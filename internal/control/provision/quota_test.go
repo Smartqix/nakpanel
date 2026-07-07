@@ -11,16 +11,18 @@ import (
 )
 
 type fakeQuotaStore struct {
-	limits        controlquota.Limits
-	hasLimits     bool
-	usage         controlquota.Usage
-	upserted      controlquota.Limits
-	upsertCalled  bool
-	getLimitCalls int
+	limits          controlquota.Limits
+	hasLimits       bool
+	usage           controlquota.Usage
+	upserted        controlquota.Limits
+	upsertCalled    bool
+	getLimitCalls   int
+	lastLimitUserID int64
 }
 
 func (s *fakeQuotaStore) GetLimits(ctx context.Context, userID int64) (controlquota.Limits, bool, error) {
 	s.getLimitCalls++
+	s.lastLimitUserID = userID
 	if !s.hasLimits {
 		return controlquota.Limits{}, false, nil
 	}
@@ -47,7 +49,7 @@ func (s *fakeQuotaStore) GetAccountQuotaSummary(ctx context.Context, userID int6
 	return controlquota.Summary{UserID: userID}, nil
 }
 
-func TestManagerAllowsSiteCreationWhenQuotaRowIsMissing(t *testing.T) {
+func TestManagerRejectsSiteCreationWithoutActiveSubscription(t *testing.T) {
 	repo := &fakeSiteRepository{}
 	quotas := &fakeQuotaStore{}
 	manager := NewManager(repo, WithQuotaStore(quotas))
@@ -57,14 +59,40 @@ func TestManagerAllowsSiteCreationWhenQuotaRowIsMissing(t *testing.T) {
 		Domain:     "example.test",
 		PHPVersion: "8.3",
 	})
+	if !errors.Is(err, controlquota.ErrNoActiveSubscription) {
+		t.Fatalf("CreateSite error = %v, want no active subscription", err)
+	}
+	if repo.req != (types.CreateSiteReq{}) {
+		t.Fatalf("repository was called despite missing subscription: %#v", repo.req)
+	}
+}
+
+func TestManagerCreatesSiteForSelectedSubscribedCustomer(t *testing.T) {
+	repo := &fakeSiteRepository{}
+	quotas := &fakeQuotaStore{
+		hasLimits: true,
+		limits: controlquota.Limits{
+			MaxSites:          -1,
+			SiteDiskQuotaMB:   512,
+			PHPFPMMaxChildren: 3,
+			PHPMemoryMB:       128,
+		},
+	}
+	manager := NewManager(repo, WithQuotaStore(quotas))
+
+	_, err := manager.CreateSiteFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 42, types.CreateSiteReq{
+		Username:   "npdemo",
+		Domain:     "example.test",
+		PHPVersion: "8.3",
+	})
 	if err != nil {
-		t.Fatalf("CreateSite returned error: %v", err)
+		t.Fatalf("CreateSiteFor returned error: %v", err)
 	}
-	if repo.req.Domain != "example.test" {
-		t.Fatalf("repository was not called: %#v", repo.req)
+	if quotas.lastLimitUserID != 42 {
+		t.Fatalf("quota user = %d, want selected customer 42", quotas.lastLimitUserID)
 	}
-	if repo.req.Limits != (types.SiteResourceLimits{}) {
-		t.Fatalf("missing quota row should not derive resource limits: %#v", repo.req.Limits)
+	if repo.ownerID != 42 {
+		t.Fatalf("repository owner = %d, want selected customer 42", repo.ownerID)
 	}
 }
 

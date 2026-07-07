@@ -3,6 +3,8 @@ package panelhttp
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -24,11 +26,11 @@ type UserStore interface {
 }
 
 type SiteCreator interface {
-	CreateSite(ctx context.Context, owner auth.SessionUser, req types.CreateSiteReq) (int64, error)
+	CreateSiteFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateSiteReq) (int64, error)
 }
 
 type DatabaseCreator interface {
-	CreateDatabase(ctx context.Context, owner auth.SessionUser, req types.CreateDatabaseReq) (int64, error)
+	CreateDatabaseFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateDatabaseReq) (int64, error)
 }
 
 type CertificateIssuer interface {
@@ -44,7 +46,7 @@ type JobRetrier interface {
 }
 
 type Phase6Manager interface {
-	CreateBackup(ctx context.Context, owner auth.SessionUser, req types.CreateBackupReq) (int64, error)
+	CreateBackupFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateBackupReq) (int64, error)
 	RestoreBackup(ctx context.Context, owner auth.SessionUser, backupID int64) (int64, error)
 	ConfigureWebmail(ctx context.Context, owner auth.SessionUser, domain string) (int64, error)
 	ConfigureDNS(ctx context.Context, owner auth.SessionUser, domain string, address string) (int64, error)
@@ -54,6 +56,10 @@ type Phase6Manager interface {
 
 type QuotaManager interface {
 	UpsertAccountQuota(ctx context.Context, owner auth.SessionUser, limits controlquota.Limits) error
+	UpsertPlan(ctx context.Context, owner auth.SessionUser, plan controlquota.Plan) (controlquota.Plan, error)
+	SetPlanActive(ctx context.Context, owner auth.SessionUser, planID int64, active bool) error
+	AssignSubscription(ctx context.Context, owner auth.SessionUser, customerUserID int64, planID int64) (controlquota.SubscriptionAssignment, error)
+	UpdateSettings(ctx context.Context, owner auth.SessionUser, settings controlquota.Settings) error
 }
 
 type ServerOptions struct {
@@ -113,6 +119,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /dns", s.handleConfigureDNS)
 	mux.HandleFunc("POST /reconcile", s.handleReconcileSystem)
 	mux.HandleFunc("POST /quotas", s.handleUpsertQuota)
+	mux.HandleFunc("POST /plans", s.handleUpsertPlan)
+	mux.HandleFunc("POST /plans/status", s.handleSetPlanStatus)
+	mux.HandleFunc("POST /subscriptions", s.handleAssignSubscription)
+	mux.HandleFunc("POST /settings/oversell", s.handleUpdateOversellSettings)
 	mux.HandleFunc("GET /db", s.handleAdminer)
 	mux.HandleFunc("GET /", s.handleDashboard)
 	return sameOriginPostGuard(mux)
@@ -246,7 +256,12 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		Domain:     strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))),
 		PHPVersion: strings.TrimSpace(r.Form.Get("php_version")),
 	}
-	if _, err := s.sites.CreateSite(r.Context(), user, req); err != nil {
+	resourceOwnerID, err := parseOptionalOwnerID(r, user.ID)
+	if err != nil {
+		http.Error(w, "Invalid site form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := s.sites.CreateSiteFor(r.Context(), user, resourceOwnerID, req); err != nil {
 		http.Error(w, "Could not create site: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -281,7 +296,12 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		DBName: strings.ToLower(strings.TrimSpace(r.Form.Get("db_name"))),
 		DBUser: strings.ToLower(strings.TrimSpace(r.Form.Get("db_user"))),
 	}
-	if _, err := s.databases.CreateDatabase(r.Context(), user, req); err != nil {
+	resourceOwnerID, err := parseOptionalOwnerID(r, user.ID)
+	if err != nil {
+		http.Error(w, "Invalid database form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := s.databases.CreateDatabaseFor(r.Context(), user, resourceOwnerID, req); err != nil {
 		http.Error(w, "Could not create database: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -363,7 +383,12 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req := types.CreateBackupReq{Domain: strings.TrimSpace(r.Form.Get("domain"))}
-	if _, err := s.phase6.CreateBackup(r.Context(), user, req); err != nil {
+	resourceOwnerID, err := parseOptionalOwnerID(r, user.ID)
+	if err != nil {
+		http.Error(w, "Invalid backup form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := s.phase6.CreateBackupFor(r.Context(), user, resourceOwnerID, req); err != nil {
 		http.Error(w, "Could not create backup: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -493,6 +518,121 @@ func (s *Server) handleUpsertQuota(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/?notice=quota-saved", http.StatusSeeOther)
 }
 
+func (s *Server) handleUpsertPlan(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireAdmin(w, r)
+	if !ok {
+		return
+	}
+	if s.quotas == nil {
+		http.Error(w, "Plan management is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid plan form", http.StatusBadRequest)
+		return
+	}
+	plan, err := parsePlan(r)
+	if err != nil {
+		http.Error(w, "Invalid plan form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := s.quotas.UpsertPlan(r.Context(), user, plan); err != nil {
+		http.Error(w, "Could not save plan: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/?notice=plan-saved", http.StatusSeeOther)
+}
+
+func (s *Server) handleSetPlanStatus(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireAdmin(w, r)
+	if !ok {
+		return
+	}
+	if s.quotas == nil {
+		http.Error(w, "Plan management is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid plan status form", http.StatusBadRequest)
+		return
+	}
+	planID, err := parseFormInt64(r, "plan_id")
+	if err != nil {
+		http.Error(w, "Invalid plan status form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	active := strings.TrimSpace(r.Form.Get("is_active")) == "true"
+	if err := s.quotas.SetPlanActive(r.Context(), user, planID, active); err != nil {
+		http.Error(w, "Could not update plan status: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/?notice=plan-status-saved", http.StatusSeeOther)
+}
+
+func (s *Server) handleAssignSubscription(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireAdmin(w, r)
+	if !ok {
+		return
+	}
+	if s.quotas == nil {
+		http.Error(w, "Subscription management is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid subscription form", http.StatusBadRequest)
+		return
+	}
+	customerUserID, err := parseFormInt64(r, "customer_user_id")
+	if err != nil {
+		http.Error(w, "Invalid subscription form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	planID, err := parseFormInt64(r, "plan_id")
+	if err != nil {
+		http.Error(w, "Invalid subscription form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	assignment, err := s.quotas.AssignSubscription(r.Context(), user, customerUserID, planID)
+	if err != nil {
+		http.Error(w, "Could not assign subscription: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if assignment.Warning != "" {
+		http.Redirect(w, r, "/?notice=subscription-warning", http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/?notice=subscription-saved", http.StatusSeeOther)
+}
+
+func (s *Server) handleUpdateOversellSettings(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireAdmin(w, r)
+	if !ok {
+		return
+	}
+	if s.quotas == nil {
+		http.Error(w, "Settings management is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid oversell settings form", http.StatusBadRequest)
+		return
+	}
+	capacity, err := parseFormInt(r, "server_disk_capacity_mb")
+	if err != nil {
+		http.Error(w, "Invalid oversell settings form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	settings := controlquota.Settings{
+		OversellPolicy:       strings.TrimSpace(r.Form.Get("oversell_policy")),
+		ServerDiskCapacityMB: capacity,
+	}
+	if err := s.quotas.UpdateSettings(r.Context(), user, settings); err != nil {
+		http.Error(w, "Could not update oversell settings: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/?notice=settings-saved", http.StatusSeeOther)
+}
+
 func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) (auth.SessionUser, bool) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
@@ -586,6 +726,16 @@ func dashboardNotice(code string) string {
 		return "Reconciliation queued. Generated configs will be refreshed from intent."
 	case "quota-saved":
 		return "Account quota saved."
+	case "plan-saved":
+		return "Plan saved."
+	case "plan-status-saved":
+		return "Plan status updated."
+	case "subscription-saved":
+		return "Subscription assigned."
+	case "subscription-warning":
+		return "Subscription assigned with an oversell warning."
+	case "settings-saved":
+		return "Oversell settings saved."
 	default:
 		return ""
 	}
@@ -643,10 +793,82 @@ func parseQuotaLimits(r *http.Request) (controlquota.Limits, error) {
 	return limits, nil
 }
 
+func parsePlan(r *http.Request) (controlquota.Plan, error) {
+	planID, err := parseOptionalFormInt64(r, "plan_id")
+	if err != nil {
+		return controlquota.Plan{}, err
+	}
+	priceCents, err := parseOptionalSQLInt64(r, "price_cents")
+	if err != nil {
+		return controlquota.Plan{}, err
+	}
+	plan := controlquota.Plan{
+		ID:           planID,
+		Name:         strings.TrimSpace(r.Form.Get("name")),
+		Description:  strings.TrimSpace(r.Form.Get("description")),
+		PriceCents:   priceCents,
+		AllowSSH:     parseFormBool(r, "allow_ssh"),
+		AllowDNS:     parseFormBool(r, "allow_dns"),
+		PHPAllowlist: strings.TrimSpace(r.Form.Get("php_allowlist")),
+		IsActive:     parseFormBool(r, "is_active"),
+	}
+	fields := []struct {
+		name   string
+		target *int
+	}{
+		{name: "disk_mb", target: &plan.DiskMB},
+		{name: "max_sites", target: &plan.MaxSites},
+		{name: "max_databases", target: &plan.MaxDatabases},
+		{name: "bandwidth_mb", target: &plan.BandwidthMB},
+		{name: "max_mailboxes", target: &plan.MaxMailboxes},
+		{name: "backup_retention_days", target: &plan.BackupRetentionDays},
+		{name: "php_max_children", target: &plan.PHPFPMMaxChildren},
+		{name: "php_memory_mb", target: &plan.PHPMemoryMB},
+		{name: "site_disk_quota_mb", target: &plan.SiteDiskQuotaMB},
+		{name: "max_backups", target: &plan.MaxBackups},
+		{name: "backup_storage_mb", target: &plan.BackupStorageMB},
+	}
+	for _, field := range fields {
+		value, err := parseFormIntAllowUnlimited(r, field.name)
+		if err != nil {
+			return controlquota.Plan{}, err
+		}
+		*field.target = value
+	}
+	return plan, nil
+}
+
+func parseOptionalOwnerID(r *http.Request, fallback int64) (int64, error) {
+	value := strings.TrimSpace(r.Form.Get("owner_user_id"))
+	if value == "" {
+		value = strings.TrimSpace(r.Form.Get("customer_user_id"))
+	}
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || parsed <= 0 {
+		return 0, errors.New("owner_user_id is required")
+	}
+	return parsed, nil
+}
+
 func parseFormInt64(r *http.Request, name string) (int64, error) {
 	value, err := strconv.ParseInt(strings.TrimSpace(r.Form.Get(name)), 10, 64)
 	if err != nil || value <= 0 {
 		return 0, fmt.Errorf("%s is required", name)
+	}
+	return value, nil
+}
+
+func parseOptionalFormInt64(r *http.Request, name string) (int64, error) {
+	raw := strings.TrimSpace(r.Form.Get(name))
+	if raw == "" {
+		return 0, nil
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative integer", name)
 	}
 	return value, nil
 }
@@ -657,4 +879,29 @@ func parseFormInt(r *http.Request, name string) (int, error) {
 		return 0, fmt.Errorf("%s must be a non-negative integer", name)
 	}
 	return value, nil
+}
+
+func parseFormIntAllowUnlimited(r *http.Request, name string) (int, error) {
+	value, err := strconv.Atoi(strings.TrimSpace(r.Form.Get(name)))
+	if err != nil || value < -1 {
+		return 0, fmt.Errorf("%s must be -1 or a non-negative integer", name)
+	}
+	return value, nil
+}
+
+func parseOptionalSQLInt64(r *http.Request, name string) (sql.NullInt64, error) {
+	raw := strings.TrimSpace(r.Form.Get(name))
+	if raw == "" {
+		return sql.NullInt64{}, nil
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 0 {
+		return sql.NullInt64{}, fmt.Errorf("%s must be a non-negative integer", name)
+	}
+	return sql.NullInt64{Int64: value, Valid: true}, nil
+}
+
+func parseFormBool(r *http.Request, name string) bool {
+	value := strings.ToLower(strings.TrimSpace(r.Form.Get(name)))
+	return value == "true" || value == "on" || value == "1" || value == "yes"
 }

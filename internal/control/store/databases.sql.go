@@ -10,7 +10,7 @@ import (
 )
 
 const getDatabase = `-- name: GetDatabase :one
-SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at
+SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id
 FROM databases
 WHERE id = $1
 `
@@ -28,12 +28,13 @@ func (q *Queries) GetDatabase(ctx context.Context, id int64) (Database, error) {
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SubscriptionID,
 	)
 	return i, err
 }
 
 const listDatabases = `-- name: ListDatabases :many
-SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at
+SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id
 FROM databases
 ORDER BY id
 `
@@ -57,6 +58,7 @@ func (q *Queries) ListDatabases(ctx context.Context) ([]Database, error) {
 			&i.LastError,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.SubscriptionID,
 		); err != nil {
 			return nil, err
 		}
@@ -107,6 +109,7 @@ func (q *Queries) MarkDatabaseFailed(ctx context.Context, arg MarkDatabaseFailed
 const upsertDatabaseIntent = `-- name: UpsertDatabaseIntent :one
 INSERT INTO databases (
     owner_user_id,
+    subscription_id,
     engine,
     db_name,
     db_user,
@@ -114,6 +117,7 @@ INSERT INTO databases (
     last_error
 ) VALUES (
     $1,
+    (SELECT id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1),
     $2,
     $3,
     $4,
@@ -123,12 +127,13 @@ INSERT INTO databases (
 ON CONFLICT (db_name) DO UPDATE
 SET
     owner_user_id = EXCLUDED.owner_user_id,
+    subscription_id = EXCLUDED.subscription_id,
     engine = EXCLUDED.engine,
     db_user = EXCLUDED.db_user,
     status = 'pending',
     last_error = '',
     updated_at = now()
-RETURNING id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at
+RETURNING id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id
 `
 
 type UpsertDatabaseIntentParams struct {
@@ -156,6 +161,7 @@ func (q *Queries) UpsertDatabaseIntent(ctx context.Context, arg UpsertDatabaseIn
 		&i.LastError,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.SubscriptionID,
 	)
 	return i, err
 }

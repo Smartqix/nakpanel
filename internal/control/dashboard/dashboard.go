@@ -26,6 +26,9 @@ type Phase6Reader interface {
 type QuotaReader interface {
 	ListAccountQuotas(ctx context.Context) ([]controlquota.Summary, error)
 	GetAccountQuotaSummary(ctx context.Context, userID int64) (controlquota.Summary, error)
+	ListPlans(ctx context.Context) ([]controlquota.Plan, error)
+	GetSettings(ctx context.Context) (controlquota.Settings, error)
+	CommittedAllocationMB(ctx context.Context) (int, error)
 }
 
 type Store struct {
@@ -36,15 +39,19 @@ type Store struct {
 }
 
 type Data struct {
-	Sites          []Site
-	Databases      []Database
-	Jobs           []Job
-	JobLoadError   string
-	Phase6         Phase6Data
-	Phase6Error    string
-	Quotas         []controlquota.Summary
-	QuotaLoadError string
-	Notice         string
+	Sites           []Site
+	Databases       []Database
+	Jobs            []Job
+	JobLoadError    string
+	Phase6          Phase6Data
+	Phase6Error     string
+	Quotas          []controlquota.Summary
+	QuotaLoadError  string
+	Plans           []controlquota.Plan
+	Settings        controlquota.Settings
+	CommittedDiskMB int
+	PlanLoadError   string
+	Notice          string
 }
 
 type Site struct {
@@ -228,16 +235,35 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			quotaLoadError = "account quotas unavailable"
 		}
 	}
+	plans := []controlquota.Plan(nil)
+	settings := controlquota.Settings{}
+	committedDiskMB := 0
+	planLoadError := ""
+	if s.quotas != nil {
+		plans, err = s.quotas.ListPlans(ctx)
+		if err != nil {
+			plans = nil
+			planLoadError = "plans unavailable"
+		} else if settings, err = s.quotas.GetSettings(ctx); err != nil {
+			planLoadError = "plan settings unavailable"
+		} else if committedDiskMB, err = s.quotas.CommittedAllocationMB(ctx); err != nil {
+			planLoadError = "committed allocation unavailable"
+		}
+	}
 
 	data := Data{
-		Sites:          make([]Site, 0, len(sites)),
-		Databases:      make([]Database, 0, len(databases)),
-		Jobs:           jobs,
-		JobLoadError:   jobLoadError,
-		Phase6:         phase6,
-		Phase6Error:    phase6Error,
-		Quotas:         quotas,
-		QuotaLoadError: quotaLoadError,
+		Sites:           make([]Site, 0, len(sites)),
+		Databases:       make([]Database, 0, len(databases)),
+		Jobs:            jobs,
+		JobLoadError:    jobLoadError,
+		Phase6:          phase6,
+		Phase6Error:     phase6Error,
+		Quotas:          quotas,
+		QuotaLoadError:  quotaLoadError,
+		Plans:           plans,
+		Settings:        settings,
+		CommittedDiskMB: committedDiskMB,
+		PlanLoadError:   planLoadError,
 	}
 	for _, site := range sites {
 		data.Sites = append(data.Sites, Site{

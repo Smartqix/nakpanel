@@ -1,6 +1,7 @@
 package web
 
 import (
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -63,6 +64,9 @@ func formatBytes(size int64) string {
 
 func formatQuotaCount(used int, allowed int, hasQuota bool) string {
 	if !hasQuota {
+		return fmt.Sprintf("%d / no active subscription", used)
+	}
+	if allowed < 0 {
 		return fmt.Sprintf("%d / unlimited", used)
 	}
 	return fmt.Sprintf("%d / %d", used, allowed)
@@ -74,6 +78,9 @@ func formatQuotaStorage(usedBytes int64, allowedMB int, hasQuota bool) string {
 		usedMB++
 	}
 	if !hasQuota {
+		return fmt.Sprintf("%d MB / no active subscription", usedMB)
+	}
+	if allowedMB < 0 {
 		return fmt.Sprintf("%d MB / unlimited", usedMB)
 	}
 	return fmt.Sprintf("%d MB / %d MB", usedMB, allowedMB)
@@ -81,6 +88,9 @@ func formatQuotaStorage(usedBytes int64, allowedMB int, hasQuota bool) string {
 
 func formatQuotaLimitMB(allowedMB int, hasQuota bool) string {
 	if !hasQuota {
+		return "no active subscription"
+	}
+	if allowedMB < 0 {
 		return "unlimited"
 	}
 	return fmt.Sprintf("%d MB", allowedMB)
@@ -88,17 +98,102 @@ func formatQuotaLimitMB(allowedMB int, hasQuota bool) string {
 
 func formatQuotaPHP(summary controlquota.Summary) string {
 	if !summary.HasQuota {
-		return "unlimited"
+		return "no active subscription"
 	}
-	return fmt.Sprintf("%d children / %d MB", summary.Limits.PHPFPMMaxChildren, summary.Limits.PHPMemoryMB)
+	children := formatPHPChildrenLimit(summary.Limits.PHPFPMMaxChildren)
+	memory := formatPHPMemoryLimit(summary.Limits.PHPMemoryMB)
+	if children == "agent default" && memory == "agent default" {
+		return "agent defaults"
+	}
+	return fmt.Sprintf("%s / %s", children, memory)
+}
+
+func formatPHPChildrenLimit(value int) string {
+	if value < 0 {
+		return "agent default"
+	}
+	return fmt.Sprintf("%d children", value)
+}
+
+func formatPHPMemoryLimit(value int) string {
+	if value < 0 {
+		return "agent default"
+	}
+	return fmt.Sprintf("%d MB", value)
 }
 
 func formatQuotaUserID(id int64) string {
 	return fmt.Sprintf("%d", id)
 }
 
-func formatQuotaFormValue(value int) string {
+func formatPlanID(id int64) string {
+	return fmt.Sprintf("%d", id)
+}
+
+func formatPlanLimit(value int) string {
+	if value < 0 {
+		return "unlimited"
+	}
 	return fmt.Sprintf("%d", value)
+}
+
+func formatPlanLimitMB(value int) string {
+	if value < 0 {
+		return "unlimited"
+	}
+	return fmt.Sprintf("%d MB", value)
+}
+
+func formatPlanLimitFormValue(value int) string {
+	return fmt.Sprintf("%d", value)
+}
+
+func formatPlanPriceCents(value sql.NullInt64) string {
+	if !value.Valid {
+		return ""
+	}
+	return fmt.Sprintf("%d", value.Int64)
+}
+
+func formatPlanStatus(plan controlquota.Plan) string {
+	if plan.IsActive {
+		return "active"
+	}
+	return "inactive"
+}
+
+func formatPlanBool(value bool) string {
+	if value {
+		return "yes"
+	}
+	return "no"
+}
+
+func formatPlanPHP(plan controlquota.Plan) string {
+	children := formatPHPChildrenLimit(plan.PHPFPMMaxChildren)
+	memory := formatPHPMemoryLimit(plan.PHPMemoryMB)
+	if children == "agent default" && memory == "agent default" {
+		return "agent defaults"
+	}
+	return fmt.Sprintf("%s / %s", children, memory)
+}
+
+func formatCommittedDisk(value int) string {
+	if value < 0 {
+		return "unlimited"
+	}
+	return fmt.Sprintf("%d MB", value)
+}
+
+func formatSettingsCapacity(value int) string {
+	return fmt.Sprintf("%d", value)
+}
+
+func formatSummaryPlanName(summary controlquota.Summary) string {
+	if !summary.HasQuota || summary.PlanName == "" {
+		return "No active subscription"
+	}
+	return summary.PlanName
 }
 
 func formatReconcileSites(run dashboard.ReconciliationRun) string {

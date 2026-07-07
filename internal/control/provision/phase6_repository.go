@@ -49,8 +49,8 @@ func (r *SQLPhase6Repository) CreateBackup(ctx context.Context, ownerID int64, r
 		return 0, err
 	}
 	var backupID int64
-	if err := tx.QueryRowContext(ctx, `INSERT INTO backups (owner_user_id, site_id, target_kind, target_name, status)
-VALUES ($1, $2, 'site', $3, 'pending')
+	if err := tx.QueryRowContext(ctx, `INSERT INTO backups (owner_user_id, site_id, subscription_id, target_kind, target_name, status)
+VALUES ($1, $2, (SELECT id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1), 'site', $3, 'pending')
 RETURNING id`, ownerID, site.id, site.domain).Scan(&backupID); err != nil {
 		return 0, fmt.Errorf("insert backup intent: %w", err)
 	}

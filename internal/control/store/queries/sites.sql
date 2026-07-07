@@ -1,6 +1,7 @@
 -- name: UpsertSiteIntent :one
 INSERT INTO sites (
     owner_user_id,
+    subscription_id,
     username,
     domain,
     php_version,
@@ -8,6 +9,7 @@ INSERT INTO sites (
     last_error
 ) VALUES (
     $1,
+    (SELECT id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1),
     $2,
     $3,
     $4,
@@ -17,25 +19,26 @@ INSERT INTO sites (
 ON CONFLICT (domain) DO UPDATE
 SET
     owner_user_id = EXCLUDED.owner_user_id,
+    subscription_id = EXCLUDED.subscription_id,
     username = EXCLUDED.username,
     php_version = EXCLUDED.php_version,
     status = 'pending',
     last_error = '',
     updated_at = now()
-RETURNING id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error;
+RETURNING id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id;
 
 -- name: GetSite :one
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id
 FROM sites
 WHERE id = $1;
 
 -- name: GetSiteByDomain :one
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id
 FROM sites
 WHERE domain = $1;
 
 -- name: ListSites :many
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id
 FROM sites
 ORDER BY id;
 

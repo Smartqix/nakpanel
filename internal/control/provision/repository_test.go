@@ -41,6 +41,7 @@ func TestSQLSiteRepositoryRejectsTLSForInactiveSites(t *testing.T) {
 			"tls_key_path",
 			"tls_expires_at",
 			"tls_last_error",
+			"subscription_id",
 		}).AddRow(
 			int64(7),
 			int64(1),
@@ -57,6 +58,7 @@ func TestSQLSiteRepositoryRejectsTLSForInactiveSites(t *testing.T) {
 			"",
 			nil,
 			"",
+			nil,
 		))
 	mock.ExpectRollback()
 

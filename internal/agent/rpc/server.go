@@ -14,11 +14,24 @@ import (
 const MaxRequestBytes = 1 << 20
 
 type Server struct {
-	dispatcher *Dispatcher
+	dispatcher     *Dispatcher
+	allowedPeerUID int
 }
 
-func NewServer(dispatcher *Dispatcher) *Server {
-	return &Server{dispatcher: dispatcher}
+type ServerOption func(*Server)
+
+func WithAllowedPeerUID(uid uint32) ServerOption {
+	return func(s *Server) {
+		s.allowedPeerUID = int(uid)
+	}
+}
+
+func NewServer(dispatcher *Dispatcher, options ...ServerOption) *Server {
+	server := &Server{dispatcher: dispatcher, allowedPeerUID: -1}
+	for _, option := range options {
+		option(server)
+	}
+	return server
 }
 
 func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
@@ -37,9 +50,35 @@ func (s *Server) Serve(ctx context.Context, listener net.Listener) error {
 		}
 
 		go func() {
+			if err := s.authorizePeer(conn); err != nil {
+				_ = writeErrorResponse(conn, "unauthorized peer: "+err.Error())
+				_ = conn.Close()
+				return
+			}
 			_ = HandleConn(ctx, conn, s.dispatcher)
 		}()
 	}
+}
+
+func (s *Server) authorizePeer(conn net.Conn) error {
+	if s.allowedPeerUID < 0 {
+		return nil
+	}
+	uid, ok, err := peerUID(conn)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	if !allowedPeerUIDMatches(uid, s.allowedPeerUID) {
+		return fmt.Errorf("uid %d is not allowed", uid)
+	}
+	return nil
+}
+
+func allowedPeerUIDMatches(peerUID uint32, allowedUID int) bool {
+	return allowedUID >= 0 && peerUID == uint32(allowedUID)
 }
 
 func HandleConn(ctx context.Context, conn net.Conn, dispatcher *Dispatcher) error {

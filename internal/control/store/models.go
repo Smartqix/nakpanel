@@ -45,18 +45,20 @@ type Backup struct {
 	LastError      string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	SubscriptionID sql.NullInt64
 }
 
 type Database struct {
-	ID          int64
-	OwnerUserID int64
-	Engine      string
-	DbName      string
-	DbUser      string
-	Status      string
-	LastError   string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID             int64
+	OwnerUserID    int64
+	Engine         string
+	DbName         string
+	DbUser         string
+	Status         string
+	LastError      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	SubscriptionID sql.NullInt64
 }
 
 type DnsZone struct {
@@ -71,6 +73,30 @@ type DnsZone struct {
 	LastError   string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type Plan struct {
+	ID                  int64
+	Name                string
+	Description         string
+	PriceCents          sql.NullInt32
+	DiskMb              int32
+	MaxSites            int32
+	MaxDatabases        int32
+	BandwidthMb         int32
+	MaxMailboxes        int32
+	AllowSsh            bool
+	AllowDns            bool
+	BackupRetentionDays int32
+	PhpAllowlist        string
+	PhpFpmMaxChildren   int32
+	PhpMemoryMb         int32
+	SiteDiskQuotaMb     int32
+	MaxBackups          int32
+	BackupStorageMb     int32
+	IsActive            bool
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 type ReconciliationRun struct {
@@ -103,22 +129,41 @@ type Session struct {
 	CreatedAt time.Time
 }
 
+type Setting struct {
+	ID                   bool
+	OversellPolicy       string
+	ServerDiskCapacityMb int32
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
 type Site struct {
-	ID           int64
-	OwnerUserID  int64
-	Username     string
-	Domain       string
-	PhpVersion   string
-	Status       string
-	LastError    string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	TlsStatus    string
-	TlsIssuer    string
-	TlsCertPath  string
-	TlsKeyPath   string
-	TlsExpiresAt sql.NullTime
-	TlsLastError string
+	ID             int64
+	OwnerUserID    int64
+	Username       string
+	Domain         string
+	PhpVersion     string
+	Status         string
+	LastError      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	TlsStatus      string
+	TlsIssuer      string
+	TlsCertPath    string
+	TlsKeyPath     string
+	TlsExpiresAt   sql.NullTime
+	TlsLastError   string
+	SubscriptionID sql.NullInt64
+}
+
+type Subscription struct {
+	ID             int64
+	CustomerUserID int64
+	ResellerUserID sql.NullInt64
+	PlanID         int64
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type User struct {

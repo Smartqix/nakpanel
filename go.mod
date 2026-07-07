@@ -11,6 +11,7 @@ require (
 	github.com/riverqueue/river/riverdriver/riverdatabasesql v0.19.0
 	github.com/riverqueue/river/rivertype v0.19.0
 	golang.org/x/crypto v0.33.0
+	golang.org/x/sys v0.34.0
 )
 
 require (
@@ -30,7 +31,6 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	go.uber.org/goleak v1.3.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

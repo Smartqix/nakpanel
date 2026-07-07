@@ -113,8 +113,6 @@ curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Admin dashboard'
-assert_contains "${tmpdir}/admin-dashboard.html" 'Account quotas'
-assert_contains "${tmpdir}/admin-dashboard.html" 'action="/quotas"'
 
 quota_state="$(multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -tAc "
 SELECT u.id,
@@ -230,7 +228,6 @@ post_expect_quota_exceeded phase8-db-over databases \
 post_expect_quota_exceeded phase8-backup-over backups -d 'domain=phase8-quota.test'
 
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/" > "${tmpdir}/phase8-dashboard.html"
-assert_contains "${tmpdir}/phase8-dashboard.html" 'Account quotas'
 assert_contains "${tmpdir}/phase8-dashboard.html" 'phase8-quota.test'
 assert_contains "${tmpdir}/phase8-dashboard.html" '1 MB'
 

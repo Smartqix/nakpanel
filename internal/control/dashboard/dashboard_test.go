@@ -50,12 +50,18 @@ func (r *fakePhase6Reader) GetPhase6(ctx context.Context) (Phase6Data, error) {
 }
 
 type fakeQuotaReader struct {
-	summaries  []controlquota.Summary
-	summary    controlquota.Summary
-	err        error
-	listCalled bool
-	getCalled  bool
-	userID     int64
+	summaries       []controlquota.Summary
+	summary         controlquota.Summary
+	plans           []controlquota.Plan
+	settings        controlquota.Settings
+	committed       int
+	err             error
+	listCalled      bool
+	getCalled       bool
+	plansCalled     bool
+	settingsCalled  bool
+	committedCalled bool
+	userID          int64
 }
 
 func (r *fakeQuotaReader) ListAccountQuotas(ctx context.Context) ([]controlquota.Summary, error) {
@@ -67,6 +73,21 @@ func (r *fakeQuotaReader) GetAccountQuotaSummary(ctx context.Context, userID int
 	r.getCalled = true
 	r.userID = userID
 	return r.summary, r.err
+}
+
+func (r *fakeQuotaReader) ListPlans(ctx context.Context) ([]controlquota.Plan, error) {
+	r.plansCalled = true
+	return r.plans, r.err
+}
+
+func (r *fakeQuotaReader) GetSettings(ctx context.Context) (controlquota.Settings, error) {
+	r.settingsCalled = true
+	return r.settings, r.err
+}
+
+func (r *fakeQuotaReader) CommittedAllocationMB(ctx context.Context) (int, error) {
+	r.committedCalled = true
+	return r.committed, r.err
 }
 
 func TestStoreMapsSitesAndDatabases(t *testing.T) {
@@ -134,17 +155,23 @@ func TestStoreIncludesQuotaSummariesForAdmins(t *testing.T) {
 			Limits:   controlquota.Limits{UserID: 2, MaxSites: 2, MaxDatabases: 1, MaxBackups: 3, SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 3, PHPMemoryMB: 128},
 			Usage:    controlquota.Usage{UserID: 2, Sites: 1, Databases: 1, Backups: 2, BackupStorageBytes: 2048},
 		}},
+		plans:     []controlquota.Plan{{ID: 10, Name: "Starter", IsActive: true}},
+		settings:  controlquota.Settings{OversellPolicy: controlquota.OversellPolicyWarn, ServerDiskCapacityMB: 100},
+		committed: 50,
 	}
 
 	data, err := NewStore(&fakeQuerier{}, WithQuotaReader(reader)).GetDashboard(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin})
 	if err != nil {
 		t.Fatalf("GetDashboard returned error: %v", err)
 	}
-	if !reader.listCalled || reader.getCalled {
-		t.Fatalf("quota reader calls list=%v get=%v, want admin list only", reader.listCalled, reader.getCalled)
+	if !reader.listCalled || reader.getCalled || !reader.plansCalled || !reader.settingsCalled || !reader.committedCalled {
+		t.Fatalf("quota reader calls list=%v get=%v plans=%v settings=%v committed=%v, want admin planning data", reader.listCalled, reader.getCalled, reader.plansCalled, reader.settingsCalled, reader.committedCalled)
 	}
 	if len(data.Quotas) != 1 || data.Quotas[0].Email != "client@nakpanel.test" || data.Quotas[0].Usage.Sites != 1 {
 		t.Fatalf("quota summaries = %#v", data.Quotas)
+	}
+	if len(data.Plans) != 1 || data.Plans[0].Name != "Starter" || data.Settings.OversellPolicy != controlquota.OversellPolicyWarn || data.CommittedDiskMB != 50 {
+		t.Fatalf("plan dashboard data = plans:%#v settings:%#v committed:%d", data.Plans, data.Settings, data.CommittedDiskMB)
 	}
 }
 
@@ -162,8 +189,8 @@ func TestStoreIncludesOwnQuotaForNonAdmins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboard returned error: %v", err)
 	}
-	if !reader.getCalled || reader.userID != 2 || reader.listCalled {
-		t.Fatalf("quota reader calls list=%v get=%v user=%d, want own quota only", reader.listCalled, reader.getCalled, reader.userID)
+	if !reader.getCalled || reader.userID != 2 || reader.listCalled || reader.plansCalled {
+		t.Fatalf("quota reader calls list=%v get=%v plans=%v user=%d, want own quota only", reader.listCalled, reader.getCalled, reader.plansCalled, reader.userID)
 	}
 	if len(data.Quotas) != 1 || data.Quotas[0].UserID != 2 || data.Quotas[0].Usage.Sites != 1 {
 		t.Fatalf("own quota = %#v", data.Quotas)
