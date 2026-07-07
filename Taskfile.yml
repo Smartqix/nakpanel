@@ -1,0 +1,100 @@
+version: "3"
+
+vars:
+  BIN_DIR: bin
+  TAILWIND_VERSION: v3.4.17
+  TAILWIND_BIN: "{{.BIN_DIR}}/tailwindcss"
+  DB_DSN:
+    sh: echo "${NAKPANEL_DATABASE_URL:-postgres://postgres@localhost:5432/nakpanel?sslmode=disable}"
+
+tasks:
+  generate:
+    desc: Generate sqlc code, templ views, and embedded CSS.
+    deps:
+      - sqlc:generate
+      - templ:generate
+      - tailwind:build
+
+  sqlc:generate:
+    desc: Generate sqlc code.
+    cmds:
+      - go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
+
+  templ:generate:
+    desc: Generate templ components.
+    cmds:
+      - go run github.com/a-h/templ/cmd/templ@v0.3.960 generate
+
+  tailwind:download:
+    desc: Download the Tailwind standalone CLI.
+    status:
+      - test -x {{.TAILWIND_BIN}}
+      - "{{.TAILWIND_BIN}} --help >/dev/null 2>&1"
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - |
+        os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+        arch="$(uname -m)"
+        case "${os}" in
+          darwin) os="macos" ;;
+          linux) os="linux" ;;
+          *) echo "unsupported OS for Tailwind standalone: ${os}" >&2; exit 1 ;;
+        esac
+        case "${arch}" in
+          x86_64|amd64) arch="x64" ;;
+          arm64|aarch64) arch="arm64" ;;
+          *) echo "unsupported architecture for Tailwind standalone: ${arch}" >&2; exit 1 ;;
+        esac
+        curl -fsSL -o "{{.TAILWIND_BIN}}" "https://github.com/tailwindlabs/tailwindcss/releases/download/{{.TAILWIND_VERSION}}/tailwindcss-${os}-${arch}"
+      - chmod +x {{.TAILWIND_BIN}}
+
+  tailwind:build:
+    desc: Build embedded CSS with Tailwind standalone.
+    deps:
+      - tailwind:download
+    cmds:
+      - BROWSERSLIST_IGNORE_OLD_DATA=1 {{.TAILWIND_BIN}} -i internal/control/web/assets/input.css -o internal/control/web/static/app.css --minify --content internal/control/web/pages.templ
+
+  build:
+    desc: Build panel and agent binaries.
+    deps:
+      - generate
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build -o {{.BIN_DIR}}/panel ./cmd/panel
+      - go build -o {{.BIN_DIR}}/agent ./cmd/agent
+
+  test:
+    desc: Run Go tests.
+    cmds:
+      - go test ./...
+
+  goose:up:
+    desc: Run goose migrations against NAKPANEL_DATABASE_URL or a local nakpanel database.
+    cmds:
+      - go run github.com/pressly/goose/v3/cmd/goose@v3.24.0 -dir migrations postgres "{{.DB_DSN}}" up
+
+  goose:down:
+    desc: Roll back one goose migration.
+    cmds:
+      - go run github.com/pressly/goose/v3/cmd/goose@v3.24.0 -dir migrations postgres "{{.DB_DSN}}" down
+
+  goose:status:
+    desc: Show goose migration status.
+    cmds:
+      - go run github.com/pressly/goose/v3/cmd/goose@v3.24.0 -dir migrations postgres "{{.DB_DSN}}" status
+
+  river:up:
+    desc: Run River queue migrations against NAKPANEL_DATABASE_URL or a local nakpanel database.
+    cmds:
+      - go run github.com/riverqueue/river/cmd/river@v0.19.0 migrate-up --line main --database-url "{{.DB_DSN}}"
+
+  river:down:
+    desc: Roll back one River queue migration.
+    cmds:
+      - go run github.com/riverqueue/river/cmd/river@v0.19.0 migrate-down --line main --database-url "{{.DB_DSN}}"
+
+  river:status:
+    desc: Show River queue migration status.
+    cmds:
+      - go run github.com/riverqueue/river/cmd/river@v0.19.0 migrate-list --line main --database-url "{{.DB_DSN}}"

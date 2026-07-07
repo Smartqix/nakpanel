@@ -1,0 +1,24 @@
+[Unit]
+Description=nakpanel hosting control panel
+Wants=network-online.target postgresql.service nakpanel-agent.service
+After=network-online.target postgresql.service nakpanel-agent.service
+
+[Service]
+Type=simple
+User=nakpanel
+Group=nakpanel
+StateDirectory=nakpanel
+WorkingDirectory=/var/lib/nakpanel
+Environment=NAKPANEL_DATABASE_URL=postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable
+Environment=NAKPANEL_TLS_DIR=/var/lib/nakpanel/tls
+ExecStart=/usr/local/bin/nakpanel-panel
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/nakpanel
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,22 @@
+[Unit]
+Description=nakpanel privileged agent
+Wants=network-online.target
+After=network-online.target
+Before=nakpanel.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+RuntimeDirectory=nakpanel
+RuntimeDirectoryMode=0750
+ExecStartPre=/bin/chown root:nakpanel /run/nakpanel
+ExecStartPre=/bin/chmod 0750 /run/nakpanel
+ExecStart=/usr/local/bin/nakpanel-agent
+Restart=on-failure
+RestartSec=2s
+NoNewPrivileges=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

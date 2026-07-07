@@ -1,0 +1,537 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/types"
+)
+
+templ LoginPage() {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>nakpanel login</title>
+			<link rel="stylesheet" href="/assets/app.css"/>
+		</head>
+		<body class="np-app np-auth antialiased">
+			<main class="np-login">
+				<section class="np-login-panel" aria-labelledby="login-title">
+					<div class="np-brand">
+						<span class="np-brand-mark" aria-hidden="true">n</span>
+						<span>nakpanel</span>
+					</div>
+					<h1 id="login-title">nakpanel login</h1>
+					<form class="np-form np-login-form" method="post" action="/login">
+						<label>Email <input type="email" name="email" autocomplete="username" required/></label>
+						<label>Password <input type="password" name="password" autocomplete="current-password" required/></label>
+						<button type="submit">Sign in</button>
+					</form>
+				</section>
+			</main>
+		</body>
+	</html>
+}
+
+templ DashboardPage(title string, user auth.SessionUser, data dashboard.Data, actions DashboardActions) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title }</title>
+			<link rel="stylesheet" href="/assets/app.css"/>
+		</head>
+		<body class="np-app antialiased">
+			<main class="np-shell">
+				<header class="np-header">
+					<div>
+						<div class="np-brand">
+							<span class="np-brand-mark" aria-hidden="true">n</span>
+							<span>nakpanel</span>
+						</div>
+						<h1>{ title }</h1>
+						<p>Signed in as { user.Email }.</p>
+					</div>
+					<form class="np-logout" method="post" action="/logout">
+						<button type="submit">Sign out</button>
+					</form>
+					</header>
+					if data.Notice != "" {
+						<p class="np-notice">{ data.Notice }</p>
+					}
+					if user.Role == auth.RoleAdmin {
+						@dashboardSections(data, actions)
+					} else {
+						@roleOverview(user, data)
+					}
+				</main>
+			</body>
+		</html>
+	}
+
+templ AdminerPage(token types.AdminerSSO) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>Adminer SSO</title>
+			<link rel="stylesheet" href="/assets/app.css"/>
+		</head>
+		<body class="np-app antialiased">
+			<main class="np-shell">
+				<section class="np-section" aria-labelledby="adminer-title">
+					<div class="np-section-heading">
+						<h1 id="adminer-title">Adminer SSO</h1>
+					</div>
+					<dl class="np-summary-list">
+						<div>
+							<dt>Token</dt>
+							<dd>{ token.Token }</dd>
+						</div>
+						<div>
+							<dt>Expires</dt>
+							<dd>{ formatUnix(token.ExpiresAtUnix) }</dd>
+						</div>
+					</dl>
+				</section>
+			</main>
+		</body>
+	</html>
+}
+
+	templ dashboardSections(data dashboard.Data, actions DashboardActions) {
+		@sitesSection(data.Sites, actions)
+		@databasesSection(data.Databases, actions)
+		@phase6Section(data.Phase6, data.Phase6Error, actions)
+		@quotaSection(data.Quotas, data.QuotaLoadError, actions)
+		@jobsSection(data.Jobs, data.JobLoadError, actions)
+	}
+
+	templ roleOverview(user auth.SessionUser, data dashboard.Data) {
+		<section class="np-section" aria-labelledby="account-title">
+			<div class="np-section-heading">
+				<h2 id="account-title">Account overview</h2>
+			</div>
+			<dl class="np-summary-list">
+				<div>
+					<dt>Role</dt>
+					<dd>{ roleLabel(user.Role) }</dd>
+				</div>
+				<div>
+					<dt>Scope</dt>
+					<dd>{ roleScope(user.Role) }</dd>
+				</div>
+			</dl>
+		</section>
+		@quotaUsageSection("Resource usage", data.Quotas, data.QuotaLoadError)
+	}
+
+	templ sitesSection(sites []dashboard.Site, actions DashboardActions) {
+	<section class="np-section" aria-labelledby="sites-title">
+		<div class="np-section-heading">
+			<h2 id="sites-title">Sites</h2>
+		</div>
+		if len(sites) == 0 {
+			<p class="np-empty">No sites yet.</p>
+		} else {
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead>
+						<tr>
+							<th>Domain</th>
+							<th>User</th>
+							<th>PHP</th>
+							<th>Status</th>
+							<th>TLS</th>
+							<th>Last error</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, site := range sites {
+							<tr>
+								<td data-label="Domain"><span class="np-table-value">{ site.Domain }</span></td>
+								<td data-label="User"><span class="np-table-value">{ site.Username }</span></td>
+								<td data-label="PHP"><span class="np-table-value">{ site.PHPVersion }</span></td>
+								<td data-label="Status" class="np-status"><span class="np-table-value">{ site.Status }</span></td>
+								<td data-label="TLS"><span class="np-table-value">{ formatTLSStatus(site) }</span></td>
+								<td data-label="Last error">
+									<span class="np-table-value">
+										for _, message := range errorMessages(site.LastError, site.TLSLastError) {
+											<span class="np-error">{ message }</span>
+										}
+									</span>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		if actions.CanCreateSite {
+			<form class="np-form np-action-form" method="post" action="/sites">
+				<label>Username <input name="username" autocomplete="off" required/></label>
+				<label>Domain <input name="domain" autocomplete="off" required/></label>
+				<label>PHP <select name="php_version"><option value="8.3">8.3</option><option value="8.2">8.2</option></select></label>
+				<button type="submit">Create site</button>
+			</form>
+		}
+		if actions.CanIssueCertificate {
+			<form class="np-form np-action-form" method="post" action="/certificates">
+				<label>Domain <input name="domain" autocomplete="off" required/></label>
+				<label>Issuer <select name="issuer"><option value="local-self-signed">local-self-signed</option><option value="acme">acme</option></select></label>
+				<button type="submit">Issue TLS</button>
+			</form>
+		}
+	</section>
+}
+
+templ databasesSection(databases []dashboard.Database, actions DashboardActions) {
+	<section class="np-section" aria-labelledby="databases-title">
+		<div class="np-section-heading">
+			<h2 id="databases-title">Databases</h2>
+		</div>
+		if len(databases) == 0 {
+			<p class="np-empty">No databases yet.</p>
+		} else {
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead>
+						<tr>
+							<th>Name</th>
+							<th>User</th>
+							<th>Engine</th>
+							<th>Status</th>
+							<th>Last error</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, database := range databases {
+							<tr>
+								<td data-label="Name"><span class="np-table-value">{ database.Name }</span></td>
+								<td data-label="User"><span class="np-table-value">{ database.User }</span></td>
+								<td data-label="Engine"><span class="np-table-value">{ database.Engine }</span></td>
+								<td data-label="Status" class="np-status"><span class="np-table-value">{ database.Status }</span></td>
+								<td data-label="Last error">
+									<span class="np-table-value">
+										for _, message := range errorMessages(database.LastError) {
+											<span class="np-error">{ message }</span>
+										}
+									</span>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		if actions.CanCreateDatabase {
+			<form class="np-form np-action-form" method="post" action="/databases">
+				<label>Engine <select name="engine"><option value="mariadb">mariadb</option></select></label>
+				<label>Name <input name="db_name" autocomplete="off" required/></label>
+				<label>User <input name="db_user" autocomplete="off" required/></label>
+				<button type="submit">Create database</button>
+			</form>
+		}
+	</section>
+}
+
+templ phase6Section(phase6 dashboard.Phase6Data, loadError string, actions DashboardActions) {
+	if actions.CanUsePhase6 {
+		<section class="np-section" aria-labelledby="phase6-title">
+			<div class="np-section-heading">
+				<h2 id="phase6-title">Operations</h2>
+			</div>
+			if loadError != "" {
+				<p class="np-empty">
+					for _, message := range errorMessages(loadError) {
+						<span class="np-error">{ message }</span>
+					}
+				</p>
+			} else {
+				@phase6Tables(phase6)
+			}
+			<form class="np-form np-action-form" method="post" action="/backups">
+				<label>Domain <input name="domain" autocomplete="off" required/></label>
+				<button type="submit">Create backup</button>
+			</form>
+			<form class="np-form np-action-form" method="post" action="/webmail">
+				<label>Domain <input name="domain" autocomplete="off" required/></label>
+				<button type="submit">Configure webmail</button>
+			</form>
+			<form class="np-form np-action-form" method="post" action="/dns">
+				<label>Domain <input name="domain" autocomplete="off" required/></label>
+				<label>Address <input name="address" autocomplete="off" required/></label>
+				<button type="submit">Configure DNS</button>
+			</form>
+			<form class="np-form np-action-form" method="post" action="/reconcile">
+				<button type="submit">Regenerate configs</button>
+				<a class="np-link-button" href="/db">Adminer SSO</a>
+			</form>
+		</section>
+	}
+}
+
+templ phase6Tables(phase6 dashboard.Phase6Data) {
+	if len(phase6.Backups) > 0 {
+		<div class="np-table-wrap">
+			<table class="np-table">
+				<thead><tr><th>Backup</th><th>Status</th><th>Archive</th><th>Size</th><th>Created</th><th>Last error</th><th>Action</th></tr></thead>
+				<tbody>
+					for _, backup := range phase6.Backups {
+						<tr>
+							<td data-label="Backup"><span class="np-table-value">{ backup.TargetName }</span></td>
+							<td data-label="Status" class="np-status"><span class="np-table-value">{ backup.Status }</span></td>
+							<td data-label="Archive"><span class="np-table-value">{ backup.ArchivePath }</span></td>
+							<td data-label="Size"><span class="np-table-value">{ formatBytes(backup.SizeBytes) }</span></td>
+							<td data-label="Created"><span class="np-table-value">{ formatTime(backup.CreatedAt) }</span></td>
+							<td data-label="Last error"><span class="np-table-value">{ backup.LastError }</span></td>
+							<td data-label="Action">
+								<span class="np-table-value">
+									if canRestoreBackup(backup) {
+										<form class="np-inline-form" method="post" action="/restores">
+											<input type="hidden" name="backup_id" value={ formatJobID(backup.ID) }/>
+											<button type="submit">Restore</button>
+										</form>
+									} else {
+										<span class="np-muted">-</span>
+									}
+								</span>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+	if len(phase6.Restores) > 0 {
+		<div class="np-table-wrap">
+			<table class="np-table">
+				<thead><tr><th>Restore</th><th>Backup ID</th><th>Status</th><th>Restored</th><th>Created</th><th>Last error</th></tr></thead>
+				<tbody>
+					for _, restore := range phase6.Restores {
+						<tr>
+							<td data-label="Restore"><span class="np-table-value">{ restore.TargetName }</span></td>
+							<td data-label="Backup ID"><span class="np-table-value">{ restore.BackupID }</span></td>
+							<td data-label="Status" class="np-status"><span class="np-table-value">{ restore.Status }</span></td>
+							<td data-label="Restored"><span class="np-table-value">{ formatNullableTime(restore.RestoredAt) }</span></td>
+							<td data-label="Created"><span class="np-table-value">{ formatTime(restore.CreatedAt) }</span></td>
+							<td data-label="Last error"><span class="np-table-value">{ restore.LastError }</span></td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+	if len(phase6.WebmailHosts) > 0 {
+		<div class="np-table-wrap">
+			<table class="np-table">
+				<thead><tr><th>Webmail</th><th>Status</th><th>Config</th><th>Created</th><th>Last error</th></tr></thead>
+				<tbody>
+					for _, host := range phase6.WebmailHosts {
+						<tr>
+							<td data-label="Webmail"><span class="np-table-value">{ host.Hostname }</span></td>
+							<td data-label="Status" class="np-status"><span class="np-table-value">{ host.Status }</span></td>
+							<td data-label="Config"><span class="np-table-value">{ host.ConfigPath }</span></td>
+							<td data-label="Created"><span class="np-table-value">{ formatTime(host.CreatedAt) }</span></td>
+							<td data-label="Last error"><span class="np-table-value">{ host.LastError }</span></td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+	if len(phase6.DNSZones) > 0 {
+		<div class="np-table-wrap">
+			<table class="np-table">
+				<thead><tr><th>DNS zone</th><th>Address</th><th>Status</th><th>Serial</th><th>Zone file</th><th>Last error</th></tr></thead>
+				<tbody>
+					for _, zone := range phase6.DNSZones {
+						<tr>
+							<td data-label="DNS zone"><span class="np-table-value">{ zone.Domain }</span></td>
+							<td data-label="Address"><span class="np-table-value">{ zone.Address }</span></td>
+							<td data-label="Status" class="np-status"><span class="np-table-value">{ zone.Status }</span></td>
+							<td data-label="Serial"><span class="np-table-value">{ zone.Serial }</span></td>
+							<td data-label="Zone file"><span class="np-table-value">{ zone.ZonePath }</span></td>
+							<td data-label="Last error"><span class="np-table-value">{ zone.LastError }</span></td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+	if len(phase6.Reconciliations) > 0 {
+		<div class="np-table-wrap">
+			<table class="np-table">
+				<thead><tr><th>Run</th><th>Status</th><th>Sites</th><th>Created</th><th>Last error</th></tr></thead>
+				<tbody>
+					for _, run := range phase6.Reconciliations {
+						<tr>
+							<td data-label="Run"><span class="np-table-value">{ run.ID }</span></td>
+							<td data-label="Status" class="np-status"><span class="np-table-value">{ run.Status }</span></td>
+							<td data-label="Sites"><span class="np-table-value">{ formatReconcileSites(run) }</span></td>
+							<td data-label="Created"><span class="np-table-value">{ formatTime(run.CreatedAt) }</span></td>
+							<td data-label="Last error"><span class="np-table-value">{ run.LastError }</span></td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+templ quotaSection(quotas []controlquota.Summary, loadError string, actions DashboardActions) {
+	<section class="np-section" aria-labelledby="quotas-title">
+		<div class="np-section-heading">
+			<h2 id="quotas-title">Account quotas</h2>
+		</div>
+		if loadError != "" {
+			<p class="np-empty">
+				for _, message := range errorMessages(loadError) {
+					<span class="np-error">{ message }</span>
+				}
+			</p>
+		} else if len(quotas) == 0 {
+			<p class="np-empty">No accounts found.</p>
+		} else {
+			@quotaUsageTable(quotas)
+		}
+		if actions.CanManageQuotas && len(quotas) > 0 {
+			for _, quota := range quotas {
+				<form class="np-form np-action-form" method="post" action="/quotas">
+					<input type="hidden" name="user_id" value={ formatQuotaUserID(quota.UserID) }/>
+					<label>Account <input value={ quota.Email } disabled/></label>
+					<label>Sites <input type="number" min="0" name="max_sites" value={ formatQuotaFormValue(quota.Limits.MaxSites) } required/></label>
+					<label>Databases <input type="number" min="0" name="max_databases" value={ formatQuotaFormValue(quota.Limits.MaxDatabases) } required/></label>
+					<label>Storage MB <input type="number" min="0" name="storage_mb" value={ formatQuotaFormValue(quota.Limits.StorageMB) } required/></label>
+					<label>Backups <input type="number" min="0" name="max_backups" value={ formatQuotaFormValue(quota.Limits.MaxBackups) } required/></label>
+					<label>Backup MB <input type="number" min="0" name="backup_storage_mb" value={ formatQuotaFormValue(quota.Limits.BackupStorageMB) } required/></label>
+					<label>Site disk MB <input type="number" min="0" name="site_disk_quota_mb" value={ formatQuotaFormValue(quota.Limits.SiteDiskQuotaMB) } required/></label>
+					<label>PHP children <input type="number" min="0" name="php_max_children" value={ formatQuotaFormValue(quota.Limits.PHPFPMMaxChildren) } required/></label>
+					<label>PHP memory MB <input type="number" min="0" name="php_memory_mb" value={ formatQuotaFormValue(quota.Limits.PHPMemoryMB) } required/></label>
+					<button type="submit">Save quota</button>
+				</form>
+			}
+		}
+	</section>
+}
+
+templ quotaUsageSection(title string, quotas []controlquota.Summary, loadError string) {
+	<section class="np-section" aria-labelledby="quota-usage-title">
+		<div class="np-section-heading">
+			<h2 id="quota-usage-title">{ title }</h2>
+		</div>
+		if loadError != "" {
+			<p class="np-empty">
+				for _, message := range errorMessages(loadError) {
+					<span class="np-error">{ message }</span>
+				}
+			</p>
+		} else if len(quotas) == 0 {
+			<p class="np-empty">No resource usage recorded.</p>
+		} else {
+			@quotaUsageTable(quotas)
+		}
+	</section>
+}
+
+templ quotaUsageTable(quotas []controlquota.Summary) {
+	<div class="np-table-wrap">
+		<table class="np-table">
+			<thead>
+				<tr>
+					<th>Account</th>
+					<th>Role</th>
+					<th>Sites</th>
+					<th>Databases</th>
+					<th>Backups</th>
+					<th>Backup storage</th>
+					<th>Site disk</th>
+					<th>PHP</th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, quota := range quotas {
+					<tr>
+						<td data-label="Account"><span class="np-table-value">{ quota.Email }</span></td>
+						<td data-label="Role"><span class="np-table-value">{ quota.Role }</span></td>
+						<td data-label="Sites"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota) }</span></td>
+						<td data-label="Databases"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Databases, quota.Limits.MaxDatabases, quota.HasQuota) }</span></td>
+						<td data-label="Backups"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Backups, quota.Limits.MaxBackups, quota.HasQuota) }</span></td>
+						<td data-label="Backup storage"><span class="np-table-value">{ formatQuotaStorage(quota.Usage.BackupStorageBytes, quota.Limits.BackupStorageMB, quota.HasQuota) }</span></td>
+						<td data-label="Site disk"><span class="np-table-value">{ formatQuotaLimitMB(quota.Limits.SiteDiskQuotaMB, quota.HasQuota) }</span></td>
+						<td data-label="PHP"><span class="np-table-value">{ formatQuotaPHP(quota) }</span></td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ jobsSection(jobs []dashboard.Job, loadError string, actions DashboardActions) {
+	<section class="np-section" aria-labelledby="jobs-title">
+		<div class="np-section-heading">
+			<h2 id="jobs-title">Recent jobs</h2>
+		</div>
+		if loadError != "" {
+			<p class="np-empty">
+				for _, message := range errorMessages(loadError) {
+					<span class="np-error">{ message }</span>
+				}
+			</p>
+		} else if len(jobs) == 0 {
+			<p class="np-empty">No recent jobs.</p>
+		} else {
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead>
+						<tr>
+							<th>ID</th>
+							<th>Kind</th>
+							<th>Target</th>
+							<th>State</th>
+							<th>Attempts</th>
+							<th>Created</th>
+							<th>Last error</th>
+							<th>Action</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, job := range jobs {
+							<tr>
+								<td data-label="ID"><span class="np-table-value">{ job.ID }</span></td>
+								<td data-label="Kind"><span class="np-table-value">{ job.Kind }</span></td>
+								<td data-label="Target"><span class="np-table-value">{ job.Target }</span></td>
+								<td data-label="State" class="np-status"><span class="np-table-value">{ job.State }</span></td>
+								<td data-label="Attempts"><span class="np-table-value">{ formatAttempts(job) }</span></td>
+								<td data-label="Created"><span class="np-table-value">{ formatTime(job.CreatedAt) }</span></td>
+								<td data-label="Last error">
+									<span class="np-table-value">
+										for _, message := range errorMessages(job.LastError) {
+											<span class="np-error">{ message }</span>
+										}
+									</span>
+								</td>
+								<td data-label="Action">
+									<span class="np-table-value">
+										if canRetryJob(job, actions) {
+											<form class="np-inline-form" method="post" action="/jobs/retry">
+												<input type="hidden" name="job_id" value={ formatJobID(job.ID) }/>
+												<button type="submit">Retry job</button>
+											</form>
+										} else {
+											<span class="np-muted">-</span>
+										}
+									</span>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</section>
+}
