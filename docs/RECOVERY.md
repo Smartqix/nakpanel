@@ -121,12 +121,13 @@ The full Phase 7 Multipass smoke test is:
 deploy/multipass/phase7-verify.sh
 ```
 
-Phase 8 adds account quotas and Linux user disk quotas. Missing
-`account_quotas` rows are treated as unlimited; explicit zero values are real
-zero limits. Admins can manage rows from **Account quotas** on the dashboard.
-Site creates derive PHP-FPM and disk limits server-side and the agent enforces
-them with per-pool PHP-FPM settings plus `setquota` on the filesystem that
-contains `/home/<site-user>`.
+Phase 8 originally adds account quotas and Linux user disk quotas. In a pure
+Phase 8 deployment, missing `account_quotas` rows are treated as unlimited and
+explicit zero values are real zero limits. Phase 9 replaces runtime quota
+entitlement with plans and subscriptions; review the Phase 9 notes below before
+changing quotas on an upgraded system. Site creates still derive PHP-FPM and
+disk limits server-side, and the agent enforces them with per-pool PHP-FPM
+settings plus `setquota` on the filesystem that contains `/home/<site-user>`.
 
 Quota recovery checks:
 
@@ -150,8 +151,42 @@ sudo quotaon -uv "$(findmnt -n -o TARGET --target /home)"
 sudo systemctl restart nakpanel-agent.service nakpanel.service
 ```
 
+Phase 9 moves entitlement from `account_quotas` to active subscriptions on
+plans. A customer without an active subscription is denied site, database, and
+backup provisioning before any agent job is queued. `-1` plan limits mean
+unlimited, while explicit `0` still means zero allowed. The `/quotas` route is
+kept only as a compatibility path that creates a custom legacy plan and active
+subscription.
+
+Plan/subscription recovery checks:
+
+```bash
+sudo -u postgres psql -d nakpanel -c "SELECT id, name, is_active FROM plans ORDER BY id"
+sudo -u postgres psql -d nakpanel -c "SELECT customer_user_id, plan_id, status FROM subscriptions ORDER BY customer_user_id"
+sudo -u postgres psql -d nakpanel -c "SELECT oversell_policy, server_disk_capacity_mb FROM settings"
+sudo journalctl -u nakpanel --no-pager -n 200
+```
+
+If provisioning fails with `no active subscription`, assign the customer an
+active plan from the admin dashboard or insert a corrected active subscription
+after verifying the intended customer and plan. If `oversell cap exceeded`
+blocks a plan assignment, either raise `settings.server_disk_capacity_mb`,
+switch `settings.oversell_policy` to `warn`, or move active customers to finite
+plans that fit the cap.
+
+The agent also rejects Unix socket clients whose Linux peer UID is not the
+panel user. If panel-to-agent RPC fails after a user or service change, confirm
+the panel service runs as `nakpanel`, the agent can resolve that UID, and the
+socket is still owned `root:nakpanel` with mode `0660`.
+
 The full Phase 8 Multipass smoke test is:
 
 ```bash
 deploy/multipass/phase8-verify.sh
+```
+
+The full Phase 9 Multipass smoke test is:
+
+```bash
+deploy/multipass/phase9-verify.sh
 ```

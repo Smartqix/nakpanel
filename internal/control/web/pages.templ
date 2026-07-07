@@ -104,10 +104,10 @@ templ AdminerPage(token types.AdminerSSO) {
 }
 
 	templ dashboardSections(data dashboard.Data, actions DashboardActions) {
-		@sitesSection(data.Sites, actions)
-		@databasesSection(data.Databases, actions)
-		@phase6Section(data.Phase6, data.Phase6Error, actions)
-		@quotaSection(data.Quotas, data.QuotaLoadError, actions)
+		@sitesSection(data.Sites, data.Quotas, actions)
+		@databasesSection(data.Databases, data.Quotas, actions)
+		@phase6Section(data.Phase6, data.Phase6Error, data.Quotas, actions)
+		@planSection(data.Quotas, data.Plans, data.Settings, data.CommittedDiskMB, data.QuotaLoadError, data.PlanLoadError, actions)
 		@jobsSection(data.Jobs, data.JobLoadError, actions)
 	}
 
@@ -130,7 +130,7 @@ templ AdminerPage(token types.AdminerSSO) {
 		@quotaUsageSection("Resource usage", data.Quotas, data.QuotaLoadError)
 	}
 
-	templ sitesSection(sites []dashboard.Site, actions DashboardActions) {
+	templ sitesSection(sites []dashboard.Site, quotas []controlquota.Summary, actions DashboardActions) {
 	<section class="np-section" aria-labelledby="sites-title">
 		<div class="np-section-heading">
 			<h2 id="sites-title">Sites</h2>
@@ -173,6 +173,7 @@ templ AdminerPage(token types.AdminerSSO) {
 		}
 		if actions.CanCreateSite {
 			<form class="np-form np-action-form" method="post" action="/sites">
+				@customerSelect(quotas)
 				<label>Username <input name="username" autocomplete="off" required/></label>
 				<label>Domain <input name="domain" autocomplete="off" required/></label>
 				<label>PHP <select name="php_version"><option value="8.3">8.3</option><option value="8.2">8.2</option></select></label>
@@ -189,7 +190,7 @@ templ AdminerPage(token types.AdminerSSO) {
 	</section>
 }
 
-templ databasesSection(databases []dashboard.Database, actions DashboardActions) {
+templ databasesSection(databases []dashboard.Database, quotas []controlquota.Summary, actions DashboardActions) {
 	<section class="np-section" aria-labelledby="databases-title">
 		<div class="np-section-heading">
 			<h2 id="databases-title">Databases</h2>
@@ -230,6 +231,7 @@ templ databasesSection(databases []dashboard.Database, actions DashboardActions)
 		}
 		if actions.CanCreateDatabase {
 			<form class="np-form np-action-form" method="post" action="/databases">
+				@customerSelect(quotas)
 				<label>Engine <select name="engine"><option value="mariadb">mariadb</option></select></label>
 				<label>Name <input name="db_name" autocomplete="off" required/></label>
 				<label>User <input name="db_user" autocomplete="off" required/></label>
@@ -239,7 +241,7 @@ templ databasesSection(databases []dashboard.Database, actions DashboardActions)
 	</section>
 }
 
-templ phase6Section(phase6 dashboard.Phase6Data, loadError string, actions DashboardActions) {
+templ phase6Section(phase6 dashboard.Phase6Data, loadError string, quotas []controlquota.Summary, actions DashboardActions) {
 	if actions.CanUsePhase6 {
 		<section class="np-section" aria-labelledby="phase6-title">
 			<div class="np-section-heading">
@@ -255,6 +257,7 @@ templ phase6Section(phase6 dashboard.Phase6Data, loadError string, actions Dashb
 				@phase6Tables(phase6)
 			}
 			<form class="np-form np-action-form" method="post" action="/backups">
+				@customerSelect(quotas)
 				<label>Domain <input name="domain" autocomplete="off" required/></label>
 				<button type="submit">Create backup</button>
 			</form>
@@ -383,14 +386,14 @@ templ phase6Tables(phase6 dashboard.Phase6Data) {
 	}
 }
 
-templ quotaSection(quotas []controlquota.Summary, loadError string, actions DashboardActions) {
-	<section class="np-section" aria-labelledby="quotas-title">
+templ planSection(quotas []controlquota.Summary, plans []controlquota.Plan, settings controlquota.Settings, committedDiskMB int, quotaLoadError string, planLoadError string, actions DashboardActions) {
+	<section class="np-section" aria-labelledby="plans-title">
 		<div class="np-section-heading">
-			<h2 id="quotas-title">Account quotas</h2>
+			<h2 id="plans-title">Plans & subscriptions</h2>
 		</div>
-		if loadError != "" {
+		if quotaLoadError != "" {
 			<p class="np-empty">
-				for _, message := range errorMessages(loadError) {
+				for _, message := range errorMessages(quotaLoadError) {
 					<span class="np-error">{ message }</span>
 				}
 			</p>
@@ -399,24 +402,126 @@ templ quotaSection(quotas []controlquota.Summary, loadError string, actions Dash
 		} else {
 			@quotaUsageTable(quotas)
 		}
-		if actions.CanManageQuotas && len(quotas) > 0 {
-			for _, quota := range quotas {
-				<form class="np-form np-action-form" method="post" action="/quotas">
-					<input type="hidden" name="user_id" value={ formatQuotaUserID(quota.UserID) }/>
-					<label>Account <input value={ quota.Email } disabled/></label>
-					<label>Sites <input type="number" min="0" name="max_sites" value={ formatQuotaFormValue(quota.Limits.MaxSites) } required/></label>
-					<label>Databases <input type="number" min="0" name="max_databases" value={ formatQuotaFormValue(quota.Limits.MaxDatabases) } required/></label>
-					<label>Storage MB <input type="number" min="0" name="storage_mb" value={ formatQuotaFormValue(quota.Limits.StorageMB) } required/></label>
-					<label>Backups <input type="number" min="0" name="max_backups" value={ formatQuotaFormValue(quota.Limits.MaxBackups) } required/></label>
-					<label>Backup MB <input type="number" min="0" name="backup_storage_mb" value={ formatQuotaFormValue(quota.Limits.BackupStorageMB) } required/></label>
-					<label>Site disk MB <input type="number" min="0" name="site_disk_quota_mb" value={ formatQuotaFormValue(quota.Limits.SiteDiskQuotaMB) } required/></label>
-					<label>PHP children <input type="number" min="0" name="php_max_children" value={ formatQuotaFormValue(quota.Limits.PHPFPMMaxChildren) } required/></label>
-					<label>PHP memory MB <input type="number" min="0" name="php_memory_mb" value={ formatQuotaFormValue(quota.Limits.PHPMemoryMB) } required/></label>
-					<button type="submit">Save quota</button>
-				</form>
-			}
+		if planLoadError != "" {
+			<p class="np-empty">
+				for _, message := range errorMessages(planLoadError) {
+					<span class="np-error">{ message }</span>
+				}
+			</p>
+		} else if actions.CanManageQuotas {
+			<dl class="np-summary-list">
+				<div>
+					<dt>Oversell policy</dt>
+					<dd>{ settings.OversellPolicy }</dd>
+				</div>
+				<div>
+					<dt>Server capacity</dt>
+					<dd>{ formatSettingsCapacity(settings.ServerDiskCapacityMB) } MB</dd>
+				</div>
+				<div>
+					<dt>Committed disk</dt>
+					<dd>{ formatCommittedDisk(committedDiskMB) }</dd>
+				</div>
+			</dl>
+			@plansTable(plans)
+			<form class="np-form np-action-form" method="post" action="/settings/oversell">
+				<label>Oversell <select name="oversell_policy"><option value="warn">warn</option><option value="cap">cap</option></select></label>
+				<label>Capacity MB <input type="number" min="0" name="server_disk_capacity_mb" value={ formatSettingsCapacity(settings.ServerDiskCapacityMB) } required/></label>
+				<button type="submit">Save settings</button>
+			</form>
+			<form class="np-form np-action-form" method="post" action="/subscriptions">
+				<label>Customer <select name="customer_user_id">
+					for _, quota := range quotas {
+						<option value={ formatQuotaUserID(quota.UserID) }>{ quota.Email } - { formatSummaryPlanName(quota) }</option>
+					}
+				</select></label>
+				<label>Plan <select name="plan_id">
+					for _, plan := range plans {
+						if plan.IsActive {
+							<option value={ formatPlanID(plan.ID) }>{ plan.Name }</option>
+						}
+					}
+				</select></label>
+				<button type="submit">Assign plan</button>
+			</form>
+			@planForm()
 		}
 	</section>
+}
+
+templ customerSelect(quotas []controlquota.Summary) {
+	if len(quotas) > 0 {
+		<label>Customer <select name="owner_user_id">
+			for _, quota := range quotas {
+				<option value={ formatQuotaUserID(quota.UserID) }>{ quota.Email } - { formatSummaryPlanName(quota) }</option>
+			}
+		</select></label>
+	}
+}
+
+templ plansTable(plans []controlquota.Plan) {
+	if len(plans) == 0 {
+		<p class="np-empty">No plans found.</p>
+	} else {
+		<div class="np-table-wrap">
+			<table class="np-table">
+				<thead><tr><th>Plan</th><th>Status</th><th>Disk</th><th>Sites</th><th>Databases</th><th>Backups</th><th>PHP</th><th>SSH</th><th>DNS</th><th>Action</th></tr></thead>
+				<tbody>
+					for _, plan := range plans {
+						<tr>
+							<td data-label="Plan"><span class="np-table-value">{ plan.Name }</span></td>
+							<td data-label="Status"><span class="np-table-value">{ formatPlanStatus(plan) }</span></td>
+							<td data-label="Disk"><span class="np-table-value">{ formatPlanLimitMB(plan.DiskMB) }</span></td>
+							<td data-label="Sites"><span class="np-table-value">{ formatPlanLimit(plan.MaxSites) }</span></td>
+							<td data-label="Databases"><span class="np-table-value">{ formatPlanLimit(plan.MaxDatabases) }</span></td>
+							<td data-label="Backups"><span class="np-table-value">{ formatPlanLimit(plan.MaxBackups) }</span></td>
+							<td data-label="PHP"><span class="np-table-value">{ formatPlanPHP(plan) }</span></td>
+							<td data-label="SSH"><span class="np-table-value">{ formatPlanBool(plan.AllowSSH) }</span></td>
+							<td data-label="DNS"><span class="np-table-value">{ formatPlanBool(plan.AllowDNS) }</span></td>
+							<td data-label="Action">
+								<span class="np-table-value">
+									<form class="np-inline-form" method="post" action="/plans/status">
+										<input type="hidden" name="plan_id" value={ formatPlanID(plan.ID) }/>
+										if plan.IsActive {
+											<input type="hidden" name="is_active" value="false"/>
+											<button type="submit">Disable</button>
+										} else {
+											<input type="hidden" name="is_active" value="true"/>
+											<button type="submit">Enable</button>
+										}
+									</form>
+								</span>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+templ planForm() {
+	<form class="np-form np-action-form" method="post" action="/plans">
+		<label>Name <input name="name" autocomplete="off" required/></label>
+		<label>Description <input name="description" autocomplete="off"/></label>
+		<label>Price cents <input type="number" min="0" name="price_cents"/></label>
+		<label>Disk MB <input type="number" min="-1" name="disk_mb" value="-1" required/></label>
+		<label>Sites <input type="number" min="-1" name="max_sites" value="-1" required/></label>
+		<label>Databases <input type="number" min="-1" name="max_databases" value="-1" required/></label>
+		<label>Bandwidth MB <input type="number" min="-1" name="bandwidth_mb" value="-1" required/></label>
+		<label>Mailboxes <input type="number" min="-1" name="max_mailboxes" value="0" required/></label>
+		<label>Retention days <input type="number" min="-1" name="backup_retention_days" value="30" required/></label>
+		<label>PHP versions <input name="php_allowlist" value="8.3,8.2" required/></label>
+		<label>PHP children <input type="number" min="-1" name="php_max_children" value="-1" required/></label>
+		<label>PHP memory MB <input type="number" min="-1" name="php_memory_mb" value="-1" required/></label>
+		<label>Site disk MB <input type="number" min="-1" name="site_disk_quota_mb" value="-1" required/></label>
+		<label>Backups <input type="number" min="-1" name="max_backups" value="-1" required/></label>
+		<label>Backup MB <input type="number" min="-1" name="backup_storage_mb" value="-1" required/></label>
+		<label>SSH <input type="checkbox" name="allow_ssh" value="true"/></label>
+		<label>DNS <input type="checkbox" name="allow_dns" value="true" checked/></label>
+		<label>Active <input type="checkbox" name="is_active" value="true" checked/></label>
+		<button type="submit">Save plan</button>
+	</form>
 }
 
 templ quotaUsageSection(title string, quotas []controlquota.Summary, loadError string) {
@@ -445,6 +550,7 @@ templ quotaUsageTable(quotas []controlquota.Summary) {
 				<tr>
 					<th>Account</th>
 					<th>Role</th>
+					<th>Plan</th>
 					<th>Sites</th>
 					<th>Databases</th>
 					<th>Backups</th>
@@ -458,6 +564,7 @@ templ quotaUsageTable(quotas []controlquota.Summary) {
 					<tr>
 						<td data-label="Account"><span class="np-table-value">{ quota.Email }</span></td>
 						<td data-label="Role"><span class="np-table-value">{ quota.Role }</span></td>
+						<td data-label="Plan"><span class="np-table-value">{ formatSummaryPlanName(quota) }</span></td>
 						<td data-label="Sites"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota) }</span></td>
 						<td data-label="Databases"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Databases, quota.Limits.MaxDatabases, quota.HasQuota) }</span></td>
 						<td data-label="Backups"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Backups, quota.Limits.MaxBackups, quota.HasQuota) }</span></td>

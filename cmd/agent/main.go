@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/nakroteck/nakpanel/internal/agent/ops"
@@ -27,6 +28,10 @@ func main() {
 		log.Fatalf("listen on agent socket: %v", err)
 	}
 	defer listener.Close()
+	allowedUID, err := resolveAllowedPeerUID()
+	if err != nil {
+		log.Fatalf("resolve allowed panel uid: %v", err)
+	}
 
 	reloader := ops.NewSystemdReloader(ops.SystemdReloaderOptions{AllowedServices: []string{"nginx", "php8.3-fpm", "php8.2-fpm", "bind9", "named.service"}})
 	siteProvisioner := ops.NewSiteProvisioner(ops.SiteProvisionerOptions{
@@ -71,7 +76,7 @@ func main() {
 			),
 		},
 	)
-	server := agentrpc.NewServer(dispatcher)
+	server := agentrpc.NewServer(dispatcher, agentrpc.WithAllowedPeerUID(allowedUID))
 
 	go func() {
 		<-ctx.Done()
@@ -82,6 +87,25 @@ func main() {
 	if err := server.Serve(ctx, listener); err != nil {
 		log.Fatalf("serve agent socket: %v", err)
 	}
+}
+
+func resolveAllowedPeerUID() (uint32, error) {
+	if raw := strings.TrimSpace(os.Getenv("NAKPANEL_AGENT_ALLOWED_UID")); raw != "" {
+		uid, err := strconv.ParseUint(raw, 10, 32)
+		if err != nil {
+			return 0, fmt.Errorf("parse NAKPANEL_AGENT_ALLOWED_UID: %w", err)
+		}
+		return uint32(uid), nil
+	}
+	panelUser, err := user.Lookup(config.PanelUser)
+	if err != nil {
+		return 0, fmt.Errorf("lookup user %q: %w", config.PanelUser, err)
+	}
+	uid, err := strconv.ParseUint(panelUser.Uid, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("parse user id %q: %w", panelUser.Uid, err)
+	}
+	return uint32(uid), nil
 }
 
 func listenUnix(socketPath, groupName string) (net.Listener, error) {

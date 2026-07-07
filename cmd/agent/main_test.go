@@ -40,3 +40,23 @@ func TestListenUnixCreatesSocketWithMode0660(t *testing.T) {
 	}
 	_ = conn.Close()
 }
+
+func TestResolveAllowedPeerUIDFromEnv(t *testing.T) {
+	t.Setenv("NAKPANEL_AGENT_ALLOWED_UID", "1234")
+
+	uid, err := resolveAllowedPeerUID()
+	if err != nil {
+		t.Fatalf("resolveAllowedPeerUID returned error: %v", err)
+	}
+	if uid != 1234 {
+		t.Fatalf("uid = %d, want 1234", uid)
+	}
+}
+
+func TestResolveAllowedPeerUIDRejectsInvalidEnv(t *testing.T) {
+	t.Setenv("NAKPANEL_AGENT_ALLOWED_UID", "not-a-uid")
+
+	if _, err := resolveAllowedPeerUID(); err == nil {
+		t.Fatal("resolveAllowedPeerUID returned nil error for invalid env")
+	}
+}

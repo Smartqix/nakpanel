@@ -45,6 +45,7 @@ type Manager struct {
 	certificateRepo   CertificateRepository
 	phase6Repo        Phase6Repository
 	quotaStore        controlquota.Store
+	quotaAdmin        controlquota.AdminStore
 	passwordGenerator PasswordGenerator
 }
 
@@ -88,12 +89,22 @@ func WithPhase6Repository(repo Phase6Repository) ManagerOption {
 func WithQuotaStore(store controlquota.Store) ManagerOption {
 	return func(m *Manager) {
 		m.quotaStore = store
+		if adminStore, ok := store.(controlquota.AdminStore); ok {
+			m.quotaAdmin = adminStore
+		}
 	}
 }
 
 func (m *Manager) CreateSite(ctx context.Context, owner auth.SessionUser, req types.CreateSiteReq) (int64, error) {
-	if owner.Role != auth.RoleAdmin {
+	return m.CreateSiteFor(ctx, owner, owner.ID, req)
+}
+
+func (m *Manager) CreateSiteFor(ctx context.Context, actor auth.SessionUser, resourceOwnerID int64, req types.CreateSiteReq) (int64, error) {
+	if actor.Role != auth.RoleAdmin {
 		return 0, ErrForbidden
+	}
+	if resourceOwnerID <= 0 {
+		return 0, errors.New("resource owner id is required")
 	}
 	if m.siteRepo == nil {
 		return 0, errors.New("site repository is not configured")
@@ -103,17 +114,24 @@ func (m *Manager) CreateSite(ctx context.Context, owner auth.SessionUser, req ty
 	if err := site.ValidateCreateSiteRequest(normalized); err != nil {
 		return 0, err
 	}
-	limits, err := controlquota.SiteLimits(ctx, m.quotaStore, owner.ID)
+	limits, err := controlquota.SiteLimits(ctx, m.quotaStore, resourceOwnerID)
 	if err != nil {
 		return 0, err
 	}
 	normalized.Limits = limits
-	return m.siteRepo.CreateSite(ctx, owner.ID, normalized)
+	return m.siteRepo.CreateSite(ctx, resourceOwnerID, normalized)
 }
 
 func (m *Manager) CreateDatabase(ctx context.Context, owner auth.SessionUser, req types.CreateDatabaseReq) (int64, error) {
-	if owner.Role != auth.RoleAdmin {
+	return m.CreateDatabaseFor(ctx, owner, owner.ID, req)
+}
+
+func (m *Manager) CreateDatabaseFor(ctx context.Context, actor auth.SessionUser, resourceOwnerID int64, req types.CreateDatabaseReq) (int64, error) {
+	if actor.Role != auth.RoleAdmin {
 		return 0, ErrForbidden
+	}
+	if resourceOwnerID <= 0 {
+		return 0, errors.New("resource owner id is required")
 	}
 	if m.databaseRepo == nil {
 		return 0, errors.New("database repository is not configured")
@@ -134,10 +152,10 @@ func (m *Manager) CreateDatabase(ctx context.Context, owner auth.SessionUser, re
 	if err := dbvalidation.ValidateCreateDatabaseRequest(normalized); err != nil {
 		return 0, err
 	}
-	if err := controlquota.CheckDatabase(ctx, m.quotaStore, owner.ID); err != nil {
+	if err := controlquota.CheckDatabase(ctx, m.quotaStore, resourceOwnerID); err != nil {
 		return 0, err
 	}
-	return m.databaseRepo.CreateDatabase(ctx, owner.ID, normalized)
+	return m.databaseRepo.CreateDatabase(ctx, resourceOwnerID, normalized)
 }
 
 func (m *Manager) IssueCertificate(ctx context.Context, owner auth.SessionUser, domain string, issuer types.CertIssuer) (int64, error) {
@@ -163,8 +181,15 @@ func (m *Manager) IssueCertificate(ctx context.Context, owner auth.SessionUser, 
 }
 
 func (m *Manager) CreateBackup(ctx context.Context, owner auth.SessionUser, req types.CreateBackupReq) (int64, error) {
-	if owner.Role != auth.RoleAdmin {
+	return m.CreateBackupFor(ctx, owner, owner.ID, req)
+}
+
+func (m *Manager) CreateBackupFor(ctx context.Context, actor auth.SessionUser, resourceOwnerID int64, req types.CreateBackupReq) (int64, error) {
+	if actor.Role != auth.RoleAdmin {
 		return 0, ErrForbidden
+	}
+	if resourceOwnerID <= 0 {
+		return 0, errors.New("resource owner id is required")
 	}
 	if m.phase6Repo == nil {
 		return 0, errors.New("phase6 repository is not configured")
@@ -173,10 +198,10 @@ func (m *Manager) CreateBackup(ctx context.Context, owner auth.SessionUser, req 
 	if err := site.ValidateDomain(req.Domain); err != nil {
 		return 0, err
 	}
-	if err := controlquota.CheckBackup(ctx, m.quotaStore, owner.ID); err != nil {
+	if err := controlquota.CheckBackup(ctx, m.quotaStore, resourceOwnerID); err != nil {
 		return 0, err
 	}
-	return m.phase6Repo.CreateBackup(ctx, owner.ID, req)
+	return m.phase6Repo.CreateBackup(ctx, resourceOwnerID, req)
 }
 
 func (m *Manager) ConfigureWebmail(ctx context.Context, owner auth.SessionUser, domain string) (int64, error) {
@@ -248,6 +273,46 @@ func (m *Manager) UpsertAccountQuota(ctx context.Context, owner auth.SessionUser
 		return errors.New("quota store is not configured")
 	}
 	return m.quotaStore.UpsertLimits(ctx, limits)
+}
+
+func (m *Manager) UpsertPlan(ctx context.Context, owner auth.SessionUser, plan controlquota.Plan) (controlquota.Plan, error) {
+	if owner.Role != auth.RoleAdmin {
+		return controlquota.Plan{}, ErrForbidden
+	}
+	if m.quotaAdmin == nil {
+		return controlquota.Plan{}, errors.New("plan store is not configured")
+	}
+	return m.quotaAdmin.UpsertPlan(ctx, plan)
+}
+
+func (m *Manager) SetPlanActive(ctx context.Context, owner auth.SessionUser, planID int64, active bool) error {
+	if owner.Role != auth.RoleAdmin {
+		return ErrForbidden
+	}
+	if m.quotaAdmin == nil {
+		return errors.New("plan store is not configured")
+	}
+	return m.quotaAdmin.SetPlanActive(ctx, planID, active)
+}
+
+func (m *Manager) AssignSubscription(ctx context.Context, owner auth.SessionUser, customerUserID int64, planID int64) (controlquota.SubscriptionAssignment, error) {
+	if owner.Role != auth.RoleAdmin {
+		return controlquota.SubscriptionAssignment{}, ErrForbidden
+	}
+	if m.quotaAdmin == nil {
+		return controlquota.SubscriptionAssignment{}, errors.New("plan store is not configured")
+	}
+	return m.quotaAdmin.AssignSubscription(ctx, customerUserID, planID)
+}
+
+func (m *Manager) UpdateSettings(ctx context.Context, owner auth.SessionUser, settings controlquota.Settings) error {
+	if owner.Role != auth.RoleAdmin {
+		return ErrForbidden
+	}
+	if m.quotaAdmin == nil {
+		return errors.New("plan store is not configured")
+	}
+	return m.quotaAdmin.UpdateSettings(ctx, settings)
 }
 
 func GenerateDatabasePassword() (string, error) {

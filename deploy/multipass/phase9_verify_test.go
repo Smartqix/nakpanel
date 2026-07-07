@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-func TestPhase8VerifierCoversQuotasAndDiskIsolation(t *testing.T) {
-	const path = "phase8-verify.sh"
+func TestPhase9VerifierCoversPlansSubscriptionsAndPeerCredentials(t *testing.T) {
+	const path = "phase9-verify.sh"
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile(%q) returned error: %v", path, err)
@@ -21,23 +21,28 @@ func TestPhase8VerifierCoversQuotasAndDiskIsolation(t *testing.T) {
 	}
 	script := string(data)
 	for _, want := range []string{
-		"phase7-verify.sh",
-		"post_admin phase8-quota quotas",
-		"quotaon",
-		"setquota",
-		"pm.max_children = 2",
-		"php_admin_value[memory_limit] = 64M",
+		"phase8-verify.sh",
+		"Plans & subscriptions",
+		"no active subscription",
+		"action=\"/plans\"",
+		"action=\"/subscriptions\"",
+		"action=\"/settings/oversell\"",
+		"Phase9 Tiny",
 		"quota exceeded",
-		"phase8 verification passed",
+		"oversell cap exceeded",
+		"nppeer9",
+		"/run/nakpanel/agent.sock",
+		"except OSError",
+		"phase9 verification passed",
 	} {
 		if !strings.Contains(script, want) {
-			t.Fatalf("phase8 verifier is missing %q", want)
+			t.Fatalf("phase9 verifier is missing %q", want)
 		}
 	}
 }
 
-func TestPhase8InstallerInstallsQuotaTooling(t *testing.T) {
-	const path = "../install/phase8-install.sh"
+func TestPhase9InstallerChainsQuotaTooling(t *testing.T) {
+	const path = "../install/phase9-install.sh"
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile(%q) returned error: %v", path, err)
@@ -51,14 +56,12 @@ func TestPhase8InstallerInstallsQuotaTooling(t *testing.T) {
 	}
 	script := string(data)
 	for _, want := range []string{
-		"phase7-install.sh",
-		"quota",
-		"quotacheck",
-		"quotaon",
+		"phase8-install.sh",
 		"systemctl restart nakpanel-agent.service nakpanel.service",
+		"Phase 9 plans/subscriptions",
 	} {
 		if !strings.Contains(script, want) {
-			t.Fatalf("phase8 installer is missing %q", want)
+			t.Fatalf("phase9 installer is missing %q", want)
 		}
 	}
 }

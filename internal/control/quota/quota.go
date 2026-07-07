@@ -10,10 +10,16 @@ import (
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
-var ErrExceeded = errors.New("quota exceeded")
+var (
+	ErrExceeded             = errors.New("quota exceeded")
+	ErrNoActiveSubscription = errors.New("no active subscription")
+)
 
 type Limits struct {
 	UserID            int64
+	SubscriptionID    int64
+	PlanID            int64
+	PlanName          string
 	MaxSites          int
 	MaxDatabases      int
 	StorageMB         int
@@ -35,12 +41,15 @@ type Usage struct {
 }
 
 type Summary struct {
-	UserID   int64
-	Email    string
-	Role     string
-	HasQuota bool
-	Limits   Limits
-	Usage    Usage
+	UserID         int64
+	Email          string
+	Role           string
+	HasQuota       bool
+	PlanID         int64
+	PlanName       string
+	SubscriptionID int64
+	Limits         Limits
+	Usage          Usage
 }
 
 type Store interface {
@@ -49,6 +58,17 @@ type Store interface {
 	UpsertLimits(ctx context.Context, limits Limits) error
 	ListAccountQuotas(ctx context.Context) ([]Summary, error)
 	GetAccountQuotaSummary(ctx context.Context, userID int64) (Summary, error)
+}
+
+type AdminStore interface {
+	Store
+	ListPlans(ctx context.Context) ([]Plan, error)
+	UpsertPlan(ctx context.Context, plan Plan) (Plan, error)
+	SetPlanActive(ctx context.Context, planID int64, active bool) error
+	AssignSubscription(ctx context.Context, customerUserID int64, planID int64) (SubscriptionAssignment, error)
+	GetSettings(ctx context.Context) (Settings, error)
+	UpdateSettings(ctx context.Context, settings Settings) error
+	CommittedAllocationMB(ctx context.Context) (int, error)
 }
 
 func SiteLimits(ctx context.Context, store Store, userID int64) (types.SiteResourceLimits, error) {
@@ -60,28 +80,28 @@ func SiteLimits(ctx context.Context, store Store, userID int64) (types.SiteResou
 		return types.SiteResourceLimits{}, err
 	}
 	if !hasLimits {
-		return types.SiteResourceLimits{}, nil
+		return types.SiteResourceLimits{}, ErrNoActiveSubscription
 	}
 	usage, err := store.GetUsage(ctx, userID)
 	if err != nil {
 		return types.SiteResourceLimits{}, err
 	}
-	if usage.Sites >= limits.MaxSites {
+	if limitReached(usage.Sites, limits.MaxSites) {
 		return types.SiteResourceLimits{}, fmt.Errorf("%w: sites %d / %d", ErrExceeded, usage.Sites, limits.MaxSites)
 	}
-	if limits.SiteDiskQuotaMB <= 0 {
+	if limits.SiteDiskQuotaMB == 0 {
 		return types.SiteResourceLimits{}, fmt.Errorf("%w: site disk quota is 0 MB", ErrExceeded)
 	}
-	if limits.PHPFPMMaxChildren <= 0 {
+	if limits.PHPFPMMaxChildren == 0 {
 		return types.SiteResourceLimits{}, fmt.Errorf("%w: php max children is 0", ErrExceeded)
 	}
-	if limits.PHPMemoryMB <= 0 {
+	if limits.PHPMemoryMB == 0 {
 		return types.SiteResourceLimits{}, fmt.Errorf("%w: php memory is 0 MB", ErrExceeded)
 	}
 	return types.SiteResourceLimits{
-		DiskQuotaMB:       limits.SiteDiskQuotaMB,
-		PHPFPMMaxChildren: limits.PHPFPMMaxChildren,
-		PHPMemoryMB:       limits.PHPMemoryMB,
+		DiskQuotaMB:       positiveLimit(limits.SiteDiskQuotaMB),
+		PHPFPMMaxChildren: positiveLimit(limits.PHPFPMMaxChildren),
+		PHPMemoryMB:       positiveLimit(limits.PHPMemoryMB),
 	}, nil
 }
 
@@ -94,13 +114,13 @@ func CheckDatabase(ctx context.Context, store Store, userID int64) error {
 		return err
 	}
 	if !hasLimits {
-		return nil
+		return ErrNoActiveSubscription
 	}
 	usage, err := store.GetUsage(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if usage.Databases >= limits.MaxDatabases {
+	if limitReached(usage.Databases, limits.MaxDatabases) {
 		return fmt.Errorf("%w: databases %d / %d", ErrExceeded, usage.Databases, limits.MaxDatabases)
 	}
 	return nil
@@ -115,20 +135,33 @@ func CheckBackup(ctx context.Context, store Store, userID int64) error {
 		return err
 	}
 	if !hasLimits {
-		return nil
+		return ErrNoActiveSubscription
 	}
 	usage, err := store.GetUsage(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if usage.Backups >= limits.MaxBackups {
+	if limitReached(usage.Backups, limits.MaxBackups) {
 		return fmt.Errorf("%w: backups %d / %d", ErrExceeded, usage.Backups, limits.MaxBackups)
 	}
-	maxBytes := int64(limits.BackupStorageMB) * 1024 * 1024
-	if usage.BackupStorageBytes >= maxBytes {
-		return fmt.Errorf("%w: backup storage %d / %d bytes", ErrExceeded, usage.BackupStorageBytes, maxBytes)
+	if limits.BackupStorageMB >= 0 {
+		maxBytes := int64(limits.BackupStorageMB) * 1024 * 1024
+		if usage.BackupStorageBytes >= maxBytes {
+			return fmt.Errorf("%w: backup storage %d / %d bytes", ErrExceeded, usage.BackupStorageBytes, maxBytes)
+		}
 	}
 	return nil
+}
+
+func limitReached(used int, allowed int) bool {
+	return allowed >= 0 && used >= allowed
+}
+
+func positiveLimit(value int) int {
+	if value > 0 {
+		return value
+	}
+	return 0
 }
 
 func ValidateLimits(limits Limits) error {
@@ -145,8 +178,8 @@ func ValidateLimits(limits Limits) error {
 		"php_max_children":   limits.PHPFPMMaxChildren,
 		"php_memory_mb":      limits.PHPMemoryMB,
 	} {
-		if value < 0 {
-			return fmt.Errorf("%s cannot be negative", name)
+		if value < -1 {
+			return fmt.Errorf("%s cannot be less than -1", name)
 		}
 	}
 	return nil
@@ -165,11 +198,17 @@ func (s *SQLStore) GetLimits(ctx context.Context, userID int64) (Limits, bool, e
 		return Limits{}, false, errors.New("quota database is not configured")
 	}
 	var limits Limits
-	err := s.db.QueryRowContext(ctx, `SELECT user_id, max_sites, max_databases, storage_mb, max_backups, backup_storage_mb,
-       site_disk_quota_mb, php_fpm_max_children, php_memory_mb, created_at, updated_at
-FROM account_quotas
-WHERE user_id = $1`, userID).Scan(
+	err := s.db.QueryRowContext(ctx, `SELECT s.customer_user_id, s.id, p.id, p.name,
+       p.max_sites, p.max_databases, p.disk_mb, p.max_backups, p.backup_storage_mb,
+       p.site_disk_quota_mb, p.php_fpm_max_children, p.php_memory_mb, p.created_at, p.updated_at
+FROM subscriptions s
+JOIN plans p ON p.id = s.plan_id
+WHERE s.customer_user_id = $1
+  AND s.status = 'active'`, userID).Scan(
 		&limits.UserID,
+		&limits.SubscriptionID,
+		&limits.PlanID,
+		&limits.PlanName,
 		&limits.MaxSites,
 		&limits.MaxDatabases,
 		&limits.StorageMB,
@@ -216,7 +255,30 @@ func (s *SQLStore) UpsertLimits(ctx context.Context, limits Limits) error {
 	if err := ValidateLimits(limits); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `INSERT INTO account_quotas (
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	planID, err := upsertLegacyQuotaPlanTx(ctx, tx, limits)
+	if err != nil {
+		return err
+	}
+	if _, err := subscriptionOversellWarningTx(ctx, tx, limits.UserID, Plan{
+		ID:     planID,
+		Name:   fmt.Sprintf("Custom quota user %d", limits.UserID),
+		DiskMB: limits.StorageMB,
+	}); err != nil {
+		return err
+	}
+	subscriptionID, err := assignSubscriptionTx(ctx, tx, limits.UserID, planID)
+	if err != nil {
+		return err
+	}
+	if err := relinkResourcesTx(ctx, tx, limits.UserID, subscriptionID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO account_quotas (
     user_id, max_sites, max_databases, storage_mb, max_backups, backup_storage_mb,
     site_disk_quota_mb, php_fpm_max_children, php_memory_mb
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -239,8 +301,10 @@ ON CONFLICT (user_id) DO UPDATE SET
 		limits.SiteDiskQuotaMB,
 		limits.PHPFPMMaxChildren,
 		limits.PHPMemoryMB,
-	)
-	return err
+	); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *SQLStore) ListAccountQuotas(ctx context.Context) ([]Summary, error) {
@@ -272,16 +336,18 @@ func (s *SQLStore) GetAccountQuotaSummary(ctx context.Context, userID int64) (Su
 }
 
 const accountQuotaSummarySQL = `SELECT u.id, u.email, u.role,
-    q.user_id IS NOT NULL AS has_quota,
-    COALESCE(q.max_sites, 0), COALESCE(q.max_databases, 0), COALESCE(q.storage_mb, 0),
-    COALESCE(q.max_backups, 0), COALESCE(q.backup_storage_mb, 0),
-    COALESCE(q.site_disk_quota_mb, 0), COALESCE(q.php_fpm_max_children, 0), COALESCE(q.php_memory_mb, 0),
+    s.id IS NOT NULL AS has_quota,
+    COALESCE(s.id, 0), COALESCE(p.id, 0), COALESCE(p.name, ''),
+    COALESCE(p.max_sites, 0), COALESCE(p.max_databases, 0), COALESCE(p.disk_mb, 0),
+    COALESCE(p.max_backups, 0), COALESCE(p.backup_storage_mb, 0),
+    COALESCE(p.site_disk_quota_mb, 0), COALESCE(p.php_fpm_max_children, 0), COALESCE(p.php_memory_mb, 0),
     COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS sites,
     COALESCE((SELECT COUNT(*) FROM databases WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS backups,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = u.id AND status = 'active'), 0)::bigint AS backup_storage_bytes
 FROM users u
-LEFT JOIN account_quotas q ON q.user_id = u.id`
+LEFT JOIN subscriptions s ON s.customer_user_id = u.id AND s.status = 'active'
+LEFT JOIN plans p ON p.id = s.plan_id`
 
 type summaryScanner interface {
 	Scan(dest ...any) error
@@ -294,6 +360,9 @@ func scanSummary(row summaryScanner) (Summary, error) {
 		&summary.Email,
 		&summary.Role,
 		&summary.HasQuota,
+		&summary.SubscriptionID,
+		&summary.PlanID,
+		&summary.PlanName,
 		&summary.Limits.MaxSites,
 		&summary.Limits.MaxDatabases,
 		&summary.Limits.StorageMB,
@@ -310,6 +379,9 @@ func scanSummary(row summaryScanner) (Summary, error) {
 		return Summary{}, err
 	}
 	summary.Limits.UserID = summary.UserID
+	summary.Limits.SubscriptionID = summary.SubscriptionID
+	summary.Limits.PlanID = summary.PlanID
+	summary.Limits.PlanName = summary.PlanName
 	summary.Usage.UserID = summary.UserID
 	return summary, nil
 }

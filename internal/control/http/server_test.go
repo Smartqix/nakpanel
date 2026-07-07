@@ -57,25 +57,29 @@ func (s *fakeSessionStore) DeleteSession(ctx context.Context, tokenHash string) 
 }
 
 type fakeSiteCreator struct {
-	owner    auth.SessionUser
-	requests []types.CreateSiteReq
-	err      error
+	owner           auth.SessionUser
+	resourceOwnerID int64
+	requests        []types.CreateSiteReq
+	err             error
 }
 
-func (c *fakeSiteCreator) CreateSite(ctx context.Context, owner auth.SessionUser, req types.CreateSiteReq) (int64, error) {
+func (c *fakeSiteCreator) CreateSiteFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateSiteReq) (int64, error) {
 	c.owner = owner
+	c.resourceOwnerID = resourceOwnerID
 	c.requests = append(c.requests, req)
 	return 7, c.err
 }
 
 type fakeDatabaseCreator struct {
-	owner    auth.SessionUser
-	requests []types.CreateDatabaseReq
-	err      error
+	owner           auth.SessionUser
+	resourceOwnerID int64
+	requests        []types.CreateDatabaseReq
+	err             error
 }
 
-func (c *fakeDatabaseCreator) CreateDatabase(ctx context.Context, owner auth.SessionUser, req types.CreateDatabaseReq) (int64, error) {
+func (c *fakeDatabaseCreator) CreateDatabaseFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateDatabaseReq) (int64, error) {
 	c.owner = owner
+	c.resourceOwnerID = resourceOwnerID
 	c.requests = append(c.requests, req)
 	return 11, c.err
 }
@@ -120,10 +124,19 @@ func (r *fakeJobRetrier) RetryProvisioningJob(ctx context.Context, jobID int64) 
 }
 
 type fakeQuotaManager struct {
-	owner  auth.SessionUser
-	limits controlquota.Limits
-	err    error
-	called bool
+	owner          auth.SessionUser
+	limits         controlquota.Limits
+	plan           controlquota.Plan
+	planID         int64
+	active         bool
+	customerUserID int64
+	settings       controlquota.Settings
+	err            error
+	called         bool
+	planCalled     bool
+	statusCalled   bool
+	subCalled      bool
+	settingsCalled bool
 }
 
 func (m *fakeQuotaManager) UpsertAccountQuota(ctx context.Context, owner auth.SessionUser, limits controlquota.Limits) error {
@@ -133,22 +146,54 @@ func (m *fakeQuotaManager) UpsertAccountQuota(ctx context.Context, owner auth.Se
 	return m.err
 }
 
-type fakePhase6Manager struct {
-	backupOwner    auth.SessionUser
-	backupReq      types.CreateBackupReq
-	webmailOwner   auth.SessionUser
-	webmailDomain  string
-	dnsOwner       auth.SessionUser
-	dnsDomain      string
-	dnsAddress     string
-	reconcileOwner auth.SessionUser
-	adminerOwner   auth.SessionUser
-	restoreOwner   auth.SessionUser
-	restoreBackup  int64
+func (m *fakeQuotaManager) UpsertPlan(ctx context.Context, owner auth.SessionUser, plan controlquota.Plan) (controlquota.Plan, error) {
+	m.owner = owner
+	m.plan = plan
+	m.planCalled = true
+	return plan, m.err
 }
 
-func (m *fakePhase6Manager) CreateBackup(ctx context.Context, owner auth.SessionUser, req types.CreateBackupReq) (int64, error) {
+func (m *fakeQuotaManager) SetPlanActive(ctx context.Context, owner auth.SessionUser, planID int64, active bool) error {
+	m.owner = owner
+	m.planID = planID
+	m.active = active
+	m.statusCalled = true
+	return m.err
+}
+
+func (m *fakeQuotaManager) AssignSubscription(ctx context.Context, owner auth.SessionUser, customerUserID int64, planID int64) (controlquota.SubscriptionAssignment, error) {
+	m.owner = owner
+	m.customerUserID = customerUserID
+	m.planID = planID
+	m.subCalled = true
+	return controlquota.SubscriptionAssignment{SubscriptionID: 77, CustomerUserID: customerUserID, PlanID: planID}, m.err
+}
+
+func (m *fakeQuotaManager) UpdateSettings(ctx context.Context, owner auth.SessionUser, settings controlquota.Settings) error {
+	m.owner = owner
+	m.settings = settings
+	m.settingsCalled = true
+	return m.err
+}
+
+type fakePhase6Manager struct {
+	backupOwner           auth.SessionUser
+	backupResourceOwnerID int64
+	backupReq             types.CreateBackupReq
+	webmailOwner          auth.SessionUser
+	webmailDomain         string
+	dnsOwner              auth.SessionUser
+	dnsDomain             string
+	dnsAddress            string
+	reconcileOwner        auth.SessionUser
+	adminerOwner          auth.SessionUser
+	restoreOwner          auth.SessionUser
+	restoreBackup         int64
+}
+
+func (m *fakePhase6Manager) CreateBackupFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateBackupReq) (int64, error) {
 	m.backupOwner = owner
+	m.backupResourceOwnerID = resourceOwnerID
 	m.backupReq = req
 	return 101, nil
 }
@@ -627,10 +672,10 @@ func TestAdminCanUsePhase6Actions(t *testing.T) {
 		{
 			name:   "backup",
 			target: "https://panel.test/backups",
-			form:   url.Values{"domain": {"example.test"}},
+			form:   url.Values{"domain": {"example.test"}, "owner_user_id": {"2"}},
 			check: func(t *testing.T) {
-				if manager.backupOwner.Role != auth.RoleAdmin || manager.backupReq.Domain != "example.test" {
-					t.Fatalf("backup request = owner:%#v req:%#v", manager.backupOwner, manager.backupReq)
+				if manager.backupOwner.Role != auth.RoleAdmin || manager.backupResourceOwnerID != 2 || manager.backupReq.Domain != "example.test" {
+					t.Fatalf("backup request = owner:%#v resourceOwner:%d req:%#v", manager.backupOwner, manager.backupResourceOwnerID, manager.backupReq)
 				}
 			},
 		},
@@ -884,13 +929,31 @@ func TestAdminDashboardRendersQuotaManagement(t *testing.T) {
 	reader := &fakeDashboardReader{
 		data: dashboard.Data{
 			Quotas: []controlquota.Summary{{
-				UserID:   2,
-				Email:    "client@nakpanel.test",
-				Role:     "client",
-				HasQuota: true,
-				Limits:   controlquota.Limits{UserID: 2, MaxSites: 2, MaxDatabases: 1, MaxBackups: 3, BackupStorageMB: 20, SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 3, PHPMemoryMB: 128},
-				Usage:    controlquota.Usage{UserID: 2, Sites: 1, Databases: 1, Backups: 2, BackupStorageBytes: 4096},
+				UserID:         2,
+				Email:          "client@nakpanel.test",
+				Role:           "client",
+				HasQuota:       true,
+				PlanID:         10,
+				PlanName:       "Starter",
+				SubscriptionID: 20,
+				Limits:         controlquota.Limits{UserID: 2, MaxSites: 2, MaxDatabases: 1, MaxBackups: 3, BackupStorageMB: 20, SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 3, PHPMemoryMB: 128},
+				Usage:          controlquota.Usage{UserID: 2, Sites: 1, Databases: 1, Backups: 2, BackupStorageBytes: 4096},
 			}},
+			Plans: []controlquota.Plan{{
+				ID:                  10,
+				Name:                "Starter",
+				DiskMB:              5120,
+				MaxSites:            1,
+				MaxDatabases:        2,
+				MaxBackups:          7,
+				PHPFPMMaxChildren:   3,
+				PHPMemoryMB:         128,
+				AllowDNS:            true,
+				BackupRetentionDays: 7,
+				IsActive:            true,
+			}},
+			Settings:        controlquota.Settings{OversellPolicy: controlquota.OversellPolicyWarn, ServerDiskCapacityMB: 10000},
+			CommittedDiskMB: 5120,
 		},
 	}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{
@@ -909,19 +972,26 @@ func TestAdminDashboardRendersQuotaManagement(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		"Account quotas",
+		"Plans & subscriptions",
+		"Starter",
+		"Committed disk",
+		"5120 MB",
+		`action="/plans"`,
+		`action="/plans/status"`,
+		`action="/subscriptions"`,
+		`action="/settings/oversell"`,
 		"client@nakpanel.test",
-		`action="/quotas"`,
+		`name="plan_id"`,
 		`name="site_disk_quota_mb"`,
-		`name="max_sites" value="2"`,
-		`name="site_disk_quota_mb" value="512"`,
-		`name="php_memory_mb" value="128"`,
 		"1 / 2",
 		"2 / 3",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("dashboard body missing %q:\n%s", want, body)
 		}
+	}
+	if strings.Contains(body, `action="/quotas"`) || strings.Contains(body, "Account quotas") {
+		t.Fatalf("admin dashboard exposed legacy quota form:\n%s", body)
 	}
 }
 
@@ -1005,6 +1075,107 @@ func TestClientCannotUpsertQuota(t *testing.T) {
 	}
 	if manager.called {
 		t.Fatal("client quota upsert invoked manager")
+	}
+}
+
+func TestAdminCanUpsertPlan(t *testing.T) {
+	manager := &fakeQuotaManager{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{QuotaManager: manager})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	form := url.Values{
+		"plan_id":               {"9"},
+		"name":                  {"Launch"},
+		"description":           {"Launch plan"},
+		"price_cents":           {"1200"},
+		"disk_mb":               {"-1"},
+		"max_sites":             {"3"},
+		"max_databases":         {"4"},
+		"bandwidth_mb":          {"-1"},
+		"max_mailboxes":         {"0"},
+		"allow_ssh":             {"true"},
+		"allow_dns":             {"true"},
+		"backup_retention_days": {"30"},
+		"php_allowlist":         {"8.3,8.2"},
+		"php_max_children":      {"6"},
+		"php_memory_mb":         {"256"},
+		"site_disk_quota_mb":    {"1024"},
+		"max_backups":           {"7"},
+		"backup_storage_mb":     {"4096"},
+		"is_active":             {"true"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/plans", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /plans status = %d, want 303; body:\n%s", rec.Code, rec.Body.String())
+	}
+	if !manager.planCalled || manager.plan.ID != 9 || manager.plan.Name != "Launch" || !manager.plan.PriceCents.Valid || manager.plan.PriceCents.Int64 != 1200 {
+		t.Fatalf("plan manager = called:%v plan:%#v", manager.planCalled, manager.plan)
+	}
+	if manager.plan.DiskMB != -1 || manager.plan.MaxSites != 3 || !manager.plan.AllowSSH || !manager.plan.AllowDNS || !manager.plan.IsActive {
+		t.Fatalf("plan limits/options = %#v", manager.plan)
+	}
+}
+
+func TestAdminCanAssignSubscriptionAndUpdateOversellSettings(t *testing.T) {
+	manager := &fakeQuotaManager{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{QuotaManager: manager})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	subForm := url.Values{"customer_user_id": {"2"}, "plan_id": {"10"}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/subscriptions", strings.NewReader(subForm.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /subscriptions status = %d, want 303; body:\n%s", rec.Code, rec.Body.String())
+	}
+	if !manager.subCalled || manager.customerUserID != 2 || manager.planID != 10 {
+		t.Fatalf("subscription call = called:%v customer:%d plan:%d", manager.subCalled, manager.customerUserID, manager.planID)
+	}
+
+	settingsForm := url.Values{"oversell_policy": {"cap"}, "server_disk_capacity_mb": {"50000"}}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/settings/oversell", strings.NewReader(settingsForm.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /settings/oversell status = %d, want 303; body:\n%s", rec.Code, rec.Body.String())
+	}
+	if !manager.settingsCalled || manager.settings.OversellPolicy != controlquota.OversellPolicyCap || manager.settings.ServerDiskCapacityMB != 50000 {
+		t.Fatalf("settings call = called:%v settings:%#v", manager.settingsCalled, manager.settings)
+	}
+}
+
+func TestClientCannotManagePlansSubscriptionsOrSettings(t *testing.T) {
+	manager := &fakeQuotaManager{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{QuotaManager: manager})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+
+	for _, target := range []string{
+		"https://panel.test/plans",
+		"https://panel.test/plans/status",
+		"https://panel.test/subscriptions",
+		"https://panel.test/settings/oversell",
+	} {
+		req := httptest.NewRequest(http.MethodPost, target, strings.NewReader("plan_id=1&customer_user_id=2&name=Starter&oversell_policy=warn&server_disk_capacity_mb=1"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusForbidden {
+			t.Fatalf("POST %s status = %d, want 403", target, rec.Code)
+		}
+	}
+	if manager.planCalled || manager.statusCalled || manager.subCalled || manager.settingsCalled {
+		t.Fatalf("client invoked plan manager: %#v", manager)
 	}
 }
 
@@ -1249,9 +1420,10 @@ func TestAdminCanCreateSite(t *testing.T) {
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
 	form := url.Values{
-		"username":    {"npdemo"},
-		"domain":      {"example.test"},
-		"php_version": {"8.3"},
+		"owner_user_id": {"2"},
+		"username":      {"npdemo"},
+		"domain":        {"example.test"},
+		"php_version":   {"8.3"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1267,6 +1439,9 @@ func TestAdminCanCreateSite(t *testing.T) {
 	}
 	if creator.owner.Role != auth.RoleAdmin || creator.owner.Email != "admin@nakpanel.test" {
 		t.Fatalf("owner = %#v, want admin session user", creator.owner)
+	}
+	if creator.resourceOwnerID != 2 {
+		t.Fatalf("resource owner id = %d, want selected customer 2", creator.resourceOwnerID)
 	}
 	want := types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3"}
 	if len(creator.requests) != 1 || creator.requests[0] != want {
@@ -1319,9 +1494,10 @@ func TestAdminCanCreateDatabase(t *testing.T) {
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
 	form := url.Values{
-		"engine":  {"mariadb"},
-		"db_name": {"np_demo"},
-		"db_user": {"np_demo_user"},
+		"owner_user_id": {"2"},
+		"engine":        {"mariadb"},
+		"db_name":       {"np_demo"},
+		"db_user":       {"np_demo_user"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/databases", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -1337,6 +1513,9 @@ func TestAdminCanCreateDatabase(t *testing.T) {
 	}
 	if creator.owner.Role != auth.RoleAdmin || creator.owner.Email != "admin@nakpanel.test" {
 		t.Fatalf("owner = %#v, want admin session user", creator.owner)
+	}
+	if creator.resourceOwnerID != 2 {
+		t.Fatalf("resource owner id = %d, want selected customer 2", creator.resourceOwnerID)
 	}
 	want := types.CreateDatabaseReq{Engine: types.EngineMariaDB, DBName: "np_demo", DBUser: "np_demo_user"}
 	if len(creator.requests) != 1 || creator.requests[0] != want {

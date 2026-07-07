@@ -118,3 +118,15 @@ func TestHandleConnRejectsOversizedRequest(t *testing.T) {
 	}
 	<-writeDone
 }
+
+func TestAllowedPeerUIDMatchesOnlyConfiguredUID(t *testing.T) {
+	if !allowedPeerUIDMatches(1001, 1001) {
+		t.Fatal("matching uid was rejected")
+	}
+	if allowedPeerUIDMatches(1002, 1001) {
+		t.Fatal("different uid was allowed")
+	}
+	if allowedPeerUIDMatches(1001, -1) {
+		t.Fatal("disabled policy allowed explicit match")
+	}
+}

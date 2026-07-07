@@ -11,7 +11,7 @@ import (
 )
 
 const getSite = `-- name: GetSite :one
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id
 FROM sites
 WHERE id = $1
 `
@@ -35,12 +35,13 @@ func (q *Queries) GetSite(ctx context.Context, id int64) (Site, error) {
 		&i.TlsKeyPath,
 		&i.TlsExpiresAt,
 		&i.TlsLastError,
+		&i.SubscriptionID,
 	)
 	return i, err
 }
 
 const getSiteByDomain = `-- name: GetSiteByDomain :one
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id
 FROM sites
 WHERE domain = $1
 `
@@ -64,12 +65,13 @@ func (q *Queries) GetSiteByDomain(ctx context.Context, domain string) (Site, err
 		&i.TlsKeyPath,
 		&i.TlsExpiresAt,
 		&i.TlsLastError,
+		&i.SubscriptionID,
 	)
 	return i, err
 }
 
 const listSites = `-- name: ListSites :many
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id
 FROM sites
 ORDER BY id
 `
@@ -99,6 +101,7 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 			&i.TlsKeyPath,
 			&i.TlsExpiresAt,
 			&i.TlsLastError,
+			&i.SubscriptionID,
 		); err != nil {
 			return nil, err
 		}
@@ -220,6 +223,7 @@ func (q *Queries) MarkSiteTLSPending(ctx context.Context, arg MarkSiteTLSPending
 const upsertSiteIntent = `-- name: UpsertSiteIntent :one
 INSERT INTO sites (
     owner_user_id,
+    subscription_id,
     username,
     domain,
     php_version,
@@ -227,6 +231,7 @@ INSERT INTO sites (
     last_error
 ) VALUES (
     $1,
+    (SELECT id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1),
     $2,
     $3,
     $4,
@@ -236,12 +241,13 @@ INSERT INTO sites (
 ON CONFLICT (domain) DO UPDATE
 SET
     owner_user_id = EXCLUDED.owner_user_id,
+    subscription_id = EXCLUDED.subscription_id,
     username = EXCLUDED.username,
     php_version = EXCLUDED.php_version,
     status = 'pending',
     last_error = '',
     updated_at = now()
-RETURNING id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error
+RETURNING id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id
 `
 
 type UpsertSiteIntentParams struct {
@@ -275,6 +281,7 @@ func (q *Queries) UpsertSiteIntent(ctx context.Context, arg UpsertSiteIntentPara
 		&i.TlsKeyPath,
 		&i.TlsExpiresAt,
 		&i.TlsLastError,
+		&i.SubscriptionID,
 	)
 	return i, err
 }
