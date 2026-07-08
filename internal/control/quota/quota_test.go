@@ -24,6 +24,16 @@ func (s fakeStore) GetUsage(ctx context.Context, userID int64) (Usage, error) {
 	return s.usage, nil
 }
 
+func (s fakeStore) GetLimitsForSubscription(ctx context.Context, subscriptionID int64) (Limits, bool, error) {
+	s.limits.SubscriptionID = subscriptionID
+	return s.limits, s.hasLimits, nil
+}
+
+func (s fakeStore) GetUsageForSubscription(ctx context.Context, subscriptionID int64) (Usage, error) {
+	s.usage.SubscriptionID = subscriptionID
+	return s.usage, nil
+}
+
 func (s fakeStore) UpsertLimits(ctx context.Context, limits Limits) error {
 	return nil
 }

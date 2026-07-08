@@ -31,6 +31,7 @@ templ LoginPage() {
 					</form>
 				</section>
 			</main>
+			<script defer src="/assets/app.js"></script>
 		</body>
 	</html>
 }
@@ -44,31 +45,28 @@ templ DashboardPage(title string, user auth.SessionUser, data dashboard.Data, ac
 			<title>{ title }</title>
 			<link rel="stylesheet" href="/assets/app.css"/>
 		</head>
-		<body class="np-app antialiased">
-			<main class="np-shell">
-				<header class="np-header">
-					<div>
-						<div class="np-brand">
-							<span class="np-brand-mark" aria-hidden="true">n</span>
-							<span>nakpanel</span>
-						</div>
-						<h1>{ title }</h1>
-						<p>Signed in as { user.Email }.</p>
+		<body class="np-app antialiased" data-np-role={ string(user.Role) }>
+			<main class="np-layout">
+				@sidebarNav(user, data, actions)
+				<section class="np-main">
+					@topbar(title, user, actions)
+					<div class="np-workspace">
+						if data.Notice != "" {
+							<p class="np-notice">{ data.Notice }</p>
+						}
+						if user.Role == auth.RoleAdmin {
+							@dashboardSections(data, actions)
+						} else {
+							@roleOverview(user, data)
+						}
 					</div>
-					<form class="np-logout" method="post" action="/logout">
-						<button type="submit">Sign out</button>
-					</form>
-					</header>
-					if data.Notice != "" {
-						<p class="np-notice">{ data.Notice }</p>
-					}
-					if user.Role == auth.RoleAdmin {
-						@dashboardSections(data, actions)
-					} else {
-						@roleOverview(user, data)
-					}
-				</main>
-			</body>
+				</section>
+				if user.Role == auth.RoleAdmin && actions.CanCreateSite {
+					@createSiteModal(data.Quotas, data.Subscriptions)
+				}
+			</main>
+			<script defer src="/assets/app.js"></script>
+		</body>
 		</html>
 	}
 
@@ -100,18 +98,184 @@ templ AdminerPage(token types.AdminerSSO) {
 				</section>
 			</main>
 		</body>
-	</html>
+</html>
 }
 
-	templ dashboardSections(data dashboard.Data, actions DashboardActions) {
-		@sitesSection(data.Sites, data.Quotas, actions)
-		@databasesSection(data.Databases, data.Quotas, actions)
-		@phase6Section(data.Phase6, data.Phase6Error, data.Quotas, actions)
-		@planSection(data.Quotas, data.Plans, data.Settings, data.CommittedDiskMB, data.QuotaLoadError, data.PlanLoadError, actions)
-		@jobsSection(data.Jobs, data.JobLoadError, actions)
-	}
+templ sidebarNav(user auth.SessionUser, data dashboard.Data, actions DashboardActions) {
+	<aside class="np-side" data-np-sidebar>
+		<div class="np-side-brand">
+			<span class="np-brand-mark" aria-hidden="true">n</span>
+			<span class="np-side-brand-text">
+				<strong>nakpanel</strong>
+				<small>ns1.nakroteck.com</small>
+			</span>
+		</div>
+		<nav class="np-nav" aria-label="Dashboard">
+			if user.Role == auth.RoleAdmin {
+				@navButton("Dashboard", "dashboard", "grid", false, false, "", "")
+				@navButton("Sites", "sites", "globe", false, false, formatBadgeCount(len(data.Sites)), "danger")
+				@navButton("Subscriptions", "subscriptions", "card", true, false, "", "")
+				@navButton("Databases", "databases", "database", false, false, "", "")
+				@navButton("DNS zones", "dns", "target", false, true, "", "")
+				@navButton("Certificates", "certificates", "shield", false, true, "", "")
+				@navButton("Backups", "backups", "box", false, true, "", "")
+				if actions.CanUsePhase6 {
+					@navButton("Activity", "operations", "pulse", false, false, formatBadgeCount(len(data.Jobs)), "")
+				} else {
+					@navButton("Activity", "activity", "pulse", false, false, formatBadgeCount(len(data.Jobs)), "")
+				}
+				<span class="np-nav-label">Administration</span>
+				@navButton("Servers", "servers", "server", false, true, "", "")
+				@navButton("Customers", "customers", "users", false, false, formatBadgeCount(len(data.Customers)), "")
+				@navButton("Service plans", "plans", "layers", false, true, "", "")
+				@navButton("Settings", "settings", "sun", false, false, "", "")
+			} else {
+				@navButton("Dashboard", "dashboard", "grid", true, false, "", "")
+				@navButton("Usage", "usage", "pulse", false, false, "", "")
+				@navButton("Support", "support", "shield", false, true, "", "")
+			}
+		</nav>
+	</aside>
+}
 
-	templ roleOverview(user auth.SessionUser, data dashboard.Data) {
+templ navButton(label string, view string, icon string, active bool, disabled bool, badge string, badgeTone string) {
+	<button
+		type="button"
+		class={ "np-nav-item " + activeClass(active) }
+		data-np-view={ view }
+		data-np-view-title={ label }
+		disabled?={ disabled }
+	>
+		<span class={ "np-nav-icon np-nav-icon-" + icon } aria-hidden="true"></span>
+		<span>{ label }</span>
+		if badge != "" {
+			<span class={ "np-nav-badge np-nav-badge-" + badgeTone }>{ badge }</span>
+		}
+	</button>
+}
+
+templ topbar(title string, user auth.SessionUser, actions DashboardActions) {
+	<header class="np-top">
+		<div class="np-top-left">
+			<button type="button" class="np-menu-button" data-np-menu aria-label="Open navigation">Menu</button>
+			<strong class="np-top-section" data-np-section-title>{ initialWorkspaceTitle(title, user.Role) }</strong>
+			<label class="np-search" aria-label="Search">
+				<span aria-hidden="true"></span>
+				<input type="search" placeholder="Search sites, databases, records..."/>
+			</label>
+		</div>
+		<div class="np-top-actions">
+			<span class="np-pill np-pill-ok">agent connected</span>
+			<form class="np-logout" method="post" action="/logout">
+				<button type="submit" class="np-avatar" title={ "Sign out " + user.Email }>{ userInitials(user) }</button>
+			</form>
+		</div>
+	</header>
+}
+
+templ dashboardSections(data dashboard.Data, actions DashboardActions) {
+	<section class="np-view" data-np-panel="dashboard" id="view-dashboard" aria-labelledby="dashboard-title">
+		<div class="np-panel-head">
+			<div>
+				<span class="np-kicker">Control plane</span>
+				<h2 id="dashboard-title">Admin dashboard</h2>
+			</div>
+			<span class="np-pill np-pill-ok">agent connected</span>
+		</div>
+		<div class="np-stat-grid">
+			@statCard("Sites", len(data.Sites), "Provisioned accounts and domains")
+			@statCard("Databases", len(data.Databases), "MariaDB intent tracked by the panel")
+			@statCard("Jobs", len(data.Jobs), "Recent provisioning activity")
+			@statCard("Plans", len(data.Plans), "Entitlement catalog")
+		</div>
+		@overviewStatus(data)
+	</section>
+	<section class="np-view" data-np-panel="sites" id="view-sites" aria-labelledby="sites-panel-title">
+		@sitesSection(data.Sites, data.Quotas, data.Subscriptions, actions)
+	</section>
+	<section class="np-view" data-np-panel="databases" id="view-databases" aria-labelledby="databases-title">
+		@databasesSection(data.Databases, data.Quotas, data.Subscriptions, actions)
+	</section>
+	if actions.CanUsePhase6 {
+		<section class="np-view" data-np-panel="operations" id="view-operations" aria-labelledby="phase6-title">
+			@phase6Section(data.Phase6, data.Phase6Error, data.Quotas, data.Subscriptions, actions)
+		</section>
+	}
+	<section class="np-view" data-np-panel="customers" id="view-customers" aria-labelledby="customers-title">
+		@customersSection(data.Customers, data.Subscriptions, actions)
+	</section>
+	<section class="np-view is-active" data-np-panel="subscriptions" id="view-subscriptions" aria-labelledby="plans-title">
+		@planSection(data.Quotas, data.Customers, data.Subscriptions, data.Plans, data.Settings, data.CommittedDiskMB, data.QuotaLoadError, data.PlanLoadError, actions)
+	</section>
+	<section class="np-view" data-np-panel="settings" id="view-settings" aria-labelledby="settings-title">
+		@settingsSection(data, actions)
+	</section>
+	<section class="np-view" data-np-panel="activity" id="view-activity" aria-labelledby="jobs-title">
+		@jobsSection(data.Jobs, data.JobLoadError, actions)
+	</section>
+}
+
+templ statCard(label string, value int, detail string) {
+	<article class="np-stat">
+		<span>{ label }</span>
+		<strong>{ formatPlanLimit(value) }</strong>
+		<p>{ detail }</p>
+	</article>
+}
+
+templ overviewStatus(data dashboard.Data) {
+	<div class="np-card-grid">
+		<article class="np-card">
+			<div class="np-card-head">
+				<h3>Recent sites</h3>
+				<span class="np-pill np-pill-run">live inventory</span>
+			</div>
+			if len(data.Sites) == 0 {
+				<p class="np-empty-inline">No sites yet.</p>
+			} else {
+				<ul class="np-site-list">
+					for _, site := range data.Sites {
+						<li>
+							<span class="np-site-initial">{ site.Domain }</span>
+							<strong>{ site.Domain }</strong>
+							<span class={ "np-pill np-pill-" + statusPillClass(site.Status) }>{ site.Status }</span>
+						</li>
+					}
+				</ul>
+			}
+		</article>
+		<article class="np-card">
+			<div class="np-card-head">
+				<h3>Entitlement pressure</h3>
+				<span class="np-pill np-pill-pend">{ formatCommittedDisk(data.CommittedDiskMB) }</span>
+			</div>
+			if len(data.Quotas) == 0 {
+				<p class="np-empty-inline">No customer usage loaded.</p>
+			} else {
+				<ul class="np-meter-list">
+					for _, quota := range data.Quotas {
+						<li>
+							<div>
+								<strong>{ quota.Email }</strong>
+								<span>{ formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota) } sites</span>
+							</div>
+							@meter(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota)
+						</li>
+					}
+				</ul>
+			}
+		</article>
+	</div>
+}
+
+templ meter(used int, allowed int, hasLimits bool) {
+	<div class={ "np-meter np-meter-" + usageMeter(used, allowed, hasLimits).Class } aria-hidden="true">
+		<span style={ "width:" + usageMeter(used, allowed, hasLimits).Percent + "%" }></span>
+	</div>
+}
+
+templ roleOverview(user auth.SessionUser, data dashboard.Data) {
+	<section class="np-view is-active" data-np-panel="dashboard" id="view-dashboard" aria-labelledby="account-title">
 		<section class="np-section" aria-labelledby="account-title">
 			<div class="np-section-heading">
 				<h2 id="account-title">Account overview</h2>
@@ -127,10 +291,43 @@ templ AdminerPage(token types.AdminerSSO) {
 				</div>
 			</dl>
 		</section>
-		@quotaUsageSection("Resource usage", data.Quotas, data.QuotaLoadError)
-	}
+		@clientSubscriptionsSection(data.Subscriptions)
+		@quotaUsageSection("Resource usage", "quota-usage-dashboard-title", data.Quotas, data.QuotaLoadError)
+	</section>
+	<section class="np-view" data-np-panel="usage" id="view-usage" aria-labelledby="quota-usage-title">
+		@quotaUsageSection("Resource usage", "quota-usage-title", data.Quotas, data.QuotaLoadError)
+	</section>
+}
 
-	templ sitesSection(sites []dashboard.Site, quotas []controlquota.Summary, actions DashboardActions) {
+templ clientSubscriptionsSection(subscriptions []types.SubscriptionSummary) {
+	<section class="np-section" aria-labelledby="client-subscriptions-title">
+		<div class="np-section-heading">
+			<h2 id="client-subscriptions-title">All subscriptions</h2>
+		</div>
+		if len(subscriptions) == 0 {
+			<p class="np-empty">No subscriptions found.</p>
+		} else {
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead><tr><th>Subscription</th><th>Plan</th><th>Sites</th><th>Databases</th><th>Status</th></tr></thead>
+					<tbody>
+						for _, subscription := range subscriptions {
+							<tr>
+								<td data-label="Subscription"><span class="np-table-value">{ subscriptionSelectLabel(subscription) }</span></td>
+								<td data-label="Plan"><span class="np-table-value">{ subscription.PlanName }</span></td>
+								<td data-label="Sites"><span class="np-table-value">{ formatQuotaCompactCount(subscription.SitesUsed, subscription.MaxSites, true) }</span></td>
+								<td data-label="Databases"><span class="np-table-value">{ formatQuotaCompactCount(subscription.DatabasesUsed, subscription.MaxDatabases, true) }</span></td>
+								<td data-label="Status"><span class={ "np-status-pill np-status-pill-" + statusPillClass(subscription.Status) }>{ subscription.Status }</span></td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</section>
+}
+
+templ sitesSection(sites []dashboard.Site, quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary, actions DashboardActions) {
 	<section class="np-section" aria-labelledby="sites-title">
 		<div class="np-section-heading">
 			<h2 id="sites-title">Sites</h2>
@@ -173,7 +370,7 @@ templ AdminerPage(token types.AdminerSSO) {
 		}
 		if actions.CanCreateSite {
 			<form class="np-form np-action-form" method="post" action="/sites">
-				@customerSelect(quotas)
+				@subscriptionSelect(quotas, subscriptions)
 				<label>Username <input name="username" autocomplete="off" required/></label>
 				<label>Domain <input name="domain" autocomplete="off" required/></label>
 				<label>PHP <select name="php_version"><option value="8.3">8.3</option><option value="8.2">8.2</option></select></label>
@@ -190,7 +387,7 @@ templ AdminerPage(token types.AdminerSSO) {
 	</section>
 }
 
-templ databasesSection(databases []dashboard.Database, quotas []controlquota.Summary, actions DashboardActions) {
+templ databasesSection(databases []dashboard.Database, quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary, actions DashboardActions) {
 	<section class="np-section" aria-labelledby="databases-title">
 		<div class="np-section-heading">
 			<h2 id="databases-title">Databases</h2>
@@ -231,7 +428,7 @@ templ databasesSection(databases []dashboard.Database, quotas []controlquota.Sum
 		}
 		if actions.CanCreateDatabase {
 			<form class="np-form np-action-form" method="post" action="/databases">
-				@customerSelect(quotas)
+				@subscriptionSelect(quotas, subscriptions)
 				<label>Engine <select name="engine"><option value="mariadb">mariadb</option></select></label>
 				<label>Name <input name="db_name" autocomplete="off" required/></label>
 				<label>User <input name="db_user" autocomplete="off" required/></label>
@@ -241,7 +438,7 @@ templ databasesSection(databases []dashboard.Database, quotas []controlquota.Sum
 	</section>
 }
 
-templ phase6Section(phase6 dashboard.Phase6Data, loadError string, quotas []controlquota.Summary, actions DashboardActions) {
+templ phase6Section(phase6 dashboard.Phase6Data, loadError string, quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary, actions DashboardActions) {
 	if actions.CanUsePhase6 {
 		<section class="np-section" aria-labelledby="phase6-title">
 			<div class="np-section-heading">
@@ -257,7 +454,7 @@ templ phase6Section(phase6 dashboard.Phase6Data, loadError string, quotas []cont
 				@phase6Tables(phase6)
 			}
 			<form class="np-form np-action-form" method="post" action="/backups">
-				@customerSelect(quotas)
+				@subscriptionSelect(quotas, subscriptions)
 				<label>Domain <input name="domain" autocomplete="off" required/></label>
 				<button type="submit">Create backup</button>
 			</form>
@@ -386,77 +583,519 @@ templ phase6Tables(phase6 dashboard.Phase6Data) {
 	}
 }
 
-templ planSection(quotas []controlquota.Summary, plans []controlquota.Plan, settings controlquota.Settings, committedDiskMB int, quotaLoadError string, planLoadError string, actions DashboardActions) {
-	<section class="np-section" aria-labelledby="plans-title">
+templ customersSection(customers []types.Customer, subscriptions []types.SubscriptionSummary, actions DashboardActions) {
+	<section class="np-section" aria-labelledby="customers-title">
 		<div class="np-section-heading">
-			<h2 id="plans-title">Plans & subscriptions</h2>
+			<h2 id="customers-title">Customers</h2>
+		</div>
+		if len(customers) == 0 {
+			<p class="np-empty">No customers found.</p>
+		} else {
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead><tr><th>Customer</th><th>Status</th><th>Login</th><th>Subscriptions</th><th>Company</th><th>Action</th></tr></thead>
+					<tbody>
+						for _, customer := range customers {
+							<tr>
+								<td data-label="Customer"><span class="np-table-value"><strong>{ displayCustomer(customer) }</strong><br/><span>{ customer.Email }</span></span></td>
+								<td data-label="Status"><span class={ "np-status-pill " + customerStatusClass(customer.Status) }>{ customer.Status }</span></td>
+								<td data-label="Login"><span class="np-table-value">{ customerLoginMode(customer) }</span></td>
+								<td data-label="Subscriptions"><span class="np-table-value">{ formatPlanLimit(countCustomerSubscriptions(customer.ID, subscriptions)) }</span></td>
+								<td data-label="Company"><span class="np-table-value">{ customer.Company }</span></td>
+								<td data-label="Action">
+									<span class="np-table-value">
+										<form class="np-inline-form" method="post" action="/customers/status">
+											<input type="hidden" name="customer_id" value={ formatQuotaUserID(customer.ID) }/>
+											if customer.Status == "active" {
+												<input type="hidden" name="status" value="suspended"/>
+												<button type="submit">Suspend</button>
+											} else {
+												<input type="hidden" name="status" value="active"/>
+												<button type="submit">Activate</button>
+											}
+										</form>
+									</span>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		if actions.CanManageQuotas {
+			<form class="np-form np-action-form" method="post" action="/customers">
+				<label>Email <input type="email" name="customer_email" autocomplete="off" required/></label>
+				<label>Name <input name="customer_name" autocomplete="off"/></label>
+				<label>Company <input name="company" autocomplete="off"/></label>
+				<label>Enable login <input type="checkbox" name="enable_login" value="true"/></label>
+				<label>Password <input type="password" name="password" autocomplete="new-password"/></label>
+				<button type="submit">Create customer</button>
+			</form>
+		}
+	</section>
+}
+
+templ planSection(quotas []controlquota.Summary, customers []types.Customer, subscriptions []types.SubscriptionSummary, plans []controlquota.Plan, settings controlquota.Settings, committedDiskMB int, quotaLoadError string, planLoadError string, actions DashboardActions) {
+	<section class="np-subscriptions-page" aria-labelledby="plans-title">
+		<div class="np-page-head">
+			<div>
+				<h2 id="plans-title">Subscriptions</h2>
+				<p>The unit of tenancy. Sites, databases and backups all belong to a subscription; the plan behind it is what the provisioning gate reads.</p>
+			</div>
 		</div>
 		if quotaLoadError != "" {
-			<p class="np-empty">
+			<p class="np-empty np-card-empty">
 				for _, message := range errorMessages(quotaLoadError) {
 					<span class="np-error">{ message }</span>
 				}
 			</p>
-		} else if len(quotas) == 0 {
-			<p class="np-empty">No accounts found.</p>
 		} else {
-			@quotaUsageTable(quotas)
+			@subscriptionToolbar(actions)
+			if len(quotas) == 0 {
+				<p class="np-empty np-card-empty">No accounts found.</p>
+			} else {
+				@subscriptionsTable(quotas, subscriptions)
+			}
+			@capacityCard(settings, committedDiskMB, quotas, actions)
 		}
 		if planLoadError != "" {
-			<p class="np-empty">
+			<p class="np-empty np-card-empty">
 				for _, message := range errorMessages(planLoadError) {
 					<span class="np-error">{ message }</span>
 				}
 			</p>
 		} else if actions.CanManageQuotas {
-			<dl class="np-summary-list">
-				<div>
-					<dt>Oversell policy</dt>
-					<dd>{ settings.OversellPolicy }</dd>
-				</div>
-				<div>
-					<dt>Server capacity</dt>
-					<dd>{ formatSettingsCapacity(settings.ServerDiskCapacityMB) } MB</dd>
-				</div>
-				<div>
-					<dt>Committed disk</dt>
-					<dd>{ formatCommittedDisk(committedDiskMB) }</dd>
-				</div>
-			</dl>
-			@plansTable(plans)
-			<form class="np-form np-action-form" method="post" action="/settings/oversell">
-				<label>Oversell <select name="oversell_policy"><option value="warn">warn</option><option value="cap">cap</option></select></label>
-				<label>Capacity MB <input type="number" min="0" name="server_disk_capacity_mb" value={ formatSettingsCapacity(settings.ServerDiskCapacityMB) } required/></label>
-				<button type="submit">Save settings</button>
-			</form>
-			<form class="np-form np-action-form" method="post" action="/subscriptions">
-				<label>Customer <select name="customer_user_id">
-					for _, quota := range quotas {
-						<option value={ formatQuotaUserID(quota.UserID) }>{ quota.Email } - { formatSummaryPlanName(quota) }</option>
-					}
-				</select></label>
-				<label>Plan <select name="plan_id">
-					for _, plan := range plans {
-						if plan.IsActive {
-							<option value={ formatPlanID(plan.ID) }>{ plan.Name }</option>
+			<section class="np-admin-forms" id="subscription-admin-forms" aria-label="Subscription administration">
+				<span class="np-sr-only">Plans & subscriptions</span>
+				<span class="np-sr-only">Committed disk { formatCommittedDisk(committedDiskMB) }</span>
+				@planCards(plans)
+				@plansTable(plans)
+				<form class="np-form np-action-form" method="post" action="/settings/oversell">
+					<label>Oversell <select name="oversell_policy"><option value="warn">warn</option><option value="cap">cap</option></select></label>
+					<label>Capacity MB <input type="number" min="0" name="server_disk_capacity_mb" value={ formatSettingsCapacity(settings.ServerDiskCapacityMB) } required/></label>
+					<button type="submit">Save settings</button>
+				</form>
+				if len(customers) > 0 {
+					<form class="np-form np-action-form" method="post" action="/subscriptions" data-np-subscription-assign-form>
+						<input type="hidden" name="customer_mode" value="existing"/>
+						<label>Customer <select name="customer_id" required>
+							<option value="" disabled selected>Select customer</option>
+							for _, customer := range customers {
+								<option value={ formatQuotaUserID(customer.ID) }>{ displayCustomer(customer) } - { customer.Email }</option>
+							}
+						</select></label>
+						<label>Plan <select name="plan_id" required>
+							for _, plan := range plans {
+								if plan.IsActive {
+									<option value={ formatPlanID(plan.ID) }>{ plan.Name }</option>
+								}
+							}
+						</select></label>
+						<label>Subscription name <input name="subscription_name" autocomplete="off"/></label>
+						<button type="submit">Add Subscription</button>
+					</form>
+				} else {
+					<form class="np-form np-action-form" method="post" action="/subscriptions" data-np-subscription-assign-form>
+						<label>Customer <select name="customer_user_id" required>
+							<option value="" disabled selected>Select customer</option>
+							for _, quota := range quotas {
+								<option value={ formatQuotaUserID(quota.UserID) }>{ quota.Email } - { formatSummaryPlanName(quota) }</option>
+							}
+						</select></label>
+						<label>Plan <select name="plan_id" required>
+							for _, plan := range plans {
+								if plan.IsActive {
+									<option value={ formatPlanID(plan.ID) }>{ plan.Name }</option>
+								}
+							}
+						</select></label>
+						<button type="submit">Add Subscription</button>
+					</form>
+				}
+				<form class="np-form np-action-form" method="post" action="/subscriptions">
+					<input type="hidden" name="customer_mode" value="new"/>
+					<label>Email <input type="email" name="customer_email" autocomplete="off" required/></label>
+					<label>Name <input name="customer_name" autocomplete="off"/></label>
+					<label>Company <input name="company" autocomplete="off"/></label>
+					<label>Plan <select name="plan_id" required>
+						for _, plan := range plans {
+							if plan.IsActive {
+								<option value={ formatPlanID(plan.ID) }>{ plan.Name }</option>
+							}
 						}
-					}
-				</select></label>
-				<button type="submit">Assign plan</button>
-			</form>
-			@planForm()
+					</select></label>
+					<label>Subscription name <input name="subscription_name" autocomplete="off"/></label>
+					<label>Enable login <input type="checkbox" name="enable_login" value="true"/></label>
+					<label>Password <input type="password" name="password" autocomplete="new-password"/></label>
+					<button type="submit">Create Customer + Subscription</button>
+				</form>
+				@planForm()
+			</section>
 		}
 	</section>
 }
 
+templ settingsSection(data dashboard.Data, actions DashboardActions) {
+	<section class="np-settings-page" aria-labelledby="settings-title">
+		<div class="np-page-head">
+			<div>
+				<h2 id="settings-title">Tools &amp; Settings</h2>
+				<p>Server-wide controls grouped like a hosting panel: live settings where NakPanel has backing data, read-only status where root agent operations are still pending.</p>
+			</div>
+			<span class="np-pill np-pill-run">admin only</span>
+		</div>
+		<div class="np-settings-grid">
+			<article class="np-settings-card">
+				<div class="np-settings-card-head">
+					<div>
+						<span class="np-kicker">General Settings</span>
+						<h3>General Server</h3>
+					</div>
+					<span class="np-pill np-pill-ok">live</span>
+				</div>
+				<dl class="np-settings-facts">
+					<div><dt>Hostname</dt><dd>ns1.nakroteck.com</dd></div>
+					<div><dt>Panel URL</dt><dd>panel.host:7443</dd></div>
+					<div><dt>Agent</dt><dd>connected</dd></div>
+					<div><dt>Timezone/NTP summary</dt><dd>{ settingsPlannedStatus() }</dd></div>
+				</dl>
+			</article>
+			<article class="np-settings-card">
+				<div class="np-settings-card-head">
+					<div>
+						<span class="np-kicker">Web Hosting</span>
+						<h3>Global PHP Settings</h3>
+					</div>
+					<span class="np-pill np-pill-pend">plan driven</span>
+				</div>
+				<dl class="np-settings-facts">
+					<div><dt>Default PHP version</dt><dd>{ settingsDefaultPHPVersion(data.Plans) }</dd></div>
+					<div><dt>Allowed versions</dt><dd>{ settingsPHPAllowlist(data.Plans) }</dd></div>
+					<div><dt>FPM limits</dt><dd>{ settingsPHPFPM(data.Plans) }</dd></div>
+					<div><dt>Extension status</dt><dd>{ settingsPlannedStatus() }</dd></div>
+				</dl>
+			</article>
+			<article class="np-settings-card">
+				<div class="np-settings-card-head">
+					<div>
+						<span class="np-kicker">Applications &amp; Databases</span>
+						<h3>Database Server Settings</h3>
+					</div>
+					<span class="np-pill np-pill-ok">MariaDB</span>
+				</div>
+				<dl class="np-settings-facts">
+					<div><dt>Default engine</dt><dd>MariaDB</dd></div>
+					<div><dt>Provisioned databases</dt><dd>{ formatPlanLimit(len(data.Databases)) }</dd></div>
+					<div><dt>External servers</dt><dd>{ settingsPlannedStatus() }</dd></div>
+				</dl>
+				if actions.CanUsePhase6 {
+					<a class="np-link-button" href="/db">Adminer SSO</a>
+				} else {
+					<span class="np-settings-disabled">Adminer SSO unavailable</span>
+				}
+			</article>
+			<article class="np-settings-card">
+				<div class="np-settings-card-head">
+					<div>
+						<span class="np-kicker">Tools &amp; Resources</span>
+						<h3>Backup Settings</h3>
+					</div>
+					<span class="np-pill np-pill-pend">policy</span>
+				</div>
+				<dl class="np-settings-facts">
+					<div><dt>Retention defaults</dt><dd>{ settingsBackupRetention(data.Plans) }</dd></div>
+					<div><dt>Backup limits</dt><dd>{ settingsBackupLimits(data.Plans) }</dd></div>
+					<div><dt>Recent backups</dt><dd>{ formatPlanLimit(len(data.Phase6.Backups)) }</dd></div>
+					<div><dt>Backup path</dt><dd>/var/lib/nakpanel/backups</dd></div>
+				</dl>
+			</article>
+			<article class="np-settings-card">
+				<div class="np-settings-card-head">
+					<div>
+						<span class="np-kicker">Security</span>
+						<h3>Firewall Settings</h3>
+					</div>
+					<span class="np-pill np-pill-pend">nftables preview</span>
+				</div>
+				<dl class="np-settings-facts">
+					<div><dt>Default inbound policy</dt><dd>deny unless generated rule allows</dd></div>
+					<div><dt>Panel service</dt><dd>TCP 7443</dd></div>
+					<div><dt>Web services</dt><dd>TCP 80, 443</dd></div>
+					<div><dt>Rule apply</dt><dd>{ settingsPlannedStatus() }</dd></div>
+				</dl>
+			</article>
+			<article class="np-settings-card">
+				<div class="np-settings-card-head">
+					<div>
+						<span class="np-kicker">Tools &amp; Resources</span>
+						<h3>SSH Terminal</h3>
+					</div>
+					<span class="np-pill np-pill-susp">gated</span>
+				</div>
+				<dl class="np-settings-facts">
+					<div><dt>Root terminal</dt><dd>Root terminal disabled</dd></div>
+					<div><dt>Plan SSH</dt><dd>{ settingsSSHAccess(data.Plans) }</dd></div>
+					<div><dt>Site-user shell</dt><dd>{ settingsPlannedStatus() }</dd></div>
+					<div><dt>Audit trail</dt><dd>{ settingsPlannedStatus() }</dd></div>
+				</dl>
+			</article>
+		</div>
+		if actions.CanManageQuotas {
+			<section class="np-section" aria-labelledby="settings-capacity-title">
+				<div class="np-section-heading">
+					<h2 id="settings-capacity-title">Capacity &amp; Overselling</h2>
+				</div>
+				<div class="np-settings-control-row">
+					@capacityCard(data.Settings, data.CommittedDiskMB, data.Quotas, actions)
+					<form class="np-form np-action-form np-settings-form" method="post" action="/settings/oversell">
+						<label>Oversell <select name="oversell_policy"><option value="warn">warn</option><option value="cap">cap</option></select></label>
+						<label>Capacity MB <input type="number" min="0" name="server_disk_capacity_mb" value={ formatSettingsCapacity(data.Settings.ServerDiskCapacityMB) } required/></label>
+						<button type="submit">Save settings</button>
+					</form>
+				</div>
+			</section>
+			<section class="np-section" aria-labelledby="settings-plan-title">
+				<div class="np-section-heading">
+					<h2 id="settings-plan-title">Plan Defaults Behind Settings</h2>
+				</div>
+				@plansTable(data.Plans)
+			</section>
+		}
+	</section>
+}
+
+templ subscriptionToolbar(actions DashboardActions) {
+	<div class="np-subscription-toolbar" aria-label="Subscription actions">
+		<div class="np-subscription-actions">
+			if actions.CanManageQuotas {
+				<button type="button" class="np-toolbar-primary" data-np-add-subscription data-np-scroll-target="#subscription-admin-forms">Add Subscription</button>
+				<button type="button" class="np-toolbar-button" data-np-change-plan data-np-scroll-target="#subscription-admin-forms" disabled>Change Plan</button>
+				<button type="button" class="np-toolbar-button" data-np-scroll-target="#subscription-admin-forms">Service Plans</button>
+			}
+		</div>
+		<label class="np-subscription-filter" aria-label="Filter subscriptions">
+			<span aria-hidden="true"></span>
+			<input type="search" placeholder="Search subscriptions" data-np-subscription-filter/>
+		</label>
+	</div>
+}
+
+templ capacityCard(settings controlquota.Settings, committedDiskMB int, quotas []controlquota.Summary, actions DashboardActions) {
+	<section class="np-capacity-card" aria-label="Server capacity">
+		<div class="np-capacity-copy">
+			<strong>Server capacity</strong>
+			<span>ns1.nakroteck.com &middot; <code>server_disk_capacity_mb = { formatSettingsCapacity(settings.ServerDiskCapacityMB) }</code> ({ formatCapacityGB(settings.ServerDiskCapacityMB) })</span>
+		</div>
+		<div class="np-capacity-row">
+			<span>Committed to plans (at max)</span>
+			<strong>{ formatCapacityCommitment(committedDiskMB, settings.ServerDiskCapacityMB) }</strong>
+		</div>
+		<div class="np-capacity-meter" aria-hidden="true">
+			<span style={ "width:" + capacityMeterWidth(committedDiskMB, settings.ServerDiskCapacityMB) + "%" }></span>
+		</div>
+		<div class="np-capacity-foot">
+			<span><i aria-hidden="true"></i> In use now: { formatUsedDiskGB(quotas) }</span>
+			<span>red line = real capacity</span>
+		</div>
+		<div class="np-oversell-head">
+			<strong>Overselling policy</strong>
+			<code>settings.oversell_policy</code>
+		</div>
+		if actions.CanManageQuotas {
+			<form class="np-oversell-form" method="post" action="/settings/oversell" aria-label="Oversell policy">
+				<input type="hidden" name="server_disk_capacity_mb" value={ formatSettingsCapacity(settings.ServerDiskCapacityMB) }/>
+				<button type="submit" name="oversell_policy" value="warn" class={ "np-segment " + oversellActiveClass(settings.OversellPolicy, "warn") }>warn</button>
+				<button type="submit" name="oversell_policy" value="cap" class={ "np-segment " + oversellActiveClass(settings.OversellPolicy, "cap") }>cap</button>
+			</form>
+		} else {
+			<div class="np-oversell-form" aria-label="Oversell policy">
+				<span class={ "np-segment " + oversellActiveClass(settings.OversellPolicy, "warn") }>warn</span>
+				<span class={ "np-segment " + oversellActiveClass(settings.OversellPolicy, "cap") }>cap</span>
+			</div>
+		}
+		<p class="np-oversell-note">
+			<strong>{ settings.OversellPolicy }</strong> - { oversellPolicyCopy(settings.OversellPolicy) }
+			if committedExceedsCapacity(committedDiskMB, settings.ServerDiskCapacityMB) {
+				<span>Committed exceeds capacity now.</span>
+			}
+		</p>
+	</section>
+}
+
+templ subscriptionsTable(quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary) {
+	<div class="np-subscription-table-wrap">
+		<table class="np-subscription-table">
+			<thead>
+				<tr>
+					<th><span class="np-sr-only">Select</span></th>
+					<th>Subscription</th>
+					<th>Subscriber</th>
+					<th>Plan</th>
+					<th>Resources</th>
+					<th>Status</th>
+					<th><span class="np-sr-only">Actions</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, quota := range quotas {
+					<tr
+						data-np-subscription-row
+						data-customer-user-id={ formatQuotaUserID(quota.UserID) }
+						data-customer-id={ formatQuotaUserID(subscriptionCustomerID(quota, subscriptions)) }
+						data-plan-name={ formatSummaryPlanName(quota) }
+						data-subscriber-email={ quota.Email }
+					>
+						<td data-label="Select" class="np-select-cell">
+							<input type="checkbox" class="np-subscription-check" aria-label={ "Select " + quota.Email } data-np-subscription-check/>
+						</td>
+						<td data-label="Subscription">
+							<div class="np-subscription-identity">
+								<strong>{ "Subscription " + formatQuotaUserID(quota.SubscriptionID) }</strong>
+								<span>{ formatSummaryPlanName(quota) }</span>
+							</div>
+						</td>
+						<td data-label="Subscriber">
+							<div class="np-subscription-identity">
+								<strong>{ displayCustomerName(quota) }</strong>
+								<span>{ quota.Email }</span>
+							</div>
+						</td>
+						<td data-label="Plan">
+							<span class={ "np-plan-pill " + planPillClass(formatSummaryPlanName(quota)) }>{ formatSummaryPlanName(quota) }</span>
+						</td>
+						<td data-label="Resources">
+							<div class="np-resource-stack">
+								<div class="np-usage-cell">
+									<div><span>{ siteLimitLabel(quota) }</span><strong>{ formatQuotaCompactCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota) }</strong></div>
+									@tableMeter(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota)
+									<span class="np-sr-only">{ formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota) }</span>
+								</div>
+								<div class="np-usage-cell">
+									<div><span>disk</span><strong>{ formatQuotaCompactStorage(quota) }</strong></div>
+									@diskMeter(quota)
+									<span class="np-sr-only">{ formatQuotaCount(quota.Usage.Databases, quota.Limits.MaxDatabases, quota.HasQuota) }</span>
+									<span class="np-sr-only">{ formatQuotaCount(quota.Usage.Backups, quota.Limits.MaxBackups, quota.HasQuota) }</span>
+									<span class="np-sr-only">{ formatQuotaStorage(quota.Usage.BackupStorageBytes, quota.Limits.BackupStorageMB, quota.HasQuota) }</span>
+									<span class="np-sr-only">{ formatQuotaLimitMB(quota.Limits.SiteDiskQuotaMB, quota.HasQuota) }</span>
+									<span class="np-sr-only">{ formatQuotaPHP(quota) }</span>
+								</div>
+							</div>
+						</td>
+						<td data-label="Status">
+							<span class={ "np-status-pill " + subscriptionStatusClass(quota) }>{ subscriptionStatusLabel(quota) }</span>
+						</td>
+						<td data-label="Action">
+							<div class="np-row-actions">
+								<span class="np-pause-dot" aria-hidden="true">Ⅱ</span>
+								<button type="button" class="np-manage-button" data-np-scroll-target="#subscription-admin-forms">Manage</button>
+							</div>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ tableMeter(used int, allowed int, hasLimits bool) {
+	<div class={ "np-row-meter np-row-meter-" + usageMeter(used, allowed, hasLimits).Class } aria-hidden="true">
+		<span style={ "width:" + usageMeter(used, allowed, hasLimits).Percent + "%" }></span>
+	</div>
+}
+
+templ diskMeter(quota controlquota.Summary) {
+	<div class={ "np-row-meter np-row-meter-" + diskUsageMeter(quota).Class } aria-hidden="true">
+		<span style={ "width:" + diskUsageMeter(quota).Percent + "%" }></span>
+	</div>
+}
+
+templ planCards(plans []controlquota.Plan) {
+	if len(plans) > 0 {
+		<div class="np-plan-grid">
+			for _, plan := range plans {
+				<article class="np-plan-card">
+					<div class="np-card-head">
+						<h3>{ plan.Name }</h3>
+						<span class={ "np-pill np-pill-" + statusPillClass(formatPlanStatus(plan)) }>{ formatPlanStatus(plan) }</span>
+					</div>
+					<p>{ plan.Description }</p>
+					<dl>
+						<div><dt>Disk</dt><dd>{ formatPlanLimitMB(plan.DiskMB) }</dd></div>
+						<div><dt>Sites</dt><dd>{ formatPlanLimit(plan.MaxSites) }</dd></div>
+						<div><dt>Databases</dt><dd>{ formatPlanLimit(plan.MaxDatabases) }</dd></div>
+					</dl>
+				</article>
+			}
+		</div>
+	}
+}
+
 templ customerSelect(quotas []controlquota.Summary) {
 	if len(quotas) > 0 {
-		<label>Customer <select name="owner_user_id">
+		<label>Customer <select name="subscription_id">
 			for _, quota := range quotas {
-				<option value={ formatQuotaUserID(quota.UserID) }>{ quota.Email } - { formatSummaryPlanName(quota) }</option>
+				<option
+					value={ formatQuotaUserID(quota.SubscriptionID) }
+					data-user-id={ formatQuotaUserID(quota.UserID) }
+					data-subscription-id={ formatQuotaUserID(quota.SubscriptionID) }
+					data-email={ quota.Email }
+					data-plan-name={ formatSummaryPlanName(quota) }
+					data-has-quota={ formatBool(quota.HasQuota) }
+					data-max-sites={ formatPlanLimitFormValue(quota.Limits.MaxSites) }
+					data-sites-used={ formatPlanLimitFormValue(quota.Usage.Sites) }
+					data-storage-mb={ formatPlanLimitFormValue(quota.Limits.StorageMB) }
+				>{ quota.Email } - { formatSummaryPlanName(quota) }</option>
 			}
 		</select></label>
 	}
+}
+
+templ subscriptionSelect(quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary) {
+	if len(subscriptions) > 0 {
+		<label>Subscription <select name="subscription_id">
+			for _, subscription := range subscriptions {
+				<option
+					value={ formatQuotaUserID(subscription.ID) }
+					data-subscription-id={ formatQuotaUserID(subscription.ID) }
+					data-customer-id={ formatQuotaUserID(subscription.CustomerID) }
+					data-email={ subscription.CustomerEmail }
+					data-plan-name={ subscription.PlanName }
+					data-has-quota="true"
+					data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) }
+					data-sites-used={ formatPlanLimitFormValue(subscription.SitesUsed) }
+					data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) }
+				>{ subscriptionSelectLabel(subscription) }</option>
+			}
+		</select></label>
+	} else {
+		@customerSelect(quotas)
+	}
+}
+
+templ createSiteModal(quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary) {
+	<div class="np-modal" id="create-site-modal" data-np-modal hidden>
+		<div class="np-modal-backdrop" data-np-close-modal></div>
+		<section class="np-modal-panel" role="dialog" aria-modal="true" aria-labelledby="create-site-title">
+			<div class="np-modal-head">
+				<div>
+					<span class="np-kicker">Entitlement-aware provisioning</span>
+					<h2 id="create-site-title">New site</h2>
+				</div>
+				<button type="button" class="np-icon-button" data-np-close-modal aria-label="Close create site dialog">x</button>
+			</div>
+			<form class="np-form np-modal-form" method="post" action="/sites" data-np-create-site-form>
+				@subscriptionSelect(quotas, subscriptions)
+				<label>Username <input name="username" autocomplete="off" required/></label>
+				<label>Domain <input name="domain" autocomplete="off" required/></label>
+				<label>PHP <select name="php_version"><option value="8.3">8.3</option><option value="8.2">8.2</option></select></label>
+				<p class="np-gate" data-np-customer-gate>Select a customer with an active plan.</p>
+				<div class="np-modal-actions">
+					<button type="button" class="np-link-button" data-np-close-modal>Cancel</button>
+					<button type="submit" data-np-create-submit>Create site</button>
+				</div>
+			</form>
+		</section>
+	</div>
 }
 
 templ plansTable(plans []controlquota.Plan) {
@@ -524,10 +1163,10 @@ templ planForm() {
 	</form>
 }
 
-templ quotaUsageSection(title string, quotas []controlquota.Summary, loadError string) {
-	<section class="np-section" aria-labelledby="quota-usage-title">
+templ quotaUsageSection(title string, titleID string, quotas []controlquota.Summary, loadError string) {
+	<section class="np-section" aria-labelledby={ titleID }>
 		<div class="np-section-heading">
-			<h2 id="quota-usage-title">{ title }</h2>
+			<h2 id={ titleID }>{ title }</h2>
 		</div>
 		if loadError != "" {
 			<p class="np-empty">

@@ -22,7 +22,8 @@ func TestPhase5UIVerifierCoversEmbeddedAndRoleScopedUI(t *testing.T) {
 
 	script := string(data)
 	for _, want := range []string{
-		"${NAKPANEL_MULTIPASS_VM:-nakpanel-phase5-ui}",
+		"common.sh",
+		"VM_NAME=\"${NAKPANEL_MULTIPASS_VM}\"",
 		"sudo rm -rf \"${REMOTE_SRC}\"",
 		"test ! -e \"${REMOTE_SRC}\"",
 		"/assets/app.css",

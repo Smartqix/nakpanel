@@ -7,19 +7,29 @@ import (
 	"time"
 )
 
-//go:embed static/app.css
+//go:embed static/app.css static/app.js
 var staticFiles embed.FS
 
 var appCSS = mustReadStatic("static/app.css")
+var appJS = mustReadStatic("static/app.js")
 
 func StaticHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "app.css" && r.URL.Path != "/app.css" {
-			http.NotFound(w, r)
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		w.Header().Set("Content-Type", "text/css; charset=utf-8")
-		http.ServeContent(w, r, "app.css", time.Time{}, bytes.NewReader(appCSS))
+		switch r.URL.Path {
+		case "app.css", "/app.css":
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			http.ServeContent(w, r, "app.css", time.Time{}, bytes.NewReader(appCSS))
+		case "app.js", "/app.js":
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			http.ServeContent(w, r, "app.js", time.Time{}, bytes.NewReader(appJS))
+		default:
+			http.NotFound(w, r)
+		}
 	})
 }
 

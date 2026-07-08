@@ -7,6 +7,8 @@ package store
 
 import (
 	"context"
+	"database/sql"
+	"time"
 )
 
 const getActiveSubscription = `-- name: GetActiveSubscription :one
@@ -16,9 +18,19 @@ WHERE s.customer_user_id = $1
   AND s.status = 'active'
 `
 
-func (q *Queries) GetActiveSubscription(ctx context.Context, customerUserID int64) (Subscription, error) {
+type GetActiveSubscriptionRow struct {
+	ID             int64
+	CustomerUserID sql.NullInt64
+	ResellerUserID sql.NullInt64
+	PlanID         int64
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (q *Queries) GetActiveSubscription(ctx context.Context, customerUserID sql.NullInt64) (GetActiveSubscriptionRow, error) {
 	row := q.db.QueryRowContext(ctx, getActiveSubscription, customerUserID)
-	var i Subscription
+	var i GetActiveSubscriptionRow
 	err := row.Scan(
 		&i.ID,
 		&i.CustomerUserID,
@@ -95,15 +107,25 @@ WHERE s.status = 'active'
 ORDER BY s.customer_user_id
 `
 
-func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]Subscription, error) {
+type ListActiveSubscriptionsRow struct {
+	ID             int64
+	CustomerUserID sql.NullInt64
+	ResellerUserID sql.NullInt64
+	PlanID         int64
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+func (q *Queries) ListActiveSubscriptions(ctx context.Context) ([]ListActiveSubscriptionsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listActiveSubscriptions)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Subscription
+	var items []ListActiveSubscriptionsRow
 	for rows.Next() {
-		var i Subscription
+		var i ListActiveSubscriptionsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.CustomerUserID,

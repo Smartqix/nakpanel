@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VM_NAME="${NAKPANEL_MULTIPASS_VM:-nakpanel-phase9}"
-IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-24.04}"
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/common.sh"
+VM_NAME="${NAKPANEL_MULTIPASS_VM}"
+IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"
@@ -71,6 +73,13 @@ assert_contains "${tmpdir}/admin-dashboard.html" 'Plans & subscriptions'
 assert_contains "${tmpdir}/admin-dashboard.html" 'action="/plans"'
 assert_contains "${tmpdir}/admin-dashboard.html" 'action="/subscriptions"'
 assert_contains "${tmpdir}/admin-dashboard.html" 'action="/settings/oversell"'
+assert_contains "${tmpdir}/admin-dashboard.html" '/assets/app.js'
+assert_contains "${tmpdir}/admin-dashboard.html" 'np-layout'
+assert_contains "${tmpdir}/admin-dashboard.html" 'data-np-view="subscriptions"'
+assert_contains "${tmpdir}/admin-dashboard.html" 'create-site-modal'
+
+curl -sk --fail "https://${VM_IP}:7443/assets/app.js" > "${tmpdir}/app.js"
+assert_contains "${tmpdir}/app.js" 'X-Nakpanel-SPA'
 
 phase9_state="$(multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -tAc "
 SELECT
@@ -96,7 +105,9 @@ WHERE args::text LIKE '%phase9-client.test%'
 DELETE FROM backups WHERE target_name IN ('phase9-client.test', 'phase9-over.test');
 DELETE FROM databases WHERE db_name LIKE 'np_phase9%';
 DELETE FROM sites WHERE domain IN ('phase9-client.test', 'phase9-over.test');
+DELETE FROM subscriptions WHERE customer_id IN (SELECT id FROM customers WHERE email = 'phase9-client@nakpanel.test');
 DELETE FROM subscriptions WHERE customer_user_id IN (SELECT id FROM users WHERE email = 'phase9-client@nakpanel.test');
+DELETE FROM customers WHERE email = 'phase9-client@nakpanel.test';
 DELETE FROM users WHERE email = 'phase9-client@nakpanel.test';
 DELETE FROM plans WHERE name IN ('Phase9 Tiny', 'Phase9 Huge');
 INSERT INTO users (email, password_hash, role)

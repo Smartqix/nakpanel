@@ -100,6 +100,9 @@ func (m *Manager) CreateSite(ctx context.Context, owner auth.SessionUser, req ty
 }
 
 func (m *Manager) CreateSiteFor(ctx context.Context, actor auth.SessionUser, resourceOwnerID int64, req types.CreateSiteReq) (int64, error) {
+	if req.SubscriptionID > 0 {
+		return m.CreateSiteForSubscription(ctx, actor, req.SubscriptionID, req)
+	}
 	if actor.Role != auth.RoleAdmin {
 		return 0, ErrForbidden
 	}
@@ -118,8 +121,45 @@ func (m *Manager) CreateSiteFor(ctx context.Context, actor auth.SessionUser, res
 	if err != nil {
 		return 0, err
 	}
+	if m.quotaStore != nil {
+		entitlement, hasEntitlement, err := m.quotaStore.GetLimits(ctx, resourceOwnerID)
+		if err != nil {
+			return 0, err
+		}
+		if hasEntitlement {
+			normalized.SubscriptionID = entitlement.SubscriptionID
+		}
+	}
 	normalized.Limits = limits
 	return m.siteRepo.CreateSite(ctx, resourceOwnerID, normalized)
+}
+
+func (m *Manager) CreateSiteForSubscription(ctx context.Context, actor auth.SessionUser, subscriptionID int64, req types.CreateSiteReq) (int64, error) {
+	if actor.Role != auth.RoleAdmin {
+		return 0, ErrForbidden
+	}
+	if subscriptionID <= 0 {
+		return 0, errors.New("subscription id is required")
+	}
+	if m.siteRepo == nil {
+		return 0, errors.New("site repository is not configured")
+	}
+
+	normalized := site.NormalizeCreateSiteRequest(req)
+	if err := site.ValidateCreateSiteRequest(normalized); err != nil {
+		return 0, err
+	}
+	limits, entitlement, err := controlquota.SiteLimitsForSubscription(ctx, m.quotaStore, subscriptionID)
+	if err != nil {
+		return 0, err
+	}
+	normalized.SubscriptionID = subscriptionID
+	normalized.Limits = limits
+	ownerID := entitlement.UserID
+	if ownerID <= 0 {
+		ownerID = actor.ID
+	}
+	return m.siteRepo.CreateSite(ctx, ownerID, normalized)
 }
 
 func (m *Manager) CreateDatabase(ctx context.Context, owner auth.SessionUser, req types.CreateDatabaseReq) (int64, error) {
@@ -127,6 +167,9 @@ func (m *Manager) CreateDatabase(ctx context.Context, owner auth.SessionUser, re
 }
 
 func (m *Manager) CreateDatabaseFor(ctx context.Context, actor auth.SessionUser, resourceOwnerID int64, req types.CreateDatabaseReq) (int64, error) {
+	if req.SubscriptionID > 0 {
+		return m.CreateDatabaseForSubscription(ctx, actor, req.SubscriptionID, req)
+	}
 	if actor.Role != auth.RoleAdmin {
 		return 0, ErrForbidden
 	}
@@ -155,7 +198,54 @@ func (m *Manager) CreateDatabaseFor(ctx context.Context, actor auth.SessionUser,
 	if err := controlquota.CheckDatabase(ctx, m.quotaStore, resourceOwnerID); err != nil {
 		return 0, err
 	}
+	if m.quotaStore != nil {
+		entitlement, hasEntitlement, err := m.quotaStore.GetLimits(ctx, resourceOwnerID)
+		if err != nil {
+			return 0, err
+		}
+		if hasEntitlement {
+			normalized.SubscriptionID = entitlement.SubscriptionID
+		}
+	}
 	return m.databaseRepo.CreateDatabase(ctx, resourceOwnerID, normalized)
+}
+
+func (m *Manager) CreateDatabaseForSubscription(ctx context.Context, actor auth.SessionUser, subscriptionID int64, req types.CreateDatabaseReq) (int64, error) {
+	if actor.Role != auth.RoleAdmin {
+		return 0, ErrForbidden
+	}
+	if subscriptionID <= 0 {
+		return 0, errors.New("subscription id is required")
+	}
+	if m.databaseRepo == nil {
+		return 0, errors.New("database repository is not configured")
+	}
+	if m.passwordGenerator == nil {
+		return 0, errors.New("database password generator is not configured")
+	}
+
+	normalized := dbvalidation.NormalizeCreateDatabaseRequest(req)
+	if normalized.Engine == "" {
+		normalized.Engine = types.EngineMariaDB
+	}
+	password, err := m.passwordGenerator()
+	if err != nil {
+		return 0, fmt.Errorf("generate database password: %w", err)
+	}
+	normalized.Password = password
+	if err := dbvalidation.ValidateCreateDatabaseRequest(normalized); err != nil {
+		return 0, err
+	}
+	entitlement, err := controlquota.CheckDatabaseForSubscription(ctx, m.quotaStore, subscriptionID)
+	if err != nil {
+		return 0, err
+	}
+	normalized.SubscriptionID = subscriptionID
+	ownerID := entitlement.UserID
+	if ownerID <= 0 {
+		ownerID = actor.ID
+	}
+	return m.databaseRepo.CreateDatabase(ctx, ownerID, normalized)
 }
 
 func (m *Manager) IssueCertificate(ctx context.Context, owner auth.SessionUser, domain string, issuer types.CertIssuer) (int64, error) {
@@ -185,6 +275,9 @@ func (m *Manager) CreateBackup(ctx context.Context, owner auth.SessionUser, req 
 }
 
 func (m *Manager) CreateBackupFor(ctx context.Context, actor auth.SessionUser, resourceOwnerID int64, req types.CreateBackupReq) (int64, error) {
+	if req.SubscriptionID > 0 {
+		return m.CreateBackupForSubscription(ctx, actor, req.SubscriptionID, req)
+	}
 	if actor.Role != auth.RoleAdmin {
 		return 0, ErrForbidden
 	}
@@ -201,7 +294,42 @@ func (m *Manager) CreateBackupFor(ctx context.Context, actor auth.SessionUser, r
 	if err := controlquota.CheckBackup(ctx, m.quotaStore, resourceOwnerID); err != nil {
 		return 0, err
 	}
+	if m.quotaStore != nil {
+		entitlement, hasEntitlement, err := m.quotaStore.GetLimits(ctx, resourceOwnerID)
+		if err != nil {
+			return 0, err
+		}
+		if hasEntitlement {
+			req.SubscriptionID = entitlement.SubscriptionID
+		}
+	}
 	return m.phase6Repo.CreateBackup(ctx, resourceOwnerID, req)
+}
+
+func (m *Manager) CreateBackupForSubscription(ctx context.Context, actor auth.SessionUser, subscriptionID int64, req types.CreateBackupReq) (int64, error) {
+	if actor.Role != auth.RoleAdmin {
+		return 0, ErrForbidden
+	}
+	if subscriptionID <= 0 {
+		return 0, errors.New("subscription id is required")
+	}
+	if m.phase6Repo == nil {
+		return 0, errors.New("phase6 repository is not configured")
+	}
+	req.Domain = site.NormalizeDomain(req.Domain)
+	if err := site.ValidateDomain(req.Domain); err != nil {
+		return 0, err
+	}
+	entitlement, err := controlquota.CheckBackupForSubscription(ctx, m.quotaStore, subscriptionID)
+	if err != nil {
+		return 0, err
+	}
+	req.SubscriptionID = subscriptionID
+	ownerID := entitlement.UserID
+	if ownerID <= 0 {
+		ownerID = actor.ID
+	}
+	return m.phase6Repo.CreateBackup(ctx, ownerID, req)
 }
 
 func (m *Manager) ConfigureWebmail(ctx context.Context, owner auth.SessionUser, domain string) (int64, error) {
@@ -303,6 +431,46 @@ func (m *Manager) AssignSubscription(ctx context.Context, owner auth.SessionUser
 		return controlquota.SubscriptionAssignment{}, errors.New("plan store is not configured")
 	}
 	return m.quotaAdmin.AssignSubscription(ctx, customerUserID, planID)
+}
+
+func (m *Manager) CreateCustomer(ctx context.Context, owner auth.SessionUser, req types.CreateCustomerReq) (types.Customer, error) {
+	if owner.Role != auth.RoleAdmin {
+		return types.Customer{}, ErrForbidden
+	}
+	if m.quotaAdmin == nil {
+		return types.Customer{}, errors.New("customer store is not configured")
+	}
+	return m.quotaAdmin.CreateCustomer(ctx, req)
+}
+
+func (m *Manager) EnableCustomerLogin(ctx context.Context, owner auth.SessionUser, customerID int64, email string, password string) (types.Customer, error) {
+	if owner.Role != auth.RoleAdmin {
+		return types.Customer{}, ErrForbidden
+	}
+	if m.quotaAdmin == nil {
+		return types.Customer{}, errors.New("customer store is not configured")
+	}
+	return m.quotaAdmin.EnableCustomerLogin(ctx, customerID, email, password)
+}
+
+func (m *Manager) SetCustomerStatus(ctx context.Context, owner auth.SessionUser, customerID int64, status string) error {
+	if owner.Role != auth.RoleAdmin {
+		return ErrForbidden
+	}
+	if m.quotaAdmin == nil {
+		return errors.New("customer store is not configured")
+	}
+	return m.quotaAdmin.SetCustomerStatus(ctx, customerID, status)
+}
+
+func (m *Manager) CreateSubscription(ctx context.Context, owner auth.SessionUser, req types.CreateSubscriptionReq) (types.SubscriptionSummary, error) {
+	if owner.Role != auth.RoleAdmin {
+		return types.SubscriptionSummary{}, ErrForbidden
+	}
+	if m.quotaAdmin == nil {
+		return types.SubscriptionSummary{}, errors.New("subscription store is not configured")
+	}
+	return m.quotaAdmin.CreateSubscription(ctx, req)
 }
 
 func (m *Manager) UpdateSettings(ctx context.Context, owner auth.SessionUser, settings controlquota.Settings) error {

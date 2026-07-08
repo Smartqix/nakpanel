@@ -43,10 +43,11 @@ func (r *SQLSiteRepository) CreateSite(ctx context.Context, ownerID int64, req t
 	defer tx.Rollback()
 
 	site, err := r.queries.WithTx(tx).UpsertSiteIntent(ctx, store.UpsertSiteIntentParams{
-		OwnerUserID: ownerID,
-		Username:    req.Username,
-		Domain:      req.Domain,
-		PhpVersion:  req.PHPVersion,
+		OwnerUserID:    ownerID,
+		Username:       req.Username,
+		Domain:         req.Domain,
+		PhpVersion:     req.PHPVersion,
+		SubscriptionID: req.SubscriptionID,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("upsert site intent: %w", err)
@@ -195,10 +196,11 @@ func (r *SQLDatabaseRepository) CreateDatabase(ctx context.Context, ownerID int6
 	defer tx.Rollback()
 
 	database, err := r.queries.WithTx(tx).UpsertDatabaseIntent(ctx, store.UpsertDatabaseIntentParams{
-		OwnerUserID: ownerID,
-		Engine:      string(req.Engine),
-		DbName:      req.DBName,
-		DbUser:      req.DBUser,
+		OwnerUserID:    ownerID,
+		Engine:         string(req.Engine),
+		DbName:         req.DBName,
+		DbUser:         req.DBUser,
+		SubscriptionID: req.SubscriptionID,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("upsert database intent: %w", err)

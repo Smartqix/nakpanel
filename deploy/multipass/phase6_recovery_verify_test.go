@@ -22,7 +22,8 @@ func TestPhase6RecoveryVerifierCoversDiscardedJobRetry(t *testing.T) {
 
 	script := string(data)
 	for _, want := range []string{
-		"${NAKPANEL_MULTIPASS_VM:-nakpanel-phase6-recovery}",
+		"common.sh",
+		"VM_NAME=\"${NAKPANEL_MULTIPASS_VM}\"",
 		"phase5-ui-verify.sh",
 		"phase6-retry.test",
 		"state::text",

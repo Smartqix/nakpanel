@@ -17,6 +17,7 @@ var (
 
 type Limits struct {
 	UserID            int64
+	CustomerID        int64
 	SubscriptionID    int64
 	PlanID            int64
 	PlanName          string
@@ -34,6 +35,8 @@ type Limits struct {
 
 type Usage struct {
 	UserID             int64
+	CustomerID         int64
+	SubscriptionID     int64
 	Sites              int
 	Databases          int
 	Backups            int
@@ -55,6 +58,8 @@ type Summary struct {
 type Store interface {
 	GetLimits(ctx context.Context, userID int64) (Limits, bool, error)
 	GetUsage(ctx context.Context, userID int64) (Usage, error)
+	GetLimitsForSubscription(ctx context.Context, subscriptionID int64) (Limits, bool, error)
+	GetUsageForSubscription(ctx context.Context, subscriptionID int64) (Usage, error)
 	UpsertLimits(ctx context.Context, limits Limits) error
 	ListAccountQuotas(ctx context.Context) ([]Summary, error)
 	GetAccountQuotaSummary(ctx context.Context, userID int64) (Summary, error)
@@ -66,6 +71,13 @@ type AdminStore interface {
 	UpsertPlan(ctx context.Context, plan Plan) (Plan, error)
 	SetPlanActive(ctx context.Context, planID int64, active bool) error
 	AssignSubscription(ctx context.Context, customerUserID int64, planID int64) (SubscriptionAssignment, error)
+	CreateCustomer(ctx context.Context, req types.CreateCustomerReq) (types.Customer, error)
+	EnableCustomerLogin(ctx context.Context, customerID int64, email string, password string) (types.Customer, error)
+	SetCustomerStatus(ctx context.Context, customerID int64, status string) error
+	CreateSubscription(ctx context.Context, req types.CreateSubscriptionReq) (types.SubscriptionSummary, error)
+	ListCustomers(ctx context.Context) ([]types.Customer, error)
+	ListSubscriptionSummaries(ctx context.Context) ([]types.SubscriptionSummary, error)
+	ListSubscriptionSummariesForUser(ctx context.Context, userID int64) ([]types.SubscriptionSummary, error)
 	GetSettings(ctx context.Context) (Settings, error)
 	UpdateSettings(ctx context.Context, settings Settings) error
 	CommittedAllocationMB(ctx context.Context) (int, error)
@@ -105,6 +117,40 @@ func SiteLimits(ctx context.Context, store Store, userID int64) (types.SiteResou
 	}, nil
 }
 
+func SiteLimitsForSubscription(ctx context.Context, store Store, subscriptionID int64) (types.SiteResourceLimits, Limits, error) {
+	if store == nil {
+		return types.SiteResourceLimits{}, Limits{}, nil
+	}
+	limits, hasLimits, err := store.GetLimitsForSubscription(ctx, subscriptionID)
+	if err != nil {
+		return types.SiteResourceLimits{}, Limits{}, err
+	}
+	if !hasLimits {
+		return types.SiteResourceLimits{}, Limits{}, ErrNoActiveSubscription
+	}
+	usage, err := store.GetUsageForSubscription(ctx, subscriptionID)
+	if err != nil {
+		return types.SiteResourceLimits{}, Limits{}, err
+	}
+	if limitReached(usage.Sites, limits.MaxSites) {
+		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: sites %d / %d", ErrExceeded, usage.Sites, limits.MaxSites)
+	}
+	if limits.SiteDiskQuotaMB == 0 {
+		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: site disk quota is 0 MB", ErrExceeded)
+	}
+	if limits.PHPFPMMaxChildren == 0 {
+		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: php max children is 0", ErrExceeded)
+	}
+	if limits.PHPMemoryMB == 0 {
+		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: php memory is 0 MB", ErrExceeded)
+	}
+	return types.SiteResourceLimits{
+		DiskQuotaMB:       positiveLimit(limits.SiteDiskQuotaMB),
+		PHPFPMMaxChildren: positiveLimit(limits.PHPFPMMaxChildren),
+		PHPMemoryMB:       positiveLimit(limits.PHPMemoryMB),
+	}, limits, nil
+}
+
 func CheckDatabase(ctx context.Context, store Store, userID int64) error {
 	if store == nil {
 		return nil
@@ -124,6 +170,27 @@ func CheckDatabase(ctx context.Context, store Store, userID int64) error {
 		return fmt.Errorf("%w: databases %d / %d", ErrExceeded, usage.Databases, limits.MaxDatabases)
 	}
 	return nil
+}
+
+func CheckDatabaseForSubscription(ctx context.Context, store Store, subscriptionID int64) (Limits, error) {
+	if store == nil {
+		return Limits{}, nil
+	}
+	limits, hasLimits, err := store.GetLimitsForSubscription(ctx, subscriptionID)
+	if err != nil {
+		return Limits{}, err
+	}
+	if !hasLimits {
+		return Limits{}, ErrNoActiveSubscription
+	}
+	usage, err := store.GetUsageForSubscription(ctx, subscriptionID)
+	if err != nil {
+		return Limits{}, err
+	}
+	if limitReached(usage.Databases, limits.MaxDatabases) {
+		return Limits{}, fmt.Errorf("%w: databases %d / %d", ErrExceeded, usage.Databases, limits.MaxDatabases)
+	}
+	return limits, nil
 }
 
 func CheckBackup(ctx context.Context, store Store, userID int64) error {
@@ -151,6 +218,33 @@ func CheckBackup(ctx context.Context, store Store, userID int64) error {
 		}
 	}
 	return nil
+}
+
+func CheckBackupForSubscription(ctx context.Context, store Store, subscriptionID int64) (Limits, error) {
+	if store == nil {
+		return Limits{}, nil
+	}
+	limits, hasLimits, err := store.GetLimitsForSubscription(ctx, subscriptionID)
+	if err != nil {
+		return Limits{}, err
+	}
+	if !hasLimits {
+		return Limits{}, ErrNoActiveSubscription
+	}
+	usage, err := store.GetUsageForSubscription(ctx, subscriptionID)
+	if err != nil {
+		return Limits{}, err
+	}
+	if limitReached(usage.Backups, limits.MaxBackups) {
+		return Limits{}, fmt.Errorf("%w: backups %d / %d", ErrExceeded, usage.Backups, limits.MaxBackups)
+	}
+	if limits.BackupStorageMB >= 0 {
+		maxBytes := int64(limits.BackupStorageMB) * 1024 * 1024
+		if usage.BackupStorageBytes >= maxBytes {
+			return Limits{}, fmt.Errorf("%w: backup storage %d / %d bytes", ErrExceeded, usage.BackupStorageBytes, maxBytes)
+		}
+	}
+	return limits, nil
 }
 
 func limitReached(used int, allowed int) bool {
@@ -203,9 +297,49 @@ func (s *SQLStore) GetLimits(ctx context.Context, userID int64) (Limits, bool, e
        p.site_disk_quota_mb, p.php_fpm_max_children, p.php_memory_mb, p.created_at, p.updated_at
 FROM subscriptions s
 JOIN plans p ON p.id = s.plan_id
+LEFT JOIN customers c ON c.id = s.customer_id
 WHERE s.customer_user_id = $1
-  AND s.status = 'active'`, userID).Scan(
+  AND s.status = 'active'
+  AND COALESCE(c.status, 'active') = 'active'`, userID).Scan(
 		&limits.UserID,
+		&limits.SubscriptionID,
+		&limits.PlanID,
+		&limits.PlanName,
+		&limits.MaxSites,
+		&limits.MaxDatabases,
+		&limits.StorageMB,
+		&limits.MaxBackups,
+		&limits.BackupStorageMB,
+		&limits.SiteDiskQuotaMB,
+		&limits.PHPFPMMaxChildren,
+		&limits.PHPMemoryMB,
+		&limits.CreatedAt,
+		&limits.UpdatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Limits{}, false, nil
+	}
+	if err != nil {
+		return Limits{}, false, err
+	}
+	return limits, true, nil
+}
+
+func (s *SQLStore) GetLimitsForSubscription(ctx context.Context, subscriptionID int64) (Limits, bool, error) {
+	if s == nil || s.db == nil {
+		return Limits{}, false, errors.New("quota database is not configured")
+	}
+	var limits Limits
+	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(s.customer_id, 0), s.id, p.id, p.name,
+       p.max_sites, p.max_databases, p.disk_mb, p.max_backups, p.backup_storage_mb,
+       p.site_disk_quota_mb, p.php_fpm_max_children, p.php_memory_mb, p.created_at, p.updated_at
+FROM subscriptions s
+JOIN plans p ON p.id = s.plan_id
+JOIN customers c ON c.id = s.customer_id
+WHERE s.id = $1
+  AND s.status = 'active'
+  AND c.status = 'active'`, subscriptionID).Scan(
+		&limits.CustomerID,
 		&limits.SubscriptionID,
 		&limits.PlanID,
 		&limits.PlanName,
@@ -240,6 +374,25 @@ func (s *SQLStore) GetUsage(ctx context.Context, userID int64) (Usage, error) {
     COALESCE((SELECT COUNT(*) FROM backups WHERE owner_user_id = $1 AND status <> 'failed'), 0)::int AS backups,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = $1 AND status = 'active'), 0)::bigint AS backup_storage_bytes`, userID).Scan(
 		&usage.UserID,
+		&usage.Sites,
+		&usage.Databases,
+		&usage.Backups,
+		&usage.BackupStorageBytes,
+	)
+	return usage, err
+}
+
+func (s *SQLStore) GetUsageForSubscription(ctx context.Context, subscriptionID int64) (Usage, error) {
+	if s == nil || s.db == nil {
+		return Usage{}, errors.New("quota database is not configured")
+	}
+	var usage Usage
+	err := s.db.QueryRowContext(ctx, `SELECT $1::bigint AS subscription_id,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS sites,
+    COALESCE((SELECT COUNT(*) FROM databases WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS databases,
+    COALESCE((SELECT COUNT(*) FROM backups WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS backups,
+    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id = $1 AND status = 'active'), 0)::bigint AS backup_storage_bytes`, subscriptionID).Scan(
+		&usage.SubscriptionID,
 		&usage.Sites,
 		&usage.Databases,
 		&usage.Backups,

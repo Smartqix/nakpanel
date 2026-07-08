@@ -46,6 +46,19 @@ type Backup struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	SubscriptionID sql.NullInt64
+	CustomerID     sql.NullInt64
+}
+
+type Customer struct {
+	ID          int64
+	LoginUserID sql.NullInt64
+	Email       string
+	DisplayName string
+	Company     string
+	Status      string
+	Notes       string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 type Database struct {
@@ -59,6 +72,7 @@ type Database struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	SubscriptionID sql.NullInt64
+	CustomerID     sql.NullInt64
 }
 
 type DnsZone struct {
@@ -154,16 +168,19 @@ type Site struct {
 	TlsExpiresAt   sql.NullTime
 	TlsLastError   string
 	SubscriptionID sql.NullInt64
+	CustomerID     sql.NullInt64
 }
 
 type Subscription struct {
 	ID             int64
-	CustomerUserID int64
+	CustomerUserID sql.NullInt64
 	ResellerUserID sql.NullInt64
 	PlanID         int64
 	Status         string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	CustomerID     int64
+	Name           string
 }
 
 type User struct {

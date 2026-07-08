@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -59,6 +60,10 @@ type QuotaManager interface {
 	UpsertPlan(ctx context.Context, owner auth.SessionUser, plan controlquota.Plan) (controlquota.Plan, error)
 	SetPlanActive(ctx context.Context, owner auth.SessionUser, planID int64, active bool) error
 	AssignSubscription(ctx context.Context, owner auth.SessionUser, customerUserID int64, planID int64) (controlquota.SubscriptionAssignment, error)
+	CreateCustomer(ctx context.Context, owner auth.SessionUser, req types.CreateCustomerReq) (types.Customer, error)
+	EnableCustomerLogin(ctx context.Context, owner auth.SessionUser, customerID int64, email string, password string) (types.Customer, error)
+	SetCustomerStatus(ctx context.Context, owner auth.SessionUser, customerID int64, status string) error
+	CreateSubscription(ctx context.Context, owner auth.SessionUser, req types.CreateSubscriptionReq) (types.SubscriptionSummary, error)
 	UpdateSettings(ctx context.Context, owner auth.SessionUser, settings controlquota.Settings) error
 }
 
@@ -119,6 +124,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /dns", s.handleConfigureDNS)
 	mux.HandleFunc("POST /reconcile", s.handleReconcileSystem)
 	mux.HandleFunc("POST /quotas", s.handleUpsertQuota)
+	mux.HandleFunc("POST /customers", s.handleCreateCustomer)
+	mux.HandleFunc("POST /customers/login", s.handleEnableCustomerLogin)
+	mux.HandleFunc("POST /customers/status", s.handleSetCustomerStatus)
 	mux.HandleFunc("POST /plans", s.handleUpsertPlan)
 	mux.HandleFunc("POST /plans/status", s.handleSetPlanStatus)
 	mux.HandleFunc("POST /subscriptions", s.handleAssignSubscription)
@@ -243,26 +251,53 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.sites == nil {
+		if wantsSPAJSON(r) {
+			writeSPAError(w, http.StatusServiceUnavailable, "Site provisioning is not configured")
+			return
+		}
 		http.Error(w, "Site provisioning is not configured", http.StatusServiceUnavailable)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
+		if wantsSPAJSON(r) {
+			writeSPAError(w, http.StatusBadRequest, "Invalid site form")
+			return
+		}
 		http.Error(w, "Invalid site form", http.StatusBadRequest)
 		return
 	}
 
 	req := types.CreateSiteReq{
-		Username:   strings.ToLower(strings.TrimSpace(r.Form.Get("username"))),
-		Domain:     strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))),
-		PHPVersion: strings.TrimSpace(r.Form.Get("php_version")),
+		SubscriptionID: parseFormInt64Default(r, "subscription_id", 0),
+		Username:       strings.ToLower(strings.TrimSpace(r.Form.Get("username"))),
+		Domain:         strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))),
+		PHPVersion:     strings.TrimSpace(r.Form.Get("php_version")),
 	}
 	resourceOwnerID, err := parseOptionalOwnerID(r, user.ID)
 	if err != nil {
+		if wantsSPAJSON(r) {
+			writeSPAError(w, http.StatusBadRequest, "Invalid site form: "+err.Error())
+			return
+		}
 		http.Error(w, "Invalid site form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := s.sites.CreateSiteFor(r.Context(), user, resourceOwnerID, req); err != nil {
+	siteID, err := s.sites.CreateSiteFor(r.Context(), user, resourceOwnerID, req)
+	if err != nil {
+		if wantsSPAJSON(r) {
+			writeSPAError(w, http.StatusBadRequest, "Could not create site: "+err.Error())
+			return
+		}
 		http.Error(w, "Could not create site: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if wantsSPAJSON(r) {
+		writeSPAJSON(w, http.StatusAccepted, map[string]any{
+			"ok":       true,
+			"site_id":  siteID,
+			"redirect": "/",
+			"notice":   "Site provisioning queued.",
+		})
 		return
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -292,9 +327,10 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		engine = string(types.EngineMariaDB)
 	}
 	req := types.CreateDatabaseReq{
-		Engine: types.DBEngine(engine),
-		DBName: strings.ToLower(strings.TrimSpace(r.Form.Get("db_name"))),
-		DBUser: strings.ToLower(strings.TrimSpace(r.Form.Get("db_user"))),
+		SubscriptionID: parseFormInt64Default(r, "subscription_id", 0),
+		Engine:         types.DBEngine(engine),
+		DBName:         strings.ToLower(strings.TrimSpace(r.Form.Get("db_name"))),
+		DBUser:         strings.ToLower(strings.TrimSpace(r.Form.Get("db_user"))),
 	}
 	resourceOwnerID, err := parseOptionalOwnerID(r, user.ID)
 	if err != nil {
@@ -382,7 +418,10 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid backup form", http.StatusBadRequest)
 		return
 	}
-	req := types.CreateBackupReq{Domain: strings.TrimSpace(r.Form.Get("domain"))}
+	req := types.CreateBackupReq{
+		SubscriptionID: parseFormInt64Default(r, "subscription_id", 0),
+		Domain:         strings.TrimSpace(r.Form.Get("domain")),
+	}
 	resourceOwnerID, err := parseOptionalOwnerID(r, user.ID)
 	if err != nil {
 		http.Error(w, "Invalid backup form: "+err.Error(), http.StatusBadRequest)
@@ -582,6 +621,24 @@ func (s *Server) handleAssignSubscription(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Invalid subscription form", http.StatusBadRequest)
 		return
 	}
+	if strings.TrimSpace(r.Form.Get("customer_id")) != "" || strings.TrimSpace(r.Form.Get("customer_mode")) == "new" || strings.TrimSpace(r.Form.Get("subscription_name")) != "" {
+		req, err := s.parseCreateSubscriptionRequest(r, user)
+		if err != nil {
+			http.Error(w, "Invalid subscription form: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		subscription, err := s.quotas.CreateSubscription(r.Context(), user, req)
+		if err != nil {
+			http.Error(w, "Could not save subscription: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if subscription.Warning != "" {
+			http.Redirect(w, r, "/?notice=subscription-warning", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/?notice=subscription-saved", http.StatusSeeOther)
+		return
+	}
 	customerUserID, err := parseFormInt64(r, "customer_user_id")
 	if err != nil {
 		http.Error(w, "Invalid subscription form: "+err.Error(), http.StatusBadRequest)
@@ -602,6 +659,77 @@ func (s *Server) handleAssignSubscription(w http.ResponseWriter, r *http.Request
 		return
 	}
 	http.Redirect(w, r, "/?notice=subscription-saved", http.StatusSeeOther)
+}
+
+func (s *Server) handleCreateCustomer(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireAdmin(w, r)
+	if !ok {
+		return
+	}
+	if s.quotas == nil {
+		http.Error(w, "Customer management is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid customer form", http.StatusBadRequest)
+		return
+	}
+	req := parseCustomerRequest(r)
+	if _, err := s.quotas.CreateCustomer(r.Context(), user, req); err != nil {
+		http.Error(w, "Could not create customer: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/?notice=customer-saved", http.StatusSeeOther)
+}
+
+func (s *Server) handleEnableCustomerLogin(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireAdmin(w, r)
+	if !ok {
+		return
+	}
+	if s.quotas == nil {
+		http.Error(w, "Customer management is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid customer login form", http.StatusBadRequest)
+		return
+	}
+	customerID, err := parseFormInt64(r, "customer_id")
+	if err != nil {
+		http.Error(w, "Invalid customer login form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := s.quotas.EnableCustomerLogin(r.Context(), user, customerID, strings.TrimSpace(r.Form.Get("email")), r.Form.Get("password")); err != nil {
+		http.Error(w, "Could not enable customer login: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/?notice=customer-login-saved", http.StatusSeeOther)
+}
+
+func (s *Server) handleSetCustomerStatus(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireAdmin(w, r)
+	if !ok {
+		return
+	}
+	if s.quotas == nil {
+		http.Error(w, "Customer management is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid customer status form", http.StatusBadRequest)
+		return
+	}
+	customerID, err := parseFormInt64(r, "customer_id")
+	if err != nil {
+		http.Error(w, "Invalid customer status form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.quotas.SetCustomerStatus(r.Context(), user, customerID, strings.TrimSpace(r.Form.Get("status"))); err != nil {
+		http.Error(w, "Could not update customer status: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Redirect(w, r, "/?notice=customer-status-saved", http.StatusSeeOther)
 }
 
 func (s *Server) handleUpdateOversellSettings(w http.ResponseWriter, r *http.Request) {
@@ -734,6 +862,12 @@ func dashboardNotice(code string) string {
 		return "Subscription assigned."
 	case "subscription-warning":
 		return "Subscription assigned with an oversell warning."
+	case "customer-saved":
+		return "Customer saved."
+	case "customer-login-saved":
+		return "Customer login saved."
+	case "customer-status-saved":
+		return "Customer status updated."
 	case "settings-saved":
 		return "Oversell settings saved."
 	default:
@@ -762,6 +896,23 @@ func renderPage(w http.ResponseWriter, r *http.Request, component templ.Componen
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = body.WriteTo(w)
+}
+
+func wantsSPAJSON(r *http.Request) bool {
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Nakpanel-SPA")), "true")
+}
+
+func writeSPAError(w http.ResponseWriter, status int, message string) {
+	writeSPAJSON(w, status, map[string]any{
+		"ok":    false,
+		"error": message,
+	})
+}
+
+func writeSPAJSON(w http.ResponseWriter, status int, body any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(body)
 }
 
 func parseQuotaLimits(r *http.Request) (controlquota.Limits, error) {
@@ -838,6 +989,53 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 	return plan, nil
 }
 
+func (s *Server) parseCreateSubscriptionRequest(r *http.Request, owner auth.SessionUser) (types.CreateSubscriptionReq, error) {
+	var customerID int64
+	var err error
+	if strings.TrimSpace(r.Form.Get("customer_mode")) == "new" {
+		customer, err := s.quotas.CreateCustomer(r.Context(), owner, parseCustomerRequest(r))
+		if err != nil {
+			return types.CreateSubscriptionReq{}, err
+		}
+		customerID = customer.ID
+	} else {
+		customerID, err = parseFormInt64(r, "customer_id")
+		if err != nil {
+			return types.CreateSubscriptionReq{}, err
+		}
+	}
+	planID, err := parseFormInt64(r, "plan_id")
+	if err != nil {
+		return types.CreateSubscriptionReq{}, err
+	}
+	subscriptionID, err := parseOptionalFormInt64(r, "subscription_id")
+	if err != nil {
+		return types.CreateSubscriptionReq{}, err
+	}
+	status := strings.TrimSpace(r.Form.Get("status"))
+	if status == "" {
+		status = "active"
+	}
+	return types.CreateSubscriptionReq{
+		ID:               subscriptionID,
+		CustomerID:       customerID,
+		PlanID:           planID,
+		SubscriptionName: strings.TrimSpace(r.Form.Get("subscription_name")),
+		Status:           status,
+	}, nil
+}
+
+func parseCustomerRequest(r *http.Request) types.CreateCustomerReq {
+	return types.CreateCustomerReq{
+		Email:       strings.TrimSpace(firstNonEmpty(r.Form.Get("customer_email"), r.Form.Get("email"))),
+		DisplayName: strings.TrimSpace(firstNonEmpty(r.Form.Get("customer_name"), r.Form.Get("display_name"))),
+		Company:     strings.TrimSpace(r.Form.Get("company")),
+		Notes:       strings.TrimSpace(r.Form.Get("notes")),
+		EnableLogin: parseFormBool(r, "enable_login"),
+		Password:    r.Form.Get("password"),
+	}
+}
+
 func parseOptionalOwnerID(r *http.Request, fallback int64) (int64, error) {
 	value := strings.TrimSpace(r.Form.Get("owner_user_id"))
 	if value == "" {
@@ -851,6 +1049,18 @@ func parseOptionalOwnerID(r *http.Request, fallback int64) (int64, error) {
 		return 0, errors.New("owner_user_id is required")
 	}
 	return parsed, nil
+}
+
+func parseFormInt64Default(r *http.Request, name string, fallback int64) int64 {
+	raw := strings.TrimSpace(r.Form.Get(name))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }
 
 func parseFormInt64(r *http.Request, name string) (int64, error) {
@@ -904,4 +1114,13 @@ func parseOptionalSQLInt64(r *http.Request, name string) (sql.NullInt64, error) 
 func parseFormBool(r *http.Request, name string) bool {
 	value := strings.ToLower(strings.TrimSpace(r.Form.Get(name)))
 	return value == "true" || value == "on" || value == "1" || value == "yes"
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }

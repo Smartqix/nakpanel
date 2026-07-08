@@ -2,6 +2,7 @@ package panelhttp
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -124,19 +125,26 @@ func (r *fakeJobRetrier) RetryProvisioningJob(ctx context.Context, jobID int64) 
 }
 
 type fakeQuotaManager struct {
-	owner          auth.SessionUser
-	limits         controlquota.Limits
-	plan           controlquota.Plan
-	planID         int64
-	active         bool
-	customerUserID int64
-	settings       controlquota.Settings
-	err            error
-	called         bool
-	planCalled     bool
-	statusCalled   bool
-	subCalled      bool
-	settingsCalled bool
+	owner                auth.SessionUser
+	limits               controlquota.Limits
+	plan                 controlquota.Plan
+	planID               int64
+	active               bool
+	customerUserID       int64
+	customerReq          types.CreateCustomerReq
+	customerStatus       string
+	customerID           int64
+	subscriptionReq      types.CreateSubscriptionReq
+	settings             controlquota.Settings
+	err                  error
+	called               bool
+	planCalled           bool
+	statusCalled         bool
+	customerCalled       bool
+	customerLoginCalled  bool
+	customerStatusCalled bool
+	subCalled            bool
+	settingsCalled       bool
 }
 
 func (m *fakeQuotaManager) UpsertAccountQuota(ctx context.Context, owner auth.SessionUser, limits controlquota.Limits) error {
@@ -167,6 +175,40 @@ func (m *fakeQuotaManager) AssignSubscription(ctx context.Context, owner auth.Se
 	m.planID = planID
 	m.subCalled = true
 	return controlquota.SubscriptionAssignment{SubscriptionID: 77, CustomerUserID: customerUserID, PlanID: planID}, m.err
+}
+
+func (m *fakeQuotaManager) CreateCustomer(ctx context.Context, owner auth.SessionUser, req types.CreateCustomerReq) (types.Customer, error) {
+	m.owner = owner
+	m.customerReq = req
+	m.customerCalled = true
+	if m.customerID == 0 {
+		m.customerID = 88
+	}
+	return types.Customer{ID: m.customerID, Email: req.Email, DisplayName: req.DisplayName, Status: "active"}, m.err
+}
+
+func (m *fakeQuotaManager) EnableCustomerLogin(ctx context.Context, owner auth.SessionUser, customerID int64, email string, password string) (types.Customer, error) {
+	m.owner = owner
+	m.customerID = customerID
+	m.customerReq.Email = email
+	m.customerReq.Password = password
+	m.customerLoginCalled = true
+	return types.Customer{ID: customerID, Email: email, Status: "active"}, m.err
+}
+
+func (m *fakeQuotaManager) SetCustomerStatus(ctx context.Context, owner auth.SessionUser, customerID int64, status string) error {
+	m.owner = owner
+	m.customerID = customerID
+	m.customerStatus = status
+	m.customerStatusCalled = true
+	return m.err
+}
+
+func (m *fakeQuotaManager) CreateSubscription(ctx context.Context, owner auth.SessionUser, req types.CreateSubscriptionReq) (types.SubscriptionSummary, error) {
+	m.owner = owner
+	m.subscriptionReq = req
+	m.subCalled = true
+	return types.SubscriptionSummary{ID: 77, CustomerID: req.CustomerID, PlanID: req.PlanID, SubscriptionName: req.SubscriptionName, Status: "active"}, m.err
 }
 
 func (m *fakeQuotaManager) UpdateSettings(ctx context.Context, owner auth.SessionUser, settings controlquota.Settings) error {
@@ -273,6 +315,9 @@ func TestLoginFormLinksEmbeddedStylesheet(t *testing.T) {
 	if !strings.Contains(body, `href="/assets/app.css"`) {
 		t.Fatalf("login page does not link embedded stylesheet:\n%s", body)
 	}
+	if !strings.Contains(body, `src="/assets/app.js"`) {
+		t.Fatalf("login page does not link embedded script:\n%s", body)
+	}
 }
 
 func TestEmbeddedStylesheetIsServedByPanel(t *testing.T) {
@@ -293,6 +338,32 @@ func TestEmbeddedStylesheetIsServedByPanel(t *testing.T) {
 	if body := rec.Body.String(); !strings.Contains(body, "content:attr(data-label)") || !strings.Contains(body, ".np-table thead") || !strings.Contains(body, ".np-table-value") {
 		t.Fatalf("embedded stylesheet missing responsive table-card rules:\n%s", body)
 	}
+	if body := rec.Body.String(); !strings.Contains(body, ".np-capacity-card") || !strings.Contains(body, ".np-subscription-table") || !strings.Contains(body, ".np-search") {
+		t.Fatalf("embedded stylesheet missing reference subscription shell rules:\n%s", body)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "overflow-y:auto") || !strings.Contains(body, "overscroll-behavior:contain") {
+		t.Fatalf("embedded stylesheet missing scrollable sidebar rules:\n%s", body)
+	}
+}
+
+func TestEmbeddedScriptIsServedByPanel(t *testing.T) {
+	handler, _ := newTestHandler(t, auth.RoleAdmin)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/assets/app.js", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /assets/app.js status = %d, want 200", rec.Code)
+	}
+	if contentType := rec.Header().Get("Content-Type"); !strings.Contains(contentType, "javascript") {
+		t.Fatalf("Content-Type = %q, want javascript", contentType)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"nakpanel", "data-np-view", "create-site-modal", "X-Nakpanel-SPA"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("embedded script missing %q:\n%s", want, body)
+		}
+	}
 }
 
 func TestEmbeddedAssetsDoNotExposeDirectoryListing(t *testing.T) {
@@ -304,7 +375,7 @@ func TestEmbeddedAssetsDoNotExposeDirectoryListing(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /assets/ status = %d, want 404; body:\n%s", rec.Code, rec.Body.String())
 	}
-	if strings.Contains(rec.Body.String(), "app.css") {
+	if strings.Contains(rec.Body.String(), "app.css") || strings.Contains(rec.Body.String(), "app.js") {
 		t.Fatalf("GET /assets/ exposed asset listing:\n%s", rec.Body.String())
 	}
 }
@@ -335,6 +406,12 @@ func TestEmbeddedAssetsRejectUnexpectedPathsAndMethods(t *testing.T) {
 			target: "https://panel.test/assets/app.css",
 			want:   http.StatusMethodNotAllowed,
 		},
+		{
+			name:   "post script",
+			method: http.MethodPost,
+			target: "https://panel.test/assets/app.js",
+			want:   http.StatusMethodNotAllowed,
+		},
 	}
 
 	for _, test := range tests {
@@ -346,8 +423,8 @@ func TestEmbeddedAssetsRejectUnexpectedPathsAndMethods(t *testing.T) {
 			if rec.Code != test.want {
 				t.Fatalf("%s %s status = %d, want %d; body:\n%s", test.method, test.target, rec.Code, test.want, rec.Body.String())
 			}
-			if body := rec.Body.String(); strings.Contains(body, "--np-bg") || strings.Contains(body, ".np-app") {
-				t.Fatalf("%s %s exposed stylesheet body:\n%s", test.method, test.target, body)
+			if body := rec.Body.String(); strings.Contains(body, "--np-bg") || strings.Contains(body, ".np-app") || strings.Contains(body, "data-np-view") {
+				t.Fatalf("%s %s exposed asset body:\n%s", test.method, test.target, body)
 			}
 		})
 	}
@@ -952,6 +1029,25 @@ func TestAdminDashboardRendersQuotaManagement(t *testing.T) {
 				BackupRetentionDays: 7,
 				IsActive:            true,
 			}},
+			Customers: []types.Customer{{
+				ID:          88,
+				LoginUserID: 2,
+				Email:       "client@nakpanel.test",
+				DisplayName: "Client Contact",
+				Status:      "active",
+			}},
+			Subscriptions: []types.SubscriptionSummary{{
+				ID:               20,
+				CustomerID:       88,
+				CustomerUserID:   2,
+				CustomerEmail:    "client@nakpanel.test",
+				CustomerName:     "Client Contact",
+				PlanID:           10,
+				PlanName:         "Starter",
+				SubscriptionName: "client.example.test",
+				Status:           "active",
+				MaxSites:         2,
+			}},
 			Settings:        controlquota.Settings{OversellPolicy: controlquota.OversellPolicyWarn, ServerDiskCapacityMB: 10000},
 			CommittedDiskMB: 5120,
 		},
@@ -973,6 +1069,18 @@ func TestAdminDashboardRendersQuotaManagement(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		"Plans & subscriptions",
+		"Add Subscription",
+		"Change Plan",
+		"Service Plans",
+		`data-np-subscription-filter`,
+		`data-np-change-plan`,
+		`data-np-subscription-check`,
+		`data-customer-user-id="2"`,
+		`data-subscriber-email="client@nakpanel.test"`,
+		`data-plan-name="Starter"`,
+		`>Subscription<`,
+		`>Subscriber<`,
+		`>Resources<`,
 		"Starter",
 		"Committed disk",
 		"5120 MB",
@@ -992,6 +1100,232 @@ func TestAdminDashboardRendersQuotaManagement(t *testing.T) {
 	}
 	if strings.Contains(body, `action="/quotas"`) || strings.Contains(body, "Account quotas") {
 		t.Fatalf("admin dashboard exposed legacy quota form:\n%s", body)
+	}
+}
+
+func TestAdminDashboardRendersPrototypeShellAndCreateGateData(t *testing.T) {
+	reader := &fakeDashboardReader{
+		data: dashboard.Data{
+			Sites: []dashboard.Site{{
+				Username:   "npdemo",
+				Domain:     "example.test",
+				PHPVersion: "8.3",
+				Status:     "active",
+			}},
+			Jobs: []dashboard.Job{{
+				ID:          41,
+				Kind:        "create_site",
+				State:       "running",
+				Target:      "example.test",
+				Attempt:     1,
+				MaxAttempts: 3,
+				CreatedAt:   time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC),
+			}},
+			Quotas: []controlquota.Summary{{
+				UserID:         2,
+				Email:          "client@nakpanel.test",
+				Role:           "client",
+				HasQuota:       true,
+				PlanName:       "Starter",
+				SubscriptionID: 20,
+				Limits:         controlquota.Limits{UserID: 2, MaxSites: 2, StorageMB: 5120, SiteDiskQuotaMB: 5120, PHPFPMMaxChildren: 3, PHPMemoryMB: 128},
+				Usage:          controlquota.Usage{UserID: 2, Sites: 2},
+			}},
+			Plans: []controlquota.Plan{{
+				ID:                  10,
+				Name:                "Starter",
+				Description:         "Single site",
+				DiskMB:              5120,
+				MaxSites:            2,
+				MaxDatabases:        2,
+				MaxBackups:          7,
+				PHPFPMMaxChildren:   3,
+				PHPMemoryMB:         128,
+				SiteDiskQuotaMB:     5120,
+				AllowDNS:            true,
+				BackupRetentionDays: 7,
+				IsActive:            true,
+			}},
+			Customers: []types.Customer{{
+				ID:          88,
+				LoginUserID: 2,
+				Email:       "client@nakpanel.test",
+				DisplayName: "Client Contact",
+				Status:      "active",
+			}},
+			Subscriptions: []types.SubscriptionSummary{{
+				ID:               20,
+				CustomerID:       88,
+				CustomerUserID:   2,
+				CustomerEmail:    "client@nakpanel.test",
+				CustomerName:     "Client Contact",
+				PlanID:           10,
+				PlanName:         "Starter",
+				SubscriptionName: "client.example.test",
+				Status:           "active",
+				MaxSites:         2,
+				SitesUsed:        2,
+			}},
+			Settings:        controlquota.Settings{OversellPolicy: controlquota.OversellPolicyWarn, ServerDiskCapacityMB: 10000},
+			CommittedDiskMB: 5120,
+		},
+	}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{
+		SiteCreator:     &fakeSiteCreator{},
+		DashboardReader: reader,
+		QuotaManager:    &fakeQuotaManager{},
+	})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`class="np-layout"`,
+		`ns1.nakroteck.com`,
+		`data-np-view="dashboard"`,
+		`data-np-view="sites"`,
+		`data-np-view="subscriptions"`,
+		`class="np-nav-item is-active" data-np-view="subscriptions"`,
+		`data-np-section-title>Subscriptions`,
+		`placeholder="Search sites, databases, records..."`,
+		`id="create-site-modal"`,
+		`agent connected`,
+		`RA</button>`,
+		`Add Subscription`,
+		`Change Plan`,
+		`Service Plans`,
+		`data-np-subscription-filter`,
+		`data-np-subscription-row`,
+		`data-np-subscription-check`,
+		`data-customer-user-id="2"`,
+		`data-customer-id="88"`,
+		`data-subscriber-email="client@nakpanel.test"`,
+		`Server capacity`,
+		`Committed to plans (at max)`,
+		`settings.oversell_policy`,
+		`name="oversell_policy" value="warn"`,
+		`>Subscription<`,
+		`>Subscriber<`,
+		`>Resources<`,
+		`Manage`,
+		`New site`,
+		`data-max-sites="2"`,
+		`data-sites-used="2"`,
+		`data-plan-name="Starter"`,
+		`data-subscription-id="20"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("dashboard shell missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestAdminDashboardRendersPleskStyleSettingsHub(t *testing.T) {
+	reader := &fakeDashboardReader{
+		data: dashboard.Data{
+			Plans: []controlquota.Plan{{
+				ID:                  10,
+				Name:                "Business",
+				DiskMB:              20480,
+				MaxSites:            10,
+				MaxDatabases:        10,
+				MaxBackups:          14,
+				BackupStorageMB:     40960,
+				PHPAllowlist:        "8.3,8.2",
+				PHPFPMMaxChildren:   8,
+				PHPMemoryMB:         256,
+				AllowSSH:            true,
+				AllowDNS:            true,
+				BackupRetentionDays: 14,
+				IsActive:            true,
+			}},
+			Settings:        controlquota.Settings{OversellPolicy: controlquota.OversellPolicyCap, ServerDiskCapacityMB: 512000},
+			CommittedDiskMB: 245760,
+			Phase6: dashboard.Phase6Data{
+				Backups: []dashboard.Backup{{TargetName: "example.test", Status: "active", SizeBytes: 42}},
+			},
+		},
+	}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{
+		DashboardReader: reader,
+		Phase6Manager:   &fakePhase6Manager{},
+		QuotaManager:    &fakeQuotaManager{},
+	})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`data-np-view="settings"`,
+		`data-np-panel="settings"`,
+		"Tools &amp; Settings",
+		"General Server",
+		"Global PHP",
+		"Database Server",
+		"Backup Settings",
+		"Firewall",
+		"SSH Terminal",
+		"Privileged agent op pending",
+		"Timezone/NTP summary",
+		"Default PHP version",
+		"MariaDB",
+		`href="/db"`,
+		`action="/settings/oversell"`,
+		"Business",
+		"8.3,8.2",
+		"14 days",
+		"nftables preview",
+		"Root terminal disabled",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("settings hub missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `data-np-view="settings" disabled`) {
+		t.Fatalf("settings nav is still disabled:\n%s", body)
+	}
+}
+
+func TestClientDashboardDoesNotRenderSettingsHub(t *testing.T) {
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{
+		DashboardReader: &fakeDashboardReader{},
+		QuotaManager:    &fakeQuotaManager{},
+	})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, unwanted := range []string{
+		`data-np-view="settings"`,
+		`data-np-panel="settings"`,
+		"Tools &amp; Settings",
+		"Global PHP",
+		"SSH Terminal",
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("client dashboard rendered settings hub fragment %q:\n%s", unwanted, body)
+		}
 	}
 }
 
@@ -1153,6 +1487,40 @@ func TestAdminCanAssignSubscriptionAndUpdateOversellSettings(t *testing.T) {
 	}
 }
 
+func TestAdminCanCreateContactCustomerAndSubscriptionTogether(t *testing.T) {
+	manager := &fakeQuotaManager{customerID: 99}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{QuotaManager: manager})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	form := url.Values{
+		"customer_mode":     {"new"},
+		"customer_email":    {"owner@example.test"},
+		"display_name":      {"Example Owner"},
+		"company":           {"Example Co"},
+		"enable_login":      {"false"},
+		"subscription_name": {"example.test"},
+		"plan_id":           {"10"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/subscriptions", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /subscriptions status = %d, want 303; body:\n%s", rec.Code, rec.Body.String())
+	}
+	if !manager.customerCalled {
+		t.Fatal("subscription flow did not create customer")
+	}
+	if manager.customerReq.Email != "owner@example.test" || manager.customerReq.DisplayName != "Example Owner" || manager.customerReq.Company != "Example Co" || manager.customerReq.EnableLogin {
+		t.Fatalf("customer request = %#v", manager.customerReq)
+	}
+	if !manager.subCalled || manager.subscriptionReq.CustomerID != 99 || manager.subscriptionReq.PlanID != 10 || manager.subscriptionReq.SubscriptionName != "example.test" {
+		t.Fatalf("subscription request = called:%v req:%#v", manager.subCalled, manager.subscriptionReq)
+	}
+}
+
 func TestClientCannotManagePlansSubscriptionsOrSettings(t *testing.T) {
 	manager := &fakeQuotaManager{}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{QuotaManager: manager})
@@ -1281,6 +1649,29 @@ func TestClientDashboardDoesNotLoadAdminInventory(t *testing.T) {
 	}
 	if strings.Contains(rec.Body.String(), "admin-only.test") {
 		t.Fatalf("client dashboard leaked admin inventory:\n%s", rec.Body.String())
+	}
+}
+
+func TestNonAdminDashboardHidesCreateSiteLauncherWhenConfigured(t *testing.T) {
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{
+		SiteCreator:     &fakeSiteCreator{},
+		DashboardReader: &fakeDashboardReader{},
+	})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET / status = %d, want 200", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, blocked := range []string{`data-np-open-create`, `id="create-site-modal"`, `action="/sites"`} {
+		if strings.Contains(body, blocked) {
+			t.Fatalf("client dashboard exposed create-site UI %q:\n%s", blocked, body)
+		}
 	}
 }
 
@@ -1446,6 +1837,71 @@ func TestAdminCanCreateSite(t *testing.T) {
 	want := types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3"}
 	if len(creator.requests) != 1 || creator.requests[0] != want {
 		t.Fatalf("site requests = %#v, want %#v", creator.requests, []types.CreateSiteReq{want})
+	}
+}
+
+func TestAdminCanCreateSiteWithSPAJSON(t *testing.T) {
+	creator := &fakeSiteCreator{}
+	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleAdmin, creator)
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	form := url.Values{
+		"owner_user_id": {"2"},
+		"username":      {"npdemo"},
+		"domain":        {"example.test"},
+		"php_version":   {"8.3"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Nakpanel-SPA", "true")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("POST /sites SPA status = %d, want 202; body:\n%s", rec.Code, rec.Body.String())
+	}
+	if contentType := rec.Header().Get("Content-Type"); !strings.HasPrefix(contentType, "application/json") {
+		t.Fatalf("Content-Type = %q, want application/json", contentType)
+	}
+	var body struct {
+		OK       bool   `json:"ok"`
+		SiteID   int64  `json:"site_id"`
+		Redirect string `json:"redirect"`
+		Notice   string `json:"notice"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !body.OK || body.SiteID != 7 || body.Redirect != "/" || body.Notice == "" {
+		t.Fatalf("SPA response = %#v, want ok site id redirect and notice", body)
+	}
+}
+
+func TestOverQuotaCreateWithSPAJSONReturnsError(t *testing.T) {
+	creator := &fakeSiteCreator{err: controlquota.ErrExceeded}
+	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleAdmin, creator)
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader("username=npdemo&domain=example.test&php_version=8.3"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Nakpanel-SPA", "true")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST /sites SPA status = %d, want 400", rec.Code)
+	}
+	var body struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if body.OK || !strings.Contains(body.Error, "quota exceeded") {
+		t.Fatalf("SPA error response = %#v, want quota exceeded error", body)
 	}
 }
 

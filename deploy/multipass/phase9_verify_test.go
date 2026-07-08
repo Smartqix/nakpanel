@@ -23,6 +23,10 @@ func TestPhase9VerifierCoversPlansSubscriptionsAndPeerCredentials(t *testing.T) 
 	for _, want := range []string{
 		"phase8-verify.sh",
 		"Plans & subscriptions",
+		"/assets/app.js",
+		"np-layout",
+		"data-np-view=\"subscriptions\"",
+		"create-site-modal",
 		"no active subscription",
 		"action=\"/plans\"",
 		"action=\"/subscriptions\"",
