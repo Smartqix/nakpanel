@@ -10,6 +10,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/store"
+	"github.com/nakroteck/nakpanel/internal/types"
 )
 
 type fakeQuerier struct {
@@ -53,6 +54,8 @@ type fakeQuotaReader struct {
 	summaries       []controlquota.Summary
 	summary         controlquota.Summary
 	plans           []controlquota.Plan
+	customers       []types.Customer
+	subscriptions   []types.SubscriptionSummary
 	settings        controlquota.Settings
 	committed       int
 	err             error
@@ -78,6 +81,19 @@ func (r *fakeQuotaReader) GetAccountQuotaSummary(ctx context.Context, userID int
 func (r *fakeQuotaReader) ListPlans(ctx context.Context) ([]controlquota.Plan, error) {
 	r.plansCalled = true
 	return r.plans, r.err
+}
+
+func (r *fakeQuotaReader) ListCustomers(ctx context.Context) ([]types.Customer, error) {
+	return r.customers, r.err
+}
+
+func (r *fakeQuotaReader) ListSubscriptionSummaries(ctx context.Context) ([]types.SubscriptionSummary, error) {
+	return r.subscriptions, r.err
+}
+
+func (r *fakeQuotaReader) ListSubscriptionSummariesForUser(ctx context.Context, userID int64) ([]types.SubscriptionSummary, error) {
+	r.userID = userID
+	return r.subscriptions, r.err
 }
 
 func (r *fakeQuotaReader) GetSettings(ctx context.Context) (controlquota.Settings, error) {

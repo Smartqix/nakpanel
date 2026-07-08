@@ -18,6 +18,8 @@ type fakeQuotaStore struct {
 	upsertCalled    bool
 	getLimitCalls   int
 	lastLimitUserID int64
+	lastLimitSubID  int64
+	lastUsageSubID  int64
 }
 
 func (s *fakeQuotaStore) GetLimits(ctx context.Context, userID int64) (controlquota.Limits, bool, error) {
@@ -32,6 +34,22 @@ func (s *fakeQuotaStore) GetLimits(ctx context.Context, userID int64) (controlqu
 
 func (s *fakeQuotaStore) GetUsage(ctx context.Context, userID int64) (controlquota.Usage, error) {
 	s.usage.UserID = userID
+	return s.usage, nil
+}
+
+func (s *fakeQuotaStore) GetLimitsForSubscription(ctx context.Context, subscriptionID int64) (controlquota.Limits, bool, error) {
+	s.getLimitCalls++
+	s.lastLimitSubID = subscriptionID
+	if !s.hasLimits {
+		return controlquota.Limits{}, false, nil
+	}
+	s.limits.SubscriptionID = subscriptionID
+	return s.limits, true, nil
+}
+
+func (s *fakeQuotaStore) GetUsageForSubscription(ctx context.Context, subscriptionID int64) (controlquota.Usage, error) {
+	s.lastUsageSubID = subscriptionID
+	s.usage.SubscriptionID = subscriptionID
 	return s.usage, nil
 }
 
@@ -93,6 +111,40 @@ func TestManagerCreatesSiteForSelectedSubscribedCustomer(t *testing.T) {
 	}
 	if repo.ownerID != 42 {
 		t.Fatalf("repository owner = %d, want selected customer 42", repo.ownerID)
+	}
+}
+
+func TestManagerCreatesSiteForSelectedSubscription(t *testing.T) {
+	repo := &fakeSiteRepository{}
+	quotas := &fakeQuotaStore{
+		hasLimits: true,
+		limits: controlquota.Limits{
+			CustomerID:         7,
+			MaxSites:           -1,
+			SiteDiskQuotaMB:    512,
+			PHPFPMMaxChildren:  3,
+			PHPMemoryMB:        128,
+		},
+	}
+	manager := NewManager(repo, WithQuotaStore(quotas))
+
+	_, err := manager.CreateSiteForSubscription(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 44, types.CreateSiteReq{
+		Username:       "npdemo",
+		Domain:         "example.test",
+		PHPVersion:     "8.3",
+		SubscriptionID: 44,
+	})
+	if err != nil {
+		t.Fatalf("CreateSiteForSubscription returned error: %v", err)
+	}
+	if quotas.lastLimitSubID != 44 || quotas.lastUsageSubID != 44 {
+		t.Fatalf("quota subscription calls limit=%d usage=%d, want 44", quotas.lastLimitSubID, quotas.lastUsageSubID)
+	}
+	if repo.req.SubscriptionID != 44 {
+		t.Fatalf("repository subscription = %d, want 44", repo.req.SubscriptionID)
+	}
+	if repo.ownerID != 1 {
+		t.Fatalf("legacy ownerID = %d, want actor 1", repo.ownerID)
 	}
 }
 

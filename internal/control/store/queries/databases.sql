@@ -1,39 +1,44 @@
 -- name: UpsertDatabaseIntent :one
 INSERT INTO databases (
     owner_user_id,
+    customer_id,
     subscription_id,
     engine,
     db_name,
     db_user,
     status,
     last_error
-) VALUES (
-    $1,
-    (SELECT id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1),
-    $2,
-    $3,
-    $4,
+) SELECT
+    sqlc.arg(owner_user_id),
+    s.customer_id,
+    s.id,
+    sqlc.arg(engine),
+    sqlc.arg(db_name),
+    sqlc.arg(db_user),
     'pending',
     ''
-)
+FROM subscriptions s
+WHERE s.id = sqlc.arg(subscription_id)
+  AND s.status = 'active'
 ON CONFLICT (db_name) DO UPDATE
 SET
     owner_user_id = EXCLUDED.owner_user_id,
+    customer_id = EXCLUDED.customer_id,
     subscription_id = EXCLUDED.subscription_id,
     engine = EXCLUDED.engine,
     db_user = EXCLUDED.db_user,
     status = 'pending',
     last_error = '',
     updated_at = now()
-RETURNING id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id;
+RETURNING id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id, customer_id;
 
 -- name: GetDatabase :one
-SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id
+SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id, customer_id
 FROM databases
 WHERE id = $1;
 
 -- name: ListDatabases :many
-SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id
+SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id, customer_id
 FROM databases
 ORDER BY id;
 

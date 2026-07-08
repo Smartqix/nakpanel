@@ -383,6 +383,10 @@ RETURNING id`,
 }
 
 func assignSubscriptionTx(ctx context.Context, tx *sql.Tx, customerUserID int64, planID int64) (int64, error) {
+	customerID, err := ensureCustomerForUserTx(ctx, tx, customerUserID)
+	if err != nil {
+		return 0, err
+	}
 	if _, err := tx.ExecContext(ctx, `UPDATE subscriptions
 SET status = 'cancelled', updated_at = now()
 WHERE customer_user_id = $1
@@ -390,25 +394,51 @@ WHERE customer_user_id = $1
 		return 0, err
 	}
 	var subscriptionID int64
-	if err := tx.QueryRowContext(ctx, `INSERT INTO subscriptions (customer_user_id, plan_id, status)
-VALUES ($1, $2, 'active')
-RETURNING id`, customerUserID, planID).Scan(&subscriptionID); err != nil {
+	if err := tx.QueryRowContext(ctx, `INSERT INTO subscriptions (customer_id, customer_user_id, plan_id, name, status)
+VALUES ($1, $2, $3, (SELECT name || ' subscription' FROM plans WHERE id = $3), 'active')
+RETURNING id`, customerID, customerUserID, planID).Scan(&subscriptionID); err != nil {
 		return 0, err
 	}
 	return subscriptionID, nil
 }
 
 func relinkResourcesTx(ctx context.Context, tx *sql.Tx, customerUserID int64, subscriptionID int64) error {
-	if _, err := tx.ExecContext(ctx, `UPDATE sites SET subscription_id = $2 WHERE owner_user_id = $1`, customerUserID, subscriptionID); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE sites
+SET subscription_id = $2,
+    customer_id = (SELECT customer_id FROM subscriptions WHERE id = $2)
+WHERE owner_user_id = $1`, customerUserID, subscriptionID); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE databases SET subscription_id = $2 WHERE owner_user_id = $1`, customerUserID, subscriptionID); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE databases
+SET subscription_id = $2,
+    customer_id = (SELECT customer_id FROM subscriptions WHERE id = $2)
+WHERE owner_user_id = $1`, customerUserID, subscriptionID); err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE backups SET subscription_id = $2 WHERE owner_user_id = $1`, customerUserID, subscriptionID); err != nil {
+	if _, err := tx.ExecContext(ctx, `UPDATE backups
+SET subscription_id = $2,
+    customer_id = (SELECT customer_id FROM subscriptions WHERE id = $2)
+WHERE owner_user_id = $1`, customerUserID, subscriptionID); err != nil {
 		return err
 	}
 	return nil
+}
+
+func ensureCustomerForUserTx(ctx context.Context, tx *sql.Tx, userID int64) (int64, error) {
+	var customerID int64
+	err := tx.QueryRowContext(ctx, `SELECT id FROM customers WHERE login_user_id = $1`, userID).Scan(&customerID)
+	if err == nil {
+		return customerID, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	err = tx.QueryRowContext(ctx, `INSERT INTO customers (login_user_id, email, display_name, status)
+SELECT id, email, email, 'active'
+FROM users
+WHERE id = $1
+RETURNING id`, userID).Scan(&customerID)
+	return customerID, err
 }
 
 func subscriptionOversellWarningTx(ctx context.Context, tx *sql.Tx, customerUserID int64, plan Plan) (string, error) {

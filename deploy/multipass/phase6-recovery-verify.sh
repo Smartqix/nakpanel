@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VM_NAME="${NAKPANEL_MULTIPASS_VM:-nakpanel-phase6-recovery}"
-IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-24.04}"
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/common.sh"
+VM_NAME="${NAKPANEL_MULTIPASS_VM}"
+IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"

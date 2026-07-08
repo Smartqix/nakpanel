@@ -40,18 +40,38 @@ func (r *SQLPhase6Repository) CreateBackup(ctx context.Context, ownerID int64, r
 	}
 	defer tx.Rollback()
 
-	site, err := selectActiveSiteForUpdate(ctx, tx, ownerID, req.Domain)
+	var site phase6Site
+	if req.SubscriptionID > 0 {
+		site, err = selectActiveSubscriptionSiteForUpdate(ctx, tx, req.SubscriptionID, req.Domain)
+	} else {
+		site, err = selectActiveSiteForUpdate(ctx, tx, ownerID, req.Domain)
+	}
 	if err != nil {
 		return 0, err
 	}
-	databases, err := selectActiveOwnerDatabases(ctx, tx, ownerID)
+	var databases []string
+	if req.SubscriptionID > 0 {
+		databases, err = selectActiveSubscriptionDatabases(ctx, tx, req.SubscriptionID)
+	} else {
+		databases, err = selectActiveOwnerDatabases(ctx, tx, ownerID)
+	}
 	if err != nil {
 		return 0, err
 	}
 	var backupID int64
-	if err := tx.QueryRowContext(ctx, `INSERT INTO backups (owner_user_id, site_id, subscription_id, target_kind, target_name, status)
-VALUES ($1, $2, (SELECT id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1), 'site', $3, 'pending')
-RETURNING id`, ownerID, site.id, site.domain).Scan(&backupID); err != nil {
+	if req.SubscriptionID > 0 {
+		err = tx.QueryRowContext(ctx, `INSERT INTO backups (owner_user_id, customer_id, site_id, subscription_id, target_kind, target_name, status)
+SELECT $1, s.customer_id, $2, s.id, 'site', $3, 'pending'
+FROM subscriptions s
+WHERE s.id = $4
+  AND s.status = 'active'
+RETURNING id`, ownerID, site.id, site.domain, req.SubscriptionID).Scan(&backupID)
+	} else {
+		err = tx.QueryRowContext(ctx, `INSERT INTO backups (owner_user_id, customer_id, site_id, subscription_id, target_kind, target_name, status)
+VALUES ($1, (SELECT customer_id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1), $2, (SELECT id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1), 'site', $3, 'pending')
+RETURNING id`, ownerID, site.id, site.domain).Scan(&backupID)
+	}
+	if err != nil {
 		return 0, fmt.Errorf("insert backup intent: %w", err)
 	}
 	_, err = r.river.InsertTx(ctx, tx, CreateBackupArgs{
@@ -290,10 +310,44 @@ FOR UPDATE`, ownerID, domain).Scan(&site.id, &site.username, &site.domain, &site
 	return site, nil
 }
 
+func selectActiveSubscriptionSiteForUpdate(ctx context.Context, tx *sql.Tx, subscriptionID int64, domain string) (phase6Site, error) {
+	var site phase6Site
+	if err := tx.QueryRowContext(ctx, `SELECT id, username, domain, php_version
+FROM sites
+WHERE subscription_id = $1 AND domain = $2 AND status = 'active'
+FOR UPDATE`, subscriptionID, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersion); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return phase6Site{}, fmt.Errorf("active site %q was not found for subscription %d", domain, subscriptionID)
+		}
+		return phase6Site{}, fmt.Errorf("select active subscription site: %w", err)
+	}
+	return site, nil
+}
+
 func selectActiveOwnerDatabases(ctx context.Context, tx *sql.Tx, ownerID int64) ([]string, error) {
 	rows, err := tx.QueryContext(ctx, `SELECT db_name FROM databases WHERE owner_user_id = $1 AND status = 'active' ORDER BY db_name`, ownerID)
 	if err != nil {
 		return nil, fmt.Errorf("select active databases: %w", err)
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
+func selectActiveSubscriptionDatabases(ctx context.Context, tx *sql.Tx, subscriptionID int64) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT db_name FROM databases WHERE subscription_id = $1 AND status = 'active' ORDER BY db_name`, subscriptionID)
+	if err != nil {
+		return nil, fmt.Errorf("select active subscription databases: %w", err)
 	}
 	defer rows.Close()
 	var names []string

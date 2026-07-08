@@ -1,36 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VM_NAME="${NAKPANEL_MULTIPASS_VM:-nakpanel-phase1}"
-IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-24.04}"
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-REMOTE_SRC="/tmp/nakpanel-src"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/common.sh"
+VM_NAME="${NAKPANEL_MULTIPASS_VM}"
+IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
+REMOTE_SRC="${NAKPANEL_REMOTE_SRC}"
 
-if ! command -v multipass >/dev/null 2>&1; then
-  echo "multipass is required" >&2
-  exit 1
-fi
-
-if ! multipass info "${VM_NAME}" >/dev/null 2>&1; then
-  multipass launch "${IMAGE}" --name "${VM_NAME}" --cpus 2 --memory 2G --disk 12G
-fi
-
-cloud_init_done=0
-for _ in $(seq 1 90); do
-  if multipass exec "${VM_NAME}" -- cloud-init status 2>/dev/null | grep -q 'status: done'; then
-    cloud_init_done=1
-    break
-  fi
-  sleep 2
-done
-
-if [[ "${cloud_init_done}" != "1" ]]; then
-  multipass exec "${VM_NAME}" -- cloud-init status --long || true
-  echo "cloud-init did not finish in time" >&2
-  exit 1
-fi
-multipass exec "${VM_NAME}" -- sudo rm -rf "${REMOTE_SRC}"
-multipass transfer -r "${ROOT_DIR}" "${VM_NAME}:${REMOTE_SRC}"
+ensure_vm 2 2G 12G
+sync_repo "${ROOT_DIR}" "${REMOTE_SRC}"
 
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail

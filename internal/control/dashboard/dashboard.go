@@ -8,6 +8,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/store"
+	"github.com/nakroteck/nakpanel/internal/types"
 )
 
 type Querier interface {
@@ -27,6 +28,9 @@ type QuotaReader interface {
 	ListAccountQuotas(ctx context.Context) ([]controlquota.Summary, error)
 	GetAccountQuotaSummary(ctx context.Context, userID int64) (controlquota.Summary, error)
 	ListPlans(ctx context.Context) ([]controlquota.Plan, error)
+	ListCustomers(ctx context.Context) ([]types.Customer, error)
+	ListSubscriptionSummaries(ctx context.Context) ([]types.SubscriptionSummary, error)
+	ListSubscriptionSummariesForUser(ctx context.Context, userID int64) ([]types.SubscriptionSummary, error)
 	GetSettings(ctx context.Context) (controlquota.Settings, error)
 	CommittedAllocationMB(ctx context.Context) (int, error)
 }
@@ -48,6 +52,8 @@ type Data struct {
 	Quotas          []controlquota.Summary
 	QuotaLoadError  string
 	Plans           []controlquota.Plan
+	Customers       []types.Customer
+	Subscriptions   []types.SubscriptionSummary
 	Settings        controlquota.Settings
 	CommittedDiskMB int
 	PlanLoadError   string
@@ -193,6 +199,10 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			} else {
 				data.Quotas = []controlquota.Summary{summary}
 			}
+			subscriptions, err := s.quotas.ListSubscriptionSummariesForUser(ctx, user.ID)
+			if err == nil {
+				data.Subscriptions = subscriptions
+			}
 		}
 		return data, nil
 	}
@@ -250,6 +260,24 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			planLoadError = "committed allocation unavailable"
 		}
 	}
+	customers := []types.Customer(nil)
+	subscriptions := []types.SubscriptionSummary(nil)
+	if s.quotas != nil {
+		customers, err = s.quotas.ListCustomers(ctx)
+		if err != nil {
+			customers = nil
+			if planLoadError == "" {
+				planLoadError = "customers unavailable"
+			}
+		}
+		subscriptions, err = s.quotas.ListSubscriptionSummaries(ctx)
+		if err != nil {
+			subscriptions = nil
+			if planLoadError == "" {
+				planLoadError = "subscriptions unavailable"
+			}
+		}
+	}
 
 	data := Data{
 		Sites:           make([]Site, 0, len(sites)),
@@ -261,6 +289,8 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 		Quotas:          quotas,
 		QuotaLoadError:  quotaLoadError,
 		Plans:           plans,
+		Customers:       customers,
+		Subscriptions:   subscriptions,
 		Settings:        settings,
 		CommittedDiskMB: committedDiskMB,
 		PlanLoadError:   planLoadError,

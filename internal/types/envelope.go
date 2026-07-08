@@ -33,11 +33,12 @@ const (
 )
 
 type CreateSiteReq struct {
-	Username   string             `json:"username"`
-	Domain     string             `json:"domain"`
-	PHPVersion string             `json:"php_version"`
-	Docroot    string             `json:"docroot"`
-	Limits     SiteResourceLimits `json:"limits"`
+	SubscriptionID int64              `json:"subscription_id"`
+	Username       string             `json:"username"`
+	Domain         string             `json:"domain"`
+	PHPVersion     string             `json:"php_version"`
+	Docroot        string             `json:"docroot"`
+	Limits         SiteResourceLimits `json:"limits"`
 }
 
 type SiteResourceLimits struct {
@@ -59,10 +60,11 @@ const (
 )
 
 type CreateDatabaseReq struct {
-	Engine   DBEngine `json:"engine"`
-	DBName   string   `json:"db_name"`
-	DBUser   string   `json:"db_user"`
-	Password string   `json:"password"`
+	SubscriptionID int64    `json:"subscription_id"`
+	Engine         DBEngine `json:"engine"`
+	DBName         string   `json:"db_name"`
+	DBUser         string   `json:"db_user"`
+	Password       string   `json:"password"`
 }
 
 type CertIssuer string
@@ -88,11 +90,66 @@ type IssueCertResult struct {
 }
 
 type CreateBackupReq struct {
-	Domain    string   `json:"domain"`
-	Username  string   `json:"username"`
-	Docroot   string   `json:"docroot"`
-	Databases []string `json:"databases"`
-	OutputDir string   `json:"output_dir"`
+	SubscriptionID int64    `json:"subscription_id"`
+	Domain         string   `json:"domain"`
+	Username       string   `json:"username"`
+	Docroot        string   `json:"docroot"`
+	Databases      []string `json:"databases"`
+	OutputDir      string   `json:"output_dir"`
+}
+
+type Customer struct {
+	ID          int64     `json:"id"`
+	LoginUserID int64     `json:"login_user_id,omitempty"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name"`
+	Company     string    `json:"company"`
+	Status      string    `json:"status"`
+	Notes       string    `json:"notes"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type CreateCustomerReq struct {
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+	Company     string `json:"company"`
+	Notes       string `json:"notes"`
+	EnableLogin bool   `json:"enable_login"`
+	Password    string `json:"password,omitempty"`
+}
+
+type CreateSubscriptionReq struct {
+	ID               int64  `json:"id,omitempty"`
+	CustomerID       int64  `json:"customer_id"`
+	PlanID           int64  `json:"plan_id"`
+	SubscriptionName string `json:"subscription_name"`
+	Status           string `json:"status"`
+}
+
+type SubscriptionSummary struct {
+	ID               int64     `json:"id"`
+	CustomerID       int64     `json:"customer_id"`
+	CustomerUserID   int64     `json:"customer_user_id,omitempty"`
+	CustomerEmail    string    `json:"customer_email"`
+	CustomerName     string    `json:"customer_name"`
+	CustomerCompany  string    `json:"customer_company"`
+	PlanID           int64     `json:"plan_id"`
+	PlanName         string    `json:"plan_name"`
+	SubscriptionName string    `json:"subscription_name"`
+	Status           string    `json:"status"`
+	MaxSites         int       `json:"max_sites"`
+	MaxDatabases     int       `json:"max_databases"`
+	DiskMB           int       `json:"disk_mb"`
+	MaxBackups       int       `json:"max_backups"`
+	BackupStorageMB  int       `json:"backup_storage_mb"`
+	SitesUsed        int       `json:"sites_used"`
+	DatabasesUsed    int       `json:"databases_used"`
+	BackupsUsed      int       `json:"backups_used"`
+	BackupBytesUsed  int64     `json:"backup_bytes_used"`
+	Warning          string    `json:"warning,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
 }
 
 type CreateBackupResult struct {

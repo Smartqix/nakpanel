@@ -1,37 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VM_NAME="${NAKPANEL_MULTIPASS_VM:-nakpanel-phase5-ui}"
-IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-24.04}"
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
-REMOTE_SRC="/tmp/nakpanel-src"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/common.sh"
+VM_NAME="${NAKPANEL_MULTIPASS_VM}"
+IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
+REMOTE_SRC="${NAKPANEL_REMOTE_SRC}"
 
-if ! command -v multipass >/dev/null 2>&1; then
-  echo "multipass is required" >&2
-  exit 1
-fi
-
-if ! multipass info "${VM_NAME}" >/dev/null 2>&1; then
-  multipass launch "${IMAGE}" --name "${VM_NAME}" --cpus 2 --memory 3G --disk 16G
-fi
-
-cloud_init_done=0
-for _ in $(seq 1 90); do
-  if multipass exec "${VM_NAME}" -- cloud-init status 2>/dev/null | grep -q 'status: done'; then
-    cloud_init_done=1
-    break
-  fi
-  sleep 2
-done
-
-if [[ "${cloud_init_done}" != "1" ]]; then
-  multipass exec "${VM_NAME}" -- cloud-init status --long || true
-  echo "cloud-init did not finish in time" >&2
-  exit 1
-fi
-
-multipass exec "${VM_NAME}" -- sudo rm -rf "${REMOTE_SRC}"
-multipass transfer -r "${ROOT_DIR}" "${VM_NAME}:${REMOTE_SRC}"
+ensure_vm 2 3G 16G
+sync_repo "${ROOT_DIR}" "${REMOTE_SRC}"
 
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
@@ -110,6 +88,16 @@ WHERE kind IN ('create_site', 'create_database', 'issue_cert')
   );
 DELETE FROM sites WHERE domain = 'phase5-ui.test' OR username = 'npui';
 DELETE FROM databases WHERE db_name = 'np_phase5' OR db_user = 'np_phase5_user';
+UPDATE subscriptions
+SET status = 'cancelled', updated_at = now()
+WHERE customer_user_id = (SELECT id FROM users WHERE email = 'admin@nakpanel.test')
+  AND status = 'active';
+INSERT INTO subscriptions (customer_id, customer_user_id, plan_id, name, status)
+SELECT c.id, u.id, p.id, 'Phase verifier unlimited', 'active'
+FROM users u
+JOIN customers c ON c.login_user_id = u.id
+JOIN plans p ON p.name = 'Legacy Unlimited'
+WHERE u.email = 'admin@nakpanel.test';
 SQL
 
 sudo mariadb -e "DROP DATABASE IF EXISTS \`np_phase5\`; DROP USER IF EXISTS 'np_phase5_user'@'localhost';"

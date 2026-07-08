@@ -103,22 +103,19 @@ panel validates the job kind and state, then atomically moves only matching
 discarded provisioning jobs back to River's `available` state. Completed and
 in-flight jobs are not retried from the UI.
 
-The Multipass recovery smoke test is:
+The full deployment smoke test uses one fresh Ubuntu 24.04 Multipass VM named
+`nakpanel-lab`. It removes old `nakpanel-phase*` Nakpanel test VMs, rebuilds
+`nakpanel-lab`, and runs the complete Phase 10 verifier chain:
 
 ```bash
-deploy/multipass/phase6-recovery-verify.sh
+deploy/multipass/deployment-verify.sh
 ```
 
-The full Phase 6 Multipass smoke test is:
+Individual phase verifiers are still useful for debugging. They now reuse the
+same VM by default, or you can set it explicitly:
 
 ```bash
-deploy/multipass/phase6-verify.sh
-```
-
-The full Phase 7 Multipass smoke test is:
-
-```bash
-deploy/multipass/phase7-verify.sh
+NAKPANEL_MULTIPASS_VM=nakpanel-lab deploy/multipass/phase10-verify.sh
 ```
 
 Phase 8 originally adds account quotas and Linux user disk quotas. In a pure
@@ -179,14 +176,9 @@ panel user. If panel-to-agent RPC fails after a user or service change, confirm
 the panel service runs as `nakpanel`, the agent can resolve that UID, and the
 socket is still owned `root:nakpanel` with mode `0660`.
 
-The full Phase 8 Multipass smoke test is:
+For a full quota/plans/subscriptions integration check, prefer the single-VM
+deployment verifier:
 
 ```bash
-deploy/multipass/phase8-verify.sh
-```
-
-The full Phase 9 Multipass smoke test is:
-
-```bash
-deploy/multipass/phase9-verify.sh
+deploy/multipass/deployment-verify.sh
 ```
