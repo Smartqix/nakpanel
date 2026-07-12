@@ -178,6 +178,284 @@ func RenderNginxVHost(plan SitePlan) string {
 `, plan.Domain, plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket)
 }
 
+func RenderSuspendedNginxVHost(plan SitePlan) string {
+	return fmt.Sprintf(`server {
+    listen 80;
+    listen [::]:80;
+    server_name %s;
+    location / {
+        add_header Retry-After "3600" always;
+        return 503;
+	    }
+}
+`, plan.Domain)
+}
+
+func RenderNginxRuntimeVHost(plan SitePlan, certPath, keyPath string, redirectHTTPS bool) string {
+	if certPath == "" || keyPath == "" {
+		return RenderNginxVHost(plan)
+	}
+	if !redirectHTTPS {
+		return RenderNginxTLSVHost(plan, certPath, keyPath)
+	}
+	return fmt.Sprintf(`server {
+    listen 80;
+    listen [::]:80;
+    server_name %[1]s;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name %[1]s;
+    root %[2]s;
+    index index.php index.html;
+
+    ssl_certificate %[7]s;
+    ssl_certificate_key %[8]s;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    access_log %[3]s;
+    error_log %[4]s;
+    location / { try_files $uri $uri/ /index.php?$query_string; }
+    location ~ \.php$ {
+        include %[5]s;
+        fastcgi_pass unix:%[6]s;
+    }
+    location ~ /\. { deny all; }
+}
+`, plan.Domain, plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath)
+}
+
+func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplySiteRuntimeReq) (err error) {
+	state := strings.ToLower(strings.TrimSpace(req.State))
+	if state != "active" && state != "suspended" {
+		return errors.New("site runtime state must be active or suspended")
+	}
+	if (req.TLSCertPath == "") != (req.TLSKeyPath == "") {
+		return errors.New("certificate and key must be provided together")
+	}
+	if req.HTTPSRedirect && req.TLSCertPath == "" {
+		return errors.New("https redirect requires an active certificate")
+	}
+	if p.reloader == nil {
+		return errors.New("service reloader is not configured")
+	}
+	currentVersion := strings.TrimSpace(req.CurrentPHPVersion)
+	if currentVersion == "" {
+		currentVersion = req.DesiredPHPVersion
+	}
+	current, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: currentVersion, Limits: req.Limits}, p.paths)
+	if err != nil {
+		return err
+	}
+	desired, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: req.DesiredPHPVersion, Limits: req.Limits}, p.paths)
+	if err != nil {
+		return err
+	}
+
+	paths := []string{current.NginxConfig, desired.NginxEnabled, current.PHPFPMConfig, current.PHPFPMConfig + ".suspended", desired.PHPFPMConfig, desired.PHPFPMConfig + ".suspended"}
+	snapshots, err := snapshotFiles(paths)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		_ = restoreSnapshots(snapshots)
+		_ = p.reloader.ReloadService(context.Background(), "php"+current.PHPVersion+"-fpm")
+		if current.PHPVersion != desired.PHPVersion {
+			_ = p.reloader.ReloadService(context.Background(), "php"+desired.PHPVersion+"-fpm")
+		}
+		_ = p.reloader.ReloadService(context.Background(), "nginx")
+	}()
+
+	if state == "suspended" {
+		if err = writeFileAtomic(desired.NginxConfig, []byte(RenderSuspendedNginxVHost(desired)), desired.FileMode); err != nil {
+			return err
+		}
+		if err = p.reloader.ReloadService(ctx, "nginx"); err != nil {
+			return err
+		}
+		if err = writeFileAtomic(desired.PHPFPMConfig+".suspended", []byte(RenderPHPFPMPool(desired)), desired.FileMode); err != nil {
+			return err
+		}
+		_ = os.Remove(desired.PHPFPMConfig)
+		if current.PHPVersion != desired.PHPVersion {
+			_ = os.Remove(current.PHPFPMConfig)
+			_ = os.Remove(current.PHPFPMConfig + ".suspended")
+		}
+	} else {
+		if err = writeFileAtomic(desired.PHPFPMConfig, []byte(RenderPHPFPMPool(desired)), desired.FileMode); err != nil {
+			return err
+		}
+		_ = os.Remove(desired.PHPFPMConfig + ".suspended")
+		if err = writeFileAtomic(desired.NginxConfig, []byte(RenderNginxRuntimeVHost(desired, req.TLSCertPath, req.TLSKeyPath, req.HTTPSRedirect)), desired.FileMode); err != nil {
+			return err
+		}
+		if err = ensureSymlink(desired.NginxConfig, desired.NginxEnabled); err != nil {
+			return err
+		}
+		if current.PHPVersion != desired.PHPVersion {
+			_ = os.Remove(current.PHPFPMConfig)
+			_ = os.Remove(current.PHPFPMConfig + ".suspended")
+		}
+	}
+	if err = p.reloader.ReloadService(ctx, "php"+desired.PHPVersion+"-fpm"); err != nil {
+		return err
+	}
+	if current.PHPVersion != desired.PHPVersion {
+		if err = p.reloader.ReloadService(ctx, "php"+current.PHPVersion+"-fpm"); err != nil {
+			return err
+		}
+	}
+	return p.reloader.ReloadService(ctx, "nginx")
+}
+
+type fileSnapshot struct {
+	path          string
+	data          []byte
+	mode          os.FileMode
+	exists        bool
+	isSymlink     bool
+	symlinkTarget string
+}
+
+func snapshotFiles(paths []string) ([]fileSnapshot, error) {
+	seen := map[string]bool{}
+	result := make([]fileSnapshot, 0, len(paths))
+	for _, path := range paths {
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
+		info, err := os.Lstat(path)
+		if os.IsNotExist(err) {
+			result = append(result, fileSnapshot{path: path})
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			target, readErr := os.Readlink(path)
+			if readErr != nil {
+				return nil, readErr
+			}
+			result = append(result, fileSnapshot{path: path, mode: info.Mode(), exists: true, isSymlink: true, symlinkTarget: target})
+			continue
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, fileSnapshot{path: path, data: data, mode: info.Mode(), exists: true})
+	}
+	return result, nil
+}
+
+func restoreSnapshots(items []fileSnapshot) error {
+	for _, item := range items {
+		if !item.exists {
+			if err := os.Remove(item.path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			continue
+		}
+		if item.isSymlink {
+			if err := os.Remove(item.path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Dir(item.path), 0o755); err != nil {
+				return err
+			}
+			if err := os.Symlink(item.symlinkTarget, item.path); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := writeFileAtomic(item.path, item.data, item.mode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *SiteProvisioner) SetHostingState(ctx context.Context, req types.SetHostingStateReq) error {
+	state := strings.ToLower(strings.TrimSpace(req.State))
+	if state != "active" && state != "suspended" {
+		return fmt.Errorf("hosting state must be active or suspended")
+	}
+	paths := fillSitePathDefaults(p.paths)
+	plan, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: req.PHPVersion}, paths)
+	if err != nil {
+		return err
+	}
+	if p.reloader == nil {
+		return errors.New("service reloader is not configured")
+	}
+	suspendedPool := plan.PHPFPMConfig + ".suspended"
+	if state == "suspended" {
+		if err := writeFileAtomic(plan.NginxConfig, []byte(RenderSuspendedNginxVHost(plan)), plan.FileMode); err != nil {
+			return fmt.Errorf("write suspended nginx config: %w", err)
+		}
+		webmailEnabled := filepath.Join(paths.NginxEnabledDir, "webmail."+plan.Domain+".conf")
+		if _, err := os.Stat(webmailEnabled); err == nil {
+			if err := os.Rename(webmailEnabled, webmailEnabled+".suspended"); err != nil {
+				return fmt.Errorf("disable webmail: %w", err)
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		// Publish the deterministic maintenance response before taking PHP down.
+		// The second reload leaves both the current and retiring nginx workers on
+		// the suspended configuration after PHP-FPM has converged.
+		if err := p.reloader.ReloadService(ctx, "nginx"); err != nil {
+			return err
+		}
+		if _, err := os.Stat(plan.PHPFPMConfig); err == nil {
+			if err := os.Rename(plan.PHPFPMConfig, suspendedPool); err != nil {
+				return fmt.Errorf("disable php-fpm pool: %w", err)
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		if err := p.reloader.ReloadService(ctx, "php"+plan.PHPVersion+"-fpm"); err != nil {
+			return err
+		}
+		return p.reloader.ReloadService(ctx, "nginx")
+	} else {
+		if _, err := os.Stat(suspendedPool); err == nil {
+			if err := os.Rename(suspendedPool, plan.PHPFPMConfig); err != nil {
+				return fmt.Errorf("enable php-fpm pool: %w", err)
+			}
+		} else if os.IsNotExist(err) {
+			if _, activeErr := os.Stat(plan.PHPFPMConfig); activeErr != nil {
+				return errors.New("php-fpm pool is missing; reconcile the site before activation")
+			}
+		} else {
+			return err
+		}
+		if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxVHost(plan)), plan.FileMode); err != nil {
+			return fmt.Errorf("restore nginx config: %w", err)
+		}
+		webmailEnabled := filepath.Join(paths.NginxEnabledDir, "webmail."+plan.Domain+".conf")
+		if _, err := os.Stat(webmailEnabled + ".suspended"); err == nil {
+			if err := os.Rename(webmailEnabled+".suspended", webmailEnabled); err != nil {
+				return fmt.Errorf("enable webmail: %w", err)
+			}
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if err := p.reloader.ReloadService(ctx, "php"+plan.PHPVersion+"-fpm"); err != nil {
+		return err
+	}
+	return p.reloader.ReloadService(ctx, "nginx")
+}
+
 func RenderPHPFPMPool(plan SitePlan) string {
 	maxChildren := plan.Limits.PHPFPMMaxChildren
 	if maxChildren <= 0 {

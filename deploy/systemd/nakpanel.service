@@ -11,6 +11,7 @@ StateDirectory=nakpanel
 WorkingDirectory=/var/lib/nakpanel
 Environment=NAKPANEL_DATABASE_URL=postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable
 Environment=NAKPANEL_TLS_DIR=/var/lib/nakpanel/tls
+EnvironmentFile=-/etc/nakpanel/panel.env
 ExecStart=/usr/local/bin/nakpanel-panel
 Restart=on-failure
 RestartSec=2s

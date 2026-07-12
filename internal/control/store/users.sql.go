@@ -82,13 +82,21 @@ func (q *Queries) DeleteSession(ctx context.Context, tokenHash string) error {
 }
 
 const findUserByEmail = `-- name: FindUserByEmail :one
-SELECT id, email, password_hash, role, created_at, updated_at
+SELECT users.id, users.email, users.password_hash, users.role, users.created_at, users.updated_at
 FROM users
-WHERE email = $1
+WHERE lower(users.email) = lower($1)
+  AND (
+    role = 'admin'
+    OR (role = 'client' AND EXISTS (SELECT 1 FROM customers WHERE customers.login_user_id = users.id AND customers.status = 'active'))
+    OR (role = 'reseller' AND EXISTS (
+      SELECT 1 FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id
+      WHERE r.login_user_id=users.id AND r.status='active' AND rs.status='active'
+    ))
+  )
 `
 
-func (q *Queries) FindUserByEmail(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRowContext(ctx, findUserByEmail, email)
+func (q *Queries) FindUserByEmail(ctx context.Context, lower string) (User, error) {
+	row := q.db.QueryRowContext(ctx, findUserByEmail, lower)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -107,6 +115,14 @@ FROM sessions
 INNER JOIN users ON users.id = sessions.user_id
 WHERE sessions.token_hash = $1
   AND sessions.expires_at > $2
+  AND (
+    users.role = 'admin'
+    OR (users.role = 'client' AND EXISTS (SELECT 1 FROM customers WHERE customers.login_user_id = users.id AND customers.status = 'active'))
+    OR (users.role = 'reseller' AND EXISTS (
+      SELECT 1 FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id
+      WHERE r.login_user_id=users.id AND r.status='active' AND rs.status='active'
+    ))
+  )
 `
 
 type GetSessionUserParams struct {

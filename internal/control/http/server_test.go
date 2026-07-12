@@ -3,10 +3,12 @@ package panelhttp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -134,6 +136,12 @@ type fakeQuotaManager struct {
 	customerReq          types.CreateCustomerReq
 	customerStatus       string
 	customerID           int64
+	bulkCustomerIDs      []int64
+	bulkSubscriptionIDs  []int64
+	bulkResellerIDs      []int64
+	bulkPlanIDs          []int64
+	bulkAddonIDs         []int64
+	bulkResellerPlanIDs  []int64
 	subscriptionReq      types.CreateSubscriptionReq
 	settings             controlquota.Settings
 	err                  error
@@ -166,6 +174,17 @@ func (m *fakeQuotaManager) SetPlanActive(ctx context.Context, owner auth.Session
 	m.planID = planID
 	m.active = active
 	m.statusCalled = true
+	return m.err
+}
+
+func (m *fakeQuotaManager) SetPlanStatuses(ctx context.Context, owner auth.SessionUser, planIDs []int64, active bool) error {
+	m.owner = owner
+	m.bulkPlanIDs = append([]int64(nil), planIDs...)
+	m.active = active
+	m.statusCalled = true
+	if len(planIDs) > 0 {
+		m.planID = planIDs[len(planIDs)-1]
+	}
 	return m.err
 }
 
@@ -204,6 +223,36 @@ func (m *fakeQuotaManager) SetCustomerStatus(ctx context.Context, owner auth.Ses
 	return m.err
 }
 
+func (m *fakeQuotaManager) SetCustomerStatuses(ctx context.Context, owner auth.SessionUser, customerIDs []int64, status string) error {
+	m.owner = owner
+	m.bulkCustomerIDs = append([]int64(nil), customerIDs...)
+	m.customerStatus = status
+	m.customerStatusCalled = true
+	if len(customerIDs) > 0 {
+		m.customerID = customerIDs[len(customerIDs)-1]
+	}
+	return m.err
+}
+
+func (m *fakeQuotaManager) SetSubscriptionStatus(ctx context.Context, owner auth.SessionUser, subscriptionID int64, status string) error {
+	m.owner = owner
+	m.customerID = subscriptionID
+	m.customerStatus = status
+	m.customerStatusCalled = true
+	return m.err
+}
+
+func (m *fakeQuotaManager) SetSubscriptionStatuses(ctx context.Context, owner auth.SessionUser, subscriptionIDs []int64, status string) error {
+	m.owner = owner
+	m.bulkSubscriptionIDs = append([]int64(nil), subscriptionIDs...)
+	m.customerStatus = status
+	m.customerStatusCalled = true
+	if len(subscriptionIDs) > 0 {
+		m.customerID = subscriptionIDs[len(subscriptionIDs)-1]
+	}
+	return m.err
+}
+
 func (m *fakeQuotaManager) CreateSubscription(ctx context.Context, owner auth.SessionUser, req types.CreateSubscriptionReq) (types.SubscriptionSummary, error) {
 	m.owner = owner
 	m.subscriptionReq = req
@@ -215,6 +264,49 @@ func (m *fakeQuotaManager) UpdateSettings(ctx context.Context, owner auth.Sessio
 	m.owner = owner
 	m.settings = settings
 	m.settingsCalled = true
+	return m.err
+}
+
+func (m *fakeQuotaManager) CreateReseller(context.Context, auth.SessionUser, types.CreateCustomerReq, int64) (types.Reseller, error) {
+	return types.Reseller{ID: 91}, m.err
+}
+func (m *fakeQuotaManager) SetResellerStatus(context.Context, auth.SessionUser, int64, string) error {
+	return m.err
+}
+func (m *fakeQuotaManager) SetResellerStatuses(ctx context.Context, owner auth.SessionUser, ids []int64, status string) error {
+	m.bulkResellerIDs = append([]int64(nil), ids...)
+	return m.err
+}
+func (m *fakeQuotaManager) UpsertResellerPlan(_ context.Context, _ auth.SessionUser, p types.ResellerPlan) (types.ResellerPlan, error) {
+	if p.ID == 0 {
+		p.ID = 92
+	}
+	return p, m.err
+}
+func (m *fakeQuotaManager) SetResellerPlanStatuses(_ context.Context, _ auth.SessionUser, ids []int64, _ bool) error {
+	m.bulkResellerPlanIDs = append([]int64(nil), ids...)
+	return m.err
+}
+func (m *fakeQuotaManager) TransferCustomer(context.Context, auth.SessionUser, int64, int64) error {
+	return m.err
+}
+func (m *fakeQuotaManager) UpsertAddonPlan(_ context.Context, _ auth.SessionUser, a types.AddonPlan) (types.AddonPlan, error) {
+	if a.ID == 0 {
+		a.ID = 93
+	}
+	return a, m.err
+}
+func (m *fakeQuotaManager) SetAddonPlanStatuses(_ context.Context, _ auth.SessionUser, ids []int64, _ bool) error {
+	m.bulkAddonIDs = append([]int64(nil), ids...)
+	return m.err
+}
+func (m *fakeQuotaManager) SetSubscriptionAddons(context.Context, auth.SessionUser, int64, []int64) error {
+	return m.err
+}
+func (m *fakeQuotaManager) SyncSubscription(context.Context, auth.SessionUser, int64) error {
+	return m.err
+}
+func (m *fakeQuotaManager) SetSubscriptionMode(context.Context, auth.SessionUser, int64, string, types.SubscriptionEntitlements) error {
 	return m.err
 }
 
@@ -231,6 +323,32 @@ type fakePhase6Manager struct {
 	adminerOwner          auth.SessionUser
 	restoreOwner          auth.SessionUser
 	restoreBackup         int64
+}
+
+type fakeWorkspaceService struct {
+	results []types.SearchResult
+	actor   auth.SessionUser
+	query   string
+	audits  []types.AuditEvent
+}
+
+func (s *fakeWorkspaceService) Search(_ context.Context, actor auth.SessionUser, query string, _ int) ([]types.SearchResult, error) {
+	s.actor = actor
+	s.query = query
+	return s.results, nil
+}
+func (s *fakeWorkspaceService) RecordAudit(_ context.Context, event types.AuditEvent) error {
+	s.audits = append(s.audits, event)
+	return nil
+}
+func (s *fakeWorkspaceService) CustomerIDForSubscription(context.Context, int64) (int64, error) {
+	return 88, nil
+}
+func (s *fakeWorkspaceService) CustomerIDForDomain(context.Context, string) (int64, error) {
+	return 88, nil
+}
+func (s *fakeWorkspaceService) CustomerIDForBackup(context.Context, int64) (int64, error) {
+	return 88, nil
 }
 
 func (m *fakePhase6Manager) CreateBackupFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateBackupReq) (int64, error) {
@@ -289,8 +407,8 @@ func TestLoginSuccessSetsSecureCookieAndShowsAdminDashboard(t *testing.T) {
 		t.Fatal("raw cookie value was stored instead of a token hash")
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -335,8 +453,8 @@ func TestEmbeddedStylesheetIsServedByPanel(t *testing.T) {
 	if body := rec.Body.String(); !strings.Contains(body, "--np-bg") || !strings.Contains(body, ".np-app") {
 		t.Fatalf("embedded stylesheet missing expected UI tokens/classes:\n%s", body)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, "content:attr(data-label)") || !strings.Contains(body, ".np-table thead") || !strings.Contains(body, ".np-table-value") {
-		t.Fatalf("embedded stylesheet missing responsive table-card rules:\n%s", body)
+	if body := rec.Body.String(); !strings.Contains(body, ".np-routed-layout") || !strings.Contains(body, ".np-mobile-scrim") || !strings.Contains(body, ".np-object-list") {
+		t.Fatalf("embedded stylesheet missing routed responsive workspace rules:\n%s", body)
 	}
 	if body := rec.Body.String(); !strings.Contains(body, ".np-capacity-card") || !strings.Contains(body, ".np-subscription-table") || !strings.Contains(body, ".np-search") {
 		t.Fatalf("embedded stylesheet missing reference subscription shell rules:\n%s", body)
@@ -359,9 +477,27 @@ func TestEmbeddedScriptIsServedByPanel(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want javascript", contentType)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"nakpanel", "data-np-view", "create-site-modal", "X-Nakpanel-SPA"} {
+	for _, want := range []string{"nakpanel", "data-np-view", "data-np-dialog-open", "X-Nakpanel-SPA", "X-Nakpanel-CSRF", "data-np-search-input"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("embedded script missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestBundledLucideSpriteIsServedByPanel(t *testing.T) {
+	handler, _ := newTestHandler(t, auth.RoleAdmin)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/assets/icons.svg", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /assets/icons.svg status = %d, want 200", rec.Code)
+	}
+	if contentType := rec.Header().Get("Content-Type"); !strings.Contains(contentType, "image/svg+xml") {
+		t.Fatalf("Content-Type = %q, want image/svg+xml", contentType)
+	}
+	for _, marker := range []string{"Lucide static", `symbol id="search"`, `symbol id="shield"`, `symbol id="pause"`} {
+		if !strings.Contains(rec.Body.String(), marker) {
+			t.Fatalf("icon sprite missing %q", marker)
 		}
 	}
 }
@@ -471,8 +607,8 @@ func TestAdminDashboardRendersOperationalInventoryAndForms(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -537,8 +673,8 @@ func TestAdminDashboardRendersMobileTableLabels(t *testing.T) {
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -595,8 +731,8 @@ func TestAdminDashboardRendersRetryActionForDiscardedJobs(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -627,7 +763,7 @@ func TestAdminCanRetryDiscardedJob(t *testing.T) {
 	form := url.Values{"job_id": {"41"}}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/jobs/retry", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -647,8 +783,8 @@ func TestRetryJobShowsSuccessNotice(t *testing.T) {
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?notice=job-retried", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1&notice=job-retried", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -664,8 +800,8 @@ func TestClientDashboardIgnoresRetryNotice(t *testing.T) {
 	handler, _ := newTestHandler(t, auth.RoleClient)
 	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?notice=job-retried", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1&notice=job-retried", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -684,7 +820,7 @@ func TestClientCannotRetryJob(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/jobs/retry", strings.NewReader("job_id=41"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -723,7 +859,7 @@ func TestRetryJobRejectsInvalidJobID(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/jobs/retry", strings.NewReader("job_id=not-a-number"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -802,7 +938,7 @@ func TestAdminCanUsePhase6Actions(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, test.target, strings.NewReader(test.form.Encode()))
 			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-			req.AddCookie(cookie)
+			addAuthenticatedCookie(req, cookie)
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
 
@@ -823,7 +959,7 @@ func TestAdminerRouteRequiresAdminAndIssuesToken(t *testing.T) {
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
 	req := httptest.NewRequest(http.MethodGet, "https://panel.test/db", nil)
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -888,8 +1024,8 @@ func TestAdminDashboardRendersPhase6Operations(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -930,7 +1066,7 @@ func TestClientCannotUsePhase6Actions(t *testing.T) {
 	} {
 		req := httptest.NewRequest(http.MethodPost, target, strings.NewReader("domain=example.test&address=192.0.2.10"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.AddCookie(cookie)
+		addAuthenticatedCookie(req, cookie)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
@@ -940,7 +1076,7 @@ func TestClientCannotUsePhase6Actions(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "https://panel.test/db", nil)
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
@@ -959,7 +1095,7 @@ func TestCrossSiteAdminPostIsRejected(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/backups", strings.NewReader("domain=example.test"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Origin", "https://attacker.test")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -981,8 +1117,8 @@ func TestAdminDashboardHidesUnavailableActionForms(t *testing.T) {
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1058,8 +1194,8 @@ func TestAdminDashboardRendersQuotaManagement(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1177,8 +1313,8 @@ func TestAdminDashboardRendersPrototypeShellAndCreateGateData(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1260,8 +1396,8 @@ func TestAdminDashboardRendersPleskStyleSettingsHub(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1307,8 +1443,8 @@ func TestClientDashboardDoesNotRenderSettingsHub(t *testing.T) {
 	})
 	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1345,8 +1481,8 @@ func TestNonAdminDashboardRendersOwnQuotaReadOnly(t *testing.T) {
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{DashboardReader: reader, QuotaManager: &fakeQuotaManager{}})
 	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1380,7 +1516,7 @@ func TestAdminCanUpsertQuota(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/quotas", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1400,7 +1536,7 @@ func TestClientCannotUpsertQuota(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/quotas", strings.NewReader("user_id=1&max_sites=1"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1440,7 +1576,7 @@ func TestAdminCanUpsertPlan(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/plans", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1463,7 +1599,7 @@ func TestAdminCanAssignSubscriptionAndUpdateOversellSettings(t *testing.T) {
 	subForm := url.Values{"customer_user_id": {"2"}, "plan_id": {"10"}}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/subscriptions", strings.NewReader(subForm.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
@@ -1476,7 +1612,7 @@ func TestAdminCanAssignSubscriptionAndUpdateOversellSettings(t *testing.T) {
 	settingsForm := url.Values{"oversell_policy": {"cap"}, "server_disk_capacity_mb": {"50000"}}
 	req = httptest.NewRequest(http.MethodPost, "https://panel.test/settings/oversell", strings.NewReader(settingsForm.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
@@ -1503,7 +1639,7 @@ func TestAdminCanCreateContactCustomerAndSubscriptionTogether(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/subscriptions", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1534,7 +1670,7 @@ func TestClientCannotManagePlansSubscriptionsOrSettings(t *testing.T) {
 	} {
 		req := httptest.NewRequest(http.MethodPost, target, strings.NewReader("plan_id=1&customer_user_id=2&name=Starter&oversell_policy=warn&server_disk_capacity_mb=1"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		req.AddCookie(cookie)
+		addAuthenticatedCookie(req, cookie)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
@@ -1554,7 +1690,7 @@ func TestOverQuotaCreateShowsClearBadRequest(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader("username=npdemo&domain=example.test&php_version=8.3"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1583,8 +1719,8 @@ func TestAdminDashboardRendersAllSiteErrorsSafely(t *testing.T) {
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1614,8 +1750,8 @@ func TestAdminDashboardRendersJobLoadErrorWithInventory(t *testing.T) {
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1639,8 +1775,8 @@ func TestClientDashboardDoesNotLoadAdminInventory(t *testing.T) {
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{DashboardReader: reader})
 	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1659,8 +1795,8 @@ func TestNonAdminDashboardHidesCreateSiteLauncherWhenConfigured(t *testing.T) {
 	})
 	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1679,8 +1815,8 @@ func TestClientUsesSameURLAndSeesClientDashboard(t *testing.T) {
 	handler, _ := newTestHandler(t, auth.RoleClient)
 	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1701,8 +1837,8 @@ func TestResellerUsesSameURLAndSeesResellerDashboard(t *testing.T) {
 	handler, _ := newTestHandler(t, auth.RoleReseller)
 	cookie := login(t, handler, "reseller@nakpanel.test", "NakpanelReseller!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1744,7 +1880,7 @@ func TestLoginFailureDoesNotSetSessionCookie(t *testing.T) {
 
 func TestUnauthenticatedDashboardRedirectsToLogin(t *testing.T) {
 	handler, _ := newTestHandler(t, auth.RoleAdmin)
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1761,7 +1897,7 @@ func TestLogoutDeletesSessionAndClearsCookie(t *testing.T) {
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/logout", nil)
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1782,8 +1918,8 @@ func TestLogoutDeletesSessionAndClearsCookie(t *testing.T) {
 		t.Fatal("logout did not clear the session cookie")
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
-	req.AddCookie(cookie)
+	req = httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
+	addAuthenticatedCookie(req, cookie)
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther {
@@ -1818,7 +1954,7 @@ func TestAdminCanCreateSite(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1854,7 +1990,7 @@ func TestAdminCanCreateSiteWithSPAJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Nakpanel-SPA", "true")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1886,7 +2022,7 @@ func TestOverQuotaCreateWithSPAJSONReturnsError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader("username=npdemo&domain=example.test&php_version=8.3"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Nakpanel-SPA", "true")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1912,7 +2048,7 @@ func TestClientCannotCreateSite(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader("username=npdemo&domain=example.test&php_version=8.3"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1957,7 +2093,7 @@ func TestAdminCanCreateDatabase(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/databases", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -1986,7 +2122,7 @@ func TestCreateDatabaseDefaultsToMariaDB(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/databases", strings.NewReader("db_name=np_demo&db_user=np_demo_user"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -2006,7 +2142,7 @@ func TestClientCannotCreateDatabase(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/databases", strings.NewReader("engine=mariadb&db_name=np_demo&db_user=np_demo_user"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -2029,7 +2165,7 @@ func TestAdminCanIssueCertificate(t *testing.T) {
 	}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/certificates", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -2054,7 +2190,7 @@ func TestClientCannotIssueCertificate(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/certificates", strings.NewReader("domain=example.test&issuer=local-self-signed"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.AddCookie(cookie)
+	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -2121,6 +2257,407 @@ func newTestHandlerWithOptions(t *testing.T, role auth.Role, options ServerOptio
 	return server.Handler(), sessionStore
 }
 
+func TestRootRedirectsToRoutedDashboard(t *testing.T) {
+	handler, _ := newTestHandler(t, auth.RoleAdmin)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/dashboard" {
+		t.Fatalf("GET / = %d Location %q, want 303 /dashboard", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestHandlerSetsSecurityHeaders(t *testing.T) {
+	handler, _ := newTestHandler(t, auth.RoleAdmin)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/healthz", nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Header().Get("Content-Security-Policy") == "" || rec.Header().Get("X-Frame-Options") != "DENY" || rec.Header().Get("X-Content-Type-Options") != "nosniff" {
+		t.Fatalf("security headers missing: %#v", rec.Header())
+	}
+}
+
+func TestHandlerRejectsOversizedPostBody(t *testing.T) {
+	handler, _ := newTestHandler(t, auth.RoleAdmin)
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/login", strings.NewReader(strings.Repeat("a", maxFormBodyBytes+1)))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized POST status = %d, want 413", rec.Code)
+	}
+}
+
+func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
+	reader := &fakeDashboardReader{data: dashboard.Data{
+		Sites:         []dashboard.Site{{ID: 7, Domain: "owned.test", Username: "owned", PHPVersion: "8.3", Status: "active", CustomerID: 88, SubscriptionID: 20}},
+		Databases:     []dashboard.Database{{ID: 8, Name: "owned_db", User: "owned_user", Engine: "mariadb", Status: "active", CustomerID: 88, SubscriptionID: 20}},
+		Customers:     []types.Customer{{ID: 88, Email: "owner@test", DisplayName: "Owner", Status: "active"}},
+		Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, CustomerName: "Owner", SubscriptionName: "Owned hosting", PlanID: 10, PlanName: "Business", Status: "active", MaxSites: 5}},
+		Plans:         []controlquota.Plan{{ID: 10, Name: "Business", IsActive: true, DiskMB: 1024, MaxSites: 5, MaxDatabases: 5, MaxBackups: 5}},
+		Resellers:     []types.Reseller{{ID: 91, Email: "provider@test", DisplayName: "Provider", Status: "active", PlanName: "Agency"}},
+		ResellerPlans: []types.ResellerPlan{{ID: 92, Name: "Agency", IsActive: true, MaxCustomers: 10}},
+	}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{
+		DashboardReader: reader, SiteCreator: &fakeSiteCreator{}, DatabaseCreator: &fakeDatabaseCreator{}, CertificateIssuer: &fakeCertificateIssuer{}, Phase6Manager: &fakePhase6Manager{}, QuotaManager: &fakeQuotaManager{},
+	})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	cases := map[string]string{
+		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Hosting overview", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "Audit events", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
+	}
+	for path, marker := range cases {
+		req := httptest.NewRequest(http.MethodGet, "https://panel.test"+path, nil)
+		addAuthenticatedCookie(req, cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), marker) {
+			t.Fatalf("GET %s = %d, marker %q missing\n%s", path, rec.Code, marker, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), `name="nakpanel-csrf"`) || !strings.Contains(rec.Body.String(), `src="/assets/app.js"`) {
+			t.Fatalf("GET %s missing routed assets or CSRF metadata", path)
+		}
+		if path == "/subscriptions" {
+			for _, want := range []string{"Change Plan", "Change Subscriber", "Service Plans", "Subscription", "Subscriber", "Resources", "data-np-subscription-row", "data-np-subscription-check", "np-subscription-check", "data-customer-user-id", "data-plan-name", "data-subscriber-email"} {
+				if !strings.Contains(rec.Body.String(), want) {
+					t.Fatalf("GET /subscriptions missing %q", want)
+				}
+			}
+		}
+		if path == "/subscriptions/20" {
+			for _, want := range []string{"Websites &amp; Domains", "owned.test", "?tab=hosting", "?tab=php", "?tab=dns", "?tab=ssl", "?tab=databases", "?tab=backups"} {
+				if !strings.Contains(rec.Body.String(), want) {
+					t.Fatalf("GET /subscriptions/20 missing %q", want)
+				}
+			}
+		}
+		if path == "/sites/7" {
+			for _, want := range []string{"Overview", "Hosting", "PHP", "DNS", "SSL/TLS", "Databases", "Backups"} {
+				if !strings.Contains(rec.Body.String(), want) {
+					t.Fatalf("GET /sites/7 missing domain tab %q", want)
+				}
+			}
+		}
+		postActions := map[string]string{
+			"/databases":         "/databases",
+			"/backups":           "/backups",
+			"/dns":               "/dns",
+			"/service-plans/new": "/plans",
+			"/tools-settings":    "/settings/oversell",
+		}
+		if action, ok := postActions[path]; ok && !renderedFormContainsCSRF(rec.Body.String(), action) {
+			t.Fatalf("GET %s form action %s missing server-rendered CSRF token", path, action)
+		}
+	}
+}
+
+func TestClientDomainTabsHonorSubscriptionPermissions(t *testing.T) {
+	reader := &fakeDashboardReader{data: dashboard.Data{
+		Sites:         []dashboard.Site{{ID: 7, Domain: "owned.test", Username: "owned", PHPVersion: "8.3", DesiredPHPVersion: "8.3", Status: "active", CustomerID: 88, SubscriptionID: 20}},
+		Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, SubscriptionName: "Restricted hosting", PlanName: "Restricted", Status: "active", PHPAllowlist: "8.3"}},
+	}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{
+		DashboardReader: reader, CertificateIssuer: &fakeCertificateIssuer{}, Phase6Manager: &fakePhase6Manager{},
+	})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	cases := []struct {
+		path, gate, action string
+	}{
+		{"/sites/7?tab=php", "PHP settings are disabled", `/sites/7/php`},
+		{"/sites/7?tab=dns", "DNS management is disabled", `/sites/7/dns-records`},
+		{"/sites/7?tab=ssl", "SSL/TLS management is disabled", `/certificates`},
+		{"/sites/7?tab=backups", "Backup and restore are disabled", `/backups`},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, "https://panel.test"+tc.path, nil)
+		addAuthenticatedCookie(req, cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), tc.gate) {
+			t.Fatalf("GET %s = %d, missing gate %q\n%s", tc.path, rec.Code, tc.gate, rec.Body.String())
+		}
+		if strings.Contains(rec.Body.String(), `action="`+tc.action+`"`) {
+			t.Fatalf("GET %s exposed disabled action %s", tc.path, tc.action)
+		}
+	}
+}
+
+func TestClientSubscriptionToolbarHidesProviderActions(t *testing.T) {
+	reader := &fakeDashboardReader{data: dashboard.Data{Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, CustomerName: "Owner", CustomerEmail: "owner@test", SubscriptionName: "Owned hosting", PlanName: "Business", Status: "active"}}}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{DashboardReader: reader})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/subscriptions", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /subscriptions = %d", rec.Code)
+	}
+	for _, hidden := range []string{"Change Plan", "Change Subscriber", "Service Plans", "data-np-subscription-check"} {
+		if strings.Contains(rec.Body.String(), hidden) {
+			t.Fatalf("client subscription page exposed provider control %q", hidden)
+		}
+	}
+	if !strings.Contains(rec.Body.String(), "Search subscriptions") || !strings.Contains(rec.Body.String(), "Owned hosting") {
+		t.Fatal("client subscription page lost read-only workspace content")
+	}
+}
+
+func renderedFormContainsCSRF(body, action string) bool {
+	start := strings.Index(body, `action="`+action+`"`)
+	if start < 0 {
+		return false
+	}
+	end := strings.Index(body[start:], "</form>")
+	if end < 0 {
+		return false
+	}
+	return strings.Contains(body[start:start+end], `name="csrf_token"`)
+}
+
+func addAuthenticatedCookie(req *http.Request, cookie *http.Cookie) {
+	req.AddCookie(cookie)
+	if req.Method == http.MethodPost && req.URL.Path != "/login" {
+		req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
+	}
+}
+
+func TestClientWorkspaceHidesAdminModulesAndUnknownSite(t *testing.T) {
+	reader := &fakeDashboardReader{data: dashboard.Data{Sites: []dashboard.Site{{ID: 7, Domain: "owned.test", Status: "active", CustomerID: 88}}}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{DashboardReader: reader, SiteCreator: &fakeSiteCreator{}})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/dashboard", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /dashboard = %d", rec.Code)
+	}
+	for _, blocked := range []string{"Customers", "Service Plans", "Tools &amp; Settings"} {
+		if strings.Contains(rec.Body.String(), blocked) {
+			t.Fatalf("client dashboard exposed %q", blocked)
+		}
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "https://panel.test/sites/999", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("GET cross-customer site = %d, want 404", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "https://panel.test/customers", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("GET /customers as client = %d, want 403", rec.Code)
+	}
+}
+
+func TestBrowserPostRequiresSessionBoundCSRFToken(t *testing.T) {
+	handler, sessions := newTestHandler(t, auth.RoleAdmin)
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/logout", nil)
+	req.Header.Set("Origin", "https://panel.test")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || sessions.deleted {
+		t.Fatalf("POST without CSRF = %d deleted=%v, want 403 false", rec.Code, sessions.deleted)
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/logout", nil)
+	req.AddCookie(cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || sessions.deleted {
+		t.Fatalf("headerless POST without CSRF = %d deleted=%v, want 403 false", rec.Code, sessions.deleted)
+	}
+
+	tokenRequest := httptest.NewRequest(http.MethodGet, "https://panel.test/dashboard", nil)
+	addAuthenticatedCookie(tokenRequest, cookie)
+	form := url.Values{"csrf_token": {csrfToken(tokenRequest)}}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/logout", strings.NewReader(form.Encode()))
+	req.Header.Set("Origin", "https://panel.test")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || !sessions.deleted {
+		t.Fatalf("POST with CSRF = %d deleted=%v, want 303 true", rec.Code, sessions.deleted)
+	}
+}
+
+func TestProviderBulkLifecycleRoutesUseSelectedObjects(t *testing.T) {
+	quotaManager := &fakeQuotaManager{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleReseller, ServerOptions{QuotaManager: quotaManager})
+	cookie := login(t, handler, "reseller@nakpanel.test", "NakpanelReseller!2026")
+	tokenRequest := httptest.NewRequest(http.MethodGet, "https://panel.test/customers", nil)
+	addAuthenticatedCookie(tokenRequest, cookie)
+
+	form := url.Values{
+		"csrf_token":  {csrfToken(tokenRequest)},
+		"customer_id": {"77", "78"},
+		"status":      {"suspended"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/customers/bulk-status", strings.NewReader(form.Encode()))
+	req.Header.Set("Origin", "https://panel.test")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || !quotaManager.customerStatusCalled || !slices.Equal(quotaManager.bulkCustomerIDs, []int64{77, 78}) || quotaManager.customerStatus != "suspended" {
+		t.Fatalf("bulk customers = %d manager=%#v", rec.Code, quotaManager)
+	}
+
+	form = url.Values{
+		"csrf_token":      {csrfToken(tokenRequest)},
+		"subscription_id": {"31"},
+		"status":          {"active"},
+	}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/subscriptions/bulk-status", strings.NewReader(form.Encode()))
+	req.Header.Set("Origin", "https://panel.test")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || !slices.Equal(quotaManager.bulkSubscriptionIDs, []int64{31}) || quotaManager.customerStatus != "active" {
+		t.Fatalf("bulk subscriptions = %d manager=%#v", rec.Code, quotaManager)
+	}
+
+	form = url.Values{"csrf_token": {csrfToken(tokenRequest)}, "plan_id": {"41", "42"}, "is_active": {"false"}}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/plans/bulk-status", strings.NewReader(form.Encode()))
+	req.Header.Set("Origin", "https://panel.test")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || !slices.Equal(quotaManager.bulkPlanIDs, []int64{41, 42}) || quotaManager.active {
+		t.Fatalf("bulk plans = %d manager=%#v", rec.Code, quotaManager)
+	}
+
+	form = url.Values{"csrf_token": {csrfToken(tokenRequest)}, "addon_id": {"51"}, "is_active": {"true"}}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/addons/bulk-status", strings.NewReader(form.Encode()))
+	req.Header.Set("Origin", "https://panel.test")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || !slices.Equal(quotaManager.bulkAddonIDs, []int64{51}) {
+		t.Fatalf("bulk add-ons = %d manager=%#v", rec.Code, quotaManager)
+	}
+
+	form = url.Values{"csrf_token": {csrfToken(tokenRequest)}, "reseller_plan_id": {"61"}, "is_active": {"true"}}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/reseller-plans/bulk-status", strings.NewReader(form.Encode()))
+	req.Header.Set("Origin", "https://panel.test")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || len(quotaManager.bulkResellerPlanIDs) != 0 {
+		t.Fatalf("reseller bulk reseller plans = %d manager=%#v", rec.Code, quotaManager)
+	}
+}
+
+func TestResellerCanProvisionOnlyWithSelectedSubscription(t *testing.T) {
+	creator := &fakeSiteCreator{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleReseller, ServerOptions{SiteCreator: creator})
+	cookie := login(t, handler, "reseller@nakpanel.test", "NakpanelReseller!2026")
+
+	form := url.Values{"subscription_id": {"21"}, "username": {"reseller-site"}, "domain": {"reseller.test"}, "php_version": {"8.3"}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || len(creator.requests) != 1 || creator.requests[0].SubscriptionID != 21 {
+		t.Fatalf("reseller site create = %d creator=%#v", rec.Code, creator)
+	}
+
+	creator.requests = nil
+	form.Del("subscription_id")
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || len(creator.requests) != 0 {
+		t.Fatalf("reseller site create without subscription = %d requests=%d", rec.Code, len(creator.requests))
+	}
+}
+
+func TestScopedSearchReturnsJSON(t *testing.T) {
+	workspace := &fakeWorkspaceService{results: []types.SearchResult{{Kind: "site", ID: 7, Label: "owned.test", URL: "/sites/7"}}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{Workspace: workspace})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/search?q=owned", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"url":"/sites/7"`) {
+		t.Fatalf("GET /search = %d %s", rec.Code, rec.Body.String())
+	}
+	if workspace.actor.Role != auth.RoleClient || workspace.query != "owned" {
+		t.Fatalf("search scope actor=%#v query=%q", workspace.actor, workspace.query)
+	}
+}
+
+func TestOnboardingRetainsSubscriptionWhenInitialSiteFails(t *testing.T) {
+	quotas := &fakeQuotaManager{}
+	sites := &fakeSiteCreator{err: errors.New("agent unavailable")}
+	workspace := &fakeWorkspaceService{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{QuotaManager: quotas, SiteCreator: sites, Workspace: workspace})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	form := url.Values{"customer_mode": {"existing"}, "customer_id": {"88"}, "plan_id": {"10"}, "subscription_name": {"Owned hosting"}, "create_site": {"true"}, "domain": {"owned.test"}, "username": {"owned"}, "php_version": {"8.3"}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/subscriptions/onboard", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/subscriptions/77?notice=subscription-site-warning" {
+		t.Fatalf("onboard = %d Location %q; body=%s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+	if !quotas.subCalled || len(sites.requests) != 1 {
+		t.Fatalf("subscription called=%v site calls=%d", quotas.subCalled, len(sites.requests))
+	}
+	if len(workspace.audits) != 1 || workspace.audits[0].Action != "subscription.created" {
+		t.Fatalf("audits = %#v", workspace.audits)
+	}
+}
+
+func TestSupportViewFiltersCustomerInventory(t *testing.T) {
+	reader := &fakeDashboardReader{data: dashboard.Data{
+		Customers:     []types.Customer{{ID: 88, DisplayName: "Owned", Email: "owned@test", Status: "active"}, {ID: 99, DisplayName: "Other", Email: "other@test", Status: "active"}},
+		Sites:         []dashboard.Site{{ID: 7, Domain: "owned.test", CustomerID: 88, Status: "active"}, {ID: 9, Domain: "other.test", CustomerID: 99, Status: "active"}},
+		Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, SubscriptionName: "Owned sub", Status: "active"}, {ID: 30, CustomerID: 99, SubscriptionName: "Other sub", Status: "active"}},
+	}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader, SiteCreator: &fakeSiteCreator{}})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/support/customers/88/sites", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "Support view") || !strings.Contains(rec.Body.String(), "owned.test") || strings.Contains(rec.Body.String(), "other.test") {
+		t.Fatalf("support inventory = %d\n%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `/support/customers/88/sites/7`) {
+		t.Fatalf("support site link is not scoped:\n%s", rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "https://panel.test/support/customers/88/sites/9", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("cross-customer support detail = %d, want 404", rec.Code)
+	}
+}
+
 func login(t *testing.T, handler http.Handler, email string, password string) *http.Cookie {
 	t.Helper()
 
@@ -2137,8 +2674,8 @@ func login(t *testing.T, handler http.Handler, email string, password string) *h
 		body, _ := io.ReadAll(rec.Result().Body)
 		t.Fatalf("POST /login status = %d, want 303; body=%q", rec.Code, string(body))
 	}
-	if location := rec.Header().Get("Location"); location != "/" {
-		t.Fatalf("Location = %q, want /", location)
+	if location := rec.Header().Get("Location"); location != "/dashboard" {
+		t.Fatalf("Location = %q, want /dashboard", location)
 	}
 	for _, cookie := range rec.Result().Cookies() {
 		if cookie.Name == SessionCookieName {

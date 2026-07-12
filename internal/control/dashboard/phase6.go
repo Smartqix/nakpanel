@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+
+	"github.com/nakroteck/nakpanel/internal/types"
 )
 
 type SQLPhase6Store struct {
@@ -38,11 +40,15 @@ func (s *SQLPhase6Store) GetPhase6(ctx context.Context) (Phase6Data, error) {
 	if err != nil {
 		return Phase6Data{}, err
 	}
-	return Phase6Data{Backups: backups, Restores: restores, WebmailHosts: webmail, DNSZones: dns, Reconciliations: reconciliations}, nil
+	records, err := s.listDNSRecords(ctx)
+	if err != nil {
+		return Phase6Data{}, err
+	}
+	return Phase6Data{Backups: backups, Restores: restores, WebmailHosts: webmail, DNSZones: dns, DNSRecords: records, Reconciliations: reconciliations}, nil
 }
 
 func (s *SQLPhase6Store) listBackups(ctx context.Context) ([]Backup, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, target_name, status, archive_path, size_bytes, last_error, created_at FROM backups ORDER BY created_at DESC, id DESC LIMIT 10`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, target_name, status, archive_path, size_bytes, last_error, created_at, COALESCE(site_id,0), COALESCE(subscription_id,0) FROM backups ORDER BY created_at DESC, id DESC LIMIT 50`)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +56,7 @@ func (s *SQLPhase6Store) listBackups(ctx context.Context) ([]Backup, error) {
 	var backups []Backup
 	for rows.Next() {
 		var backup Backup
-		if err := rows.Scan(&backup.ID, &backup.TargetName, &backup.Status, &backup.ArchivePath, &backup.SizeBytes, &backup.LastError, &backup.CreatedAt); err != nil {
+		if err := rows.Scan(&backup.ID, &backup.TargetName, &backup.Status, &backup.ArchivePath, &backup.SizeBytes, &backup.LastError, &backup.CreatedAt, &backup.SiteID, &backup.SubscriptionID); err != nil {
 			return nil, err
 		}
 		backups = append(backups, backup)
@@ -95,7 +101,7 @@ func (s *SQLPhase6Store) listWebmail(ctx context.Context) ([]WebmailHost, error)
 }
 
 func (s *SQLPhase6Store) listDNS(ctx context.Context) ([]DNSZone, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, domain, address, serial, status, zone_path, last_error, created_at FROM dns_zones ORDER BY created_at DESC, id DESC LIMIT 10`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, domain, address, serial, status, zone_path, last_error, created_at, site_id FROM dns_zones ORDER BY created_at DESC, id DESC LIMIT 50`)
 	if err != nil {
 		return nil, err
 	}
@@ -103,12 +109,29 @@ func (s *SQLPhase6Store) listDNS(ctx context.Context) ([]DNSZone, error) {
 	var zones []DNSZone
 	for rows.Next() {
 		var zone DNSZone
-		if err := rows.Scan(&zone.ID, &zone.Domain, &zone.Address, &zone.Serial, &zone.Status, &zone.ZonePath, &zone.LastError, &zone.CreatedAt); err != nil {
+		if err := rows.Scan(&zone.ID, &zone.Domain, &zone.Address, &zone.Serial, &zone.Status, &zone.ZonePath, &zone.LastError, &zone.CreatedAt, &zone.SiteID); err != nil {
 			return nil, err
 		}
 		zones = append(zones, zone)
 	}
 	return zones, rows.Err()
+}
+
+func (s *SQLPhase6Store) listDNSRecords(ctx context.Context) ([]types.DNSRecord, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id,zone_id,host,record_type,value,COALESCE(priority,0),ttl FROM dns_records ORDER BY zone_id,host,record_type,id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []types.DNSRecord
+	for rows.Next() {
+		var record types.DNSRecord
+		if err := rows.Scan(&record.ID, &record.ZoneID, &record.Host, &record.Type, &record.Value, &record.Priority, &record.TTL); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
 }
 
 func (s *SQLPhase6Store) listReconciliations(ctx context.Context) ([]ReconciliationRun, error) {

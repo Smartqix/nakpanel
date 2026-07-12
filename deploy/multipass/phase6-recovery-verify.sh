@@ -59,12 +59,14 @@ REMOTE
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Admin dashboard'
 
 site_status="$(curl -sk -o "${tmpdir}/site-create.out" -w '%{http_code}' \
   -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
   -d 'username=npretry' \
   -d 'domain=phase6-retry.test' \
   -d 'php_version=8.3' \
@@ -137,7 +139,7 @@ REMOTE
 )"
 previous_max_attempts="$(echo "${previous_max_attempts}" | tr -d '[:space:]')"
 
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/" > "${tmpdir}/admin-discarded.html"
+curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/?legacy=1" > "${tmpdir}/admin-discarded.html"
 assert_contains "${tmpdir}/admin-discarded.html" 'phase6-retry.test'
 assert_contains "${tmpdir}/admin-discarded.html" 'discarded'
 assert_contains "${tmpdir}/admin-discarded.html" 'phase6 synthetic failure'
@@ -147,6 +149,7 @@ assert_contains "${tmpdir}/admin-discarded.html" 'Retry job'
 
 retry_status="$(curl -sk -o "${tmpdir}/retry.out" -w '%{http_code}' \
   -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
   -d "job_id=${job_id}" \
   "https://${VM_IP}:7443/jobs/retry")"
 if [[ "${retry_status}" != "303" ]]; then
@@ -176,6 +179,7 @@ assert_contains "${tmpdir}/admin-notice.html" 'Retry queued. Refresh in a moment
 
 curl -sk --fail -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" -L \
   -d 'email=client@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelClient!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/client-dashboard.html"
 assert_contains "${tmpdir}/client-dashboard.html" 'Client dashboard'
@@ -183,6 +187,7 @@ assert_not_contains "${tmpdir}/client-dashboard.html" 'Retry job'
 
 client_retry_status="$(curl -sk -o "${tmpdir}/client-retry.out" -w '%{http_code}' \
   -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/client.cookies")" \
   -d "job_id=${job_id}" \
   "https://${VM_IP}:7443/jobs/retry")"
 if [[ "${client_retry_status}" != "403" ]]; then

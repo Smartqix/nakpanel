@@ -3,6 +3,7 @@ package rpc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -69,6 +70,23 @@ func TestDispatchPing(t *testing.T) {
 	}
 	if !strings.Contains(string(resp.Data), `"pong":true`) {
 		t.Fatalf("Ping data = %s, want pong true", resp.Data)
+	}
+}
+
+func TestDispatcherBoundsCompletedResponseCache(t *testing.T) {
+	dispatcher := NewDispatcher(&fakeReloader{}, Options{})
+	for i := 0; i <= maxCachedResponses; i++ {
+		id := fmt.Sprintf("cache-%d", i)
+		resp := dispatcher.Dispatch(context.Background(), types.Request{Op: types.OpPing, ID: id, Data: json.RawMessage(`{}`)})
+		if !resp.OK {
+			t.Fatalf("dispatch %d failed: %s", i, resp.Error)
+		}
+	}
+	if got := len(dispatcher.responses); got != maxCachedResponses {
+		t.Fatalf("cached responses = %d, want %d", got, maxCachedResponses)
+	}
+	if _, ok := dispatcher.responses["cache-0"]; ok {
+		t.Fatal("oldest completed response was not evicted")
 	}
 }
 

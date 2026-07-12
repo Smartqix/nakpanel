@@ -622,16 +622,30 @@ func NewDNSProvisioner(opts DNSProvisionerOptions) *DNSProvisioner {
 	}
 }
 
-func (p *DNSProvisioner) ConfigureDNSZone(ctx context.Context, req types.ConfigureDNSZoneReq) (types.ConfigureDNSZoneResult, error) {
+func (p *DNSProvisioner) ConfigureDNSZone(ctx context.Context, req types.ConfigureDNSZoneReq) (_ types.ConfigureDNSZoneResult, err error) {
 	normalized, err := normalizeDNSZoneRequest(req, p.zoneDir)
 	if err != nil {
 		return types.ConfigureDNSZoneResult{}, err
 	}
 	zonePath := filepath.Join(normalized.ZoneDir, "db."+normalized.Domain)
+	includePath := filepath.Join(p.includeDir, normalized.Domain+".conf")
+	snapshots, err := snapshotFiles([]string{zonePath, includePath, p.aggregatePath})
+	if err != nil {
+		return types.ConfigureDNSZoneResult{}, err
+	}
+	reloadAttempted := false
+	defer func() {
+		if err == nil {
+			return
+		}
+		_ = restoreSnapshots(snapshots)
+		if reloadAttempted && p.reloader != nil {
+			_ = p.reloader.ReloadService(context.Background(), "named.service")
+		}
+	}()
 	if err := writeFileAtomic(zonePath, []byte(RenderDNSZone(normalized)), 0o644); err != nil {
 		return types.ConfigureDNSZoneResult{}, fmt.Errorf("write dns zone: %w", err)
 	}
-	includePath := filepath.Join(p.includeDir, normalized.Domain+".conf")
 	if err := writeFileAtomic(includePath, []byte(RenderDNSZoneInclude(normalized.Domain, zonePath)), 0o644); err != nil {
 		return types.ConfigureDNSZoneResult{}, fmt.Errorf("write dns include: %w", err)
 	}
@@ -645,6 +659,7 @@ func (p *DNSProvisioner) ConfigureDNSZone(ctx context.Context, req types.Configu
 		return types.ConfigureDNSZoneResult{}, err
 	}
 	if p.reloader != nil {
+		reloadAttempted = true
 		if err := p.reloader.ReloadService(ctx, "named.service"); err != nil {
 			return types.ConfigureDNSZoneResult{}, err
 		}
@@ -653,7 +668,7 @@ func (p *DNSProvisioner) ConfigureDNSZone(ctx context.Context, req types.Configu
 }
 
 func RenderDNSZone(req types.ConfigureDNSZoneReq) string {
-	return fmt.Sprintf(`$ORIGIN %[1]s.
+	header := fmt.Sprintf(`$ORIGIN %[1]s.
 $TTL 300
 @ IN SOA ns1.%[1]s. hostmaster.%[1]s. (
     %[3]d
@@ -664,10 +679,34 @@ $TTL 300
 )
 @ IN NS ns1.%[1]s.
 ns1 IN A %[2]s
-@ IN A %[2]s
-www IN A %[2]s
 webmail IN A %[2]s
 `, req.Domain, req.Address, req.Serial)
+	if len(req.Records) == 0 {
+		return header + fmt.Sprintf("@ IN A %s\nwww IN A %s\n", req.Address, req.Address)
+	}
+	var builder strings.Builder
+	builder.WriteString(header)
+	for _, record := range req.Records {
+		host := strings.TrimSpace(record.Host)
+		if host == "" {
+			host = "@"
+		}
+		value := strings.TrimSpace(record.Value)
+		switch record.Type {
+		case "CNAME", "MX":
+			if !strings.HasSuffix(value, ".") {
+				value += "."
+			}
+		case "TXT":
+			value = `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
+		}
+		if record.Type == "MX" {
+			fmt.Fprintf(&builder, "%s %d IN MX %d %s\n", host, record.TTL, record.Priority, value)
+		} else {
+			fmt.Fprintf(&builder, "%s %d IN %s %s\n", host, record.TTL, record.Type, value)
+		}
+	}
+	return builder.String()
 }
 
 func RenderDNSZoneInclude(domain string, zonePath string) string {
@@ -736,6 +775,24 @@ func normalizeDNSZoneRequest(req types.ConfigureDNSZoneReq, defaultZoneDir strin
 	}
 	if net.ParseIP(req.Address) == nil {
 		return types.ConfigureDNSZoneReq{}, fmt.Errorf("invalid dns address %q", req.Address)
+	}
+	for _, record := range req.Records {
+		if record.TTL < 60 || record.TTL > 86400 {
+			return types.ConfigureDNSZoneReq{}, errors.New("DNS record TTL is invalid")
+		}
+		switch record.Type {
+		case "A":
+			if ip := net.ParseIP(record.Value); ip == nil || ip.To4() == nil {
+				return types.ConfigureDNSZoneReq{}, errors.New("invalid A record")
+			}
+		case "AAAA":
+			if ip := net.ParseIP(record.Value); ip == nil || ip.To4() != nil {
+				return types.ConfigureDNSZoneReq{}, errors.New("invalid AAAA record")
+			}
+		case "CNAME", "MX", "TXT":
+		default:
+			return types.ConfigureDNSZoneReq{}, fmt.Errorf("unsupported DNS record type %q", record.Type)
+		}
 	}
 	return req, nil
 }

@@ -37,6 +37,7 @@ post_admin() {
   local status
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "303" ]]; then
@@ -54,6 +55,7 @@ post_expect_400() {
   local status
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "400" ]]; then
@@ -66,6 +68,7 @@ post_expect_400() {
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Customers'
@@ -92,11 +95,23 @@ DELETE FROM river_job
 WHERE args::text LIKE '%phase10-one.test%'
    OR args::text LIKE '%phase10-two.test%'
    OR args::text LIKE '%phase10-over.test%'
-   OR args::text LIKE '%np10%';
-DELETE FROM backups WHERE target_name IN ('phase10-one.test', 'phase10-two.test', 'phase10-over.test');
-DELETE FROM databases WHERE db_name LIKE 'np10_%';
-DELETE FROM sites WHERE domain IN ('phase10-one.test', 'phase10-two.test', 'phase10-over.test');
+   OR args::text LIKE '%phase11-client.test%'
+   OR args::text LIKE '%np10%'
+   OR args::text LIKE '%np11client%';
+DELETE FROM restore_runs WHERE backup_id IN (
+  SELECT id FROM backups WHERE customer_id IN (SELECT id FROM customers WHERE email = 'phase10-customer@nakpanel.test')
+     OR target_name IN ('phase10-one.test', 'phase10-two.test', 'phase10-over.test')
+);
+DELETE FROM backups WHERE customer_id IN (SELECT id FROM customers WHERE email = 'phase10-customer@nakpanel.test')
+   OR target_name IN ('phase10-one.test', 'phase10-two.test', 'phase10-over.test');
+DELETE FROM databases WHERE customer_id IN (SELECT id FROM customers WHERE email = 'phase10-customer@nakpanel.test')
+   OR db_name LIKE 'np10%'
+   OR site_id IN (SELECT id FROM sites WHERE domain IN ('phase10-one.test', 'phase10-two.test', 'phase10-over.test'));
+DELETE FROM sites WHERE customer_id IN (SELECT id FROM customers WHERE email = 'phase10-customer@nakpanel.test')
+   OR domain IN ('phase10-one.test', 'phase10-two.test', 'phase10-over.test');
 DELETE FROM subscriptions WHERE customer_id IN (SELECT id FROM customers WHERE email = 'phase10-customer@nakpanel.test');
+DELETE FROM audit_events WHERE customer_id IN (SELECT id FROM customers WHERE email = 'phase10-customer@nakpanel.test')
+   OR actor_user_id IN (SELECT id FROM users WHERE email = 'phase10-customer@nakpanel.test');
 DELETE FROM customers WHERE email = 'phase10-customer@nakpanel.test';
 DELETE FROM users WHERE email = 'phase10-customer@nakpanel.test';
 DELETE FROM plans WHERE name IN ('Phase10 One', 'Phase10 Two');
@@ -117,7 +132,7 @@ for plan in One Two; do
     -d 'bandwidth_mb=-1' \
     -d 'max_mailboxes=0' \
     -d 'backup_retention_days=7' \
-    -d 'php_allowlist=8.3,8.2' \
+    -d 'php_allowlist=8.3' \
     -d 'php_max_children=2' \
     -d 'php_memory_mb=64' \
     -d 'site_disk_quota_mb=32' \
@@ -197,6 +212,7 @@ fi
 
 curl -sk --fail -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" -L \
   -d 'email=phase10-customer@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelPhase10!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/client-dashboard.html"
 assert_contains "${tmpdir}/client-dashboard.html" 'Phase10 One'

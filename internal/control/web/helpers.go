@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"net/url"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +23,964 @@ type DashboardActions struct {
 	CanRetryJob         bool
 	CanUsePhase6        bool
 	CanManageQuotas     bool
+	CanUseFileManager   bool
+}
+
+type WorkspaceView struct {
+	Route                string
+	Title                string
+	DetailID             int64
+	SelectedSubscription int64
+	CSRFToken            string
+	SupportCustomerID    int64
+	SupportCustomerName  string
+	PlanType             string
+	PlanTab              string
+	SearchQuery          string
+	StatusFilter         string
+	ProviderFilter       string
+	CloneFrom            int64
+	Tab                  string
+	FileManager          *FileManagerView
+	FileEditor           *FileEditorView
+}
+
+type FileManagerView struct {
+	SiteID         int64
+	Domain         string
+	Username       string
+	Path           string
+	Entries        []types.FileEntry
+	Directories    []types.FileEntry
+	Total          int
+	Page           int
+	PerPage        int
+	Query          string
+	Sort           string
+	Order          string
+	UploadMaxBytes int64
+	Error          string
+}
+
+type FileEditorView struct {
+	SiteID  int64
+	Domain  string
+	Path    string
+	Name    string
+	Content string
+	SHA256  string
+	Mode    uint32
+}
+
+func databasesForSite(items []dashboard.Database, siteID int64) []dashboard.Database {
+	result := make([]dashboard.Database, 0)
+	for _, item := range items {
+		if item.SiteID == siteID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func backupsForSite(items []dashboard.Backup, siteID int64) []dashboard.Backup {
+	result := make([]dashboard.Backup, 0)
+	for _, item := range items {
+		if item.SiteID == siteID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func dnsZoneForSite(items []dashboard.DNSZone, siteID int64) (dashboard.DNSZone, bool) {
+	for _, item := range items {
+		if item.SiteID == siteID {
+			return item, true
+		}
+	}
+	return dashboard.DNSZone{}, false
+}
+
+func dnsRecordsForZone(items []types.DNSRecord, zoneID int64) []types.DNSRecord {
+	result := make([]types.DNSRecord, 0)
+	for _, item := range items {
+		if item.ZoneID == zoneID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func subscriptionForSite(items []types.SubscriptionSummary, site dashboard.Site) (types.SubscriptionSummary, bool) {
+	return subscriptionByID(items, site.SubscriptionID)
+}
+
+func domainTabActive(current, candidate string) string {
+	if current == candidate {
+		return "is-active"
+	}
+	return ""
+}
+
+func phpVersions(allowlist string) []string {
+	var result []string
+	for _, item := range strings.Split(allowlist, ",") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			result = append(result, item)
+		}
+	}
+	if len(result) == 0 {
+		return []string{"8.3", "8.2"}
+	}
+	return result
+}
+
+func routeTitle(route string) string {
+	switch route {
+	case "dashboard":
+		return "Home"
+	case "sites", "site-detail", "site-files", "site-file-edit":
+		return "Websites & Domains"
+	case "databases":
+		return "Databases"
+	case "backups":
+		return "Backups"
+	case "dns":
+		return "DNS"
+	case "certificates":
+		return "SSL/TLS Certificates"
+	case "activity":
+		return "Activity"
+	case "customers", "customer-detail":
+		return "Customers"
+	case "subscriptions", "subscription-detail", "subscription-new":
+		return "Subscriptions"
+	case "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new", "reseller-plan-new", "reseller-plan-detail":
+		return "Service Plans"
+	case "tools-settings":
+		return "Tools & Settings"
+	case "resellers", "reseller-detail":
+		return "Resellers"
+	case "reseller-plans":
+		return "Reseller Plans"
+	case "my-resources":
+		return "My Resources"
+	default:
+		return "Nakpanel"
+	}
+}
+
+func routeActive(route string, candidates ...string) string {
+	for _, candidate := range candidates {
+		if route == candidate {
+			return "is-active"
+		}
+	}
+	return ""
+}
+
+func planListType(view WorkspaceView) string {
+	switch view.PlanType {
+	case "addon", "reseller":
+		return view.PlanType
+	default:
+		return "hosting"
+	}
+}
+
+func planTypeClass(current, candidate string) string {
+	if current == candidate {
+		return "is-active"
+	}
+	return ""
+}
+
+func planEditorTab(view WorkspaceView) string {
+	switch view.PlanTab {
+	case "permissions", "hosting", "php", "mail", "dns", "performance", "logs", "applications":
+		return view.PlanTab
+	default:
+		return "resources"
+	}
+}
+
+func planTabClass(view WorkspaceView, tab string) string {
+	if planEditorTab(view) == tab {
+		return "is-active"
+	}
+	return ""
+}
+
+func planTabURL(view WorkspaceView, tab string) string {
+	base := "/service-plans/new"
+	switch view.Route {
+	case "plan-detail":
+		base = "/service-plans/" + strconv.FormatInt(view.DetailID, 10)
+	case "addon-new":
+		base = "/service-plans/addons/new"
+	case "addon-detail":
+		base = "/service-plans/addons/" + strconv.FormatInt(view.DetailID, 10)
+	case "reseller-plan-new":
+		base = "/service-plans/resellers/new"
+	case "reseller-plan-detail":
+		base = "/service-plans/resellers/" + strconv.FormatInt(view.DetailID, 10)
+	}
+	return base + "?tab=" + tab
+}
+
+func planEditorDefault(capabilities types.RuntimeCapabilities) controlquota.Plan {
+	phpVersion := ""
+	phpVersions := []string{}
+	if len(capabilities.PHPVersions) > 0 {
+		phpVersion = capabilities.PHPVersions[0]
+		phpVersions = append(phpVersions, phpVersion)
+	}
+	return controlquota.Plan{Name: "", DiskMB: 5120, MaxSites: 1, MaxDatabases: 2, BandwidthMB: 102400,
+		MaxMailboxes: 0, BackupRetentionDays: 7, PHPAllowlist: phpVersion, DefaultPHPVersion: phpVersion,
+		PHPFPMMaxChildren: 3, PHPMemoryMB: 128, SiteDiskQuotaMB: 5120, MaxBackups: 7,
+		BackupStorageMB: 5120, IsActive: true, OverusePolicy: types.PlanOveruseBlock,
+		DiskWarningPercent: 80, TrafficWarningPercent: 80, MaxSubdomains: 0,
+		MaxDomainAliases: 0, MaxFTPAccounts: 0, ValidityDays: -1, HostingEnabled: true,
+		AllowDNS: true, AllowTLS: true, AllowBackups: true,
+		Presets: types.PlanServicePresets{SchemaVersion: 1,
+			Hosting: types.HostingPreset{WebServer: "nginx", PreferredDomain: "none", DefaultPHPVersion: phpVersion, AllowedPHPVersions: phpVersions},
+			PHP:     types.PHPPreset{MaxExecutionSeconds: 30, MaxInputSeconds: 60, PostMaxMB: 128, UploadMaxMB: 128, FPMMaxRequests: 500, LogErrors: true},
+			DNS:     types.DNSPreset{Mode: "primary", DefaultTTL: 3600}, Logs: types.LogsPreset{RotationEnabled: true, RetentionDays: 14}}}
+}
+
+func planForCreate(plans []controlquota.Plan, view WorkspaceView, capabilities types.RuntimeCapabilities) controlquota.Plan {
+	if view.CloneFrom > 0 {
+		if source, ok := planByID(plans, view.CloneFrom); ok {
+			source.ID = 0
+			source.Name += " Copy"
+			source.IsActive = false
+			source.Revision = 0
+			return source
+		}
+	}
+	return planEditorDefault(capabilities)
+}
+
+func addonEditorDefault() controlquota.Plan {
+	return controlquota.Plan{IsActive: true, OverusePolicy: types.PlanOveruseBlock,
+		DiskWarningPercent: 80, TrafficWarningPercent: 80,
+		Presets: types.PlanServicePresets{SchemaVersion: 1}}
+}
+
+func planEditorLimitDisplayValue(value int, unit string) string {
+	if value < 0 {
+		return "0"
+	}
+	if unit == "MB" {
+		switch planEditorLimitUnit(value) {
+		case "TB":
+			return strconv.Itoa(value / (1024 * 1024))
+		case "GB":
+			return strconv.Itoa(value / 1024)
+		}
+	}
+	return strconv.Itoa(value)
+}
+
+func planEditorLimitUnit(value int) string {
+	if value > 0 && value%(1024*1024) == 0 {
+		return "TB"
+	}
+	if value > 0 && value%1024 == 0 {
+		return "GB"
+	}
+	return "MB"
+}
+
+func planMatchesFilter(plan controlquota.Plan, view WorkspaceView) bool {
+	if view.StatusFilter == "active" && !plan.IsActive || view.StatusFilter == "inactive" && plan.IsActive {
+		return false
+	}
+	if view.ProviderFilter == "admin" && plan.ResellerID != 0 {
+		return false
+	}
+	if view.ProviderFilter != "" && view.ProviderFilter != "admin" && view.ProviderFilter != strconv.FormatInt(plan.ResellerID, 10) {
+		return false
+	}
+	query := strings.ToLower(strings.TrimSpace(view.SearchQuery))
+	return query == "" || strings.Contains(strings.ToLower(plan.Name+" "+plan.Description), query)
+}
+
+func addonMatchesFilter(addon types.AddonPlan, view WorkspaceView) bool {
+	if view.StatusFilter == "active" && !addon.IsActive || view.StatusFilter == "inactive" && addon.IsActive {
+		return false
+	}
+	if view.ProviderFilter == "admin" && addon.ResellerID != 0 {
+		return false
+	}
+	if view.ProviderFilter != "" && view.ProviderFilter != "admin" && view.ProviderFilter != strconv.FormatInt(addon.ResellerID, 10) {
+		return false
+	}
+	query := strings.ToLower(strings.TrimSpace(view.SearchQuery))
+	return query == "" || strings.Contains(strings.ToLower(addon.Name+" "+addon.Description), query)
+}
+
+func resellerPlanMatchesFilter(plan types.ResellerPlan, view WorkspaceView) bool {
+	if view.StatusFilter == "active" && !plan.IsActive || view.StatusFilter == "inactive" && plan.IsActive {
+		return false
+	}
+	if view.ProviderFilter != "" && view.ProviderFilter != "admin" {
+		return false
+	}
+	query := strings.ToLower(strings.TrimSpace(view.SearchQuery))
+	return query == "" || strings.Contains(strings.ToLower(plan.Name+" "+plan.Description), query)
+}
+
+func formatPlanPrice(value sql.NullInt64) string {
+	if !value.Valid {
+		return "Not set"
+	}
+	return fmt.Sprintf("$%.2f", float64(value.Int64)/100)
+}
+
+func planProvider(plan controlquota.Plan, resellers []types.Reseller) string {
+	if plan.ResellerID == 0 {
+		return "Administrator"
+	}
+	for _, reseller := range resellers {
+		if reseller.ID == plan.ResellerID {
+			if reseller.Company != "" {
+				return reseller.Company
+			}
+			return reseller.DisplayName
+		}
+	}
+	return "Reseller"
+}
+
+func planSubscriptionStats(planID int64, subscriptions []types.SubscriptionSummary) (int, int) {
+	total, pending := 0, 0
+	for _, subscription := range subscriptions {
+		if subscription.PlanID != planID {
+			continue
+		}
+		total++
+		if subscription.SyncStatus != "" && subscription.SyncStatus != "in_sync" {
+			pending++
+		}
+	}
+	return total, pending
+}
+
+func planSubscriptionCount(planID int64, subscriptions []types.SubscriptionSummary) int {
+	total, _ := planSubscriptionStats(planID, subscriptions)
+	return total
+}
+
+func planSyncLabel(planID int64, subscriptions []types.SubscriptionSummary) string {
+	_, pending := planSubscriptionStats(planID, subscriptions)
+	if pending > 0 {
+		return strconv.Itoa(pending) + " pending"
+	}
+	return "In sync"
+}
+
+func addonByID(items []types.AddonPlan, id int64) (types.AddonPlan, bool) {
+	for _, item := range items {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return types.AddonPlan{}, false
+}
+
+func addonProvider(addon types.AddonPlan, resellers []types.Reseller) string {
+	return planProvider(controlquota.Plan{ResellerID: addon.ResellerID}, resellers)
+}
+
+func addonAsPlan(addon types.AddonPlan) controlquota.Plan {
+	e := addon.Entitlements
+	return controlquota.Plan{ID: addon.ID, Name: addon.Name, Description: addon.Description, DiskMB: e.DiskMB,
+		MaxSites: e.MaxSites, MaxDatabases: e.MaxDatabases, BandwidthMB: e.BandwidthMB,
+		MaxMailboxes: e.MaxMailboxes, AllowSSH: e.AllowSSH, AllowDNS: e.AllowDNS,
+		BackupRetentionDays: e.BackupRetentionDays, PHPAllowlist: e.PHPAllowlist,
+		PHPFPMMaxChildren: e.PHPFPMMaxChildren, PHPMemoryMB: e.PHPMemoryMB,
+		SiteDiskQuotaMB: e.SiteDiskQuotaMB, MaxBackups: e.MaxBackups, BackupStorageMB: e.BackupStorageMB,
+		MaxSubdomains: e.MaxSubdomains, MaxDomainAliases: e.MaxDomainAliases, MaxFTPAccounts: e.MaxFTPAccounts,
+		AllowTLS: e.AllowTLS, AllowBackups: e.AllowBackups, AllowPHPSettings: e.AllowPHPSettings,
+		Presets: e.ServicePresets, IsActive: addon.IsActive, Revision: addon.Revision,
+		OverusePolicy: types.PlanOveruseBlock, DiskWarningPercent: 80, TrafficWarningPercent: 80,
+		ValidityDays: -1, DefaultPHPVersion: e.DefaultPHPVersion}
+}
+
+func containsCSV(value, wanted string) bool {
+	for _, item := range strings.Split(value, ",") {
+		if strings.TrimSpace(item) == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func planEditorTitle(plan controlquota.Plan, addon bool) string {
+	if plan.ID > 0 {
+		return plan.Name
+	}
+	if addon {
+		return "Add an Add-on"
+	}
+	return "Add a Plan"
+}
+
+func planEditorNameLabel(addon bool) string {
+	if addon {
+		return "Add-on name"
+	}
+	return "Plan name"
+}
+
+func planEditorDescription(plan controlquota.Plan, addon bool) string {
+	if addon {
+		return "Extend a subscription with additional resources and permissions."
+	}
+	if plan.ID > 0 {
+		return "Edit the plan revision and synchronize eligible subscriptions."
+	}
+	return "Create a reusable hosting entitlement for new subscriptions."
+}
+
+func planEditorAction(addon bool) string {
+	if addon {
+		return "/addons"
+	}
+	return "/plans"
+}
+
+func planListBackURL(addon bool) string {
+	if addon {
+		return "/service-plans?type=addon"
+	}
+	return "/service-plans?type=hosting"
+}
+
+func planEditorSubmitLabel(plan controlquota.Plan, addon bool) string {
+	if plan.ID == 0 {
+		if addon {
+			return "Create Add-on"
+		}
+		return "Create Plan"
+	}
+	if addon {
+		return "Update Add-on"
+	}
+	return "Update & Sync"
+}
+
+func planEditorSaveTitle(plan controlquota.Plan, addon bool) string {
+	if plan.ID == 0 {
+		return "Create new revision source"
+	}
+	if addon {
+		return "Save add-on revision"
+	}
+	return "Save and synchronize"
+}
+
+func planEditorSaveHint(plan controlquota.Plan, addon bool) string {
+	if plan.ID == 0 {
+		return "Limits are validated against provider capacity before saving."
+	}
+	if addon {
+		return "Subscriptions using this add-on are queued for synchronization."
+	}
+	return "Locked and custom subscriptions are not changed."
+}
+
+func planPHPVersions(plan controlquota.Plan, capabilities types.RuntimeCapabilities) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, version := range capabilities.PHPVersions {
+		if version = strings.TrimSpace(version); version != "" && !seen[version] {
+			seen[version] = true
+			out = append(out, version)
+		}
+	}
+	for _, version := range strings.Split(plan.PHPAllowlist, ",") {
+		if version = strings.TrimSpace(version); version != "" && !seen[version] {
+			seen[version] = true
+			out = append(out, version)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func stringInSlice(items []string, wanted string) bool {
+	for _, item := range items {
+		if item == wanted {
+			return true
+		}
+	}
+	return false
+}
+
+func subscriptionPHPVersions(items []types.SubscriptionSummary) []string {
+	seen := make(map[string]bool)
+	var out []string
+	for _, item := range items {
+		for _, version := range strings.Split(item.PHPAllowlist, ",") {
+			if version = strings.TrimSpace(version); version != "" && !seen[version] {
+				seen[version] = true
+				out = append(out, version)
+			}
+		}
+	}
+	if len(out) == 0 {
+		out = append(out, "8.3")
+	}
+	return out
+}
+
+func customSubscriptionPHPVersions(subscription types.SubscriptionSummary, capabilities types.RuntimeCapabilities) []string {
+	return planPHPVersions(controlquota.Plan{PHPAllowlist: subscription.PHPAllowlist}, capabilities)
+}
+
+func ariaCurrent(active string) string {
+	if active != "" {
+		return "page"
+	}
+	return "false"
+}
+
+func customerByID(customers []types.Customer, id int64) (types.Customer, bool) {
+	for _, customer := range customers {
+		if customer.ID == id {
+			return customer, true
+		}
+	}
+	return types.Customer{}, false
+}
+
+func subscriptionByID(subscriptions []types.SubscriptionSummary, id int64) (types.SubscriptionSummary, bool) {
+	for _, subscription := range subscriptions {
+		if subscription.ID == id {
+			return subscription, true
+		}
+	}
+	return types.SubscriptionSummary{}, false
+}
+
+func siteByID(sites []dashboard.Site, id int64) (dashboard.Site, bool) {
+	for _, item := range sites {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return dashboard.Site{}, false
+}
+
+func planByID(plans []controlquota.Plan, id int64) (controlquota.Plan, bool) {
+	for _, item := range plans {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return controlquota.Plan{}, false
+}
+
+func resellerByID(items []types.Reseller, id int64) (types.Reseller, bool) {
+	for _, item := range items {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return types.Reseller{}, false
+}
+func customersForReseller(items []types.Customer, id int64) []types.Customer {
+	var out []types.Customer
+	for _, item := range items {
+		if item.ResellerID == id {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+func plansForReseller(items []controlquota.Plan, id int64) []controlquota.Plan {
+	var out []controlquota.Plan
+	for _, item := range items {
+		if item.ResellerID == id {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+func subscriptionsForReseller(items []types.SubscriptionSummary, id int64) []types.SubscriptionSummary {
+	var out []types.SubscriptionSummary
+	for _, item := range items {
+		if item.ResellerID == id {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+func addonsForProvider(items []types.AddonPlan, resellerID int64) []types.AddonPlan {
+	result := make([]types.AddonPlan, 0, len(items))
+	for _, item := range items {
+		if item.ResellerID == resellerID && item.IsActive {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+func providerName(customer types.Customer, resellers []types.Reseller) string {
+	if customer.ResellerID == 0 {
+		return "Administrator"
+	}
+	if r, ok := resellerByID(resellers, customer.ResellerID); ok {
+		if r.DisplayName != "" {
+			return r.DisplayName
+		}
+		return r.Email
+	}
+	return "Reseller"
+}
+func resellerPlanByName(items []types.ResellerPlan, name string) (types.ResellerPlan, bool) {
+	for _, item := range items {
+		if item.Name == name {
+			return item, true
+		}
+	}
+	return types.ResellerPlan{}, false
+}
+
+func resellerPlanByID(items []types.ResellerPlan, id int64) (types.ResellerPlan, bool) {
+	for _, item := range items {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return types.ResellerPlan{}, false
+}
+
+func resellerPlanDefault() types.ResellerPlan {
+	return types.ResellerPlan{MaxCustomers: 10, MaxSubscriptions: 20, DiskMB: 102400,
+		MaxSites: 20, MaxSubdomains: 40, MaxDomainAliases: 20, MaxDatabases: 40,
+		BandwidthMB: 1024000, MaxMailboxes: 0, MaxFTPAccounts: 20, MaxBackups: 20,
+		BackupStorageMB: 102400, AllowCustomPlans: true, AllowDNS: true, AllowTLS: true,
+		AllowBackups: true, IsActive: true}
+}
+
+func resellerPlanEditorTitle(plan types.ResellerPlan) string {
+	if plan.ID > 0 {
+		return plan.Name
+	}
+	return "Add Reseller Plan"
+}
+
+func resellerPlanEditorSaveTitle(plan types.ResellerPlan) string {
+	if plan.ID > 0 {
+		return "Update reseller allocation"
+	}
+	return "Create reseller plan"
+}
+
+func resellerPlanEditorSubmitLabel(plan types.ResellerPlan) string {
+	if plan.ID > 0 {
+		return "Update Plan"
+	}
+	return "Create Plan"
+}
+func yesNo(value bool) string {
+	if value {
+		return "Yes"
+	}
+	return "No"
+}
+func planActiveStatus(value bool) string {
+	if value {
+		return "active"
+	}
+	return "inactive"
+}
+func formatProviderID(id int64) string {
+	if id == 0 {
+		return "Administrator"
+	}
+	return "Reseller #" + strconv.FormatInt(id, 10)
+}
+
+func subscriptionsForCustomer(items []types.SubscriptionSummary, customerID int64) []types.SubscriptionSummary {
+	if customerID == 0 {
+		return items
+	}
+	result := make([]types.SubscriptionSummary, 0)
+	for _, item := range items {
+		if item.CustomerID == customerID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func sitesForCustomer(items []dashboard.Site, customerID int64) []dashboard.Site {
+	if customerID == 0 {
+		return items
+	}
+	result := make([]dashboard.Site, 0)
+	for _, item := range items {
+		if item.CustomerID == customerID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func databasesForCustomer(items []dashboard.Database, customerID int64) []dashboard.Database {
+	if customerID == 0 {
+		return items
+	}
+	result := make([]dashboard.Database, 0)
+	for _, item := range items {
+		if item.CustomerID == customerID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func selectedSubscription(items []types.SubscriptionSummary, selected int64) []types.SubscriptionSummary {
+	if selected == 0 {
+		return items
+	}
+	result := make([]types.SubscriptionSummary, 0, 1)
+	for _, item := range items {
+		if item.ID == selected {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func sitesForSubscription(items []dashboard.Site, subscriptionID int64) []dashboard.Site {
+	if subscriptionID == 0 {
+		return items
+	}
+	result := make([]dashboard.Site, 0)
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func databasesForSubscription(items []dashboard.Database, subscriptionID int64) []dashboard.Database {
+	if subscriptionID == 0 {
+		return items
+	}
+	result := make([]dashboard.Database, 0)
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func csrfField(token string) string { return token }
+
+func workspacePath(view WorkspaceView, path string) string {
+	if view.SupportCustomerID > 0 {
+		if strings.HasPrefix(path, "/sites/") || strings.HasPrefix(path, "/subscriptions/") {
+			return "/support/customers/" + strconv.FormatInt(view.SupportCustomerID, 10) + path
+		}
+		page := strings.TrimPrefix(path, "/")
+		if strings.Contains(page, "/") {
+			page = strings.Split(page, "/")[0]
+		}
+		if page == "" {
+			page = "dashboard"
+		}
+		return "/support/customers/" + strconv.FormatInt(view.SupportCustomerID, 10) + "/" + page
+	}
+	return path
+}
+
+type fileCrumb struct{ Label, Path string }
+
+func fileBasePath(view WorkspaceView, siteID int64) string {
+	return workspacePath(view, "/sites/"+strconv.FormatInt(siteID, 10)+"/files")
+}
+
+func fileManagerPath(view WorkspaceView, siteID int64, rel string) string {
+	base := fileBasePath(view, siteID)
+	if strings.Trim(rel, "/") == "" {
+		return base
+	}
+	return base + "?path=" + url.QueryEscape(strings.Trim(rel, "/"))
+}
+
+func fileActionPath(view WorkspaceView, siteID int64, action string, rel string) string {
+	base := fileBasePath(view, siteID) + "/" + action
+	if strings.Trim(rel, "/") == "" {
+		return base
+	}
+	return base + "?path=" + url.QueryEscape(strings.Trim(rel, "/"))
+}
+
+func fileEntryPath(view WorkspaceView, siteID int64, action, rel string) string {
+	return fileBasePath(view, siteID) + "/" + action + "?path=" + url.QueryEscape(rel)
+}
+
+func fileParent(rel string) string {
+	rel = strings.Trim(rel, "/")
+	if rel == "" {
+		return ""
+	}
+	parent := path.Dir(rel)
+	if parent == "." {
+		return ""
+	}
+	return parent
+}
+
+func fileCrumbs(rel string) []fileCrumb {
+	result := []fileCrumb{{Label: "public_html", Path: ""}}
+	current := ""
+	for _, part := range strings.Split(strings.Trim(rel, "/"), "/") {
+		if part == "" {
+			continue
+		}
+		current = path.Join(current, part)
+		result = append(result, fileCrumb{Label: part, Path: current})
+	}
+	return result
+}
+
+func fileMode(mode uint32) string { return fmt.Sprintf("%04o", mode) }
+
+func fileKindIcon(entry types.FileEntry) string {
+	if entry.Kind == types.FileKindDirectory {
+		return "folder"
+	}
+	if entry.Archive {
+		return "file-archive"
+	}
+	switch strings.ToLower(path.Ext(entry.Name)) {
+	case ".php", ".js", ".css", ".html", ".htm", ".json", ".xml", ".sh", ".sql", ".yaml", ".yml":
+		return "file-code"
+	default:
+		return "file"
+	}
+}
+
+func filePageCount(total, perPage int) int {
+	if perPage <= 0 {
+		return 1
+	}
+	pages := (total + perPage - 1) / perPage
+	if pages < 1 {
+		return 1
+	}
+	return pages
+}
+
+func filePagePath(view WorkspaceView, data *FileManagerView, pageNumber int) string {
+	values := url.Values{}
+	if data.Path != "" {
+		values.Set("path", data.Path)
+	}
+	if data.Query != "" {
+		values.Set("q", data.Query)
+	}
+	if data.Sort != "" {
+		values.Set("sort", data.Sort)
+	}
+	if data.Order != "" {
+		values.Set("order", data.Order)
+	}
+	values.Set("page", strconv.Itoa(pageNumber))
+	return fileBasePath(view, data.SiteID) + "?" + values.Encode()
+}
+
+func fileSortPath(view WorkspaceView, data *FileManagerView, field string) string {
+	values := url.Values{}
+	if data.Path != "" {
+		values.Set("path", data.Path)
+	}
+	if data.Query != "" {
+		values.Set("q", data.Query)
+	}
+	current := strings.ToLower(strings.TrimSpace(data.Sort))
+	if current == "" {
+		current = "name"
+	}
+	values.Set("sort", field)
+	if current == field && !strings.EqualFold(data.Order, "desc") {
+		values.Set("order", "desc")
+	} else {
+		values.Set("order", "asc")
+	}
+	return fileBasePath(view, data.SiteID) + "?" + values.Encode()
+}
+
+func fileSortClass(data *FileManagerView, field string) string {
+	current := strings.ToLower(strings.TrimSpace(data.Sort))
+	if current == "" {
+		current = "name"
+	}
+	className := "np-file-sort"
+	if current == field {
+		className += " is-active"
+		if strings.EqualFold(data.Order, "desc") {
+			className += " is-desc"
+		} else {
+			className += " is-asc"
+		}
+	}
+	return className
+}
+
+func uploadLimitLabel(bytes int64) string { return formatBytes(bytes) }
+
+func fileEmptyTitle(query string) string {
+	if strings.TrimSpace(query) != "" {
+		return "No matching files"
+	}
+	return "This folder is empty"
+}
+
+func fileEmptyCopy(query string) string {
+	if strings.TrimSpace(query) != "" {
+		return "Try another filename or open a different folder."
+	}
+	return "Upload content or create the first file or folder."
+}
+
+func canOpenSubscriptionDetails(view WorkspaceView) bool { return view.SupportCustomerID == 0 }
+
+func subscriptionUsagePath(id int64, details bool, view WorkspaceView) string {
+	if details {
+		return "/subscriptions/" + strconv.FormatInt(id, 10)
+	}
+	return withSubscription(workspacePath(view, "/dashboard"), id)
+}
+
+func withSubscription(path string, subscriptionID int64) string {
+	if subscriptionID <= 0 {
+		return path
+	}
+	separator := "?"
+	if strings.Contains(path, "?") {
+		separator = "&"
+	}
+	return path + separator + "subscription_id=" + strconv.FormatInt(subscriptionID, 10)
+}
+
+func backupPhase6(data dashboard.Phase6Data) dashboard.Phase6Data {
+	return dashboard.Phase6Data{Backups: data.Backups, Restores: data.Restores}
+}
+
+func retryActions(user auth.SessionUser) DashboardActions {
+	return DashboardActions{CanRetryJob: user.Role == auth.RoleAdmin}
 }
 
 type usageMeterData struct {
@@ -40,6 +1000,13 @@ func formatTLSStatus(site dashboard.Site) string {
 		status += " / expires " + site.TLSExpiresAt.Time.UTC().Format("2006-01-02")
 	}
 	return status
+}
+
+func formatTLSState(site dashboard.Site) string {
+	if site.TLSStatus == "" {
+		return "none"
+	}
+	return site.TLSStatus
 }
 
 func formatTime(value time.Time) string {
@@ -68,6 +1035,20 @@ func formatAttempts(job dashboard.Job) string {
 }
 
 func formatBytes(size int64) string {
+	if size < 1024 {
+		return fmt.Sprintf("%d B", size)
+	}
+	units := []string{"KB", "MB", "GB", "TB"}
+	value := float64(size)
+	for _, unit := range units {
+		value /= 1024
+		if value < 1024 || unit == units[len(units)-1] {
+			if value < 10 {
+				return fmt.Sprintf("%.1f %s", value, unit)
+			}
+			return fmt.Sprintf("%.0f %s", value, unit)
+		}
+	}
 	return fmt.Sprintf("%d B", size)
 }
 
@@ -448,6 +1429,14 @@ func formatPlanLimitMB(value int) string {
 	if value < 0 {
 		return "unlimited"
 	}
+	const mbPerGB = 1024
+	const mbPerTB = mbPerGB * 1024
+	if value > 0 && value%mbPerTB == 0 {
+		return fmt.Sprintf("%d TB", value/mbPerTB)
+	}
+	if value > 0 && value%mbPerGB == 0 {
+		return fmt.Sprintf("%d GB", value/mbPerGB)
+	}
 	return fmt.Sprintf("%d MB", value)
 }
 
@@ -468,6 +1457,36 @@ func formatPlanStatus(plan controlquota.Plan) string {
 	}
 	return "inactive"
 }
+
+func oppositePlanStatus(plan controlquota.Plan) string {
+	if plan.IsActive {
+		return "false"
+	}
+	return "true"
+}
+
+func planStatusAction(plan controlquota.Plan) string {
+	if plan.IsActive {
+		return "Deactivate plan"
+	}
+	return "Activate plan"
+}
+
+func oppositeCustomerStatus(customer types.Customer) string {
+	if customer.Status == "active" {
+		return "suspended"
+	}
+	return "active"
+}
+
+func customerStatusAction(customer types.Customer) string {
+	if customer.Status == "active" {
+		return "Suspend"
+	}
+	return "Activate"
+}
+
+func isSiteRetryNotice(notice string) bool { return strings.Contains(notice, "first website") }
 
 func formatPlanBool(value bool) string {
 	if value {

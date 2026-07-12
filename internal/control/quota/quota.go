@@ -5,9 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/types"
+	"github.com/riverqueue/river"
 )
 
 var (
@@ -29,6 +32,12 @@ type Limits struct {
 	SiteDiskQuotaMB   int
 	PHPFPMMaxChildren int
 	PHPMemoryMB       int
+	BandwidthMB       int
+	OverusePolicy     types.PlanOverusePolicy
+	PHPAllowlist      string
+	DefaultPHPVersion string
+	HostingEnabled    bool
+	AllowBackups      bool
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 }
@@ -74,6 +83,7 @@ type AdminStore interface {
 	CreateCustomer(ctx context.Context, req types.CreateCustomerReq) (types.Customer, error)
 	EnableCustomerLogin(ctx context.Context, customerID int64, email string, password string) (types.Customer, error)
 	SetCustomerStatus(ctx context.Context, customerID int64, status string) error
+	SetSubscriptionStatus(ctx context.Context, subscriptionID int64, status string) error
 	CreateSubscription(ctx context.Context, req types.CreateSubscriptionReq) (types.SubscriptionSummary, error)
 	ListCustomers(ctx context.Context) ([]types.Customer, error)
 	ListSubscriptionSummaries(ctx context.Context) ([]types.SubscriptionSummary, error)
@@ -81,6 +91,43 @@ type AdminStore interface {
 	GetSettings(ctx context.Context) (Settings, error)
 	UpdateSettings(ctx context.Context, settings Settings) error
 	CommittedAllocationMB(ctx context.Context) (int, error)
+	ProviderScopeForUser(ctx context.Context, user auth.SessionUser) (types.ProviderScope, error)
+	ListResellers(ctx context.Context) ([]types.Reseller, error)
+	ListResellerPlans(ctx context.Context) ([]types.ResellerPlan, error)
+	UpsertResellerPlan(ctx context.Context, plan types.ResellerPlan) (types.ResellerPlan, error)
+	CreateReseller(ctx context.Context, req types.CreateCustomerReq, resellerPlanID int64) (types.Reseller, error)
+	SetResellerStatus(ctx context.Context, resellerID int64, status string) error
+	TransferCustomer(ctx context.Context, customerID, resellerID int64) error
+	ListAddonPlans(ctx context.Context) ([]types.AddonPlan, error)
+	UpsertAddonPlan(ctx context.Context, addon types.AddonPlan) (types.AddonPlan, error)
+	SetSubscriptionAddons(ctx context.Context, subscriptionID int64, addonIDs []int64) error
+	SyncSubscription(ctx context.Context, subscriptionID int64) error
+	SetSubscriptionMode(ctx context.Context, subscriptionID int64, mode string, custom types.SubscriptionEntitlements) error
+}
+
+// BulkStatusStore applies a lifecycle change atomically across all selected
+// objects. Keeping this separate preserves compatibility with focused test
+// stores that only implement the single-object AdminStore contract.
+type BulkStatusStore interface {
+	SetCustomerStatuses(ctx context.Context, customerIDs []int64, status string) error
+	SetSubscriptionStatuses(ctx context.Context, subscriptionIDs []int64, status string) error
+	SetResellerStatuses(ctx context.Context, resellerIDs []int64, status string) error
+}
+
+type PlanBulkStatusStore interface {
+	SetPlanStatuses(ctx context.Context, planIDs []int64, resellerID int64, unrestricted bool, active bool) error
+	SetAddonPlanStatuses(ctx context.Context, addonIDs []int64, resellerID int64, unrestricted bool, active bool) error
+	SetResellerPlanStatuses(ctx context.Context, planIDs []int64, active bool) error
+}
+
+type DomainSettingsStore interface {
+	SiteDomain(ctx context.Context, siteID int64) (string, error)
+	UpdateSiteSettings(ctx context.Context, req types.UpdateSiteSettingsReq) error
+}
+
+type SubscriptionChangeStore interface {
+	ChangeSubscriptionPlans(ctx context.Context, subscriptionIDs []int64, planID int64) error
+	ChangeSubscriptionSubscriber(ctx context.Context, subscriptionIDs []int64, customerID int64) error
 }
 
 func SiteLimits(ctx context.Context, store Store, userID int64) (types.SiteResourceLimits, error) {
@@ -98,7 +145,7 @@ func SiteLimits(ctx context.Context, store Store, userID int64) (types.SiteResou
 	if err != nil {
 		return types.SiteResourceLimits{}, err
 	}
-	if limitReached(usage.Sites, limits.MaxSites) {
+	if countLimitReached(usage.Sites, limits.MaxSites, limits.OverusePolicy) {
 		return types.SiteResourceLimits{}, fmt.Errorf("%w: sites %d / %d", ErrExceeded, usage.Sites, limits.MaxSites)
 	}
 	if limits.SiteDiskQuotaMB == 0 {
@@ -132,7 +179,10 @@ func SiteLimitsForSubscription(ctx context.Context, store Store, subscriptionID 
 	if err != nil {
 		return types.SiteResourceLimits{}, Limits{}, err
 	}
-	if limitReached(usage.Sites, limits.MaxSites) {
+	if !limits.HostingEnabled && limits.OverusePolicy != "" {
+		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: hosting is disabled by the subscription", ErrExceeded)
+	}
+	if countLimitReached(usage.Sites, limits.MaxSites, limits.OverusePolicy) {
 		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: sites %d / %d", ErrExceeded, usage.Sites, limits.MaxSites)
 	}
 	if limits.SiteDiskQuotaMB == 0 {
@@ -166,7 +216,7 @@ func CheckDatabase(ctx context.Context, store Store, userID int64) error {
 	if err != nil {
 		return err
 	}
-	if limitReached(usage.Databases, limits.MaxDatabases) {
+	if countLimitReached(usage.Databases, limits.MaxDatabases, limits.OverusePolicy) {
 		return fmt.Errorf("%w: databases %d / %d", ErrExceeded, usage.Databases, limits.MaxDatabases)
 	}
 	return nil
@@ -187,7 +237,7 @@ func CheckDatabaseForSubscription(ctx context.Context, store Store, subscription
 	if err != nil {
 		return Limits{}, err
 	}
-	if limitReached(usage.Databases, limits.MaxDatabases) {
+	if countLimitReached(usage.Databases, limits.MaxDatabases, limits.OverusePolicy) {
 		return Limits{}, fmt.Errorf("%w: databases %d / %d", ErrExceeded, usage.Databases, limits.MaxDatabases)
 	}
 	return limits, nil
@@ -208,7 +258,10 @@ func CheckBackup(ctx context.Context, store Store, userID int64) error {
 	if err != nil {
 		return err
 	}
-	if limitReached(usage.Backups, limits.MaxBackups) {
+	if !limits.AllowBackups && limits.OverusePolicy != "" {
+		return fmt.Errorf("%w: backups are disabled by the subscription", ErrExceeded)
+	}
+	if countLimitReached(usage.Backups, limits.MaxBackups, limits.OverusePolicy) {
 		return fmt.Errorf("%w: backups %d / %d", ErrExceeded, usage.Backups, limits.MaxBackups)
 	}
 	if limits.BackupStorageMB >= 0 {
@@ -235,7 +288,10 @@ func CheckBackupForSubscription(ctx context.Context, store Store, subscriptionID
 	if err != nil {
 		return Limits{}, err
 	}
-	if limitReached(usage.Backups, limits.MaxBackups) {
+	if !limits.AllowBackups && limits.OverusePolicy != "" {
+		return Limits{}, fmt.Errorf("%w: backups are disabled by the subscription", ErrExceeded)
+	}
+	if countLimitReached(usage.Backups, limits.MaxBackups, limits.OverusePolicy) {
 		return Limits{}, fmt.Errorf("%w: backups %d / %d", ErrExceeded, usage.Backups, limits.MaxBackups)
 	}
 	if limits.BackupStorageMB >= 0 {
@@ -249,6 +305,32 @@ func CheckBackupForSubscription(ctx context.Context, store Store, subscriptionID
 
 func limitReached(used int, allowed int) bool {
 	return allowed >= 0 && used >= allowed
+}
+
+func countLimitReached(used, allowed int, policy types.PlanOverusePolicy) bool {
+	if policy == types.PlanOveruseNormal || policy == types.PlanOveruseNotify {
+		return false
+	}
+	return limitReached(used, allowed)
+}
+
+func ResolvePHPVersion(limits Limits, requested string) (string, error) {
+	requested = strings.TrimSpace(requested)
+	if strings.TrimSpace(limits.PHPAllowlist) == "" && limits.OverusePolicy == "" {
+		return requested, nil
+	}
+	if requested == "" {
+		requested = strings.TrimSpace(limits.DefaultPHPVersion)
+	}
+	if requested == "" {
+		return "", errors.New("subscription has no default PHP version")
+	}
+	for _, version := range strings.Split(limits.PHPAllowlist, ",") {
+		if strings.TrimSpace(version) == requested {
+			return requested, nil
+		}
+	}
+	return "", fmt.Errorf("PHP %s is not allowed by the subscription", requested)
 }
 
 func positiveLimit(value int) int {
@@ -280,11 +362,16 @@ func ValidateLimits(limits Limits) error {
 }
 
 type SQLStore struct {
-	db *sql.DB
+	db    *sql.DB
+	river *river.Client[*sql.Tx]
 }
 
-func NewSQLStore(db *sql.DB) *SQLStore {
-	return &SQLStore{db: db}
+func NewSQLStore(db *sql.DB, clients ...*river.Client[*sql.Tx]) *SQLStore {
+	store := &SQLStore{db: db}
+	if len(clients) > 0 {
+		store.river = clients[0]
+	}
+	return store
 }
 
 func (s *SQLStore) GetLimits(ctx context.Context, userID int64) (Limits, bool, error) {
@@ -292,15 +379,21 @@ func (s *SQLStore) GetLimits(ctx context.Context, userID int64) (Limits, bool, e
 		return Limits{}, false, errors.New("quota database is not configured")
 	}
 	var limits Limits
-	err := s.db.QueryRowContext(ctx, `SELECT s.customer_user_id, s.id, p.id, p.name,
-       p.max_sites, p.max_databases, p.disk_mb, p.max_backups, p.backup_storage_mb,
-       p.site_disk_quota_mb, p.php_fpm_max_children, p.php_memory_mb, p.created_at, p.updated_at
+	err := s.db.QueryRowContext(ctx, `SELECT s.customer_user_id, s.id, COALESCE(s.plan_id, 0), e.plan_name,
+	       e.max_sites, e.max_databases, e.disk_mb, e.max_backups, e.backup_storage_mb,
+	       e.site_disk_quota_mb, e.php_fpm_max_children, e.php_memory_mb, e.bandwidth_mb,
+	       e.overuse_policy, e.php_allowlist, e.default_php_version, e.hosting_enabled,
+	       e.allow_backups, e.updated_at, e.updated_at
 FROM subscriptions s
-JOIN plans p ON p.id = s.plan_id
+JOIN subscription_entitlements e ON e.subscription_id = s.id
 LEFT JOIN customers c ON c.id = s.customer_id
+LEFT JOIN reseller_accounts r ON r.id = c.reseller_id
+LEFT JOIN reseller_subscriptions rs ON rs.reseller_id = r.id AND rs.status = 'active'
 WHERE s.customer_user_id = $1
   AND s.status = 'active'
-  AND COALESCE(c.status, 'active') = 'active'`, userID).Scan(
+  AND COALESCE(c.status, 'active') = 'active'
+  AND (c.reseller_id IS NULL OR (r.status = 'active' AND rs.id IS NOT NULL))
+ORDER BY s.id LIMIT 1`, userID).Scan(
 		&limits.UserID,
 		&limits.SubscriptionID,
 		&limits.PlanID,
@@ -313,6 +406,12 @@ WHERE s.customer_user_id = $1
 		&limits.SiteDiskQuotaMB,
 		&limits.PHPFPMMaxChildren,
 		&limits.PHPMemoryMB,
+		&limits.BandwidthMB,
+		&limits.OverusePolicy,
+		&limits.PHPAllowlist,
+		&limits.DefaultPHPVersion,
+		&limits.HostingEnabled,
+		&limits.AllowBackups,
 		&limits.CreatedAt,
 		&limits.UpdatedAt,
 	)
@@ -330,15 +429,20 @@ func (s *SQLStore) GetLimitsForSubscription(ctx context.Context, subscriptionID 
 		return Limits{}, false, errors.New("quota database is not configured")
 	}
 	var limits Limits
-	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(s.customer_id, 0), s.id, p.id, p.name,
-       p.max_sites, p.max_databases, p.disk_mb, p.max_backups, p.backup_storage_mb,
-       p.site_disk_quota_mb, p.php_fpm_max_children, p.php_memory_mb, p.created_at, p.updated_at
+	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(s.customer_id, 0), s.id, COALESCE(s.plan_id, 0), e.plan_name,
+	       e.max_sites, e.max_databases, e.disk_mb, e.max_backups, e.backup_storage_mb,
+	       e.site_disk_quota_mb, e.php_fpm_max_children, e.php_memory_mb, e.bandwidth_mb,
+	       e.overuse_policy, e.php_allowlist, e.default_php_version, e.hosting_enabled,
+	       e.allow_backups, e.updated_at, e.updated_at
 FROM subscriptions s
-JOIN plans p ON p.id = s.plan_id
+JOIN subscription_entitlements e ON e.subscription_id = s.id
 JOIN customers c ON c.id = s.customer_id
+LEFT JOIN reseller_accounts r ON r.id = c.reseller_id
+LEFT JOIN reseller_subscriptions rs ON rs.reseller_id = r.id AND rs.status = 'active'
 WHERE s.id = $1
   AND s.status = 'active'
-  AND c.status = 'active'`, subscriptionID).Scan(
+  AND c.status = 'active'
+  AND (c.reseller_id IS NULL OR (r.status = 'active' AND rs.id IS NOT NULL))`, subscriptionID).Scan(
 		&limits.CustomerID,
 		&limits.SubscriptionID,
 		&limits.PlanID,
@@ -351,6 +455,12 @@ WHERE s.id = $1
 		&limits.SiteDiskQuotaMB,
 		&limits.PHPFPMMaxChildren,
 		&limits.PHPMemoryMB,
+		&limits.BandwidthMB,
+		&limits.OverusePolicy,
+		&limits.PHPAllowlist,
+		&limits.DefaultPHPVersion,
+		&limits.HostingEnabled,
+		&limits.AllowBackups,
 		&limits.CreatedAt,
 		&limits.UpdatedAt,
 	)
@@ -490,17 +600,17 @@ func (s *SQLStore) GetAccountQuotaSummary(ctx context.Context, userID int64) (Su
 
 const accountQuotaSummarySQL = `SELECT u.id, u.email, u.role,
     s.id IS NOT NULL AS has_quota,
-    COALESCE(s.id, 0), COALESCE(p.id, 0), COALESCE(p.name, ''),
-    COALESCE(p.max_sites, 0), COALESCE(p.max_databases, 0), COALESCE(p.disk_mb, 0),
-    COALESCE(p.max_backups, 0), COALESCE(p.backup_storage_mb, 0),
-    COALESCE(p.site_disk_quota_mb, 0), COALESCE(p.php_fpm_max_children, 0), COALESCE(p.php_memory_mb, 0),
+    COALESCE(s.id, 0), COALESCE(s.plan_id, 0), COALESCE(e.plan_name, ''),
+    COALESCE(e.max_sites, 0), COALESCE(e.max_databases, 0), COALESCE(e.disk_mb, 0),
+    COALESCE(e.max_backups, 0), COALESCE(e.backup_storage_mb, 0),
+    COALESCE(e.site_disk_quota_mb, 0), COALESCE(e.php_fpm_max_children, 0), COALESCE(e.php_memory_mb, 0),
     COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS sites,
     COALESCE((SELECT COUNT(*) FROM databases WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS backups,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = u.id AND status = 'active'), 0)::bigint AS backup_storage_bytes
 FROM users u
 LEFT JOIN subscriptions s ON s.customer_user_id = u.id AND s.status = 'active'
-LEFT JOIN plans p ON p.id = s.plan_id`
+LEFT JOIN subscription_entitlements e ON e.subscription_id = s.id`
 
 type summaryScanner interface {
 	Scan(dest ...any) error

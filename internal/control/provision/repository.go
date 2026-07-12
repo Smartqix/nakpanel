@@ -41,6 +41,9 @@ func (r *SQLSiteRepository) CreateSite(ctx context.Context, ownerID int64, req t
 		return 0, fmt.Errorf("begin site transaction: %w", err)
 	}
 	defer tx.Rollback()
+	if err := guardSiteIntentTx(ctx, tx, req.SubscriptionID, req.Domain); err != nil {
+		return 0, fmt.Errorf("guard site entitlement: %w", err)
+	}
 
 	site, err := r.queries.WithTx(tx).UpsertSiteIntent(ctx, store.UpsertSiteIntentParams{
 		OwnerUserID:    ownerID,
@@ -194,6 +197,9 @@ func (r *SQLDatabaseRepository) CreateDatabase(ctx context.Context, ownerID int6
 		return 0, fmt.Errorf("begin database transaction: %w", err)
 	}
 	defer tx.Rollback()
+	if err := guardDatabaseIntentTx(ctx, tx, req.SubscriptionID, req.DBName); err != nil {
+		return 0, fmt.Errorf("guard database entitlement: %w", err)
+	}
 
 	database, err := r.queries.WithTx(tx).UpsertDatabaseIntent(ctx, store.UpsertDatabaseIntentParams{
 		OwnerUserID:    ownerID,
@@ -201,6 +207,7 @@ func (r *SQLDatabaseRepository) CreateDatabase(ctx context.Context, ownerID int6
 		DbName:         req.DBName,
 		DbUser:         req.DBUser,
 		SubscriptionID: req.SubscriptionID,
+		SiteID:         req.SiteID,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("upsert database intent: %w", err)

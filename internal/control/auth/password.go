@@ -12,7 +12,13 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-const argon2Version = 19
+const (
+	argon2Version    = 19
+	maxArgon2Memory  = 256 * 1024
+	maxArgon2Time    = 10
+	maxArgon2Threads = 16
+	maxArgon2Field   = 1024
+)
 
 type PasswordParams struct {
 	Memory     uint32
@@ -39,8 +45,8 @@ var TestPasswordParams = PasswordParams{
 }
 
 func HashPassword(password string, params PasswordParams) (string, error) {
-	if params.Memory == 0 || params.Time == 0 || params.Threads == 0 || params.SaltLength == 0 || params.KeyLength == 0 {
-		return "", errors.New("argon2id parameters must be non-zero")
+	if err := validatePasswordParams(params); err != nil {
+		return "", err
 	}
 
 	salt := make([]byte, params.SaltLength)
@@ -107,8 +113,26 @@ func decodePHC(encodedHash string) (PasswordParams, []byte, []byte, error) {
 	if len(salt) == 0 || len(key) == 0 {
 		return PasswordParams{}, nil, nil, errors.New("argon2id salt and key must be non-empty")
 	}
+	params.SaltLength = uint32(len(salt))
+	params.KeyLength = uint32(len(key))
+	if err := validatePasswordParams(params); err != nil {
+		return PasswordParams{}, nil, nil, err
+	}
 
 	return params, salt, key, nil
+}
+
+func validatePasswordParams(params PasswordParams) error {
+	if params.Memory == 0 || params.Time == 0 || params.Threads == 0 || params.SaltLength == 0 || params.KeyLength == 0 {
+		return errors.New("argon2id parameters must be non-zero")
+	}
+	if params.Memory > maxArgon2Memory || params.Time > maxArgon2Time || params.Threads > maxArgon2Threads {
+		return errors.New("argon2id work parameters exceed supported limits")
+	}
+	if params.SaltLength > maxArgon2Field || params.KeyLength > maxArgon2Field {
+		return errors.New("argon2id salt or key length exceeds supported limits")
+	}
+	return nil
 }
 
 func parseVersion(field string) (int, error) {
@@ -125,11 +149,16 @@ func parseVersion(field string) (int, error) {
 
 func parseParams(field string) (PasswordParams, error) {
 	var params PasswordParams
+	seen := make(map[string]bool, 3)
 	for _, part := range strings.Split(field, ",") {
 		key, value, ok := strings.Cut(part, "=")
 		if !ok {
 			return PasswordParams{}, errors.New("invalid argon2id parameter field")
 		}
+		if seen[key] {
+			return PasswordParams{}, fmt.Errorf("duplicate argon2id parameter %q", key)
+		}
+		seen[key] = true
 
 		parsed, err := strconv.ParseUint(value, 10, 32)
 		if err != nil {

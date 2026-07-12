@@ -86,6 +86,27 @@ func TestManagerPhase6ActionsRequireAdmin(t *testing.T) {
 	}
 }
 
+func TestManagerClientDNSRequiresPlanPermission(t *testing.T) {
+	client := auth.SessionUser{ID: 22, Role: auth.RoleClient}
+	deniedRepo := &fakePhase6Repository{}
+	denied := NewManager(nil, WithPhase6Repository(deniedRepo), WithAccessPolicy(fakeAccessPolicy{allow: false}))
+	if _, err := denied.ConfigureDNS(context.Background(), client, "owned.test", "192.0.2.10"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("denied ConfigureDNS error = %v, want ErrForbidden", err)
+	}
+	if deniedRepo.dnsDomain != "" {
+		t.Fatalf("denied ConfigureDNS reached repository: %#v", deniedRepo)
+	}
+
+	allowedRepo := &fakePhase6Repository{}
+	allowed := NewManager(nil, WithPhase6Repository(allowedRepo), WithAccessPolicy(fakeAccessPolicy{allow: true}))
+	if _, err := allowed.ConfigureDNS(context.Background(), client, "OWNED.TEST.", "192.0.2.10"); err != nil {
+		t.Fatalf("allowed ConfigureDNS: %v", err)
+	}
+	if allowedRepo.dnsDomain != "owned.test" || allowedRepo.dnsOwnerID != 22 {
+		t.Fatalf("allowed ConfigureDNS repository request = %#v", allowedRepo)
+	}
+}
+
 func TestManagerPhase6ActionsNormalizeAndForwardAdminRequests(t *testing.T) {
 	repo := &fakePhase6Repository{}
 	manager := NewManager(nil, WithPhase6Repository(repo))

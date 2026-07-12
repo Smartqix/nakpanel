@@ -3,10 +3,13 @@ package agentclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	agentrpc "github.com/nakroteck/nakpanel/internal/agent/rpc"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -111,6 +114,44 @@ func TestClientDoReturnsValidationResponse(t *testing.T) {
 	}
 	if resp.OK {
 		t.Fatalf("unknown op response OK = true: %#v", resp)
+	}
+}
+
+func TestClientCancellationInterruptsAgentRead(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "nakagent-cancel-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "agent.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	serverDone := make(chan struct{})
+	go func() {
+		defer close(serverDone)
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer conn.Close()
+		var req types.Request
+		_ = json.NewDecoder(conn).Decode(&req)
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	_, err = New(socketPath).Ping(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Ping error = %v, want context deadline exceeded", err)
+	}
+	select {
+	case <-serverDone:
+	case <-time.After(time.Second):
+		t.Fatal("agent connection remained open after cancellation")
 	}
 }
 

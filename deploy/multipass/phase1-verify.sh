@@ -11,7 +11,7 @@ REMOTE_SRC="${NAKPANEL_REMOTE_SRC}"
 ensure_vm 2 2G 12G
 sync_repo "${ROOT_DIR}" "${REMOTE_SRC}"
 
-multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" -- env REMOTE_SRC="${REMOTE_SRC}" bash -se <<'REMOTE'
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
@@ -44,6 +44,8 @@ sudo systemctl stop nginx
 if ! id nakpanel >/dev/null 2>&1; then
   sudo useradd --system --home-dir /var/lib/nakpanel --create-home --shell /usr/sbin/nologin nakpanel
 fi
+sudo install -d -o nakpanel -g nakpanel -m 0750 /var/lib/nakpanel
+sudo chown -R nakpanel:nakpanel /var/lib/nakpanel
 
 if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname = 'nakpanel'" | grep -qx 1; then
   sudo -u postgres createuser nakpanel
@@ -53,8 +55,8 @@ if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'nakp
   sudo -u postgres createdb -O nakpanel nakpanel
 fi
 
-sudo chown -R nakpanel:nakpanel /tmp/nakpanel-src
-cd /tmp/nakpanel-src
+sudo chown -R nakpanel:nakpanel "${REMOTE_SRC}"
+cd "${REMOTE_SRC}"
 
 sudo -u nakpanel env \
   PATH="${PATH}" \
@@ -147,12 +149,14 @@ curl -sk --fail "https://${VM_IP}:7443/login" | grep -q 'nakpanel login'
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Admin dashboard'
 
 curl -sk --fail -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" -L \
   -d 'email=client@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelClient!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/client-dashboard.html"
 assert_client_dashboard "${tmpdir}/client-dashboard.html"

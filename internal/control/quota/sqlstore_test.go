@@ -88,9 +88,15 @@ func TestGetLimitsForSubscriptionLoadsActivePlanBySubscription(t *testing.T) {
 			"site_disk_quota_mb",
 			"php_fpm_max_children",
 			"php_memory_mb",
+			"bandwidth_mb",
+			"overuse_policy",
+			"php_allowlist",
+			"default_php_version",
+			"hosting_enabled",
+			"allow_backups",
 			"created_at",
 			"updated_at",
-		}).AddRow(int64(7), int64(44), int64(10), "Starter", 1, 2, 5120, 7, 5120, 5120, 3, 128, now, now))
+		}).AddRow(int64(7), int64(44), int64(10), "Starter", 1, 2, 5120, 7, 5120, 5120, 3, 128, -1, "block", "8.3", "8.3", true, true, now, now))
 
 	limits, ok, err := store.GetLimitsForSubscription(context.Background(), 44)
 	if err != nil {
@@ -153,5 +159,50 @@ func TestGetUsageForSubscriptionCountsOnlySelectedSubscription(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("unmet SQL expectations: %v", err)
+	}
+}
+
+func TestProjectedCommittedAllocationUsesComposedSubscriptionValues(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery("WITH affected AS").
+		WithArgs(int64(9), 200).
+		WillReturnRows(sqlmock.NewRows([]string{"committed", "unlimited"}).AddRow(int64(350), false))
+	committed, unlimited, err := projectedCommittedAllocationTx(context.Background(), db, 9, 200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if committed != 350 || unlimited {
+		t.Fatalf("projected allocation = %d, unlimited=%v", committed, unlimited)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestProviderPlanBulkStatusIsAtomicAndScoped(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := NewSQLStore(db)
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE addon_plans").WithArgs(int64(1), false, int64(7), false).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE addon_plans").WithArgs(int64(2), false, int64(7), false).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectRollback()
+	err = store.SetAddonPlanStatuses(context.Background(), []int64{1, 2}, 7, false, false)
+	if !errors.Is(err, ErrProviderScope) {
+		t.Fatalf("SetAddonPlanStatuses error = %v, want ErrProviderScope", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -37,6 +37,7 @@ post_admin() {
   local status
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "303" ]]; then
@@ -54,6 +55,7 @@ post_expect_400() {
   local status
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "400" ]]; then
@@ -66,6 +68,7 @@ post_expect_400() {
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Admin dashboard'
@@ -142,7 +145,7 @@ post_admin phase9-plan plans \
   -d 'bandwidth_mb=-1' \
   -d 'max_mailboxes=0' \
   -d 'backup_retention_days=7' \
-  -d 'php_allowlist=8.3,8.2' \
+  -d 'php_allowlist=8.3' \
   -d 'php_max_children=2' \
   -d 'php_memory_mb=64' \
   -d 'site_disk_quota_mb=1' \
@@ -265,7 +268,7 @@ post_admin phase9-huge-plan plans \
   -d 'bandwidth_mb=-1' \
   -d 'max_mailboxes=0' \
   -d 'backup_retention_days=30' \
-  -d 'php_allowlist=8.3,8.2' \
+  -d 'php_allowlist=8.3' \
   -d 'php_max_children=-1' \
   -d 'php_memory_mb=-1' \
   -d 'site_disk_quota_mb=-1' \
@@ -329,7 +332,7 @@ sudo systemctl is-active --quiet nakpanel-agent.service
 sudo systemctl is-active --quiet nakpanel.service
 REMOTE
 
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/" > "${tmpdir}/phase9-dashboard.html"
+curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/?legacy=1" > "${tmpdir}/phase9-dashboard.html"
 assert_contains "${tmpdir}/phase9-dashboard.html" 'Plans & subscriptions'
 assert_contains "${tmpdir}/phase9-dashboard.html" 'Phase9 Tiny'
 assert_contains "${tmpdir}/phase9-dashboard.html" 'phase9-client.test'

@@ -35,51 +35,104 @@ type QuotaReader interface {
 	CommittedAllocationMB(ctx context.Context) (int, error)
 }
 
+type ProviderReader interface {
+	ListCustomersForUser(ctx context.Context, userID int64) ([]types.Customer, error)
+	ListPlansForUser(ctx context.Context, userID int64) ([]controlquota.Plan, error)
+	ListResellers(ctx context.Context) ([]types.Reseller, error)
+	ListResellerPlans(ctx context.Context) ([]types.ResellerPlan, error)
+	ListResellerPlansForUser(ctx context.Context, userID int64) ([]types.ResellerPlan, error)
+	ListResellersForUser(ctx context.Context, userID int64) ([]types.Reseller, error)
+	ListAddonPlans(ctx context.Context) ([]types.AddonPlan, error)
+	ListAddonPlansForUser(ctx context.Context, userID int64) ([]types.AddonPlan, error)
+}
+
+type ScopedReader interface {
+	ListSitesForUser(ctx context.Context, userID int64) ([]Site, error)
+	ListDatabasesForUser(ctx context.Context, userID int64) ([]Database, error)
+	GetPhase6ForUser(ctx context.Context, userID int64) (Phase6Data, error)
+}
+
+type AuditReader interface {
+	ListAudit(ctx context.Context, actor auth.SessionUser, limit int) ([]types.AuditEvent, error)
+}
+
+type UsageReader interface {
+	ListSubscriptionUsage(ctx context.Context, actor auth.SessionUser) ([]types.SubscriptionUsage, error)
+	ListUsageAlerts(ctx context.Context, actor auth.SessionUser, limit int) ([]types.UsageAlert, error)
+}
+
+type CapabilityReader interface {
+	RuntimeCapabilities(ctx context.Context) (types.RuntimeCapabilities, error)
+}
+
 type Store struct {
-	queries Querier
-	jobs    JobReader
-	phase6  Phase6Reader
-	quotas  QuotaReader
+	queries      Querier
+	jobs         JobReader
+	phase6       Phase6Reader
+	quotas       QuotaReader
+	scoped       ScopedReader
+	audit        AuditReader
+	capabilities CapabilityReader
 }
 
 type Data struct {
-	Sites           []Site
-	Databases       []Database
-	Jobs            []Job
-	JobLoadError    string
-	Phase6          Phase6Data
-	Phase6Error     string
-	Quotas          []controlquota.Summary
-	QuotaLoadError  string
-	Plans           []controlquota.Plan
-	Customers       []types.Customer
-	Subscriptions   []types.SubscriptionSummary
-	Settings        controlquota.Settings
-	CommittedDiskMB int
-	PlanLoadError   string
-	Notice          string
+	Sites             []Site
+	Databases         []Database
+	Jobs              []Job
+	JobLoadError      string
+	Phase6            Phase6Data
+	Phase6Error       string
+	Quotas            []controlquota.Summary
+	QuotaLoadError    string
+	Plans             []controlquota.Plan
+	Customers         []types.Customer
+	Subscriptions     []types.SubscriptionSummary
+	Settings          controlquota.Settings
+	CommittedDiskMB   int
+	PlanLoadError     string
+	Notice            string
+	AuditEvents       []types.AuditEvent
+	Resellers         []types.Reseller
+	ResellerPlans     []types.ResellerPlan
+	AddonPlans        []types.AddonPlan
+	SubscriptionUsage []types.SubscriptionUsage
+	UsageAlerts       []types.UsageAlert
+	Capabilities      types.RuntimeCapabilities
 }
 
 type Site struct {
-	ID           int64
-	Username     string
-	Domain       string
-	PHPVersion   string
-	Status       string
-	LastError    string
-	TLSStatus    string
-	TLSIssuer    string
-	TLSExpiresAt NullableTime
-	TLSLastError string
+	ID                   int64
+	Username             string
+	Domain               string
+	PHPVersion           string
+	Status               string
+	LastError            string
+	TLSStatus            string
+	TLSIssuer            string
+	TLSExpiresAt         NullableTime
+	TLSLastError         string
+	TLSCertPath          string
+	TLSKeyPath           string
+	SubscriptionID       int64
+	CustomerID           int64
+	DesiredStatus        string
+	DesiredPHPVersion    string
+	HTTPSRedirect        bool
+	DesiredHTTPSRedirect bool
+	SettingsStatus       string
+	SettingsError        string
 }
 
 type Database struct {
-	ID        int64
-	Engine    string
-	Name      string
-	User      string
-	Status    string
-	LastError string
+	ID             int64
+	Engine         string
+	Name           string
+	User           string
+	Status         string
+	LastError      string
+	SubscriptionID int64
+	CustomerID     int64
+	SiteID         int64
 }
 
 type Job struct {
@@ -102,17 +155,20 @@ type Phase6Data struct {
 	Restores        []RestoreRun
 	WebmailHosts    []WebmailHost
 	DNSZones        []DNSZone
+	DNSRecords      []types.DNSRecord
 	Reconciliations []ReconciliationRun
 }
 
 type Backup struct {
-	ID          int64
-	TargetName  string
-	Status      string
-	ArchivePath string
-	SizeBytes   int64
-	LastError   string
-	CreatedAt   time.Time
+	ID             int64
+	TargetName     string
+	Status         string
+	ArchivePath    string
+	SizeBytes      int64
+	LastError      string
+	CreatedAt      time.Time
+	SiteID         int64
+	SubscriptionID int64
 }
 
 type RestoreRun struct {
@@ -143,6 +199,7 @@ type DNSZone struct {
 	ZonePath  string
 	LastError string
 	CreatedAt time.Time
+	SiteID    int64
 }
 
 type ReconciliationRun struct {
@@ -181,6 +238,18 @@ func WithQuotaReader(quotas QuotaReader) StoreOption {
 	}
 }
 
+func WithScopedReader(reader ScopedReader) StoreOption {
+	return func(s *Store) { s.scoped = reader }
+}
+
+func WithAuditReader(reader AuditReader) StoreOption {
+	return func(s *Store) { s.audit = reader }
+}
+
+func WithCapabilityReader(reader CapabilityReader) StoreOption {
+	return func(s *Store) { s.capabilities = reader }
+}
+
 func NewStore(queries Querier, options ...StoreOption) *Store {
 	s := &Store{queries: queries}
 	for _, option := range options {
@@ -192,6 +261,11 @@ func NewStore(queries Querier, options ...StoreOption) *Store {
 func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, error) {
 	if user.Role != auth.RoleAdmin {
 		data := Data{}
+		if s.scoped != nil {
+			data.Sites, _ = s.scoped.ListSitesForUser(ctx, user.ID)
+			data.Databases, _ = s.scoped.ListDatabasesForUser(ctx, user.ID)
+			data.Phase6, _ = s.scoped.GetPhase6ForUser(ctx, user.ID)
+		}
 		if s.quotas != nil {
 			summary, err := s.quotas.GetAccountQuotaSummary(ctx, user.ID)
 			if err != nil {
@@ -203,6 +277,22 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			if err == nil {
 				data.Subscriptions = subscriptions
 			}
+			if user.Role == auth.RoleReseller {
+				if provider, ok := s.quotas.(ProviderReader); ok {
+					data.Customers, _ = provider.ListCustomersForUser(ctx, user.ID)
+					data.Plans, _ = provider.ListPlansForUser(ctx, user.ID)
+					data.ResellerPlans, _ = provider.ListResellerPlansForUser(ctx, user.ID)
+					data.Resellers, _ = provider.ListResellersForUser(ctx, user.ID)
+					data.AddonPlans, _ = provider.ListAddonPlansForUser(ctx, user.ID)
+				}
+			}
+			if usage, ok := s.quotas.(UsageReader); ok {
+				data.SubscriptionUsage, _ = usage.ListSubscriptionUsage(ctx, user)
+				data.UsageAlerts, _ = usage.ListUsageAlerts(ctx, user, 25)
+			}
+		}
+		if s.capabilities != nil {
+			data.Capabilities, _ = s.capabilities.RuntimeCapabilities(ctx)
 		}
 		return data, nil
 	}
@@ -245,6 +335,16 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			quotaLoadError = "account quotas unavailable"
 		}
 	}
+	usageItems := []types.SubscriptionUsage(nil)
+	usageAlerts := []types.UsageAlert(nil)
+	if usage, ok := s.quotas.(UsageReader); ok {
+		usageItems, _ = usage.ListSubscriptionUsage(ctx, user)
+		usageAlerts, _ = usage.ListUsageAlerts(ctx, user, 25)
+	}
+	capabilities := types.RuntimeCapabilities{}
+	if s.capabilities != nil {
+		capabilities, _ = s.capabilities.RuntimeCapabilities(ctx)
+	}
 	plans := []controlquota.Plan(nil)
 	settings := controlquota.Settings{}
 	committedDiskMB := 0
@@ -278,45 +378,77 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			}
 		}
 	}
+	auditEvents := []types.AuditEvent(nil)
+	if s.audit != nil {
+		auditEvents, _ = s.audit.ListAudit(ctx, user, 50)
+	}
+	resellers := []types.Reseller(nil)
+	resellerPlans := []types.ResellerPlan(nil)
+	addonPlans := []types.AddonPlan(nil)
+	if provider, ok := s.quotas.(ProviderReader); ok {
+		resellers, _ = provider.ListResellers(ctx)
+		resellerPlans, _ = provider.ListResellerPlans(ctx)
+		addonPlans, _ = provider.ListAddonPlans(ctx)
+	}
 
 	data := Data{
-		Sites:           make([]Site, 0, len(sites)),
-		Databases:       make([]Database, 0, len(databases)),
-		Jobs:            jobs,
-		JobLoadError:    jobLoadError,
-		Phase6:          phase6,
-		Phase6Error:     phase6Error,
-		Quotas:          quotas,
-		QuotaLoadError:  quotaLoadError,
-		Plans:           plans,
-		Customers:       customers,
-		Subscriptions:   subscriptions,
-		Settings:        settings,
-		CommittedDiskMB: committedDiskMB,
-		PlanLoadError:   planLoadError,
+		Sites:             make([]Site, 0, len(sites)),
+		Databases:         make([]Database, 0, len(databases)),
+		Jobs:              jobs,
+		JobLoadError:      jobLoadError,
+		Phase6:            phase6,
+		Phase6Error:       phase6Error,
+		Quotas:            quotas,
+		QuotaLoadError:    quotaLoadError,
+		Plans:             plans,
+		Customers:         customers,
+		Subscriptions:     subscriptions,
+		Settings:          settings,
+		CommittedDiskMB:   committedDiskMB,
+		PlanLoadError:     planLoadError,
+		AuditEvents:       auditEvents,
+		Resellers:         resellers,
+		ResellerPlans:     resellerPlans,
+		AddonPlans:        addonPlans,
+		SubscriptionUsage: usageItems,
+		UsageAlerts:       usageAlerts,
+		Capabilities:      capabilities,
 	}
 	for _, site := range sites {
 		data.Sites = append(data.Sites, Site{
-			ID:           site.ID,
-			Username:     site.Username,
-			Domain:       site.Domain,
-			PHPVersion:   site.PhpVersion,
-			Status:       site.Status,
-			LastError:    site.LastError,
-			TLSStatus:    site.TlsStatus,
-			TLSIssuer:    site.TlsIssuer,
-			TLSExpiresAt: NullableTime{Time: site.TlsExpiresAt.Time, Valid: site.TlsExpiresAt.Valid},
-			TLSLastError: site.TlsLastError,
+			ID:                   site.ID,
+			Username:             site.Username,
+			Domain:               site.Domain,
+			PHPVersion:           site.PhpVersion,
+			Status:               site.Status,
+			LastError:            site.LastError,
+			TLSStatus:            site.TlsStatus,
+			TLSIssuer:            site.TlsIssuer,
+			TLSExpiresAt:         NullableTime{Time: site.TlsExpiresAt.Time, Valid: site.TlsExpiresAt.Valid},
+			TLSLastError:         site.TlsLastError,
+			TLSCertPath:          site.TlsCertPath,
+			TLSKeyPath:           site.TlsKeyPath,
+			SubscriptionID:       site.SubscriptionID,
+			CustomerID:           site.CustomerID,
+			DesiredStatus:        site.DesiredStatus,
+			DesiredPHPVersion:    site.DesiredPhpVersion,
+			HTTPSRedirect:        site.HttpsRedirect,
+			DesiredHTTPSRedirect: site.DesiredHttpsRedirect,
+			SettingsStatus:       site.SettingsStatus,
+			SettingsError:        site.SettingsError,
 		})
 	}
 	for _, database := range databases {
 		data.Databases = append(data.Databases, Database{
-			ID:        database.ID,
-			Engine:    database.Engine,
-			Name:      database.DbName,
-			User:      database.DbUser,
-			Status:    database.Status,
-			LastError: database.LastError,
+			ID:             database.ID,
+			Engine:         database.Engine,
+			Name:           database.DbName,
+			User:           database.DbUser,
+			Status:         database.Status,
+			LastError:      database.LastError,
+			SubscriptionID: database.SubscriptionID,
+			CustomerID:     database.CustomerID,
+			SiteID:         database.SiteID.Int64,
 		})
 	}
 	return data, nil

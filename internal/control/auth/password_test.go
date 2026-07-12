@@ -34,3 +34,15 @@ func TestVerifyPasswordRejectsMalformedHash(t *testing.T) {
 		t.Fatal("VerifyPassword returned true for malformed hash")
 	}
 }
+
+func TestVerifyPasswordRejectsExcessiveAndDuplicateParameters(t *testing.T) {
+	tests := []string{
+		`$argon2id$v=19$m=1048576,t=1,p=1$c2FsdA$a2V5`,
+		`$argon2id$v=19$m=1024,m=2048,t=1,p=1$c2FsdA$a2V5`,
+	}
+	for _, encoded := range tests {
+		if ok, err := VerifyPassword("password", encoded); err == nil || ok {
+			t.Fatalf("VerifyPassword(%q) = %v, %v; want false and error", encoded, ok, err)
+		}
+	}
+}

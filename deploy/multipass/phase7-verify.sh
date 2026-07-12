@@ -37,6 +37,7 @@ post_admin() {
   local status
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "303" ]]; then
@@ -48,6 +49,7 @@ post_admin() {
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Admin dashboard'
@@ -152,7 +154,7 @@ sudo systemctl is-active --quiet nakpanel-agent.service
 sudo systemctl is-active --quiet nakpanel.service
 REMOTE
 
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/" > "${tmpdir}/phase7-dashboard.html"
+curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/?legacy=1" > "${tmpdir}/phase7-dashboard.html"
 assert_contains "${tmpdir}/phase7-dashboard.html" 'phase5-ui.test'
 
 echo "phase7 verification passed for restore, DNS validation includes, CSRF origin rejection, and integrated Phase 6 flow on https://${VM_IP}:7443"

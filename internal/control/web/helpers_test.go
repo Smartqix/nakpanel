@@ -4,7 +4,20 @@ import (
 	"testing"
 
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/types"
 )
+
+func TestAddonsForProviderExcludesForeignAndInactivePlans(t *testing.T) {
+	items := []types.AddonPlan{
+		{ID: 1, ResellerID: 17, Name: "Matching", IsActive: true},
+		{ID: 2, ResellerID: 18, Name: "Foreign", IsActive: true},
+		{ID: 3, ResellerID: 17, Name: "Inactive", IsActive: false},
+	}
+	got := addonsForProvider(items, 17)
+	if len(got) != 1 || got[0].ID != 1 {
+		t.Fatalf("addonsForProvider() = %#v, want only matching active add-on", got)
+	}
+}
 
 func TestFormatQuotaPHPHandlesUnlimitedFields(t *testing.T) {
 	tests := []struct {
@@ -58,6 +71,12 @@ func TestFormatPlanLimitMB(t *testing.T) {
 	}
 	if got := formatPlanLimitMB(512); got != "512 MB" {
 		t.Fatalf("formatPlanLimitMB(512) = %q, want 512 MB", got)
+	}
+	if got := formatPlanLimitMB(5 * 1024); got != "5 GB" {
+		t.Fatalf("formatPlanLimitMB(5 GiB) = %q, want 5 GB", got)
+	}
+	if got := formatPlanLimitMB(1024 * 1024); got != "1 TB" {
+		t.Fatalf("formatPlanLimitMB(1 TiB) = %q, want 1 TB", got)
 	}
 }
 
@@ -196,5 +215,15 @@ func TestReferenceSubscriptionFormatting(t *testing.T) {
 	}
 	if got := formatCapacityCommitment(245760, 245760); got != "240 GB / 240 GB (100%)" {
 		t.Fatalf("formatCapacityCommitment() = %q, want 240 GB / 240 GB (100%%)", got)
+	}
+}
+
+func TestFileSortPathPreservesSupportScopeAndFilters(t *testing.T) {
+	view := WorkspaceView{SupportCustomerID: 88}
+	data := &FileManagerView{SiteID: 7, Path: "assets", Query: "php", Sort: "size", Order: "asc"}
+	got := fileSortPath(view, data, "size")
+	want := "/support/customers/88/sites/7/files?order=desc&path=assets&q=php&sort=size"
+	if got != want {
+		t.Fatalf("fileSortPath() = %q, want %q", got, want)
 	}
 }

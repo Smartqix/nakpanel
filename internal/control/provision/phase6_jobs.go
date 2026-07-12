@@ -48,10 +48,11 @@ func (RestoreBackupArgs) Kind() string { return "restore_backup" }
 func (RestoreBackupArgs) InsertOpts() river.InsertOpts { return activeUniqueOpts() }
 
 type ConfigureDNSZoneArgs struct {
-	ZoneID  int64  `json:"zone_id" river:"unique"`
-	Domain  string `json:"domain"`
-	Address string `json:"address"`
-	Serial  int64  `json:"serial"`
+	ZoneID  int64             `json:"zone_id" river:"unique"`
+	Domain  string            `json:"domain"`
+	Address string            `json:"address"`
+	Serial  int64             `json:"serial"`
+	Records []types.DNSRecord `json:"records,omitempty"`
 }
 
 func (ConfigureDNSZoneArgs) Kind() string { return "configure_dns_zone" }
@@ -248,7 +249,7 @@ func (w *ConfigureDNSZoneWorker) Work(ctx context.Context, job *river.Job[Config
 	if w.agent == nil {
 		return errors.New("agent dns client is not configured")
 	}
-	resp, err := w.agent.ConfigureDNSZone(ctx, types.ConfigureDNSZoneReq{Domain: job.Args.Domain, Address: job.Args.Address, Serial: job.Args.Serial})
+	resp, err := w.agent.ConfigureDNSZone(ctx, types.ConfigureDNSZoneReq{Domain: job.Args.Domain, Address: job.Args.Address, Serial: job.Args.Serial, Records: job.Args.Records})
 	if err != nil {
 		w.markDNSFailed(ctx, job.Args.ZoneID, err.Error())
 		return err

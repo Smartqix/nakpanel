@@ -1,17 +1,23 @@
 package rpc
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
-const MaxRequestBytes = 1 << 20
+const (
+	MaxRequestBytes    = 1 << 20
+	requestReadTimeout = 30 * time.Second
+)
 
 type Server struct {
 	dispatcher     *Dispatcher
@@ -69,7 +75,7 @@ func (s *Server) authorizePeer(conn net.Conn) error {
 		return err
 	}
 	if !ok {
-		return nil
+		return errors.New("peer credentials are unavailable")
 	}
 	if !allowedPeerUIDMatches(uid, s.allowedPeerUID) {
 		return fmt.Errorf("uid %d is not allowed", uid)
@@ -83,16 +89,26 @@ func allowedPeerUIDMatches(peerUID uint32, allowedUID int) bool {
 
 func HandleConn(ctx context.Context, conn net.Conn, dispatcher *Dispatcher) error {
 	defer conn.Close()
+	if err := conn.SetReadDeadline(time.Now().Add(requestReadTimeout)); err != nil {
+		return fmt.Errorf("set agent request deadline: %w", err)
+	}
 
 	limited := &io.LimitedReader{R: conn, N: MaxRequestBytes + 1}
+	frame, err := bufio.NewReader(limited).ReadBytes('\n')
+	_ = conn.SetReadDeadline(time.Time{})
+	if len(frame) > MaxRequestBytes || limited.N <= 0 {
+		return writeErrorResponse(conn, "request too large")
+	}
+	if err != nil && !errors.Is(err, io.EOF) {
+		return writeErrorResponse(conn, "invalid request json: "+err.Error())
+	}
+
 	var req types.Request
-	decoder := json.NewDecoder(limited)
+	decoder := json.NewDecoder(bytes.NewReader(frame))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&req); err != nil {
+	if err = decoder.Decode(&req); err != nil {
 		errMsg := "invalid request json"
-		if limited.N <= 0 {
-			errMsg = "request too large"
-		} else if !errors.Is(err, io.EOF) {
+		if !errors.Is(err, io.EOF) {
 			errMsg = "invalid request json: " + err.Error()
 		}
 		if encodeErr := writeErrorResponse(conn, errMsg); encodeErr != nil {
@@ -103,8 +119,9 @@ func HandleConn(ctx context.Context, conn net.Conn, dispatcher *Dispatcher) erro
 		}
 		return nil
 	}
-	if limited.N <= 0 {
-		return writeErrorResponse(conn, "request too large")
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return writeErrorResponse(conn, "invalid request json: multiple json values")
 	}
 
 	resp := dispatcher.Dispatch(ctx, req)

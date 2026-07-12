@@ -24,7 +24,7 @@ tailwind-download:
 	fi
 
 tailwind-build: tailwind-download
-	BROWSERSLIST_IGNORE_OLD_DATA=1 $(TAILWIND_BIN) -i internal/control/web/assets/input.css -o internal/control/web/static/app.css --minify --content internal/control/web/pages.templ
+	BROWSERSLIST_IGNORE_OLD_DATA=1 $(TAILWIND_BIN) -i internal/control/web/assets/input.css -o internal/control/web/static/app.css --minify --content 'internal/control/web/*.templ'
 
 build: generate
 	mkdir -p bin

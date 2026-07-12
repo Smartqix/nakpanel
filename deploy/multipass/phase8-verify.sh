@@ -37,6 +37,7 @@ post_admin() {
   local status
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "303" ]]; then
@@ -53,6 +54,7 @@ post_expect_quota_exceeded() {
   local status
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "400" ]]; then
@@ -112,6 +114,7 @@ REMOTE
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Admin dashboard'
@@ -139,7 +142,7 @@ post_admin phase8-quota quotas \
   -d "user_id=${admin_id}" \
   -d "max_sites=${max_sites}" \
   -d "max_databases=${max_databases}" \
-  -d 'storage_mb=0' \
+  -d 'storage_mb=1024' \
   -d "max_backups=${max_backups}" \
   -d "backup_storage_mb=${backup_storage_mb}" \
   -d 'site_disk_quota_mb=1' \
@@ -229,7 +232,7 @@ post_expect_quota_exceeded phase8-db-over databases \
   -d 'db_user=np_phase8_over_user'
 post_expect_quota_exceeded phase8-backup-over backups -d 'domain=phase8-quota.test'
 
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/" > "${tmpdir}/phase8-dashboard.html"
+curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/?legacy=1" > "${tmpdir}/phase8-dashboard.html"
 assert_contains "${tmpdir}/phase8-dashboard.html" 'phase8-quota.test'
 assert_contains "${tmpdir}/phase8-dashboard.html" '1 MB'
 
