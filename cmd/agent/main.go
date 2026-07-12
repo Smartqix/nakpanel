@@ -43,6 +43,8 @@ func main() {
 	})
 	webmailProvisioner := ops.NewWebmailProvisioner(ops.WebmailProvisionerOptions{Reloader: reloader})
 	dnsProvisioner := ops.NewDNSProvisioner(ops.DNSProvisionerOptions{Reloader: reloader})
+	usageCollector := ops.NewUsageCollector("/home", "/var/log/nginx", os.Getenv("NAKPANEL_MARIADB_DSN"))
+	fileManager := ops.NewFileManager(ops.FileManagerOptions{TransferDir: config.FileTransferDir, PanelUser: config.PanelUser})
 	dispatcher := agentrpc.NewDispatcher(
 		reloader,
 		agentrpc.Options{
@@ -74,6 +76,10 @@ func main() {
 				webmailProvisioner,
 				dnsProvisioner,
 			),
+			HostingStateProvisioner: siteProvisioner,
+			UsageCollector:          usageCollector,
+			SiteRuntimeProvisioner:  siteProvisioner,
+			FileManager:             fileManager,
 		},
 	)
 	server := agentrpc.NewServer(dispatcher, agentrpc.WithAllowedPeerUID(allowedUID))

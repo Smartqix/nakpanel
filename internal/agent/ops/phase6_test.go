@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -188,11 +189,11 @@ func TestDNSProvisionerWritesZoneAndReloadsBind(t *testing.T) {
 	reloader := &recordingPhase6Reloader{}
 	runner := &recordingCommandRunner{}
 	provisioner := NewDNSProvisioner(DNSProvisionerOptions{
-		ZoneDir:        reloaderSafePath(filepath.Join(root, "zones")),
-		IncludeDir:     filepath.Join(root, "zones.d"),
-		AggregatePath:  filepath.Join(root, "named.conf.nakpanel"),
+		ZoneDir:         reloaderSafePath(filepath.Join(root, "zones")),
+		IncludeDir:      filepath.Join(root, "zones.d"),
+		AggregatePath:   filepath.Join(root, "named.conf.nakpanel"),
 		ValidatorRunner: runner,
-		Reloader:       reloader,
+		Reloader:        reloader,
 	})
 
 	result, err := provisioner.ConfigureDNSZone(context.Background(), types.ConfigureDNSZoneReq{
@@ -231,6 +232,61 @@ func TestDNSProvisionerWritesZoneAndReloadsBind(t *testing.T) {
 	}
 	if len(reloader.services) != 1 || reloader.services[0] != "named.service" {
 		t.Fatalf("services = %#v, want named.service reload", reloader.services)
+	}
+}
+
+func TestDNSProvisionerRestoresFilesWhenValidationFails(t *testing.T) {
+	root := t.TempDir()
+	zoneDir := filepath.Join(root, "zones")
+	includeDir := filepath.Join(root, "zones.d")
+	aggregatePath := filepath.Join(root, "named.conf.nakpanel")
+	if err := os.MkdirAll(zoneDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(includeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	zonePath := filepath.Join(zoneDir, "db.example.test")
+	includePath := filepath.Join(includeDir, "example.test.conf")
+	oldZone, oldInclude, oldAggregate := "old zone\n", "old include\n", "old aggregate\n"
+	for path, content := range map[string]string{zonePath: oldZone, includePath: oldInclude, aggregatePath: oldAggregate} {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runner := &recordingCommandRunner{failName: "named-checkzone"}
+	reloader := &recordingPhase6Reloader{}
+	provisioner := NewDNSProvisioner(DNSProvisionerOptions{ZoneDir: zoneDir, IncludeDir: includeDir, AggregatePath: aggregatePath, ValidatorRunner: runner, Reloader: reloader})
+	_, err := provisioner.ConfigureDNSZone(context.Background(), types.ConfigureDNSZoneReq{Domain: "example.test", Address: "192.0.2.20", Serial: 2})
+	if err == nil {
+		t.Fatal("ConfigureDNSZone returned nil, want validation failure")
+	}
+	for path, want := range map[string]string{zonePath: oldZone, includePath: oldInclude, aggregatePath: oldAggregate} {
+		got, readErr := os.ReadFile(path)
+		if readErr != nil || string(got) != want {
+			t.Fatalf("restored %s = %q, %v; want %q", path, got, readErr, want)
+		}
+	}
+	if len(reloader.services) != 0 {
+		t.Fatalf("services = %v, want no reload after failed validation", reloader.services)
+	}
+}
+
+func TestRenderDNSZoneUsesCompleteStoredRecordSet(t *testing.T) {
+	zone := RenderDNSZone(types.ConfigureDNSZoneReq{Domain: "example.test", Address: "192.0.2.10", Serial: 7, Records: []types.DNSRecord{
+		{Host: "@", Type: "A", Value: "192.0.2.20", TTL: 3600},
+		{Host: "www", Type: "AAAA", Value: "2001:db8::20", TTL: 600},
+		{Host: "shop", Type: "CNAME", Value: "shops.example.net", TTL: 300},
+		{Host: "@", Type: "MX", Value: "mail.example.test", Priority: 10, TTL: 3600},
+		{Host: "@", Type: "TXT", Value: "v=spf1 -all", TTL: 3600},
+	}})
+	for _, want := range []string{"@ 3600 IN A 192.0.2.20", "www 600 IN AAAA 2001:db8::20", "shop 300 IN CNAME shops.example.net.", "@ 3600 IN MX 10 mail.example.test.", `@ 3600 IN TXT "v=spf1 -all"`} {
+		if !strings.Contains(zone, want) {
+			t.Fatalf("rendered zone missing %q:\n%s", want, zone)
+		}
+	}
+	if strings.Contains(zone, "www IN A 192.0.2.10") {
+		t.Fatalf("rendered zone retained legacy default records:\n%s", zone)
 	}
 }
 
@@ -325,11 +381,15 @@ type commandCall struct {
 }
 
 type recordingCommandRunner struct {
-	calls []commandCall
+	calls    []commandCall
+	failName string
 }
 
 func (r *recordingCommandRunner) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, commandCall{name: name, args: append([]string(nil), args...)})
+	if name == r.failName {
+		return nil, errors.New("injected command failure")
+	}
 	return []byte("ok"), nil
 }
 

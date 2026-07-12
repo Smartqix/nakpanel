@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -22,6 +23,17 @@ func (m *recordingUserManager) EnsureUser(ctx context.Context, username string) 
 
 type recordingReloader struct {
 	services []string
+}
+
+type failingServiceReloader struct {
+	failService string
+}
+
+func (r *failingServiceReloader) ReloadService(_ context.Context, name string) error {
+	if name == r.failService {
+		return errors.New("injected reload failure")
+	}
+	return nil
 }
 
 func (r *recordingReloader) ReloadService(ctx context.Context, name string) error {
@@ -109,6 +121,58 @@ func TestRenderSiteConfigsAreDeterministicAndDerivePaths(t *testing.T) {
 		if !strings.Contains(fpm, want) {
 			t.Fatalf("fpm config missing %q:\n%s", want, fpm)
 		}
+	}
+}
+
+func TestRenderNginxRuntimeVHostRedirectsHTTPAndKeepsTLSHosting(t *testing.T) {
+	plan, err := NewSitePlan(types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3"}, SitePathConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := RenderNginxRuntimeVHost(plan, "/cert.pem", "/key.pem", true)
+	for _, want := range []string{"return 301 https://$host$request_uri;", "listen 443 ssl;", "ssl_certificate /cert.pem;", "fastcgi_pass unix:"} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("runtime nginx config missing %q:\n%s", want, config)
+		}
+	}
+}
+
+func TestApplySiteRuntimeRestoresConfigsAndNewSymlinkOnReloadFailure(t *testing.T) {
+	root := t.TempDir()
+	paths := SitePathConfig{
+		HomeRoot: filepath.Join(root, "home"), NginxAvailableDir: filepath.Join(root, "available"), NginxEnabledDir: filepath.Join(root, "enabled"),
+		NginxLogDir: filepath.Join(root, "logs"), PHPFPMPoolDir: filepath.Join(root, "php"), PHPFPMLogDir: filepath.Join(root, "php-logs"),
+		PHPRunDir: filepath.Join(root, "run"), NginxSnippet: "snippets/fastcgi-php.conf", WWWGroup: "www-data", PHPTmpDir: filepath.Join(root, "tmp"), DefaultFileMode: 0o644,
+	}
+	plan, err := NewSitePlan(types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3"}, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(plan.NginxConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(plan.PHPFPMConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(plan.NginxConfig, []byte("old nginx\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(plan.PHPFPMConfig, []byte("old php\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	provisioner := NewSiteProvisioner(SiteProvisionerOptions{Paths: paths, Reloader: &failingServiceReloader{failService: "nginx"}})
+	err = provisioner.ApplySiteRuntime(context.Background(), types.ApplySiteRuntimeReq{Username: "npdemo", Domain: "example.test", CurrentPHPVersion: "8.3", DesiredPHPVersion: "8.3", State: "active"})
+	if err == nil {
+		t.Fatal("ApplySiteRuntime returned nil, want reload failure")
+	}
+	for path, want := range map[string]string{plan.NginxConfig: "old nginx\n", plan.PHPFPMConfig: "old php\n"} {
+		got, readErr := os.ReadFile(path)
+		if readErr != nil || string(got) != want {
+			t.Fatalf("restored %s = %q, %v; want %q", path, got, readErr, want)
+		}
+	}
+	if _, err := os.Lstat(plan.NginxEnabled); !os.IsNotExist(err) {
+		t.Fatalf("new nginx symlink survived rollback: %v", err)
 	}
 }
 

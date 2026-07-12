@@ -11,7 +11,7 @@ REMOTE_SRC="${NAKPANEL_REMOTE_SRC}"
 ensure_vm 2 2G 12G
 sync_repo "${ROOT_DIR}" "${REMOTE_SRC}"
 
-multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" -- env REMOTE_SRC="${REMOTE_SRC}" bash -se <<'REMOTE'
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
@@ -44,8 +44,8 @@ fi
 
 sudo systemctl enable --now nginx
 
-sudo chown -R nakpanel:nakpanel /tmp/nakpanel-src
-cd /tmp/nakpanel-src
+sudo chown -R nakpanel:nakpanel "${REMOTE_SRC}"
+cd "${REMOTE_SRC}"
 
 sudo -u nakpanel env PATH="${PATH}" HOME=/var/lib/nakpanel task build
 sudo systemctl stop nakpanel-agent.service 2>/dev/null || true

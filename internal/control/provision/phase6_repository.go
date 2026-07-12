@@ -10,8 +10,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 )
@@ -20,6 +22,155 @@ type SQLPhase6Repository struct {
 	db    *sql.DB
 	river *river.Client[*sql.Tx]
 	now   func() time.Time
+}
+
+func normalizeDNSRecord(domain string, record types.DNSRecord) (types.DNSRecord, error) {
+	record.Host = strings.ToLower(strings.TrimSpace(record.Host))
+	if record.Host == "" {
+		record.Host = "@"
+	}
+	record.Type = strings.ToUpper(strings.TrimSpace(record.Type))
+	record.Value = strings.TrimSpace(record.Value)
+	if record.TTL == 0 {
+		record.TTL = 3600
+	}
+	if record.TTL < 60 || record.TTL > 86400 {
+		return record, errors.New("DNS TTL must be between 60 and 86400")
+	}
+	if record.Host != "@" {
+		if err := site.ValidateDomain(record.Host + "." + domain); err != nil {
+			return record, fmt.Errorf("invalid DNS host: %w", err)
+		}
+	}
+	switch record.Type {
+	case "A":
+		ip := net.ParseIP(record.Value)
+		if ip == nil || ip.To4() == nil {
+			return record, errors.New("A record requires an IPv4 address")
+		}
+		record.Priority = 0
+	case "AAAA":
+		ip := net.ParseIP(record.Value)
+		if ip == nil || ip.To4() != nil {
+			return record, errors.New("AAAA record requires an IPv6 address")
+		}
+		record.Priority = 0
+	case "CNAME":
+		if err := site.ValidateDomain(strings.TrimSuffix(record.Value, ".")); err != nil {
+			return record, errors.New("CNAME requires a fully qualified domain")
+		}
+		record.Priority = 0
+	case "MX":
+		if err := site.ValidateDomain(strings.TrimSuffix(record.Value, ".")); err != nil {
+			return record, errors.New("MX requires a fully qualified domain")
+		}
+		if record.Priority < 0 || record.Priority > 65535 {
+			return record, errors.New("MX priority is invalid")
+		}
+	case "TXT":
+		if record.Value == "" || len(record.Value) > 255 {
+			return record, errors.New("TXT value must contain 1 to 255 characters")
+		}
+		record.Priority = 0
+	default:
+		return record, fmt.Errorf("unsupported DNS record type %q", record.Type)
+	}
+	return record, nil
+}
+
+func (r *SQLPhase6Repository) UpsertDNSRecord(ctx context.Context, siteID int64, record types.DNSRecord) error {
+	if r.db == nil || r.river == nil {
+		return errors.New("DNS record repository is not configured")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var zoneID, serial int64
+	var domain, address string
+	if err = tx.QueryRowContext(ctx, `SELECT z.id,z.domain,z.address,z.serial FROM dns_zones z JOIN sites s ON s.id=z.site_id WHERE s.id=$1 FOR UPDATE OF z`, siteID).Scan(&zoneID, &domain, &address, &serial); err != nil {
+		return err
+	}
+	record, err = normalizeDNSRecord(domain, record)
+	if err != nil {
+		return err
+	}
+	if record.ID > 0 {
+		res, execErr := tx.ExecContext(ctx, `UPDATE dns_records SET host=$3,record_type=$4,value=$5,priority=$6,ttl=$7,updated_at=now() WHERE id=$1 AND zone_id=$2`, record.ID, zoneID, record.Host, record.Type, record.Value, nullableDNSPriority(record), record.TTL)
+		if execErr != nil {
+			return execErr
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			return sql.ErrNoRows
+		}
+	} else {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO dns_records(zone_id,host,record_type,value,priority,ttl) VALUES($1,$2,$3,$4,$5,$6)`, zoneID, record.Host, record.Type, record.Value, nullableDNSPriority(record), record.TTL); err != nil {
+			return err
+		}
+	}
+	return r.enqueueDNSZoneTx(ctx, tx, zoneID, domain, address, serial)
+}
+
+func (r *SQLPhase6Repository) DeleteDNSRecord(ctx context.Context, siteID, recordID int64) error {
+	if r.db == nil || r.river == nil {
+		return errors.New("DNS record repository is not configured")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var zoneID, serial int64
+	var domain, address string
+	if err = tx.QueryRowContext(ctx, `SELECT z.id,z.domain,z.address,z.serial FROM dns_zones z JOIN sites s ON s.id=z.site_id WHERE s.id=$1 FOR UPDATE OF z`, siteID).Scan(&zoneID, &domain, &address, &serial); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM dns_records WHERE id=$1 AND zone_id=$2`, recordID, zoneID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return r.enqueueDNSZoneTx(ctx, tx, zoneID, domain, address, serial)
+}
+
+func nullableDNSPriority(record types.DNSRecord) any {
+	if record.Type == "MX" {
+		return record.Priority
+	}
+	return nil
+}
+
+func (r *SQLPhase6Repository) enqueueDNSZoneTx(ctx context.Context, tx *sql.Tx, zoneID int64, domain, address string, previousSerial int64) error {
+	serial := r.now().UTC().Unix()
+	if serial <= previousSerial {
+		serial = previousSerial + 1
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id,zone_id,host,record_type,value,COALESCE(priority,0),ttl FROM dns_records WHERE zone_id=$1 ORDER BY host,record_type,id`, zoneID)
+	if err != nil {
+		return err
+	}
+	var records []types.DNSRecord
+	for rows.Next() {
+		var rec types.DNSRecord
+		if err := rows.Scan(&rec.ID, &rec.ZoneID, &rec.Host, &rec.Type, &rec.Value, &rec.Priority, &rec.TTL); err != nil {
+			rows.Close()
+			return err
+		}
+		records = append(records, rec)
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE dns_zones SET serial=$2,status='pending',last_error='',updated_at=now() WHERE id=$1`, zoneID, serial); err != nil {
+		return err
+	}
+	if _, err = r.river.InsertTx(ctx, tx, ConfigureDNSZoneArgs{ZoneID: zoneID, Domain: domain, Address: address, Serial: serial, Records: records}, nil); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func NewSQLPhase6Repository(db *sql.DB, riverClient *river.Client[*sql.Tx]) *SQLPhase6Repository {
@@ -42,6 +193,9 @@ func (r *SQLPhase6Repository) CreateBackup(ctx context.Context, ownerID int64, r
 
 	var site phase6Site
 	if req.SubscriptionID > 0 {
+		if err := guardBackupIntentTx(ctx, tx, req.SubscriptionID); err != nil {
+			return 0, fmt.Errorf("guard backup entitlement: %w", err)
+		}
 		site, err = selectActiveSubscriptionSiteForUpdate(ctx, tx, req.SubscriptionID, req.Domain)
 	} else {
 		site, err = selectActiveSiteForUpdate(ctx, tx, ownerID, req.Domain)
@@ -103,7 +257,7 @@ func (r *SQLPhase6Repository) ConfigureWebmail(ctx context.Context, ownerID int6
 	}
 	defer tx.Rollback()
 
-	site, err := selectActiveSiteForUpdate(ctx, tx, ownerID, domain)
+	site, err := selectActiveSiteByDomainForUpdate(ctx, tx, domain)
 	if err != nil {
 		return 0, err
 	}
@@ -141,11 +295,11 @@ func (r *SQLPhase6Repository) RestoreBackup(ctx context.Context, ownerID int64, 
 	}
 	defer tx.Rollback()
 
-	backup, err := selectRestorableBackupForUpdate(ctx, tx, ownerID, backupID)
+	backup, err := selectRestorableBackupForUpdate(ctx, tx, backupID)
 	if err != nil {
 		return 0, err
 	}
-	databases, err := selectActiveOwnerDatabases(ctx, tx, ownerID)
+	databases, err := selectActiveSubscriptionDatabases(ctx, tx, backup.subscriptionID)
 	if err != nil {
 		return 0, err
 	}
@@ -189,7 +343,7 @@ func (r *SQLPhase6Repository) ConfigureDNS(ctx context.Context, ownerID int64, d
 	}
 	defer tx.Rollback()
 
-	site, err := selectActiveSiteForUpdate(ctx, tx, ownerID, domain)
+	site, err := selectActiveSiteByDomainForUpdate(ctx, tx, domain)
 	if err != nil {
 		return 0, err
 	}
@@ -201,7 +355,27 @@ ON CONFLICT (domain) DO UPDATE SET address = EXCLUDED.address, serial = EXCLUDED
 RETURNING id`, ownerID, site.id, site.domain, address, serial).Scan(&id); err != nil {
 		return 0, fmt.Errorf("upsert dns intent: %w", err)
 	}
-	_, err = r.river.InsertTx(ctx, tx, ConfigureDNSZoneArgs{ZoneID: id, Domain: site.domain, Address: address, Serial: serial}, nil)
+	if _, err := tx.ExecContext(ctx, `INSERT INTO dns_records(zone_id,host,record_type,value,ttl) VALUES($1,'@','A',$2,3600)
+ON CONFLICT (zone_id,host,record_type,value,priority) DO UPDATE SET ttl=EXCLUDED.ttl,updated_at=now()`, id, address); err != nil {
+		return 0, err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id,zone_id,host,record_type,value,COALESCE(priority,0),ttl FROM dns_records WHERE zone_id=$1 ORDER BY host,record_type,id`, id)
+	if err != nil {
+		return 0, err
+	}
+	var records []types.DNSRecord
+	for rows.Next() {
+		var rec types.DNSRecord
+		if err := rows.Scan(&rec.ID, &rec.ZoneID, &rec.Host, &rec.Type, &rec.Value, &rec.Priority, &rec.TTL); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		records = append(records, rec)
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+	_, err = r.river.InsertTx(ctx, tx, ConfigureDNSZoneArgs{ZoneID: id, Domain: site.domain, Address: address, Serial: serial, Records: records}, nil)
 	if err != nil {
 		return 0, fmt.Errorf("enqueue configure_dns_zone job: %w", err)
 	}
@@ -270,24 +444,24 @@ type phase6Site struct {
 }
 
 type restorableBackup struct {
-	backupID    int64
-	siteID      int64
-	username    string
-	domain      string
-	archivePath string
+	backupID       int64
+	subscriptionID int64
+	siteID         int64
+	username       string
+	domain         string
+	archivePath    string
 }
 
-func selectRestorableBackupForUpdate(ctx context.Context, tx *sql.Tx, ownerID int64, backupID int64) (restorableBackup, error) {
+func selectRestorableBackupForUpdate(ctx context.Context, tx *sql.Tx, backupID int64) (restorableBackup, error) {
 	var backup restorableBackup
-	if err := tx.QueryRowContext(ctx, `SELECT b.id, s.id, s.username, s.domain, b.archive_path
+	if err := tx.QueryRowContext(ctx, `SELECT b.id, b.subscription_id, s.id, s.username, s.domain, b.archive_path
 FROM backups b
 JOIN sites s ON s.id = b.site_id
-WHERE b.owner_user_id = $1
-  AND b.id = $2
+WHERE b.id = $1
   AND b.status = 'active'
   AND b.archive_path <> ''
   AND s.status = 'active'
-FOR UPDATE`, ownerID, backupID).Scan(&backup.backupID, &backup.siteID, &backup.username, &backup.domain, &backup.archivePath); err != nil {
+FOR UPDATE`, backupID).Scan(&backup.backupID, &backup.subscriptionID, &backup.siteID, &backup.username, &backup.domain, &backup.archivePath); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return restorableBackup{}, fmt.Errorf("active backup %d was not found", backupID)
 		}
@@ -296,11 +470,26 @@ FOR UPDATE`, ownerID, backupID).Scan(&backup.backupID, &backup.siteID, &backup.u
 	return backup, nil
 }
 
+func selectActiveSiteByDomainForUpdate(ctx context.Context, tx *sql.Tx, domain string) (phase6Site, error) {
+	var site phase6Site
+	if err := tx.QueryRowContext(ctx, `SELECT id, username, domain, php_version
+FROM sites
+WHERE domain=$1 AND status='active'
+FOR UPDATE`, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersion); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return phase6Site{}, fmt.Errorf("active site %q was not found", domain)
+		}
+		return phase6Site{}, fmt.Errorf("select active site: %w", err)
+	}
+	return site, nil
+}
+
 func selectActiveSiteForUpdate(ctx context.Context, tx *sql.Tx, ownerID int64, domain string) (phase6Site, error) {
 	var site phase6Site
 	if err := tx.QueryRowContext(ctx, `SELECT id, username, domain, php_version
 FROM sites
-WHERE owner_user_id = $1 AND domain = $2 AND status = 'active'
+WHERE (owner_user_id = $1 OR customer_id IN (SELECT id FROM customers WHERE login_user_id = $1))
+  AND domain = $2 AND status = 'active'
 FOR UPDATE`, ownerID, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersion); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return phase6Site{}, fmt.Errorf("active site %q was not found", domain)

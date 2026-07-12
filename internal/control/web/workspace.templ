@@ -1,0 +1,1259 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/types"
+)
+
+templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	<!doctype html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="nakpanel-csrf" content={ view.CSRFToken }/>
+			<title>{ title }</title>
+			<link rel="stylesheet" href="/assets/app.css"/>
+		</head>
+		<body class="np-app np-routed" data-np-role={ string(user.Role) }>
+			<div class="np-routed-layout">
+				@routedSidebar(user, data, view)
+				<div class="np-routed-main">
+					@routedTopbar(user, data, view)
+					if view.SupportCustomerID > 0 {
+						@supportBanner(view)
+					}
+					<main class="np-routed-content" id="main-content">
+						if data.Notice != "" {
+							<p class="np-notice" role="status">{ data.Notice }</p>
+						}
+						@routedContent(user, data, actions, view)
+					</main>
+				</div>
+			</div>
+			<div class="np-mobile-scrim" data-np-menu-close hidden></div>
+			if actions.CanCreateSite {
+				@routedSiteDialog(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), view)
+			}
+			if (user.Role == auth.RoleAdmin || user.Role == auth.RoleReseller) && actions.CanManageQuotas {
+				@customerDialog(view)
+			}
+			if view.FileEditor != nil {
+				<script defer src="/assets/ace/ace.js"></script>
+			}
+			<script defer src="/assets/app.js"></script>
+		</body>
+	</html>
+}
+
+templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
+	<aside class="np-routed-side" data-np-sidebar>
+		<div class="np-side-brand">
+			<span class="np-brand-mark" aria-hidden="true">n</span>
+			<span class="np-side-brand-text"><strong>nakpanel</strong><small>ns1.nakroteck.com</small></span>
+		</div>
+		<nav class="np-routed-nav" aria-label="Primary navigation">
+			@navRoute(workspacePath(view, "/dashboard"), "Home", "home", routeActive(view.Route, "dashboard"), "")
+			if user.Role == auth.RoleAdmin && view.SupportCustomerID == 0 {
+				<span class="np-nav-label">Hosting services</span>
+				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), formatBadgeCount(len(data.Customers)))
+				@navRoute("/resellers", "Resellers", "users", routeActive(view.Route, "resellers", "reseller-detail"), formatBadgeCount(len(data.Resellers)))
+				@navRoute("/sites", "Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(data.Sites)))
+				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), formatBadgeCount(len(data.Subscriptions)))
+		@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new", "reseller-plan-new"), "")
+				<span class="np-nav-label">Server management</span>
+				@navRoute("/activity", "Activity", "activity", routeActive(view.Route, "activity"), formatBadgeCount(len(data.Jobs)))
+				@navRoute("/tools-settings", "Tools & Settings", "settings", routeActive(view.Route, "tools-settings"), "")
+			} else if user.Role == auth.RoleReseller && view.SupportCustomerID == 0 {
+				<span class="np-nav-label">Hosting services</span>
+				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), formatBadgeCount(len(data.Customers)))
+				@navRoute("/sites", "Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(data.Sites)))
+				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), formatBadgeCount(len(data.Subscriptions)))
+		@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new"), "")
+				<span class="np-nav-label">Account</span>
+				@navRoute("/activity", "Activity", "activity", routeActive(view.Route, "activity"), "")
+				@navRoute("/my-resources", "My Resources", "activity", routeActive(view.Route, "my-resources"), "")
+			} else {
+				<span class="np-nav-label">Hosting services</span>
+				@navRoute(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(sitesForCustomer(data.Sites, view.SupportCustomerID))))
+				@navRoute(workspacePath(view, "/subscriptions"), "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail"), formatBadgeCount(len(data.Subscriptions)))
+				@navRoute(workspacePath(view, "/databases"), "Databases", "database", routeActive(view.Route, "databases"), formatBadgeCount(len(databasesForCustomer(data.Databases, view.SupportCustomerID))))
+				@navRoute(workspacePath(view, "/backups"), "Backups", "archive", routeActive(view.Route, "backups"), "")
+				@navRoute(workspacePath(view, "/dns"), "DNS", "network", routeActive(view.Route, "dns"), "")
+				@navRoute(workspacePath(view, "/certificates"), "SSL/TLS", "shield", routeActive(view.Route, "certificates"), "")
+				<span class="np-nav-label">Account</span>
+				@navRoute(workspacePath(view, "/activity"), "Activity", "activity", routeActive(view.Route, "activity"), "")
+			}
+		</nav>
+		<div class="np-side-footer"><span class="np-agent-dot"></span><span>Panel connected</span></div>
+	</aside>
+}
+
+templ navRoute(path string, label string, iconName string, active string, badge string) {
+	<a href={ templ.SafeURL(path) } class={ "np-routed-nav-item " + active } aria-current={ ariaCurrent(active) }>
+		@icon(iconName)
+		<span>{ label }</span>
+		if badge != "" {
+			<span class="np-nav-badge">{ badge }</span>
+		}
+	</a>
+}
+
+templ icon(name string) {
+	<svg class="np-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href={ templ.SafeURL("/assets/icons.svg#" + name) }></use></svg>
+}
+
+templ statusPill(state string) { <span class={ "np-status-pill np-status-pill-" + statusPillClass(state) }>{ state }</span> }
+
+templ routedTopbar(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
+	<header class="np-routed-top">
+		<div class="np-top-primary">
+			<button class="np-menu-icon" type="button" data-np-menu aria-label="Open navigation" aria-expanded="false">@icon("menu")</button>
+			<div><span class="np-breadcrumb">{ routeTitle(view.Route) }</span></div>
+			<div class="np-global-search" data-np-global-search>
+				@icon("search")
+				<input type="search" placeholder="Search sites, customers, subscriptions..." aria-label="Search Nakpanel" autocomplete="off" data-np-search-input/>
+				<div class="np-search-results" data-np-search-results hidden></div>
+			</div>
+		</div>
+		<div class="np-top-secondary">
+			if user.Role == auth.RoleClient || view.SupportCustomerID > 0 {
+				<label class="np-context-select"><span class="np-sr-only">Subscription</span><select data-np-subscription-nav>
+					<option value={ templ.SafeURL(workspacePath(view, "/dashboard")) }>All subscriptions</option>
+					for _, subscription := range subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID) {
+						<option value={ templ.SafeURL(withSubscription(workspacePath(view, "/dashboard"), subscription.ID)) } selected?={ subscription.ID == view.SelectedSubscription }>{ subscription.SubscriptionName }</option>
+					}
+				</select></label>
+			}
+			if user.Role == auth.RoleAdmin {
+				<span class="np-health"><span></span>Agent connected</span>
+			}
+			<form method="post" action="/logout">@csrfInput(view)<button class="np-avatar" type="submit" title={ "Sign out " + user.Email }>{ userInitials(user) }</button></form>
+		</div>
+	</header>
+}
+
+templ supportBanner(view WorkspaceView) {
+	<div class="np-support-banner" role="status">
+		<div><strong>Support view</strong><span>Managing { view.SupportCustomerName } as administrator. Your identity is preserved.</span></div>
+		<form method="post" action={ templ.SafeURL("/support/customers/" + formatJobID(view.SupportCustomerID) + "/exit") }>
+			@csrfInput(view)
+			<button type="submit" class="np-secondary-button">Exit support view</button>
+		</form>
+	</div>
+}
+
+templ csrfInput(view WorkspaceView) {
+	@csrfTokenInput(view.CSRFToken)
+}
+
+templ routedContent(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	switch view.Route {
+		case "dashboard":
+			@routedDashboard(user, data, view)
+		case "sites":
+			@routedSites(user, sitesForSubscription(sitesForCustomer(data.Sites, view.SupportCustomerID), view.SelectedSubscription), selectedSubscription(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), view.SelectedSubscription), actions, view)
+		case "site-detail":
+			@routedSiteDetail(user, data, actions, view)
+		case "site-files":
+			@routedFileManager(view)
+		case "site-file-edit":
+			@routedFileEditor(view)
+		case "databases":
+			@routedDatabases(databasesForSubscription(databasesForCustomer(data.Databases, view.SupportCustomerID), view.SelectedSubscription), selectedSubscription(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), view.SelectedSubscription), actions, view)
+		case "backups":
+			@routedBackups(data.Phase6, subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), actions, view)
+		case "dns":
+			@routedDNS(data.Phase6, sitesForCustomer(data.Sites, view.SupportCustomerID), actions, view)
+		case "certificates":
+			@routedCertificates(sitesForCustomer(data.Sites, view.SupportCustomerID), actions, view)
+		case "activity":
+			@routedActivity(data, user, view)
+		case "customers":
+			@routedCustomers(data, view)
+		case "customer-detail":
+			@routedCustomerDetail(data, user, view)
+		case "subscriptions":
+			@routedSubscriptions(user, data, view)
+		case "subscription-detail":
+			@routedSubscriptionDetail(user, data, actions, view)
+		case "subscription-new":
+			@routedSubscriptionOnboarding(data, view)
+		case "service-plans":
+			@routedPlans(data, user, view)
+		case "plan-detail":
+			@routedPlanDetail(data, view)
+		case "plan-new":
+			@routedPlanEditor(planForCreate(data.Plans, view, data.Capabilities), data, view, false)
+		case "addon-detail":
+			@routedAddonDetail(data, view)
+		case "addon-new":
+			@routedPlanEditor(addonEditorDefault(), data, view, true)
+		case "reseller-plan-new":
+			@routedResellerPlanEditor(resellerPlanDefault(), view)
+		case "reseller-plan-detail":
+			if plan, ok := resellerPlanByID(data.ResellerPlans, view.DetailID); ok {
+				@routedResellerPlanEditor(plan, view)
+			} else {
+				<p class="np-empty">Reseller plan not found.</p>
+			}
+		case "tools-settings":
+			@settingsSection(data, actions, view.CSRFToken)
+		case "resellers":
+			@routedResellers(data, view)
+		case "reseller-detail":
+			@routedResellerDetail(data, view)
+		case "reseller-plans":
+			@routedResellerPlans(data, view)
+		case "my-resources":
+			@routedMyResources(data, view)
+		default:
+			<p class="np-empty">This workspace is unavailable.</p>
+	}
+}
+
+templ pageHead(kicker string, title string, description string) {
+	<div class="np-routed-page-head"><div><span class="np-kicker">{ kicker }</span><h1>{ title }</h1><p>{ description }</p></div>{ children... }</div>
+}
+
+templ routedDashboard(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
+	@pageHead("Control panel", routeTitle(view.Route), "A focused view of hosting health, capacity and work that needs attention.") {
+		<a class="np-primary-link" href={ templ.SafeURL(workspacePath(view, "/sites")) }>View websites</a>
+	}
+	<div class="np-stat-grid np-routed-stats">
+		@statCard("Websites", len(sitesForCustomer(data.Sites, view.SupportCustomerID)), "Active domains and hosting accounts")
+		@statCard("Databases", len(databasesForCustomer(data.Databases, view.SupportCustomerID)), "Provisioned MariaDB resources")
+		@statCard("Backups", len(data.Phase6.Backups), "Recent protected snapshots")
+		@statCard("Subscriptions", len(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID)), "Plans currently assigned")
+	</div>
+	<div class="np-routed-grid">
+		<section class="np-panel"><div class="np-panel-title"><h2>Recent websites</h2><a href={ templ.SafeURL(workspacePath(view, "/sites")) }>View all</a></div>@siteRows(sitesForCustomer(data.Sites, view.SupportCustomerID), view)</section>
+		<section class="np-panel"><div class="np-panel-title"><h2>Subscription usage</h2><span class="np-muted">plan limits</span></div>@subscriptionUsageRows(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), canOpenSubscriptionDetails(view), view)</section>
+	</div>
+}
+
+templ siteRows(sites []dashboard.Site, view WorkspaceView) {
+	if len(sites) == 0 {
+		<p class="np-empty">No websites yet.</p>
+	} else {
+		<div class="np-object-list">
+			for _, item := range sites {
+				<a class="np-object-row" href={ templ.SafeURL(workspacePath(view, "/sites/" + formatJobID(item.ID))) }>
+					<span class="np-object-icon">@icon("globe")</span>
+					<span><strong>{ item.Domain }</strong><small>{ item.Username } · PHP { item.PHPVersion }</small></span>
+					<span class={ "np-status-pill " + customerStatusClass(item.Status) }>{ item.Status }</span>
+				</a>
+			}
+		</div>
+	}
+}
+
+templ subscriptionUsageRows(items []types.SubscriptionSummary, details bool, view WorkspaceView) {
+	if len(items) == 0 {
+		<p class="np-empty">No active subscriptions.</p>
+	} else {
+		<div class="np-usage-list">
+			for _, item := range items {
+				<a href={ templ.SafeURL(subscriptionUsagePath(item.ID, details, view)) }>
+					<span><strong>{ item.SubscriptionName }</strong><small>{ item.PlanName }</small></span>
+					<span>{ formatQuotaCompactCount(item.SitesUsed, item.MaxSites, true) } sites</span>
+					@tableMeter(item.SitesUsed, item.MaxSites, true)
+				</a>
+			}
+		</div>
+	}
+}
+
+templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
+	@pageHead("Hosting services", "Websites & Domains", "Manage hosting, PHP, certificates, DNS and backups from each website.") {
+		if actions.CanCreateSite {
+			<button type="button" data-np-dialog-open="site-dialog">Add website</button>
+		}
+	}
+	<section class="np-panel">@siteRows(sites, view)</section>
+}
+
+templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	if item, ok := siteByID(data.Sites, view.DetailID); ok {
+		if subscription, hasSubscription := subscriptionForSite(data.Subscriptions, item); hasSubscription {
+			@pageHead("Website", item.Domain, subscription.SubscriptionName + " · " + subscription.PlanName) {
+				<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/subscriptions/" + formatJobID(item.SubscriptionID))) }>Back to subscription</a>
+			}
+			<div class="np-domain-commandbar">
+				<div><span class={ "np-status-pill " + customerStatusClass(item.Status) }>{ item.Status }</span><span>PHP { item.PHPVersion }</span><span>{ formatTLSStatus(item) }</span></div>
+				<a href={ templ.SafeURL("http://" + item.Domain) } target="_blank" rel="noreferrer">@icon("globe")<span>Open website</span></a>
+			</div>
+			<nav class="np-domain-tabs" aria-label="Domain settings">
+				@domainTab(item.ID, "overview", "Overview", view.Tab, view)
+				if actions.CanUseFileManager {
+					<a href={ templ.SafeURL(fileBasePath(view,item.ID)) }>Files</a>
+				}
+				@domainTab(item.ID, "hosting", "Hosting", view.Tab, view)
+				@domainTab(item.ID, "php", "PHP", view.Tab, view)
+				@domainTab(item.ID, "dns", "DNS", view.Tab, view)
+				@domainTab(item.ID, "ssl", "SSL/TLS", view.Tab, view)
+				@domainTab(item.ID, "databases", "Databases", view.Tab, view)
+				@domainTab(item.ID, "backups", "Backups", view.Tab, view)
+			</nav>
+			if view.Tab == "overview" {
+				<div class="np-detail-grid">
+					<section class="np-panel"><div class="np-panel-title"><h2>Hosting overview</h2>@statusPill(item.SettingsStatus)</div><dl class="np-facts"><div><dt>System user</dt><dd>{ item.Username }</dd></div><div><dt>Document root</dt><dd>/home/{ item.Username }/public_html</dd></div><div><dt>PHP</dt><dd>{ item.PHPVersion }</dd></div><div><dt>HTTPS redirect</dt><dd>{ yesNo(item.HTTPSRedirect) }</dd></div><div><dt>Subscription</dt><dd><a href={ templ.SafeURL("/subscriptions/"+formatJobID(item.SubscriptionID)) }>{ subscription.SubscriptionName }</a></dd></div><div><dt>TLS</dt><dd>{ formatTLSStatus(item) }</dd></div></dl></section>
+					<section class="np-panel"><div class="np-panel-title"><h2>Domain services</h2></div><div class="np-tool-grid">
+						if actions.CanUseFileManager {
+							<a href={ templ.SafeURL(fileBasePath(view,item.ID)) }>@icon("folder")<strong>File Manager</strong><span>Manage website content</span></a>
+						}
+						@domainTool(item.ID,"hosting","settings","Hosting","Status and HTTPS",view)@domainTool(item.ID,"php","activity","PHP","Runtime configuration",view)@domainTool(item.ID,"dns","network","DNS","Zone and records",view)@domainTool(item.ID,"ssl","shield","SSL/TLS","Certificates",view)@domainTool(item.ID,"databases","database","Databases","Site data",view)@domainTool(item.ID,"backups","archive","Backups","Recovery points",view)
+					</div></section>
+				</div>
+			} else if view.Tab == "hosting" {
+				<section class="np-panel np-domain-settings"><div class="np-panel-title"><h2>Hosting settings</h2>@statusPill(item.SettingsStatus)</div>
+					if item.SettingsError != "" {
+						<p class="np-error">{ item.SettingsError }</p>
+					}
+					<form class="np-form np-domain-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/hosting") }>@csrfInput(view)<input type="hidden" name="desired_php_version" value={ item.DesiredPHPVersion }/>
+						<label>Website status<select name="desired_status"><option value="active" selected?={ item.DesiredStatus=="active" }>Active</option><option value="suspended" selected?={ item.DesiredStatus=="suspended" }>Suspended</option></select></label>
+						<label class="np-check"><input type="checkbox" name="desired_https_redirect" value="true" checked?={ item.DesiredHTTPSRedirect } disabled?={ item.TLSStatus!="active" || (user.Role!=auth.RoleAdmin && !subscription.AllowTLS) }/>Redirect HTTP to HTTPS</label>
+						<label>Document root<input value={ "/home/"+item.Username+"/public_html" } readonly/></label><button type="submit">Apply hosting settings</button>
+					</form>
+				</section>
+			} else if view.Tab == "php" {
+				<section class="np-panel np-domain-settings"><div class="np-panel-title"><h2>PHP settings</h2><span class="np-muted">Inherited limits</span></div>
+					if user.Role!=auth.RoleAdmin && !subscription.AllowPHPSettings {
+						<p class="np-gate">PHP settings are disabled by this subscription.</p>
+					} else {
+						<form class="np-form np-domain-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php") }>@csrfInput(view)<input type="hidden" name="desired_status" value={ item.DesiredStatus }/><input type="hidden" name="desired_https_redirect" value={ formatBool(item.DesiredHTTPSRedirect) }/>
+							<label>PHP version<select name="desired_php_version">
+								for _, version := range phpVersions(subscription.PHPAllowlist) {
+									<option value={ version } selected?={ version==item.DesiredPHPVersion }>{ version }</option>
+								}
+							</select></label>
+							<dl class="np-facts"><div><dt>Memory limit</dt><dd>{ formatPlanLimitMB(subscription.PHPMemoryMB) }</dd></div><div><dt>FPM children</dt><dd>{ formatPlanLimit(subscription.PHPFPMMaxChildren) }</dd></div><div><dt>Disk quota</dt><dd>{ formatPlanLimitMB(subscription.SiteDiskQuotaMB) }</dd></div></dl><button type="submit">Apply PHP version</button>
+						</form>
+					}
+				</section>
+			} else if view.Tab == "dns" {
+				@domainDNS(user, item, data.Phase6, subscription, actions, view)
+			} else if view.Tab == "ssl" {
+				@domainSSL(user, item, subscription, actions, view)
+			} else if view.Tab == "databases" {
+				@domainDatabases(item, databasesForSite(data.Databases,item.ID), actions, view)
+			} else if view.Tab == "backups" {
+				@domainBackups(user, item, subscription, backupsForSite(data.Phase6.Backups,item.ID), actions, view)
+			}
+			} else {
+				<p class="np-empty">Subscription not found.</p>
+			}
+	} else {
+		<p class="np-empty">Website not found.</p>
+	}
+}
+
+templ domainTab(siteID int64, tab string, label string, current string, view WorkspaceView) {
+	<a class={ domainTabActive(current,tab) } href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(siteID))+"?tab="+tab) } aria-current={ ariaCurrent(domainTabActive(current,tab)) }>{ label }</a>
+}
+templ domainTool(siteID int64, tab string, iconName string, title string, copy string, view WorkspaceView) {
+	<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(siteID))+"?tab="+tab) }>@icon(iconName)<strong>{ title }</strong><span>{ copy }</span></a>
+}
+
+templ routedFileManager(view WorkspaceView) {
+	if data := view.FileManager; data != nil {
+		@pageHead("Website files", "File Manager", data.Domain + " · public_html") {
+			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(data.SiteID))) }>Back to website</a>
+		}
+		<section class="np-file-manager" data-np-file-manager data-np-file-unavailable?={ data.Error != "" }>
+			<div class="np-file-toolbar">
+				<div class="np-file-toolbar-actions">
+					<button type="button" class="np-toolbar-primary" data-np-file-upload-trigger="files" aria-label="Upload files" disabled?={ data.Error != "" }>@icon("upload")<span>Upload files</span></button>
+					<button type="button" class="np-toolbar-button" data-np-file-upload-trigger="folder" aria-label="Upload folder" title="Upload a folder" disabled?={ data.Error != "" }>@icon("folder-up")<span>Upload folder</span></button>
+					<button type="button" class="np-toolbar-button" data-np-dialog-open="file-create-dialog" aria-label="Create file or folder" disabled?={ data.Error != "" }>@icon("plus")<span>New</span></button>
+					<button type="button" class="np-toolbar-button" data-np-file-dialog-open="file-copy-dialog" aria-label="Copy selected items" disabled>@icon("copy")<span>Copy</span></button>
+					<button type="button" class="np-toolbar-button" data-np-file-dialog-open="file-move-dialog" aria-label="Move selected items" disabled>@icon("move")<span>Move</span></button>
+					<button type="button" class="np-toolbar-button" data-np-file-dialog-open="file-archive-dialog" aria-label="Archive selected items" disabled>@icon("archive")<span>Archive</span></button>
+					<button type="button" class="np-toolbar-button np-file-delete-button" data-np-file-dialog-open="file-delete-dialog" disabled title="Delete selected items">@icon("trash")</button>
+				</div>
+				<form class="np-file-search" method="get" action={ templ.SafeURL(fileBasePath(view,data.SiteID)) }>
+					if data.Path != "" {
+						<input type="hidden" name="path" value={ data.Path }/>
+					}
+					@icon("search")<input type="search" name="q" value={ data.Query } placeholder="Search filenames" aria-label="Search filenames" disabled?={ data.Error != "" }/><button type="submit" class="np-sr-only" disabled?={ data.Error != "" }>Search</button>
+				</form>
+			</div>
+			<form class="np-file-upload-form" action={ templ.SafeURL(fileActionPath(view,data.SiteID,"upload",data.Path)) } method="post" enctype="multipart/form-data" data-np-file-upload-form hidden>
+				<input type="file" name="files" multiple data-np-file-input="files"/>
+				<input type="file" name="folder" multiple webkitdirectory directory data-np-file-input="folder"/>
+			</form>
+			<div class="np-file-upload-progress" data-np-file-upload-progress hidden><span data-np-file-upload-bar></span><div class="np-file-upload-summary"><strong>Uploading files</strong><small data-np-file-upload-label></small></div><div class="np-file-upload-items" data-np-file-upload-items></div></div>
+			<div class="np-file-breadcrumbs" aria-label="Current folder">
+				for index, crumb := range fileCrumbs(data.Path) {
+					if index > 0 {
+						@icon("chevron-right")
+					}
+					<a href={ templ.SafeURL(fileManagerPath(view,data.SiteID,crumb.Path)) }>{ crumb.Label }</a>
+				}
+			</div>
+			<div class="np-file-layout">
+				<aside class="np-file-tree" data-np-file-tree>
+					<div class="np-file-tree-head"><strong>Folders</strong><button type="button" class="np-icon-button" data-np-file-tree-close title="Close folders">@icon("x")</button></div>
+					<a class="is-root" href={ templ.SafeURL(fileManagerPath(view,data.SiteID,"")) }>@icon("folder-open")<span>public_html</span></a>
+					if data.Path != "" {
+						<a href={ templ.SafeURL(fileManagerPath(view,data.SiteID,fileParent(data.Path))) }>@icon("corner-up-left")<span>Parent folder</span></a>
+					}
+					for _, item := range data.Directories {
+						<a href={ templ.SafeURL(fileManagerPath(view,data.SiteID,item.Path)) }>@icon("folder")<span>{ item.Name }</span></a>
+					}
+				</aside>
+				<div class="np-file-content">
+					<div class="np-file-mobile-head"><button type="button" class="np-toolbar-button" data-np-file-tree-open>@icon("folders")<span>Folders</span></button><span>{ formatPlanLimit(data.Total) } items</span></div>
+					if data.Error != "" {
+						<div class="np-file-state np-file-state-error">@icon("triangle-alert")<div><strong>File Manager unavailable</strong><p>{ data.Error }</p></div></div>
+					} else if len(data.Entries) == 0 {
+						<div class="np-file-state">@icon("folder-open")<div><strong>{ fileEmptyTitle(data.Query) }</strong><p>{ fileEmptyCopy(data.Query) }</p></div></div>
+					} else {
+						<div class="np-file-table-wrap"><table class="np-file-table"><thead><tr><th class="np-file-check"><input type="checkbox" aria-label="Select all files" data-np-file-select-all/></th><th>@fileSortLink(view,data,"name","Name")</th><th>@fileSortLink(view,data,"modified","Modified")</th><th>@fileSortLink(view,data,"size","Size")</th><th>Permissions</th><th>Owner</th><th>Group</th><th><span class="np-sr-only">Actions</span></th></tr></thead><tbody>
+							for _, item := range data.Entries {
+								<tr data-np-file-row><td class="np-file-check"><input type="checkbox" name="paths" value={ item.Path } aria-label={ "Select "+item.Name } data-np-file-select/></td><td data-label="Name"><span class={ "np-file-kind np-file-kind-"+string(item.Kind) }>@icon(fileKindIcon(item))</span>
+									if item.Kind == types.FileKindDirectory {
+										<a href={ templ.SafeURL(fileManagerPath(view,data.SiteID,item.Path)) }><strong>{ item.Name }</strong></a>
+									} else {
+										<strong>{ item.Name }</strong>
+									}
+								</td><td data-label="Modified">{ formatTime(item.ModifiedAt) }</td><td data-label="Size">
+									if item.Kind == types.FileKindDirectory {
+										<span>—</span>
+									} else {
+										<span>{ formatBytes(item.Size) }</span>
+									}
+								</td><td data-label="Permissions"><code>{ fileMode(item.Mode) }</code></td><td data-label="Owner">{ item.Owner }</td><td data-label="Group">{ item.Group }</td><td class="np-file-row-actions"><details><summary aria-label={ "Actions for "+item.Name }>@icon("ellipsis")</summary><div class="np-file-menu">
+									if item.Editable {
+										<a href={ templ.SafeURL(fileEntryPath(view,data.SiteID,"edit",item.Path)) }>@icon("file-pen")<span>Edit</span></a>
+									}
+									if item.Downloadable {
+										<a href={ templ.SafeURL(fileEntryPath(view,data.SiteID,"download",item.Path)) }>@icon("download")<span>Download</span></a>
+									}
+									if item.Renamable {
+										<button type="button" data-np-file-row-action="rename" data-path={ item.Path } data-name={ item.Name }>@icon("pencil")<span>Rename</span></button>
+									}
+									if item.Chmod {
+										<button type="button" data-np-file-row-action="permissions" data-path={ item.Path } data-mode={ fileMode(item.Mode) }>@icon("shield-check")<span>Permissions</span></button>
+									}
+									if item.Archive {
+										<button type="button" data-np-file-row-action="extract" data-path={ item.Path }>@icon("package-open")<span>Extract</span></button>
+									}
+									if item.Deletable {
+										<form method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/delete") }>@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><input type="hidden" name="paths" value={ item.Path }/><button type="submit" class="is-danger" data-np-confirm={ "Delete "+item.Name+" permanently?" }>@icon("trash")<span>Delete</span></button></form>
+									}
+								</div></details></td></tr>
+							}
+						</tbody></table></div>
+						if filePageCount(data.Total,data.PerPage) > 1 {
+							<nav class="np-file-pagination" aria-label="File pages"><span>Page { formatPlanLimit(data.Page) } of { formatPlanLimit(filePageCount(data.Total,data.PerPage)) }</span><div>
+								if data.Page > 1 {
+									<a class="np-secondary-link" href={ templ.SafeURL(filePagePath(view,data,data.Page-1)) }>Previous</a>
+								}
+								if data.Page < filePageCount(data.Total,data.PerPage) {
+									<a class="np-secondary-link" href={ templ.SafeURL(filePagePath(view,data,data.Page+1)) }>Next</a>
+								}
+							</div></nav>
+						}
+					}
+				</div>
+			</div>
+			<div class="np-file-foot"><span>Upload limit { uploadLimitLabel(data.UploadMaxBytes) }</span><span>Files are owned by { data.Username }</span></div>
+			@fileManagerDialogs(view,data)
+		</section>
+	}
+}
+
+templ fileSortLink(view WorkspaceView, data *FileManagerView, field string, label string) {
+	<a class={ fileSortClass(data,field) } href={ templ.SafeURL(fileSortPath(view,data,field)) }>{ label }@icon("chevron-right")</a>
+}
+
+templ fileManagerDialogs(view WorkspaceView, data *FileManagerView) {
+	<dialog class="np-dialog np-file-dialog" id="file-create-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">File Manager</span><h2>Create an item</h2></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/create") }>@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><label>Name<input name="name" required maxlength="255"/></label><label>Type<select name="kind"><option value="file">File</option><option value="directory">Folder</option></select></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create</button></div></form></dialog>
+	@fileBatchDialog(view,data,"file-copy-dialog","Copy selected items","copy","Destination folder","Copy")
+	@fileBatchDialog(view,data,"file-move-dialog","Move selected items","move","Destination folder","Move")
+	<dialog class="np-dialog np-file-dialog" id="file-archive-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">File Manager</span><h2>Create ZIP archive</h2></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/archive") } data-np-file-batch-form>@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><div data-np-file-selected-inputs></div><label>Archive name<input name="name" value="archive.zip" required/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create archive</button></div></form></dialog>
+	<dialog class="np-dialog np-file-dialog" id="file-delete-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Permanent action</span><h2>Delete selected items?</h2><p>This removes files and folders immediately.</p></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/delete") } data-np-file-batch-form>@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><div data-np-file-selected-inputs></div><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Delete</button></div></form></dialog>
+	<dialog class="np-dialog np-file-dialog" id="file-rename-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">File Manager</span><h2>Rename item</h2></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/rename") }>@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><input type="hidden" name="file_path" data-np-row-path/><label>New name<input name="name" data-np-row-name required/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Rename</button></div></form></dialog>
+	<dialog class="np-dialog np-file-dialog" id="file-permissions-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Linux permissions</span><h2>Change permissions</h2><p>Use an octal mode between 0000 and 0777.</p></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/permissions") }>@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><input type="hidden" name="file_path" data-np-row-path/><label>Mode<input name="mode" inputmode="numeric" pattern="[0-7]{3,4}" data-np-row-mode required/></label><label class="np-check"><input type="checkbox" name="recursive" value="true"/>Apply recursively to folder contents</label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save permissions</button></div></form></dialog>
+	<dialog class="np-dialog np-file-dialog" id="file-extract-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Archive</span><h2>Extract files</h2></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/extract") }>@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><input type="hidden" name="file_path" data-np-row-path/><label>Destination folder<input name="destination" value={ data.Path }/></label><label class="np-check"><input type="checkbox" name="overwrite" value="true"/>Replace existing files</label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Extract</button></div></form></dialog>
+}
+
+templ fileBatchDialog(view WorkspaceView, data *FileManagerView, id string, title string, action string, label string, submit string) {
+	<dialog class="np-dialog np-file-dialog" id={ id } data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">File Manager</span><h2>{ title }</h2></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/"+action) } data-np-file-batch-form>@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><div data-np-file-selected-inputs></div><label>{ label }<input name="destination" value={ data.Path }/></label><label class="np-check"><input type="checkbox" name="overwrite" value="true"/>Replace existing items</label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">{ submit }</button></div></form></dialog>
+}
+
+templ routedFileEditor(view WorkspaceView) {
+	if data := view.FileEditor; data != nil {
+		@pageHead("File Manager", data.Name, data.Domain + " · public_html/" + data.Path) {
+			<a class="np-secondary-link" href={ templ.SafeURL(fileManagerPath(view,data.SiteID,fileParent(data.Path))) }>Back to files</a>
+		}
+		<form class="np-code-editor" method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/save") } data-np-editor-form>
+			@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><input type="hidden" name="sha256" value={ data.SHA256 }/>
+			<div class="np-editor-toolbar"><div>@icon("file-code")<strong>{ data.Name }</strong><code>{ fileMode(data.Mode) }</code></div><div><a class="np-secondary-link" href={ templ.SafeURL(fileEntryPath(view,data.SiteID,"download",data.Path)) }>@icon("download")<span>Download</span></a><button type="submit">@icon("save")<span>Save</span></button></div></div>
+			<textarea name="content" spellcheck="false" data-np-code-editor>{ data.Content }</textarea>
+		</form>
+	}
+}
+
+templ domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase6Data, subscription types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
+	<section class="np-panel np-domain-settings"><div class="np-panel-title"><h2>DNS settings</h2><span class="np-muted">A, AAAA, CNAME, MX and TXT</span></div>
+		if user.Role!=auth.RoleAdmin && !subscription.AllowDNS {
+			<p class="np-gate">DNS management is disabled by this subscription.</p>
+		} else if zone, ok := dnsZoneForSite(phase.DNSZones,item.ID); ok {
+			<div class="np-zone-summary"><span>Zone { zone.Domain }</span>@statusPill(zone.Status)<span>Serial { formatJobID(zone.Serial) }</span></div>
+			<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Host</th><th>Type</th><th>Value</th><th>TTL</th><th></th></tr></thead><tbody>
+				for _, record := range dnsRecordsForZone(phase.DNSRecords,zone.ID) {
+					<tr><td data-label="Host">{ record.Host }</td><td data-label="Type">{ record.Type }</td><td data-label="Value">{ record.Value }</td><td data-label="TTL">{ formatPlanLimit(record.TTL) }</td><td data-label="Action"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/dns-records/"+formatJobID(record.ID)+"/delete") }>@csrfInput(view)<button class="np-icon-button" type="submit" title="Delete DNS record" data-np-confirm="Delete this DNS record?">@icon("x")</button></form></td></tr>
+				}
+			</tbody></table></div>
+			<form class="np-form np-domain-form np-dns-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/dns-records") }>@csrfInput(view)<label>Host<input name="host" value="@" required/></label><label>Type<select name="record_type"><option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option><option>TXT</option></select></label><label>Value<input name="value" required/></label><label>Priority<input type="number" name="priority" min="0" max="65535" value="10"/></label><label>TTL<input type="number" name="ttl" min="60" max="86400" value="3600" required/></label><button type="submit">Add record</button></form>
+		} else {
+			<p class="np-empty">This domain does not have an authoritative zone yet.</p><form class="np-form np-action-form" method="post" action="/dns">@csrfInput(view)<input type="hidden" name="domain" value={ item.Domain }/><input type="hidden" name="site_id" value={ formatJobID(item.ID) }/><label>Server IPv4 address<input name="address" required/></label><button type="submit">Initialize DNS zone</button></form>
+		}
+	</section>
+}
+
+templ domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
+	<section class="np-panel np-domain-settings"><div class="np-panel-title"><h2>SSL/TLS certificate</h2>@statusPill(formatTLSState(item))</div><dl class="np-facts"><div><dt>Issuer</dt><dd>{ item.TLSIssuer }</dd></div><div><dt>Expires</dt><dd>{ formatNullableTime(item.TLSExpiresAt) }</dd></div><div><dt>HTTPS redirect</dt><dd>{ yesNo(item.HTTPSRedirect) }</dd></div><div><dt>Last error</dt><dd>{ item.TLSLastError }</dd></div></dl>
+		if user.Role!=auth.RoleAdmin && !subscription.AllowTLS {
+			<p class="np-gate">SSL/TLS management is disabled by this subscription.</p>
+		} else if actions.CanIssueCertificate {
+			<form class="np-form np-action-form" method="post" action="/certificates">@csrfInput(view)<input type="hidden" name="domain" value={ item.Domain }/><input type="hidden" name="site_id" value={ formatJobID(item.ID) }/><label>Issuer<select name="issuer"><option value="acme">ACME / Let's Encrypt</option><option value="local-self-signed">Local self-signed</option></select></label><button type="submit">Issue or reissue certificate</button></form>
+		}
+	</section>
+}
+
+templ domainDatabases(item dashboard.Site, databases []dashboard.Database, actions DashboardActions, view WorkspaceView) {
+	<section class="np-panel np-domain-settings"><div class="np-panel-title"><h2>Databases</h2><span class="np-muted">{ formatPlanLimit(len(databases)) } assigned</span></div>@databasesSection(databases,nil,nil,DashboardActions{},view.CSRFToken)
+		if actions.CanCreateDatabase {
+			<form class="np-form np-action-form" method="post" action="/databases">@csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(item.SubscriptionID) }/><input type="hidden" name="site_id" value={ formatJobID(item.ID) }/><input type="hidden" name="engine" value="mariadb"/><label>Database name<input name="db_name" required/></label><label>Database user<input name="db_user" required/></label><button type="submit">Create database</button></form>
+		}
+	</section>
+}
+
+templ domainBackups(user auth.SessionUser, item dashboard.Site, subscription types.SubscriptionSummary, backups []dashboard.Backup, actions DashboardActions, view WorkspaceView) {
+	<section class="np-panel np-domain-settings"><div class="np-panel-title"><h2>Backups</h2><span class="np-muted">{ formatPlanLimit(len(backups)) } recovery points</span></div>
+		if user.Role!=auth.RoleAdmin && !subscription.AllowBackups {
+			<p class="np-gate">Backup and restore are disabled by this subscription.</p>
+		}
+		if len(backups)==0 {
+			<p class="np-empty">No backups for this domain.</p>
+		} else {
+			<div class="np-object-list">
+				for _,backup:=range backups {
+					<div class="np-object-row"><span class="np-object-icon">@icon("archive")</span><span><strong>{ formatTime(backup.CreatedAt) }</strong><small>{ formatBytes(backup.SizeBytes) }</small></span>@statusPill(backup.Status)
+					if canRestoreBackup(backup) && (user.Role==auth.RoleAdmin || subscription.AllowBackups) {
+						<form method="post" action="/restores">@csrfInput(view)<input type="hidden" name="backup_id" value={ formatJobID(backup.ID) }/><input type="hidden" name="site_id" value={ formatJobID(item.ID) }/><button type="submit" class="np-secondary-button">Restore</button></form>
+					}
+					</div>
+				}
+			</div>
+		}
+		if actions.CanUsePhase6 && (user.Role==auth.RoleAdmin || subscription.AllowBackups) {
+			<form method="post" action="/backups" class="np-panel-actions">@csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(item.SubscriptionID) }/><input type="hidden" name="site_id" value={ formatJobID(item.ID) }/><input type="hidden" name="domain" value={ item.Domain }/><button type="submit">Create backup</button></form>
+		}
+	</section>
+}
+
+templ routedDatabases(databases []dashboard.Database, subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
+	@pageHead("Hosting services", "Databases", "Create and track subscription-scoped MariaDB databases.") {}
+	<section class="np-panel">@databasesSection(databases, nil, subscriptions, actions, view.CSRFToken)</section>
+}
+
+templ routedBackups(data dashboard.Phase6Data, subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
+	@pageHead("Hosting services", "Backups", "Create recovery points and restore owned website data.") {}
+	<section class="np-panel">
+		@phase6Tables(backupPhase6(data), view.CSRFToken)
+		if actions.CanUsePhase6 {
+			<form class="np-form np-action-form" method="post" action="/backups">
+				@csrfInput(view)
+				@subscriptionSelect(nil, subscriptions)
+				<label>Domain<input name="domain" required/></label>
+				<button type="submit">Create backup</button>
+			</form>
+		}
+	</section>
+}
+
+templ routedDNS(data dashboard.Phase6Data, sites []dashboard.Site, actions DashboardActions, view WorkspaceView) {
+	@pageHead("Hosting services", "DNS", "Manage authoritative zones for websites you control.") {}
+	<section class="np-panel">
+		if len(data.DNSZones) == 0 {
+			<p class="np-empty">No DNS zones configured.</p>
+		} else {
+			<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Domain</th><th>Address</th><th>Status</th><th>Serial</th></tr></thead><tbody>
+				for _, z := range data.DNSZones {
+					<tr><td data-label="Domain">{ z.Domain }</td><td data-label="Address">{ z.Address }</td><td data-label="Status">{ z.Status }</td><td data-label="Serial">{ z.Serial }</td></tr>
+				}
+			</tbody></table></div>
+		}
+		if actions.CanUsePhase6 {
+			<form class="np-form np-action-form" method="post" action="/dns">
+				@csrfInput(view)
+				<label>Domain<select name="domain">
+					for _, item := range sites {
+						<option value={ item.Domain }>{ item.Domain }</option>
+					}
+				</select></label>
+				<label>IPv4 address<input name="address" required/></label><button type="submit">Configure DNS</button>
+			</form>
+		}
+	</section>
+}
+
+templ routedCertificates(sites []dashboard.Site, actions DashboardActions, view WorkspaceView) {
+	@pageHead("Hosting services", "SSL/TLS Certificates", "Review certificate state and secure an owned website.") {}
+	<section class="np-panel">
+		<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Domain</th><th>Status</th><th>Issuer</th><th>Expires</th></tr></thead><tbody>
+			for _, item := range sites {
+				<tr><td data-label="Domain"><a href={ templ.SafeURL("/sites/" + formatJobID(item.ID)) }>{ item.Domain }</a></td><td data-label="Status">{ item.TLSStatus }</td><td data-label="Issuer">{ item.TLSIssuer }</td><td data-label="Expires">{ formatNullableTime(item.TLSExpiresAt) }</td></tr>
+			}
+		</tbody></table></div>
+		if actions.CanIssueCertificate {
+			<form class="np-form np-action-form" method="post" action="/certificates">
+				@csrfInput(view)
+				<label>Domain<select name="domain">
+					for _, item := range sites {
+						<option value={ item.Domain }>{ item.Domain }</option>
+					}
+				</select></label>
+				<label>Issuer<select name="issuer"><option value="local-self-signed">Local self-signed</option><option value="acme">ACME</option></select></label>
+				<button type="submit">Issue certificate</button>
+			</form>
+		}
+	</section>
+}
+
+templ routedActivity(data dashboard.Data, user auth.SessionUser, view WorkspaceView) {
+	@pageHead("Operations", "Activity", "Provisioning jobs and administrator support actions in one timeline.") {}
+	if len(data.UsageAlerts) > 0 {
+		<section class="np-panel"><div class="np-panel-title"><h2>Resource alerts</h2><span class="np-muted">disk, traffic and synchronization</span></div><div class="np-object-list">
+			for _, alert := range data.UsageAlerts {
+				<div class="np-object-row"><span class="np-object-icon">@icon("activity")</span><span><strong>{ alert.Title }</strong><small>{ alert.Body } · { formatTime(alert.CreatedAt) }</small></span>@statusPill(alert.Severity)</div>
+			}
+		</div></section>
+	}
+	<section class="np-panel">@jobsSection(data.Jobs, data.JobLoadError, retryActions(user), view.CSRFToken)</section>
+	if user.Role == auth.RoleAdmin {
+		<section class="np-panel"><div class="np-panel-title"><h2>Audit events</h2></div><div class="np-table-wrap"><table class="np-table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead><tbody>
+			for _, event := range data.AuditEvents {
+				<tr><td data-label="Time">{ formatTime(event.CreatedAt) }</td><td data-label="Actor">{ event.ActorEmail }</td><td data-label="Action">{ event.Action }</td><td data-label="Target">{ event.TargetType } { formatJobID(event.TargetID) }</td></tr>
+			}
+		</tbody></table></div></section>
+	}
+}
+
+templ routedCustomers(data dashboard.Data, view WorkspaceView) {
+	@pageHead("Account management", "Customers", "Customer profiles, login access and owned subscriptions.") {
+		<button type="button" data-np-dialog-open="customer-dialog">Add customer</button>
+	}
+	<section class="np-panel">
+		<form method="post" action="/customers/bulk-status" data-np-bulk-form>
+			@csrfInput(view)
+			<div class="np-bulk-bar"><label class="np-check"><input type="checkbox" data-np-bulk-all/>Select all</label><span data-np-bulk-count>0 selected</span><div><button type="submit" name="status" value="active" class="np-secondary-button">Activate</button><button type="submit" name="status" value="suspended" class="np-danger-button" data-np-confirm="Suspend the selected customers and their hosted websites?">Suspend</button></div></div>
+			@customerRows(data.Customers,data.Subscriptions,data.Resellers)
+		</form>
+	</section>
+}
+
+templ routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view WorkspaceView) {
+	if customer, ok := customerByID(data.Customers, view.DetailID); ok {
+		@pageHead("Customer", displayCustomer(customer), customer.Email) {
+			<a class="np-secondary-link" href="/customers">Back to customers</a>
+		}
+		<div class="np-detail-grid">
+			<section class="np-panel"><div class="np-panel-title"><h2>Profile</h2><span class={ "np-status-pill " + customerStatusClass(customer.Status) }>{ customer.Status }</span></div>
+				<dl class="np-facts"><div><dt>Company</dt><dd>{ customer.Company }</dd></div><div><dt>Provider</dt><dd>{ providerName(customer,data.Resellers) }</dd></div><div><dt>Login</dt><dd>{ customerLoginMode(customer) }</dd></div><div><dt>Notes</dt><dd>{ customer.Notes }</dd></div></dl>
+				<div class="np-panel-actions">
+					<form method="post" action="/customers/status">@csrfInput(view)<input type="hidden" name="customer_id" value={ formatJobID(customer.ID) }/>
+						if customer.Status == "active" {
+							<input type="hidden" name="status" value="suspended"/><button type="submit" class="np-danger-button" data-np-confirm="Suspend this customer? Their panel access will be blocked.">Suspend</button>
+						} else {
+							<input type="hidden" name="status" value="active"/><button type="submit">Activate</button>
+						}
+					</form>
+					if user.Role == auth.RoleAdmin {
+						<form method="post" action={ templ.SafeURL("/support/customers/" + formatJobID(customer.ID) + "/enter") }>
+							@csrfInput(view)
+							<button type="submit" class="np-secondary-button">Open support view</button>
+						</form>
+					}
+				</div>
+				if user.Role == auth.RoleAdmin {
+					<form class="np-form np-action-form" method="post" action="/customers/provider">
+						@csrfInput(view)
+						<input type="hidden" name="customer_id" value={ formatJobID(customer.ID) }/>
+						<label>Provider<select name="reseller_id">
+							<option value="">Administrator</option>
+							for _, reseller := range data.Resellers {
+								<option value={ formatJobID(reseller.ID) } selected?={ reseller.ID == customer.ResellerID }>{ reseller.DisplayName }</option>
+							}
+						</select></label>
+						<button type="submit">Move customer</button>
+					</form>
+				}
+			</section>
+			<section class="np-panel"><div class="np-panel-title"><h2>Subscriptions</h2><a href={ templ.SafeURL("/subscriptions/new?customer_id=" + formatJobID(customer.ID)) }>Add subscription</a></div>@subscriptionUsageRows(subscriptionsForCustomer(data.Subscriptions, customer.ID), true, view)</section>
+		</div>
+		<section class="np-panel"><div class="np-panel-title"><h2>Websites</h2></div>@siteRows(sitesForCustomer(data.Sites, customer.ID), view)</section>
+		<section class="np-panel"><div class="np-panel-title"><h2>Databases</h2></div>@databasesSection(databasesForCustomer(data.Databases, customer.ID), nil, subscriptionsForCustomer(data.Subscriptions, customer.ID), DashboardActions{}, view.CSRFToken)</section>
+		if customer.LoginUserID == 0 {
+			<section class="np-panel"><div class="np-panel-title"><h2>Panel login</h2></div><form class="np-form np-action-form" method="post" action="/customers/login">@csrfInput(view)<input type="hidden" name="customer_id" value={ formatJobID(customer.ID) }/><label>Email<input type="email" name="email" value={ customer.Email } required/></label><label>Temporary password<input type="password" name="password" autocomplete="new-password" required/></label><button type="submit">Enable login</button></form></section>
+		}
+	} else {
+		<p class="np-empty">Customer not found.</p>
+	}
+}
+
+templ routedSubscriptions(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
+	@pageHead("Account management", "Subscriptions", "Manage subscribers, service plans and every hosted domain from one workspace.") {}
+	<section class="np-panel np-subscriptions-workspace">
+		<form method="post" action="/subscriptions/bulk-status" data-np-bulk-form data-np-subscription-bulk>
+			@csrfInput(view)
+			<div class="np-subscription-toolbar">
+				if user.Role != auth.RoleClient {
+					<a class="np-primary-link" href="/subscriptions/new">@icon("card")<span>Add subscription</span></a>
+					<label class="np-compact-select"><span class="np-sr-only">Service plan</span><select name="plan_id"><option value="">Plan...</option>
+						for _,plan:=range data.Plans {
+							if plan.IsActive {
+								<option value={ formatPlanID(plan.ID) }>{ plan.Name }</option>
+							}
+						}
+					</select></label>
+					<button type="submit" formaction="/subscriptions/bulk-plan" class="np-secondary-button" disabled>Change Plan</button>
+					<label class="np-compact-select"><span class="np-sr-only">Subscriber</span><select name="customer_id"><option value="">Subscriber...</option>
+						for _,customer:=range data.Customers {
+							<option value={ formatJobID(customer.ID) }>{ displayCustomer(customer) }</option>
+						}
+					</select></label>
+					<button type="submit" formaction="/subscriptions/bulk-subscriber" class="np-secondary-button" disabled>Change Subscriber</button>
+					<button type="submit" name="status" value="active" class="np-secondary-button" disabled>Activate</button><button type="submit" name="status" value="suspended" class="np-secondary-button" data-np-confirm="Suspend the selected subscriptions and websites?" disabled>Suspend</button>
+					<a class="np-secondary-link" href="/service-plans">Service Plans</a>
+				}
+				<label class="np-subscription-search">@icon("search")<input type="search" placeholder="Search subscriptions" data-np-subscription-filter/></label>
+			</div>
+			if user.Role != auth.RoleClient {
+				<div class="np-bulk-meta"><label class="np-check"><input type="checkbox" data-np-bulk-all/>Select all</label><span data-np-bulk-count>0 selected</span><span class="np-muted" data-np-provider-warning></span></div>
+			}
+			<div class="np-table-wrap"><table class="np-table np-subscription-table"><thead><tr>
+				if user.Role != auth.RoleClient {
+					<th><span class="np-sr-only">Select</span></th>
+				}
+				<th>Subscription</th><th>Subscriber</th><th>Plan</th><th>Domains</th><th>Resources</th><th>Status</th><th></th></tr></thead><tbody>
+				for _,subscription:=range data.Subscriptions {
+					<tr data-np-subscription-row data-provider-id={ formatJobID(subscription.ResellerID) } data-customer-user-id={ formatJobID(subscription.CustomerUserID) } data-customer-id={ formatJobID(subscription.CustomerID) } data-plan-name={ subscription.PlanName } data-subscriber-email={ subscription.CustomerEmail }>
+						if user.Role != auth.RoleClient {
+							<td data-label="Select" class="np-select-cell"><input class="np-subscription-check" type="checkbox" name="subscription_id" value={ formatJobID(subscription.ID) } aria-label={ "Select "+subscription.SubscriptionName } data-np-bulk-check data-np-subscription-check/></td>
+						}
+						<td data-label="Subscription"><a href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(subscription.ID))) }><strong>{ subscription.SubscriptionName }</strong><small>#{ formatJobID(subscription.ID) }</small></a></td>
+						<td data-label="Subscriber"><strong>{ subscription.CustomerName }</strong><small>{ subscription.CustomerEmail }</small></td>
+						<td data-label="Plan"><span class="np-plan-pill">{ subscription.PlanName }</span></td>
+						<td data-label="Domains">{ formatPlanLimit(len(sitesForSubscription(data.Sites,subscription.ID))) }</td>
+						<td data-label="Resources"><span>{ formatQuotaCompactCount(subscription.SitesUsed,subscription.MaxSites,true) } sites</span><span>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) } databases</span></td>
+						<td data-label="Status">@statusPill(subscription.Status)</td><td data-label="Action"><a class="np-manage-button" href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(subscription.ID))) }>Manage</a></td>
+					</tr>
+				}
+			</tbody></table></div>
+		</form>
+	</section>
+}
+
+templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	if subscription, ok := subscriptionByID(data.Subscriptions, view.DetailID); ok {
+		@pageHead("Subscription", subscription.SubscriptionName, subscription.CustomerName + " · " + subscription.PlanName) {
+			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/subscriptions")) }>Back to subscriptions</a>
+		}
+		<div class="np-subscription-overview"><div class="np-stat-grid np-routed-stats">@statCard("Domains", subscription.SitesUsed, "Limit " + formatPlanLimit(subscription.MaxSites))@statCard("Databases", subscription.DatabasesUsed, "Limit " + formatPlanLimit(subscription.MaxDatabases))@statCard("Backups", subscription.BackupsUsed, "Limit " + formatPlanLimit(subscription.MaxBackups))@statCard("Backup storage", int(subscription.BackupBytesUsed/1024/1024), "MB used")</div><aside class="np-subscription-account"><div><span>Subscriber</span><strong>{ subscription.CustomerName }</strong><small>{ subscription.CustomerEmail }</small></div><div><span>Service plan</span><strong>{ subscription.PlanName }</strong></div><div><span>Status</span>@statusPill(subscription.Status)</div></aside></div>
+		<section class="np-panel np-subscription-domains"><div class="np-panel-title"><div><h2>Websites &amp; Domains</h2><span class="np-muted">Everything hosted under this subscription</span></div>
+			if actions.CanCreateSite {
+				<button type="button" data-np-dialog-open="site-dialog" data-np-subscription-id={ formatJobID(subscription.ID) }>@icon("globe")<span>Add Domain</span></button>
+			}
+		</div>
+			if len(sitesForSubscription(data.Sites,subscription.ID))==0 {
+				<p class="np-empty">No domains are hosted by this subscription.</p>
+			} else {
+				<div class="np-domain-blocks">
+					for _,site:=range sitesForSubscription(data.Sites,subscription.ID) {
+					@subscriptionDomainBlock(site,data,view)
+					}
+				</div>
+			}
+		</section>
+		if user.Role != auth.RoleClient {
+		<section class="np-panel np-subscription-settings"><div class="np-panel-title"><h2>Subscription settings</h2><span class={ "np-status-pill " + customerStatusClass(subscription.Status) }>{ subscription.Status }</span></div>
+			<dl class="np-facts"><div><dt>Entitlements</dt><dd>{ subscription.SyncMode }</dd></div><div><dt>Synchronization</dt><dd>@statusPill(subscription.SyncStatus)</dd></div><div><dt>Plan revision</dt><dd>{ formatPlanLimit(subscription.PlanRevision) }</dd></div><div><dt>Provider</dt><dd>{ formatProviderID(subscription.ResellerID) }</dd></div></dl>
+			if subscription.SyncError != "" {
+				<p class="np-error">{ subscription.SyncError }</p>
+			}
+			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status") }>
+				@csrfInput(view)
+				<input type="hidden" name="customer_id" value={ formatJobID(subscription.CustomerID) }/><input type="hidden" name="subscription_name" value={ subscription.SubscriptionName }/><input type="hidden" name="sync_mode" value={ subscription.SyncMode }/>
+				<label>Service plan<select name="plan_id">
+					for _, plan := range data.Plans {
+						if plan.IsActive || plan.ID == subscription.PlanID {
+							<option value={ formatPlanID(plan.ID) } selected?={ plan.ID == subscription.PlanID }>{ plan.Name }</option>
+						}
+					}
+				</select></label>
+				<label>Status<select name="status"><option value="active" selected?={ subscription.Status == "active" }>Active</option><option value="suspended" selected?={ subscription.Status == "suspended" }>Suspended</option><option value="cancelled" selected?={ subscription.Status == "cancelled" }>Cancelled</option></select></label><button type="submit" data-np-confirm="Apply this plan or status change?">Save changes</button>
+			</form>
+			<div class="np-panel-actions">
+				if subscription.SyncMode != "custom" {
+					<form method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync") }>
+						@csrfInput(view)
+						<button type="submit" class="np-secondary-button">Synchronize now</button>
+					</form>
+				}
+				if subscription.SyncMode == "synced" {
+					<form method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/mode") }>
+						@csrfInput(view)
+						<input type="hidden" name="sync_mode" value="locked"/>
+						<button type="submit" class="np-secondary-button">Lock customization</button>
+					</form>
+				} else if subscription.SyncMode == "locked" {
+					<form method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/mode") }>
+						@csrfInput(view)
+						<input type="hidden" name="sync_mode" value="synced"/>
+						<button type="submit">Return to plan sync</button>
+					</form>
+				}
+			</div>
+			if subscription.SyncMode != "custom" && len(addonsForProvider(data.AddonPlans, subscription.ResellerID)) > 0 {
+				<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/addons") }>
+					@csrfInput(view)
+					<fieldset><legend>Add-on plans</legend>
+						for _, addon := range addonsForProvider(data.AddonPlans, subscription.ResellerID) {
+							<label class="np-check"><input type="checkbox" name="addon_id" value={ formatJobID(addon.ID) }/>{ addon.Name }</label>
+						}
+					</fieldset>
+					<button type="submit">Apply add-ons</button>
+				</form>
+			} else if subscription.SyncMode == "custom" {
+				<p class="np-muted">Custom subscriptions use their saved entitlement snapshot and cannot attach add-ons.</p>
+			}
+			@customEntitlementEditor(subscription,data,view)
+			if isSiteRetryNotice(data.Notice) {
+				<div class="np-panel-actions"><button type="button" data-np-dialog-open="site-dialog">Retry website setup</button></div>
+			}
+		</section>
+		}
+	} else {
+		<p class="np-empty">Subscription not found.</p>
+	}
+}
+
+templ customEntitlementEditor(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	<details class="np-disclosure"><summary>Custom entitlement snapshot</summary>
+		<form class="np-form np-action-form np-custom-entitlements" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mode") }>
+			@csrfInput(view)
+			<input type="hidden" name="sync_mode" value="custom"/>
+			<div class="np-plan-field-grid">
+				@planLimitField("Disk space","disk_mb",subscription.DiskMB,"MB")
+				@planLimitField("Monthly traffic","bandwidth_mb",subscription.BandwidthMB,"MB")
+				@planLimitField("Websites","max_sites",subscription.MaxSites,"count")
+				@planLimitField("Subdomains","max_subdomains",subscription.MaxSubdomains,"count")
+				@planLimitField("Domain aliases","max_domain_aliases",subscription.MaxDomainAliases,"count")
+				@planLimitField("Databases","max_databases",subscription.MaxDatabases,"count")
+				@planLimitField("Mailboxes","max_mailboxes",subscription.MaxMailboxes,"count")
+				@planLimitField("FTP accounts","max_ftp_accounts",subscription.MaxFTPAccounts,"count")
+				@planLimitField("Backups","max_backups",subscription.MaxBackups,"count")
+				@planLimitField("Backup storage","backup_storage_mb",subscription.BackupStorageMB,"MB")
+				@planLimitField("Backup retention","backup_retention_days",subscription.BackupRetentionDays,"days")
+				@planLimitField("Subscription validity","validity_days",subscription.ValidityDays,"days")
+				@planLimitField("Per-site disk quota","site_disk_quota_mb",subscription.SiteDiskQuotaMB,"MB")
+				@planLimitField("PHP-FPM max children","php_max_children",subscription.PHPFPMMaxChildren,"count")
+				@planLimitField("PHP memory","php_memory_mb",subscription.PHPMemoryMB,"MB")
+			</div>
+			<div class="np-plan-field-grid np-threshold-grid">
+				<label>Overuse policy<select name="overuse_policy"><option value="block" selected?={ subscription.OverusePolicy == types.PlanOveruseBlock }>Block</option><option value="normal" selected?={ subscription.OverusePolicy == types.PlanOveruseNormal }>Allow</option><option value="notify" selected?={ subscription.OverusePolicy == types.PlanOveruseNotify }>Allow and notify</option><option value="not_suspend" selected?={ subscription.OverusePolicy == types.PlanOveruseNotSuspend }>Disk and traffic only</option><option value="not_suspend_notify" selected?={ subscription.OverusePolicy == types.PlanOveruseNotSuspendNotify }>Disk and traffic with notifications</option></select></label>
+				<label>Disk warning %<input type="number" min="1" max="100" name="disk_warning_percent" value={ formatJobID(int64(subscription.DiskWarningPercent)) }/></label>
+				<label>Traffic warning %<input type="number" min="1" max="100" name="traffic_warning_percent" value={ formatJobID(int64(subscription.TrafficWarningPercent)) }/></label>
+			</div>
+			<fieldset><legend>Permissions</legend><div class="np-permission-list">@planToggle("hosting_enabled","Web hosting enabled",subscription.HostingEnabled) @planToggle("allow_dns","DNS zone management",subscription.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",subscription.AllowTLS) @planToggle("allow_backups","Backup and restore management",subscription.AllowBackups) @planToggle("allow_php_settings","PHP settings management",subscription.AllowPHPSettings) @planToggle("allow_ssh","SSH access",subscription.AllowSSH)</div></fieldset>
+			<fieldset><legend>PHP runtimes</legend><div class="np-checkbox-grid">
+				for _, version := range customSubscriptionPHPVersions(subscription,data.Capabilities) {
+					<label class="np-check"><input type="checkbox" name="php_versions" value={ version } checked?={ containsCSV(subscription.PHPAllowlist,version) }/>{ version }</label>
+				}
+			</div><label>Default PHP version<select name="default_php_version">
+				for _, version := range customSubscriptionPHPVersions(subscription,data.Capabilities) {
+					<option value={ version } selected?={ version == subscription.DefaultPHPVersion }>{ version }</option>
+				}
+			</select></label></fieldset>
+			<input type="hidden" name="hosting_web_server" value={ subscription.ServicePresets.Hosting.WebServer }/>
+			<input type="hidden" name="preferred_domain" value={ subscription.ServicePresets.Hosting.PreferredDomain }/>
+			<input type="hidden" name="php_max_execution_seconds" value={ formatJobID(int64(subscription.ServicePresets.PHP.MaxExecutionSeconds)) }/>
+			<input type="hidden" name="php_max_input_seconds" value={ formatJobID(int64(subscription.ServicePresets.PHP.MaxInputSeconds)) }/>
+			<input type="hidden" name="php_post_max_mb" value={ formatJobID(int64(subscription.ServicePresets.PHP.PostMaxMB)) }/>
+			<input type="hidden" name="php_upload_max_mb" value={ formatJobID(int64(subscription.ServicePresets.PHP.UploadMaxMB)) }/>
+			<input type="hidden" name="php_fpm_max_requests" value={ formatJobID(int64(subscription.ServicePresets.PHP.FPMMaxRequests)) }/>
+			<input type="hidden" name="php_display_errors" value={ formatBool(subscription.ServicePresets.PHP.DisplayErrors) }/>
+			<input type="hidden" name="php_log_errors" value={ formatBool(subscription.ServicePresets.PHP.LogErrors) }/>
+			<input type="hidden" name="php_allow_url_fopen" value={ formatBool(subscription.ServicePresets.PHP.AllowURLFOpen) }/>
+			<input type="hidden" name="mail_webmail_enabled" value={ formatBool(subscription.ServicePresets.Mail.WebmailEnabled) }/>
+			<input type="hidden" name="mail_spam_filter" value={ formatBool(subscription.ServicePresets.Mail.SpamFilter) }/>
+			<input type="hidden" name="mail_dkim" value={ formatBool(subscription.ServicePresets.Mail.DKIM) }/>
+			<input type="hidden" name="mail_dmarc_policy" value={ subscription.ServicePresets.Mail.DMARCPolicy }/>
+			<input type="hidden" name="dns_mode" value={ subscription.ServicePresets.DNS.Mode }/>
+			<input type="hidden" name="dns_default_ttl" value={ formatJobID(int64(subscription.ServicePresets.DNS.DefaultTTL)) }/>
+			<input type="hidden" name="performance_max_connections" value={ formatJobID(int64(subscription.ServicePresets.Performance.MaxConnections)) }/>
+			<input type="hidden" name="performance_static_cache" value={ formatBool(subscription.ServicePresets.Performance.StaticFileCache) }/>
+			<input type="hidden" name="logs_rotation_enabled" value={ formatBool(subscription.ServicePresets.Logs.RotationEnabled) }/>
+			<input type="hidden" name="logs_retention_days" value={ formatJobID(int64(subscription.ServicePresets.Logs.RetentionDays)) }/>
+			<input type="hidden" name="logs_statistics_enabled" value={ formatBool(subscription.ServicePresets.Logs.StatisticsEnabled) }/>
+			<input type="hidden" name="applications_catalog_enabled" value={ formatBool(subscription.ServicePresets.Applications.CatalogEnabled) }/>
+			for _, application := range subscription.ServicePresets.Applications.Allowed {
+				<input type="hidden" name="applications_allowed" value={ application }/>
+			}
+			<button type="submit" data-np-confirm="Detach this subscription from automatic plan synchronization?">Save custom snapshot</button>
+		</form>
+	</details>
+}
+
+templ subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view WorkspaceView) {
+	<article class="np-domain-block">
+		<div class="np-domain-block-main">
+			<span class="np-object-icon">@icon("globe")</span>
+			<div>
+				<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))) }><strong>{ site.Domain }</strong></a>
+				<span>{ site.Username } · PHP { site.PHPVersion }</span>
+			</div>
+			@statusPill(site.Status)
+		</div>
+		<div class="np-domain-service-state">
+			<span>@icon("shield")<b>{ formatTLSState(site) }</b> TLS</span>
+			<span>@icon("database")<b>{ formatPlanLimit(len(databasesForSite(data.Databases,site.ID))) }</b> databases</span>
+			<span>@icon("archive")<b>{ formatPlanLimit(len(backupsForSite(data.Phase6.Backups,site.ID))) }</b> backups</span>
+		</div>
+		<nav>
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=hosting") }>Hosting</a>
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=php") }>PHP</a>
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=dns") }>DNS</a>
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=ssl") }>SSL/TLS</a>
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=databases") }>Databases</a>
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=backups") }>Backups</a>
+		</nav>
+	</article>
+}
+
+templ routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) {
+	@pageHead("Account management", "Add Subscription", "Create the customer, entitlement and optional first website in one guided workflow.") {
+		<a class="np-secondary-link" href="/subscriptions">Cancel</a>
+	}
+	<form class="np-onboarding" method="post" action="/subscriptions/onboard" data-np-onboarding>
+		@csrfInput(view)
+		<section class="np-panel"><div class="np-step-head"><span>1</span><div><h2>Customer</h2><p>Choose an existing customer or create a new profile.</p></div></div>
+			<div class="np-segmented"><label><input type="radio" name="customer_mode" value="existing" checked/>Existing customer</label><label><input type="radio" name="customer_mode" value="new"/>New customer</label></div>
+			<div data-np-customer-mode="existing"><label>Customer<select name="customer_id"><option value="">Select customer</option>
+				for _, customer := range data.Customers {
+					<option value={ formatJobID(customer.ID) } selected?={ customer.ID == view.DetailID }>{ displayCustomer(customer) } · { customer.Email }</option>
+				}
+			</select></label></div>
+			<div class="np-form-grid" data-np-customer-mode="new" hidden><label>Email<input type="email" name="customer_email"/></label><label>Name<input name="customer_name"/></label><label>Company<input name="company"/></label><label class="np-check"><input type="checkbox" name="enable_login" value="true"/>Enable panel login</label><label>Password<input type="password" name="password" autocomplete="new-password"/></label></div>
+		</section>
+		<section class="np-panel"><div class="np-step-head"><span>2</span><div><h2>Service plan</h2><p>The plan remains the source of every entitlement.</p></div></div><div class="np-form-grid"><label>Plan<select name="plan_id" required>
+			for _, plan := range data.Plans {
+				if plan.IsActive {
+					<option value={ formatPlanID(plan.ID) }>{ plan.Name }</option>
+				}
+			}
+		</select></label><label>Subscription name<input name="subscription_name" required/></label></div></section>
+		<section class="np-panel"><div class="np-step-head"><span>3</span><div><h2>First website</h2><p>Optional. Nakpanel will queue provisioning after the subscription is saved.</p></div></div><label class="np-check"><input type="checkbox" name="create_site" value="true" data-np-create-first-site/>Create the first website now</label><div class="np-form-grid" data-np-first-site hidden><label>Domain<input name="domain"/></label><label>System username<input name="username"/></label><label>PHP<select name="php_version"><option value="8.3">8.3</option><option value="8.2">8.2</option></select></label></div></section>
+		<div class="np-onboarding-actions"><a class="np-secondary-link" href="/subscriptions">Cancel</a><button type="submit">Create subscription</button></div>
+	</form>
+}
+
+templ routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView) {
+	@pageHead("Account management", "Service Plans", "Define reusable hosting resources, permissions and service presets.") {
+		if planListType(view) == "hosting" {
+			<a class="np-primary-link" href="/service-plans/new">Create plan</a>
+		}
+		if planListType(view) == "addon" {
+			<a class="np-primary-link" href="/service-plans/addons/new">Add an Add-on</a>
+		}
+		if user.Role == auth.RoleAdmin && planListType(view) == "reseller" {
+			<a class="np-primary-link" href="/service-plans/resellers/new">Add Reseller Plan</a>
+		}
+	}
+		<nav class="np-plan-type-tabs" aria-label="Plan type">
+			<a class={ planTypeClass(planListType(view), "hosting") } href="/service-plans?type=hosting">Hosting Plans</a>
+			<a class={ planTypeClass(planListType(view), "addon") } href="/service-plans?type=addon">Add-on Plans</a>
+			if user.Role == auth.RoleAdmin {
+				<a class={ planTypeClass(planListType(view), "reseller") } href="/service-plans?type=reseller">Reseller Plans</a>
+			}
+		</nav>
+	<section class="np-plan-toolbar">
+		<form method="get" action="/service-plans" class="np-plan-filters"><input type="hidden" name="type" value={ planListType(view) }/><label class="np-filter-search">@icon("search")<input type="search" name="q" value={ view.SearchQuery } placeholder="Search plans"/></label><label><span class="np-sr-only">Provider</span><select name="provider"><option value="">All providers</option><option value="admin" selected?={ view.ProviderFilter == "admin" }>Administrator</option>
+			for _, reseller := range data.Resellers {
+				<option value={ formatPlanID(reseller.ID) } selected?={ view.ProviderFilter == formatPlanID(reseller.ID) }>{ reseller.DisplayName }</option>
+			}
+		</select></label><label><span class="np-sr-only">Status</span><select name="status"><option value="">All statuses</option><option value="active" selected?={ view.StatusFilter == "active" }>Active</option><option value="inactive" selected?={ view.StatusFilter == "inactive" }>Inactive</option></select></label><button class="np-secondary-button" type="submit">Filter</button></form>
+	</section>
+		if planListType(view) == "hosting" {
+			@hostingPlanTable(data, view)
+		}
+		if planListType(view) == "addon" {
+			@addonPlanTable(data, view)
+		}
+		if user.Role == auth.RoleAdmin && planListType(view) == "reseller" {
+			@resellerPlanTable(data, view)
+		}
+}
+
+templ hostingPlanTable(data dashboard.Data, view WorkspaceView) {
+	<section class="np-panel np-plan-list-panel"><form method="post" action="/plans/bulk-status" data-np-bulk-form>@csrfInput(view)
+		<div class="np-bulk-bar"><label class="np-check"><input type="checkbox" data-np-bulk-all/>Select all</label><span data-np-bulk-count>0 selected</span><div><button type="submit" name="is_active" value="true" class="np-secondary-button">Activate</button><button type="submit" name="is_active" value="false" class="np-secondary-button">Deactivate</button></div></div>
+		<div class="np-table-wrap"><table class="np-table np-plan-table"><thead><tr><th><span class="np-sr-only">Select</span></th><th>Plan name</th><th>Provider</th><th>Subscriptions</th><th>Resources</th><th>Price</th><th>Sync</th><th>Status</th></tr></thead><tbody>
+			for _, plan := range data.Plans {
+				if planMatchesFilter(plan, view) {
+				<tr><td data-label="Select" class="np-select-cell"><input type="checkbox" name="plan_id" value={ formatPlanID(plan.ID) } data-np-bulk-check aria-label={ "Select " + plan.Name }/></td><td data-label="Plan"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)) }><strong>{ plan.Name }</strong><small>Revision { formatPlanID(int64(plan.Revision)) }</small></a></td><td data-label="Provider">{ planProvider(plan, data.Resellers) }</td><td data-label="Subscriptions">{ formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))) }</td><td data-label="Resources"><span class="np-resource-summary"><strong>{ formatPlanLimitMB(plan.DiskMB) }</strong><small>{ formatPlanLimit(plan.MaxSites) } sites · { formatPlanLimit(plan.MaxDatabases) } databases · { formatPlanLimitMB(plan.BandwidthMB) } traffic</small></span></td><td data-label="Price">{ formatPlanPrice(plan.PriceCents) }</td><td data-label="Sync">@statusPill(planSyncLabel(plan.ID, data.Subscriptions))</td><td data-label="Status">@statusPill(planActiveStatus(plan.IsActive))</td></tr>
+				}
+			}
+		</tbody></table></div>
+	</form></section>
+}
+
+templ addonPlanTable(data dashboard.Data, view WorkspaceView) {
+	<section class="np-panel np-plan-list-panel"><form method="post" action="/addons/bulk-status" data-np-bulk-form>@csrfInput(view)
+		<div class="np-bulk-bar"><label class="np-check"><input type="checkbox" data-np-bulk-all/>Select all</label><span data-np-bulk-count>0 selected</span><div><button type="submit" name="is_active" value="true" class="np-secondary-button">Activate</button><button type="submit" name="is_active" value="false" class="np-secondary-button">Deactivate</button></div></div>
+		<div class="np-table-wrap"><table class="np-table np-plan-table"><thead><tr><th><span class="np-sr-only">Select</span></th><th>Add-on</th><th>Provider</th><th>Resources added</th><th>Revision</th><th>Status</th></tr></thead><tbody>
+		for _, addon := range data.AddonPlans {
+			if addonMatchesFilter(addon, view) {
+				<tr><td data-label="Select" class="np-select-cell"><input type="checkbox" name="addon_id" value={ formatPlanID(addon.ID) } data-np-bulk-check aria-label={ "Select " + addon.Name }/></td><td data-label="Add-on"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/addons/" + formatPlanID(addon.ID)) }><strong>{ addon.Name }</strong><small>{ addon.Description }</small></a></td><td data-label="Provider">{ addonProvider(addon, data.Resellers) }</td><td data-label="Resources"><span class="np-resource-summary"><strong>+{ formatPlanLimitMB(addon.Entitlements.DiskMB) }</strong><small>+{ formatPlanLimit(addon.Entitlements.MaxSites) } sites · +{ formatPlanLimit(addon.Entitlements.MaxDatabases) } databases</small></span></td><td data-label="Revision">{ formatPlanID(int64(addon.Revision)) }</td><td data-label="Status">@statusPill(planActiveStatus(addon.IsActive))</td></tr>
+			}
+		}
+	</tbody></table></div></form></section>
+}
+
+templ resellerPlanTable(data dashboard.Data, view WorkspaceView) {
+	<section class="np-panel np-plan-list-panel"><form method="post" action="/reseller-plans/bulk-status" data-np-bulk-form>@csrfInput(view)
+		<div class="np-bulk-bar"><label class="np-check"><input type="checkbox" data-np-bulk-all/>Select all</label><span data-np-bulk-count>0 selected</span><div><button type="submit" name="is_active" value="true" class="np-secondary-button">Activate</button><button type="submit" name="is_active" value="false" class="np-secondary-button">Deactivate</button></div></div>
+		<div class="np-table-wrap"><table class="np-table np-plan-table"><thead><tr><th><span class="np-sr-only">Select</span></th><th>Plan</th><th>Customers</th><th>Subscriptions</th><th>Disk</th><th>Sites</th><th>Status</th></tr></thead><tbody>
+	for _, plan := range data.ResellerPlans {
+			<tr><td data-label="Select" class="np-select-cell"><input type="checkbox" name="reseller_plan_id" value={ formatPlanID(plan.ID) } data-np-bulk-check aria-label={ "Select " + plan.Name }/></td><td data-label="Plan"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/resellers/" + formatPlanID(plan.ID)) }><strong>{ plan.Name }</strong><small>{ plan.Description }</small></a></td><td data-label="Customers">{ formatPlanLimit(plan.MaxCustomers) }</td><td data-label="Subscriptions">{ formatPlanLimit(plan.MaxSubscriptions) }</td><td data-label="Disk">{ formatPlanLimitMB(plan.DiskMB) }</td><td data-label="Sites">{ formatPlanLimit(plan.MaxSites) }</td><td data-label="Status">@statusPill(planActiveStatus(plan.IsActive))</td></tr>
+		}
+	</tbody></table></div></form></section>
+}
+
+templ routedResellers(data dashboard.Data, view WorkspaceView) {
+	@pageHead("Account management", "Resellers", "Allocate server resources to providers who manage their own plans, customers and subscriptions.") {
+		<a class="np-primary-link" href="#reseller-create">Add reseller</a>
+	}
+	<section class="np-panel">
+		<div class="np-panel-title"><h2>Provider accounts</h2><span class="np-muted">{ formatBadgeCount(len(data.Resellers)) } total</span></div>
+		<form method="post" action="/resellers/bulk-status" data-np-bulk-form>
+			@csrfInput(view)
+			<div class="np-bulk-bar"><label class="np-check"><input type="checkbox" data-np-bulk-all/>Select all</label><span data-np-bulk-count>0 selected</span><div><button type="submit" name="status" value="active" class="np-secondary-button">Activate</button><button type="submit" name="status" value="suspended" class="np-danger-button" data-np-confirm="Suspend the selected resellers and all downstream websites?">Suspend</button></div></div>
+		<div class="np-table-wrap"><table class="np-table"><thead><tr><th><span class="np-sr-only">Select</span></th><th>Reseller</th><th>Plan</th><th>Customers</th><th>Subscriptions</th><th>Status</th></tr></thead><tbody>
+			for _, reseller := range data.Resellers {
+				<tr><td class="np-select-cell" data-label="Select"><input type="checkbox" name="reseller_id" value={ formatJobID(reseller.ID) } aria-label={ "Select " + reseller.DisplayName } data-np-bulk-check/></td><td data-label="Reseller"><a href={ templ.SafeURL("/resellers/" + formatJobID(reseller.ID)) }><strong>{ reseller.DisplayName }</strong><small>{ reseller.Email }</small></a></td><td data-label="Plan">{ reseller.PlanName }</td><td data-label="Customers">{ formatJobID(int64(len(customersForReseller(data.Customers,reseller.ID)))) }</td><td data-label="Subscriptions">{ formatJobID(int64(len(subscriptionsForReseller(data.Subscriptions,reseller.ID)))) }</td><td data-label="Status">@statusPill(reseller.Status)</td></tr>
+			}
+		</tbody></table></div></form>
+	</section>
+	<section class="np-panel" id="reseller-create"><div class="np-panel-title"><h2>Add reseller</h2><span class="np-muted">bounded provider account</span></div>
+		<form class="np-form np-action-form" method="post" action="/resellers">@csrfInput(view)
+			<label>Name<input name="customer_name" required/></label><label>Company<input name="company"/></label><label>Email<input type="email" name="customer_email" required/></label><label>Temporary password<input type="password" name="password" autocomplete="new-password" required/></label>
+			<label>Reseller plan<select name="reseller_plan_id" required><option value="">Select plan</option>
+				for _, plan := range data.ResellerPlans {
+					if plan.IsActive {
+						<option value={ formatJobID(plan.ID) }>{ plan.Name }</option>
+					}
+				}
+			</select></label><label>Internal notes<input name="notes"/></label><button type="submit">Create reseller</button>
+		</form>
+	</section>
+}
+
+templ routedResellerDetail(data dashboard.Data, view WorkspaceView) {
+	if reseller, ok := resellerByID(data.Resellers, view.DetailID); ok {
+		@pageHead("Resellers", reseller.DisplayName, "Provider account, allocated resources and downstream ownership.") { <a class="np-secondary-button" href="/resellers">Back to resellers</a> }
+		<div class="np-routed-grid"><section class="np-panel"><div class="np-panel-title"><h2>Account</h2>@statusPill(reseller.Status)</div><dl class="np-facts"><div><dt>Email</dt><dd>{ reseller.Email }</dd></div><div><dt>Company</dt><dd>{ reseller.Company }</dd></div><div><dt>Reseller plan</dt><dd>{ reseller.PlanName }</dd></div><div><dt>Customers</dt><dd>{ formatJobID(int64(len(customersForReseller(data.Customers,reseller.ID)))) }</dd></div></dl><form method="post" action="/resellers/status">@csrfInput(view)<input type="hidden" name="reseller_id" value={ formatJobID(reseller.ID) }/><input type="hidden" name="status" value={ oppositeCustomerStatus(types.Customer{Status:reseller.Status}) }/><button type="submit" class="np-secondary-button" data-np-confirm="This changes service availability for every downstream customer.">{ customerStatusAction(types.Customer{Status:reseller.Status}) } reseller</button></form></section>
+		<section class="np-panel"><div class="np-panel-title"><h2>Owned service plans</h2></div>@planRows(plansForReseller(data.Plans,reseller.ID))</section></div>
+		<section class="np-panel"><div class="np-panel-title"><h2>Customers</h2></div>@customerRows(customersForReseller(data.Customers,reseller.ID),data.Subscriptions,data.Resellers)</section>
+	}
+}
+
+templ routedResellerPlans(data dashboard.Data, view WorkspaceView) {
+	@pageHead("Service plans", "Reseller Plans", "Define the hard resource and permission boundary available to each reseller.") { <a class="np-primary-link" href="/service-plans/resellers/new">Add Reseller Plan</a> }
+	<section class="np-panel"><div class="np-panel-title"><h2>Allocations</h2></div><div class="np-table-wrap"><table class="np-table"><thead><tr><th>Plan</th><th>Customers</th><th>Subscriptions</th><th>Disk</th><th>Sites</th><th>Status</th></tr></thead><tbody>
+		for _, plan := range data.ResellerPlans {
+			if resellerPlanMatchesFilter(plan, view) {
+				<tr><td data-label="Plan"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/resellers/" + formatPlanID(plan.ID)) }><strong>{ plan.Name }</strong><small>{ plan.Description }</small></a></td><td data-label="Customers">{ formatPlanLimit(plan.MaxCustomers) }</td><td data-label="Subscriptions">{ formatPlanLimit(plan.MaxSubscriptions) }</td><td data-label="Disk">{ formatPlanLimitMB(plan.DiskMB) }</td><td data-label="Sites">{ formatPlanLimit(plan.MaxSites) }</td><td data-label="Status">@statusPill(planActiveStatus(plan.IsActive))</td></tr>
+			}
+		}
+	</tbody></table></div></section>
+}
+
+templ routedResellerPlanEditor(plan types.ResellerPlan, view WorkspaceView) {
+	@pageHead("Service plans", resellerPlanEditorTitle(plan), "Set the maximum resources and permissions a reseller may commit to downstream subscriptions.") { <a class="np-secondary-button" href="/service-plans?type=reseller">Back to plans</a> }
+	<form class="np-plan-editor" method="post" action="/reseller-plans" data-np-plan-editor data-np-dirty-guard>
+		@csrfInput(view)
+		if plan.ID > 0 {
+			<input type="hidden" name="reseller_plan_id" value={ formatPlanID(plan.ID) }/>
+		}
+		<section class="np-plan-general"><div class="np-plan-general-grid"><label>Plan name<input name="name" value={ plan.Name } required maxlength="120"/></label><label class="np-plan-description">Description<textarea name="description" rows="2">{ plan.Description }</textarea></label><label class="np-switch"><input type="hidden" name="is_active" value="false"/><input type="checkbox" name="is_active" value="true" checked?={ plan.IsActive }/><span>Available for new resellers</span></label></div></section>
+		<nav class="np-plan-editor-tabs" aria-label="Reseller plan properties">@planEditorTabLink(view,"resources","Resources") @planEditorTabLink(view,"permissions","Permissions")</nav>
+		<section class="np-plan-property-panel" data-np-plan-panel="resources" hidden?={ planEditorTab(view) != "resources" }><div class="np-property-head"><h2>Resources</h2><p>These are provider-wide allocation ceilings across every downstream customer.</p></div><div class="np-plan-field-grid">@planLimitField("Customers","max_customers",plan.MaxCustomers,"count") @planLimitField("Subscriptions","max_subscriptions",plan.MaxSubscriptions,"count") @planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB")</div></section>
+		<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ planEditorTab(view) != "permissions" }><div class="np-property-head"><h2>Permissions</h2><p>Resellers may grant only capabilities included in this allocation.</p></div><div class="np-permission-list">@planToggle("allow_custom_plans","Create custom subscription snapshots",plan.AllowCustomPlans) @planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",plan.AllowTLS) @planToggle("allow_backups","Backup and restore management",plan.AllowBackups) @planToggle("allow_php_settings","PHP settings management",plan.AllowPHPSettings) @planToggle("allow_ssh","SSH access",plan.AllowSSH)</div></section>
+		<div class="np-plan-action-bar"><div><strong>{ resellerPlanEditorSaveTitle(plan) }</strong><span>Existing reseller allocations are validated before this change is committed.</span></div><div><a class="np-secondary-button" href="/service-plans?type=reseller">Cancel</a><button type="submit">{ resellerPlanEditorSubmitLabel(plan) }</button></div></div>
+	</form>
+}
+
+templ routedMyResources(data dashboard.Data, view WorkspaceView) {
+	@pageHead("Account", "My Resources", "Your provider allocation and the committed customer resources inside it.") {}
+	if len(data.ResellerPlans) == 0 {
+		<section class="np-panel"><p class="np-empty">No active reseller allocation.</p></section>
+	} else {
+		for _, plan := range data.ResellerPlans {
+			<section class="np-panel"><div class="np-panel-title"><h2>{ plan.Name }</h2>@statusPill(planActiveStatus(plan.IsActive))</div><dl class="np-facts"><div><dt>Customers</dt><dd>{ formatPlanLimit(plan.MaxCustomers) }</dd></div><div><dt>Subscriptions</dt><dd>{ formatPlanLimit(plan.MaxSubscriptions) }</dd></div><div><dt>Disk</dt><dd>{ formatPlanLimitMB(plan.DiskMB) }</dd></div><div><dt>Sites</dt><dd>{ formatPlanLimit(plan.MaxSites) }</dd></div><div><dt>Databases</dt><dd>{ formatPlanLimit(plan.MaxDatabases) }</dd></div><div><dt>Custom plans</dt><dd>{ yesNo(plan.AllowCustomPlans) }</dd></div></dl></section>
+		}
+	}
+}
+
+templ customerRows(customers []types.Customer, subscriptions []types.SubscriptionSummary, resellers []types.Reseller) {
+	<div class="np-table-wrap"><table class="np-table"><thead><tr><th><span class="np-sr-only">Select</span></th><th>Customer</th><th>Provider</th><th>Subscriptions</th><th>Status</th></tr></thead><tbody>
+		for _, customer := range customers {
+			<tr><td class="np-select-cell" data-label="Select"><input type="checkbox" name="customer_id" value={ formatJobID(customer.ID) } aria-label={ "Select " + customer.DisplayName } data-np-bulk-check/></td><td data-label="Customer"><a href={ templ.SafeURL("/customers/" + formatJobID(customer.ID)) }><strong>{ customer.DisplayName }</strong><small>{ customer.Email }</small></a></td><td data-label="Provider">{ providerName(customer,resellers) }</td><td data-label="Subscriptions">{ formatJobID(int64(len(subscriptionsForCustomer(subscriptions,customer.ID)))) }</td><td data-label="Status">@statusPill(customer.Status)</td></tr>
+		}
+	</tbody></table></div>
+}
+
+templ planRows(plans []controlquota.Plan) {
+	if len(plans) == 0 {
+		<p class="np-empty">No service plans.</p>
+	} else {
+		<div class="np-object-list">
+			for _, plan := range plans {
+				<a class="np-object-row" href={ templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)) }><span><strong>{ plan.Name }</strong><small>{ plan.Description }</small></span>@statusPill(planActiveStatus(plan.IsActive))</a>
+			}
+		</div>
+	}
+}
+
+templ routedPlanDetail(data dashboard.Data, view WorkspaceView) {
+	if plan, ok := planByID(data.Plans, view.DetailID); ok {
+		@routedPlanEditor(plan, data, view, false)
+	} else {
+		<p class="np-empty">Plan not found.</p>
+	}
+}
+
+templ routedAddonDetail(data dashboard.Data, view WorkspaceView) {
+	if addon, ok := addonByID(data.AddonPlans, view.DetailID); ok {
+		@routedPlanEditor(addonAsPlan(addon), data, view, true)
+	} else {
+		<p class="np-empty">Add-on plan not found.</p>
+	}
+}
+
+templ routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view WorkspaceView, addon bool) {
+	@pageHead("Service plans", planEditorTitle(plan, addon), planEditorDescription(plan, addon)) {
+		<div class="np-plan-head-actions"><a class="np-secondary-button" href={ templ.SafeURL(planListBackURL(addon)) }>Back to plans</a>
+		if !addon && plan.ID > 0 {
+			<a class="np-secondary-button" href={ templ.SafeURL("/service-plans/new?clone_from=" + formatPlanID(plan.ID)) }>@icon("layers") Clone</a>
+		}
+		</div>
+	}
+	if plan.ID > 0 {
+		<section class="np-plan-summary"><div><span>Status</span>@statusPill(planActiveStatus(plan.IsActive))</div><div><span>Revision</span><strong>{ formatPlanID(int64(plan.Revision)) }</strong></div><div><span>Subscriptions</span><strong>{ formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))) }</strong></div><div><span>Synchronization</span><strong>{ planSyncLabel(plan.ID, data.Subscriptions) }</strong></div><div><span>Provider</span><strong>{ planProvider(plan, data.Resellers) }</strong></div></section>
+	}
+	<form class="np-plan-editor" method="post" action={ templ.SafeURL(planEditorAction(addon)) } data-np-plan-editor data-np-plan-id={ formatPlanID(plan.ID) } data-np-dirty-guard>
+		@csrfInput(view)
+		if plan.ID > 0 {
+			if addon {
+				<input type="hidden" name="addon_id" value={ formatPlanID(plan.ID) }/>
+			} else {
+				<input type="hidden" name="plan_id" value={ formatPlanID(plan.ID) }/>
+			}
+		}
+		<section class="np-plan-general"><div class="np-plan-general-grid"><label>{ planEditorNameLabel(addon) }<input name="name" value={ plan.Name } required maxlength="120"/></label>
+			if !addon {
+				<label>Price, cents<input type="number" min="0" name="price_cents" value={ formatPlanPriceCents(plan.PriceCents) }/></label>
+			}
+			<label class="np-plan-description">Description<textarea name="description" rows="2">{ plan.Description }</textarea></label><label class="np-switch"><input type="hidden" name="is_active" value="false"/><input type="checkbox" name="is_active" value="true" checked?={ plan.IsActive }/><span>Available for new subscriptions</span></label></div></section>
+		<nav class="np-plan-editor-tabs" aria-label="Plan properties">
+			@planEditorTabLink(view,"resources","Resources") @planEditorTabLink(view,"permissions","Permissions") @planEditorTabLink(view,"hosting","Hosting") @planEditorTabLink(view,"php","PHP Settings") @planEditorTabLink(view,"mail","Mail") @planEditorTabLink(view,"dns","DNS") @planEditorTabLink(view,"performance","Performance") @planEditorTabLink(view,"logs","Logs & Statistics") @planEditorTabLink(view,"applications","Applications")
+		</nav>
+		<section class="np-plan-property-panel" data-np-plan-panel="resources" hidden?={ planEditorTab(view) != "resources" }><div class="np-property-head"><h2>Resources</h2><p>Set hard allocations, warning thresholds and overuse behavior.</p></div>
+			if !addon {
+				<fieldset class="np-field-group"><legend>Overuse policy</legend><div class="np-overuse-options">@overuseOption(plan,"block","Overuse is not allowed") @overuseOption(plan,"normal","Overuse is allowed") @overuseOption(plan,"notify","Allow and notify") @overuseOption(plan,"not_suspend","Disk and traffic only") @overuseOption(plan,"not_suspend_notify","Disk and traffic with notifications")</div></fieldset>
+			}
+			<div class="np-plan-field-grid">@planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB") @planLimitField("Backup retention","backup_retention_days",plan.BackupRetentionDays,"days")
+				if !addon {
+					@planLimitField("Subscription validity","validity_days",plan.ValidityDays,"days")
+				}
+			</div>
+			if !addon {
+				<div class="np-plan-field-grid np-threshold-grid"><label>Disk warning threshold<div class="np-input-suffix"><input type="number" name="disk_warning_percent" min="1" max="100" value={ formatPlanID(int64(plan.DiskWarningPercent)) } required/><span>%</span></div></label><label>Traffic warning threshold<div class="np-input-suffix"><input type="number" name="traffic_warning_percent" min="1" max="100" value={ formatPlanID(int64(plan.TrafficWarningPercent)) } required/><span>%</span></div></label></div>
+			}
+		</section>
+		<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ planEditorTab(view) != "permissions" }><div class="np-property-head"><h2>Permissions</h2><p>Choose which hosting tools the subscription may use.</p></div><div class="np-permission-list">@planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",plan.AllowTLS) @planToggle("allow_backups","Backup and restore management",plan.AllowBackups) @planToggle("allow_php_settings","PHP version and settings management",plan.AllowPHPSettings) @planToggle("allow_ssh","SSH access preset",plan.AllowSSH)</div></section>
+		<section class="np-plan-property-panel" data-np-plan-panel="hosting" hidden?={ planEditorTab(view) != "hosting" }><div class="np-property-head"><h2>Hosting parameters</h2><p>Configure the default web-hosting runtime.</p></div>
+			if !addon && len(data.Capabilities.PHPVersions) == 0 {
+				<p class="np-gate is-blocked">No PHP-FPM runtime was reported by the agent. Install PHP-FPM before enabling web hosting in this plan.</p>
+			}
+			<div class="np-plan-field-grid">
+				if !addon {
+					@planToggle("hosting_enabled","Web hosting enabled",plan.HostingEnabled)<label>Web server<select name="hosting_web_server"><option value="nginx" selected>Nginx</option></select></label><label>Preferred domain<select name="preferred_domain"><option value="none" selected?={ plan.Presets.Hosting.PreferredDomain == "none" }>No preference</option><option value="www" selected?={ plan.Presets.Hosting.PreferredDomain == "www" }>www</option><option value="non-www" selected?={ plan.Presets.Hosting.PreferredDomain == "non-www" }>non-www</option></select></label><label>Default PHP version<select name="default_php_version">@phpVersionOptions(plan,data.Capabilities)</select></label>
+				}
+				@planLimitField("Per-site disk quota","site_disk_quota_mb",plan.SiteDiskQuotaMB,"MB")
+			</div></section>
+		<section class="np-plan-property-panel" data-np-plan-panel="php" hidden?={ planEditorTab(view) != "php" }><div class="np-property-head"><h2>PHP Settings</h2><p>Set the allowed runtimes and PHP-FPM defaults.</p></div><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">@phpVersionChecks(plan,data.Capabilities)</div></fieldset><div class="np-plan-field-grid">@planLimitField("PHP-FPM max children","php_max_children",plan.PHPFPMMaxChildren,"count") @planLimitField("PHP memory","php_memory_mb",plan.PHPMemoryMB,"MB")<label>Max execution time<input type="number" min="0" name="php_max_execution_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)) }/></label><label>Max input time<input type="number" min="0" name="php_max_input_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)) }/></label><label>POST max size, MB<input type="number" min="0" name="php_post_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.PostMaxMB)) }/></label><label>Upload max size, MB<input type="number" min="0" name="php_upload_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)) }/></label><label>FPM max requests<input type="number" min="0" name="php_fpm_max_requests" value={ formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)) }/></label></div><div class="np-permission-list">@planToggle("php_log_errors","Log PHP errors",plan.Presets.PHP.LogErrors) @planToggle("php_display_errors","Display PHP errors",plan.Presets.PHP.DisplayErrors) @planToggle("php_allow_url_fopen","Allow URL fopen",plan.Presets.PHP.AllowURLFOpen)</div></section>
+		@planPresetPanels(plan,view)
+		<div class="np-plan-action-bar"><div><strong>{ planEditorSaveTitle(plan,addon) }</strong><span>{ planEditorSaveHint(plan,addon) }</span></div><div><a class="np-secondary-button" href={ templ.SafeURL(planListBackURL(addon)) }>Cancel</a><button type="submit" data-np-plan-submit>{ planEditorSubmitLabel(plan,addon) }</button></div></div>
+	</form>
+	if !addon && plan.ID > 0 {
+		@planPreviewDialog(plan,view)
+	}
+}
+
+templ planEditorTabLink(view WorkspaceView, tab string, label string) { <a href={ templ.SafeURL(planTabURL(view,tab)) } class={ planTabClass(view,tab) } data-np-plan-tab={ tab }>{ label }</a> }
+
+templ planLimitField(label string, name string, value int, unit string) { <div class="np-limit-field"><span>{ label }</span><span class="np-limit-controls"><input type="number" min="0" name={ name } value={ planEditorLimitDisplayValue(value,unit) } aria-label={ label } required/>
+	if unit == "MB" {
+		<select name={ name + "_unit" } aria-label={ label + " unit" }><option value="MB" selected?={ planEditorLimitUnit(value) == "MB" }>MB</option><option value="GB" selected?={ planEditorLimitUnit(value) == "GB" }>GB</option><option value="TB" selected?={ planEditorLimitUnit(value) == "TB" }>TB</option></select>
+	} else {
+		<input type="hidden" name={ name + "_unit" } value={ unit }/>
+	}
+	<label class="np-unlimited"><input type="checkbox" name={ name + "_unlimited" } value="true" checked?={ value < 0 } data-np-unlimited/>Unlimited</label></span></div> }
+
+templ planToggle(name string, label string, checked bool) { <label class="np-permission-row"><input type="hidden" name={ name } value="false"/><input type="checkbox" name={ name } value="true" checked?={ checked }/><span>{ label }</span></label> }
+
+templ overuseOption(plan controlquota.Plan, value string, label string) { <label><input type="radio" name="overuse_policy" value={ value } checked?={ string(plan.OverusePolicy) == value }/><span>{ label }</span></label> }
+
+templ phpVersionOptions(plan controlquota.Plan, capabilities types.RuntimeCapabilities) {
+	for _, version := range planPHPVersions(plan,capabilities) {
+		<option value={ version } selected?={ version == plan.DefaultPHPVersion }>{ version }</option>
+	}
+}
+templ phpVersionChecks(plan controlquota.Plan, capabilities types.RuntimeCapabilities) {
+	for _, version := range planPHPVersions(plan,capabilities) {
+		<label class="np-check"><input type="checkbox" name="php_versions" value={ version } checked?={ containsCSV(plan.PHPAllowlist,version) }/>{ version }</label>
+	}
+}
+
+templ planPresetPanels(plan controlquota.Plan, view WorkspaceView) {
+	<section class="np-plan-property-panel" data-np-plan-panel="mail" hidden?={ planEditorTab(view) != "mail" }><div class="np-property-head"><h2>Mail</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("mail_webmail_enabled","Webmail enabled",plan.Presets.Mail.WebmailEnabled) @planToggle("mail_spam_filter","Spam filtering",plan.Presets.Mail.SpamFilter) @planToggle("mail_dkim","DKIM signing",plan.Presets.Mail.DKIM)</div><label>DMARC policy<select name="mail_dmarc_policy"><option value="none" selected?={ plan.Presets.Mail.DMARCPolicy == "none" }>None</option><option value="quarantine" selected?={ plan.Presets.Mail.DMARCPolicy == "quarantine" }>Quarantine</option><option value="reject" selected?={ plan.Presets.Mail.DMARCPolicy == "reject" }>Reject</option></select></label></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="dns" hidden?={ planEditorTab(view) != "dns" }><div class="np-property-head"><h2>DNS</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Zone mode<select name="dns_mode"><option value="primary" selected?={ plan.Presets.DNS.Mode == "primary" }>Primary</option><option value="secondary" selected?={ plan.Presets.DNS.Mode == "secondary" }>Secondary</option></select></label><label>Default TTL<input type="number" name="dns_default_ttl" min="60" value={ formatPlanID(int64(plan.Presets.DNS.DefaultTTL)) }/></label></div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="performance" hidden?={ planEditorTab(view) != "performance" }><div class="np-property-head"><h2>Performance</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Maximum connections<input type="number" min="0" name="performance_max_connections" value={ formatPlanID(int64(plan.Presets.Performance.MaxConnections)) }/></label>@planToggle("performance_static_cache","Static file caching",plan.Presets.Performance.StaticFileCache)</div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="logs" hidden?={ planEditorTab(view) != "logs" }><div class="np-property-head"><h2>Logs & Statistics</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Log retention, days<input type="number" min="1" name="logs_retention_days" value={ formatPlanID(int64(plan.Presets.Logs.RetentionDays)) }/></label>@planToggle("logs_rotation_enabled","Rotate logs",plan.Presets.Logs.RotationEnabled) @planToggle("logs_statistics_enabled","Traffic statistics",plan.Presets.Logs.StatisticsEnabled)</div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="applications" hidden?={ planEditorTab(view) != "applications" }><div class="np-property-head"><h2>Applications</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("applications_catalog_enabled","Application catalog",plan.Presets.Applications.CatalogEnabled)</div><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="applications_allowed" value="wordpress" checked?={ stringInSlice(plan.Presets.Applications.Allowed,"wordpress") }/>WordPress</label><label class="np-check"><input type="checkbox" name="applications_allowed" value="drupal" checked?={ stringInSlice(plan.Presets.Applications.Allowed,"drupal") }/>Drupal</label></div></section>
+}
+
+templ presetStatus() { <span class="np-preset-badge">Stored preset</span> }
+
+templ planPreviewDialog(plan controlquota.Plan, view WorkspaceView) { <dialog class="np-dialog np-plan-preview-dialog" id="plan-preview-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Update & Sync</span><h2>Review synchronization impact</h2><p>Synced subscriptions receive the new revision. Locked and custom subscriptions retain their current snapshots.</p></div><dl class="np-preview-facts"><div><dt>Synced subscriptions</dt><dd data-np-preview-synced>-</dd></div><div><dt>Locked subscriptions</dt><dd data-np-preview-locked>-</dd></div><div><dt>Custom subscriptions</dt><dd data-np-preview-custom>-</dd></div><div><dt>Server committed disk</dt><dd data-np-preview-disk>-</dd></div><div data-np-preview-reseller-row hidden><dt>Reseller allocation</dt><dd data-np-preview-reseller>-</dd></div></dl><p class="np-gate" data-np-preview-warning></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="button" data-np-plan-confirm-submit>Update & Sync</button></div></dialog> }
+
+templ routedSiteDialog(subscriptions []types.SubscriptionSummary, view WorkspaceView) {
+	<dialog class="np-dialog" id="site-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Hosting services</span><h2>Add website</h2><p>Limits are derived from the selected subscription.</p></div><form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>@csrfInput(view)@subscriptionSelect(nil,subscriptions)<label>Domain<input name="domain" required/></label><label>System username<input name="username" required/></label><label>PHP<select name="php_version" data-np-site-php>
+		for _, version := range subscriptionPHPVersions(subscriptions) {
+			<option value={ version }>{ version }</option>
+		}
+	</select></label><p class="np-gate" data-np-customer-gate></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit>Create website</button></div></form></dialog>
+}
+
+templ customerDialog(view WorkspaceView) {
+	<dialog class="np-dialog" id="customer-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Account management</span><h2>Add customer</h2><p>Create a contact-only customer or enable panel access now.</p></div><form class="np-form np-dialog-form" method="post" action="/customers">@csrfInput(view)<label>Email<input type="email" name="customer_email" required/></label><label>Name<input name="customer_name"/></label><label>Company<input name="company"/></label><label>Notes<input name="notes"/></label><label class="np-check"><input type="checkbox" name="enable_login" value="true"/>Enable panel login</label><label>Password<input type="password" name="password" autocomplete="new-password"/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create customer</button></div></form></dialog>
+}

@@ -22,7 +22,7 @@ type GetActiveSubscriptionRow struct {
 	ID             int64
 	CustomerUserID sql.NullInt64
 	ResellerUserID sql.NullInt64
-	PlanID         int64
+	PlanID         sql.NullInt64
 	Status         string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -52,9 +52,33 @@ FROM plans
 WHERE id = $1
 `
 
-func (q *Queries) GetPlan(ctx context.Context, id int64) (Plan, error) {
+type GetPlanRow struct {
+	ID                  int64
+	Name                string
+	Description         string
+	PriceCents          sql.NullInt32
+	DiskMb              int32
+	MaxSites            int32
+	MaxDatabases        int32
+	BandwidthMb         int32
+	MaxMailboxes        int32
+	AllowSsh            bool
+	AllowDns            bool
+	BackupRetentionDays int32
+	PhpAllowlist        string
+	PhpFpmMaxChildren   int32
+	PhpMemoryMb         int32
+	SiteDiskQuotaMb     int32
+	MaxBackups          int32
+	BackupStorageMb     int32
+	IsActive            bool
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+func (q *Queries) GetPlan(ctx context.Context, id int64) (GetPlanRow, error) {
 	row := q.db.QueryRowContext(ctx, getPlan, id)
-	var i Plan
+	var i GetPlanRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -111,7 +135,7 @@ type ListActiveSubscriptionsRow struct {
 	ID             int64
 	CustomerUserID sql.NullInt64
 	ResellerUserID sql.NullInt64
-	PlanID         int64
+	PlanID         sql.NullInt64
 	Status         string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -157,15 +181,39 @@ FROM plans
 ORDER BY id
 `
 
-func (q *Queries) ListPlans(ctx context.Context) ([]Plan, error) {
+type ListPlansRow struct {
+	ID                  int64
+	Name                string
+	Description         string
+	PriceCents          sql.NullInt32
+	DiskMb              int32
+	MaxSites            int32
+	MaxDatabases        int32
+	BandwidthMb         int32
+	MaxMailboxes        int32
+	AllowSsh            bool
+	AllowDns            bool
+	BackupRetentionDays int32
+	PhpAllowlist        string
+	PhpFpmMaxChildren   int32
+	PhpMemoryMb         int32
+	SiteDiskQuotaMb     int32
+	MaxBackups          int32
+	BackupStorageMb     int32
+	IsActive            bool
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+func (q *Queries) ListPlans(ctx context.Context) ([]ListPlansRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPlans)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Plan
+	var items []ListPlansRow
 	for rows.Next() {
-		var i Plan
+		var i ListPlansRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,

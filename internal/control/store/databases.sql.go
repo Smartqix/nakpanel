@@ -10,7 +10,7 @@ import (
 )
 
 const getDatabase = `-- name: GetDatabase :one
-SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id, customer_id
+SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id, customer_id, site_id
 FROM databases
 WHERE id = $1
 `
@@ -30,12 +30,13 @@ func (q *Queries) GetDatabase(ctx context.Context, id int64) (Database, error) {
 		&i.UpdatedAt,
 		&i.SubscriptionID,
 		&i.CustomerID,
+		&i.SiteID,
 	)
 	return i, err
 }
 
 const listDatabases = `-- name: ListDatabases :many
-SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id, customer_id
+SELECT id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id, customer_id, site_id
 FROM databases
 ORDER BY id
 `
@@ -61,6 +62,7 @@ func (q *Queries) ListDatabases(ctx context.Context) ([]Database, error) {
 			&i.UpdatedAt,
 			&i.SubscriptionID,
 			&i.CustomerID,
+			&i.SiteID,
 		); err != nil {
 			return nil, err
 		}
@@ -113,6 +115,7 @@ INSERT INTO databases (
     owner_user_id,
     customer_id,
     subscription_id,
+    site_id,
     engine,
     db_name,
     db_user,
@@ -122,29 +125,36 @@ INSERT INTO databases (
     $1,
     s.customer_id,
     s.id,
-    $2,
+    NULLIF($2, 0),
     $3,
     $4,
+    $5,
     'pending',
     ''
 FROM subscriptions s
-WHERE s.id = $5
+WHERE s.id = $6
   AND s.status = 'active'
+  AND ($2::bigint = 0 OR EXISTS (
+      SELECT 1 FROM sites site WHERE site.id = $2::bigint AND site.subscription_id = s.id
+  ))
 ON CONFLICT (db_name) DO UPDATE
 SET
     owner_user_id = EXCLUDED.owner_user_id,
     customer_id = EXCLUDED.customer_id,
     subscription_id = EXCLUDED.subscription_id,
+    site_id = EXCLUDED.site_id,
     engine = EXCLUDED.engine,
     db_user = EXCLUDED.db_user,
     status = 'pending',
     last_error = '',
     updated_at = now()
-RETURNING id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id, customer_id
+WHERE databases.subscription_id = EXCLUDED.subscription_id
+RETURNING id, owner_user_id, engine, db_name, db_user, status, last_error, created_at, updated_at, subscription_id, customer_id, site_id
 `
 
 type UpsertDatabaseIntentParams struct {
 	OwnerUserID    int64
+	SiteID         interface{}
 	Engine         string
 	DbName         string
 	DbUser         string
@@ -154,6 +164,7 @@ type UpsertDatabaseIntentParams struct {
 func (q *Queries) UpsertDatabaseIntent(ctx context.Context, arg UpsertDatabaseIntentParams) (Database, error) {
 	row := q.db.QueryRowContext(ctx, upsertDatabaseIntent,
 		arg.OwnerUserID,
+		arg.SiteID,
 		arg.Engine,
 		arg.DbName,
 		arg.DbUser,
@@ -172,6 +183,7 @@ func (q *Queries) UpsertDatabaseIntent(ctx context.Context, arg UpsertDatabaseIn
 		&i.UpdatedAt,
 		&i.SubscriptionID,
 		&i.CustomerID,
+		&i.SiteID,
 	)
 	return i, err
 }

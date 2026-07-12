@@ -89,6 +89,31 @@ func TestHandleConnRejectsUnknownEnvelopeFields(t *testing.T) {
 	}
 }
 
+func TestHandleConnRejectsMultipleJSONValues(t *testing.T) {
+	serverSide, clientSide := net.Pipe()
+	defer clientSide.Close()
+	dispatcher := NewDispatcher(&fakeReloader{}, Options{})
+
+	done := make(chan error, 1)
+	go func() {
+		done <- HandleConn(context.Background(), serverSide, dispatcher)
+	}()
+
+	if _, err := clientSide.Write([]byte(`{"op":"ping","id":"01JPHASE200000000000000012","data":{}} {"op":"ping"}` + "\n")); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+	line, err := bufio.NewReader(clientSide).ReadString('\n')
+	if err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+	if !strings.Contains(line, `"ok":false`) || !strings.Contains(line, "multiple json values") {
+		t.Fatalf("response line = %q", line)
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("HandleConn returned error: %v", err)
+	}
+}
+
 func TestHandleConnRejectsOversizedRequest(t *testing.T) {
 	serverSide, clientSide := net.Pipe()
 	defer clientSide.Close()
@@ -128,5 +153,16 @@ func TestAllowedPeerUIDMatchesOnlyConfiguredUID(t *testing.T) {
 	}
 	if allowedPeerUIDMatches(1001, -1) {
 		t.Fatal("disabled policy allowed explicit match")
+	}
+}
+
+func TestAuthorizePeerFailsClosedWhenCredentialsUnavailable(t *testing.T) {
+	serverSide, clientSide := net.Pipe()
+	defer serverSide.Close()
+	defer clientSide.Close()
+
+	server := NewServer(NewDispatcher(&fakeReloader{}, Options{}), WithAllowedPeerUID(1001))
+	if err := server.authorizePeer(serverSide); err == nil || !strings.Contains(err.Error(), "credentials are unavailable") {
+		t.Fatalf("authorizePeer error = %v, want unavailable credentials", err)
 	}
 }

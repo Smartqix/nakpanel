@@ -6,6 +6,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -23,6 +24,38 @@ type AccountQuota struct {
 	PhpMemoryMb       int32
 }
 
+type AddonPlan struct {
+	ID                  int64
+	ResellerID          sql.NullInt64
+	Name                string
+	Description         string
+	DiskMb              int32
+	MaxSites            int32
+	MaxDatabases        int32
+	BandwidthMb         int32
+	MaxMailboxes        int32
+	BackupRetentionDays int32
+	PhpAllowlist        string
+	PhpFpmMaxChildren   int32
+	PhpMemoryMb         int32
+	SiteDiskQuotaMb     int32
+	MaxBackups          int32
+	BackupStorageMb     int32
+	AllowSsh            bool
+	AllowDns            bool
+	IsActive            bool
+	Revision            int32
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	MaxSubdomains       int32
+	MaxDomainAliases    int32
+	MaxFtpAccounts      int32
+	AllowTls            bool
+	AllowBackups        bool
+	AllowPhpSettings    bool
+	ServicePresets      json.RawMessage
+}
+
 type AdminerToken struct {
 	ID          int64
 	OwnerUserID int64
@@ -30,6 +63,18 @@ type AdminerToken struct {
 	ExpiresAt   time.Time
 	UsedAt      sql.NullTime
 	CreatedAt   time.Time
+}
+
+type AuditEvent struct {
+	ID             int64
+	ActorUserID    int64
+	CustomerID     sql.NullInt64
+	SubscriptionID sql.NullInt64
+	Action         string
+	TargetType     string
+	TargetID       sql.NullInt64
+	Metadata       json.RawMessage
+	CreatedAt      time.Time
 }
 
 type Backup struct {
@@ -45,8 +90,8 @@ type Backup struct {
 	LastError      string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	SubscriptionID sql.NullInt64
-	CustomerID     sql.NullInt64
+	SubscriptionID int64
+	CustomerID     int64
 }
 
 type Customer struct {
@@ -59,6 +104,7 @@ type Customer struct {
 	Notes       string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+	ResellerID  sql.NullInt64
 }
 
 type Database struct {
@@ -71,8 +117,21 @@ type Database struct {
 	LastError      string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	SubscriptionID sql.NullInt64
-	CustomerID     sql.NullInt64
+	SubscriptionID int64
+	CustomerID     int64
+	SiteID         sql.NullInt64
+}
+
+type DnsRecord struct {
+	ID         int64
+	ZoneID     int64
+	Host       string
+	RecordType string
+	Value      string
+	Priority   sql.NullInt32
+	Ttl        int32
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type DnsZone struct {
@@ -89,28 +148,85 @@ type DnsZone struct {
 	UpdatedAt   time.Time
 }
 
+type Notification struct {
+	ID              int64
+	RecipientUserID sql.NullInt64
+	CustomerID      sql.NullInt64
+	ResellerID      sql.NullInt64
+	SubscriptionID  sql.NullInt64
+	Kind            string
+	Severity        string
+	Title           string
+	Body            string
+	DedupeKey       string
+	ReadAt          sql.NullTime
+	ResolvedAt      sql.NullTime
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type NotificationDelivery struct {
+	ID             int64
+	NotificationID int64
+	Channel        string
+	Recipient      string
+	Status         string
+	Attempts       int32
+	LastError      string
+	SentAt         sql.NullTime
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
 type Plan struct {
-	ID                  int64
-	Name                string
-	Description         string
-	PriceCents          sql.NullInt32
-	DiskMb              int32
-	MaxSites            int32
-	MaxDatabases        int32
-	BandwidthMb         int32
-	MaxMailboxes        int32
-	AllowSsh            bool
-	AllowDns            bool
-	BackupRetentionDays int32
-	PhpAllowlist        string
-	PhpFpmMaxChildren   int32
-	PhpMemoryMb         int32
-	SiteDiskQuotaMb     int32
-	MaxBackups          int32
-	BackupStorageMb     int32
-	IsActive            bool
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	ID                    int64
+	Name                  string
+	Description           string
+	PriceCents            sql.NullInt32
+	DiskMb                int32
+	MaxSites              int32
+	MaxDatabases          int32
+	BandwidthMb           int32
+	MaxMailboxes          int32
+	AllowSsh              bool
+	AllowDns              bool
+	BackupRetentionDays   int32
+	PhpAllowlist          string
+	PhpFpmMaxChildren     int32
+	PhpMemoryMb           int32
+	SiteDiskQuotaMb       int32
+	MaxBackups            int32
+	BackupStorageMb       int32
+	IsActive              bool
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
+	ResellerID            sql.NullInt64
+	Revision              int32
+	OverusePolicy         string
+	DiskWarningPercent    int32
+	TrafficWarningPercent int32
+	MaxSubdomains         int32
+	MaxDomainAliases      int32
+	MaxFtpAccounts        int32
+	ValidityDays          int32
+	HostingEnabled        bool
+	DefaultPhpVersion     string
+	AllowTls              bool
+	AllowBackups          bool
+	AllowPhpSettings      bool
+}
+
+type PlanServicePreset struct {
+	PlanID        int64
+	SchemaVersion int32
+	Hosting       json.RawMessage
+	Php           json.RawMessage
+	Mail          json.RawMessage
+	Dns           json.RawMessage
+	Performance   json.RawMessage
+	Logs          json.RawMessage
+	Applications  json.RawMessage
+	UpdatedAt     time.Time
 }
 
 type ReconciliationRun struct {
@@ -122,6 +238,54 @@ type ReconciliationRun struct {
 	LastError   string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type ResellerAccount struct {
+	ID          int64
+	LoginUserID int64
+	Email       string
+	DisplayName string
+	Company     string
+	Status      string
+	Notes       string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type ResellerPlan struct {
+	ID               int64
+	Name             string
+	Description      string
+	MaxCustomers     int32
+	MaxSubscriptions int32
+	DiskMb           int32
+	MaxSites         int32
+	MaxDatabases     int32
+	BandwidthMb      int32
+	MaxMailboxes     int32
+	MaxBackups       int32
+	BackupStorageMb  int32
+	AllowCustomPlans bool
+	AllowSsh         bool
+	AllowDns         bool
+	IsActive         bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	MaxSubdomains    int32
+	MaxDomainAliases int32
+	MaxFtpAccounts   int32
+	AllowTls         bool
+	AllowBackups     bool
+	AllowPhpSettings bool
+}
+
+type ResellerSubscription struct {
+	ID             int64
+	ResellerID     int64
+	ResellerPlanID int64
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type RestoreRun struct {
@@ -152,35 +316,122 @@ type Setting struct {
 }
 
 type Site struct {
-	ID             int64
-	OwnerUserID    int64
-	Username       string
-	Domain         string
-	PhpVersion     string
-	Status         string
-	LastError      string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	TlsStatus      string
-	TlsIssuer      string
-	TlsCertPath    string
-	TlsKeyPath     string
-	TlsExpiresAt   sql.NullTime
-	TlsLastError   string
-	SubscriptionID sql.NullInt64
-	CustomerID     sql.NullInt64
+	ID                   int64
+	OwnerUserID          int64
+	Username             string
+	Domain               string
+	PhpVersion           string
+	Status               string
+	LastError            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TlsStatus            string
+	TlsIssuer            string
+	TlsCertPath          string
+	TlsKeyPath           string
+	TlsExpiresAt         sql.NullTime
+	TlsLastError         string
+	SubscriptionID       int64
+	CustomerID           int64
+	DesiredStatus        string
+	DesiredPhpVersion    string
+	HttpsRedirect        bool
+	DesiredHttpsRedirect bool
+	SettingsStatus       string
+	SettingsError        string
+}
+
+type SiteTrafficCursor struct {
+	SiteID       int64
+	DeviceID     int64
+	Inode        int64
+	ByteOffset   int64
+	PeriodStart  time.Time
+	TrafficBytes int64
+	UpdatedAt    time.Time
 }
 
 type Subscription struct {
-	ID             int64
-	CustomerUserID sql.NullInt64
-	ResellerUserID sql.NullInt64
-	PlanID         int64
-	Status         string
+	ID               int64
+	CustomerUserID   sql.NullInt64
+	ResellerUserID   sql.NullInt64
+	PlanID           sql.NullInt64
+	Status           string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	CustomerID       int64
+	Name             string
+	SyncMode         string
+	SyncStatus       string
+	PlanRevision     int32
+	SyncError        string
+	SuspensionReason string
+	ExpiresAt        sql.NullTime
+}
+
+type SubscriptionAddon struct {
+	SubscriptionID int64
+	AddonPlanID    int64
 	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	CustomerID     int64
-	Name           string
+}
+
+type SubscriptionEntitlement struct {
+	SubscriptionID        int64
+	PlanName              string
+	DiskMb                int32
+	MaxSites              int32
+	MaxDatabases          int32
+	BandwidthMb           int32
+	MaxMailboxes          int32
+	AllowSsh              bool
+	AllowDns              bool
+	BackupRetentionDays   int32
+	PhpAllowlist          string
+	PhpFpmMaxChildren     int32
+	PhpMemoryMb           int32
+	SiteDiskQuotaMb       int32
+	MaxBackups            int32
+	BackupStorageMb       int32
+	SourceRevision        int32
+	UpdatedAt             time.Time
+	OverusePolicy         string
+	DiskWarningPercent    int32
+	TrafficWarningPercent int32
+	MaxSubdomains         int32
+	MaxDomainAliases      int32
+	MaxFtpAccounts        int32
+	ValidityDays          int32
+	HostingEnabled        bool
+	DefaultPhpVersion     string
+	AllowTls              bool
+	AllowBackups          bool
+	AllowPhpSettings      bool
+	ServicePresets        json.RawMessage
+}
+
+type SubscriptionUsageCurrent struct {
+	SubscriptionID int64
+	PeriodStart    time.Time
+	SiteBytes      int64
+	DatabaseBytes  int64
+	BackupBytes    int64
+	DiskBytes      int64
+	TrafficBytes   int64
+	IsComplete     bool
+	CollectedAt    time.Time
+	LastError      string
+}
+
+type SubscriptionUsageHistory struct {
+	ID             int64
+	SubscriptionID int64
+	PeriodStart    time.Time
+	SiteBytes      int64
+	DatabaseBytes  int64
+	BackupBytes    int64
+	DiskBytes      int64
+	TrafficBytes   int64
+	RecordedAt     time.Time
 }
 
 type User struct {

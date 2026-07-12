@@ -194,11 +194,11 @@ templ dashboardSections(data dashboard.Data, actions DashboardActions) {
 		@sitesSection(data.Sites, data.Quotas, data.Subscriptions, actions)
 	</section>
 	<section class="np-view" data-np-panel="databases" id="view-databases" aria-labelledby="databases-title">
-		@databasesSection(data.Databases, data.Quotas, data.Subscriptions, actions)
+		@databasesSection(data.Databases, data.Quotas, data.Subscriptions, actions, "")
 	</section>
 	if actions.CanUsePhase6 {
 		<section class="np-view" data-np-panel="operations" id="view-operations" aria-labelledby="phase6-title">
-			@phase6Section(data.Phase6, data.Phase6Error, data.Quotas, data.Subscriptions, actions)
+			@phase6Section(data.Phase6, data.Phase6Error, data.Quotas, data.Subscriptions, actions, "")
 		</section>
 	}
 	<section class="np-view" data-np-panel="customers" id="view-customers" aria-labelledby="customers-title">
@@ -208,10 +208,10 @@ templ dashboardSections(data dashboard.Data, actions DashboardActions) {
 		@planSection(data.Quotas, data.Customers, data.Subscriptions, data.Plans, data.Settings, data.CommittedDiskMB, data.QuotaLoadError, data.PlanLoadError, actions)
 	</section>
 	<section class="np-view" data-np-panel="settings" id="view-settings" aria-labelledby="settings-title">
-		@settingsSection(data, actions)
+		@settingsSection(data, actions, "")
 	</section>
 	<section class="np-view" data-np-panel="activity" id="view-activity" aria-labelledby="jobs-title">
-		@jobsSection(data.Jobs, data.JobLoadError, actions)
+		@jobsSection(data.Jobs, data.JobLoadError, actions, "")
 	</section>
 }
 
@@ -387,7 +387,7 @@ templ sitesSection(sites []dashboard.Site, quotas []controlquota.Summary, subscr
 	</section>
 }
 
-templ databasesSection(databases []dashboard.Database, quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary, actions DashboardActions) {
+templ databasesSection(databases []dashboard.Database, quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary, actions DashboardActions, csrfToken string) {
 	<section class="np-section" aria-labelledby="databases-title">
 		<div class="np-section-heading">
 			<h2 id="databases-title">Databases</h2>
@@ -428,6 +428,7 @@ templ databasesSection(databases []dashboard.Database, quotas []controlquota.Sum
 		}
 		if actions.CanCreateDatabase {
 			<form class="np-form np-action-form" method="post" action="/databases">
+				@csrfTokenInput(csrfToken)
 				@subscriptionSelect(quotas, subscriptions)
 				<label>Engine <select name="engine"><option value="mariadb">mariadb</option></select></label>
 				<label>Name <input name="db_name" autocomplete="off" required/></label>
@@ -438,7 +439,7 @@ templ databasesSection(databases []dashboard.Database, quotas []controlquota.Sum
 	</section>
 }
 
-templ phase6Section(phase6 dashboard.Phase6Data, loadError string, quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary, actions DashboardActions) {
+templ phase6Section(phase6 dashboard.Phase6Data, loadError string, quotas []controlquota.Summary, subscriptions []types.SubscriptionSummary, actions DashboardActions, csrfToken string) {
 	if actions.CanUsePhase6 {
 		<section class="np-section" aria-labelledby="phase6-title">
 			<div class="np-section-heading">
@@ -451,23 +452,27 @@ templ phase6Section(phase6 dashboard.Phase6Data, loadError string, quotas []cont
 					}
 				</p>
 			} else {
-				@phase6Tables(phase6)
+				@phase6Tables(phase6, csrfToken)
 			}
 			<form class="np-form np-action-form" method="post" action="/backups">
+				@csrfTokenInput(csrfToken)
 				@subscriptionSelect(quotas, subscriptions)
 				<label>Domain <input name="domain" autocomplete="off" required/></label>
 				<button type="submit">Create backup</button>
 			</form>
 			<form class="np-form np-action-form" method="post" action="/webmail">
+				@csrfTokenInput(csrfToken)
 				<label>Domain <input name="domain" autocomplete="off" required/></label>
 				<button type="submit">Configure webmail</button>
 			</form>
 			<form class="np-form np-action-form" method="post" action="/dns">
+				@csrfTokenInput(csrfToken)
 				<label>Domain <input name="domain" autocomplete="off" required/></label>
 				<label>Address <input name="address" autocomplete="off" required/></label>
 				<button type="submit">Configure DNS</button>
 			</form>
 			<form class="np-form np-action-form" method="post" action="/reconcile">
+				@csrfTokenInput(csrfToken)
 				<button type="submit">Regenerate configs</button>
 				<a class="np-link-button" href="/db">Adminer SSO</a>
 			</form>
@@ -475,7 +480,7 @@ templ phase6Section(phase6 dashboard.Phase6Data, loadError string, quotas []cont
 	}
 }
 
-templ phase6Tables(phase6 dashboard.Phase6Data) {
+templ phase6Tables(phase6 dashboard.Phase6Data, csrfToken string) {
 	if len(phase6.Backups) > 0 {
 		<div class="np-table-wrap">
 			<table class="np-table">
@@ -493,6 +498,7 @@ templ phase6Tables(phase6 dashboard.Phase6Data) {
 								<span class="np-table-value">
 									if canRestoreBackup(backup) {
 										<form class="np-inline-form" method="post" action="/restores">
+											@csrfTokenInput(csrfToken)
 											<input type="hidden" name="backup_id" value={ formatJobID(backup.ID) }/>
 											<button type="submit">Restore</button>
 										</form>
@@ -656,7 +662,7 @@ templ planSection(quotas []controlquota.Summary, customers []types.Customer, sub
 			} else {
 				@subscriptionsTable(quotas, subscriptions)
 			}
-			@capacityCard(settings, committedDiskMB, quotas, actions)
+			@capacityCard(settings, committedDiskMB, quotas, actions, "")
 		}
 		if planLoadError != "" {
 			<p class="np-empty np-card-empty">
@@ -729,13 +735,13 @@ templ planSection(quotas []controlquota.Summary, customers []types.Customer, sub
 					<label>Password <input type="password" name="password" autocomplete="new-password"/></label>
 					<button type="submit">Create Customer + Subscription</button>
 				</form>
-				@planForm()
+				@planForm("")
 			</section>
 		}
 	</section>
 }
 
-templ settingsSection(data dashboard.Data, actions DashboardActions) {
+templ settingsSection(data dashboard.Data, actions DashboardActions, csrfToken string) {
 	<section class="np-settings-page" aria-labelledby="settings-title">
 		<div class="np-page-head">
 			<div>
@@ -846,8 +852,9 @@ templ settingsSection(data dashboard.Data, actions DashboardActions) {
 					<h2 id="settings-capacity-title">Capacity &amp; Overselling</h2>
 				</div>
 				<div class="np-settings-control-row">
-					@capacityCard(data.Settings, data.CommittedDiskMB, data.Quotas, actions)
+					@capacityCard(data.Settings, data.CommittedDiskMB, data.Quotas, actions, csrfToken)
 					<form class="np-form np-action-form np-settings-form" method="post" action="/settings/oversell">
+						@csrfTokenInput(csrfToken)
 						<label>Oversell <select name="oversell_policy"><option value="warn">warn</option><option value="cap">cap</option></select></label>
 						<label>Capacity MB <input type="number" min="0" name="server_disk_capacity_mb" value={ formatSettingsCapacity(data.Settings.ServerDiskCapacityMB) } required/></label>
 						<button type="submit">Save settings</button>
@@ -880,7 +887,7 @@ templ subscriptionToolbar(actions DashboardActions) {
 	</div>
 }
 
-templ capacityCard(settings controlquota.Settings, committedDiskMB int, quotas []controlquota.Summary, actions DashboardActions) {
+templ capacityCard(settings controlquota.Settings, committedDiskMB int, quotas []controlquota.Summary, actions DashboardActions, csrfToken string) {
 	<section class="np-capacity-card" aria-label="Server capacity">
 		<div class="np-capacity-copy">
 			<strong>Server capacity</strong>
@@ -903,6 +910,7 @@ templ capacityCard(settings controlquota.Settings, committedDiskMB int, quotas [
 		</div>
 		if actions.CanManageQuotas {
 			<form class="np-oversell-form" method="post" action="/settings/oversell" aria-label="Oversell policy">
+				@csrfTokenInput(csrfToken)
 				<input type="hidden" name="server_disk_capacity_mb" value={ formatSettingsCapacity(settings.ServerDiskCapacityMB) }/>
 				<button type="submit" name="oversell_policy" value="warn" class={ "np-segment " + oversellActiveClass(settings.OversellPolicy, "warn") }>warn</button>
 				<button type="submit" name="oversell_policy" value="cap" class={ "np-segment " + oversellActiveClass(settings.OversellPolicy, "cap") }>cap</button>
@@ -946,7 +954,7 @@ templ subscriptionsTable(quotas []controlquota.Summary, subscriptions []types.Su
 						data-subscriber-email={ quota.Email }
 					>
 						<td data-label="Select" class="np-select-cell">
-							<input type="checkbox" class="np-subscription-check" aria-label={ "Select " + quota.Email } data-np-subscription-check/>
+							<input type="checkbox" class="np-subscription-check" name="subscription_id" value={ formatQuotaUserID(quota.SubscriptionID) } aria-label={ "Select " + quota.Email } data-np-subscription-check data-np-bulk-check/>
 						</td>
 						<td data-label="Subscription">
 							<div class="np-subscription-identity">
@@ -986,8 +994,8 @@ templ subscriptionsTable(quotas []controlquota.Summary, subscriptions []types.Su
 						</td>
 						<td data-label="Action">
 							<div class="np-row-actions">
-								<span class="np-pause-dot" aria-hidden="true">Ⅱ</span>
-								<button type="button" class="np-manage-button" data-np-scroll-target="#subscription-admin-forms">Manage</button>
+								<span class="np-pause-dot" aria-hidden="true">@icon("pause")</span>
+								<a class="np-manage-button" href={ templ.SafeURL("/subscriptions/" + formatQuotaUserID(quota.SubscriptionID)) }>Manage</a>
 							</div>
 						</td>
 					</tr>
@@ -1064,6 +1072,7 @@ templ subscriptionSelect(quotas []controlquota.Summary, subscriptions []types.Su
 					data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) }
 					data-sites-used={ formatPlanLimitFormValue(subscription.SitesUsed) }
 					data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) }
+					data-php-versions={ subscription.PHPAllowlist }
 				>{ subscriptionSelectLabel(subscription) }</option>
 			}
 		</select></label>
@@ -1139,8 +1148,9 @@ templ plansTable(plans []controlquota.Plan) {
 	}
 }
 
-templ planForm() {
+templ planForm(csrfToken string) {
 	<form class="np-form np-action-form" method="post" action="/plans">
+		@csrfTokenInput(csrfToken)
 		<label>Name <input name="name" autocomplete="off" required/></label>
 		<label>Description <input name="description" autocomplete="off"/></label>
 		<label>Price cents <input type="number" min="0" name="price_cents"/></label>
@@ -1217,7 +1227,7 @@ templ quotaUsageTable(quotas []controlquota.Summary) {
 	</div>
 }
 
-templ jobsSection(jobs []dashboard.Job, loadError string, actions DashboardActions) {
+templ jobsSection(jobs []dashboard.Job, loadError string, actions DashboardActions, csrfToken string) {
 	<section class="np-section" aria-labelledby="jobs-title">
 		<div class="np-section-heading">
 			<h2 id="jobs-title">Recent jobs</h2>
@@ -1263,8 +1273,9 @@ templ jobsSection(jobs []dashboard.Job, loadError string, actions DashboardActio
 								</td>
 								<td data-label="Action">
 									<span class="np-table-value">
-										if canRetryJob(job, actions) {
-											<form class="np-inline-form" method="post" action="/jobs/retry">
+									if canRetryJob(job, actions) {
+										<form class="np-inline-form" method="post" action="/jobs/retry">
+											@csrfTokenInput(csrfToken)
 												<input type="hidden" name="job_id" value={ formatJobID(job.ID) }/>
 												<button type="submit">Retry job</button>
 											</form>
@@ -1280,4 +1291,10 @@ templ jobsSection(jobs []dashboard.Job, loadError string, actions DashboardActio
 			</div>
 		}
 	</section>
+}
+
+templ csrfTokenInput(token string) {
+	if token != "" {
+		<input type="hidden" name="csrf_token" value={ token }/>
+	}
 }

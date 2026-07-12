@@ -17,6 +17,8 @@ NAKPANEL_LEGACY_PHASE_VMS=(
   nakpanel-phase8
   nakpanel-phase9
   nakpanel-phase10
+  nakpanel-phase11
+  nakpanel-phase12
 )
 
 require_multipass() {
@@ -73,6 +75,21 @@ sync_repo() {
 
 vm_ip() {
   multipass info "${NAKPANEL_MULTIPASS_VM}" | awk '/IPv4/{print $2; exit}'
+}
+
+csrf_token() {
+  local cookie_file="$1"
+  local session_token
+  session_token="$(awk '$6 == "nakpanel_session" { value = $7 } END { print value }' "${cookie_file}")"
+  if [[ -z "${session_token}" ]]; then
+    echo "nakpanel_session is missing from ${cookie_file}" >&2
+    return 1
+  fi
+  if command -v shasum >/dev/null 2>&1; then
+    printf 'nakpanel-csrf-v1:%s' "${session_token}" | shasum -a 256 | awk '{print $1}'
+  else
+    printf 'nakpanel-csrf-v1:%s' "${session_token}" | sha256sum | awk '{print $1}'
+  fi
 }
 
 destroy_vm() {

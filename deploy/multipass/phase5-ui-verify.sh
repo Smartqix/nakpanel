@@ -11,10 +11,9 @@ REMOTE_SRC="${NAKPANEL_REMOTE_SRC}"
 ensure_vm 2 3G 16G
 sync_repo "${ROOT_DIR}" "${REMOTE_SRC}"
 
-multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" -- env REMOTE_SRC="${REMOTE_SRC}" bash -se <<'REMOTE'
 set -euo pipefail
 
-REMOTE_SRC="/tmp/nakpanel-src"
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl postgresql postgresql-contrib nginx php8.3-fpm mariadb-server build-essential python3
@@ -98,6 +97,20 @@ FROM users u
 JOIN customers c ON c.login_user_id = u.id
 JOIN plans p ON p.name = 'Legacy Unlimited'
 WHERE u.email = 'admin@nakpanel.test';
+
+INSERT INTO subscription_entitlements (
+  subscription_id, plan_name, disk_mb, max_sites, max_databases, bandwidth_mb,
+  max_mailboxes, allow_ssh, allow_dns, backup_retention_days, php_allowlist,
+  php_fpm_max_children, php_memory_mb, site_disk_quota_mb, max_backups,
+  backup_storage_mb, source_revision
+)
+SELECT s.id,p.name,p.disk_mb,p.max_sites,p.max_databases,p.bandwidth_mb,
+  p.max_mailboxes,p.allow_ssh,p.allow_dns,p.backup_retention_days,p.php_allowlist,
+  p.php_fpm_max_children,p.php_memory_mb,p.site_disk_quota_mb,p.max_backups,
+  p.backup_storage_mb,p.revision
+FROM subscriptions s JOIN plans p ON p.id=s.plan_id
+WHERE s.name='Phase verifier unlimited' AND s.status='active'
+ON CONFLICT (subscription_id) DO NOTHING;
 SQL
 
 sudo mariadb -e "DROP DATABASE IF EXISTS \`np_phase5\`; DROP USER IF EXISTS 'np_phase5_user'@'localhost';"
@@ -197,6 +210,7 @@ multipass exec "${VM_NAME}" -- test ! -e "${REMOTE_SRC}"
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Admin dashboard'
@@ -210,6 +224,7 @@ assert_contains "${tmpdir}/admin-dashboard.html" 'name="db_user"'
 
 site_status="$(curl -sk -o "${tmpdir}/site-create.out" -w '%{http_code}' \
   -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
   -d 'username=npui' \
   -d 'domain=phase5-ui.test' \
   -d 'php_version=8.3' \
@@ -238,6 +253,7 @@ curl -s --fail -H 'Host: phase5-ui.test' "http://${VM_IP}/" | grep -qx 'nakpanel
 
 db_status="$(curl -sk -o "${tmpdir}/database-create.out" -w '%{http_code}' \
   -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
   -d 'engine=mariadb' \
   -d 'db_name=np_phase5' \
   -d 'db_user=np_phase5_user' \
@@ -262,7 +278,7 @@ sudo mariadb -NBe "SELECT CONCAT(User, '@', Host) FROM mysql.user WHERE User = '
 sudo mariadb -NBe "SHOW GRANTS FOR 'np_phase5_user'@'localhost'" | grep -F 'ON `np_phase5`.*'
 REMOTE
 
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/" > "${tmpdir}/admin-after-actions.html"
+curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/?legacy=1" > "${tmpdir}/admin-after-actions.html"
 assert_contains "${tmpdir}/admin-after-actions.html" 'phase5-ui.test'
 assert_contains "${tmpdir}/admin-after-actions.html" 'npui'
 assert_contains "${tmpdir}/admin-after-actions.html" 'np_phase5'
@@ -273,12 +289,14 @@ assert_contains "${tmpdir}/admin-after-actions.html" 'data-label="Created"'
 
 curl -sk --fail -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" -L \
   -d 'email=client@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelClient!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/client-dashboard.html"
 assert_client_dashboard "${tmpdir}/client-dashboard.html"
 
 client_site_status="$(curl -sk -o "${tmpdir}/client-site.out" -w '%{http_code}' \
   -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/client.cookies")" \
   -d 'username=npclient' \
   -d 'domain=client-phase5-ui.test' \
   -d 'php_version=8.3' \
@@ -291,6 +309,7 @@ fi
 
 client_db_status="$(curl -sk -o "${tmpdir}/client-database.out" -w '%{http_code}' \
   -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/client.cookies")" \
   -d 'engine=mariadb' \
   -d 'db_name=np_client_phase5' \
   -d 'db_user=np_client_phase5_user' \
@@ -303,11 +322,12 @@ fi
 
 client_cert_status="$(curl -sk -o "${tmpdir}/client-cert.out" -w '%{http_code}' \
   -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/client.cookies")" \
   -d 'domain=phase5-ui.test' \
   -d 'issuer=local-self-signed' \
   "https://${VM_IP}:7443/certificates")"
-if [[ "${client_cert_status}" != "403" ]]; then
-  echo "client certificate issue returned HTTP ${client_cert_status}, want 403" >&2
+if [[ "${client_cert_status}" != "404" ]]; then
+  echo "client certificate issue returned HTTP ${client_cert_status}, want 404" >&2
   cat "${tmpdir}/client-cert.out" >&2
   exit 1
 fi

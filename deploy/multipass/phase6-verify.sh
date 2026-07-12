@@ -76,6 +76,7 @@ REMOTE
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Admin dashboard'
@@ -98,6 +99,7 @@ post_phase6_action() {
   local status
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "303" ]]; then
@@ -165,7 +167,7 @@ if grep -Eq 'LISTEN.+:(80|443)\b.+nakpanel-panel' /tmp/nakpanel-phase6-ss.txt; t
 fi
 REMOTE
 
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/" > "${tmpdir}/phase6-dashboard.html"
+curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/?legacy=1" > "${tmpdir}/phase6-dashboard.html"
 assert_contains "${tmpdir}/phase6-dashboard.html" 'phase5-ui.test'
 assert_contains "${tmpdir}/phase6-dashboard.html" 'webmail.phase5-ui.test'
 assert_contains "${tmpdir}/phase6-dashboard.html" 'db.phase5-ui.test'
@@ -184,6 +186,7 @@ assert_contains "${tmpdir}/nginx-stopped-login.html" 'nakpanel login'
 
 curl -sk --fail -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" -L \
   -d 'email=client@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelClient!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/client-dashboard.html"
 assert_contains "${tmpdir}/client-dashboard.html" 'Client dashboard'

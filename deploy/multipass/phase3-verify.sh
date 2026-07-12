@@ -11,7 +11,7 @@ REMOTE_SRC="${NAKPANEL_REMOTE_SRC}"
 ensure_vm 2 3G 16G
 sync_repo "${ROOT_DIR}" "${REMOTE_SRC}"
 
-multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" -- env REMOTE_SRC="${REMOTE_SRC}" bash -se <<'REMOTE'
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
@@ -53,8 +53,8 @@ if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'nakp
   sudo -u postgres createdb -O nakpanel nakpanel
 fi
 
-sudo chown -R nakpanel:nakpanel /tmp/nakpanel-src
-cd /tmp/nakpanel-src
+sudo chown -R nakpanel:nakpanel "${REMOTE_SRC}"
+cd "${REMOTE_SRC}"
 
 sudo -u nakpanel env \
   PATH="${PATH}" \
@@ -155,12 +155,14 @@ curl -sk --fail "https://${VM_IP}:7443/login" | grep -q 'nakpanel login'
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin-dashboard.html"
 assert_contains "${tmpdir}/admin-dashboard.html" 'Admin dashboard'
 
 create_status="$(curl -sk -o "${tmpdir}/create.out" -w '%{http_code}' \
   -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
   -d 'username=npdemo' \
   -d 'domain=phase3.test' \
   -d 'php_version=8.3' \
@@ -211,6 +213,7 @@ REMOTE
 
 repeat_status="$(curl -sk -o "${tmpdir}/repeat.out" -w '%{http_code}' \
   -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
   -d 'username=npdemo' \
   -d 'domain=phase3.test' \
   -d 'php_version=8.3' \
@@ -263,12 +266,14 @@ grep -qx 'npdemo' "${tmpdir}/sleep.out"
 
 curl -sk --fail -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" -L \
   -d 'email=client@nakpanel.test' \
+  -d 'legacy=1' \
   -d 'password=NakpanelClient!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/client-dashboard.html"
 assert_client_dashboard "${tmpdir}/client-dashboard.html"
 
 client_status="$(curl -sk -o "${tmpdir}/client-create.out" -w '%{http_code}' \
   -c "${tmpdir}/client.cookies" -b "${tmpdir}/client.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/client.cookies")" \
   -d 'username=npclient' \
   -d 'domain=client-phase3.test' \
   -d 'php_version=8.3' \
