@@ -521,6 +521,7 @@ templ domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.S
 		if user.Role!=auth.RoleAdmin && !subscription.AllowTLS {
 			<p class="np-gate">SSL/TLS management is disabled by this subscription.</p>
 		} else if actions.CanIssueCertificate {
+			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/tls-auto-renew") }>@csrfInput(view)<label class="np-check"><input type="checkbox" name="tls_auto_renew" value="true" checked?={ item.TLSAutoRenew }/>Renew this certificate automatically</label><button type="submit">Save renewal setting</button></form>
 			<form class="np-form np-action-form" method="post" action="/certificates">@csrfInput(view)<input type="hidden" name="domain" value={ item.Domain }/><input type="hidden" name="site_id" value={ formatJobID(item.ID) }/><label>Issuer<select name="issuer"><option value="acme">ACME / Let's Encrypt</option><option value="local-self-signed">Local self-signed</option></select></label><button type="submit">Issue or reissue certificate</button></form>
 		}
 	</section>

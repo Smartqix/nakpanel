@@ -151,6 +151,11 @@ func TestUsageCollectorRejectsUnrecoverableLogRotation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	oldLog, err := os.Open(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer oldLog.Close()
 	if err := os.Remove(logPath); err != nil {
 		t.Fatal(err)
 	}

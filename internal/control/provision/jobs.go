@@ -70,11 +70,15 @@ type AgentDatabaseClient interface {
 }
 
 type IssueCertArgs struct {
-	SiteID     int64            `json:"site_id" river:"unique"`
-	Username   string           `json:"username"`
-	Domain     string           `json:"domain"`
-	PHPVersion string           `json:"php_version"`
-	Issuer     types.CertIssuer `json:"issuer"`
+	SiteID         int64            `json:"site_id" river:"unique"`
+	Username       string           `json:"username"`
+	Domain         string           `json:"domain"`
+	PHPVersion     string           `json:"php_version"`
+	Issuer         types.CertIssuer `json:"issuer"`
+	SubscriptionID int64            `json:"subscription_id,omitempty"`
+	CustomerID     int64            `json:"customer_id,omitempty"`
+	ActorUserID    int64            `json:"actor_user_id,omitempty"`
+	Automated      bool             `json:"automated,omitempty"`
 }
 
 func (IssueCertArgs) Kind() string { return "issue_cert" }
@@ -218,15 +222,20 @@ func (w *CreateDatabaseWorker) markFailed(ctx context.Context, id int64, message
 type IssueCertWorker struct {
 	river.WorkerDefaults[IssueCertArgs]
 
-	agent AgentCertificateClient
-	sites SiteTLSStatusStore
+	agent    AgentCertificateClient
+	sites    SiteTLSStatusStore
+	reporter AutomatedReporter
 }
 
-func NewIssueCertWorker(agent AgentCertificateClient, sites SiteTLSStatusStore) *IssueCertWorker {
-	return &IssueCertWorker{
+func NewIssueCertWorker(agent AgentCertificateClient, sites SiteTLSStatusStore, reporters ...AutomatedReporter) *IssueCertWorker {
+	worker := &IssueCertWorker{
 		agent: agent,
 		sites: sites,
 	}
+	if len(reporters) > 0 {
+		worker.reporter = reporters[0]
+	}
+	return worker
 }
 
 func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs]) error {
@@ -241,35 +250,46 @@ func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs
 		Issuer:     job.Args.Issuer,
 	})
 	if err != nil {
-		w.markFailed(ctx, job.Args.SiteID, err.Error())
-		return err
+		return errors.Join(err, w.markFailed(ctx, job.Args.SiteID, err.Error()), w.report(ctx, job.Args, err))
 	}
 	if !resp.OK {
 		err := fmt.Errorf("agent issue_cert failed: %s", resp.Error)
-		w.markFailed(ctx, job.Args.SiteID, err.Error())
-		return err
+		return errors.Join(err, w.markFailed(ctx, job.Args.SiteID, err.Error()), w.report(ctx, job.Args, err))
 	}
 	var result types.IssueCertResult
 	if err := json.Unmarshal(resp.Data, &result); err != nil {
-		w.markFailed(ctx, job.Args.SiteID, err.Error())
-		return fmt.Errorf("decode issue_cert response: %w", err)
+		wrapped := fmt.Errorf("decode issue_cert response: %w", err)
+		return errors.Join(wrapped, w.markFailed(ctx, job.Args.SiteID, err.Error()), w.report(ctx, job.Args, wrapped))
 	}
 	if err := validateIssueCertResult(job.Args, result); err != nil {
-		w.markFailed(ctx, job.Args.SiteID, err.Error())
-		return fmt.Errorf("invalid issue_cert response: %w", err)
+		wrapped := fmt.Errorf("invalid issue_cert response: %w", err)
+		return errors.Join(wrapped, w.markFailed(ctx, job.Args.SiteID, err.Error()), w.report(ctx, job.Args, wrapped))
 	}
 	if w.sites != nil {
 		if err := w.sites.MarkSiteTLSActive(ctx, job.Args.SiteID, result); err != nil {
 			return fmt.Errorf("mark site tls active: %w", err)
 		}
 	}
+	if w.reporter != nil {
+		if err := w.reporter.ReportCertificate(ctx, job.Args, nil); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-func (w *IssueCertWorker) markFailed(ctx context.Context, id int64, message string) {
-	if w.sites != nil {
-		_ = w.sites.MarkSiteTLSFailed(ctx, id, message)
+func (w *IssueCertWorker) report(ctx context.Context, args IssueCertArgs, err error) error {
+	if w.reporter != nil {
+		return w.reporter.ReportCertificate(ctx, args, err)
 	}
+	return nil
+}
+
+func (w *IssueCertWorker) markFailed(ctx context.Context, id int64, message string) error {
+	if w.sites != nil {
+		return w.sites.MarkSiteTLSFailed(ctx, id, message)
+	}
+	return nil
 }
 
 func validateIssueCertResult(args IssueCertArgs, result types.IssueCertResult) error {

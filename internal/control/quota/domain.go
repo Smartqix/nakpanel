@@ -2,6 +2,7 @@ package quota
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
@@ -14,6 +15,17 @@ func (s *SQLStore) SiteDomain(ctx context.Context, siteID int64) (string, error)
 	var domain string
 	err := s.db.QueryRowContext(ctx, `SELECT domain FROM sites WHERE id=$1`, siteID).Scan(&domain)
 	return domain, err
+}
+
+func (s *SQLStore) SetTLSAutoRenew(ctx context.Context, siteID int64, enabled bool) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE sites SET tls_auto_renew=$2,updated_at=now() WHERE id=$1`, siteID, enabled)
+	if err != nil {
+		return err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 func (s *SQLStore) UpdateSiteSettings(ctx context.Context, req types.UpdateSiteSettingsReq) error {

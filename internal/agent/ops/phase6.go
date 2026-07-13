@@ -24,6 +24,7 @@ import (
 
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
+	"golang.org/x/sys/unix"
 )
 
 var (
@@ -49,6 +50,73 @@ type BackupProvisioner struct {
 	outputDir string
 	dumper    DatabaseDumper
 	now       func() time.Time
+}
+
+type DeleteBackupProvisioner struct {
+	root string
+}
+
+func NewDeleteBackupProvisioner(root string) *DeleteBackupProvisioner {
+	if strings.TrimSpace(root) == "" {
+		root = "/var/lib/nakpanel/backups"
+	}
+	return &DeleteBackupProvisioner{root: root}
+}
+
+func (p *DeleteBackupProvisioner) DeleteBackup(_ context.Context, req types.DeleteBackupReq) (types.DeleteBackupResult, error) {
+	root, err := filepath.Abs(p.root)
+	if err != nil {
+		return types.DeleteBackupResult{}, fmt.Errorf("resolve backup root: %w", err)
+	}
+	root, err = filepath.EvalSymlinks(root)
+	if err != nil {
+		return types.DeleteBackupResult{}, fmt.Errorf("resolve backup root symlinks: %w", err)
+	}
+	raw := strings.TrimSpace(req.ArchivePath)
+	if raw == "" || !filepath.IsAbs(raw) || strings.Contains(filepath.ToSlash(raw), "/../") {
+		return types.DeleteBackupResult{}, errors.New("archive path must be an absolute path without traversal")
+	}
+	clean := filepath.Clean(raw)
+	parent, err := filepath.EvalSymlinks(filepath.Dir(clean))
+	if err != nil {
+		return types.DeleteBackupResult{}, fmt.Errorf("resolve archive parent: %w", err)
+	}
+	if parent != root || filepath.Ext(strings.TrimSuffix(clean, ".gz")) != ".tar" || !strings.HasSuffix(clean, ".tar.gz") {
+		return types.DeleteBackupResult{}, errors.New("archive must be a direct .tar.gz child of the backup root")
+	}
+	name := filepath.Base(clean)
+	clean = filepath.Join(root, name)
+	dirFD, err := unix.Open(root, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if err != nil {
+		return types.DeleteBackupResult{}, fmt.Errorf("open backup root: %w", err)
+	}
+	defer unix.Close(dirFD)
+	fileFD, err := unix.Openat(dirFD, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
+	if errors.Is(err, unix.ENOENT) {
+		return types.DeleteBackupResult{ArchivePath: clean, Deleted: false}, nil
+	}
+	if err != nil {
+		return types.DeleteBackupResult{}, fmt.Errorf("open backup archive without following links: %w", err)
+	}
+	var stat unix.Stat_t
+	statErr := unix.Fstat(fileFD, &stat)
+	_ = unix.Close(fileFD)
+	if statErr != nil {
+		return types.DeleteBackupResult{}, fmt.Errorf("stat backup archive: %w", statErr)
+	}
+	if stat.Mode&unix.S_IFMT != unix.S_IFREG {
+		return types.DeleteBackupResult{}, errors.New("backup archive must be a regular file")
+	}
+	if err := unix.Unlinkat(dirFD, name, 0); err != nil {
+		if errors.Is(err, unix.ENOENT) {
+			return types.DeleteBackupResult{ArchivePath: clean, Deleted: false}, nil
+		}
+		return types.DeleteBackupResult{}, fmt.Errorf("unlink backup archive: %w", err)
+	}
+	if err := unix.Fsync(dirFD); err != nil {
+		return types.DeleteBackupResult{}, fmt.Errorf("sync backup root: %w", err)
+	}
+	return types.DeleteBackupResult{ArchivePath: clean, Deleted: true}, nil
 }
 
 func NewBackupProvisioner(opts BackupProvisionerOptions) *BackupProvisioner {
@@ -596,6 +664,50 @@ type DNSProvisioner struct {
 	reloader        SiteServiceReloader
 }
 
+func (p *DNSProvisioner) DNSZoneDrift(req types.ConfigureDNSZoneReq) (bool, error) {
+	normalized, err := normalizeDNSZoneRequest(req, p.zoneDir)
+	if err != nil {
+		return false, err
+	}
+	zonePath := filepath.Join(normalized.ZoneDir, "db."+normalized.Domain)
+	includePath := filepath.Join(p.includeDir, normalized.Domain+".conf")
+	checks := []struct {
+		path string
+		want []byte
+	}{{zonePath, []byte(RenderDNSZone(normalized))}, {includePath, []byte(RenderDNSZoneInclude(normalized.Domain, zonePath))}}
+	for _, check := range checks {
+		got, readErr := os.ReadFile(check.path)
+		if os.IsNotExist(readErr) {
+			return true, nil
+		}
+		if readErr != nil {
+			return false, readErr
+		}
+		if !bytes.Equal(got, check.want) {
+			return true, nil
+		}
+	}
+	entries, err := os.ReadDir(p.includeDir)
+	if err != nil {
+		return false, err
+	}
+	var paths []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".conf") {
+			paths = append(paths, filepath.Join(p.includeDir, entry.Name()))
+		}
+	}
+	sort.Strings(paths)
+	got, err := os.ReadFile(p.aggregatePath)
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return !bytes.Equal(got, []byte(RenderDNSAggregateInclude(paths))), nil
+}
+
 func NewDNSProvisioner(opts DNSProvisionerOptions) *DNSProvisioner {
 	zoneDir := opts.ZoneDir
 	if zoneDir == "" {
@@ -807,6 +919,29 @@ type ReconciliationProvisioner struct {
 	dns interface {
 		ConfigureDNSZone(context.Context, types.ConfigureDNSZoneReq) (types.ConfigureDNSZoneResult, error)
 	}
+	dnsDrift interface {
+		DNSZoneDrift(types.ConfigureDNSZoneReq) (bool, error)
+	}
+	runtime interface {
+		ApplySiteRuntime(context.Context, types.ApplySiteRuntimeReq) error
+		SiteRuntimeDrift(context.Context, types.ApplySiteRuntimeReq) (bool, error)
+	}
+	databases interface {
+		DatabaseExists(context.Context, string) (bool, error)
+	}
+}
+
+type CommandDatabaseDriftChecker struct{}
+
+func (CommandDatabaseDriftChecker) DatabaseExists(ctx context.Context, name string) (bool, error) {
+	if !phase6DBIdentifierRE.MatchString(name) {
+		return false, errors.New("invalid database name")
+	}
+	out, err := exec.CommandContext(ctx, "mariadb", "--batch", "--skip-column-names", "-e", "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='"+name+"'").CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("inspect database: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return strings.TrimSpace(string(out)) == "1", nil
 }
 
 func NewReconciliationProvisioner(siteProvisioner interface {
@@ -815,30 +950,105 @@ func NewReconciliationProvisioner(siteProvisioner interface {
 	ConfigureWebmail(context.Context, types.ConfigureWebmailReq) (types.ConfigureWebmailResult, error)
 }, dns interface {
 	ConfigureDNSZone(context.Context, types.ConfigureDNSZoneReq) (types.ConfigureDNSZoneResult, error)
-}) *ReconciliationProvisioner {
-	return &ReconciliationProvisioner{sites: siteProvisioner, webmail: webmail, dns: dns}
+}, extras ...any) *ReconciliationProvisioner {
+	p := &ReconciliationProvisioner{sites: siteProvisioner, webmail: webmail, dns: dns}
+	if x, ok := dns.(interface {
+		DNSZoneDrift(types.ConfigureDNSZoneReq) (bool, error)
+	}); ok {
+		p.dnsDrift = x
+	}
+	for _, extra := range extras {
+		if x, ok := extra.(interface {
+			ApplySiteRuntime(context.Context, types.ApplySiteRuntimeReq) error
+			SiteRuntimeDrift(context.Context, types.ApplySiteRuntimeReq) (bool, error)
+		}); ok {
+			p.runtime = x
+		}
+		if x, ok := extra.(interface {
+			DatabaseExists(context.Context, string) (bool, error)
+		}); ok {
+			p.databases = x
+		}
+	}
+	return p
 }
 
 func (p *ReconciliationProvisioner) ReconcileSystem(ctx context.Context, req types.ReconcileSystemReq) (types.ReconcileSystemResult, error) {
 	result := types.ReconcileSystemResult{SitesTotal: len(req.Sites)}
 	for _, siteReq := range req.Sites {
-		createSite := types.CreateSiteReq{Username: siteReq.Username, Domain: siteReq.Domain, PHPVersion: siteReq.PHPVersion}
-		if p.sites != nil {
-			if err := p.sites.CreateSite(ctx, createSite); err != nil {
-				return result, fmt.Errorf("reconcile site %q: %w", siteReq.Domain, err)
+		item := types.ReconcileResourceResult{ResourceType: "site", ResourceID: siteReq.SiteID, CustomerID: siteReq.CustomerID, SubscriptionID: siteReq.SubscriptionID, Name: siteReq.Domain, Outcome: "unchanged"}
+		var itemErr error
+		if siteReq.State != "" && p.runtime != nil {
+			desiredPHP := siteReq.DesiredPHPVersion
+			if desiredPHP == "" {
+				desiredPHP = siteReq.PHPVersion
 			}
+			runtimeReq := types.ApplySiteRuntimeReq{Username: siteReq.Username, Domain: siteReq.Domain, CurrentPHPVersion: siteReq.PHPVersion, DesiredPHPVersion: desiredPHP, State: siteReq.State, HTTPSRedirect: siteReq.HTTPSRedirect, TLSCertPath: siteReq.TLSCertPath, TLSKeyPath: siteReq.TLSKeyPath, Limits: siteReq.Limits}
+			var drift bool
+			drift, itemErr = p.runtime.SiteRuntimeDrift(ctx, runtimeReq)
+			if itemErr == nil && drift {
+				item.Outcome = "repaired"
+				itemErr = p.runtime.ApplySiteRuntime(ctx, runtimeReq)
+			}
+		} else if p.sites != nil {
+			itemErr = p.sites.CreateSite(ctx, types.CreateSiteReq{Username: siteReq.Username, Domain: siteReq.Domain, PHPVersion: siteReq.PHPVersion, Limits: siteReq.Limits})
+		}
+		if itemErr != nil {
+			item.Outcome = "failed"
+			item.Error = itemErr.Error()
+			result.Failed++
+			result.Resources = append(result.Resources, item)
+			continue
 		}
 		if siteReq.EnableWebmail && p.webmail != nil {
 			if _, err := p.webmail.ConfigureWebmail(ctx, types.ConfigureWebmailReq{Domain: siteReq.Domain, Hostname: "webmail." + site.NormalizeDomain(siteReq.Domain)}); err != nil {
-				return result, fmt.Errorf("reconcile webmail %q: %w", siteReq.Domain, err)
+				item.Outcome = "failed"
+				item.Error = err.Error()
 			}
 		}
+		if item.Outcome == "failed" {
+			result.Failed++
+		} else {
+			result.SitesOK++
+		}
+		result.Resources = append(result.Resources, item)
 		if siteReq.EnableDNS && p.dns != nil {
-			if _, err := p.dns.ConfigureDNSZone(ctx, types.ConfigureDNSZoneReq{Domain: siteReq.Domain, Address: siteReq.Address}); err != nil {
-				return result, fmt.Errorf("reconcile dns %q: %w", siteReq.Domain, err)
+			dnsItem := types.ReconcileResourceResult{ResourceType: "dns_zone", ResourceID: siteReq.DNSZoneID, CustomerID: siteReq.CustomerID, SubscriptionID: siteReq.SubscriptionID, Name: siteReq.Domain, Outcome: "unchanged"}
+			dnsReq := types.ConfigureDNSZoneReq{Domain: siteReq.Domain, Address: siteReq.Address, Serial: siteReq.DNSSerial, Records: siteReq.DNSRecords}
+			drift := true
+			if p.dnsDrift != nil {
+				drift, itemErr = p.dnsDrift.DNSZoneDrift(dnsReq)
 			}
+			if itemErr == nil && drift {
+				dnsItem.Outcome = "repaired"
+				_, itemErr = p.dns.ConfigureDNSZone(ctx, dnsReq)
+			}
+			if itemErr != nil {
+				dnsItem.Outcome = "failed"
+				dnsItem.Error = itemErr.Error()
+				result.Failed++
+			}
+			result.Resources = append(result.Resources, dnsItem)
 		}
-		result.SitesOK++
+	}
+	for _, db := range req.Databases {
+		item := types.ReconcileResourceResult{ResourceType: "database", ResourceID: db.DatabaseID, CustomerID: db.CustomerID, SubscriptionID: db.SubscriptionID, Name: db.Name, Outcome: "unchanged"}
+		if p.databases == nil {
+			item.Outcome = "failed"
+			item.Error = "database drift checker is not configured"
+		} else if exists, err := p.databases.DatabaseExists(ctx, db.Name); err != nil {
+			item.Outcome = "failed"
+			item.Error = err.Error()
+		} else if !exists {
+			item.Outcome = "detected_only"
+			item.Error = "database is missing and credentials are not recoverable"
+		}
+		if item.Outcome == "failed" {
+			result.Failed++
+		} else if item.Outcome == "detected_only" {
+			result.Attention++
+		}
+		result.Resources = append(result.Resources, item)
 	}
 	return result, nil
 }

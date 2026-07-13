@@ -87,6 +87,81 @@ func TestBackupProvisionerCreatesArchiveWithFilesAndDatabaseDumps(t *testing.T) 
 	}
 }
 
+func TestDeleteBackupProvisionerDeletesTrackedArchive(t *testing.T) {
+	root := t.TempDir()
+	archive := filepath.Join(root, "example.test-20260712T020000Z.tar.gz")
+	if err := os.WriteFile(archive, []byte("backup"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	result, err := NewDeleteBackupProvisioner(root).DeleteBackup(context.Background(), types.DeleteBackupReq{ArchivePath: archive})
+	if err != nil {
+		t.Fatalf("DeleteBackup returned error: %v", err)
+	}
+	if filepath.Base(result.ArchivePath) != filepath.Base(archive) || !result.Deleted {
+		t.Fatalf("DeleteBackup result = %#v", result)
+	}
+	if _, err := os.Lstat(archive); !os.IsNotExist(err) {
+		t.Fatalf("archive still exists: %v", err)
+	}
+}
+
+func TestDeleteBackupProvisionerTreatsMissingArchiveAsSuccess(t *testing.T) {
+	root := t.TempDir()
+	archive := filepath.Join(root, "missing.tar.gz")
+	result, err := NewDeleteBackupProvisioner(root).DeleteBackup(context.Background(), types.DeleteBackupReq{ArchivePath: archive})
+	if err != nil || result.Deleted {
+		t.Fatalf("DeleteBackup result=%#v err=%v, want idempotent success", result, err)
+	}
+}
+
+func TestDeleteBackupProvisionerRejectsUnsafePaths(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.tar.gz")
+	if err := os.WriteFile(outside, []byte("outside"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	nestedDir := filepath.Join(root, "nested")
+	if err := os.Mkdir(nestedDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(nestedDir, "nested.tar.gz")
+	if err := os.WriteFile(nested, []byte("nested"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	nonArchive := filepath.Join(root, "notes.txt")
+	if err := os.WriteFile(nonArchive, []byte("notes"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	directory := filepath.Join(root, "directory.tar.gz")
+	if err := os.Mkdir(directory, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	symlink := filepath.Join(root, "linked.tar.gz")
+	if err := os.Symlink(outside, symlink); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := map[string]string{
+		"outside root": outside,
+		"traversal":    filepath.Join(root, "..", filepath.Base(filepath.Dir(outside)), filepath.Base(outside)),
+		"nested":       nested,
+		"non archive":  nonArchive,
+		"directory":    directory,
+		"symlink":      symlink,
+		"relative":     "relative.tar.gz",
+	}
+	for name, archive := range tests {
+		t.Run(name, func(t *testing.T) {
+			if _, err := NewDeleteBackupProvisioner(root).DeleteBackup(context.Background(), types.DeleteBackupReq{ArchivePath: archive}); err == nil {
+				t.Fatal("DeleteBackup returned nil error")
+			}
+		})
+	}
+	if data, err := os.ReadFile(outside); err != nil || string(data) != "outside" {
+		t.Fatalf("outside file changed: data=%q err=%v", data, err)
+	}
+}
+
 func TestRestoreProvisionerRestoresFilesAndDatabaseDumps(t *testing.T) {
 	root := t.TempDir()
 	docroot := filepath.Join(root, "home", "npdemo", "public_html")
@@ -235,6 +310,27 @@ func TestDNSProvisionerWritesZoneAndReloadsBind(t *testing.T) {
 	}
 }
 
+func TestDNSZoneDriftDetectsHandEditedZone(t *testing.T) {
+	root := t.TempDir()
+	p := NewDNSProvisioner(DNSProvisionerOptions{ZoneDir: reloaderSafePath(filepath.Join(root, "zones")), IncludeDir: filepath.Join(root, "zones.d"), AggregatePath: filepath.Join(root, "named.conf.nakpanel"), ValidatorRunner: &recordingCommandRunner{}, Reloader: &recordingPhase6Reloader{}})
+	req := types.ConfigureDNSZoneReq{Domain: "example.test", Address: "192.0.2.10", Serial: 2026071201, Records: []types.DNSRecord{{Host: "@", Type: "A", Value: "192.0.2.10", TTL: 3600}}}
+	result, err := p.ConfigureDNSZone(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drift, err := p.DNSZoneDrift(req)
+	if err != nil || drift {
+		t.Fatalf("drift=%v err=%v after configure", drift, err)
+	}
+	if err = os.WriteFile(result.ZonePath, []byte("hand edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	drift, err = p.DNSZoneDrift(req)
+	if err != nil || !drift {
+		t.Fatalf("drift=%v err=%v, want detected", drift, err)
+	}
+}
+
 func TestDNSProvisionerRestoresFilesWhenValidationFails(t *testing.T) {
 	root := t.TempDir()
 	zoneDir := filepath.Join(root, "zones")
@@ -314,6 +410,23 @@ func TestReconciliationProvisionerRegeneratesSiteWebmailAndDNS(t *testing.T) {
 	}
 	if site.req.Domain != "example.test" || webmail.req.Hostname != "webmail.example.test" || dns.req.Address != "192.0.2.10" {
 		t.Fatalf("site=%#v webmail=%#v dns=%#v, want all phase6 regenerators called", site.req, webmail.req, dns.req)
+	}
+}
+
+type missingDatabaseChecker struct{}
+
+func (missingDatabaseChecker) DatabaseExists(context.Context, string) (bool, error) {
+	return false, nil
+}
+
+func TestReconciliationProvisionerReportsMissingDatabaseAsAttention(t *testing.T) {
+	provisioner := NewReconciliationProvisioner(nil, nil, nil, missingDatabaseChecker{})
+	result, err := provisioner.ReconcileSystem(context.Background(), types.ReconcileSystemReq{Databases: []types.ReconcileDatabaseReq{{DatabaseID: 9, Name: "np_missing"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Failed != 0 || result.Attention != 1 || len(result.Resources) != 1 || result.Resources[0].Outcome != "detected_only" {
+		t.Fatalf("result=%#v, want one detect-only attention", result)
 	}
 }
 

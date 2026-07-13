@@ -48,7 +48,7 @@ INSERT INTO users (
     $2,
     $3
 )
-RETURNING id, email, password_hash, role, created_at, updated_at
+RETURNING id, email, password_hash, role, created_at, updated_at, login_disabled
 `
 
 type CreateUserParams struct {
@@ -67,6 +67,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LoginDisabled,
 	)
 	return i, err
 }
@@ -82,9 +83,10 @@ func (q *Queries) DeleteSession(ctx context.Context, tokenHash string) error {
 }
 
 const findUserByEmail = `-- name: FindUserByEmail :one
-SELECT users.id, users.email, users.password_hash, users.role, users.created_at, users.updated_at
+SELECT users.id, users.email, users.password_hash, users.role, users.created_at, users.updated_at, users.login_disabled
 FROM users
 WHERE lower(users.email) = lower($1)
+  AND users.login_disabled = false
   AND (
     role = 'admin'
     OR (role = 'client' AND EXISTS (SELECT 1 FROM customers WHERE customers.login_user_id = users.id AND customers.status = 'active'))
@@ -105,6 +107,7 @@ func (q *Queries) FindUserByEmail(ctx context.Context, lower string) (User, erro
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LoginDisabled,
 	)
 	return i, err
 }
@@ -115,6 +118,7 @@ FROM sessions
 INNER JOIN users ON users.id = sessions.user_id
 WHERE sessions.token_hash = $1
   AND sessions.expires_at > $2
+  AND users.login_disabled = false
   AND (
     users.role = 'admin'
     OR (users.role = 'client' AND EXISTS (SELECT 1 FROM customers WHERE customers.login_user_id = users.id AND customers.status = 'active'))
@@ -144,7 +148,7 @@ func (q *Queries) GetSessionUser(ctx context.Context, arg GetSessionUserParams) 
 }
 
 const getUser = `-- name: GetUser :one
-SELECT id, email, password_hash, role, created_at, updated_at
+SELECT id, email, password_hash, role, created_at, updated_at, login_disabled
 FROM users
 WHERE id = $1
 `
@@ -159,12 +163,13 @@ func (q *Queries) GetUser(ctx context.Context, id int64) (User, error) {
 		&i.Role,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LoginDisabled,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, email, password_hash, role, created_at, updated_at
+SELECT id, email, password_hash, role, created_at, updated_at, login_disabled
 FROM users
 ORDER BY id
 `
@@ -185,6 +190,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Role,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LoginDisabled,
 		); err != nil {
 			return nil, err
 		}

@@ -123,6 +123,7 @@ type PlanBulkStatusStore interface {
 type DomainSettingsStore interface {
 	SiteDomain(ctx context.Context, siteID int64) (string, error)
 	UpdateSiteSettings(ctx context.Context, req types.UpdateSiteSettingsReq) error
+	SetTLSAutoRenew(ctx context.Context, siteID int64, enabled bool) error
 }
 
 type SubscriptionChangeStore interface {

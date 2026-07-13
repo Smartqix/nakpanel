@@ -36,6 +36,8 @@ func (s *fakeDomainSettingsStore) UpdateSiteSettings(_ context.Context, req type
 	return nil
 }
 
+func (s *fakeDomainSettingsStore) SetTLSAutoRenew(context.Context, int64, bool) error { return nil }
+
 type capabilityAccessPolicy struct {
 	fakeAccessPolicy
 	php bool
