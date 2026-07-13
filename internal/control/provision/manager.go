@@ -948,6 +948,27 @@ func (m *Manager) UpdateSiteSettings(ctx context.Context, owner auth.SessionUser
 	return store.UpdateSiteSettings(ctx, req)
 }
 
+func (m *Manager) SetTLSAutoRenew(ctx context.Context, owner auth.SessionUser, siteID int64, enabled bool) error {
+	if owner.Role != auth.RoleAdmin && owner.Role != auth.RoleClient && owner.Role != auth.RoleReseller {
+		return ErrForbidden
+	}
+	store, ok := m.quotaStore.(controlquota.DomainSettingsStore)
+	if !ok {
+		return errors.New("domain settings are not configured")
+	}
+	domain, err := store.SiteDomain(ctx, siteID)
+	if err != nil {
+		return err
+	}
+	if err = m.canManageDomain(ctx, owner, domain); err != nil {
+		return err
+	}
+	if err = m.canManageTLS(ctx, owner, domain); err != nil {
+		return err
+	}
+	return store.SetTLSAutoRenew(ctx, siteID, enabled)
+}
+
 func (m *Manager) CreateSubscription(ctx context.Context, owner auth.SessionUser, req types.CreateSubscriptionReq) (types.SubscriptionSummary, error) {
 	if owner.Role != auth.RoleAdmin && owner.Role != auth.RoleReseller {
 		return types.SubscriptionSummary{}, ErrForbidden

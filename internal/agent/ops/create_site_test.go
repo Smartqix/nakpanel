@@ -176,6 +176,46 @@ func TestApplySiteRuntimeRestoresConfigsAndNewSymlinkOnReloadFailure(t *testing.
 	}
 }
 
+func TestSiteRuntimeDriftDetectsAndRepairsHandEditedVHost(t *testing.T) {
+	root := t.TempDir()
+	paths := SitePathConfig{HomeRoot: filepath.Join(root, "home"), NginxAvailableDir: filepath.Join(root, "available"), NginxEnabledDir: filepath.Join(root, "enabled"), NginxLogDir: filepath.Join(root, "logs"), PHPFPMPoolDir: filepath.Join(root, "php"), PHPFPMLogDir: filepath.Join(root, "php-logs"), PHPRunDir: filepath.Join(root, "run"), NginxSnippet: "snippets/fastcgi-php.conf", WWWGroup: "www-data", PHPTmpDir: filepath.Join(root, "tmp"), DefaultFileMode: 0o644}
+	plan, err := NewSitePlan(types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3"}, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(filepath.Dir(plan.NginxConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(filepath.Dir(plan.PHPFPMConfig), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(filepath.Dir(plan.NginxEnabled), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(plan.NginxConfig, []byte("hand edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(plan.PHPFPMConfig, []byte(RenderPHPFPMPool(plan)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Symlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
+		t.Fatal(err)
+	}
+	p := NewSiteProvisioner(SiteProvisionerOptions{Paths: paths, Reloader: &recordingReloader{}})
+	req := types.ApplySiteRuntimeReq{Username: "npdemo", Domain: "example.test", CurrentPHPVersion: "8.3", DesiredPHPVersion: "8.3", State: "active"}
+	drift, err := p.SiteRuntimeDrift(context.Background(), req)
+	if err != nil || !drift {
+		t.Fatalf("drift=%v err=%v, want detected", drift, err)
+	}
+	if err = p.ApplySiteRuntime(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	drift, err = p.SiteRuntimeDrift(context.Background(), req)
+	if err != nil || drift {
+		t.Fatalf("drift=%v err=%v after repair", drift, err)
+	}
+}
+
 func TestNewSitePlanUsesRequestedPHPVersionInDefaultPoolDir(t *testing.T) {
 	plan, err := NewSitePlan(types.CreateSiteReq{
 		Username:   "npdemo",

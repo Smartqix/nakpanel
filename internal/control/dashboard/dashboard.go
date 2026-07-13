@@ -111,6 +111,7 @@ type Site struct {
 	TLSIssuer            string
 	TLSExpiresAt         NullableTime
 	TLSLastError         string
+	TLSAutoRenew         bool
 	TLSCertPath          string
 	TLSKeyPath           string
 	SubscriptionID       int64
@@ -426,6 +427,7 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			TLSIssuer:            site.TlsIssuer,
 			TLSExpiresAt:         NullableTime{Time: site.TlsExpiresAt.Time, Valid: site.TlsExpiresAt.Valid},
 			TLSLastError:         site.TlsLastError,
+			TLSAutoRenew:         site.TlsAutoRenew,
 			TLSCertPath:          site.TlsCertPath,
 			TLSKeyPath:           site.TlsKeyPath,
 			SubscriptionID:       site.SubscriptionID,

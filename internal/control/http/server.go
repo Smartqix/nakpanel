@@ -92,6 +92,7 @@ type QuotaManager interface {
 
 type DomainManager interface {
 	UpdateSiteSettings(ctx context.Context, owner auth.SessionUser, req types.UpdateSiteSettingsReq) error
+	SetTLSAutoRenew(ctx context.Context, owner auth.SessionUser, siteID int64, enabled bool) error
 	UpsertDNSRecord(ctx context.Context, owner auth.SessionUser, siteID int64, record types.DNSRecord) error
 	DeleteDNSRecord(ctx context.Context, owner auth.SessionUser, siteID, recordID int64) error
 	ChangeSubscriptionPlans(ctx context.Context, owner auth.SessionUser, subscriptionIDs []int64, planID int64) error
@@ -211,6 +212,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /subscriptions/bulk-subscriber", s.handleBulkSubscriptionSubscriber)
 	mux.HandleFunc("POST /sites/{id}/hosting", s.handleSiteHosting)
 	mux.HandleFunc("POST /sites/{id}/php", s.handleSitePHP)
+	mux.HandleFunc("POST /sites/{id}/tls-auto-renew", s.handleTLSAutoRenew)
 	mux.HandleFunc("POST /sites/{id}/dns-records", s.handleUpsertDNSRecord)
 	mux.HandleFunc("POST /sites/{id}/dns-records/{recordID}/delete", s.handleDeleteDNSRecord)
 	s.registerFileManagerRoutes(mux)
@@ -1718,6 +1720,34 @@ func (s *Server) handleSiteHosting(w http.ResponseWriter, r *http.Request) {
 }
 func (s *Server) handleSitePHP(w http.ResponseWriter, r *http.Request) {
 	s.handleSiteSettings(w, r, "php")
+}
+
+func (s *Server) handleTLSAutoRenew(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.currentUser(w, r)
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if s.domains == nil {
+		http.Error(w, "Domain settings are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid TLS settings", http.StatusBadRequest)
+		return
+	}
+	siteID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || siteID <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	enabled := parseFormBool(r, "tls_auto_renew")
+	if err = s.domains.SetTLSAutoRenew(r.Context(), user, siteID, enabled); err != nil {
+		writeQuotaError(w, r, "Could not update automatic renewal", err)
+		return
+	}
+	s.recordAudit(r.Context(), user, 0, 0, "certificate.auto_renew_changed", "site", siteID, map[string]any{"enabled": enabled})
+	http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=ssl&notice=site-settings-saved", http.StatusSeeOther)
 }
 
 func (s *Server) handleSiteSettings(w http.ResponseWriter, r *http.Request, tab string) {

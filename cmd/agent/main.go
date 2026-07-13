@@ -65,6 +65,7 @@ func main() {
 			BackupProvisioner: ops.NewBackupProvisioner(ops.BackupProvisionerOptions{
 				DatabaseDumper: ops.CommandDatabaseDumper{},
 			}),
+			DeleteBackupProvisioner: ops.NewDeleteBackupProvisioner(""),
 			RestoreProvisioner: ops.NewRestoreProvisioner(ops.RestoreProvisionerOptions{
 				DatabaseRestorer: ops.CommandDatabaseRestorer{},
 				OwnershipManager: ops.NewLinuxOwnershipManager(nil),
@@ -75,6 +76,8 @@ func main() {
 				siteProvisioner,
 				webmailProvisioner,
 				dnsProvisioner,
+				siteProvisioner,
+				ops.CommandDatabaseDriftChecker{},
 			),
 			HostingStateProvisioner: siteProvisioner,
 			UsageCollector:          usageCollector,

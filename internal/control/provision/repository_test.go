@@ -49,6 +49,7 @@ func TestSQLSiteRepositoryRejectsTLSForInactiveSites(t *testing.T) {
 			"desired_https_redirect",
 			"settings_status",
 			"settings_error",
+			"tls_auto_renew",
 		}).AddRow(
 			int64(7),
 			int64(1),
@@ -73,6 +74,7 @@ func TestSQLSiteRepositoryRejectsTLSForInactiveSites(t *testing.T) {
 			false,
 			"in_sync",
 			"",
+			true,
 		))
 	mock.ExpectRollback()
 

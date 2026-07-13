@@ -92,6 +92,7 @@ type Backup struct {
 	UpdatedAt      time.Time
 	SubscriptionID int64
 	CustomerID     int64
+	ScheduledFor   sql.NullTime
 }
 
 type Customer struct {
@@ -339,6 +340,7 @@ type Site struct {
 	DesiredHttpsRedirect bool
 	SettingsStatus       string
 	SettingsError        string
+	TlsAutoRenew         bool
 }
 
 type SiteTrafficCursor struct {
@@ -435,12 +437,13 @@ type SubscriptionUsageHistory struct {
 }
 
 type User struct {
-	ID           int64
-	Email        string
-	PasswordHash string
-	Role         string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID            int64
+	Email         string
+	PasswordHash  string
+	Role          string
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	LoginDisabled bool
 }
 
 type WebmailHost struct {

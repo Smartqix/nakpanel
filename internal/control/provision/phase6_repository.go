@@ -193,7 +193,7 @@ func (r *SQLPhase6Repository) CreateBackup(ctx context.Context, ownerID int64, r
 
 	var site phase6Site
 	if req.SubscriptionID > 0 {
-		if err := guardBackupIntentTx(ctx, tx, req.SubscriptionID); err != nil {
+		if err := guardBackupIntentTx(ctx, tx, req.SubscriptionID, req.Domain); err != nil {
 			return 0, fmt.Errorf("guard backup entitlement: %w", err)
 		}
 		site, err = selectActiveSubscriptionSiteForUpdate(ctx, tx, req.SubscriptionID, req.Domain)
@@ -229,11 +229,13 @@ RETURNING id`, ownerID, site.id, site.domain).Scan(&backupID)
 		return 0, fmt.Errorf("insert backup intent: %w", err)
 	}
 	_, err = r.river.InsertTx(ctx, tx, CreateBackupArgs{
-		BackupID:  backupID,
-		Domain:    site.domain,
-		Username:  site.username,
-		Docroot:   "/home/" + site.username + "/public_html",
-		Databases: databases,
+		BackupID:       backupID,
+		SiteID:         site.id,
+		SubscriptionID: req.SubscriptionID,
+		Domain:         site.domain,
+		Username:       site.username,
+		Docroot:        "/home/" + site.username + "/public_html",
+		Databases:      databases,
 	}, nil)
 	if err != nil {
 		return 0, fmt.Errorf("enqueue create_backup job: %w", err)

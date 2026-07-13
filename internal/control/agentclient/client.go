@@ -148,6 +148,14 @@ func (c *Client) CreateBackup(ctx context.Context, req types.CreateBackupReq) (t
 	})
 }
 
+func (c *Client) DeleteBackup(ctx context.Context, req types.DeleteBackupReq) (types.Response, error) {
+	data, err := json.Marshal(req)
+	if err != nil {
+		return types.Response{}, fmt.Errorf("marshal delete backup request: %w", err)
+	}
+	return c.Do(ctx, types.Request{Op: types.OpDeleteBackup, ID: newID(), Data: data})
+}
+
 func (c *Client) RestoreBackup(ctx context.Context, req types.RestoreBackupReq) (types.Response, error) {
 	data, err := json.Marshal(req)
 	if err != nil {

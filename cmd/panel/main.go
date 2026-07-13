@@ -17,6 +17,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	controlfiles "github.com/nakroteck/nakpanel/internal/control/filemanager"
 	panelhttp "github.com/nakroteck/nakpanel/internal/control/http"
+	controlmaintenance "github.com/nakroteck/nakpanel/internal/control/maintenance"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/store"
@@ -24,6 +25,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/workspace"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
+	"github.com/robfig/cron/v3"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -137,14 +139,21 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	siteStatus := provision.NewSQLSiteStatusStore(queries)
 	databaseStatus := provision.NewSQLDatabaseStatusStore(db, queries)
 	phase6Status := provision.NewSQLPhase6StatusStore(db)
+	maintenanceService := controlmaintenance.NewService(db, nil, agent)
 	river.AddWorker(workers, provision.NewCreateSiteWorker(agent, siteStatus))
 	river.AddWorker(workers, provision.NewCreateDatabaseWorker(agent, databaseStatus))
-	river.AddWorker(workers, provision.NewIssueCertWorker(agent, siteStatus))
-	river.AddWorker(workers, provision.NewCreateBackupWorker(agent, phase6Status))
+	river.AddWorker(workers, provision.NewIssueCertWorker(agent, siteStatus, maintenanceService))
+	river.AddWorker(workers, provision.NewCreateBackupWorker(agent, phase6Status, maintenanceService))
 	river.AddWorker(workers, provision.NewRestoreBackupWorker(agent, phase6Status))
 	river.AddWorker(workers, provision.NewConfigureWebmailWorker(agent, phase6Status))
 	river.AddWorker(workers, provision.NewConfigureDNSZoneWorker(agent, phase6Status))
-	river.AddWorker(workers, provision.NewReconcileSystemWorker(agent, phase6Status))
+	river.AddWorker(workers, provision.NewReconcileSystemWorker(agent, phase6Status, maintenanceService))
+	river.AddWorker(workers, controlmaintenance.NewRenewCertsWorker(maintenanceService))
+	river.AddWorker(workers, controlmaintenance.NewScheduledBackupsWorker(maintenanceService))
+	river.AddWorker(workers, controlmaintenance.NewPruneBackupsWorker(maintenanceService))
+	river.AddWorker(workers, controlmaintenance.NewPruneSiteWorker(maintenanceService))
+	river.AddWorker(workers, controlmaintenance.NewDeleteBackupWorker(maintenanceService))
+	river.AddWorker(workers, controlmaintenance.NewReconcileWorker(maintenanceService))
 	river.AddWorker(workers, controlquota.NewSetHostingStateWorker(agent, db))
 	river.AddWorker(workers, controlquota.NewSyncPlanWorker(db))
 	river.AddWorker(workers, controlquota.NewSyncAddonWorker(db))
@@ -155,6 +164,14 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		Password: runtimeConfig.SMTPPassword, From: runtimeConfig.SMTPFrom, TLSMode: runtimeConfig.SMTPTLSMode,
 	}))
 
+	backupSchedule, err := cron.ParseStandard("0 2 * * *")
+	if err != nil {
+		return nil, err
+	}
+	pruneSchedule, err := cron.ParseStandard("0 3 * * *")
+	if err != nil {
+		return nil, err
+	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
 		PeriodicJobs: []*river.PeriodicJob{
 			river.NewPeriodicJob(river.PeriodicInterval(15*time.Minute), func() (river.JobArgs, *river.InsertOpts) {
@@ -163,9 +180,22 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) {
 				return controlquota.DeliverNotificationsArgs{}, nil
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(6*time.Hour), func() (river.JobArgs, *river.InsertOpts) {
+				return controlmaintenance.RenewCertsArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(backupSchedule, func() (river.JobArgs, *river.InsertOpts) {
+				return controlmaintenance.ScheduledBackupsArgs{Window: time.Now().Format("2006-01-02")}, nil
+			}, nil),
+			river.NewPeriodicJob(pruneSchedule, func() (river.JobArgs, *river.InsertOpts) {
+				return controlmaintenance.PruneBackupsArgs{}, nil
+			}, nil),
+			river.NewPeriodicJob(river.PeriodicInterval(time.Hour), func() (river.JobArgs, *river.InsertOpts) {
+				return controlmaintenance.ReconcileArgs{Scope: "system"}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
 		},
 		Queues: map[string]river.QueueConfig{
-			river.QueueDefault: {MaxWorkers: 1},
+			river.QueueDefault:       {MaxWorkers: 1},
+			controlmaintenance.Queue: {MaxWorkers: 2},
 		},
 		Workers: workers,
 	})
@@ -173,6 +203,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, err
 	}
 	usageWorker.SetRiverClient(client)
+	maintenanceService.SetRiverClient(client)
 	return client, nil
 }
 

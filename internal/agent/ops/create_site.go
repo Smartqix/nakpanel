@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -312,6 +313,53 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 		}
 	}
 	return p.reloader.ReloadService(ctx, "nginx")
+}
+
+func (p *SiteProvisioner) SiteRuntimeDrift(_ context.Context, req types.ApplySiteRuntimeReq) (bool, error) {
+	state := strings.ToLower(strings.TrimSpace(req.State))
+	if state != "active" && state != "suspended" {
+		return false, errors.New("site runtime state must be active or suspended")
+	}
+	desired, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: req.DesiredPHPVersion, Limits: req.Limits}, p.paths)
+	if err != nil {
+		return false, err
+	}
+	nginx := []byte(RenderNginxRuntimeVHost(desired, req.TLSCertPath, req.TLSKeyPath, req.HTTPSRedirect))
+	phpPath := desired.PHPFPMConfig
+	absentPath := desired.PHPFPMConfig + ".suspended"
+	if state == "suspended" {
+		nginx = []byte(RenderSuspendedNginxVHost(desired))
+		phpPath, absentPath = absentPath, phpPath
+	}
+	nginxCurrent, err := os.ReadFile(desired.NginxConfig)
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	phpCurrent, err := os.ReadFile(phpPath)
+	if os.IsNotExist(err) {
+		return true, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if _, err = os.Lstat(absentPath); err == nil {
+		return true, nil
+	} else if !os.IsNotExist(err) {
+		return false, err
+	}
+	if !bytes.Equal(nginxCurrent, nginx) || !bytes.Equal(phpCurrent, []byte(RenderPHPFPMPool(desired))) {
+		return true, nil
+	}
+	if state == "active" {
+		target, err := os.Readlink(desired.NginxEnabled)
+		if err != nil || target != desired.NginxConfig {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 type fileSnapshot struct {

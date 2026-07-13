@@ -78,7 +78,7 @@ func guardDatabaseIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64
 	return enforceCountLimitTx(ctx, tx, "databases", subscriptionID, limits.MaxDatabases, limits.OverusePolicy)
 }
 
-func guardBackupIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64) error {
+func guardBackupIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, domain string) error {
 	limits, err := lockActiveSubscriptionLimits(ctx, tx, subscriptionID)
 	if err != nil {
 		return err
@@ -86,8 +86,19 @@ func guardBackupIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64) 
 	if !limits.AllowBackups {
 		return fmt.Errorf("%w: backups are disabled by the subscription", controlquota.ErrExceeded)
 	}
-	if err := enforceCountLimitTx(ctx, tx, "backups", subscriptionID, limits.MaxBackups, limits.OverusePolicy); err != nil {
-		return err
+	if limits.OverusePolicy != types.PlanOveruseNormal && limits.OverusePolicy != types.PlanOveruseNotify && limits.MaxBackups >= 0 {
+		if limits.MaxBackups == 0 {
+			return fmt.Errorf("%w: backups 0 / 0", controlquota.ErrExceeded)
+		}
+		var used, activeJobs int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(b.id) FILTER (WHERE b.status<>'failed')::int,
+(SELECT COUNT(*)::int FROM river_job job WHERE job.kind='create_backup' AND job.state IN ('available','retryable','running','scheduled') AND job.args->>'site_id'=site.id::text)
+FROM sites site LEFT JOIN backups b ON b.site_id=site.id AND b.subscription_id=$1 WHERE site.domain=$2 GROUP BY site.id`, subscriptionID, domain).Scan(&used, &activeJobs); err != nil {
+			return err
+		}
+		if used > limits.MaxBackups || (used >= limits.MaxBackups && activeJobs > 0) {
+			return fmt.Errorf("%w: backups %d / %d", controlquota.ErrExceeded, used, limits.MaxBackups)
+		}
 	}
 	if limits.BackupStorageMB >= 0 {
 		var used int64

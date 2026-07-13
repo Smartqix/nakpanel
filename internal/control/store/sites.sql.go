@@ -11,7 +11,7 @@ import (
 )
 
 const getSite = `-- name: GetSite :one
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew
 FROM sites
 WHERE id = $1
 `
@@ -43,12 +43,13 @@ func (q *Queries) GetSite(ctx context.Context, id int64) (Site, error) {
 		&i.DesiredHttpsRedirect,
 		&i.SettingsStatus,
 		&i.SettingsError,
+		&i.TlsAutoRenew,
 	)
 	return i, err
 }
 
 const getSiteByDomain = `-- name: GetSiteByDomain :one
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew
 FROM sites
 WHERE domain = $1
 `
@@ -80,12 +81,13 @@ func (q *Queries) GetSiteByDomain(ctx context.Context, domain string) (Site, err
 		&i.DesiredHttpsRedirect,
 		&i.SettingsStatus,
 		&i.SettingsError,
+		&i.TlsAutoRenew,
 	)
 	return i, err
 }
 
 const listSites = `-- name: ListSites :many
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew
 FROM sites
 ORDER BY id
 `
@@ -123,6 +125,7 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 			&i.DesiredHttpsRedirect,
 			&i.SettingsStatus,
 			&i.SettingsError,
+			&i.TlsAutoRenew,
 		); err != nil {
 			return nil, err
 		}
@@ -274,7 +277,7 @@ SET
     last_error = '',
     updated_at = now()
 WHERE sites.subscription_id = EXCLUDED.subscription_id
-RETURNING id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error
+RETURNING id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew
 `
 
 type UpsertSiteIntentParams struct {
@@ -318,6 +321,7 @@ func (q *Queries) UpsertSiteIntent(ctx context.Context, arg UpsertSiteIntentPara
 		&i.DesiredHttpsRedirect,
 		&i.SettingsStatus,
 		&i.SettingsError,
+		&i.TlsAutoRenew,
 	)
 	return i, err
 }

@@ -94,6 +94,32 @@ type fakeCertificateIssuer struct {
 	err    error
 }
 
+type fakeDomainManager struct {
+	siteID    int64
+	autoRenew bool
+	called    bool
+}
+
+func (m *fakeDomainManager) UpdateSiteSettings(context.Context, auth.SessionUser, types.UpdateSiteSettingsReq) error {
+	return nil
+}
+func (m *fakeDomainManager) SetTLSAutoRenew(_ context.Context, _ auth.SessionUser, siteID int64, enabled bool) error {
+	m.siteID, m.autoRenew, m.called = siteID, enabled, true
+	return nil
+}
+func (m *fakeDomainManager) UpsertDNSRecord(context.Context, auth.SessionUser, int64, types.DNSRecord) error {
+	return nil
+}
+func (m *fakeDomainManager) DeleteDNSRecord(context.Context, auth.SessionUser, int64, int64) error {
+	return nil
+}
+func (m *fakeDomainManager) ChangeSubscriptionPlans(context.Context, auth.SessionUser, []int64, int64) error {
+	return nil
+}
+func (m *fakeDomainManager) ChangeSubscriptionSubscriber(context.Context, auth.SessionUser, []int64, int64) error {
+	return nil
+}
+
 func (c *fakeCertificateIssuer) IssueCertificate(ctx context.Context, owner auth.SessionUser, domain string, issuer types.CertIssuer) (int64, error) {
 	c.owner = owner
 	c.domain = domain
@@ -2349,6 +2375,29 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 		if action, ok := postActions[path]; ok && !renderedFormContainsCSRF(rec.Body.String(), action) {
 			t.Fatalf("GET %s form action %s missing server-rendered CSRF token", path, action)
 		}
+	}
+}
+
+func TestTLSAutoRenewRendersAndUpdates(t *testing.T) {
+	reader := &fakeDashboardReader{data: dashboard.Data{Sites: []dashboard.Site{{ID: 7, Domain: "owned.test", Status: "active", TLSStatus: "active", TLSAutoRenew: true, CustomerID: 88, SubscriptionID: 20}}, Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, Status: "active", AllowTLS: true}}}}
+	domains := &fakeDomainManager{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader, CertificateIssuer: &fakeCertificateIssuer{}, DomainManager: domains})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/7?tab=ssl", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `action="/sites/7/tls-auto-renew"`) || !strings.Contains(rec.Body.String(), `name="tls_auto_renew" value="true" checked`) {
+		t.Fatalf("TLS auto-renew form missing or unchecked: status=%d\n%s", rec.Code, rec.Body.String())
+	}
+	form := url.Values{"tls_auto_renew": {"false"}}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/tls-auto-renew", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || !domains.called || domains.siteID != 7 || domains.autoRenew {
+		t.Fatalf("POST auto-renew status=%d manager=%#v", rec.Code, domains)
 	}
 }
 

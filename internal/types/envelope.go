@@ -26,6 +26,7 @@ const (
 	OpIssueCert           = "issue_cert"
 	OpCreateDatabase      = "create_database"
 	OpCreateBackup        = "create_backup"
+	OpDeleteBackup        = "delete_backup"
 	OpRestoreBackup       = "restore_backup"
 	OpConfigureWebmail    = "configure_webmail"
 	OpConfigureDNSZone    = "configure_dns_zone"
@@ -687,6 +688,15 @@ type CreateBackupResult struct {
 	SHA256      string `json:"sha256"`
 }
 
+type DeleteBackupReq struct {
+	ArchivePath string `json:"archive_path"`
+}
+
+type DeleteBackupResult struct {
+	ArchivePath string `json:"archive_path"`
+	Deleted     bool   `json:"deleted"`
+}
+
 type RestoreBackupReq struct {
 	Domain      string   `json:"domain"`
 	Username    string   `json:"username"`
@@ -730,21 +740,54 @@ type ConfigureDNSZoneResult struct {
 }
 
 type ReconcileSiteReq struct {
-	Username      string `json:"username"`
-	Domain        string `json:"domain"`
-	PHPVersion    string `json:"php_version"`
-	EnableWebmail bool   `json:"enable_webmail"`
-	EnableDNS     bool   `json:"enable_dns"`
-	Address       string `json:"address"`
+	SiteID            int64              `json:"site_id,omitempty"`
+	CustomerID        int64              `json:"customer_id,omitempty"`
+	SubscriptionID    int64              `json:"subscription_id,omitempty"`
+	Username          string             `json:"username"`
+	Domain            string             `json:"domain"`
+	PHPVersion        string             `json:"php_version"`
+	DesiredPHPVersion string             `json:"desired_php_version,omitempty"`
+	EnableWebmail     bool               `json:"enable_webmail"`
+	EnableDNS         bool               `json:"enable_dns"`
+	DNSZoneID         int64              `json:"dns_zone_id,omitempty"`
+	DNSSerial         int64              `json:"dns_serial,omitempty"`
+	Address           string             `json:"address"`
+	State             string             `json:"state,omitempty"`
+	HTTPSRedirect     bool               `json:"https_redirect,omitempty"`
+	TLSCertPath       string             `json:"tls_cert_path,omitempty"`
+	TLSKeyPath        string             `json:"tls_key_path,omitempty"`
+	Limits            SiteResourceLimits `json:"limits,omitempty"`
+	DNSRecords        []DNSRecord        `json:"dns_records,omitempty"`
+}
+
+type ReconcileDatabaseReq struct {
+	DatabaseID     int64  `json:"database_id"`
+	CustomerID     int64  `json:"customer_id,omitempty"`
+	SubscriptionID int64  `json:"subscription_id,omitempty"`
+	Name           string `json:"name"`
 }
 
 type ReconcileSystemReq struct {
-	Sites []ReconcileSiteReq `json:"sites"`
+	Sites     []ReconcileSiteReq     `json:"sites"`
+	Databases []ReconcileDatabaseReq `json:"databases,omitempty"`
+}
+
+type ReconcileResourceResult struct {
+	ResourceType   string `json:"resource_type"`
+	ResourceID     int64  `json:"resource_id,omitempty"`
+	CustomerID     int64  `json:"customer_id,omitempty"`
+	SubscriptionID int64  `json:"subscription_id,omitempty"`
+	Name           string `json:"name"`
+	Outcome        string `json:"outcome"`
+	Error          string `json:"error,omitempty"`
 }
 
 type ReconcileSystemResult struct {
-	SitesTotal int `json:"sites_total"`
-	SitesOK    int `json:"sites_ok"`
+	SitesTotal int                       `json:"sites_total"`
+	SitesOK    int                       `json:"sites_ok"`
+	Failed     int                       `json:"failed"`
+	Attention  int                       `json:"attention"`
+	Resources  []ReconcileResourceResult `json:"resources,omitempty"`
 }
 
 type AdminerSSO struct {

@@ -10,6 +10,7 @@ require (
 	github.com/riverqueue/river v0.19.0
 	github.com/riverqueue/river/riverdriver/riverdatabasesql v0.19.0
 	github.com/riverqueue/river/rivertype v0.19.0
+	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/crypto v0.33.0
 	golang.org/x/sys v0.34.0
 )

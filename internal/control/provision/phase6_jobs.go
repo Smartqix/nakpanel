@@ -12,11 +12,16 @@ import (
 )
 
 type CreateBackupArgs struct {
-	BackupID  int64    `json:"backup_id" river:"unique"`
-	Domain    string   `json:"domain"`
-	Username  string   `json:"username"`
-	Docroot   string   `json:"docroot"`
-	Databases []string `json:"databases"`
+	BackupID       int64    `json:"backup_id" river:"unique"`
+	SiteID         int64    `json:"site_id,omitempty"`
+	SubscriptionID int64    `json:"subscription_id,omitempty"`
+	CustomerID     int64    `json:"customer_id,omitempty"`
+	ActorUserID    int64    `json:"actor_user_id,omitempty"`
+	Automated      bool     `json:"automated,omitempty"`
+	Domain         string   `json:"domain"`
+	Username       string   `json:"username"`
+	Docroot        string   `json:"docroot"`
+	Databases      []string `json:"databases"`
 }
 
 func (CreateBackupArgs) Kind() string { return "create_backup" }
@@ -60,8 +65,12 @@ func (ConfigureDNSZoneArgs) Kind() string { return "configure_dns_zone" }
 func (ConfigureDNSZoneArgs) InsertOpts() river.InsertOpts { return activeUniqueOpts() }
 
 type ReconcileSystemArgs struct {
-	RunID int64                    `json:"run_id" river:"unique"`
-	Sites []types.ReconcileSiteReq `json:"sites"`
+	RunID       int64                        `json:"run_id"`
+	ScopeKey    string                       `json:"scope_key" river:"unique"`
+	ActorUserID int64                        `json:"actor_user_id,omitempty"`
+	Automated   bool                         `json:"automated,omitempty"`
+	Sites       []types.ReconcileSiteReq     `json:"sites"`
+	Databases   []types.ReconcileDatabaseReq `json:"databases,omitempty"`
 }
 
 func (ReconcileSystemArgs) Kind() string { return "reconcile_system" }
@@ -116,14 +125,25 @@ type Phase6StatusStore interface {
 	MarkReconcileFailed(ctx context.Context, id int64, message string) error
 }
 
-type CreateBackupWorker struct {
-	river.WorkerDefaults[CreateBackupArgs]
-	agent AgentBackupClient
-	store Phase6StatusStore
+type AutomatedReporter interface {
+	ReportCertificate(context.Context, IssueCertArgs, error) error
+	ReportBackup(context.Context, CreateBackupArgs, error) error
+	ReportReconcile(context.Context, ReconcileSystemArgs, *types.ReconcileSystemResult, error) error
 }
 
-func NewCreateBackupWorker(agent AgentBackupClient, store Phase6StatusStore) *CreateBackupWorker {
-	return &CreateBackupWorker{agent: agent, store: store}
+type CreateBackupWorker struct {
+	river.WorkerDefaults[CreateBackupArgs]
+	agent    AgentBackupClient
+	store    Phase6StatusStore
+	reporter AutomatedReporter
+}
+
+func NewCreateBackupWorker(agent AgentBackupClient, store Phase6StatusStore, reporters ...AutomatedReporter) *CreateBackupWorker {
+	w := &CreateBackupWorker{agent: agent, store: store}
+	if len(reporters) > 0 {
+		w.reporter = reporters[0]
+	}
+	return w
 }
 
 func (w *CreateBackupWorker) Work(ctx context.Context, job *river.Job[CreateBackupArgs]) error {
@@ -137,24 +157,37 @@ func (w *CreateBackupWorker) Work(ctx context.Context, job *river.Job[CreateBack
 		Databases: job.Args.Databases,
 	})
 	if err != nil {
-		w.markBackupFailed(ctx, job.Args.BackupID, err.Error())
-		return err
+		return errors.Join(err, w.markBackupFailed(ctx, job.Args.BackupID, err.Error()), w.reportBackup(ctx, job.Args, err))
 	}
 	var result types.CreateBackupResult
 	if err := decodeAgentResult(resp, &result); err != nil {
-		w.markBackupFailed(ctx, job.Args.BackupID, err.Error())
-		return err
+		return errors.Join(err, w.markBackupFailed(ctx, job.Args.BackupID, err.Error()), w.reportBackup(ctx, job.Args, err))
 	}
 	if w.store != nil {
-		return w.store.MarkBackupActive(ctx, job.Args.BackupID, result)
+		if err := w.store.MarkBackupActive(ctx, job.Args.BackupID, result); err != nil {
+			return err
+		}
+	}
+	if w.reporter != nil {
+		if err := w.reporter.ReportBackup(ctx, job.Args, nil); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (w *CreateBackupWorker) markBackupFailed(ctx context.Context, id int64, message string) {
-	if w.store != nil {
-		_ = w.store.MarkBackupFailed(ctx, id, message)
+func (w *CreateBackupWorker) reportBackup(ctx context.Context, args CreateBackupArgs, err error) error {
+	if w.reporter != nil {
+		return w.reporter.ReportBackup(ctx, args, err)
 	}
+	return nil
+}
+
+func (w *CreateBackupWorker) markBackupFailed(ctx context.Context, id int64, message string) error {
+	if w.store != nil {
+		return w.store.MarkBackupFailed(ctx, id, message)
+	}
+	return nil
 }
 
 type RestoreBackupWorker struct {
@@ -273,38 +306,60 @@ func (w *ConfigureDNSZoneWorker) markDNSFailed(ctx context.Context, id int64, me
 
 type ReconcileSystemWorker struct {
 	river.WorkerDefaults[ReconcileSystemArgs]
-	agent AgentReconciliationClient
-	store Phase6StatusStore
+	agent    AgentReconciliationClient
+	store    Phase6StatusStore
+	reporter AutomatedReporter
 }
 
-func NewReconcileSystemWorker(agent AgentReconciliationClient, store Phase6StatusStore) *ReconcileSystemWorker {
-	return &ReconcileSystemWorker{agent: agent, store: store}
+func NewReconcileSystemWorker(agent AgentReconciliationClient, store Phase6StatusStore, reporters ...AutomatedReporter) *ReconcileSystemWorker {
+	w := &ReconcileSystemWorker{agent: agent, store: store}
+	if len(reporters) > 0 {
+		w.reporter = reporters[0]
+	}
+	return w
 }
 
 func (w *ReconcileSystemWorker) Work(ctx context.Context, job *river.Job[ReconcileSystemArgs]) error {
 	if w.agent == nil {
 		return errors.New("agent reconciliation client is not configured")
 	}
-	resp, err := w.agent.ReconcileSystem(ctx, types.ReconcileSystemReq{Sites: job.Args.Sites})
+	resp, err := w.agent.ReconcileSystem(ctx, types.ReconcileSystemReq{Sites: job.Args.Sites, Databases: job.Args.Databases})
 	if err != nil {
-		w.markReconcileFailed(ctx, job.Args.RunID, err.Error())
-		return err
+		return errors.Join(err, w.markReconcileFailed(ctx, job.Args.RunID, err.Error()), w.reportReconcile(ctx, job.Args, nil, err))
 	}
 	var result types.ReconcileSystemResult
 	if err := decodeAgentResult(resp, &result); err != nil {
-		w.markReconcileFailed(ctx, job.Args.RunID, err.Error())
-		return err
+		return errors.Join(err, w.markReconcileFailed(ctx, job.Args.RunID, err.Error()), w.reportReconcile(ctx, job.Args, nil, err))
+	}
+	if result.Failed > 0 {
+		err := fmt.Errorf("reconciliation reported %d failed resources", result.Failed)
+		return errors.Join(err, w.markReconcileFailed(ctx, job.Args.RunID, err.Error()), w.reportReconcile(ctx, job.Args, &result, err))
 	}
 	if w.store != nil {
-		return w.store.MarkReconcileActive(ctx, job.Args.RunID, result)
+		if err := w.store.MarkReconcileActive(ctx, job.Args.RunID, result); err != nil {
+			return err
+		}
+	}
+	if w.reporter != nil {
+		if err := w.reporter.ReportReconcile(ctx, job.Args, &result, nil); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (w *ReconcileSystemWorker) markReconcileFailed(ctx context.Context, id int64, message string) {
-	if w.store != nil {
-		_ = w.store.MarkReconcileFailed(ctx, id, message)
+func (w *ReconcileSystemWorker) reportReconcile(ctx context.Context, args ReconcileSystemArgs, result *types.ReconcileSystemResult, err error) error {
+	if w.reporter != nil {
+		return w.reporter.ReportReconcile(ctx, args, result, err)
 	}
+	return nil
+}
+
+func (w *ReconcileSystemWorker) markReconcileFailed(ctx context.Context, id int64, message string) error {
+	if w.store != nil {
+		return w.store.MarkReconcileFailed(ctx, id, message)
+	}
+	return nil
 }
 
 func decodeAgentResult(resp types.Response, dst any) error {
