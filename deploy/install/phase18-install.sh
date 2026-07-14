@@ -78,6 +78,13 @@ apt-get install -y roundcube roundcube-core roundcube-sqlite3 \
 if ! grep -q "dbtype='sqlite3'" /etc/roundcube/debian-db.php 2>/dev/null; then
   dpkg-reconfigure -fnoninteractive roundcube-core >/dev/null 2>&1 || true
 fi
+# Roundcube may pull in Apache through Ubuntu's recommended packages. Nakpanel
+# serves webmail through nginx, so keep Apache from competing for ports 80/443
+# and clear any package-install failure left behind by that conflict.
+if systemctl list-unit-files apache2.service >/dev/null 2>&1; then
+  systemctl disable --now apache2.service >/dev/null 2>&1 || true
+  systemctl reset-failed apache2.service >/dev/null 2>&1 || true
+fi
 systemctl restart php8.3-fpm
 
 install -m 0644 "${SCRIPT_DIR}/../systemd/stalwart-mail.service" /etc/systemd/system/stalwart-mail.service

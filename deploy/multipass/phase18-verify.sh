@@ -162,6 +162,7 @@ vm "dig +short @127.0.0.1 TXT _dmarc.${DOMAIN}" | grep -Fq 'v=DMARC1; p=quaranti
 vm "dig +short @127.0.0.1 TXT nak1._domainkey.${DOMAIN}" | grep -Fq 'v=DKIM1'
 vm "test \"\$(sudo stat -c '%U:%G:%a' /var/lib/nakpanel/dkim/${DOMAIN}/nak1.key)\" = root:root:600"
 vm "sudo systemctl is-active stalwart-mail.service" | grep -qx active
+vm "! sudo systemctl is-active --quiet apache2.service && ! sudo systemctl is-failed --quiet apache2.service"
 
 # Re-running domain enablement is idempotent: no key churn, no config churn,
 # no duplicate DNS records.
