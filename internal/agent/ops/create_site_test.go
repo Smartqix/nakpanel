@@ -125,12 +125,12 @@ func TestRenderSiteConfigsAreDeterministicAndDerivePaths(t *testing.T) {
 }
 
 func TestRenderNginxRuntimeVHostRedirectsHTTPAndKeepsTLSHosting(t *testing.T) {
-	plan, err := NewSitePlan(types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3"}, SitePathConfig{})
+	plan, err := NewSitePlan(types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3", Limits: types.SiteResourceLimits{RequestRatePerSecond: 5, RequestBurst: 10, MaxConnections: 20}}, SitePathConfig{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	config := RenderNginxRuntimeVHost(plan, "/cert.pem", "/key.pem", true)
-	for _, want := range []string{"return 301 https://$host$request_uri;", "listen 443 ssl;", "ssl_certificate /cert.pem;", "fastcgi_pass unix:"} {
+	for _, want := range []string{"return 301 https://$host$request_uri;", "listen 443 ssl;", "ssl_certificate /cert.pem;", "fastcgi_pass unix:", "limit_req zone=", "limit_conn "} {
 		if !strings.Contains(config, want) {
 			t.Fatalf("runtime nginx config missing %q:\n%s", want, config)
 		}
@@ -176,6 +176,45 @@ func TestApplySiteRuntimeRestoresConfigsAndNewSymlinkOnReloadFailure(t *testing.
 	}
 }
 
+func TestCreateSiteRestoresPolicyAndRuntimeConfigsOnReloadFailure(t *testing.T) {
+	root := t.TempDir()
+	paths := SitePathConfig{
+		HomeRoot: filepath.Join(root, "home"), NginxAvailableDir: filepath.Join(root, "available"), NginxEnabledDir: filepath.Join(root, "enabled"),
+		NginxConfDir: filepath.Join(root, "conf.d"), NginxLogDir: filepath.Join(root, "logs"), PHPFPMPoolDir: filepath.Join(root, "php"),
+		PHPFPMLogDir: filepath.Join(root, "php-logs"), PHPRunDir: filepath.Join(root, "run"), NginxSnippet: "snippets/fastcgi-php.conf",
+		WWWGroup: "www-data", PHPTmpDir: filepath.Join(root, "tmp"), DefaultFileMode: 0o644,
+	}
+	plan, err := NewSitePlan(types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3"}, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{plan.NginxConfig, plan.PHPFPMConfig, plan.NginxPolicyConfig} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("old\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := NewSiteProvisioner(SiteProvisionerOptions{Paths: paths, UserManager: &recordingUserManager{}, Reloader: &failingServiceReloader{failService: "nginx"}})
+	err = p.CreateSite(context.Background(), types.CreateSiteReq{
+		Username: "npdemo", Domain: "example.test", PHPVersion: "8.3",
+		Limits: types.SiteResourceLimits{RequestRatePerSecond: 5, MaxConnections: 10},
+	})
+	if err == nil {
+		t.Fatal("CreateSite returned nil, want reload failure")
+	}
+	for _, path := range []string{plan.NginxConfig, plan.PHPFPMConfig, plan.NginxPolicyConfig} {
+		got, readErr := os.ReadFile(path)
+		if readErr != nil || string(got) != "old\n" {
+			t.Fatalf("restored %s = %q, %v", path, got, readErr)
+		}
+	}
+	if _, err := os.Lstat(plan.NginxEnabled); !os.IsNotExist(err) {
+		t.Fatalf("new nginx symlink survived rollback: %v", err)
+	}
+}
+
 func TestSiteRuntimeDriftDetectsAndRepairsHandEditedVHost(t *testing.T) {
 	root := t.TempDir()
 	paths := SitePathConfig{HomeRoot: filepath.Join(root, "home"), NginxAvailableDir: filepath.Join(root, "available"), NginxEnabledDir: filepath.Join(root, "enabled"), NginxLogDir: filepath.Join(root, "logs"), PHPFPMPoolDir: filepath.Join(root, "php"), PHPFPMLogDir: filepath.Join(root, "php-logs"), PHPRunDir: filepath.Join(root, "run"), NginxSnippet: "snippets/fastcgi-php.conf", WWWGroup: "www-data", PHPTmpDir: filepath.Join(root, "tmp"), DefaultFileMode: 0o644}
@@ -213,6 +252,28 @@ func TestSiteRuntimeDriftDetectsAndRepairsHandEditedVHost(t *testing.T) {
 	drift, err = p.SiteRuntimeDrift(context.Background(), req)
 	if err != nil || drift {
 		t.Fatalf("drift=%v err=%v after repair", drift, err)
+	}
+}
+
+func TestApplySiteRuntimePreservesSharedAccountDocumentRoot(t *testing.T) {
+	root := t.TempDir()
+	paths := SitePathConfig{HomeRoot: filepath.Join(root, "home"), NginxAvailableDir: filepath.Join(root, "available"), NginxEnabledDir: filepath.Join(root, "enabled"), NginxLogDir: filepath.Join(root, "logs"), PHPFPMPoolDir: filepath.Join(root, "php"), PHPFPMLogDir: filepath.Join(root, "php-logs"), PHPRunDir: filepath.Join(root, "run"), NginxSnippet: "snippets/fastcgi-php.conf", WWWGroup: "www-data", PHPTmpDir: filepath.Join(root, "tmp"), DefaultFileMode: 0o644}
+	p := NewSiteProvisioner(SiteProvisionerOptions{Paths: paths, Reloader: &recordingReloader{}})
+	req := types.ApplySiteRuntimeReq{Username: "npdemo", Domain: "example.test", SharedAccount: true, CurrentPHPVersion: "8.3", DesiredPHPVersion: "8.3", State: "active"}
+	if err := p.ApplySiteRuntime(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := NewSitePlan(types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3", SharedAccount: true}, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nginx, err := os.ReadFile(plan.NginxConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "root " + filepath.Join(paths.HomeRoot, "npdemo", "domains", "example.test", "public_html") + ";"
+	if !strings.Contains(string(nginx), want) {
+		t.Fatalf("shared runtime vhost missing %q:\n%s", want, nginx)
 	}
 }
 
@@ -345,5 +406,37 @@ func TestSiteProvisionerCreatesExpectedStateAndIsIdempotent(t *testing.T) {
 	}
 	if got, want := string(fpm), RenderPHPFPMPool(plan); got != want {
 		t.Fatalf("fpm config mismatch\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestSiteProvisionerMakesSharedAccountPathTraversableByNginx(t *testing.T) {
+	tmp := t.TempDir()
+	paths := SitePathConfig{
+		HomeRoot: filepath.Join(tmp, "home"), NginxAvailableDir: filepath.Join(tmp, "available"),
+		NginxEnabledDir: filepath.Join(tmp, "enabled"), NginxLogDir: filepath.Join(tmp, "logs"),
+		PHPFPMPoolDir: filepath.Join(tmp, "php"), PHPFPMLogDir: filepath.Join(tmp, "php-logs"),
+		PHPRunDir: filepath.Join(tmp, "run"), NginxConfDir: filepath.Join(tmp, "conf.d"),
+		NginxSnippet: "snippets/fastcgi-php.conf", WWWGroup: "www-data", PHPTmpDir: filepath.Join(tmp, "tmp"), DefaultFileMode: 0o644,
+	}
+	home := filepath.Join(paths.HomeRoot, "npdemo")
+	if err := os.MkdirAll(filepath.Join(home, "domains"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	p := NewSiteProvisioner(SiteProvisionerOptions{Paths: paths, UserManager: &recordingUserManager{}, Reloader: &recordingReloader{}})
+	if err := p.CreateSite(context.Background(), types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3", SharedAccount: true}); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]os.FileMode{
+		filepath.Join(home, "domains"):                                0o711,
+		filepath.Join(home, "domains", "example.test"):                0o711,
+		filepath.Join(home, "domains", "example.test", "public_html"): 0o755,
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Fatalf("%s mode = %o, want %o", path, got, want)
+		}
 	}
 }

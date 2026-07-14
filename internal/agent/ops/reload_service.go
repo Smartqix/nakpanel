@@ -30,6 +30,29 @@ type SystemdReloader struct {
 	runner  CommandRunner
 }
 
+type NginxConfigTester interface {
+	TestNginxConfig(ctx context.Context) error
+}
+
+type CommandNginxConfigTester struct {
+	runner CommandRunner
+}
+
+func NewCommandNginxConfigTester(runner CommandRunner) *CommandNginxConfigTester {
+	if runner == nil {
+		runner = ExecRunner{}
+	}
+	return &CommandNginxConfigTester{runner: runner}
+}
+
+func (t *CommandNginxConfigTester) TestNginxConfig(ctx context.Context) error {
+	output, err := t.runner.Run(ctx, "nginx", "-t")
+	if err != nil {
+		return fmt.Errorf("test nginx configuration: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
 func NewSystemdReloader(opts SystemdReloaderOptions) *SystemdReloader {
 	allowed := make(map[string]struct{}, len(opts.AllowedServices))
 	for _, service := range opts.AllowedServices {
@@ -57,9 +80,9 @@ func (r *SystemdReloader) ReloadService(ctx context.Context, name string) error 
 		return ErrServiceNotAllowed
 	}
 
-	output, err := r.runner.Run(ctx, "systemctl", "reload", name)
+	output, err := r.runner.Run(ctx, "systemctl", "reload-or-restart", name)
 	if err != nil {
-		return fmt.Errorf("reload service %q: %w: %s", name, err, strings.TrimSpace(string(output)))
+		return fmt.Errorf("reload or restart service %q: %w: %s", name, err, strings.TrimSpace(string(output)))
 	}
 	return nil
 }

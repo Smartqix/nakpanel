@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/provision"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -99,11 +101,14 @@ func (w *RenewCertsWorker) Work(ctx context.Context, _ *river.Job[RenewCertsArgs
 }
 
 func (s *Service) renewCertificates(ctx context.Context) error {
+	if err := s.maintainCustomCertificateNotifications(ctx); err != nil {
+		return err
+	}
 	actorID, err := s.schedulerID(ctx)
 	if err != nil {
 		return err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT site.id,site.username,site.domain,site.php_version,site.tls_issuer,site.subscription_id,site.customer_id
+	rows, err := s.db.QueryContext(ctx, `SELECT site.id,site.username,site.domain,site.php_version,site.document_root,site.tls_issuer,site.subscription_id,site.customer_id
 FROM sites site JOIN subscriptions sub ON sub.id=site.subscription_id
 JOIN customers c ON c.id=site.customer_id JOIN subscription_entitlements e ON e.subscription_id=sub.id
 WHERE site.status='active' AND site.tls_status IN ('active','failed') AND site.tls_auto_renew=true
@@ -116,12 +121,19 @@ AND sub.status='active' AND c.status='active' AND e.allow_tls=true ORDER BY site
 	defer rows.Close()
 	for rows.Next() {
 		var a provision.IssueCertArgs
-		if err := rows.Scan(&a.SiteID, &a.Username, &a.Domain, &a.PHPVersion, &a.Issuer, &a.SubscriptionID, &a.CustomerID); err != nil {
+		var documentRoot string
+		if err := rows.Scan(&a.SiteID, &a.Username, &a.Domain, &a.PHPVersion, &documentRoot, &a.Issuer, &a.SubscriptionID, &a.CustomerID); err != nil {
 			return err
 		}
+		a.SharedAccount = controlquota.IsSharedSiteDocumentRoot(a.Username, a.Domain, documentRoot)
 		a.Automated, a.ActorUserID = true, actorID
 		tx, err := s.db.BeginTx(ctx, nil)
 		if err != nil {
+			return err
+		}
+		a.Limits, err = controlquota.EffectiveSiteResourceLimitsTx(ctx, tx, a.SiteID)
+		if err != nil {
+			tx.Rollback()
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, `UPDATE sites SET tls_status='pending',tls_last_error='',updated_at=now() WHERE id=$1 AND tls_status IN ('active','failed')`, a.SiteID); err == nil {
@@ -140,6 +152,86 @@ AND sub.status='active' AND c.status='active' AND e.allow_tls=true ORDER BY site
 		}
 	}
 	return rows.Err()
+}
+
+func (s *Service) maintainCustomCertificateNotifications(ctx context.Context) error {
+	now := s.now().UTC()
+	if _, err := s.db.ExecContext(ctx, `UPDATE notifications notification SET resolved_at=now(),updated_at=now()
+		WHERE notification.kind='certificate_expiring' AND notification.resolved_at IS NULL
+		AND NOT EXISTS (SELECT 1 FROM sites site WHERE notification.dedupe_key LIKE 'certificate-expiring:'||site.id||':%'
+			AND site.tls_issuer='custom' AND site.tls_status='active' AND site.tls_expires_at IS NOT NULL AND site.tls_expires_at <= $1)`, now.Add(14*24*time.Hour)); err != nil {
+		return err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT site.id,site.domain,site.tls_expires_at,c.id,c.login_user_id,c.email,c.reseller_id
+		FROM sites site JOIN customers c ON c.id=site.customer_id
+		WHERE site.tls_issuer='custom' AND site.tls_status='active' AND site.tls_expires_at IS NOT NULL
+		ORDER BY site.id`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var siteID, customerID int64
+		var domain, customerEmail string
+		var expiresAt time.Time
+		var customerUserID, resellerID sql.NullInt64
+		if err := rows.Scan(&siteID, &domain, &expiresAt, &customerID, &customerUserID, &customerEmail, &resellerID); err != nil {
+			return err
+		}
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		prefix := fmt.Sprintf("certificate-expiring:%d:", siteID)
+		if expiresAt.After(now.Add(14 * 24 * time.Hour)) {
+			_, err = tx.ExecContext(ctx, `UPDATE notifications SET resolved_at=now(),updated_at=now() WHERE dedupe_key LIKE $1 AND resolved_at IS NULL`, prefix+"%")
+		} else {
+			body := fmt.Sprintf("The custom certificate for %s expires at %s. Upload a replacement before it expires.", domain, expiresAt.UTC().Format(time.RFC3339))
+			if customerUserID.Valid {
+				err = upsertCertificateExpiryNotification(ctx, tx, customerUserID.Int64, customerID, resellerID.Int64, siteID, customerEmail, body, prefix+"customer")
+			}
+			if err == nil {
+				var providerUserID int64
+				var providerEmail string
+				if resellerID.Valid {
+					err = tx.QueryRowContext(ctx, `SELECT login_user_id,email FROM reseller_accounts WHERE id=$1`, resellerID.Int64).Scan(&providerUserID, &providerEmail)
+				} else {
+					err = tx.QueryRowContext(ctx, `SELECT id,email FROM users WHERE role='admin' AND login_disabled=false ORDER BY id LIMIT 1`).Scan(&providerUserID, &providerEmail)
+				}
+				if errors.Is(err, sql.ErrNoRows) {
+					err = nil
+				} else if err == nil && (!customerUserID.Valid || providerUserID != customerUserID.Int64) {
+					err = upsertCertificateExpiryNotification(ctx, tx, providerUserID, customerID, resellerID.Int64, siteID, providerEmail, body, prefix+fmt.Sprintf("provider:%d", providerUserID))
+				}
+			}
+		}
+		if err == nil {
+			err = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return rows.Err()
+}
+
+func upsertCertificateExpiryNotification(ctx context.Context, tx *sql.Tx, recipientUserID, customerID, resellerID, siteID int64, email, body, key string) error {
+	var notificationID int64
+	err := tx.QueryRowContext(ctx, `INSERT INTO notifications(recipient_user_id,customer_id,reseller_id,kind,severity,title,body,dedupe_key)
+		VALUES($1,$2,NULLIF($3,0),'certificate_expiring','warning','Custom certificate expiring',$4,$5)
+		ON CONFLICT(dedupe_key) WHERE resolved_at IS NULL DO UPDATE SET recipient_user_id=EXCLUDED.recipient_user_id,body=EXCLUDED.body,updated_at=now()
+		RETURNING id`, recipientUserID, customerID, resellerID, body, key).Scan(&notificationID)
+	if err != nil {
+		return err
+	}
+	if email = strings.TrimSpace(email); email == "" {
+		return nil
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO notification_deliveries(notification_id,channel,recipient)
+		VALUES($1,'smtp',$2) ON CONFLICT(notification_id,channel,recipient) DO NOTHING`, notificationID, email)
+	return err
 }
 
 type ScheduledBackupsWorker struct {
@@ -163,7 +255,7 @@ func (s *Service) scheduleBackups(ctx context.Context, window time.Time) error {
 	if err != nil {
 		return err
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT site.id,site.owner_user_id,site.customer_id,site.subscription_id,site.username,site.domain
+	rows, err := s.db.QueryContext(ctx, `SELECT site.id,site.owner_user_id,site.customer_id,site.subscription_id,site.username,site.domain,site.document_root
 FROM sites site JOIN subscriptions sub ON sub.id=site.subscription_id JOIN customers c ON c.id=site.customer_id
 JOIN subscription_entitlements e ON e.subscription_id=sub.id
 WHERE site.status='active' AND sub.status='active' AND c.status='active' AND e.allow_backups=true
@@ -177,8 +269,8 @@ ORDER BY site.id`, window)
 	defer rows.Close()
 	for rows.Next() {
 		var siteID, ownerID, customerID, subscriptionID int64
-		var username, domain string
-		if err := rows.Scan(&siteID, &ownerID, &customerID, &subscriptionID, &username, &domain); err != nil {
+		var username, domain, documentRoot string
+		if err := rows.Scan(&siteID, &ownerID, &customerID, &subscriptionID, &username, &domain, &documentRoot); err != nil {
 			return err
 		}
 		tx, err := s.db.BeginTx(ctx, nil)
@@ -188,7 +280,7 @@ ORDER BY site.id`, window)
 		var backupID int64
 		if err = tx.QueryRowContext(ctx, `SELECT id FROM sites WHERE id=$1 FOR UPDATE`, siteID).Scan(&siteID); err == nil {
 			err = tx.QueryRowContext(ctx, `INSERT INTO backups(owner_user_id,customer_id,site_id,subscription_id,target_kind,target_name,status,scheduled_for)
-SELECT $1,$2,$3,$4,'site',$5,'pending',$6 WHERE NOT EXISTS(SELECT 1 FROM backups existing WHERE existing.site_id=$3 AND existing.status='active' AND existing.created_at >= $6 AND existing.created_at < $6+interval '1 day')
+SELECT $1,$2,$3,$4,'site',$5,'pending',$6::timestamptz WHERE NOT EXISTS(SELECT 1 FROM backups existing WHERE existing.site_id=$3 AND existing.status='active' AND existing.created_at >= $6::timestamptz AND existing.created_at < $6::timestamptz+interval '1 day')
 ON CONFLICT(site_id,scheduled_for) WHERE scheduled_for IS NOT NULL DO NOTHING RETURNING id`, ownerID, customerID, siteID, subscriptionID, domain, window).Scan(&backupID)
 		}
 		if errors.Is(err, sql.ErrNoRows) {
@@ -212,9 +304,8 @@ ON CONFLICT(site_id,scheduled_for) WHERE scheduled_for IS NOT NULL DO NOTHING RE
 			}
 			err = qerr
 			if err == nil {
-				a := provision.CreateBackupArgs{BackupID: backupID, SiteID: siteID, SubscriptionID: subscriptionID, CustomerID: customerID, ActorUserID: actorID, Automated: true, Domain: domain, Username: username, Docroot: "/home/" + username + "/public_html", Databases: databases}
+				a := provision.CreateBackupArgs{BackupID: backupID, SiteID: siteID, SubscriptionID: subscriptionID, CustomerID: customerID, ActorUserID: actorID, Automated: true, Domain: domain, Username: username, Docroot: documentRoot, Databases: databases}
 				opts := a.InsertOpts()
-				opts.Queue = Queue
 				opts.MaxAttempts = 3
 				_, err = s.river.InsertTx(ctx, tx, a, &opts)
 			}
@@ -257,7 +348,7 @@ SELECT b.id,b.site_id,b.created_at,e.max_backups,e.backup_retention_days,row_num
 FROM backups b JOIN sites site ON site.id=b.site_id JOIN subscription_entitlements e ON e.subscription_id=site.subscription_id
 WHERE b.status='active' AND b.archive_path<>'' AND ($1::bigint=0 OR b.site_id=$1)
 AND NOT EXISTS(SELECT 1 FROM river_job job JOIN backups in_flight ON in_flight.id=(job.args->>'backup_id')::bigint WHERE job.kind='create_backup' AND job.state IN('available','retryable','running','scheduled') AND in_flight.site_id=b.site_id AND in_flight.status<>'active'))
-SELECT id FROM ranked WHERE (max_backups>=0 AND rank>max_backups) OR (backup_retention_days>=0 AND created_at < now()-(backup_retention_days*interval '1 day')) ORDER BY id`, siteID)
+SELECT id FROM ranked WHERE (max_backups>=0 AND rank>max_backups) OR (backup_retention_days>0 AND created_at < now()-(backup_retention_days*interval '1 day')) ORDER BY id`, siteID)
 	if err != nil {
 		return err
 	}

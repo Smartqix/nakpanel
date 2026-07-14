@@ -20,6 +20,10 @@ management, and migration-sensitive control-plane behavior.
 - Customer records, service plans, subscriptions, and entitlement checks.
 - Site, database, TLS, backup, restore, DNS, webmail, and reconciliation jobs
   through River.
+- `panelctl` operator and recovery commands that work without the web listener,
+  while retaining subscription, quota, lifecycle, audit, and River gates.
+- ACME, self-signed, and system-trusted custom site certificates with atomic
+  agent installation and custom-certificate expiry warnings.
 - Privileged Unix-socket agent for Linux provisioning work.
 - PHP-FPM pool rendering, Linux users, nginx vhosts, MariaDB databases, and
   per-site disk quota enforcement.
@@ -33,11 +37,13 @@ Nakpanel is intentionally split into a control plane and a privileged agent:
 - `cmd/panel`: HTTPS web panel, authentication, dashboards, PostgreSQL access,
   River workers, and job orchestration.
 - `cmd/agent`: root-owned Unix-socket service for OS-level provisioning.
+- `cmd/panelctl`: local operator/recovery CLI backed by PostgreSQL and the same
+  control-plane services as the web panel.
 - `internal/control`: HTTP handlers, auth, dashboard loading, quota and plan
   logic, provisioning managers, stores, TLS bootstrap, and embedded web assets.
 - `internal/agent`: RPC server, peer credential checks, and Linux operations.
-- `migrations`: goose migrations from users/sessions through Phase 10
-  customers and multi-subscription ownership.
+- `migrations`: goose migrations from users/sessions through subscription
+  accounts, operator identity, and custom TLS notifications.
 - `deploy`: systemd units, install scripts, and Multipass verification scripts.
 
 The panel communicates with the agent over `/run/nakpanel/agent.sock`. On Linux,
@@ -95,8 +101,8 @@ deploy/multipass/deployment-verify.sh
 
 This creates a fresh `nakpanel-lab` Ubuntu 24.04 Multipass VM, removes old
 Nakpanel phase VMs, installs the service stack, runs migrations, builds the
-panel and agent, installs systemd units, and runs the full Phase 10 verification
-chain.
+panel, agent, and CLI, installs systemd units, and runs the full Phase 18 verification
+chain (through mailbox hosting on Stalwart; see `docs/MAIL.md`).
 
 The verifier intentionally refuses to delete Multipass VMs whose names do not
 start with `nakpanel-`. Non-Nakpanel VMs such as unrelated local test machines
@@ -134,6 +140,7 @@ Important environment variables:
 | `NAKPANEL_DATABASE_URL` | PostgreSQL DSN for panel, migrations, and River tasks. |
 | `NAKPANEL_TLS_DIR` | Directory for the panel bootstrap TLS certificate and key. Defaults to `/var/lib/nakpanel/tls`. |
 | `NAKPANEL_AGENT_ALLOWED_UID` | Optional numeric UID allowed to connect to the agent socket. |
+| `NAKPANEL_AGENT_SOCKET` | Agent socket used by `panelctl agent ping`. Defaults to `/run/nakpanel/agent.sock`. |
 | `NAKPANEL_MARIADB_DSN` | Optional MariaDB connection string used by the agent database provisioner. |
 | `NAKPANEL_ACME_DIRECTORY_URL` | ACME directory URL for certificate issuance. |
 | `NAKPANEL_ACME_ACCOUNT_KEY` | Path to the ACME account key. |
@@ -150,7 +157,7 @@ Common commands:
 
 ```bash
 task generate      # sqlc, templ, and embedded CSS
-task build         # build panel and agent
+task build         # build panel, agent, and panelctl
 task test          # run go test ./...
 task goose:up      # apply goose migrations
 task river:up      # apply River queue migrations
@@ -159,6 +166,37 @@ task river:up      # apply River queue migrations
 Generated code and assets are checked in where the current project expects
 them, including sqlc output, templ output, and `internal/control/web/static/app.css`.
 Run `task build` after touching SQL queries, templ pages, or Tailwind input.
+
+## Operator CLI
+
+Install `bin/panelctl` as `/usr/local/bin/panelctl` on an Ubuntu host. Commands
+use `NAKPANEL_DATABASE_URL`; only `agent ping` contacts the privileged socket.
+The default audit label is `SUDO_USER` or the current OS username, and can be
+overridden with `--actor`.
+
+```bash
+sudo -u nakpanel panelctl create-admin --email admin@example.test
+sudo -u nakpanel panelctl user list
+sudo -u nakpanel panelctl session list --user admin@example.test
+sudo -u nakpanel panelctl site reconcile example.test
+sudo -u nakpanel panelctl backup create example.test
+sudo -u nakpanel panelctl reconcile --system
+sudo -u nakpanel panelctl agent ping
+```
+
+Destructive commands require an interactive confirmation or `--yes`. Custom
+site certificates can be queued without placing key material in River:
+
+```bash
+sudo -u nakpanel panelctl ssl set-custom example.test \
+  --cert /secure/example.crt \
+  --key /secure/example.key \
+  --chain /secure/intermediate.crt
+```
+
+The chain must verify to the host system trust store. Arbitrary private roots,
+self-signed leaves, encrypted keys, mismatched keys, and wrong-domain or
+out-of-date certificates are rejected.
 
 Useful recovery and operations notes live in:
 

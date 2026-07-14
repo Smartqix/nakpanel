@@ -71,7 +71,7 @@ sudo -u nakpanel env \
 sudo -u nakpanel env PATH="${PATH}" HOME=/var/lib/nakpanel task build
 
 sudo systemctl stop nakpanel.service nakpanel-agent.service 2>/dev/null || true
-sudo -u postgres psql -d nakpanel >/dev/null <<'SQL'
+sudo -u postgres psql -v ON_ERROR_STOP=1 -d nakpanel >/dev/null <<'SQL'
 DELETE FROM river_job
 WHERE kind IN ('create_site', 'create_database', 'issue_cert')
   AND (
@@ -87,10 +87,13 @@ WHERE kind IN ('create_site', 'create_database', 'issue_cert')
   );
 DELETE FROM sites WHERE domain = 'phase5-ui.test' OR username = 'npui';
 DELETE FROM databases WHERE db_name = 'np_phase5' OR db_user = 'np_phase5_user';
+DELETE FROM backups
+WHERE subscription_id IN (SELECT id FROM subscriptions WHERE name = 'Phase verifier unlimited');
 UPDATE subscriptions
 SET status = 'cancelled', updated_at = now()
 WHERE customer_user_id = (SELECT id FROM users WHERE email = 'admin@nakpanel.test')
   AND status = 'active';
+DELETE FROM subscriptions WHERE name = 'Phase verifier unlimited';
 INSERT INTO subscriptions (customer_id, customer_user_id, plan_id, name, status)
 SELECT c.id, u.id, p.id, 'Phase verifier unlimited', 'active'
 FROM users u
@@ -111,11 +114,19 @@ SELECT s.id,p.name,p.disk_mb,p.max_sites,p.max_databases,p.bandwidth_mb,
 FROM subscriptions s JOIN plans p ON p.id=s.plan_id
 WHERE s.name='Phase verifier unlimited' AND s.status='active'
 ON CONFLICT (subscription_id) DO NOTHING;
+
+INSERT INTO subscription_system_accounts (
+  subscription_id, username, home_path, shell_mode, desired_state,
+  applied_state, convergence_status, migration_status
+)
+SELECT s.id, 'nps' || s.id::text, '/home/nps' || s.id::text, 'disabled', 'active', 'pending', 'pending', 'pending'
+FROM subscriptions s
+WHERE s.name='Phase verifier unlimited' AND s.status='active';
 SQL
 
 sudo mariadb -e "DROP DATABASE IF EXISTS \`np_phase5\`; DROP USER IF EXISTS 'np_phase5_user'@'localhost';"
 sudo rm -f /etc/nginx/sites-enabled/phase5-ui.test.conf /etc/nginx/sites-available/phase5-ui.test.conf
-sudo rm -f /etc/php/8.3/fpm/pool.d/nakpanel-npui-phase5-ui-test.conf
+sudo rm -f /etc/php/8.3/fpm/pool.d/nakpanel-*-phase5-ui-test.conf /etc/php/8.3/fpm/pool.d/nakpanel-*-phase5-ui-test.conf.suspended
 sudo rm -rf /home/npui
 sudo systemctl reload nginx || true
 sudo systemctl reload php8.3-fpm || true
@@ -278,9 +289,10 @@ sudo mariadb -NBe "SELECT CONCAT(User, '@', Host) FROM mysql.user WHERE User = '
 sudo mariadb -NBe "SHOW GRANTS FOR 'np_phase5_user'@'localhost'" | grep -F 'ON `np_phase5`.*'
 REMOTE
 
+phase5_username="$(multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase5-ui.test'" | tr -d '[:space:]')"
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/?legacy=1" > "${tmpdir}/admin-after-actions.html"
 assert_contains "${tmpdir}/admin-after-actions.html" 'phase5-ui.test'
-assert_contains "${tmpdir}/admin-after-actions.html" 'npui'
+assert_contains "${tmpdir}/admin-after-actions.html" "${phase5_username}"
 assert_contains "${tmpdir}/admin-after-actions.html" 'np_phase5'
 assert_contains "${tmpdir}/admin-after-actions.html" 'np_phase5_user'
 assert_contains "${tmpdir}/admin-after-actions.html" 'data-label="Domain"'

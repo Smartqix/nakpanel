@@ -85,7 +85,8 @@ func (a SetHostingStateArgs) InsertOpts() river.InsertOpts {
 }
 
 func siteSettingsKey(state, phpVersion string, httpsRedirect bool, limits types.SiteResourceLimits) string {
-	return fmt.Sprintf("%s|%s|%t|%d|%d|%d", state, phpVersion, httpsRedirect, limits.DiskQuotaMB, limits.PHPFPMMaxChildren, limits.PHPMemoryMB)
+	encoded, _ := json.Marshal(limits)
+	return fmt.Sprintf("%s|%s|%t|%s", state, phpVersion, httpsRedirect, encoded)
 }
 
 type HostingStateAgent interface {
@@ -184,12 +185,22 @@ WHERE s.id=$1`, siteID).Scan(&state)
 func (w *SetHostingStateWorker) siteRuntimeRequest(ctx context.Context, siteID int64, fallbackState string) (types.ApplySiteRuntimeReq, error) {
 	var req types.ApplySiteRuntimeReq
 	var tlsStatus string
-	err := w.db.QueryRowContext(ctx, `SELECT s.username,s.domain,s.php_version,s.desired_php_version,s.desired_https_redirect,s.tls_status,s.tls_cert_path,s.tls_key_path,
-e.site_disk_quota_mb,e.php_fpm_max_children,e.php_memory_mb,
+	var documentRoot string
+	tx, err := w.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return req, err
+	}
+	defer tx.Rollback()
+	err = tx.QueryRowContext(ctx, `SELECT s.username,s.domain,s.document_root,s.php_version,s.desired_php_version,s.desired_https_redirect,s.tls_status,s.tls_cert_path,s.tls_key_path,
 CASE WHEN s.desired_status='active' AND c.status='active' AND sub.status='active' AND (c.reseller_id IS NULL OR (ra.status='active' AND rs.id IS NOT NULL)) THEN 'active' ELSE 'suspended' END
-FROM sites s JOIN subscriptions sub ON sub.id=s.subscription_id JOIN subscription_entitlements e ON e.subscription_id=sub.id JOIN customers c ON c.id=sub.customer_id
+FROM sites s JOIN subscriptions sub ON sub.id=s.subscription_id JOIN customers c ON c.id=sub.customer_id
 LEFT JOIN reseller_accounts ra ON ra.id=c.reseller_id LEFT JOIN reseller_subscriptions rs ON rs.reseller_id=ra.id AND rs.status='active'
-WHERE s.id=$1`, siteID).Scan(&req.Username, &req.Domain, &req.CurrentPHPVersion, &req.DesiredPHPVersion, &req.HTTPSRedirect, &tlsStatus, &req.TLSCertPath, &req.TLSKeyPath, &req.Limits.DiskQuotaMB, &req.Limits.PHPFPMMaxChildren, &req.Limits.PHPMemoryMB, &req.State)
+WHERE s.id=$1`, siteID).Scan(&req.Username, &req.Domain, &documentRoot, &req.CurrentPHPVersion, &req.DesiredPHPVersion, &req.HTTPSRedirect, &tlsStatus, &req.TLSCertPath, &req.TLSKeyPath, &req.State)
+	if err != nil {
+		return req, err
+	}
+	req.SharedAccount = IsSharedSiteDocumentRoot(req.Username, req.Domain, documentRoot)
+	req.Limits, err = EffectiveSiteResourceLimitsTx(ctx, tx, siteID)
 	if err != nil {
 		return req, err
 	}
@@ -201,7 +212,7 @@ WHERE s.id=$1`, siteID).Scan(&req.Username, &req.Domain, &req.CurrentPHPVersion,
 		req.TLSKeyPath = ""
 		req.HTTPSRedirect = false
 	}
-	return req, nil
+	return req, tx.Commit()
 }
 
 func (w *SetHostingStateWorker) recordHostingFailure(ctx context.Context, siteID int64, state string, convergenceErr error) {
@@ -218,31 +229,38 @@ FROM sites s CROSS JOIN LATERAL (SELECT id FROM users WHERE role='admin' ORDER B
 func (s *SQLStore) enqueueCustomerHostingStateTx(ctx context.Context, tx *sql.Tx, customerID int64) error {
 	rows, err := tx.QueryContext(ctx, `SELECT r.id,r.username,r.domain,r.php_version,
 CASE WHEN c.status='active' AND sub.status='active' AND (c.reseller_id IS NULL OR (ra.status='active' AND rs.id IS NOT NULL)) THEN 'active' ELSE 'suspended' END
-,r.desired_php_version,r.desired_https_redirect,e.site_disk_quota_mb,e.php_fpm_max_children,e.php_memory_mb
+,r.desired_php_version,r.desired_https_redirect
 FROM sites r JOIN subscriptions sub ON sub.id=r.subscription_id JOIN customers c ON c.id=sub.customer_id
-JOIN subscription_entitlements e ON e.subscription_id=sub.id
 LEFT JOIN reseller_accounts ra ON ra.id=c.reseller_id LEFT JOIN reseller_subscriptions rs ON rs.reseller_id=ra.id AND rs.status='active'
 WHERE c.id=$1 ORDER BY r.id`, customerID)
 	if err != nil {
 		return err
 	}
 	var jobs []SetHostingStateArgs
+	desiredPHPBySite := make(map[int64]string)
+	desiredRedirectBySite := make(map[int64]bool)
 	for rows.Next() {
 		var a SetHostingStateArgs
 		var desiredPHP string
 		var desiredRedirect bool
-		var limits types.SiteResourceLimits
-		if err := rows.Scan(&a.SiteID, &a.Username, &a.Domain, &a.PHPVersion, &a.State, &desiredPHP, &desiredRedirect, &limits.DiskQuotaMB, &limits.PHPFPMMaxChildren, &limits.PHPMemoryMB); err != nil {
+		if err := rows.Scan(&a.SiteID, &a.Username, &a.Domain, &a.PHPVersion, &a.State, &desiredPHP, &desiredRedirect); err != nil {
 			rows.Close()
 			return err
 		}
-		a.SettingsKey = siteSettingsKey(a.State, desiredPHP, desiredRedirect, limits)
+		desiredPHPBySite[a.SiteID] = desiredPHP
+		desiredRedirectBySite[a.SiteID] = desiredRedirect
 		jobs = append(jobs, a)
 	}
 	if err := rows.Close(); err != nil {
 		return err
 	}
-	for _, a := range jobs {
+	for i := range jobs {
+		a := &jobs[i]
+		limits, err := EffectiveSiteResourceLimitsTx(ctx, tx, a.SiteID)
+		if err != nil {
+			return err
+		}
+		a.SettingsKey = siteSettingsKey(a.State, desiredPHPBySite[a.SiteID], desiredRedirectBySite[a.SiteID], limits)
 		next := a.State
 		if s.river != nil {
 			next = map[string]string{"active": "activating", "suspended": "suspending"}[a.State]
@@ -251,7 +269,7 @@ WHERE c.id=$1 ORDER BY r.id`, customerID)
 			return err
 		}
 		if s.river != nil {
-			if _, err := s.river.InsertTx(ctx, tx, a, nil); err != nil {
+			if _, err := s.river.InsertTx(ctx, tx, *a, nil); err != nil {
 				return fmt.Errorf("enqueue hosting state: %w", err)
 			}
 		}

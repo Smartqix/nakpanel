@@ -16,6 +16,7 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
+	"github.com/nakroteck/nakpanel/internal/certificates"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	controlfiles "github.com/nakroteck/nakpanel/internal/control/filemanager"
@@ -44,6 +45,10 @@ type DatabaseCreator interface {
 
 type CertificateIssuer interface {
 	IssueCertificate(ctx context.Context, owner auth.SessionUser, domain string, issuer types.CertIssuer) (int64, error)
+}
+
+type CustomCertificateInstaller interface {
+	InstallCustomCertificate(context.Context, auth.SessionUser, int64, certificates.Bundle) (int64, error)
 }
 
 type DashboardReader interface {
@@ -99,6 +104,18 @@ type DomainManager interface {
 	ChangeSubscriptionSubscriber(ctx context.Context, owner auth.SessionUser, subscriptionIDs []int64, customerID int64) error
 }
 
+type SubscriptionServices interface {
+	SetSubscriptionPolicy(context.Context, auth.SessionUser, int64, json.RawMessage) error
+	SetSitePolicy(context.Context, auth.SessionUser, int64, json.RawMessage) error
+	UpsertSFTPIdentity(context.Context, auth.SessionUser, int64, types.SFTPIdentityInput) (int64, error)
+	UpsertScheduledTask(context.Context, auth.SessionUser, int64, types.ScheduledTaskInput) (int64, error)
+	UpsertMailDomain(context.Context, auth.SessionUser, int64, types.MailDomainInput) (int64, error)
+	UpsertMailbox(context.Context, auth.SessionUser, int64, types.MailboxInput) (int64, error)
+	UpsertMailAlias(context.Context, auth.SessionUser, int64, types.MailAliasInput) (int64, error)
+	UpsertApplication(context.Context, auth.SessionUser, int64, types.ApplicationInput) (int64, error)
+	DeleteSubscriptionService(context.Context, auth.SessionUser, int64, string, int64) error
+}
+
 type WorkspaceService interface {
 	Search(ctx context.Context, actor auth.SessionUser, query string, limit int) ([]types.SearchResult, error)
 	RecordAudit(ctx context.Context, event types.AuditEvent) error
@@ -128,31 +145,33 @@ type FileManagerService interface {
 }
 
 type ServerOptions struct {
-	SiteCreator       SiteCreator
-	DatabaseCreator   DatabaseCreator
-	CertificateIssuer CertificateIssuer
-	DashboardReader   DashboardReader
-	JobRetrier        JobRetrier
-	Phase6Manager     Phase6Manager
-	QuotaManager      QuotaManager
-	Workspace         WorkspaceService
-	DomainManager     DomainManager
-	FileManager       FileManagerService
+	SiteCreator                SiteCreator
+	DatabaseCreator            DatabaseCreator
+	CertificateIssuer          CertificateIssuer
+	CustomCertificateInstaller CustomCertificateInstaller
+	DashboardReader            DashboardReader
+	JobRetrier                 JobRetrier
+	Phase6Manager              Phase6Manager
+	QuotaManager               QuotaManager
+	Workspace                  WorkspaceService
+	DomainManager              DomainManager
+	FileManager                FileManagerService
 }
 
 type Server struct {
-	users        UserStore
-	sessions     *auth.SessionManager
-	sites        SiteCreator
-	databases    DatabaseCreator
-	certificates CertificateIssuer
-	dashboard    DashboardReader
-	jobs         JobRetrier
-	phase6       Phase6Manager
-	quotas       QuotaManager
-	workspace    WorkspaceService
-	domains      DomainManager
-	files        FileManagerService
+	users              UserStore
+	sessions           *auth.SessionManager
+	sites              SiteCreator
+	databases          DatabaseCreator
+	certificates       CertificateIssuer
+	customCertificates CustomCertificateInstaller
+	dashboard          DashboardReader
+	jobs               JobRetrier
+	phase6             Phase6Manager
+	quotas             QuotaManager
+	workspace          WorkspaceService
+	domains            DomainManager
+	files              FileManagerService
 }
 
 func NewServer(users UserStore, sessions *auth.SessionManager, options ...ServerOptions) *Server {
@@ -161,18 +180,19 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		opts = options[0]
 	}
 	return &Server{
-		users:        users,
-		sessions:     sessions,
-		sites:        opts.SiteCreator,
-		databases:    opts.DatabaseCreator,
-		certificates: opts.CertificateIssuer,
-		dashboard:    opts.DashboardReader,
-		jobs:         opts.JobRetrier,
-		phase6:       opts.Phase6Manager,
-		quotas:       opts.QuotaManager,
-		workspace:    opts.Workspace,
-		domains:      opts.DomainManager,
-		files:        opts.FileManager,
+		users:              users,
+		sessions:           sessions,
+		sites:              opts.SiteCreator,
+		databases:          opts.DatabaseCreator,
+		certificates:       opts.CertificateIssuer,
+		customCertificates: opts.CustomCertificateInstaller,
+		dashboard:          opts.DashboardReader,
+		jobs:               opts.JobRetrier,
+		phase6:             opts.Phase6Manager,
+		quotas:             opts.QuotaManager,
+		workspace:          opts.Workspace,
+		domains:            opts.DomainManager,
+		files:              opts.FileManager,
 	}
 }
 
@@ -186,6 +206,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /sites", s.handleCreateSite)
 	mux.HandleFunc("POST /databases", s.handleCreateDatabase)
 	mux.HandleFunc("POST /certificates", s.handleIssueCertificate)
+	mux.HandleFunc("POST /sites/{id}/certificates/custom", s.handleInstallCustomCertificate)
 	mux.HandleFunc("POST /jobs/retry", s.handleRetryJob)
 	mux.HandleFunc("POST /backups", s.handleCreateBackup)
 	mux.HandleFunc("POST /restores", s.handleRestoreBackup)
@@ -215,6 +236,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /sites/{id}/tls-auto-renew", s.handleTLSAutoRenew)
 	mux.HandleFunc("POST /sites/{id}/dns-records", s.handleUpsertDNSRecord)
 	mux.HandleFunc("POST /sites/{id}/dns-records/{recordID}/delete", s.handleDeleteDNSRecord)
+	mux.HandleFunc("POST /subscriptions/{id}/policy", s.handleSubscriptionPolicy)
+	mux.HandleFunc("POST /sites/{id}/policy", s.handleSitePolicy)
+	mux.HandleFunc("POST /subscriptions/{id}/sftp", s.handleSFTPIdentity)
+	mux.HandleFunc("POST /subscriptions/{id}/scheduled-tasks", s.handleScheduledTask)
+	mux.HandleFunc("POST /subscriptions/{id}/mail-domains", s.handleMailDomain)
+	mux.HandleFunc("POST /subscriptions/{id}/mailboxes", s.handleMailbox)
+	mux.HandleFunc("POST /subscriptions/{id}/mail-aliases", s.handleMailAlias)
+	mux.HandleFunc("POST /subscriptions/{id}/applications", s.handleApplication)
+	mux.HandleFunc("POST /subscriptions/{id}/services/{kind}/{resourceID}/delete", s.handleDeleteSubscriptionService)
 	s.registerFileManagerRoutes(mux)
 	mux.HandleFunc("POST /plans/{id}/clone", s.handleClonePlan)
 	mux.HandleFunc("POST /support/customers/{id}/enter", s.handleEnterSupport)
@@ -414,7 +444,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		if view.Tab == "" {
 			view.Tab = "overview"
 		}
-		if !map[string]bool{"overview": true, "hosting": true, "php": true, "dns": true, "ssl": true, "databases": true, "backups": true}[view.Tab] {
+		if !validWorkspaceTab(route, view.Tab) {
 			view.Tab = "overview"
 		}
 		if route == "subscription-new" {
@@ -488,11 +518,18 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	tab := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tab")))
-	if !map[string]bool{"overview": true, "hosting": true, "php": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab] {
+	if !validWorkspaceTab(page, tab) {
 		tab = "overview"
 	}
 	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
 	renderPage(w, r, web.RoutedDashboardPage("Support · "+name, user, data, s.dashboardActions(auth.SessionUser{Role: auth.RoleClient}), view))
+}
+
+func validWorkspaceTab(route, tab string) bool {
+	if route == "subscription-detail" {
+		return map[string]bool{"overview": true, "resources": true, "access": true, "mail": true, "tasks": true, "applications": true, "backups": true, "activity": true}[tab]
+	}
+	return map[string]bool{"overview": true, "hosting": true, "php": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
 }
 
 func workspaceDetailVisible(route string, id int64, data dashboard.Data) bool {
@@ -671,7 +708,7 @@ func (s *Server) handleOnboardSubscription(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Invalid onboarding form", http.StatusBadRequest)
 		return
 	}
-	req := types.OnboardSubscriptionReq{CustomerMode: strings.TrimSpace(r.Form.Get("customer_mode")), Customer: parseCustomerRequest(r), PlanID: parseFormInt64Default(r, "plan_id", 0), SubscriptionName: strings.TrimSpace(r.Form.Get("subscription_name")), CreateSite: parseFormBool(r, "create_site"), Site: types.CreateSiteReq{Username: strings.ToLower(strings.TrimSpace(r.Form.Get("username"))), Domain: strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))), PHPVersion: strings.TrimSpace(r.Form.Get("php_version"))}}
+	req := types.OnboardSubscriptionReq{CustomerMode: strings.TrimSpace(r.Form.Get("customer_mode")), Customer: parseCustomerRequest(r), PlanID: parseFormInt64Default(r, "plan_id", 0), SubscriptionName: strings.TrimSpace(r.Form.Get("subscription_name")), CreateSite: parseFormBool(r, "create_site"), Site: types.CreateSiteReq{Username: strings.ToLower(strings.TrimSpace(firstNonEmpty(r.Form.Get("system_username"), r.Form.Get("username")))), Domain: strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))), PHPVersion: strings.TrimSpace(r.Form.Get("php_version"))}}
 	if req.CustomerMode == "new" {
 		customer, err := s.quotas.CreateCustomer(r.Context(), user, req.Customer)
 		if err != nil {
@@ -686,7 +723,7 @@ func (s *Server) handleOnboardSubscription(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Customer and plan are required", http.StatusBadRequest)
 		return
 	}
-	sub, err := s.quotas.CreateSubscription(r.Context(), user, types.CreateSubscriptionReq{CustomerID: req.CustomerID, PlanID: req.PlanID, SubscriptionName: req.SubscriptionName, Status: "active"})
+	sub, err := s.quotas.CreateSubscription(r.Context(), user, types.CreateSubscriptionReq{CustomerID: req.CustomerID, PlanID: req.PlanID, SubscriptionName: req.SubscriptionName, SystemUsername: req.Site.Username, Status: "active"})
 	if err != nil {
 		writeQuotaError(w, r, "Could not create subscription", err)
 		return
@@ -698,6 +735,9 @@ func (s *Server) handleOnboardSubscription(w http.ResponseWriter, r *http.Reques
 			notice = "subscription-site-warning"
 		} else {
 			req.Site.SubscriptionID = sub.ID
+			if req.Site.Username == "" {
+				req.Site.Username = "npsystem"
+			}
 			siteID, siteErr := s.sites.CreateSiteFor(r.Context(), user, user.ID, req.Site)
 			if siteErr != nil {
 				notice = "subscription-site-warning"
@@ -1028,6 +1068,89 @@ func (s *Server) handleIssueCertificate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	redirectAfterPost(w, r, "/", "/certificates?notice=certificate-queued")
+}
+
+func (s *Server) handleInstallCustomCertificate(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.currentUser(w, r)
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if user.Role != auth.RoleAdmin && user.Role != auth.RoleClient && user.Role != auth.RoleReseller {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if s.customCertificates == nil {
+		http.Error(w, "Custom certificate installation is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	siteID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || siteID <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	if err = r.ParseMultipartForm(certificates.MaxBundleBytes); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			http.Error(w, "Certificate request is too large", http.StatusRequestEntityTooLarge)
+			return
+		}
+		http.Error(w, "Invalid custom certificate form", http.StatusBadRequest)
+		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+	certificatePEM, err := readCertificateUpload(r, "certificate", true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	privateKeyPEM, err := readCertificateUpload(r, "private_key", true)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	chainPEM, err := readCertificateUpload(r, "chain", false)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	jobID, err := s.customCertificates.InstallCustomCertificate(r.Context(), user, siteID, certificates.Bundle{
+		CertificatePEM: certificatePEM, PrivateKeyPEM: privateKeyPEM, ChainPEM: chainPEM,
+	})
+	if err != nil {
+		if errors.Is(err, provision.ErrForbidden) || errors.Is(err, sql.ErrNoRows) {
+			http.NotFound(w, r)
+			return
+		}
+		http.Error(w, "Could not install custom certificate: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.recordAudit(r.Context(), user, 0, 0, "certificate.custom_queued", "site", siteID, map[string]any{"job_id": jobID})
+	http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=ssl&notice=certificate-queued", http.StatusSeeOther)
+}
+
+func readCertificateUpload(r *http.Request, name string, required bool) ([]byte, error) {
+	file, header, err := r.FormFile(name)
+	if err != nil {
+		if !required && errors.Is(err, http.ErrMissingFile) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("%s file is required", strings.ReplaceAll(name, "_", " "))
+	}
+	defer file.Close()
+	if header.Size > certificates.MaxPEMBytes {
+		return nil, fmt.Errorf("%s file must be 256 KiB or smaller", strings.ReplaceAll(name, "_", " "))
+	}
+	data, err := io.ReadAll(io.LimitReader(file, certificates.MaxPEMBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("read %s file: %w", strings.ReplaceAll(name, "_", " "), err)
+	}
+	if len(data) > certificates.MaxPEMBytes {
+		return nil, fmt.Errorf("%s file must be 256 KiB or smaller", strings.ReplaceAll(name, "_", " "))
+	}
+	return data, nil
 }
 
 func (s *Server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
@@ -2201,6 +2324,9 @@ func limitPostBody(next http.Handler, files FileManagerService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			limit := int64(maxFormBodyBytes)
+			if strings.HasSuffix(r.URL.Path, "/certificates/custom") {
+				limit = certificates.MaxBundleBytes
+			}
 			if files != nil && strings.HasSuffix(r.URL.Path, "/files/upload") {
 				limit = files.UploadMaxBytes() + fileUploadOverhead
 			}
@@ -2516,6 +2642,51 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		Logs:         types.LogsPreset{RotationEnabled: formBoolDefault(r, "logs_rotation_enabled", true), RetentionDays: parseFormIntDefault(r, "logs_retention_days", 14), StatisticsEnabled: parseFormBool(r, "logs_statistics_enabled")},
 		Applications: types.ApplicationsPreset{CatalogEnabled: parseFormBool(r, "applications_catalog_enabled"), Allowed: normalizeFormList(r.Form["applications_allowed"])},
 	}
+	dnsMode := plan.Presets.DNS.Mode
+	switch dnsMode {
+	case "primary", "authoritative", "":
+		dnsMode = "authoritative"
+	case "secondary", "external":
+		dnsMode = "external"
+	}
+	plan.HostingPolicy = types.HostingPolicy{
+		SchemaVersion: 1,
+		Resources: types.HostingResourcePolicy{
+			DiskMB: plan.DiskMB, TrafficMB: plan.BandwidthMB, MaxSites: plan.MaxSites,
+			MaxDatabases: plan.MaxDatabases, MaxMailboxes: plan.MaxMailboxes,
+			MaxSFTPIdentities: plan.MaxFTPAccounts, MaxBackups: plan.MaxBackups,
+			BackupStorageMB: plan.BackupStorageMB,
+		},
+		Permissions: types.HostingPermissionPolicy{
+			Hosting: plan.HostingEnabled, SSH: plan.AllowSSH, SFTP: parseFormBool(r, "allow_sftp"),
+			ScheduledTasks: parseFormBool(r, "allow_scheduled_tasks"), DNS: plan.AllowDNS, TLS: plan.AllowTLS,
+			Mail: parseFormBool(r, "allow_mail"), Databases: plan.MaxDatabases != 0, Backups: plan.AllowBackups,
+			PHPSettings: plan.AllowPHPSettings, CGI: parseFormBool(r, "allow_cgi"), Applications: parseFormBool(r, "allow_applications"),
+			CustomOCIImages: parseFormBool(r, "allow_custom_oci_images"), ApplicationEgress: parseFormBool(r, "allow_application_egress"),
+		},
+		Web:          types.HostingWebPolicy{PreferredDomain: plan.Presets.Hosting.PreferredDomain, MaxConnections: plan.Presets.Performance.MaxConnections, StaticCache: plan.Presets.Performance.StaticFileCache, FastCGIMicrocache: parseFormBool(r, "fastcgi_microcache")},
+		PHP:          types.HostingPHPPolicy{DefaultVersion: plan.DefaultPHPVersion, AllowedVersions: normalizeFormList(strings.Split(plan.PHPAllowlist, ",")), FPMMaxChildren: plan.PHPFPMMaxChildren, FPMMaxRequests: plan.Presets.PHP.FPMMaxRequests, MemoryLimitMB: plan.PHPMemoryMB, MaxExecutionSeconds: plan.Presets.PHP.MaxExecutionSeconds, MaxInputSeconds: plan.Presets.PHP.MaxInputSeconds, PostMaxMB: plan.Presets.PHP.PostMaxMB, UploadMaxMB: plan.Presets.PHP.UploadMaxMB, DisplayErrors: plan.Presets.PHP.DisplayErrors, LogErrors: plan.Presets.PHP.LogErrors, AllowURLFOpen: plan.Presets.PHP.AllowURLFOpen, ExecEnabled: parseFormBool(r, "php_exec_enabled")},
+		Mail:         types.HostingMailPolicy{Enabled: parseFormBool(r, "allow_mail"), DKIM: plan.Presets.Mail.DKIM, DMARCPolicy: plan.Presets.Mail.DMARCPolicy, SpamFilter: plan.Presets.Mail.SpamFilter, Webmail: plan.Presets.Mail.WebmailEnabled, Autoresponders: parseFormBool(r, "mail_autoresponders"), CatchAll: parseFormBool(r, "mail_catch_all")},
+		DNS:          types.HostingDNSPolicy{Enabled: plan.AllowDNS, Mode: dnsMode, DefaultTTL: plan.Presets.DNS.DefaultTTL, DNSSEC: parseFormBool(r, "dnssec")},
+		Access:       types.HostingAccessPolicy{ShellMode: formStringDefault(r, "shell_mode", "disabled"), NspawnImage: strings.TrimSpace(r.Form.Get("nspawn_image")), SFTPOnly: true, SSHIdleTimeoutMins: parseFormIntDefault(r, "ssh_idle_timeout_minutes", 30)},
+		Backups:      types.HostingBackupPolicy{Enabled: plan.AllowBackups, RetentionDays: plan.BackupRetentionDays, Schedule: strings.TrimSpace(r.Form.Get("backup_schedule"))},
+		Applications: types.HostingApplicationPolicy{CatalogEnabled: plan.Presets.Applications.CatalogEnabled, AllowedCatalogSlugs: plan.Presets.Applications.Allowed, AllowedRegistries: normalizeFormList(strings.Split(r.Form.Get("allowed_registries"), ",")), AllowedRuntimes: normalizeFormList(r.Form["allowed_runtimes"]), Rootless: true, EgressEnabled: parseFormBool(r, "allow_application_egress")},
+	}
+	for name, target := range map[string]*int{
+		"cpu_percent": &plan.HostingPolicy.Resources.CPUPercent, "memory_limit_mb": &plan.HostingPolicy.Resources.MemoryMB,
+		"io_read_mbps": &plan.HostingPolicy.Resources.IOReadMBPS, "io_write_mbps": &plan.HostingPolicy.Resources.IOWriteMBPS,
+		"max_tasks": &plan.HostingPolicy.Resources.MaxTasks, "max_database_users": &plan.HostingPolicy.Resources.MaxDatabaseUsers,
+		"max_mail_aliases": &plan.HostingPolicy.Resources.MaxMailAliases, "max_scheduled_tasks": &plan.HostingPolicy.Resources.MaxScheduledTasks,
+		"max_applications": &plan.HostingPolicy.Resources.MaxApplications, "container_storage_mb": &plan.HostingPolicy.Resources.ContainerStorageMB,
+		"request_rate_per_second": &plan.HostingPolicy.Web.RequestRatePerSecond, "request_burst": &plan.HostingPolicy.Web.RequestBurst,
+		"mailbox_quota_mb": &plan.HostingPolicy.Mail.MailboxQuotaMB,
+	} {
+		value, parseErr := parsePlanLimitDefault(r, name, 0)
+		if parseErr != nil {
+			return controlquota.Plan{}, parseErr
+		}
+		*target = value
+	}
 	return plan, nil
 }
 
@@ -2617,6 +2788,7 @@ func (s *Server) parseCreateSubscriptionRequest(r *http.Request, owner auth.Sess
 		CustomerID:       customerID,
 		PlanID:           planID,
 		SubscriptionName: strings.TrimSpace(r.Form.Get("subscription_name")),
+		SystemUsername:   strings.ToLower(strings.TrimSpace(r.Form.Get("system_username"))),
 		Status:           status,
 		SyncMode:         strings.TrimSpace(r.Form.Get("sync_mode")),
 	}, nil

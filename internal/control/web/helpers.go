@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
@@ -772,6 +773,93 @@ func sitesForSubscription(items []dashboard.Site, subscriptionID int64) []dashbo
 	return result
 }
 
+func accountForSubscription(items []types.SubscriptionSystemAccount, subscriptionID int64) (types.SubscriptionSystemAccount, bool) {
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			return item, true
+		}
+	}
+	return types.SubscriptionSystemAccount{}, false
+}
+
+func sftpForSubscription(items []dashboard.SFTPIdentity, subscriptionID int64) []dashboard.SFTPIdentity {
+	var out []dashboard.SFTPIdentity
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func tasksForSubscription(items []dashboard.ScheduledTask, subscriptionID int64) []dashboard.ScheduledTask {
+	var out []dashboard.ScheduledTask
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func mailForSubscription(items []dashboard.MailDomain, subscriptionID int64) []dashboard.MailDomain {
+	var out []dashboard.MailDomain
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func mailboxesForSubscription(items []dashboard.Mailbox, subscriptionID int64) []dashboard.Mailbox {
+	var out []dashboard.Mailbox
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func mailAliasesForSubscription(items []dashboard.MailAlias, subscriptionID int64) []dashboard.MailAlias {
+	var out []dashboard.MailAlias
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func formatMailboxQuota(quotaMB int) string {
+	if quotaMB <= 0 {
+		return "Unlimited"
+	}
+	return fmt.Sprintf("%d MB", quotaMB)
+}
+
+func applicationsForSubscription(items []dashboard.Application, subscriptionID int64) []dashboard.Application {
+	var out []dashboard.Application
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func subscriptionTabPath(view WorkspaceView, subscriptionID int64, tab string) templ.SafeURL {
+	return templ.SafeURL(workspacePath(view, "/subscriptions/"+formatJobID(subscriptionID)) + "?tab=" + tab)
+}
+
+func subscriptionTabClass(active, tab string) string {
+	if active == tab {
+		return "active"
+	}
+	return ""
+}
+
 func databasesForSubscription(items []dashboard.Database, subscriptionID int64) []dashboard.Database {
 	if subscriptionID == 0 {
 		return items
@@ -1050,6 +1138,24 @@ func formatBytes(size int64) string {
 		}
 	}
 	return fmt.Sprintf("%d B", size)
+}
+
+func formatEnabled(value bool) string {
+	if value {
+		return "Enabled"
+	}
+	return "Disabled"
+}
+
+func joinStrings(values []string) string { return strings.Join(values, ",") }
+
+func policyForSite(items []dashboard.SitePolicy, siteID int64) (types.HostingPolicy, bool) {
+	for _, item := range items {
+		if item.SiteID == siteID {
+			return item.EffectivePolicy, true
+		}
+	}
+	return types.HostingPolicy{}, false
 }
 
 func statusPillClass(state string) string {

@@ -51,12 +51,13 @@ func TestRequestEnvelopeRoundTrip(t *testing.T) {
 
 func TestAgentVocabularyConstants(t *testing.T) {
 	want := map[string]string{
-		"ping":               OpPing,
-		"reload_service":     OpReloadService,
-		"create_system_user": OpCreateSystemUser,
-		"create_site":        OpCreateSite,
-		"issue_cert":         OpIssueCert,
-		"create_database":    OpCreateDatabase,
+		"ping":                OpPing,
+		"reload_service":      OpReloadService,
+		"create_system_user":  OpCreateSystemUser,
+		"create_site":         OpCreateSite,
+		"issue_cert":          OpIssueCert,
+		"install_custom_cert": OpInstallCustomCert,
+		"create_database":     OpCreateDatabase,
 	}
 
 	for value, got := range want {

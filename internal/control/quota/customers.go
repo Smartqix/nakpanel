@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
@@ -227,6 +229,10 @@ func (s *SQLStore) CreateSubscription(ctx context.Context, req types.CreateSubsc
 	if req.CustomerID <= 0 {
 		return types.SubscriptionSummary{}, errors.New("customer id is required")
 	}
+	requestedUsername := strings.ToLower(strings.TrimSpace(req.SystemUsername))
+	if requestedUsername != "" && !regexp.MustCompile(`^[a-z][a-z0-9]{2,31}$`).MatchString(requestedUsername) {
+		return types.SubscriptionSummary{}, errors.New("system username must start with a letter and contain 3-32 lowercase letters or digits")
+	}
 	syncMode := strings.TrimSpace(req.SyncMode)
 	if syncMode == "" {
 		if req.PlanID > 0 {
@@ -384,6 +390,19 @@ WHERE id = $1
 	if err != nil {
 		return types.SubscriptionSummary{}, err
 	}
+	if req.ID == 0 {
+		if _, err = createSubscriptionSystemAccountTx(ctx, tx, subscriptionID, requestedUsername, status); err != nil {
+			return types.SubscriptionSummary{}, err
+		}
+	} else {
+		desiredState := "active"
+		if status != "active" {
+			desiredState = "suspended"
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE subscription_system_accounts SET desired_state=$2,convergence_status='pending',last_error='',updated_at=now() WHERE subscription_id=$1`, subscriptionID, desiredState); err != nil {
+			return types.SubscriptionSummary{}, err
+		}
+	}
 	if req.ID > 0 {
 		if syncMode == "custom" {
 			if _, err = tx.ExecContext(ctx, `DELETE FROM subscription_addons WHERE subscription_id=$1`, subscriptionID); err != nil {
@@ -408,6 +427,14 @@ WHERE sa.subscription_id=$1 AND a.id=sa.addon_plan_id AND COALESCE(a.reseller_id
 	if err := relinkSubscriptionResourcesToCustomerTx(ctx, tx, subscriptionID, customer.ID); err != nil {
 		return types.SubscriptionSummary{}, err
 	}
+	if s.river != nil {
+		if _, err = s.river.InsertTx(ctx, tx, ConvergeSubscriptionArgs{SubscriptionID: subscriptionID}, nil); err != nil {
+			return types.SubscriptionSummary{}, fmt.Errorf("enqueue subscription convergence: %w", err)
+		}
+		if err = wakeSubscriptionConvergenceTx(ctx, tx, subscriptionID); err != nil {
+			return types.SubscriptionSummary{}, fmt.Errorf("wake subscription convergence: %w", err)
+		}
+	}
 	if req.ID > 0 {
 		if status == "active" {
 			if _, err := tx.ExecContext(ctx, `UPDATE notifications SET resolved_at=now(),updated_at=now() WHERE subscription_id=$1 AND kind='suspended' AND resolved_at IS NULL`, subscriptionID); err != nil {
@@ -427,6 +454,47 @@ WHERE sa.subscription_id=$1 AND a.id=sa.addon_plan_id AND COALESCE(a.reseller_id
 		return types.SubscriptionSummary{}, err
 	}
 	return summary, nil
+}
+
+func availableSystemUsernameTx(ctx context.Context, tx *sql.Tx, subscriptionID int64) (string, error) {
+	for attempt := 0; attempt < 100; attempt++ {
+		candidate := fmt.Sprintf("nps%d", subscriptionID)
+		if attempt > 0 {
+			candidate = fmt.Sprintf("np%d%s", subscriptionID, strconv.FormatInt(int64(attempt), 36))
+		}
+		if len(candidate) > 32 {
+			candidate = candidate[:32]
+		}
+		var exists bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM subscription_system_accounts WHERE username=$1)`, candidate).Scan(&exists); err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
+	}
+	return "", errors.New("could not allocate a unique system username")
+}
+
+func createSubscriptionSystemAccountTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, requestedUsername, subscriptionStatus string) (string, error) {
+	username := strings.ToLower(strings.TrimSpace(requestedUsername))
+	if username == "" {
+		var err error
+		username, err = availableSystemUsernameTx(ctx, tx, subscriptionID)
+		if err != nil {
+			return "", err
+		}
+	}
+	desiredState := "active"
+	if subscriptionStatus != "active" {
+		desiredState = "suspended"
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO subscription_system_accounts
+(subscription_id,username,home_path,shell_mode,desired_state,applied_state,convergence_status,migration_status)
+VALUES($1,$2,'/home/'||$2,'disabled',$3,'pending','pending','pending')`, subscriptionID, username, desiredState); err != nil {
+		return "", fmt.Errorf("create subscription system account: %w", err)
+	}
+	return username, nil
 }
 
 func shouldPreserveLockedSnapshot(subscriptionID, requestedPlanID int64, requestedMode string, currentPlanID int64, currentMode string) bool {

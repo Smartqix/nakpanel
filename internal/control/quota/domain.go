@@ -45,17 +45,20 @@ func (s *SQLStore) UpdateSiteSettings(ctx context.Context, req types.UpdateSiteS
 		return err
 	}
 	defer tx.Rollback()
-	var username, domain, currentPHP, allowlist, tlsStatus string
-	var limits types.SiteResourceLimits
-	err = tx.QueryRowContext(ctx, `SELECT site.username,site.domain,site.php_version,e.php_allowlist,site.tls_status,e.site_disk_quota_mb,e.php_fpm_max_children,e.php_memory_mb
-FROM sites site JOIN subscriptions sub ON sub.id=site.subscription_id JOIN subscription_entitlements e ON e.subscription_id=sub.id
-WHERE site.id=$1 FOR UPDATE OF site`, req.SiteID).Scan(&username, &domain, &currentPHP, &allowlist, &tlsStatus, &limits.DiskQuotaMB, &limits.PHPFPMMaxChildren, &limits.PHPMemoryMB)
+	var username, domain, currentPHP, tlsStatus string
+	err = tx.QueryRowContext(ctx, `SELECT site.username,site.domain,site.php_version,site.tls_status
+FROM sites site WHERE site.id=$1 FOR UPDATE`, req.SiteID).Scan(&username, &domain, &currentPHP, &tlsStatus)
 	if err != nil {
 		return err
 	}
+	effective, err := EffectiveSitePolicyTx(ctx, tx, req.SiteID)
+	if err != nil {
+		return err
+	}
+	limits := siteResourceLimitsFromPolicy(effective)
 	allowed := false
-	for _, version := range strings.Split(allowlist, ",") {
-		if strings.TrimSpace(version) == req.DesiredPHPVersion {
+	for _, version := range effective.PHP.AllowedVersions {
+		if version == req.DesiredPHPVersion {
 			allowed = true
 			break
 		}

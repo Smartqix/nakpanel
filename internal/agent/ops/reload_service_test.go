@@ -33,7 +33,7 @@ func TestSystemdReloaderReloadsAllowedServiceWithoutShell(t *testing.T) {
 	if runner.name != "systemctl" {
 		t.Fatalf("runner name = %q, want systemctl", runner.name)
 	}
-	wantArgs := []string{"reload", "nginx"}
+	wantArgs := []string{"reload-or-restart", "nginx"}
 	if len(runner.args) != len(wantArgs) {
 		t.Fatalf("runner args = %#v, want %#v", runner.args, wantArgs)
 	}

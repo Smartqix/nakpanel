@@ -5,7 +5,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,10 +17,12 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -557,17 +561,23 @@ func normalizeBackupRequest(req types.CreateBackupReq, defaultOutputDir string) 
 }
 
 type WebmailProvisionerOptions struct {
-	NginxAvailableDir string
-	NginxEnabledDir   string
-	RoundcubeRoot     string
-	Reloader          SiteServiceReloader
+	NginxAvailableDir   string
+	NginxEnabledDir     string
+	RoundcubeRoot       string
+	RoundcubeConfigPath string
+	DESKeyPath          string
+	PHPGroup            string
+	Reloader            SiteServiceReloader
 }
 
 type WebmailProvisioner struct {
-	availableDir  string
-	enabledDir    string
-	roundcubeRoot string
-	reloader      SiteServiceReloader
+	availableDir        string
+	enabledDir          string
+	roundcubeRoot       string
+	roundcubeConfigPath string
+	desKeyPath          string
+	phpGroup            string
+	reloader            SiteServiceReloader
 }
 
 func NewWebmailProvisioner(opts WebmailProvisionerOptions) *WebmailProvisioner {
@@ -583,7 +593,23 @@ func NewWebmailProvisioner(opts WebmailProvisionerOptions) *WebmailProvisioner {
 	if root == "" {
 		root = "/usr/share/roundcube"
 	}
-	return &WebmailProvisioner{availableDir: availableDir, enabledDir: enabledDir, roundcubeRoot: root, reloader: opts.Reloader}
+	roundcubeConfigPath := opts.RoundcubeConfigPath
+	if roundcubeConfigPath == "" {
+		roundcubeConfigPath = "/etc/roundcube/config.inc.php"
+	}
+	desKeyPath := opts.DESKeyPath
+	if desKeyPath == "" {
+		desKeyPath = "/var/lib/nakpanel/roundcube-des-key"
+	}
+	phpGroup := opts.PHPGroup
+	if phpGroup == "" {
+		phpGroup = "www-data"
+	}
+	return &WebmailProvisioner{
+		availableDir: availableDir, enabledDir: enabledDir, roundcubeRoot: root,
+		roundcubeConfigPath: roundcubeConfigPath, desKeyPath: desKeyPath, phpGroup: phpGroup,
+		reloader: opts.Reloader,
+	}
 }
 
 func (p *WebmailProvisioner) ConfigureWebmail(ctx context.Context, req types.ConfigureWebmailReq) (types.ConfigureWebmailResult, error) {
@@ -599,12 +625,77 @@ func (p *WebmailProvisioner) ConfigureWebmail(ctx context.Context, req types.Con
 	if err := ensureSymlink(configPath, enabledPath); err != nil {
 		return types.ConfigureWebmailResult{}, fmt.Errorf("enable webmail nginx config: %w", err)
 	}
+	if err := p.writeRoundcubeConfig(); err != nil {
+		return types.ConfigureWebmailResult{}, err
+	}
 	if p.reloader != nil {
 		if err := p.reloader.ReloadService(ctx, "nginx"); err != nil {
 			return types.ConfigureWebmailResult{}, err
 		}
 	}
 	return types.ConfigureWebmailResult{Hostname: normalized.Hostname, ConfigPath: configPath, EnabledPath: enabledPath}, nil
+}
+
+// writeRoundcubeConfig points Roundcube at the local Stalwart IMAP/SMTP
+// listeners so webmail authenticates against provisioned mailboxes. The DES
+// session key is generated once and reused; the rendered file is readable by
+// the PHP pool group only.
+func (p *WebmailProvisioner) writeRoundcubeConfig() error {
+	desKey, err := p.ensureDESKey()
+	if err != nil {
+		return err
+	}
+	rendered := RenderRoundcubeConfig(desKey)
+	if current, readErr := os.ReadFile(p.roundcubeConfigPath); readErr == nil && string(current) == rendered {
+		return nil
+	}
+	if err := writeFileAtomic(p.roundcubeConfigPath, []byte(rendered), 0o640); err != nil {
+		return fmt.Errorf("write roundcube config: %w", err)
+	}
+	if group, lookupErr := user.LookupGroup(p.phpGroup); lookupErr == nil {
+		if gid, parseErr := strconv.Atoi(group.Gid); parseErr == nil {
+			if err := os.Chown(p.roundcubeConfigPath, 0, gid); err != nil {
+				return fmt.Errorf("chown roundcube config: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+func (p *WebmailProvisioner) ensureDESKey() (string, error) {
+	data, err := os.ReadFile(p.desKeyPath)
+	if err == nil && len(strings.TrimSpace(string(data))) == 24 {
+		return strings.TrimSpace(string(data)), nil
+	}
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return "", err
+	}
+	raw := make([]byte, 18)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	key := base64.RawStdEncoding.EncodeToString(raw)[:24]
+	if err := writeFileAtomic(p.desKeyPath, []byte(key), 0o600); err != nil {
+		return "", fmt.Errorf("write roundcube des key: %w", err)
+	}
+	return key, nil
+}
+
+func RenderRoundcubeConfig(desKey string) string {
+	return fmt.Sprintf(`<?php
+// Managed by nakpanel (configure_webmail). Do not edit: regenerated from panel intent.
+include_once("/etc/roundcube/debian-db-roundcube.php");
+$config['imap_host'] = 'tls://127.0.0.1:143';
+$config['smtp_host'] = 'tls://127.0.0.1:587';
+$config['smtp_user'] = '%%u';
+$config['smtp_pass'] = '%%p';
+$config['des_key'] = '%s';
+$config['product_name'] = 'Nakpanel Webmail';
+$config['plugins'] = [];
+$config['support_url'] = '';
+$config['imap_conn_options'] = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
+$config['smtp_conn_options'] = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
+`, desKey)
 }
 
 func RenderWebmailNginxConfig(req types.ConfigureWebmailReq) string {
@@ -810,7 +901,7 @@ webmail IN A %[2]s
 				value += "."
 			}
 		case "TXT":
-			value = `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
+			value = renderTXTValue(value)
 		}
 		if record.Type == "MX" {
 			fmt.Fprintf(&builder, "%s %d IN MX %d %s\n", host, record.TTL, record.Priority, value)
@@ -819,6 +910,26 @@ webmail IN A %[2]s
 		}
 	}
 	return builder.String()
+}
+
+// renderTXTValue splits long TXT data into quoted 255-octet character-strings
+// as RFC 1035 requires — DKIM public keys routinely exceed one string.
+func renderTXTValue(value string) string {
+	escaped := strings.ReplaceAll(value, `"`, `\"`)
+	if len(escaped) <= 255 {
+		return `"` + escaped + `"`
+	}
+	var chunks []string
+	for len(escaped) > 0 {
+		size := min(255, len(escaped))
+		// Never split immediately after a backslash: it would break the escape.
+		for size > 1 && escaped[size-1] == '\\' {
+			size--
+		}
+		chunks = append(chunks, `"`+escaped[:size]+`"`)
+		escaped = escaped[size:]
+	}
+	return strings.Join(chunks, " ")
 }
 
 func RenderDNSZoneInclude(domain string, zonePath string) string {
@@ -983,7 +1094,7 @@ func (p *ReconciliationProvisioner) ReconcileSystem(ctx context.Context, req typ
 			if desiredPHP == "" {
 				desiredPHP = siteReq.PHPVersion
 			}
-			runtimeReq := types.ApplySiteRuntimeReq{Username: siteReq.Username, Domain: siteReq.Domain, CurrentPHPVersion: siteReq.PHPVersion, DesiredPHPVersion: desiredPHP, State: siteReq.State, HTTPSRedirect: siteReq.HTTPSRedirect, TLSCertPath: siteReq.TLSCertPath, TLSKeyPath: siteReq.TLSKeyPath, Limits: siteReq.Limits}
+			runtimeReq := types.ApplySiteRuntimeReq{Username: siteReq.Username, Domain: siteReq.Domain, SharedAccount: siteReq.SharedAccount, CurrentPHPVersion: siteReq.PHPVersion, DesiredPHPVersion: desiredPHP, State: siteReq.State, HTTPSRedirect: siteReq.HTTPSRedirect, TLSCertPath: siteReq.TLSCertPath, TLSKeyPath: siteReq.TLSKeyPath, Limits: siteReq.Limits}
 			var drift bool
 			drift, itemErr = p.runtime.SiteRuntimeDrift(ctx, runtimeReq)
 			if itemErr == nil && drift {
@@ -991,7 +1102,7 @@ func (p *ReconciliationProvisioner) ReconcileSystem(ctx context.Context, req typ
 				itemErr = p.runtime.ApplySiteRuntime(ctx, runtimeReq)
 			}
 		} else if p.sites != nil {
-			itemErr = p.sites.CreateSite(ctx, types.CreateSiteReq{Username: siteReq.Username, Domain: siteReq.Domain, PHPVersion: siteReq.PHPVersion, Limits: siteReq.Limits})
+			itemErr = p.sites.CreateSite(ctx, types.CreateSiteReq{Username: siteReq.Username, Domain: siteReq.Domain, PHPVersion: siteReq.PHPVersion, SharedAccount: siteReq.SharedAccount, Limits: siteReq.Limits})
 		}
 		if itemErr != nil {
 			item.Outcome = "failed"

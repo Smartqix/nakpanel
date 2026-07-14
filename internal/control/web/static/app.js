@@ -466,6 +466,62 @@
     form.addEventListener("submit", function () { textarea.value = editor.getValue(); form.dataset.npDirty = "false"; });
   }
 
+  function buildHostingPolicyPatch(form) {
+    function number(name) {
+      var input = form.elements[name];
+      var value = input ? parseInt(input.value, 10) : 0;
+      return isNaN(value) ? 0 : value;
+    }
+    function checked(name) {
+      var input = form.elements[name];
+      return !!(input && input.checked);
+    }
+    var registries = (form.elements.policy_registries.value || "").split(",").map(function (value) { return value.trim(); }).filter(Boolean);
+    var sftp = checked("policy_sftp");
+    var mail = checked("policy_mail");
+    var patch = {
+      resources: {
+        cpu_percent: number("policy_cpu_percent"), memory_mb: number("policy_memory_mb"),
+        io_read_mbps: number("policy_io_read_mbps"), io_write_mbps: number("policy_io_write_mbps"),
+        max_tasks: number("policy_max_tasks"), max_scheduled_tasks: number("policy_max_scheduled_tasks"),
+        max_applications: number("policy_max_applications"), container_storage_mb: number("policy_container_storage_mb")
+      },
+      permissions: {
+        sftp: sftp, scheduled_tasks: checked("policy_scheduled_tasks"), mail: mail,
+        applications: checked("policy_applications"), custom_oci_images: checked("policy_custom_images")
+      },
+      access: {shell_mode: sftp ? "sftp" : "disabled", sftp_only: true},
+      mail: {enabled: mail},
+      applications: {allowed_registries: registries, rootless: true, allowed_runtimes: ["php", "python", "node", "oci"]}
+    };
+    form.querySelector("[data-np-policy-patch]").value = JSON.stringify(patch);
+  }
+
+  function buildSitePolicyPatch(form) {
+    function number(name) {
+      var input = form.elements[name];
+      var value = input ? parseInt(input.value, 10) : 0;
+      return isNaN(value) ? 0 : value;
+    }
+    function checked(name) {
+      var input = form.elements[name];
+      return !!(input && input.checked);
+    }
+    var patch = {
+      permissions: {cgi: checked("site_cgi")},
+      web: {
+        request_rate_per_second: number("site_request_rate"), request_burst: number("site_request_burst"),
+        max_connections: number("site_max_connections"), static_cache: checked("site_static_cache"),
+        fastcgi_microcache: checked("site_fastcgi_microcache")
+      },
+      php: {
+        fpm_max_children: number("site_fpm_children"), memory_limit_mb: number("site_php_memory"),
+        max_execution_seconds: number("site_php_execution"), exec_enabled: checked("site_php_exec")
+      }
+    };
+    form.querySelector("[data-np-policy-patch]").value = JSON.stringify(patch);
+  }
+
   document.addEventListener("click", function (event) {
     var legacy = event.target.closest("[data-np-view]");
     if (legacy && !legacy.disabled) setLegacyView(legacy.getAttribute("data-np-view"));
@@ -545,6 +601,10 @@
   });
 
   document.addEventListener("submit", function (event) {
+	var policyForm = event.target.closest("[data-np-policy-builder]");
+	if (policyForm) buildHostingPolicyPatch(policyForm);
+	var sitePolicyForm = event.target.closest("[data-np-site-policy-builder]");
+	if (sitePolicyForm) buildSitePolicyPatch(sitePolicyForm);
     prepareForms();
 	var planEditorForm = event.target.closest("[data-np-plan-editor]");
 	var planForm = event.target.closest('[data-np-plan-editor][action="/plans"]');

@@ -68,7 +68,9 @@ fi
 
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
-sudo install -o npui -g npui -m 0644 /dev/stdin /home/npui/public_html/index.php <<'PHP'
+docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase5-ui.test'" | xargs)"
+username="$(sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase5-ui.test'" | xargs)"
+sudo install -o "${username}" -g "${username}" -m 0644 /dev/stdin "${docroot}/index.php" <<'PHP'
 phase7 restored file
 PHP
 sudo mariadb np_phase5 <<'SQL'
@@ -106,11 +108,13 @@ fi
 
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
-sudo install -o npui -g npui -m 0644 /dev/stdin /home/npui/public_html/index.php <<'PHP'
+docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase5-ui.test'" | xargs)"
+username="$(sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase5-ui.test'" | xargs)"
+sudo install -o "${username}" -g "${username}" -m 0644 /dev/stdin "${docroot}/index.php" <<'PHP'
 phase7 mutated file
 PHP
 sudo mariadb np_phase5 -e "UPDATE phase7_restore_probe SET value = 'mutated' WHERE id = 1;"
-grep -Fxq 'phase7 mutated file' /home/npui/public_html/index.php
+grep -Fxq 'phase7 mutated file' "${docroot}/index.php"
 sudo mariadb -NBe "SELECT value FROM np_phase5.phase7_restore_probe WHERE id = 1" | grep -qx 'mutated'
 REMOTE
 
@@ -134,7 +138,8 @@ REMOTE
 multipass exec "${VM_NAME}" -- bash -se "${VM_IP}" <<'REMOTE'
 set -euo pipefail
 vm_ip="$1"
-grep -Fxq 'phase7 restored file' /home/npui/public_html/index.php
+docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase5-ui.test'" | xargs)"
+grep -Fxq 'phase7 restored file' "${docroot}/index.php"
 sudo mariadb -NBe "SELECT value FROM np_phase5.phase7_restore_probe WHERE id = 1" | grep -qx 'restored'
 
 zone_path="/etc/bind/nakpanel/zones/db.phase5-ui.test"
@@ -148,7 +153,7 @@ grep -Fq "file \"${zone_path}\"" "${include_path}"
 grep -Fq "include \"${include_path}\";" "${aggregate_path}"
 named-checkzone phase5-ui.test "${zone_path}"
 named-checkconf "${aggregate_path}"
-grep -Fq "@ IN A ${vm_ip}" "${zone_path}"
+grep -Eq "^@ (3600 )?IN A ${vm_ip}$" "${zone_path}"
 sudo systemctl is-active --quiet named.service
 sudo systemctl is-active --quiet nakpanel-agent.service
 sudo systemctl is-active --quiet nakpanel.service

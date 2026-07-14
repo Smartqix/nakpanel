@@ -84,20 +84,19 @@ func TestJobRetrierRejectsNonDiscardedJobs(t *testing.T) {
 }
 
 func TestJobRetrierRejectsUnsupportedKind(t *testing.T) {
-	store := &fakeJobRetryStore{
-		job: jobRetryRecord{
-			Kind:  "send_email",
-			State: rivertype.JobStateDiscarded,
-		},
-	}
-	retrier := NewJobRetrier(store)
+	for _, kind := range []string{"send_email", "install_custom_cert"} {
+		t.Run(kind, func(t *testing.T) {
+			store := &fakeJobRetryStore{job: jobRetryRecord{Kind: kind, State: rivertype.JobStateDiscarded}}
+			retrier := NewJobRetrier(store)
 
-	err := retrier.RetryProvisioningJob(context.Background(), 41)
-	if !errors.Is(err, ErrUnsupportedJobKind) {
-		t.Fatalf("RetryProvisioningJob error = %v, want ErrUnsupportedJobKind", err)
-	}
-	if store.retryCallCount != 0 {
-		t.Fatal("retry was called for unsupported job kind")
+			err := retrier.RetryProvisioningJob(context.Background(), 41)
+			if !errors.Is(err, ErrUnsupportedJobKind) {
+				t.Fatalf("RetryProvisioningJob error = %v, want ErrUnsupportedJobKind", err)
+			}
+			if store.retryCallCount != 0 {
+				t.Fatal("retry was called for unsupported job kind")
+			}
+		})
 	}
 }
 

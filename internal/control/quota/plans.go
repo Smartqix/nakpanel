@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	controlpolicy "github.com/nakroteck/nakpanel/internal/control/policy"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
@@ -56,6 +57,7 @@ type Plan struct {
 	AllowBackups          bool
 	AllowPHPSettings      bool
 	Presets               types.PlanServicePresets
+	HostingPolicy         types.HostingPolicy
 }
 
 type Settings struct {
@@ -135,7 +137,7 @@ const planCoreColumns = `p.id, p.name, p.description, p.price_cents, p.disk_mb, 
        p.backup_storage_mb, p.is_active, p.created_at, p.updated_at, COALESCE(p.reseller_id, 0), p.revision,
        p.overuse_policy, p.disk_warning_percent, p.traffic_warning_percent, p.max_subdomains,
        p.max_domain_aliases, p.max_ftp_accounts, p.validity_days, p.hosting_enabled,
-       p.default_php_version, p.allow_tls, p.allow_backups, p.allow_php_settings`
+	       p.default_php_version, p.allow_tls, p.allow_backups, p.allow_php_settings, p.hosting_policy`
 
 const planPresetJSON = `jsonb_build_object(
        'schema_version', COALESCE(ps.schema_version, 1),
@@ -221,6 +223,20 @@ func (s *SQLStore) UpsertPlan(ctx context.Context, plan Plan) (Plan, error) {
 		return Plan{}, err
 	}
 	saved.Presets = normalizedPlanPresets(plan)
+	if plan.HostingPolicy.SchemaVersion == 0 {
+		plan.HostingPolicy = hostingPolicyFromPlan(plan)
+	}
+	if err := controlpolicy.Validate(plan.HostingPolicy); err != nil {
+		return Plan{}, fmt.Errorf("hosting policy: %w", err)
+	}
+	policyJSON, err := json.Marshal(plan.HostingPolicy)
+	if err != nil {
+		return Plan{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE plans SET hosting_policy=$2 WHERE id=$1`, saved.ID, policyJSON); err != nil {
+		return Plan{}, err
+	}
+	saved.HostingPolicy = plan.HostingPolicy
 	if err := validatePlanWithinResellerTx(ctx, tx, saved); err != nil {
 		return Plan{}, err
 	}
@@ -694,7 +710,25 @@ RETURNING id`, name, description, limits.StorageMB, limits.MaxSites, limits.MaxD
 			limits.PHPFPMMaxChildren, limits.PHPMemoryMB, limits.SiteDiskQuotaMB,
 			limits.MaxBackups, limits.BackupStorageMB).Scan(&planID)
 	}
-	return planID, err
+	if err != nil {
+		return 0, err
+	}
+	plan := normalizePlanDefaults(Plan{
+		ID: planID, Name: name, Description: description, DiskMB: limits.StorageMB,
+		MaxSites: limits.MaxSites, MaxDatabases: limits.MaxDatabases, BandwidthMB: -1,
+		AllowDNS: true, PHPAllowlist: "8.3", PHPFPMMaxChildren: limits.PHPFPMMaxChildren,
+		PHPMemoryMB: limits.PHPMemoryMB, SiteDiskQuotaMB: limits.SiteDiskQuotaMB,
+		MaxBackups: limits.MaxBackups, BackupStorageMB: limits.BackupStorageMB,
+		ValidityDays: -1, HostingEnabled: true, AllowTLS: true, AllowBackups: true,
+	})
+	policyJSON, err := json.Marshal(hostingPolicyFromPlan(plan))
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE plans SET hosting_policy=$2 WHERE id=$1`, planID, policyJSON); err != nil {
+		return 0, err
+	}
+	return planID, nil
 }
 
 func assignSubscriptionTx(ctx context.Context, tx *sql.Tx, customerUserID int64, planID int64) (int64, error) {
@@ -702,23 +736,45 @@ func assignSubscriptionTx(ctx context.Context, tx *sql.Tx, customerUserID int64,
 	if err != nil {
 		return 0, err
 	}
-	if _, err := tx.ExecContext(ctx, `UPDATE subscriptions
-SET status = 'cancelled', updated_at = now()
-WHERE customer_user_id = $1
-  AND status IN ('active', 'suspended')`, customerUserID); err != nil {
-		return 0, err
-	}
-	var subscriptionID int64
-	if err := tx.QueryRowContext(ctx, `INSERT INTO subscriptions (customer_id, customer_user_id, plan_id, name, status)
-VALUES ($1, $2, $3, (SELECT name || ' subscription' FROM plans WHERE id = $3), 'active')
-RETURNING id`, customerID, customerUserID, planID).Scan(&subscriptionID); err != nil {
-		return 0, err
-	}
 	plan, err := selectPlanForUpdateTx(ctx, tx, planID)
 	if err != nil {
 		return 0, err
 	}
+	var subscriptionID int64
+	err = tx.QueryRowContext(ctx, `SELECT id
+FROM subscriptions
+WHERE customer_user_id=$1 AND status IN ('active','suspended')
+ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END,id
+LIMIT 1
+FOR UPDATE`, customerUserID).Scan(&subscriptionID)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		err = tx.QueryRowContext(ctx, `INSERT INTO subscriptions
+(customer_id,customer_user_id,plan_id,name,status,sync_mode,sync_status,plan_revision,sync_error)
+VALUES($1,$2,$3,$4,'active','synced','in_sync',$5,'')
+RETURNING id`, customerID, customerUserID, planID, plan.Name+" subscription", maxInt(plan.Revision, 1)).Scan(&subscriptionID)
+	case err == nil:
+		_, err = tx.ExecContext(ctx, `UPDATE subscriptions
+SET customer_id=$2,customer_user_id=$3,plan_id=$4,name=$5,status='active',
+    sync_mode='synced',sync_status='in_sync',plan_revision=$6,sync_error='',updated_at=now()
+WHERE id=$1`, subscriptionID, customerID, customerUserID, planID, plan.Name+" subscription", maxInt(plan.Revision, 1))
+	}
+	if err != nil {
+		return 0, err
+	}
 	if err := writePlanEntitlementsTx(ctx, tx, subscriptionID, plan); err != nil {
+		return 0, err
+	}
+	var accountID int64
+	err = tx.QueryRowContext(ctx, `SELECT id FROM subscription_system_accounts WHERE subscription_id=$1 FOR UPDATE`, subscriptionID).Scan(&accountID)
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err = createSubscriptionSystemAccountTx(ctx, tx, subscriptionID, "", "active")
+	} else if err == nil {
+		_, err = tx.ExecContext(ctx, `UPDATE subscription_system_accounts
+SET desired_state='active',convergence_status='pending',last_error='',updated_at=now()
+WHERE id=$1`, accountID)
+	}
+	if err != nil {
 		return 0, err
 	}
 	return subscriptionID, nil
@@ -901,7 +957,7 @@ func scanPlan(row planScanner) (Plan, error) {
 
 func scanPlanWithPresets(row planScanner) (Plan, error) {
 	var plan Plan
-	var raw []byte
+	var policyRaw, presetsRaw []byte
 	if err := row.Scan(
 		&plan.ID, &plan.Name, &plan.Description, &plan.PriceCents, &plan.DiskMB,
 		&plan.MaxSites, &plan.MaxDatabases, &plan.BandwidthMB, &plan.MaxMailboxes,
@@ -912,14 +968,22 @@ func scanPlanWithPresets(row planScanner) (Plan, error) {
 		&plan.DiskWarningPercent, &plan.TrafficWarningPercent, &plan.MaxSubdomains,
 		&plan.MaxDomainAliases, &plan.MaxFTPAccounts, &plan.ValidityDays,
 		&plan.HostingEnabled, &plan.DefaultPHPVersion, &plan.AllowTLS,
-		&plan.AllowBackups, &plan.AllowPHPSettings, &raw,
+		&plan.AllowBackups, &plan.AllowPHPSettings, &policyRaw, &presetsRaw,
 	); err != nil {
 		return Plan{}, err
 	}
-	if err := json.Unmarshal(raw, &plan.Presets); err != nil {
+	if err := json.Unmarshal(presetsRaw, &plan.Presets); err != nil {
 		return Plan{}, fmt.Errorf("decode plan service presets: %w", err)
 	}
+	if err := json.Unmarshal(policyRaw, &plan.HostingPolicy); err != nil {
+		return Plan{}, fmt.Errorf("decode plan hosting policy: %w", err)
+	}
 	return plan, nil
+}
+
+func hostingPolicyFromPlan(plan Plan) types.HostingPolicy {
+	e := entitlementsFromPlan(plan)
+	return controlpolicy.DefaultFromEntitlements(e)
 }
 
 func normalizedPlanPresets(plan Plan) types.PlanServicePresets {

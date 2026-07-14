@@ -16,11 +16,12 @@ var (
 
 func NormalizeCreateSiteRequest(req types.CreateSiteReq) types.CreateSiteReq {
 	return types.CreateSiteReq{
-		Username:   strings.ToLower(strings.TrimSpace(req.Username)),
-		Domain:     NormalizeDomain(req.Domain),
-		PHPVersion: strings.TrimSpace(req.PHPVersion),
-		Docroot:    strings.TrimSpace(req.Docroot),
-		Limits:     req.Limits,
+		Username:      strings.ToLower(strings.TrimSpace(req.Username)),
+		Domain:        NormalizeDomain(req.Domain),
+		PHPVersion:    strings.TrimSpace(req.PHPVersion),
+		Docroot:       strings.TrimSpace(req.Docroot),
+		SharedAccount: req.SharedAccount,
+		Limits:        req.Limits,
 	}
 }
 

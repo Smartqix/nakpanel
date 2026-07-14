@@ -5,7 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/store"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
@@ -16,6 +18,16 @@ type SQLSiteRepository struct {
 	queries *store.Queries
 	river   *river.Client[*sql.Tx]
 }
+
+var ErrCertificateOperationInProgress = errors.New("certificate operation is already in progress")
+
+const activeCertificateJobSQL = `SELECT EXISTS (
+SELECT 1
+FROM river_job
+WHERE kind IN ('issue_cert', 'install_custom_cert')
+  AND state IN ('available', 'pending', 'retryable', 'running', 'scheduled')
+  AND args->>'site_id' = $1::text
+)`
 
 func NewSQLSiteRepository(db *sql.DB, queries *store.Queries, riverClient *river.Client[*sql.Tx]) *SQLSiteRepository {
 	return &SQLSiteRepository{
@@ -47,7 +59,6 @@ func (r *SQLSiteRepository) CreateSite(ctx context.Context, ownerID int64, req t
 
 	site, err := r.queries.WithTx(tx).UpsertSiteIntent(ctx, store.UpsertSiteIntentParams{
 		OwnerUserID:    ownerID,
-		Username:       req.Username,
 		Domain:         req.Domain,
 		PhpVersion:     req.PHPVersion,
 		SubscriptionID: req.SubscriptionID,
@@ -57,14 +68,18 @@ func (r *SQLSiteRepository) CreateSite(ctx context.Context, ownerID int64, req t
 	}
 
 	_, err = r.river.InsertTx(ctx, tx, CreateSiteArgs{
-		SiteID:     site.ID,
-		Username:   site.Username,
-		Domain:     site.Domain,
-		PHPVersion: site.PhpVersion,
-		Limits:     req.Limits,
+		SiteID:        site.ID,
+		Username:      site.Username,
+		Domain:        site.Domain,
+		PHPVersion:    site.PhpVersion,
+		SharedAccount: true,
+		Limits:        req.Limits,
 	}, nil)
 	if err != nil {
 		return 0, fmt.Errorf("enqueue create_site job: %w", err)
+	}
+	if _, err = r.river.InsertTx(ctx, tx, controlquota.ConvergeSubscriptionArgs{SubscriptionID: req.SubscriptionID}, nil); err != nil {
+		return 0, fmt.Errorf("enqueue subscription convergence: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit site transaction: %w", err)
@@ -96,6 +111,13 @@ func (r *SQLSiteRepository) IssueCertificate(ctx context.Context, ownerID int64,
 	if site.Status != "active" {
 		return 0, fmt.Errorf("site must be active before issuing tls: status %q", site.Status)
 	}
+	if err := guardCertificateOperationTx(ctx, tx, site.ID); err != nil {
+		return 0, err
+	}
+	limits, err := controlquota.EffectiveSiteResourceLimitsTx(ctx, tx, site.ID)
+	if err != nil {
+		return 0, fmt.Errorf("resolve site policy for certificate: %w", err)
+	}
 	if err := r.queries.WithTx(tx).MarkSiteTLSPending(ctx, store.MarkSiteTLSPendingParams{
 		ID:        site.ID,
 		TlsIssuer: string(issuer),
@@ -104,11 +126,13 @@ func (r *SQLSiteRepository) IssueCertificate(ctx context.Context, ownerID int64,
 	}
 
 	_, err = r.river.InsertTx(ctx, tx, IssueCertArgs{
-		SiteID:     site.ID,
-		Username:   site.Username,
-		Domain:     site.Domain,
-		PHPVersion: site.PhpVersion,
-		Issuer:     issuer,
+		SiteID:        site.ID,
+		Username:      site.Username,
+		Domain:        site.Domain,
+		PHPVersion:    site.PhpVersion,
+		Issuer:        issuer,
+		SharedAccount: controlquota.IsSharedSiteDocumentRoot(site.Username, site.Domain, site.DocumentRoot),
+		Limits:        limits,
 	}, nil)
 	if err != nil {
 		return 0, fmt.Errorf("enqueue issue_cert job: %w", err)
@@ -117,6 +141,63 @@ func (r *SQLSiteRepository) IssueCertificate(ctx context.Context, ownerID int64,
 		return 0, fmt.Errorf("commit certificate transaction: %w", err)
 	}
 	return site.ID, nil
+}
+
+func (r *SQLSiteRepository) InstallCustomCertificate(ctx context.Context, ownerID int64, domain, stagingPath string) (int64, error) {
+	if r.db == nil || r.queries == nil || r.river == nil {
+		return 0, errors.New("custom certificate repository is not configured")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	siteRow, err := r.queries.WithTx(tx).GetSiteByDomain(ctx, domain)
+	if err != nil {
+		return 0, fmt.Errorf("get site by domain: %w", err)
+	}
+	if siteRow.Status != "active" {
+		return 0, fmt.Errorf("site must be active before installing TLS: status %q", siteRow.Status)
+	}
+	if err := guardCertificateOperationTx(ctx, tx, siteRow.ID); err != nil {
+		return 0, err
+	}
+	limits, err := controlquota.EffectiveSiteResourceLimitsTx(ctx, tx, siteRow.ID)
+	if err != nil {
+		return 0, err
+	}
+	if err = r.queries.WithTx(tx).MarkSiteTLSPending(ctx, store.MarkSiteTLSPendingParams{ID: siteRow.ID, TlsIssuer: string(types.CertIssuerCustom)}); err != nil {
+		return 0, err
+	}
+	inserted, err := r.river.InsertTx(ctx, tx, InstallCustomCertArgs{
+		SiteID: siteRow.ID, StagingPath: stagingPath, Username: siteRow.Username, Domain: siteRow.Domain,
+		PHPVersion: siteRow.PhpVersion, SharedAccount: controlquota.IsSharedSiteDocumentRoot(siteRow.Username, siteRow.Domain, siteRow.DocumentRoot), Limits: limits,
+	}, nil)
+	if err != nil {
+		return 0, fmt.Errorf("enqueue install_custom_cert job: %w", err)
+	}
+	if inserted.UniqueSkippedAsDuplicate {
+		return 0, errors.New("custom certificate installation is already in progress")
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, err
+	}
+	return inserted.Job.ID, nil
+}
+
+func guardCertificateOperationTx(ctx context.Context, tx *sql.Tx, siteID int64) error {
+	var lockedID int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM sites WHERE id = $1 FOR UPDATE`, siteID).Scan(&lockedID); err != nil {
+		return fmt.Errorf("lock site certificate state: %w", err)
+	}
+	var active bool
+	if err := tx.QueryRowContext(ctx, activeCertificateJobSQL, strconv.FormatInt(siteID, 10)).Scan(&active); err != nil {
+		return fmt.Errorf("check active certificate jobs: %w", err)
+	}
+	if active {
+		return ErrCertificateOperationInProgress
+	}
+	return nil
 }
 
 type SQLSiteStatusStore struct {

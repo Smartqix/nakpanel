@@ -1,10 +1,12 @@
 package panelhttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,8 +15,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/certificates"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/control/provision"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -92,6 +96,18 @@ type fakeCertificateIssuer struct {
 	domain string
 	issuer types.CertIssuer
 	err    error
+}
+
+type fakeCustomCertificateInstaller struct {
+	owner  auth.SessionUser
+	siteID int64
+	bundle certificates.Bundle
+	err    error
+}
+
+func (i *fakeCustomCertificateInstaller) InstallCustomCertificate(_ context.Context, owner auth.SessionUser, siteID int64, bundle certificates.Bundle) (int64, error) {
+	i.owner, i.siteID, i.bundle = owner, siteID, bundle
+	return 91, i.err
 }
 
 type fakeDomainManager struct {
@@ -2228,6 +2244,62 @@ func TestClientCannotIssueCertificate(t *testing.T) {
 	}
 }
 
+func TestAuthenticatedUserCanQueueCustomCertificateWithoutEchoingKey(t *testing.T) {
+	installer := &fakeCustomCertificateInstaller{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{CustomCertificateInstaller: installer})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req := customCertificateRequest(t, "https://panel.test/sites/7/certificates/custom", cookie, []byte("leaf-pem"), []byte("private-key-secret"), []byte("chain-pem"))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+	}
+	if installer.siteID != 7 || installer.owner.Role != auth.RoleClient || string(installer.bundle.PrivateKeyPEM) != "private-key-secret" {
+		t.Fatalf("installer call = site %d owner %#v bundle %#v", installer.siteID, installer.owner, installer.bundle)
+	}
+	if strings.Contains(rec.Body.String(), "private-key-secret") || strings.Contains(rec.Header().Get("Location"), "private-key-secret") {
+		t.Fatal("private key was exposed in HTTP response")
+	}
+}
+
+func TestCrossTenantCustomCertificateReturnsNotFound(t *testing.T) {
+	installer := &fakeCustomCertificateInstaller{err: provision.ErrForbidden}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{CustomCertificateInstaller: installer})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req := customCertificateRequest(t, "https://panel.test/sites/99/certificates/custom", cookie, []byte("leaf"), []byte("key"), nil)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status=%d, want 404; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func customCertificateRequest(t *testing.T, target string, cookie *http.Cookie, certificate, key, chain []byte) *http.Request {
+	t.Helper()
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	for name, data := range map[string][]byte{"certificate": certificate, "private_key": key, "chain": chain} {
+		if len(data) == 0 {
+			continue
+		}
+		part, err := writer.CreateFormFile(name, name+".pem")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = part.Write(data); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, target, &body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	addAuthenticatedCookie(req, cookie)
+	req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
+	return req
+}
+
 func newTestHandler(t *testing.T, role auth.Role) (http.Handler, *fakeSessionStore) {
 	return newTestHandlerWithSiteCreator(t, role, nil)
 }
@@ -2318,7 +2390,7 @@ func TestHandlerRejectsOversizedPostBody(t *testing.T) {
 
 func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 	reader := &fakeDashboardReader{data: dashboard.Data{
-		Sites:         []dashboard.Site{{ID: 7, Domain: "owned.test", Username: "owned", PHPVersion: "8.3", Status: "active", CustomerID: 88, SubscriptionID: 20}},
+		Sites:         []dashboard.Site{{ID: 7, Domain: "owned.test", Username: "owned", DocumentRoot: "/home/owned/domains/owned.test/public_html", PHPVersion: "8.3", Status: "active", CustomerID: 88, SubscriptionID: 20}},
 		Databases:     []dashboard.Database{{ID: 8, Name: "owned_db", User: "owned_user", Engine: "mariadb", Status: "active", CustomerID: 88, SubscriptionID: 20}},
 		Customers:     []types.Customer{{ID: 88, Email: "owner@test", DisplayName: "Owner", Status: "active"}},
 		Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, CustomerName: "Owner", SubscriptionName: "Owned hosting", PlanID: 10, PlanName: "Business", Status: "active", MaxSites: 5}},
@@ -2331,7 +2403,7 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 	cases := map[string]string{
-		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Hosting overview", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "Audit events", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
+		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Hosting overview", "/sites/7?tab=hosting": "Hosting settings", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "Audit events", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
 	}
 	for path, marker := range cases {
 		req := httptest.NewRequest(http.MethodGet, "https://panel.test"+path, nil)
@@ -2362,6 +2434,13 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 			for _, want := range []string{"Overview", "Hosting", "PHP", "DNS", "SSL/TLS", "Databases", "Backups"} {
 				if !strings.Contains(rec.Body.String(), want) {
 					t.Fatalf("GET /sites/7 missing domain tab %q", want)
+				}
+			}
+		}
+		if path == "/sites/7?tab=hosting" {
+			for _, want := range []string{`class="np-readonly-field"`, "/home/owned/domains/owned.test/public_html"} {
+				if !strings.Contains(rec.Body.String(), want) {
+					t.Fatalf("GET /sites/7?tab=hosting missing %q", want)
 				}
 			}
 		}

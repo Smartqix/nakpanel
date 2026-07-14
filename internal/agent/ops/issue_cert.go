@@ -15,24 +15,29 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/certificates"
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
 type CertificateProvisionerOptions struct {
-	Paths      SitePathConfig
-	CertRoot   string
-	Reloader   SiteServiceReloader
-	Now        func() time.Time
-	ACMEIssuer ACMEIssuer
+	Paths       SitePathConfig
+	CertRoot    string
+	Reloader    SiteServiceReloader
+	Now         func() time.Time
+	ACMEIssuer  ACMEIssuer
+	NginxTester NginxConfigTester
+	Validator   certificates.Validator
 }
 
 type CertificateProvisioner struct {
-	paths      SitePathConfig
-	certRoot   string
-	reloader   SiteServiceReloader
-	now        func() time.Time
-	acmeIssuer ACMEIssuer
+	paths       SitePathConfig
+	certRoot    string
+	reloader    SiteServiceReloader
+	now         func() time.Time
+	acmeIssuer  ACMEIssuer
+	nginxTester NginxConfigTester
+	validator   certificates.Validator
 }
 
 type ACMEIssueRequest struct {
@@ -62,11 +67,13 @@ func NewCertificateProvisioner(opts CertificateProvisionerOptions) *CertificateP
 		now = time.Now
 	}
 	return &CertificateProvisioner{
-		paths:      opts.Paths,
-		certRoot:   certRoot,
-		reloader:   opts.Reloader,
-		now:        now,
-		acmeIssuer: opts.ACMEIssuer,
+		paths:       opts.Paths,
+		certRoot:    certRoot,
+		reloader:    opts.Reloader,
+		now:         now,
+		acmeIssuer:  opts.ACMEIssuer,
+		nginxTester: opts.NginxTester,
+		validator:   opts.Validator,
 	}
 }
 
@@ -104,6 +111,9 @@ func NormalizeIssueCertRequest(req types.IssueCertReq) types.IssueCertReq {
 }
 
 func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueCertReq) (types.IssueCertResult, error) {
+	siteConfigMutationMu.Lock()
+	defer siteConfigMutationMu.Unlock()
+
 	req = NormalizeIssueCertRequest(req)
 	if err := ValidateIssueCertRequest(req); err != nil {
 		return types.IssueCertResult{}, err
@@ -113,9 +123,11 @@ func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueC
 	}
 
 	plan, err := NewSitePlan(types.CreateSiteReq{
-		Username:   req.Username,
-		Domain:     req.Domain,
-		PHPVersion: req.PHPVersion,
+		Username:      req.Username,
+		Domain:        req.Domain,
+		PHPVersion:    req.PHPVersion,
+		SharedAccount: req.SharedAccount,
+		Limits:        req.Limits,
 	}, p.paths)
 	if err != nil {
 		return types.IssueCertResult{}, err
@@ -124,6 +136,18 @@ func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueC
 	certDir := filepath.Join(p.certRoot, req.Domain)
 	certPath := filepath.Join(certDir, "fullchain.pem")
 	keyPath := filepath.Join(certDir, "privkey.pem")
+	snapshots, err := snapshotFiles([]string{plan.NginxConfig, plan.NginxEnabled, certPath, keyPath})
+	if err != nil {
+		return types.IssueCertResult{}, err
+	}
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		_ = restoreSnapshots(snapshots)
+		_ = p.reloader.ReloadService(context.Background(), "nginx")
+	}()
 	expiresAt := time.Time{}
 	switch req.Issuer {
 	case types.CertIssuerLocalSelfSigned:
@@ -158,9 +182,15 @@ func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueC
 	if err := ensureSymlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
 		return types.IssueCertResult{}, fmt.Errorf("enable nginx tls site: %w", err)
 	}
+	if p.nginxTester != nil {
+		if err := p.nginxTester.TestNginxConfig(ctx); err != nil {
+			return types.IssueCertResult{}, err
+		}
+	}
 	if err := p.reloader.ReloadService(ctx, "nginx"); err != nil {
 		return types.IssueCertResult{}, err
 	}
+	committed = true
 
 	return types.IssueCertResult{
 		Domain:    req.Domain,
@@ -168,6 +198,86 @@ func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueC
 		CertPath:  certPath,
 		KeyPath:   keyPath,
 		ExpiresAt: expiresAt,
+	}, nil
+}
+
+func (p *CertificateProvisioner) InstallCustomCert(ctx context.Context, req types.InstallCustomCertReq) (result types.InstallCustomCertResult, err error) {
+	siteConfigMutationMu.Lock()
+	defer siteConfigMutationMu.Unlock()
+
+	normalized := NormalizeIssueCertRequest(types.IssueCertReq{
+		Username: req.Username, Domain: req.Domain, PHPVersion: req.PHPVersion,
+		SharedAccount: req.SharedAccount, Limits: req.Limits, Issuer: types.CertIssuerLocalSelfSigned,
+	})
+	if err := ValidateIssueCertRequest(normalized); err != nil {
+		return types.InstallCustomCertResult{}, err
+	}
+	if p.reloader == nil {
+		return types.InstallCustomCertResult{}, errors.New("service reloader is not configured")
+	}
+	if p.nginxTester == nil {
+		return types.InstallCustomCertResult{}, errors.New("nginx configuration tester is not configured")
+	}
+	validated, err := p.validator.Validate(normalized.Domain, certificates.Bundle{
+		CertificatePEM: []byte(req.CertificatePEM), PrivateKeyPEM: []byte(req.PrivateKeyPEM), ChainPEM: []byte(req.ChainPEM),
+	})
+	if err != nil {
+		return types.InstallCustomCertResult{}, err
+	}
+	plan, err := NewSitePlan(types.CreateSiteReq{
+		Username: normalized.Username, Domain: normalized.Domain, PHPVersion: normalized.PHPVersion,
+		SharedAccount: normalized.SharedAccount, Limits: normalized.Limits,
+	}, p.paths)
+	if err != nil {
+		return types.InstallCustomCertResult{}, err
+	}
+	certDir := filepath.Join(p.certRoot, normalized.Domain)
+	certPath := filepath.Join(certDir, "fullchain.pem")
+	keyPath := filepath.Join(certDir, "privkey.pem")
+	snapshots, err := snapshotFiles([]string{plan.NginxConfig, plan.NginxEnabled, certPath, keyPath})
+	if err != nil {
+		return types.InstallCustomCertResult{}, err
+	}
+	committed := false
+	defer func() {
+		if committed {
+			return
+		}
+		if restoreErr := restoreSnapshots(snapshots); restoreErr != nil {
+			err = errors.Join(err, fmt.Errorf("restore certificate files: %w", restoreErr))
+		}
+		if reloadErr := p.reloader.ReloadService(context.Background(), "nginx"); reloadErr != nil {
+			err = errors.Join(err, fmt.Errorf("reload restored nginx configuration: %w", reloadErr))
+		}
+	}()
+	if err = os.MkdirAll(certDir, 0o700); err != nil {
+		return types.InstallCustomCertResult{}, fmt.Errorf("create certificate directory: %w", err)
+	}
+	if err = os.Chmod(certDir, 0o700); err != nil {
+		return types.InstallCustomCertResult{}, fmt.Errorf("secure certificate directory: %w", err)
+	}
+	if err = writeFileAtomic(certPath, validated.FullChainPEM, 0o600); err != nil {
+		return types.InstallCustomCertResult{}, fmt.Errorf("write custom certificate: %w", err)
+	}
+	if err = writeFileAtomic(keyPath, validated.PrivateKeyPEM, 0o600); err != nil {
+		return types.InstallCustomCertResult{}, fmt.Errorf("write custom private key: %w", err)
+	}
+	if err = writeFileAtomic(plan.NginxConfig, []byte(RenderNginxTLSVHost(plan, certPath, keyPath)), plan.FileMode); err != nil {
+		return types.InstallCustomCertResult{}, fmt.Errorf("write nginx TLS site config: %w", err)
+	}
+	if err = ensureSymlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
+		return types.InstallCustomCertResult{}, fmt.Errorf("enable nginx TLS site: %w", err)
+	}
+	if err = p.nginxTester.TestNginxConfig(ctx); err != nil {
+		return types.InstallCustomCertResult{}, err
+	}
+	if err = p.reloader.ReloadService(ctx, "nginx"); err != nil {
+		return types.InstallCustomCertResult{}, err
+	}
+	committed = true
+	return types.InstallCustomCertResult{
+		Domain: normalized.Domain, Issuer: types.CertIssuerCustom, CertPath: certPath,
+		KeyPath: keyPath, ExpiresAt: validated.Leaf.NotAfter.UTC(),
 	}, nil
 }
 
@@ -202,6 +312,7 @@ func RenderNginxTLSVHost(plan SitePlan, certPath, keyPath string) string {
     error_log %[4]s;
 
     location / {
+%[9]s
         try_files $uri $uri/ /index.php?$query_string;
     }
 
@@ -230,6 +341,7 @@ server {
     error_log %[4]s;
 
     location / {
+%[9]s
         try_files $uri $uri/ /index.php?$query_string;
     }
 
@@ -242,7 +354,7 @@ server {
         deny all;
     }
 }
-`, plan.Domain, plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath)
+`, plan.Domain, plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath, renderNginxLocationControls(plan))
 }
 
 func (p *CertificateProvisioner) writeSelfSignedCertificate(domain, certPath, keyPath string) (time.Time, error) {

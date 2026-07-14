@@ -1233,8 +1233,11 @@
 
   .np-breadcrumb {
     color: #222b3a;
+    display: block;
     font-size: 15px;
     font-weight: 760;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
 
@@ -1521,7 +1524,7 @@
   .np-top-primary { display: contents; }
   .np-menu-icon { grid-column: 1; grid-row: 1; }
   .np-breadcrumb { align-self: center; }
-  .np-top-primary > div:not(.np-global-search) { grid-column: 2; grid-row: 1; }
+  .np-top-primary > div:not(.np-global-search) { grid-column: 2; grid-row: 1; min-width: 0; overflow: hidden; }
   .np-global-search { grid-column: 1 / -1; grid-row: 2; min-width: 0; width: 100%; }
   .np-top-secondary { grid-column: 3; grid-row: 1; justify-content: flex-end; }
   .np-context-select { min-width: 0; width: 100%; }
@@ -3429,6 +3432,9 @@
   .np-domain-form { align-items: end; display: grid; gap: 14px; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 4px 18px 18px; }
   .np-domain-form .np-facts { grid-column: 1 / -1; }
   .np-domain-form button { justify-self: start; }
+  .np-readonly-field { display: grid; gap: 7px; }
+  .np-readonly-field > span { color: #3f4758; font-size: 13px; font-weight: 720; }
+  .np-readonly-field code { background: #f7f9fc; border: 1px solid var(--np-border); border-radius: 6px; color: #273142; display: block; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 12px; line-height: 1.45; min-height: 40px; overflow-wrap: anywhere; padding: 10px 11px; white-space: normal; }
   .np-zone-summary { align-items: center; background: #f7f9fc; border-bottom: 1px solid var(--np-border-soft); display: flex; flex-wrap: wrap; gap: 14px; padding: 10px 18px; }
   .np-dns-form { border-top: 1px solid var(--np-border-soft); grid-template-columns: .8fr .7fr 1.6fr .7fr .7fr auto; padding-top: 16px; }
   .np-icon-button { align-items: center; background: transparent; border: 0; color: #667085; display: inline-flex; height: 30px; justify-content: center; padding: 0; width: 30px; }
@@ -3561,6 +3567,15 @@
       grid-template-columns: 1fr;
     }
 
+    .np-subscription-overview .np-stat-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .np-subscription-overview .np-stat {
+      min-height: 0;
+      padding: 14px;
+    }
+
     .np-action-form,
     .np-login-form,
     .np-top {
@@ -3572,6 +3587,12 @@
     input,
     select {
       width: 100%;
+    }
+
+    .np-check input[type="checkbox"],
+    .np-check input[type="radio"] {
+      flex: 0 0 auto;
+      width: auto;
     }
 
     .np-table-wrap {

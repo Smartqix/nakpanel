@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
+IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 
 if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
