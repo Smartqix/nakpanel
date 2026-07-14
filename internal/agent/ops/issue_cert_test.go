@@ -91,10 +91,12 @@ func TestLocalCertificateProvisionerCreatesCertAndTLSVHost(t *testing.T) {
 	})
 
 	result, err := provisioner.IssueCert(context.Background(), types.IssueCertReq{
-		Username:   "npdemo",
-		Domain:     "example.test",
-		PHPVersion: "8.3",
-		Issuer:     types.CertIssuerLocalSelfSigned,
+		Username:      "npdemo",
+		Domain:        "example.test",
+		PHPVersion:    "8.3",
+		Issuer:        types.CertIssuerLocalSelfSigned,
+		SharedAccount: true,
+		Limits:        types.SiteResourceLimits{RequestRatePerSecond: 4, RequestBurst: 8, MaxConnections: 12},
 	})
 	if err != nil {
 		t.Fatalf("IssueCert returned error: %v", err)
@@ -143,10 +145,12 @@ func TestLocalCertificateProvisionerCreatesCertAndTLSVHost(t *testing.T) {
 	for _, want := range []string{
 		"listen 443 ssl;",
 		"server_name example.test;",
-		"root " + filepath.Join(paths.HomeRoot, "npdemo", "public_html") + ";",
+		"root " + filepath.Join(paths.HomeRoot, "npdemo", "domains", "example.test", "public_html") + ";",
 		"ssl_certificate " + result.CertPath + ";",
 		"ssl_certificate_key " + result.KeyPath + ";",
 		"fastcgi_pass unix:" + filepath.Join(paths.PHPRunDir, "nakpanel-npdemo-example-test.sock") + ";",
+		"limit_req zone=",
+		"limit_conn ",
 	} {
 		if !strings.Contains(string(nginx), want) {
 			t.Fatalf("nginx config missing %q:\n%s", want, nginx)
@@ -188,15 +192,16 @@ func TestACMECertificateProvisionerUsesIssuerAndWritesTLSVHost(t *testing.T) {
 	})
 
 	result, err := provisioner.IssueCert(context.Background(), types.IssueCertReq{
-		Username:   "npdemo",
-		Domain:     "example.test",
-		PHPVersion: "8.3",
-		Issuer:     types.CertIssuerACME,
+		Username:      "npdemo",
+		Domain:        "example.test",
+		PHPVersion:    "8.3",
+		Issuer:        types.CertIssuerACME,
+		SharedAccount: true,
 	})
 	if err != nil {
 		t.Fatalf("IssueCert returned error: %v", err)
 	}
-	if issuer.req.Domain != "example.test" || issuer.req.Docroot != filepath.Join(paths.HomeRoot, "npdemo", "public_html") {
+	if issuer.req.Domain != "example.test" || issuer.req.Docroot != filepath.Join(paths.HomeRoot, "npdemo", "domains", "example.test", "public_html") {
 		t.Fatalf("ACME request = %#v, want domain and docroot", issuer.req)
 	}
 	if issuer.req.CertPath != issuer.result.CertPath || issuer.req.KeyPath != issuer.result.KeyPath {
@@ -258,11 +263,45 @@ func TestACMECertificateProvisionerRejectsInvalidIssuerResult(t *testing.T) {
 	if !strings.Contains(err.Error(), "missing certificate path") {
 		t.Fatalf("IssueCert error = %q, want missing certificate path", err.Error())
 	}
-	if len(reloader.services) != 0 {
-		t.Fatalf("reloaded services = %#v, want none", reloader.services)
+	if got, want := reloader.services, []string{"nginx"}; !slices.Equal(got, want) {
+		t.Fatalf("rollback reloads = %#v, want %#v", got, want)
 	}
 	if _, err := os.Stat(filepath.Join(paths.NginxAvailableDir, "example.test.conf")); !os.IsNotExist(err) {
 		t.Fatalf("nginx config was written or stat failed: %v", err)
+	}
+}
+
+func TestCertificateProvisionerRestoresVHostAndCertificateOnReloadFailure(t *testing.T) {
+	tmp := t.TempDir()
+	paths := SitePathConfig{
+		HomeRoot: filepath.Join(tmp, "home"), NginxAvailableDir: filepath.Join(tmp, "available"), NginxEnabledDir: filepath.Join(tmp, "enabled"),
+		NginxLogDir: filepath.Join(tmp, "logs"), PHPFPMPoolDir: filepath.Join(tmp, "php"), PHPFPMLogDir: filepath.Join(tmp, "php-logs"),
+		PHPRunDir: filepath.Join(tmp, "run"), NginxSnippet: "snippets/fastcgi-php.conf", WWWGroup: "www-data", PHPTmpDir: filepath.Join(tmp, "tmp"), DefaultFileMode: 0o644,
+	}
+	certRoot := filepath.Join(tmp, "certs")
+	plan, err := NewSitePlan(types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3"}, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPath := filepath.Join(certRoot, "example.test", "fullchain.pem")
+	keyPath := filepath.Join(certRoot, "example.test", "privkey.pem")
+	for path, contents := range map[string]string{plan.NginxConfig: "old nginx\n", certPath: "old cert\n", keyPath: "old key\n"} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := NewCertificateProvisioner(CertificateProvisionerOptions{Paths: paths, CertRoot: certRoot, Reloader: &failingServiceReloader{failService: "nginx"}})
+	if _, err := p.IssueCert(context.Background(), types.IssueCertReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3", Issuer: types.CertIssuerLocalSelfSigned}); err == nil {
+		t.Fatal("IssueCert returned nil, want reload failure")
+	}
+	for path, want := range map[string]string{plan.NginxConfig: "old nginx\n", certPath: "old cert\n", keyPath: "old key\n"} {
+		got, err := os.ReadFile(path)
+		if err != nil || string(got) != want {
+			t.Fatalf("restored %s = %q, %v; want %q", path, got, err, want)
+		}
 	}
 }
 

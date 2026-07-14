@@ -65,6 +65,10 @@ type CapabilityReader interface {
 	RuntimeCapabilities(ctx context.Context) (types.RuntimeCapabilities, error)
 }
 
+type SubscriptionServiceReader interface {
+	ListSubscriptionServices(context.Context, auth.SessionUser) (SubscriptionServicesData, error)
+}
+
 type Store struct {
 	queries      Querier
 	jobs         JobReader
@@ -76,33 +80,116 @@ type Store struct {
 }
 
 type Data struct {
-	Sites             []Site
-	Databases         []Database
-	Jobs              []Job
-	JobLoadError      string
-	Phase6            Phase6Data
-	Phase6Error       string
-	Quotas            []controlquota.Summary
-	QuotaLoadError    string
-	Plans             []controlquota.Plan
-	Customers         []types.Customer
-	Subscriptions     []types.SubscriptionSummary
-	Settings          controlquota.Settings
-	CommittedDiskMB   int
-	PlanLoadError     string
-	Notice            string
-	AuditEvents       []types.AuditEvent
-	Resellers         []types.Reseller
-	ResellerPlans     []types.ResellerPlan
-	AddonPlans        []types.AddonPlan
-	SubscriptionUsage []types.SubscriptionUsage
-	UsageAlerts       []types.UsageAlert
-	Capabilities      types.RuntimeCapabilities
+	Sites                []Site
+	Databases            []Database
+	Jobs                 []Job
+	JobLoadError         string
+	Phase6               Phase6Data
+	Phase6Error          string
+	Quotas               []controlquota.Summary
+	QuotaLoadError       string
+	Plans                []controlquota.Plan
+	Customers            []types.Customer
+	Subscriptions        []types.SubscriptionSummary
+	Settings             controlquota.Settings
+	CommittedDiskMB      int
+	PlanLoadError        string
+	Notice               string
+	AuditEvents          []types.AuditEvent
+	Resellers            []types.Reseller
+	ResellerPlans        []types.ResellerPlan
+	AddonPlans           []types.AddonPlan
+	SubscriptionUsage    []types.SubscriptionUsage
+	UsageAlerts          []types.UsageAlert
+	Capabilities         types.RuntimeCapabilities
+	SubscriptionServices SubscriptionServicesData
+}
+
+type SubscriptionServicesData struct {
+	Accounts     []types.SubscriptionSystemAccount
+	SFTP         []SFTPIdentity
+	Tasks        []ScheduledTask
+	MailDomains  []MailDomain
+	Mailboxes    []Mailbox
+	MailAliases  []MailAlias
+	Applications []Application
+	SitePolicies []SitePolicy
+}
+
+type SitePolicy struct {
+	SiteID          int64
+	SubscriptionID  int64
+	EffectivePolicy types.HostingPolicy
+}
+
+type SFTPIdentity struct {
+	ID             int64
+	SubscriptionID int64
+	Name           string
+	RelativeRoot   string
+	Enabled        bool
+}
+
+type ScheduledTask struct {
+	ID               int64
+	SubscriptionID   int64
+	SiteID           int64
+	Name             string
+	Schedule         string
+	Command          string
+	WorkingDirectory string
+	TimeoutSeconds   int
+	Enabled          bool
+	Status           string
+	LastError        string
+}
+
+type MailDomain struct {
+	ID             int64
+	SubscriptionID int64
+	SiteID         int64
+	Domain         string
+	Enabled        bool
+	DKIM           bool
+	DMARCPolicy    string
+	Status         string
+	LastError      string
+}
+
+type Mailbox struct {
+	ID             int64
+	SubscriptionID int64
+	MailDomainID   int64
+	Address        string
+	QuotaMB        int
+	Enabled        bool
+}
+
+type MailAlias struct {
+	ID             int64
+	SubscriptionID int64
+	MailDomainID   int64
+	Address        string
+	Destinations   string
+}
+
+type Application struct {
+	ID             int64
+	SubscriptionID int64
+	SiteID         int64
+	Name           string
+	Runtime        string
+	ImageRef       string
+	DesiredState   string
+	AppliedState   string
+	Status         string
+	LastError      string
 }
 
 type Site struct {
 	ID                   int64
 	Username             string
+	DocumentRoot         string
 	Domain               string
 	PHPVersion           string
 	Status               string
@@ -295,6 +382,9 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 		if s.capabilities != nil {
 			data.Capabilities, _ = s.capabilities.RuntimeCapabilities(ctx)
 		}
+		if services, ok := s.scoped.(SubscriptionServiceReader); ok {
+			data.SubscriptionServices, _ = services.ListSubscriptionServices(ctx, user)
+		}
 		return data, nil
 	}
 	if s.queries == nil {
@@ -415,10 +505,14 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 		UsageAlerts:       usageAlerts,
 		Capabilities:      capabilities,
 	}
+	if services, ok := s.scoped.(SubscriptionServiceReader); ok {
+		data.SubscriptionServices, _ = services.ListSubscriptionServices(ctx, user)
+	}
 	for _, site := range sites {
 		data.Sites = append(data.Sites, Site{
 			ID:                   site.ID,
 			Username:             site.Username,
+			DocumentRoot:         site.DocumentRoot,
 			Domain:               site.Domain,
 			PHPVersion:           site.PhpVersion,
 			Status:               site.Status,

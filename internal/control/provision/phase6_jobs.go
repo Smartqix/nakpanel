@@ -26,7 +26,11 @@ type CreateBackupArgs struct {
 
 func (CreateBackupArgs) Kind() string { return "create_backup" }
 
-func (CreateBackupArgs) InsertOpts() river.InsertOpts { return activeUniqueOpts() }
+func (CreateBackupArgs) InsertOpts() river.InsertOpts {
+	opts := activeUniqueOpts()
+	opts.Queue = "heavy"
+	return opts
+}
 
 type ConfigureWebmailArgs struct {
 	WebmailID int64  `json:"webmail_id" river:"unique"`
@@ -50,7 +54,11 @@ type RestoreBackupArgs struct {
 
 func (RestoreBackupArgs) Kind() string { return "restore_backup" }
 
-func (RestoreBackupArgs) InsertOpts() river.InsertOpts { return activeUniqueOpts() }
+func (RestoreBackupArgs) InsertOpts() river.InsertOpts {
+	opts := activeUniqueOpts()
+	opts.Queue = "heavy"
+	return opts
+}
 
 type ConfigureDNSZoneArgs struct {
 	ZoneID  int64             `json:"zone_id" river:"unique"`
@@ -110,6 +118,10 @@ type AgentDNSClient interface {
 
 type AgentReconciliationClient interface {
 	ReconcileSystem(ctx context.Context, req types.ReconcileSystemReq) (types.Response, error)
+}
+
+type ReconcileIntentRefresher interface {
+	RefreshReconcileIntent(context.Context, ReconcileSystemArgs) (ReconcileSystemArgs, error)
 }
 
 type Phase6StatusStore interface {
@@ -323,25 +335,33 @@ func (w *ReconcileSystemWorker) Work(ctx context.Context, job *river.Job[Reconci
 	if w.agent == nil {
 		return errors.New("agent reconciliation client is not configured")
 	}
-	resp, err := w.agent.ReconcileSystem(ctx, types.ReconcileSystemReq{Sites: job.Args.Sites, Databases: job.Args.Databases})
+	args := job.Args
+	if refresher, ok := w.store.(ReconcileIntentRefresher); ok {
+		var err error
+		args, err = refresher.RefreshReconcileIntent(ctx, args)
+		if err != nil {
+			return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, nil, err))
+		}
+	}
+	resp, err := w.agent.ReconcileSystem(ctx, types.ReconcileSystemReq{Sites: args.Sites, Databases: args.Databases})
 	if err != nil {
-		return errors.Join(err, w.markReconcileFailed(ctx, job.Args.RunID, err.Error()), w.reportReconcile(ctx, job.Args, nil, err))
+		return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, nil, err))
 	}
 	var result types.ReconcileSystemResult
 	if err := decodeAgentResult(resp, &result); err != nil {
-		return errors.Join(err, w.markReconcileFailed(ctx, job.Args.RunID, err.Error()), w.reportReconcile(ctx, job.Args, nil, err))
+		return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, nil, err))
 	}
 	if result.Failed > 0 {
 		err := fmt.Errorf("reconciliation reported %d failed resources", result.Failed)
-		return errors.Join(err, w.markReconcileFailed(ctx, job.Args.RunID, err.Error()), w.reportReconcile(ctx, job.Args, &result, err))
+		return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, &result, err))
 	}
 	if w.store != nil {
-		if err := w.store.MarkReconcileActive(ctx, job.Args.RunID, result); err != nil {
+		if err := w.store.MarkReconcileActive(ctx, args.RunID, result); err != nil {
 			return err
 		}
 	}
 	if w.reporter != nil {
-		if err := w.reporter.ReportReconcile(ctx, job.Args, &result, nil); err != nil {
+		if err := w.reporter.ReportReconcile(ctx, args, &result, nil); err != nil {
 			return err
 		}
 	}

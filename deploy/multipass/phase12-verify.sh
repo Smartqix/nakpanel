@@ -142,7 +142,7 @@ DELETE FROM reseller_plans WHERE name = 'Phase12 Agency';
 SQL
 multipass exec "${VM_NAME}" -- bash -c '
   sudo rm -f /etc/nginx/sites-enabled/phase12-reseller.test.conf /etc/nginx/sites-available/phase12-reseller.test.conf
-  sudo rm -f /etc/php/8.3/fpm/pool.d/nakpanel-np12site-phase12-reseller-test.conf /etc/php/8.3/fpm/pool.d/nakpanel-np12site-phase12-reseller-test.conf.suspended
+  sudo rm -f /etc/php/8.3/fpm/pool.d/nakpanel-*-phase12-reseller-test.conf /etc/php/8.3/fpm/pool.d/nakpanel-*-phase12-reseller-test.conf.suspended
   sudo systemctl reload nginx php8.3-fpm >/dev/null 2>&1 || true
   id -u np12site >/dev/null 2>&1 && sudo userdel -r np12site >/dev/null 2>&1 || true
 '
@@ -296,16 +296,19 @@ post_as reseller phase12-site sites \
   -d "subscription_id=${synced_id}" -d 'username=np12site' -d 'domain=phase12-reseller.test' -d 'php_version=8.3'
 site_id="$(db_value "SELECT id FROM sites WHERE domain='phase12-reseller.test'")"
 wait_for_value 'site provisioning' "SELECT status FROM sites WHERE id=${site_id}" 'active'
+site_username="$(db_value "SELECT username FROM sites WHERE id=${site_id}")"
+site_home="$(db_value "SELECT '/home/'||username FROM sites WHERE id=${site_id}")"
+site_pool="/etc/php/8.3/fpm/pool.d/nakpanel-${site_username}-phase12-reseller-test.conf"
 
 post_as reseller phase12-suspend customers/status -d "customer_id=${customer_id}" -d 'status=suspended'
 wait_for_value 'site suspension' "SELECT status FROM sites WHERE id=${site_id}" 'suspended'
 wait_for_http_status 'suspended website' 'phase12-reseller.test' '503'
-multipass exec "${VM_NAME}" -- test -f /etc/php/8.3/fpm/pool.d/nakpanel-np12site-phase12-reseller-test.conf.suspended
+multipass exec "${VM_NAME}" -- test -f "${site_pool}.suspended"
 
 post_as reseller phase12-activate customers/status -d "customer_id=${customer_id}" -d 'status=active'
 wait_for_value 'site reactivation' "SELECT status FROM sites WHERE id=${site_id}" 'active'
 wait_for_http_status 'reactivated website' 'phase12-reseller.test' '200'
-multipass exec "${VM_NAME}" -- test -f /etc/php/8.3/fpm/pool.d/nakpanel-np12site-phase12-reseller-test.conf
+multipass exec "${VM_NAME}" -- test -f "${site_pool}"
 
 # Two opposing jobs may overlap in River. The worker must converge on the
 # current database intent rather than letting a stale suspend win last.
@@ -328,7 +331,7 @@ post_as reseller phase12-overuse-plan plans \
   -d 'max_domain_aliases=0' -d 'max_ftp_accounts=0' -d 'validity_days=-1' \
   -d 'allow_dns=true' -d 'allow_tls=true' -d 'allow_backups=true' -d 'is_active=true'
 wait_for_value 'overuse plan snapshot' "SELECT disk_mb FROM subscription_entitlements WHERE subscription_id=${synced_id}" '1'
-multipass exec "${VM_NAME}" -- sudo -u np12site dd if=/dev/zero of=/home/np12site/overuse.bin bs=1M count=2 status=none
+multipass exec "${VM_NAME}" -- sudo -u "${site_username}" dd if=/dev/zero of="${site_home}/overuse.bin" bs=1M count=2 status=none
 multipass exec "${VM_NAME}" -- sudo systemctl restart nakpanel
 wait_for_value 'usage collection completed' "SELECT is_complete::text FROM subscription_usage_current WHERE subscription_id=${synced_id}" 'true'
 wait_for_value 'overuse subscription suspension' "SELECT status FROM subscriptions WHERE id=${synced_id}" 'suspended'
@@ -336,7 +339,7 @@ wait_for_http_status 'overuse website' 'phase12-reseller.test' '503'
 overuse_alerts="$(db_value "SELECT COUNT(*) FROM notifications WHERE subscription_id=${synced_id} AND kind IN ('over_limit','suspended') AND resolved_at IS NULL")"
 [[ "${overuse_alerts}" -ge 2 ]] || { echo "overuse notifications are incomplete: ${overuse_alerts}" >&2; exit 1; }
 
-multipass exec "${VM_NAME}" -- sudo rm -f /home/np12site/overuse.bin
+multipass exec "${VM_NAME}" -- sudo rm -f "${site_home}/overuse.bin"
 multipass exec "${VM_NAME}" -- sudo systemctl restart nakpanel
 wait_for_value 'usage returned below plan' "SELECT (is_complete AND disk_bytes<=1048576)::text FROM subscription_usage_current WHERE subscription_id=${synced_id}" 'true'
 post_as reseller phase12-overuse-reactivate "subscriptions/${synced_id}/status" \

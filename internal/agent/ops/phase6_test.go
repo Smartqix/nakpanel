@@ -230,11 +230,15 @@ func TestRestoreProvisionerRestoresFilesAndDatabaseDumps(t *testing.T) {
 func TestWebmailProvisionerWritesNginxConfigAndReloads(t *testing.T) {
 	root := t.TempDir()
 	reloader := &recordingPhase6Reloader{}
+	roundcubeConfig := filepath.Join(root, "roundcube", "config.inc.php")
 	provisioner := NewWebmailProvisioner(WebmailProvisionerOptions{
-		NginxAvailableDir: filepath.Join(root, "available"),
-		NginxEnabledDir:   filepath.Join(root, "enabled"),
-		RoundcubeRoot:     "/usr/share/roundcube",
-		Reloader:          reloader,
+		NginxAvailableDir:   filepath.Join(root, "available"),
+		NginxEnabledDir:     filepath.Join(root, "enabled"),
+		RoundcubeRoot:       "/usr/share/roundcube",
+		RoundcubeConfigPath: roundcubeConfig,
+		DESKeyPath:          filepath.Join(root, "roundcube-des-key"),
+		PHPGroup:            "nakpanel-test-missing-group", // chown is root-only; skip it in tests
+		Reloader:            reloader,
 	})
 
 	result, err := provisioner.ConfigureWebmail(context.Background(), types.ConfigureWebmailReq{
@@ -256,6 +260,27 @@ func TestWebmailProvisionerWritesNginxConfigAndReloads(t *testing.T) {
 	}
 	if _, err := os.Lstat(result.EnabledPath); err != nil {
 		t.Fatalf("enabled symlink missing: %v", err)
+	}
+	rendered, err := os.ReadFile(roundcubeConfig)
+	if err != nil {
+		t.Fatalf("roundcube config missing: %v", err)
+	}
+	for _, want := range []string{"tls://127.0.0.1:143", "tls://127.0.0.1:587", "$config['des_key']", "debian-db-roundcube.php"} {
+		if !strings.Contains(string(rendered), want) {
+			t.Fatalf("roundcube config missing %q:\n%s", want, rendered)
+		}
+	}
+	// Re-running must not rotate the DES key (it would invalidate sessions).
+	before := string(rendered)
+	if _, err := provisioner.ConfigureWebmail(context.Background(), types.ConfigureWebmailReq{Domain: "example.test", Hostname: "webmail.example.test"}); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(roundcubeConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != before {
+		t.Fatal("roundcube config changed on identical re-run")
 	}
 }
 
@@ -396,6 +421,7 @@ func TestReconciliationProvisionerRegeneratesSiteWebmailAndDNS(t *testing.T) {
 		Sites: []types.ReconcileSiteReq{{
 			Username:      "npdemo",
 			Domain:        "example.test",
+			SharedAccount: true,
 			PHPVersion:    "8.3",
 			EnableWebmail: true,
 			EnableDNS:     true,
@@ -408,7 +434,7 @@ func TestReconciliationProvisionerRegeneratesSiteWebmailAndDNS(t *testing.T) {
 	if result.SitesTotal != 1 || result.SitesOK != 1 {
 		t.Fatalf("result = %#v, want one reconciled site", result)
 	}
-	if site.req.Domain != "example.test" || webmail.req.Hostname != "webmail.example.test" || dns.req.Address != "192.0.2.10" {
+	if site.req.Domain != "example.test" || !site.req.SharedAccount || webmail.req.Hostname != "webmail.example.test" || dns.req.Address != "192.0.2.10" {
 		t.Fatalf("site=%#v webmail=%#v dns=%#v, want all phase6 regenerators called", site.req, webmail.req, dns.req)
 	}
 }

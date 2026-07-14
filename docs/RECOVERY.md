@@ -29,6 +29,73 @@ sudo ss -ltnp | grep 7443
 curl -k https://127.0.0.1:7443/healthz
 ```
 
+## Recovery CLI
+
+`panelctl` uses PostgreSQL directly and does not require the HTTPS listener.
+Run it as `nakpanel` so file staging and `agent ping` use the same UID as the
+panel service:
+
+```bash
+sudo -u nakpanel env \
+  NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' \
+  panelctl user list
+```
+
+Bootstrap an administrator when no usable admin login remains:
+
+```bash
+sudo -u nakpanel env \
+  NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' \
+  panelctl --actor recovery-console create-admin --email recovery@example.test
+```
+
+The password prompt is hidden. For non-interactive recovery, provide
+`--password` through a protected process environment or invocation mechanism
+and clear shell history as appropriate. Useful recovery commands include:
+
+```bash
+sudo -u nakpanel panelctl session revoke-user user@example.test --yes
+sudo -u nakpanel panelctl user suspend user@example.test --yes
+sudo -u nakpanel panelctl user unsuspend user@example.test
+sudo -u nakpanel panelctl site reconcile example.test
+sudo -u nakpanel panelctl reconcile --system
+sudo -u nakpanel panelctl agent ping
+```
+
+All successful mutations create `audit_events` entries labeled with the OS
+actor or `--actor`. Provisioning commands enqueue River work and continue to
+enforce the selected subscription's entitlement snapshot.
+
+## Custom Site Certificates
+
+Custom certificates are validated against the Ubuntu system trust store before
+being staged, and revalidated by the root agent before installation. The
+staging directory is `/var/lib/nakpanel/tls-staging`; abandoned private `0600`
+files are removed after 24 hours. Installed files are under
+`/var/lib/nakpanel/certs/<domain>` with a `0700` directory and `0600` certificate
+and key files.
+
+```bash
+sudo -u nakpanel panelctl ssl set-custom example.test \
+  --cert /secure/example.crt --key /secure/example.key \
+  --chain /secure/intermediate.crt --yes
+```
+
+The agent runs `nginx -t` before reload and restores the previous certificate,
+key, and vhost if testing or reload fails. Check state without exposing key
+material:
+
+```bash
+sudo -u postgres psql -d nakpanel -c \
+  "SELECT domain,tls_issuer,tls_status,tls_auto_renew,tls_expires_at,tls_last_error FROM sites ORDER BY domain"
+sudo journalctl -u nakpanel -u nakpanel-agent -u nginx --no-pager -n 200
+sudo nginx -t
+```
+
+Custom certificates are excluded from ACME renewal. Nakpanel creates a
+deduplicated `certificate_expiring` warning during the certificate maintenance
+sweep when fewer than 14 days remain.
+
 The panel must not bind ports `80` or `443`; those remain reserved for tenant
 sites served by nginx.
 
@@ -100,12 +167,13 @@ job** on a `discarded` `create_site`, `create_database`, `issue_cert`,
 `reconcile_system` row after fixing the underlying OS or agent problem. Phase 7
 also includes `restore_backup` jobs in retry handling. The
 panel validates the job kind and state, then atomically moves only matching
-discarded provisioning jobs back to River's `available` state. Completed and
+discarded provisioning jobs, including `install_custom_cert`, back to River's
+`available` state. Completed and
 in-flight jobs are not retried from the UI.
 
 The full deployment smoke test uses one fresh Ubuntu 24.04 Multipass VM named
 `nakpanel-lab`. It removes old `nakpanel-phase*` Nakpanel test VMs, rebuilds
-`nakpanel-lab`, and runs the complete Phase 10 verifier chain:
+`nakpanel-lab`, and runs the complete Phase 17 verifier chain:
 
 ```bash
 deploy/multipass/deployment-verify.sh
@@ -115,7 +183,7 @@ Individual phase verifiers are still useful for debugging. They now reuse the
 same VM by default, or you can set it explicitly:
 
 ```bash
-NAKPANEL_MULTIPASS_VM=nakpanel-lab deploy/multipass/phase10-verify.sh
+NAKPANEL_MULTIPASS_VM=nakpanel-lab deploy/multipass/phase17-verify.sh
 ```
 
 Phase 8 originally adds account quotas and Linux user disk quotas. In a pure

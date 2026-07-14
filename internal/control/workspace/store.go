@@ -168,7 +168,7 @@ func (s *Store) ListSitesForUser(ctx context.Context, userID int64) ([]dashboard
 	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.username, r.domain, r.php_version, r.status, r.last_error,
 	       r.tls_status, r.tls_issuer, r.tls_expires_at, r.tls_last_error, r.tls_cert_path, r.tls_key_path,
 	       COALESCE(r.subscription_id, 0), COALESCE(r.customer_id, 0), r.desired_status, r.desired_php_version,
-	       r.https_redirect, r.desired_https_redirect, r.settings_status, r.settings_error, r.tls_auto_renew
+	       r.https_redirect, r.desired_https_redirect, r.settings_status, r.settings_error, r.tls_auto_renew, r.document_root
 FROM sites r JOIN customers c ON c.id = r.customer_id
 WHERE c.login_user_id = $1 OR c.reseller_id=(SELECT id FROM reseller_accounts WHERE login_user_id=$1) ORDER BY r.domain`, userID)
 	if err != nil {
@@ -182,7 +182,7 @@ WHERE c.login_user_id = $1 OR c.reseller_id=(SELECT id FROM reseller_accounts WH
 		if err := rows.Scan(&item.ID, &item.Username, &item.Domain, &item.PHPVersion, &item.Status, &item.LastError,
 			&item.TLSStatus, &item.TLSIssuer, &expires, &item.TLSLastError, &item.TLSCertPath, &item.TLSKeyPath,
 			&item.SubscriptionID, &item.CustomerID, &item.DesiredStatus, &item.DesiredPHPVersion,
-			&item.HTTPSRedirect, &item.DesiredHTTPSRedirect, &item.SettingsStatus, &item.SettingsError, &item.TLSAutoRenew); err != nil {
+			&item.HTTPSRedirect, &item.DesiredHTTPSRedirect, &item.SettingsStatus, &item.SettingsError, &item.TLSAutoRenew, &item.DocumentRoot); err != nil {
 			return nil, err
 		}
 		item.TLSExpiresAt = dashboard.NullableTime{Time: expires.Time, Valid: expires.Valid}
@@ -323,8 +323,8 @@ func (s *Store) ListAudit(ctx context.Context, actor auth.SessionUser, limit int
 	if actor.Role != auth.RoleAdmin {
 		return []types.AuditEvent{}, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT e.id,e.actor_user_id,u.email,COALESCE(e.customer_id,0),COALESCE(e.subscription_id,0),e.action,e.target_type,COALESCE(e.target_id,0),e.metadata,e.created_at
-FROM audit_events e JOIN users u ON u.id=e.actor_user_id ORDER BY e.created_at DESC,e.id DESC LIMIT $1`, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT e.id,COALESCE(e.actor_user_id,0),COALESCE(u.email,e.actor_label,'operator'),COALESCE(e.customer_id,0),COALESCE(e.subscription_id,0),e.action,e.target_type,COALESCE(e.target_id,0),e.metadata,e.created_at
+FROM audit_events e LEFT JOIN users u ON u.id=e.actor_user_id ORDER BY e.created_at DESC,e.id DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}

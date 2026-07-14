@@ -3,13 +3,16 @@ package ops
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -36,6 +39,7 @@ type SitePathConfig struct {
 	NginxAvailableDir string
 	NginxEnabledDir   string
 	NginxLogDir       string
+	NginxConfDir      string
 	PHPFPMPoolDir     string
 	PHPFPMLogDir      string
 	PHPRunDir         string
@@ -46,25 +50,28 @@ type SitePathConfig struct {
 }
 
 type SitePlan struct {
-	Username       string
-	Domain         string
-	PHPVersion     string
-	SiteSlug       string
-	SiteHome       string
-	Docroot        string
-	NginxConfig    string
-	NginxEnabled   string
-	NginxAccessLog string
-	NginxErrorLog  string
-	NginxSnippet   string
-	PHPFPMConfig   string
-	PHPFPMPool     string
-	PHPFPMSocket   string
-	PHPFPMErrorLog string
-	WWWGroup       string
-	PHPTmpDir      string
-	FileMode       os.FileMode
-	Limits         types.SiteResourceLimits
+	Username            string
+	Domain              string
+	PHPVersion          string
+	SiteSlug            string
+	SiteHome            string
+	Docroot             string
+	NginxConfig         string
+	NginxEnabled        string
+	NginxAccessLog      string
+	NginxErrorLog       string
+	NginxSnippet        string
+	NginxPolicyConfig   string
+	NginxRateZone       string
+	NginxConnectionZone string
+	PHPFPMConfig        string
+	PHPFPMPool          string
+	PHPFPMSocket        string
+	PHPFPMErrorLog      string
+	WWWGroup            string
+	PHPTmpDir           string
+	FileMode            os.FileMode
+	Limits              types.SiteResourceLimits
 }
 
 type SiteProvisionerOptions struct {
@@ -83,12 +90,18 @@ type SiteProvisioner struct {
 	reloader   SiteServiceReloader
 }
 
+// Site and certificate operations replace shared nginx and PHP-FPM files.
+// The agent serves concurrent RPC connections, so these mutations must
+// converge one at a time across provisioner types.
+var siteConfigMutationMu sync.Mutex
+
 func DefaultSitePathConfig() SitePathConfig {
 	return SitePathConfig{
 		HomeRoot:          "/home",
 		NginxAvailableDir: "/etc/nginx/sites-available",
 		NginxEnabledDir:   "/etc/nginx/sites-enabled",
 		NginxLogDir:       "/var/log/nginx",
+		NginxConfDir:      "/etc/nginx/conf.d",
 		PHPFPMLogDir:      "/var/log/php-fpm",
 		PHPRunDir:         "/run/php",
 		NginxSnippet:      "snippets/fastcgi-php.conf",
@@ -119,40 +132,53 @@ func NewSitePlan(req types.CreateSiteReq, paths SitePathConfig) (SitePlan, error
 	}
 
 	customPHPFPMPoolDir := paths.PHPFPMPoolDir
+	customNginxAvailableDir := paths.NginxAvailableDir
+	customNginxConfDir := paths.NginxConfDir
 	paths = fillSitePathDefaults(paths)
 	if customPHPFPMPoolDir == "" {
 		paths.PHPFPMPoolDir = filepath.Join("/etc/php", normalized.PHPVersion, "fpm", "pool.d")
 	}
+	if customNginxConfDir == "" && customNginxAvailableDir != "" {
+		paths.NginxConfDir = filepath.Join(filepath.Dir(customNginxAvailableDir), "conf.d")
+	}
 	siteHome := filepath.Join(paths.HomeRoot, normalized.Username)
 	docroot := filepath.Join(siteHome, "public_html")
+	if normalized.SharedAccount {
+		docroot = filepath.Join(siteHome, "domains", normalized.Domain, "public_html")
+	}
 	slug := normalized.Username + "-" + strings.ReplaceAll(normalized.Domain, ".", "-")
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(normalized.Domain)))[:12]
 	nginxName := normalized.Domain + ".conf"
 	fpmName := "nakpanel-" + slug
 
 	return SitePlan{
-		Username:       normalized.Username,
-		Domain:         normalized.Domain,
-		PHPVersion:     normalized.PHPVersion,
-		SiteSlug:       slug,
-		SiteHome:       siteHome,
-		Docroot:        docroot,
-		NginxConfig:    filepath.Join(paths.NginxAvailableDir, nginxName),
-		NginxEnabled:   filepath.Join(paths.NginxEnabledDir, nginxName),
-		NginxAccessLog: filepath.Join(paths.NginxLogDir, slug+".access.log"),
-		NginxErrorLog:  filepath.Join(paths.NginxLogDir, slug+".error.log"),
-		NginxSnippet:   paths.NginxSnippet,
-		PHPFPMConfig:   filepath.Join(paths.PHPFPMPoolDir, fpmName+".conf"),
-		PHPFPMPool:     fpmName,
-		PHPFPMSocket:   filepath.Join(paths.PHPRunDir, fpmName+".sock"),
-		PHPFPMErrorLog: filepath.Join(paths.PHPFPMLogDir, slug+".error.log"),
-		WWWGroup:       paths.WWWGroup,
-		PHPTmpDir:      paths.PHPTmpDir,
-		FileMode:       paths.DefaultFileMode,
-		Limits:         normalized.Limits,
+		Username:            normalized.Username,
+		Domain:              normalized.Domain,
+		PHPVersion:          normalized.PHPVersion,
+		SiteSlug:            slug,
+		SiteHome:            siteHome,
+		Docroot:             docroot,
+		NginxConfig:         filepath.Join(paths.NginxAvailableDir, nginxName),
+		NginxEnabled:        filepath.Join(paths.NginxEnabledDir, nginxName),
+		NginxAccessLog:      filepath.Join(paths.NginxLogDir, slug+".access.log"),
+		NginxErrorLog:       filepath.Join(paths.NginxLogDir, slug+".error.log"),
+		NginxSnippet:        paths.NginxSnippet,
+		NginxPolicyConfig:   filepath.Join(paths.NginxConfDir, "00-nakpanel-"+digest+".conf"),
+		NginxRateZone:       "npr_" + digest,
+		NginxConnectionZone: "npc_" + digest,
+		PHPFPMConfig:        filepath.Join(paths.PHPFPMPoolDir, fpmName+".conf"),
+		PHPFPMPool:          fpmName,
+		PHPFPMSocket:        filepath.Join(paths.PHPRunDir, fpmName+".sock"),
+		PHPFPMErrorLog:      filepath.Join(paths.PHPFPMLogDir, slug+".error.log"),
+		WWWGroup:            paths.WWWGroup,
+		PHPTmpDir:           paths.PHPTmpDir,
+		FileMode:            paths.DefaultFileMode,
+		Limits:              normalized.Limits,
 	}, nil
 }
 
 func RenderNginxVHost(plan SitePlan) string {
+	controls := renderNginxLocationControls(plan)
 	return fmt.Sprintf(`server {
     listen 80;
     listen [::]:80;
@@ -163,8 +189,9 @@ func RenderNginxVHost(plan SitePlan) string {
     access_log %[3]s;
     error_log %[4]s;
 
-    location / {
-        try_files $uri $uri/ /index.php?$query_string;
+	    location / {
+	%[7]s
+	        try_files $uri $uri/ /index.php?$query_string;
     }
 
     location ~ \.php$ {
@@ -176,7 +203,39 @@ func RenderNginxVHost(plan SitePlan) string {
         deny all;
     }
 }
-`, plan.Domain, plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket)
+	`, plan.Domain, plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, controls)
+}
+
+func renderNginxLocationControls(plan SitePlan) string {
+	var lines []string
+	if plan.Limits.RequestRatePerSecond > 0 {
+		burst := plan.Limits.RequestBurst
+		if burst < 1 {
+			burst = plan.Limits.RequestRatePerSecond
+		}
+		lines = append(lines, fmt.Sprintf("        limit_req zone=%s burst=%d nodelay;", plan.NginxRateZone, burst))
+	}
+	if plan.Limits.MaxConnections > 0 {
+		lines = append(lines, fmt.Sprintf("        limit_conn %s %d;", plan.NginxConnectionZone, plan.Limits.MaxConnections))
+	}
+	if plan.Limits.StaticCache {
+		lines = append(lines, "        expires 5m;")
+	}
+	return strings.Join(lines, "\n")
+}
+
+func RenderNginxPolicyZones(plan SitePlan) string {
+	var lines []string
+	if plan.Limits.RequestRatePerSecond > 0 {
+		lines = append(lines, fmt.Sprintf("limit_req_zone $binary_remote_addr zone=%s:10m rate=%dr/s;", plan.NginxRateZone, plan.Limits.RequestRatePerSecond))
+	}
+	if plan.Limits.MaxConnections > 0 {
+		lines = append(lines, fmt.Sprintf("limit_conn_zone $binary_remote_addr zone=%s:10m;", plan.NginxConnectionZone))
+	}
+	if len(lines) == 0 {
+		return ""
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 func RenderSuspendedNginxVHost(plan SitePlan) string {
@@ -219,17 +278,23 @@ server {
 
     access_log %[3]s;
     error_log %[4]s;
-    location / { try_files $uri $uri/ /index.php?$query_string; }
+    location / {
+%[9]s
+        try_files $uri $uri/ /index.php?$query_string;
+    }
     location ~ \.php$ {
         include %[5]s;
         fastcgi_pass unix:%[6]s;
     }
     location ~ /\. { deny all; }
 }
-`, plan.Domain, plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath)
+`, plan.Domain, plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath, renderNginxLocationControls(plan))
 }
 
 func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplySiteRuntimeReq) (err error) {
+	siteConfigMutationMu.Lock()
+	defer siteConfigMutationMu.Unlock()
+
 	state := strings.ToLower(strings.TrimSpace(req.State))
 	if state != "active" && state != "suspended" {
 		return errors.New("site runtime state must be active or suspended")
@@ -247,16 +312,16 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 	if currentVersion == "" {
 		currentVersion = req.DesiredPHPVersion
 	}
-	current, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: currentVersion, Limits: req.Limits}, p.paths)
+	current, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: currentVersion, SharedAccount: req.SharedAccount, Limits: req.Limits}, p.paths)
 	if err != nil {
 		return err
 	}
-	desired, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: req.DesiredPHPVersion, Limits: req.Limits}, p.paths)
+	desired, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: req.DesiredPHPVersion, SharedAccount: req.SharedAccount, Limits: req.Limits}, p.paths)
 	if err != nil {
 		return err
 	}
 
-	paths := []string{current.NginxConfig, desired.NginxEnabled, current.PHPFPMConfig, current.PHPFPMConfig + ".suspended", desired.PHPFPMConfig, desired.PHPFPMConfig + ".suspended"}
+	paths := []string{current.NginxConfig, desired.NginxEnabled, desired.NginxPolicyConfig, current.PHPFPMConfig, current.PHPFPMConfig + ".suspended", desired.PHPFPMConfig, desired.PHPFPMConfig + ".suspended"}
 	snapshots, err := snapshotFiles(paths)
 	if err != nil {
 		return err
@@ -272,6 +337,13 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 		}
 		_ = p.reloader.ReloadService(context.Background(), "nginx")
 	}()
+	if zones := RenderNginxPolicyZones(desired); zones != "" {
+		if err = writeFileAtomic(desired.NginxPolicyConfig, []byte(zones), desired.FileMode); err != nil {
+			return err
+		}
+	} else if err = os.Remove(desired.NginxPolicyConfig); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 
 	if state == "suspended" {
 		if err = writeFileAtomic(desired.NginxConfig, []byte(RenderSuspendedNginxVHost(desired)), desired.FileMode); err != nil {
@@ -320,7 +392,7 @@ func (p *SiteProvisioner) SiteRuntimeDrift(_ context.Context, req types.ApplySit
 	if state != "active" && state != "suspended" {
 		return false, errors.New("site runtime state must be active or suspended")
 	}
-	desired, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: req.DesiredPHPVersion, Limits: req.Limits}, p.paths)
+	desired, err := NewSitePlan(types.CreateSiteReq{Username: req.Username, Domain: req.Domain, PHPVersion: req.DesiredPHPVersion, SharedAccount: req.SharedAccount, Limits: req.Limits}, p.paths)
 	if err != nil {
 		return false, err
 	}
@@ -338,6 +410,18 @@ func (p *SiteProvisioner) SiteRuntimeDrift(_ context.Context, req types.ApplySit
 	if err != nil {
 		return false, err
 	}
+	desiredZones := []byte(RenderNginxPolicyZones(desired))
+	currentZones, zoneErr := os.ReadFile(desired.NginxPolicyConfig)
+	if os.IsNotExist(zoneErr) && len(desiredZones) > 0 {
+		return true, nil
+	}
+	if len(desiredZones) == 0 && os.IsNotExist(zoneErr) {
+		currentZones = nil
+		zoneErr = nil
+	}
+	if zoneErr != nil {
+		return false, zoneErr
+	}
 	phpCurrent, err := os.ReadFile(phpPath)
 	if os.IsNotExist(err) {
 		return true, nil
@@ -350,7 +434,7 @@ func (p *SiteProvisioner) SiteRuntimeDrift(_ context.Context, req types.ApplySit
 	} else if !os.IsNotExist(err) {
 		return false, err
 	}
-	if !bytes.Equal(nginxCurrent, nginx) || !bytes.Equal(phpCurrent, []byte(RenderPHPFPMPool(desired))) {
+	if !bytes.Equal(nginxCurrent, nginx) || !bytes.Equal(phpCurrent, []byte(RenderPHPFPMPool(desired))) || !bytes.Equal(currentZones, desiredZones) {
 		return true, nil
 	}
 	if state == "active" {
@@ -432,6 +516,9 @@ func restoreSnapshots(items []fileSnapshot) error {
 }
 
 func (p *SiteProvisioner) SetHostingState(ctx context.Context, req types.SetHostingStateReq) error {
+	siteConfigMutationMu.Lock()
+	defer siteConfigMutationMu.Unlock()
+
 	state := strings.ToLower(strings.TrimSpace(req.State))
 	if state != "active" && state != "suspended" {
 		return fmt.Errorf("hosting state must be active or suspended")
@@ -513,6 +600,36 @@ func RenderPHPFPMPool(plan SitePlan) string {
 	if plan.Limits.PHPMemoryMB > 0 {
 		memoryLimit = fmt.Sprintf("php_admin_value[memory_limit] = %dM\n", plan.Limits.PHPMemoryMB)
 	}
+	maxRequests := plan.Limits.PHPFPMMaxRequests
+	if maxRequests <= 0 {
+		maxRequests = 500
+	}
+	var phpSettings []string
+	advancedSettings := plan.Limits.PHPFPMMaxRequests != 0 || plan.Limits.PHPMaxExecutionSeconds != 0 || plan.Limits.PHPMaxInputSeconds != 0 || plan.Limits.PHPPostMaxMB != 0 || plan.Limits.PHPUploadMaxMB != 0 || plan.Limits.PHPDisplayErrors || plan.Limits.PHPLogErrors || plan.Limits.PHPAllowURLFOpen || plan.Limits.PHPExecEnabled
+	for name, value := range map[string]int{"max_execution_time": plan.Limits.PHPMaxExecutionSeconds, "max_input_time": plan.Limits.PHPMaxInputSeconds, "post_max_size": plan.Limits.PHPPostMaxMB, "upload_max_filesize": plan.Limits.PHPUploadMaxMB} {
+		if value > 0 {
+			suffix := ""
+			if strings.Contains(name, "size") {
+				suffix = "M"
+			}
+			phpSettings = append(phpSettings, fmt.Sprintf("php_admin_value[%s] = %d%s", name, value, suffix))
+		}
+	}
+	sort.Strings(phpSettings)
+	if advancedSettings {
+		phpSettings = append(phpSettings,
+			fmt.Sprintf("php_admin_flag[display_errors] = %s", onOff(plan.Limits.PHPDisplayErrors)),
+			fmt.Sprintf("php_admin_flag[log_errors] = %s", onOff(plan.Limits.PHPLogErrors)),
+			fmt.Sprintf("php_admin_flag[allow_url_fopen] = %s", onOff(plan.Limits.PHPAllowURLFOpen)),
+		)
+		if !plan.Limits.PHPExecEnabled {
+			phpSettings = append(phpSettings, "php_admin_value[disable_functions] = exec,passthru,shell_exec,system,proc_open,popen")
+		}
+	}
+	settingsBlock := strings.Join(phpSettings, "\n")
+	if settingsBlock != "" {
+		settingsBlock += "\n"
+	}
 	return fmt.Sprintf(`[%[1]s]
 user = %[2]s
 group = %[2]s
@@ -524,17 +641,27 @@ listen.mode = 0660
 pm = ondemand
 pm.max_children = %[8]d
 pm.process_idle_timeout = 10s
-pm.max_requests = 500
+pm.max_requests = %[10]d
 
 chdir = /
 catch_workers_output = yes
 php_admin_value[error_log] = %[5]s
 php_admin_flag[log_errors] = on
-%[9]sphp_admin_value[open_basedir] = %[6]s:%[7]s
-`, plan.PHPFPMPool, plan.Username, plan.PHPFPMSocket, plan.WWWGroup, plan.PHPFPMErrorLog, plan.Docroot, plan.PHPTmpDir, maxChildren, memoryLimit)
+%[9]s%[11]sphp_admin_value[open_basedir] = %[6]s:%[7]s
+`, plan.PHPFPMPool, plan.Username, plan.PHPFPMSocket, plan.WWWGroup, plan.PHPFPMErrorLog, plan.Docroot, plan.PHPTmpDir, maxChildren, memoryLimit, maxRequests, settingsBlock)
 }
 
-func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteReq) error {
+func onOff(value bool) string {
+	if value {
+		return "on"
+	}
+	return "off"
+}
+
+func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteReq) (err error) {
+	siteConfigMutationMu.Lock()
+	defer siteConfigMutationMu.Unlock()
+
 	plan, err := NewSitePlan(req, p.paths)
 	if err != nil {
 		return err
@@ -557,6 +684,7 @@ func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteRe
 		filepath.Dir(plan.PHPFPMConfig),
 		filepath.Dir(plan.PHPFPMSocket),
 		filepath.Dir(plan.NginxAccessLog),
+		filepath.Dir(plan.NginxPolicyConfig),
 		filepath.Dir(plan.PHPFPMErrorLog),
 		plan.PHPTmpDir,
 	} {
@@ -572,12 +700,41 @@ func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteRe
 			return fmt.Errorf("chmod directory %q: %w", path, err)
 		}
 	}
+	if req.SharedAccount {
+		for _, path := range []string{filepath.Join(plan.SiteHome, "domains"), filepath.Dir(plan.Docroot)} {
+			if err := os.Chmod(path, 0o711); err != nil {
+				return fmt.Errorf("chmod shared account directory %q: %w", path, err)
+			}
+		}
+	}
+	snapshots, err := snapshotFiles([]string{plan.NginxConfig, plan.NginxEnabled, plan.NginxPolicyConfig, plan.PHPFPMConfig})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		_ = restoreSnapshots(snapshots)
+		_ = p.reloader.ReloadService(context.Background(), "php"+plan.PHPVersion+"-fpm")
+		_ = p.reloader.ReloadService(context.Background(), "nginx")
+	}()
 
-	if err := writeFileAtomic(filepath.Join(plan.Docroot, "index.php"), []byte(renderPlaceholderIndex(plan)), plan.FileMode); err != nil {
-		return fmt.Errorf("write placeholder index: %w", err)
+	indexPath := filepath.Join(plan.Docroot, "index.php")
+	if _, statErr := os.Stat(indexPath); os.IsNotExist(statErr) {
+		if err := writeFileAtomic(indexPath, []byte(renderPlaceholderIndex(plan)), plan.FileMode); err != nil {
+			return fmt.Errorf("write placeholder index: %w", err)
+		}
 	}
 	if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxVHost(plan)), plan.FileMode); err != nil {
 		return fmt.Errorf("write nginx site config: %w", err)
+	}
+	if zones := RenderNginxPolicyZones(plan); zones != "" {
+		if err := writeFileAtomic(plan.NginxPolicyConfig, []byte(zones), plan.FileMode); err != nil {
+			return fmt.Errorf("write nginx policy zones: %w", err)
+		}
+	} else if err := os.Remove(plan.NginxPolicyConfig); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	if err := ensureSymlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
 		return fmt.Errorf("enable nginx site: %w", err)
@@ -722,6 +879,9 @@ func fillSitePathDefaults(paths SitePathConfig) SitePathConfig {
 	}
 	if paths.NginxLogDir == "" {
 		paths.NginxLogDir = defaults.NginxLogDir
+	}
+	if paths.NginxConfDir == "" {
+		paths.NginxConfDir = defaults.NginxConfDir
 	}
 	if paths.PHPFPMPoolDir == "" {
 		paths.PHPFPMPoolDir = defaults.PHPFPMPoolDir

@@ -30,6 +30,7 @@ build: generate
 	mkdir -p bin
 	go build -o bin/panel ./cmd/panel
 	go build -o bin/agent ./cmd/agent
+	go build -o bin/panelctl ./cmd/panelctl
 
 test:
 	go test ./...

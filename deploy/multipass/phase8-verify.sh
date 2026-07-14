@@ -89,8 +89,10 @@ if ! grep -Eq 'user quota .* is on' <<<"${quota_state}"; then
   if ! sudo quotacheck -ugm "${quota_target}"; then
     sudo quotacheck -cugm "${quota_target}"
   fi
-  sudo quotaon -uv "${quota_target}"
+  sudo quotaon -uv "${quota_target}" || true
 fi
+quota_state="$(sudo quotaon -p "${quota_target}" 2>/dev/null || true)"
+grep -Eq 'user quota .* is on' <<<"${quota_state}"
 
 sudo -u postgres psql -d nakpanel >/dev/null <<'SQL'
 DELETE FROM river_job
@@ -111,6 +113,20 @@ sudo systemctl is-active --quiet nginx
 sudo systemctl is-active --quiet nakpanel-agent.service
 sudo systemctl is-active --quiet nakpanel.service
 REMOTE
+
+panel_ready=0
+for _ in $(seq 1 60); do
+  if curl -sk --fail "https://${VM_IP}:7443/healthz" >/dev/null; then
+    panel_ready=1
+    break
+  fi
+  sleep 1
+done
+if [[ "${panel_ready}" != "1" ]]; then
+  multipass exec "${VM_NAME}" -- sudo journalctl -u nakpanel --no-pager -n 200 >&2 || true
+  echo "panel did not become ready after Phase 8 setup" >&2
+  exit 1
+fi
 
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
@@ -169,21 +185,23 @@ if ! sudo -u postgres psql -d nakpanel -tAc "SELECT status FROM sites WHERE doma
   exit 1
 fi
 
-pool="/etc/php/8.3/fpm/pool.d/nakpanel-npq8-phase8-quota-test.conf"
+username="$(sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase8-quota.test'" | xargs)"
+docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase8-quota.test'" | xargs)"
+pool="/etc/php/8.3/fpm/pool.d/nakpanel-${username}-phase8-quota-test.conf"
 test -f "${pool}"
 grep -Fq 'pm.max_children = 2' "${pool}"
 grep -Fq 'php_admin_value[memory_limit] = 64M' "${pool}"
 
-quota_target="$(findmnt -n -o TARGET --target /home/npq8)"
-sudo setquota -u npq8 0 1024 0 0 "${quota_target}"
-sudo quota -u npq8 | tee /tmp/nakpanel-phase8-quota.txt
+quota_target="$(findmnt -n -o TARGET --target "${docroot}")"
+sudo setquota -u "${username}" 0 1024 0 0 "${quota_target}"
+sudo quota -u "${username}" | tee /tmp/nakpanel-phase8-quota.txt
 grep -Eq '(^|[[:space:]])1024([[:space:]]|$)' /tmp/nakpanel-phase8-quota.txt
 
-if sudo -u npq8 dd if=/dev/zero of=/home/npq8/public_html/too-big.bin bs=1M count=3 status=none; then
-  echo "over-quota write succeeded for npq8" >&2
+if sudo -u "${username}" dd if=/dev/zero of="${docroot}/too-big.bin" bs=1M count=3 status=none; then
+  echo "over-quota write succeeded for ${username}" >&2
   exit 1
 fi
-sudo rm -f /home/npq8/public_html/too-big.bin
+sudo rm -f "${docroot}/too-big.bin"
 REMOTE
 
 post_admin phase8-db databases \

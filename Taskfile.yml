@@ -56,13 +56,14 @@ tasks:
       - BROWSERSLIST_IGNORE_OLD_DATA=1 {{.TAILWIND_BIN}} -i internal/control/web/assets/input.css -o internal/control/web/static/app.css --minify --content 'internal/control/web/*.templ'
 
   build:
-    desc: Build panel and agent binaries.
+    desc: Build panel, agent, and operator CLI binaries.
     deps:
       - generate
     cmds:
       - mkdir -p {{.BIN_DIR}}
       - go build -o {{.BIN_DIR}}/panel ./cmd/panel
       - go build -o {{.BIN_DIR}}/agent ./cmd/agent
+      - go build -o {{.BIN_DIR}}/panelctl ./cmd/panelctl
 
   test:
     desc: Run Go tests.

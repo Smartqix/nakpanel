@@ -1,0 +1,17 @@
+[Unit]
+Description=Stalwart mail server (managed by nakpanel)
+Wants=network-online.target
+After=network-online.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/stalwart-mail --config /etc/stalwart/config.toml
+Restart=on-failure
+RestartSec=2s
+LimitNOFILE=65536
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

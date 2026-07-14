@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
@@ -234,7 +235,7 @@ RETURNING id`, ownerID, site.id, site.domain).Scan(&backupID)
 		SubscriptionID: req.SubscriptionID,
 		Domain:         site.domain,
 		Username:       site.username,
-		Docroot:        "/home/" + site.username + "/public_html",
+		Docroot:        site.documentRoot,
 		Databases:      databases,
 	}, nil)
 	if err != nil {
@@ -316,7 +317,7 @@ RETURNING id`, ownerID, backupID, backup.domain).Scan(&restoreID); err != nil {
 		BackupID:    backupID,
 		Domain:      backup.domain,
 		Username:    backup.username,
-		Docroot:     "/home/" + backup.username + "/public_html",
+		Docroot:     backup.documentRoot,
 		ArchivePath: backup.archivePath,
 		Databases:   databases,
 	}, nil)
@@ -404,18 +405,58 @@ func (r *SQLPhase6Repository) ReconcileSystem(ctx context.Context, ownerID int64
 	if err != nil {
 		return 0, err
 	}
+	databases, err := selectReconcileDatabases(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
 	var runID int64
 	if err := tx.QueryRowContext(ctx, `INSERT INTO reconciliation_runs (owner_user_id, status, sites_total)
 VALUES ($1, 'pending', $2)
 RETURNING id`, ownerID, len(sites)).Scan(&runID); err != nil {
 		return 0, fmt.Errorf("insert reconciliation run: %w", err)
 	}
-	_, err = r.river.InsertTx(ctx, tx, ReconcileSystemArgs{RunID: runID, Sites: sites}, nil)
+	_, err = r.river.InsertTx(ctx, tx, ReconcileSystemArgs{RunID: runID, Sites: sites, Databases: databases}, nil)
 	if err != nil {
 		return 0, fmt.Errorf("enqueue reconcile_system job: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit reconciliation transaction: %w", err)
+	}
+	return runID, nil
+}
+
+func (r *SQLPhase6Repository) ReconcileSite(ctx context.Context, ownerID int64, domain string) (int64, error) {
+	if r.db == nil || r.river == nil {
+		return 0, errors.New("site reconciliation repository is not configured")
+	}
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	allSites, err := selectReconcileSites(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
+	var selected []types.ReconcileSiteReq
+	for _, candidate := range allSites {
+		if candidate.Domain == domain {
+			selected = append(selected, candidate)
+			break
+		}
+	}
+	if len(selected) == 0 {
+		return 0, sql.ErrNoRows
+	}
+	var runID int64
+	if err = tx.QueryRowContext(ctx, `INSERT INTO reconciliation_runs(owner_user_id,status,sites_total) VALUES($1,'pending',1) RETURNING id`, ownerID).Scan(&runID); err != nil {
+		return 0, err
+	}
+	if _, err = r.river.InsertTx(ctx, tx, ReconcileSystemArgs{RunID: runID, ScopeKey: "site:" + domain, Sites: selected}, nil); err != nil {
+		return 0, fmt.Errorf("enqueue site reconciliation: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		return 0, err
 	}
 	return runID, nil
 }
@@ -439,10 +480,11 @@ VALUES ($1, $2, $3)`, ownerID, hex.EncodeToString(hash[:]), expiresAt); err != n
 }
 
 type phase6Site struct {
-	id         int64
-	username   string
-	domain     string
-	phpVersion string
+	id           int64
+	username     string
+	domain       string
+	phpVersion   string
+	documentRoot string
 }
 
 type restorableBackup struct {
@@ -452,18 +494,19 @@ type restorableBackup struct {
 	username       string
 	domain         string
 	archivePath    string
+	documentRoot   string
 }
 
 func selectRestorableBackupForUpdate(ctx context.Context, tx *sql.Tx, backupID int64) (restorableBackup, error) {
 	var backup restorableBackup
-	if err := tx.QueryRowContext(ctx, `SELECT b.id, b.subscription_id, s.id, s.username, s.domain, b.archive_path
+	if err := tx.QueryRowContext(ctx, `SELECT b.id, b.subscription_id, s.id, s.username, s.domain, b.archive_path, s.document_root
 FROM backups b
 JOIN sites s ON s.id = b.site_id
 WHERE b.id = $1
   AND b.status = 'active'
   AND b.archive_path <> ''
   AND s.status = 'active'
-FOR UPDATE`, backupID).Scan(&backup.backupID, &backup.subscriptionID, &backup.siteID, &backup.username, &backup.domain, &backup.archivePath); err != nil {
+FOR UPDATE`, backupID).Scan(&backup.backupID, &backup.subscriptionID, &backup.siteID, &backup.username, &backup.domain, &backup.archivePath, &backup.documentRoot); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return restorableBackup{}, fmt.Errorf("active backup %d was not found", backupID)
 		}
@@ -474,10 +517,10 @@ FOR UPDATE`, backupID).Scan(&backup.backupID, &backup.subscriptionID, &backup.si
 
 func selectActiveSiteByDomainForUpdate(ctx context.Context, tx *sql.Tx, domain string) (phase6Site, error) {
 	var site phase6Site
-	if err := tx.QueryRowContext(ctx, `SELECT id, username, domain, php_version
+	if err := tx.QueryRowContext(ctx, `SELECT id, username, domain, php_version, document_root
 FROM sites
 WHERE domain=$1 AND status='active'
-FOR UPDATE`, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersion); err != nil {
+FOR UPDATE`, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersion, &site.documentRoot); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return phase6Site{}, fmt.Errorf("active site %q was not found", domain)
 		}
@@ -488,11 +531,11 @@ FOR UPDATE`, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersi
 
 func selectActiveSiteForUpdate(ctx context.Context, tx *sql.Tx, ownerID int64, domain string) (phase6Site, error) {
 	var site phase6Site
-	if err := tx.QueryRowContext(ctx, `SELECT id, username, domain, php_version
+	if err := tx.QueryRowContext(ctx, `SELECT id, username, domain, php_version, document_root
 FROM sites
 WHERE (owner_user_id = $1 OR customer_id IN (SELECT id FROM customers WHERE login_user_id = $1))
   AND domain = $2 AND status = 'active'
-FOR UPDATE`, ownerID, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersion); err != nil {
+FOR UPDATE`, ownerID, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersion, &site.documentRoot); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return phase6Site{}, fmt.Errorf("active site %q was not found", domain)
 		}
@@ -503,10 +546,10 @@ FOR UPDATE`, ownerID, domain).Scan(&site.id, &site.username, &site.domain, &site
 
 func selectActiveSubscriptionSiteForUpdate(ctx context.Context, tx *sql.Tx, subscriptionID int64, domain string) (phase6Site, error) {
 	var site phase6Site
-	if err := tx.QueryRowContext(ctx, `SELECT id, username, domain, php_version
+	if err := tx.QueryRowContext(ctx, `SELECT id, username, domain, php_version, document_root
 FROM sites
 WHERE subscription_id = $1 AND domain = $2 AND status = 'active'
-FOR UPDATE`, subscriptionID, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersion); err != nil {
+FOR UPDATE`, subscriptionID, domain).Scan(&site.id, &site.username, &site.domain, &site.phpVersion, &site.documentRoot); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return phase6Site{}, fmt.Errorf("active site %q was not found for subscription %d", domain, subscriptionID)
 		}
@@ -556,14 +599,20 @@ func selectActiveSubscriptionDatabases(ctx context.Context, tx *sql.Tx, subscrip
 }
 
 func selectReconcileSites(ctx context.Context, tx *sql.Tx) ([]types.ReconcileSiteReq, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT s.username, s.domain, s.php_version,
+	rows, err := tx.QueryContext(ctx, `SELECT s.id,s.customer_id,s.subscription_id,s.username,s.domain,s.document_root,s.php_version,s.desired_php_version,
        COALESCE(w.status IN ('pending', 'active', 'failed'), false) AS enable_webmail,
        COALESCE(d.status IN ('pending', 'active', 'failed'), false) AS enable_dns,
-       COALESCE(d.address, '') AS address
-FROM sites s
+	   COALESCE(d.id,0),COALESCE(d.serial,0),COALESCE(d.address, '') AS address,
+	   CASE WHEN s.desired_status='active' AND customer.status='active' AND sub.status='active'
+	     AND (customer.reseller_id IS NULL OR (reseller.status='active' AND reseller_sub.id IS NOT NULL)) THEN 'active' ELSE 'suspended' END,
+	   CASE WHEN s.tls_status='active' THEN s.desired_https_redirect ELSE false END,
+	   CASE WHEN s.tls_status='active' THEN s.tls_cert_path ELSE '' END,
+	   CASE WHEN s.tls_status='active' THEN s.tls_key_path ELSE '' END
+FROM sites s JOIN subscriptions sub ON sub.id=s.subscription_id JOIN customers customer ON customer.id=sub.customer_id
 LEFT JOIN webmail_hosts w ON w.site_id = s.id
 LEFT JOIN dns_zones d ON d.site_id = s.id
-WHERE s.status = 'active'
+LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
+LEFT JOIN reseller_subscriptions reseller_sub ON reseller_sub.reseller_id=reseller.id AND reseller_sub.status='active'
 ORDER BY s.domain`)
 	if err != nil {
 		return nil, fmt.Errorf("select reconcile sites: %w", err)
@@ -572,15 +621,64 @@ ORDER BY s.domain`)
 	var sites []types.ReconcileSiteReq
 	for rows.Next() {
 		var site types.ReconcileSiteReq
-		if err := rows.Scan(&site.Username, &site.Domain, &site.PHPVersion, &site.EnableWebmail, &site.EnableDNS, &site.Address); err != nil {
+		var documentRoot string
+		if err := rows.Scan(&site.SiteID, &site.CustomerID, &site.SubscriptionID, &site.Username, &site.Domain, &documentRoot, &site.PHPVersion, &site.DesiredPHPVersion, &site.EnableWebmail, &site.EnableDNS, &site.DNSZoneID, &site.DNSSerial, &site.Address, &site.State, &site.HTTPSRedirect, &site.TLSCertPath, &site.TLSKeyPath); err != nil {
 			return nil, err
 		}
+		site.SharedAccount = controlquota.IsSharedSiteDocumentRoot(site.Username, site.Domain, documentRoot)
 		sites = append(sites, site)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	for i := range sites {
+		sites[i].Limits, err = controlquota.EffectiveSiteResourceLimitsTx(ctx, tx, sites[i].SiteID)
+		if err != nil {
+			return nil, err
+		}
+		if sites[i].DNSZoneID > 0 {
+			records, queryErr := selectReconcileDNSRecords(ctx, tx, sites[i].DNSZoneID)
+			if queryErr != nil {
+				return nil, queryErr
+			}
+			sites[i].DNSRecords = records
+		}
+	}
 	return sites, nil
+}
+
+func selectReconcileDNSRecords(ctx context.Context, tx *sql.Tx, zoneID int64) ([]types.DNSRecord, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id,zone_id,host,record_type,value,COALESCE(priority,0),ttl FROM dns_records WHERE zone_id=$1 ORDER BY id`, zoneID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []types.DNSRecord
+	for rows.Next() {
+		var record types.DNSRecord
+		if err := rows.Scan(&record.ID, &record.ZoneID, &record.Host, &record.Type, &record.Value, &record.Priority, &record.TTL); err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func selectReconcileDatabases(ctx context.Context, tx *sql.Tx) ([]types.ReconcileDatabaseReq, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id,customer_id,subscription_id,db_name FROM databases WHERE status='active' ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var databases []types.ReconcileDatabaseReq
+	for rows.Next() {
+		var database types.ReconcileDatabaseReq
+		if err := rows.Scan(&database.DatabaseID, &database.CustomerID, &database.SubscriptionID, &database.Name); err != nil {
+			return nil, err
+		}
+		databases = append(databases, database)
+	}
+	return databases, rows.Err()
 }
 
 type SQLPhase6StatusStore struct {
@@ -589,6 +687,43 @@ type SQLPhase6StatusStore struct {
 
 func NewSQLPhase6StatusStore(db *sql.DB) *SQLPhase6StatusStore {
 	return &SQLPhase6StatusStore{db: db}
+}
+
+func (s *SQLPhase6StatusStore) RefreshReconcileIntent(ctx context.Context, args ReconcileSystemArgs) (ReconcileSystemArgs, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return args, err
+	}
+	defer tx.Rollback()
+
+	sites, err := selectReconcileSites(ctx, tx)
+	if err != nil {
+		return args, err
+	}
+	databases, err := selectReconcileDatabases(ctx, tx)
+	if err != nil {
+		return args, err
+	}
+	if strings.HasPrefix(args.ScopeKey, "site:") {
+		requested := make(map[int64]struct{}, len(args.Sites))
+		for _, site := range args.Sites {
+			requested[site.SiteID] = struct{}{}
+		}
+		filtered := sites[:0]
+		for _, site := range sites {
+			if _, ok := requested[site.SiteID]; ok {
+				filtered = append(filtered, site)
+			}
+		}
+		sites = filtered
+		databases = nil
+	}
+	if err := tx.Commit(); err != nil {
+		return args, err
+	}
+	args.Sites = sites
+	args.Databases = databases
+	return args, nil
 }
 
 func (s *SQLPhase6StatusStore) MarkBackupActive(ctx context.Context, id int64, result types.CreateBackupResult) error {

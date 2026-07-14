@@ -117,7 +117,7 @@ INSERT INTO users (email, password_hash, role)
 VALUES ('phase9-client@nakpanel.test', '$argon2id$v=19$m=65536,t=3,p=1$CtuDwkxvRQbtZgjhC3Jkog$JAqH/qKCmBZdQmLhykEgWmDnYOlHZxAG5vzSf4FViyQ', 'client');
 SQL
 sudo rm -f /etc/nginx/sites-enabled/phase9-client.test.conf /etc/nginx/sites-available/phase9-client.test.conf
-sudo rm -f /etc/php/8.3/fpm/pool.d/nakpanel-npq9a-phase9-client-test.conf
+sudo rm -f /etc/php/8.3/fpm/pool.d/nakpanel-*-phase9-client-test.conf /etc/php/8.3/fpm/pool.d/nakpanel-*-phase9-client-test.conf.suspended
 sudo userdel -r npq9a >/dev/null 2>&1 || true
 sudo systemctl restart nakpanel-agent.service nakpanel.service
 REMOTE
@@ -187,18 +187,20 @@ if ! sudo -u postgres psql -d nakpanel -tAc "SELECT status FROM sites WHERE doma
   echo "phase9 site did not become active" >&2
   exit 1
 fi
-pool="/etc/php/8.3/fpm/pool.d/nakpanel-npq9a-phase9-client-test.conf"
+username="$(sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase9-client.test' ORDER BY id DESC LIMIT 1" | xargs)"
+docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase9-client.test' ORDER BY id DESC LIMIT 1" | xargs)"
+pool="/etc/php/8.3/fpm/pool.d/nakpanel-${username}-phase9-client-test.conf"
 test -f "${pool}"
 grep -Fq 'pm.max_children = 2' "${pool}"
 grep -Fq 'php_admin_value[memory_limit] = 64M' "${pool}"
-quota_target="$(findmnt -n -o TARGET --target /home/npq9a)"
-sudo quota -u npq9a | tee /tmp/nakpanel-phase9-quota.txt
-grep -Eq '(^|[[:space:]])1024([[:space:]]|$)' /tmp/nakpanel-phase9-quota.txt
-if sudo -u npq9a dd if=/dev/zero of=/home/npq9a/public_html/too-big.bin bs=1M count=3 status=none; then
-  echo "over-quota write succeeded for npq9a" >&2
+quota_target="$(findmnt -n -o TARGET --target "${docroot}")"
+sudo quota -u "${username}" | tee /tmp/nakpanel-phase9-quota.txt
+grep -Eq '(^|[[:space:]])2048([[:space:]]|$)' /tmp/nakpanel-phase9-quota.txt
+if sudo -u "${username}" dd if=/dev/zero of="${docroot}/too-big.bin" bs=1M count=3 status=none; then
+  echo "over-quota write succeeded for ${username}" >&2
   exit 1
 fi
-sudo rm -f /home/npq9a/public_html/too-big.bin
+sudo rm -f "${docroot}/too-big.bin"
 REMOTE
 
 owner_check="$(multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -tAc "SELECT owner_user_id = ${phase9_user_id}, subscription_id IS NOT NULL FROM sites WHERE domain = 'phase9-client.test'" | tr -d '[:space:]')"

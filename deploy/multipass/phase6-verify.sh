@@ -150,7 +150,7 @@ grep -Fq 'root /usr/share/roundcube;' "${webmail_config}"
 zone_path="$(sudo -u postgres psql -d nakpanel -tAc "SELECT zone_path FROM dns_zones WHERE domain = 'phase5-ui.test' ORDER BY id DESC LIMIT 1" | tr -d '[:space:]')"
 test -f "${zone_path}"
 grep -Fq '$ORIGIN phase5-ui.test.' "${zone_path}"
-grep -Fq "@ IN A ${vm_ip}" "${zone_path}"
+grep -Eq "^@ (3600 )?IN A ${vm_ip}$" "${zone_path}"
 grep -Fq "webmail IN A ${vm_ip}" "${zone_path}"
 
 archive_path="$(sudo -u postgres psql -d nakpanel -tAc "SELECT archive_path FROM backups WHERE target_name = 'phase5-ui.test' ORDER BY id DESC LIMIT 1" | tr -d '[:space:]')"

@@ -77,3 +77,30 @@ func TestComposeEntitlementsUnlimitedAndFailureSemantics(t *testing.T) {
 		t.Fatal("ComposeEntitlements accepted an overflowing combined limit")
 	}
 }
+
+func TestEntitlementSnapshotPreservesTypedPlanPolicy(t *testing.T) {
+	plan := normalizePlanDefaults(Plan{
+		Name: "Advanced", DiskMB: 1024, MaxSites: 2, MaxDatabases: 1, BandwidthMB: -1,
+		PHPAllowlist: "8.3", DefaultPHPVersion: "8.3", HostingEnabled: true,
+		HostingPolicy: types.HostingPolicy{
+			SchemaVersion: 1,
+			Resources:     types.HostingResourcePolicy{DiskMB: 1024, TrafficMB: -1, MaxSites: 2, MaxDatabases: 1, CPUPercent: 125},
+			Permissions:   types.HostingPermissionPolicy{Hosting: true, Applications: true},
+			PHP:           types.HostingPHPPolicy{DefaultVersion: "8.3", AllowedVersions: []string{"8.3"}},
+			DNS:           types.HostingDNSPolicy{Mode: "authoritative", DefaultTTL: 3600},
+			Access:        types.HostingAccessPolicy{ShellMode: "disabled"},
+			Mail:          types.HostingMailPolicy{DMARCPolicy: "none"},
+		},
+	})
+	snapshot := entitlementsFromPlan(plan)
+	if snapshot.HostingPolicy.Resources.CPUPercent != 125 || !snapshot.HostingPolicy.Permissions.Applications {
+		t.Fatalf("typed plan policy was not preserved: %#v", snapshot.HostingPolicy)
+	}
+	composed, err := ComposeEntitlements(snapshot, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if composed.HostingPolicy.Resources.CPUPercent != 125 || !composed.HostingPolicy.Permissions.Applications {
+		t.Fatalf("typed policy was lost during composition: %#v", composed.HostingPolicy)
+	}
+}

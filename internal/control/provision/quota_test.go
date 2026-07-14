@@ -119,11 +119,11 @@ func TestManagerCreatesSiteForSelectedSubscription(t *testing.T) {
 	quotas := &fakeQuotaStore{
 		hasLimits: true,
 		limits: controlquota.Limits{
-			CustomerID:         7,
-			MaxSites:           -1,
-			SiteDiskQuotaMB:    512,
-			PHPFPMMaxChildren:  3,
-			PHPMemoryMB:        128,
+			CustomerID:        7,
+			MaxSites:          -1,
+			SiteDiskQuotaMB:   512,
+			PHPFPMMaxChildren: 3,
+			PHPMemoryMB:       128,
 		},
 	}
 	manager := NewManager(repo, WithQuotaStore(quotas))

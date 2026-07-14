@@ -33,7 +33,7 @@ func main() {
 		log.Fatalf("resolve allowed panel uid: %v", err)
 	}
 
-	reloader := ops.NewSystemdReloader(ops.SystemdReloaderOptions{AllowedServices: []string{"nginx", "php8.3-fpm", "php8.2-fpm", "bind9", "named.service"}})
+	reloader := ops.NewSystemdReloader(ops.SystemdReloaderOptions{AllowedServices: []string{"nginx", "php8.3-fpm", "php8.2-fpm", "bind9", "named.service", "stalwart-mail.service"}})
 	siteProvisioner := ops.NewSiteProvisioner(ops.SiteProvisionerOptions{
 		Paths:            ops.DefaultSitePathConfig(),
 		UserManager:      ops.NewLinuxUserManager(ops.LinuxUserManagerOptions{}),
@@ -45,17 +45,29 @@ func main() {
 	dnsProvisioner := ops.NewDNSProvisioner(ops.DNSProvisionerOptions{Reloader: reloader})
 	usageCollector := ops.NewUsageCollector("/home", "/var/log/nginx", os.Getenv("NAKPANEL_MARIADB_DSN"))
 	fileManager := ops.NewFileManager(ops.FileManagerOptions{TransferDir: config.FileTransferDir, PanelUser: config.PanelUser})
+	accountProvisioner := ops.NewSubscriptionAccountProvisioner(ops.SubscriptionAccountProvisionerOptions{
+		UserManager:     ops.NewLinuxUserManager(ops.LinuxUserManagerOptions{}),
+		Ownership:       ops.NewLinuxOwnershipManager(nil),
+		DiskQuota:       ops.NewLinuxDiskQuotaManager(nil),
+		SiteProvisioner: siteProvisioner,
+	})
+	mailProvisioner := ops.NewMailProvisioner(ops.MailProvisionerOptions{
+		ManagementURL: os.Getenv("NAKPANEL_STALWART_URL"),
+		Reloader:      reloader,
+	})
+	podmanProvisioner := ops.NewPodmanProvisioner(ops.PodmanProvisionerOptions{})
 	dispatcher := agentrpc.NewDispatcher(
 		reloader,
 		agentrpc.Options{
-			AllowedServices: []string{"nginx", "php8.3-fpm", "php8.2-fpm", "bind9", "named.service"},
+			AllowedServices: []string{"nginx", "php8.3-fpm", "php8.2-fpm", "bind9", "named.service", "stalwart-mail.service"},
 			SiteProvisioner: siteProvisioner,
 			DatabaseProvisioner: ops.NewDatabaseProvisioner(map[types.DBEngine]ops.DatabaseEngine{
 				types.EngineMariaDB: ops.NewLazyMariaDBEngine(os.Getenv("NAKPANEL_MARIADB_DSN")),
 			}),
 			CertificateProvisioner: ops.NewCertificateProvisioner(ops.CertificateProvisionerOptions{
-				Paths:    ops.DefaultSitePathConfig(),
-				Reloader: reloader,
+				Paths:       ops.DefaultSitePathConfig(),
+				Reloader:    reloader,
+				NginxTester: ops.NewCommandNginxConfigTester(nil),
 				ACMEIssuer: ops.NewACMEHTTP01Issuer(ops.ACMEHTTP01IssuerOptions{
 					DirectoryURL:   os.Getenv("NAKPANEL_ACME_DIRECTORY_URL"),
 					AccountKeyPath: os.Getenv("NAKPANEL_ACME_ACCOUNT_KEY"),
@@ -83,6 +95,9 @@ func main() {
 			UsageCollector:          usageCollector,
 			SiteRuntimeProvisioner:  siteProvisioner,
 			FileManager:             fileManager,
+			SubscriptionAccounts:    accountProvisioner,
+			Mail:                    mailProvisioner,
+			Applications:            podmanProvisioner,
 		},
 	)
 	server := agentrpc.NewServer(dispatcher, agentrpc.WithAllowedPeerUID(allowedUID))

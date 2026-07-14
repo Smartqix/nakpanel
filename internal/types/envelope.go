@@ -19,35 +19,43 @@ type Response struct {
 }
 
 const (
-	OpPing                = "ping"
-	OpReloadService       = "reload_service"
-	OpCreateSystemUser    = "create_system_user"
-	OpCreateSite          = "create_site"
-	OpIssueCert           = "issue_cert"
-	OpCreateDatabase      = "create_database"
-	OpCreateBackup        = "create_backup"
-	OpDeleteBackup        = "delete_backup"
-	OpRestoreBackup       = "restore_backup"
-	OpConfigureWebmail    = "configure_webmail"
-	OpConfigureDNSZone    = "configure_dns_zone"
-	OpReconcileSystem     = "reconcile_system"
-	OpSetHostingState     = "set_hosting_state"
-	OpApplySiteRuntime    = "apply_site_runtime"
-	OpCollectUsage        = "collect_usage"
-	OpRuntimeCapabilities = "runtime_capabilities"
-	OpListFiles           = "list_files"
-	OpSearchFiles         = "search_files"
-	OpReadFile            = "read_file"
-	OpWriteFile           = "write_file"
-	OpCreateFileEntry     = "create_file_entry"
-	OpCopyFiles           = "copy_files"
-	OpMoveFiles           = "move_files"
-	OpDeleteFiles         = "delete_files"
-	OpArchiveFiles        = "archive_files"
-	OpExtractArchive      = "extract_archive"
-	OpSetFileMode         = "set_file_mode"
-	OpImportFileTransfer  = "import_file_transfer"
-	OpExportFileTransfer  = "export_file_transfer"
+	OpPing                       = "ping"
+	OpReloadService              = "reload_service"
+	OpCreateSystemUser           = "create_system_user"
+	OpCreateSite                 = "create_site"
+	OpIssueCert                  = "issue_cert"
+	OpInstallCustomCert          = "install_custom_cert"
+	OpCreateDatabase             = "create_database"
+	OpCreateBackup               = "create_backup"
+	OpDeleteBackup               = "delete_backup"
+	OpRestoreBackup              = "restore_backup"
+	OpConfigureWebmail           = "configure_webmail"
+	OpConfigureDNSZone           = "configure_dns_zone"
+	OpReconcileSystem            = "reconcile_system"
+	OpSetHostingState            = "set_hosting_state"
+	OpApplySiteRuntime           = "apply_site_runtime"
+	OpCollectUsage               = "collect_usage"
+	OpRuntimeCapabilities        = "runtime_capabilities"
+	OpListFiles                  = "list_files"
+	OpSearchFiles                = "search_files"
+	OpReadFile                   = "read_file"
+	OpWriteFile                  = "write_file"
+	OpCreateFileEntry            = "create_file_entry"
+	OpCopyFiles                  = "copy_files"
+	OpMoveFiles                  = "move_files"
+	OpDeleteFiles                = "delete_files"
+	OpArchiveFiles               = "archive_files"
+	OpExtractArchive             = "extract_archive"
+	OpSetFileMode                = "set_file_mode"
+	OpImportFileTransfer         = "import_file_transfer"
+	OpExportFileTransfer         = "export_file_transfer"
+	OpEnsureSubscriptionAccount  = "ensure_subscription_account"
+	OpApplyScheduledTasks        = "apply_scheduled_tasks"
+	OpConfigureMail              = "configure_mail"
+	OpCollectMailQueue           = "collect_mail_queue"
+	OpEnsureApplication          = "ensure_application"
+	OpMigrateSubscriptionAccount = "migrate_subscription_account"
+	OpCleanupLegacyHomes         = "cleanup_legacy_homes"
 )
 
 type FileKind string
@@ -190,13 +198,27 @@ type CreateSiteReq struct {
 	Domain         string             `json:"domain"`
 	PHPVersion     string             `json:"php_version"`
 	Docroot        string             `json:"docroot"`
+	SharedAccount  bool               `json:"shared_account,omitempty"`
 	Limits         SiteResourceLimits `json:"limits"`
 }
 
 type SiteResourceLimits struct {
-	DiskQuotaMB       int `json:"disk_quota_mb"`
-	PHPFPMMaxChildren int `json:"php_max_children"`
-	PHPMemoryMB       int `json:"php_memory_mb"`
+	DiskQuotaMB            int  `json:"disk_quota_mb"`
+	PHPFPMMaxChildren      int  `json:"php_max_children"`
+	PHPMemoryMB            int  `json:"php_memory_mb"`
+	PHPFPMMaxRequests      int  `json:"php_fpm_max_requests,omitempty"`
+	PHPMaxExecutionSeconds int  `json:"php_max_execution_seconds,omitempty"`
+	PHPMaxInputSeconds     int  `json:"php_max_input_seconds,omitempty"`
+	PHPPostMaxMB           int  `json:"php_post_max_mb,omitempty"`
+	PHPUploadMaxMB         int  `json:"php_upload_max_mb,omitempty"`
+	PHPDisplayErrors       bool `json:"php_display_errors,omitempty"`
+	PHPLogErrors           bool `json:"php_log_errors,omitempty"`
+	PHPAllowURLFOpen       bool `json:"php_allow_url_fopen,omitempty"`
+	PHPExecEnabled         bool `json:"php_exec_enabled,omitempty"`
+	RequestRatePerSecond   int  `json:"request_rate_per_second,omitempty"`
+	RequestBurst           int  `json:"request_burst,omitempty"`
+	MaxConnections         int  `json:"max_connections,omitempty"`
+	StaticCache            bool `json:"static_cache,omitempty"`
 }
 
 type ReloadServiceReq struct {
@@ -225,16 +247,40 @@ type CertIssuer string
 const (
 	CertIssuerLocalSelfSigned CertIssuer = "local-self-signed"
 	CertIssuerACME            CertIssuer = "acme"
+	CertIssuerCustom          CertIssuer = "custom"
 )
 
 type IssueCertReq struct {
-	Username   string     `json:"username"`
-	Domain     string     `json:"domain"`
-	PHPVersion string     `json:"php_version"`
-	Issuer     CertIssuer `json:"issuer"`
+	Username      string             `json:"username"`
+	Domain        string             `json:"domain"`
+	PHPVersion    string             `json:"php_version"`
+	Issuer        CertIssuer         `json:"issuer"`
+	SharedAccount bool               `json:"shared_account,omitempty"`
+	Limits        SiteResourceLimits `json:"limits"`
 }
 
 type IssueCertResult struct {
+	Domain    string     `json:"domain"`
+	Issuer    CertIssuer `json:"issuer"`
+	CertPath  string     `json:"cert_path"`
+	KeyPath   string     `json:"key_path"`
+	ExpiresAt time.Time  `json:"expires_at"`
+}
+
+// InstallCustomCertReq is sent only across the privileged local agent socket.
+// River job arguments must contain a staging path instead of these PEM values.
+type InstallCustomCertReq struct {
+	Username       string             `json:"username"`
+	Domain         string             `json:"domain"`
+	PHPVersion     string             `json:"php_version"`
+	SharedAccount  bool               `json:"shared_account,omitempty"`
+	Limits         SiteResourceLimits `json:"limits"`
+	CertificatePEM string             `json:"certificate_pem"`
+	PrivateKeyPEM  string             `json:"private_key_pem"`
+	ChainPEM       string             `json:"chain_pem,omitempty"`
+}
+
+type InstallCustomCertResult struct {
 	Domain    string     `json:"domain"`
 	Issuer    CertIssuer `json:"issuer"`
 	CertPath  string     `json:"cert_path"`
@@ -279,6 +325,7 @@ type CreateSubscriptionReq struct {
 	CustomerID       int64                    `json:"customer_id"`
 	PlanID           int64                    `json:"plan_id"`
 	SubscriptionName string                   `json:"subscription_name"`
+	SystemUsername   string                   `json:"system_username,omitempty"`
 	Status           string                   `json:"status"`
 	SyncMode         string                   `json:"sync_mode,omitempty"`
 	Entitlements     SubscriptionEntitlements `json:"entitlements,omitempty"`
@@ -371,6 +418,7 @@ type SubscriptionEntitlements struct {
 	AllowBackups          bool               `json:"allow_backups"`
 	AllowPHPSettings      bool               `json:"allow_php_settings"`
 	ServicePresets        PlanServicePresets `json:"service_presets"`
+	HostingPolicy         HostingPolicy      `json:"hosting_policy"`
 }
 
 type PlanOverusePolicy string
@@ -575,6 +623,7 @@ type ApplySiteRuntimeReq struct {
 	CurrentPHPVersion string             `json:"current_php_version"`
 	DesiredPHPVersion string             `json:"desired_php_version"`
 	State             string             `json:"state"`
+	SharedAccount     bool               `json:"shared_account,omitempty"`
 	HTTPSRedirect     bool               `json:"https_redirect"`
 	TLSCertPath       string             `json:"tls_cert_path,omitempty"`
 	TLSKeyPath        string             `json:"tls_key_path,omitempty"`
@@ -745,6 +794,7 @@ type ReconcileSiteReq struct {
 	SubscriptionID    int64              `json:"subscription_id,omitempty"`
 	Username          string             `json:"username"`
 	Domain            string             `json:"domain"`
+	SharedAccount     bool               `json:"shared_account,omitempty"`
 	PHPVersion        string             `json:"php_version"`
 	DesiredPHPVersion string             `json:"desired_php_version,omitempty"`
 	EnableWebmail     bool               `json:"enable_webmail"`

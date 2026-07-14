@@ -30,6 +30,10 @@ type CertificateProvisioner interface {
 	IssueCert(ctx context.Context, req types.IssueCertReq) (types.IssueCertResult, error)
 }
 
+type CustomCertificateProvisioner interface {
+	InstallCustomCert(ctx context.Context, req types.InstallCustomCertReq) (types.InstallCustomCertResult, error)
+}
+
 type BackupProvisioner interface {
 	CreateBackup(ctx context.Context, req types.CreateBackupReq) (types.CreateBackupResult, error)
 }
@@ -60,6 +64,22 @@ type HostingStateProvisioner interface {
 
 type SiteRuntimeProvisioner interface {
 	ApplySiteRuntime(ctx context.Context, req types.ApplySiteRuntimeReq) error
+}
+
+type SubscriptionAccountProvisioner interface {
+	EnsureSubscriptionAccount(context.Context, types.EnsureSubscriptionAccountReq) (types.EnsureSubscriptionAccountResult, error)
+	ApplyScheduledTasks(context.Context, types.ApplyScheduledTasksReq) error
+	MigrateSubscriptionAccount(context.Context, types.MigrateSubscriptionAccountReq) (types.MigrateSubscriptionAccountResult, error)
+	CleanupLegacyHomes(context.Context, types.CleanupLegacyHomesReq) (types.CleanupLegacyHomesResult, error)
+}
+
+type MailProvisioner interface {
+	ConfigureMail(context.Context, types.ConfigureMailReq) (types.ConfigureMailResult, error)
+	CollectMailQueue(context.Context) (types.CollectMailQueueResult, error)
+}
+
+type ApplicationProvisioner interface {
+	EnsureApplication(context.Context, types.EnsureApplicationReq) error
 }
 
 type UsageCollector interface {
@@ -98,6 +118,9 @@ type Options struct {
 	SiteRuntimeProvisioner    SiteRuntimeProvisioner
 	UsageCollector            UsageCollector
 	FileManager               FileManager
+	SubscriptionAccounts      SubscriptionAccountProvisioner
+	Mail                      MailProvisioner
+	Applications              ApplicationProvisioner
 }
 
 type Dispatcher struct {
@@ -105,6 +128,7 @@ type Dispatcher struct {
 	siteProvisioner           SiteProvisioner
 	databaseProvisioner       DatabaseProvisioner
 	certificateProvisioner    CertificateProvisioner
+	customCertProvisioner     CustomCertificateProvisioner
 	backupProvisioner         BackupProvisioner
 	deleteBackupProvisioner   DeleteBackupProvisioner
 	webmailProvisioner        WebmailProvisioner
@@ -115,6 +139,9 @@ type Dispatcher struct {
 	siteRuntimeProvisioner    SiteRuntimeProvisioner
 	usageCollector            UsageCollector
 	fileManager               FileManager
+	subscriptionAccounts      SubscriptionAccountProvisioner
+	mail                      MailProvisioner
+	applications              ApplicationProvisioner
 	allowed                   map[string]struct{}
 
 	mu            sync.Mutex
@@ -138,11 +165,13 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 		}
 	}
 
+	customCertProvisioner, _ := opts.CertificateProvisioner.(CustomCertificateProvisioner)
 	return &Dispatcher{
 		reloader:                  reloader,
 		siteProvisioner:           opts.SiteProvisioner,
 		databaseProvisioner:       opts.DatabaseProvisioner,
 		certificateProvisioner:    opts.CertificateProvisioner,
+		customCertProvisioner:     customCertProvisioner,
 		backupProvisioner:         opts.BackupProvisioner,
 		deleteBackupProvisioner:   opts.DeleteBackupProvisioner,
 		webmailProvisioner:        opts.WebmailProvisioner,
@@ -153,6 +182,9 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 		siteRuntimeProvisioner:    opts.SiteRuntimeProvisioner,
 		usageCollector:            opts.UsageCollector,
 		fileManager:               opts.FileManager,
+		subscriptionAccounts:      opts.SubscriptionAccounts,
+		mail:                      opts.Mail,
+		applications:              opts.Applications,
 		allowed:                   allowed,
 		responses:                 make(map[string]*responseEntry),
 	}
@@ -387,6 +419,94 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, map[string]any{"service": payload.Name, "reloaded": true})
+	case types.OpEnsureSubscriptionAccount:
+		var payload types.EnsureSubscriptionAccountReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.subscriptionAccounts == nil {
+			return errorResponse(req.ID, "subscription account provisioner is not configured")
+		}
+		result, err := d.subscriptionAccounts.EnsureSubscriptionAccount(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpApplyScheduledTasks:
+		var payload types.ApplyScheduledTasksReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.subscriptionAccounts == nil {
+			return errorResponse(req.ID, "subscription account provisioner is not configured")
+		}
+		if err := d.subscriptionAccounts.ApplyScheduledTasks(ctx, payload); err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, map[string]any{"applied": true})
+	case types.OpMigrateSubscriptionAccount:
+		var payload types.MigrateSubscriptionAccountReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.subscriptionAccounts == nil {
+			return errorResponse(req.ID, "subscription account provisioner is not configured")
+		}
+		result, err := d.subscriptionAccounts.MigrateSubscriptionAccount(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpCleanupLegacyHomes:
+		var payload types.CleanupLegacyHomesReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.subscriptionAccounts == nil {
+			return errorResponse(req.ID, "subscription account provisioner is not configured")
+		}
+		result, err := d.subscriptionAccounts.CleanupLegacyHomes(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpConfigureMail:
+		var payload types.ConfigureMailReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.mail == nil {
+			return errorResponse(req.ID, "mail provisioner is not configured")
+		}
+		result, err := d.mail.ConfigureMail(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpCollectMailQueue:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.mail == nil {
+			return errorResponse(req.ID, "mail provisioner is not configured")
+		}
+		result, err := d.mail.CollectMailQueue(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpEnsureApplication:
+		var payload types.EnsureApplicationReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.applications == nil {
+			return errorResponse(req.ID, "application provisioner is not configured")
+		}
+		if err := d.applications.EnsureApplication(ctx, payload); err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, map[string]any{"applied": true})
 	case types.OpCreateSite:
 		var payload types.CreateSiteReq
 		if err := decodeStrict(req.Data, &payload); err != nil {
@@ -420,6 +540,19 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, "certificate provisioner is not configured")
 		}
 		result, err := d.certificateProvisioner.IssueCert(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpInstallCustomCert:
+		var payload types.InstallCustomCertReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.customCertProvisioner == nil {
+			return errorResponse(req.ID, "certificate provisioner is not configured")
+		}
+		result, err := d.customCertProvisioner.InstallCustomCert(ctx, payload)
 		if err != nil {
 			return errorResponse(req.ID, err.Error())
 		}

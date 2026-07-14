@@ -299,7 +299,7 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 			</nav>
 			if view.Tab == "overview" {
 				<div class="np-detail-grid">
-					<section class="np-panel"><div class="np-panel-title"><h2>Hosting overview</h2>@statusPill(item.SettingsStatus)</div><dl class="np-facts"><div><dt>System user</dt><dd>{ item.Username }</dd></div><div><dt>Document root</dt><dd>/home/{ item.Username }/public_html</dd></div><div><dt>PHP</dt><dd>{ item.PHPVersion }</dd></div><div><dt>HTTPS redirect</dt><dd>{ yesNo(item.HTTPSRedirect) }</dd></div><div><dt>Subscription</dt><dd><a href={ templ.SafeURL("/subscriptions/"+formatJobID(item.SubscriptionID)) }>{ subscription.SubscriptionName }</a></dd></div><div><dt>TLS</dt><dd>{ formatTLSStatus(item) }</dd></div></dl></section>
+					<section class="np-panel"><div class="np-panel-title"><h2>Hosting overview</h2>@statusPill(item.SettingsStatus)</div><dl class="np-facts"><div><dt>System user</dt><dd>{ item.Username }</dd></div><div><dt>Document root</dt><dd>{ item.DocumentRoot }</dd></div><div><dt>PHP</dt><dd>{ item.PHPVersion }</dd></div><div><dt>HTTPS redirect</dt><dd>{ yesNo(item.HTTPSRedirect) }</dd></div><div><dt>Subscription</dt><dd><a href={ templ.SafeURL("/subscriptions/"+formatJobID(item.SubscriptionID)) }>{ subscription.SubscriptionName }</a></dd></div><div><dt>TLS</dt><dd>{ formatTLSStatus(item) }</dd></div></dl></section>
 					<section class="np-panel"><div class="np-panel-title"><h2>Domain services</h2></div><div class="np-tool-grid">
 						if actions.CanUseFileManager {
 							<a href={ templ.SafeURL(fileBasePath(view,item.ID)) }>@icon("folder")<strong>File Manager</strong><span>Manage website content</span></a>
@@ -315,9 +315,12 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 					<form class="np-form np-domain-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/hosting") }>@csrfInput(view)<input type="hidden" name="desired_php_version" value={ item.DesiredPHPVersion }/>
 						<label>Website status<select name="desired_status"><option value="active" selected?={ item.DesiredStatus=="active" }>Active</option><option value="suspended" selected?={ item.DesiredStatus=="suspended" }>Suspended</option></select></label>
 						<label class="np-check"><input type="checkbox" name="desired_https_redirect" value="true" checked?={ item.DesiredHTTPSRedirect } disabled?={ item.TLSStatus!="active" || (user.Role!=auth.RoleAdmin && !subscription.AllowTLS) }/>Redirect HTTP to HTTPS</label>
-						<label>Document root<input value={ "/home/"+item.Username+"/public_html" } readonly/></label><button type="submit">Apply hosting settings</button>
+						<div class="np-readonly-field"><span>Document root</span><code>{ item.DocumentRoot }</code></div><button type="submit">Apply hosting settings</button>
 					</form>
 				</section>
+				if effectivePolicy, found := policyForSite(data.SubscriptionServices.SitePolicies,item.ID); found {
+					@sitePolicyEditor(item,effectivePolicy,view)
+				}
 			} else if view.Tab == "php" {
 				<section class="np-panel np-domain-settings"><div class="np-panel-title"><h2>PHP settings</h2><span class="np-muted">Inherited limits</span></div>
 					if user.Role!=auth.RoleAdmin && !subscription.AllowPHPSettings {
@@ -348,6 +351,17 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 	} else {
 		<p class="np-empty">Website not found.</p>
 	}
+}
+
+templ sitePolicyEditor(item dashboard.Site, policy types.HostingPolicy, view WorkspaceView) {
+	<section class="np-panel np-domain-settings"><div class="np-panel-title"><div><h2>Domain policy</h2><span class="np-muted">Overrides subscription defaults for this domain</span></div></div>
+		<form class="np-form np-domain-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/policy") } data-np-site-policy-builder>
+			@csrfInput(view)<input type="hidden" name="policy_patch" value="{}" data-np-policy-patch/>
+			<div class="np-plan-field-grid"><label>Request rate per second<input type="number" min="0" name="site_request_rate" value={ formatJobID(int64(policy.Web.RequestRatePerSecond)) }/></label><label>Request burst<input type="number" min="0" name="site_request_burst" value={ formatJobID(int64(policy.Web.RequestBurst)) }/></label><label>Maximum connections<input type="number" min="0" name="site_max_connections" value={ formatJobID(int64(policy.Web.MaxConnections)) }/></label><label>PHP-FPM children<input type="number" min="-1" name="site_fpm_children" value={ formatJobID(int64(policy.PHP.FPMMaxChildren)) }/></label><label>PHP memory MB<input type="number" min="-1" name="site_php_memory" value={ formatJobID(int64(policy.PHP.MemoryLimitMB)) }/></label><label>Max execution seconds<input type="number" min="0" name="site_php_execution" value={ formatJobID(int64(policy.PHP.MaxExecutionSeconds)) }/></label></div>
+			<div class="np-permission-list">@planToggle("site_static_cache","Static cache",policy.Web.StaticCache) @planToggle("site_fastcgi_microcache","FastCGI microcache",policy.Web.FastCGIMicrocache) @planToggle("site_php_exec","PHP process execution",policy.PHP.ExecEnabled) @planToggle("site_cgi","CGI execution",policy.Permissions.CGI)</div>
+			<button type="submit">Apply domain policy</button>
+		</form>
+	</section>
 }
 
 templ domainTab(siteID int64, tab string, label string, current string, view WorkspaceView) {
@@ -523,6 +537,8 @@ templ domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.S
 		} else if actions.CanIssueCertificate {
 			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/tls-auto-renew") }>@csrfInput(view)<label class="np-check"><input type="checkbox" name="tls_auto_renew" value="true" checked?={ item.TLSAutoRenew }/>Renew this certificate automatically</label><button type="submit">Save renewal setting</button></form>
 			<form class="np-form np-action-form" method="post" action="/certificates">@csrfInput(view)<input type="hidden" name="domain" value={ item.Domain }/><input type="hidden" name="site_id" value={ formatJobID(item.ID) }/><label>Issuer<select name="issuer"><option value="acme">ACME / Let's Encrypt</option><option value="local-self-signed">Local self-signed</option></select></label><button type="submit">Issue or reissue certificate</button></form>
+			<button type="button" class="np-secondary-button" data-np-dialog-open={ "custom-certificate-dialog-"+formatJobID(item.ID) }>@icon("upload")<span>Upload custom certificate</span></button>
+			<dialog class="np-dialog" id={ "custom-certificate-dialog-"+formatJobID(item.ID) } data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">SSL/TLS</span><h2>Install custom certificate</h2><p>The certificate must cover { item.Domain } and chain to a trusted system authority.</p></div><form class="np-form np-dialog-form" method="post" enctype="multipart/form-data" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/certificates/custom") }>@csrfInput(view)<label>Leaf certificate<input type="file" name="certificate" accept=".pem,.crt,.cer,application/x-pem-file" required/></label><label>Private key<input type="file" name="private_key" accept=".pem,.key,application/x-pem-file" required/></label><label>Intermediate chain <span class="np-muted">optional</span><input type="file" name="chain" accept=".pem,.crt,.cer,application/x-pem-file"/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Install certificate</button></div></form></dialog>
 		}
 	</section>
 }
@@ -764,11 +780,22 @@ templ routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Works
 
 templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
 	if subscription, ok := subscriptionByID(data.Subscriptions, view.DetailID); ok {
-		@pageHead("Subscription", subscription.SubscriptionName, subscription.CustomerName + " · " + subscription.PlanName) {
+			@pageHead("Subscription", subscription.SubscriptionName, subscription.CustomerName + " · " + subscription.PlanName) {
 			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/subscriptions")) }>Back to subscriptions</a>
-		}
-		<div class="np-subscription-overview"><div class="np-stat-grid np-routed-stats">@statCard("Domains", subscription.SitesUsed, "Limit " + formatPlanLimit(subscription.MaxSites))@statCard("Databases", subscription.DatabasesUsed, "Limit " + formatPlanLimit(subscription.MaxDatabases))@statCard("Backups", subscription.BackupsUsed, "Limit " + formatPlanLimit(subscription.MaxBackups))@statCard("Backup storage", int(subscription.BackupBytesUsed/1024/1024), "MB used")</div><aside class="np-subscription-account"><div><span>Subscriber</span><strong>{ subscription.CustomerName }</strong><small>{ subscription.CustomerEmail }</small></div><div><span>Service plan</span><strong>{ subscription.PlanName }</strong></div><div><span>Status</span>@statusPill(subscription.Status)</div></aside></div>
-		<section class="np-panel np-subscription-domains"><div class="np-panel-title"><div><h2>Websites &amp; Domains</h2><span class="np-muted">Everything hosted under this subscription</span></div>
+			}
+			<div class="np-subscription-overview"><div class="np-stat-grid np-routed-stats">@statCard("Domains", subscription.SitesUsed, "Limit " + formatPlanLimit(subscription.MaxSites))@statCard("Databases", subscription.DatabasesUsed, "Limit " + formatPlanLimit(subscription.MaxDatabases))@statCard("Backups", subscription.BackupsUsed, "Limit " + formatPlanLimit(subscription.MaxBackups))@statCard("Backup storage", int(subscription.BackupBytesUsed/1024/1024), "MB used")</div><aside class="np-subscription-account"><div><span>Subscriber</span><strong>{ subscription.CustomerName }</strong><small>{ subscription.CustomerEmail }</small></div><div><span>Service plan</span><strong>{ subscription.PlanName }</strong></div><div><span>Status</span>@statusPill(subscription.Status)</div></aside></div>
+			<nav class="np-domain-tabs np-subscription-tabs" aria-label="Subscription workspace">
+				<a class={ subscriptionTabClass(view.Tab,"overview") } href={ subscriptionTabPath(view,subscription.ID,"overview") }>Websites &amp; Domains</a>
+				<a class={ subscriptionTabClass(view.Tab,"resources") } href={ subscriptionTabPath(view,subscription.ID,"resources") }>Resources<span class="np-sr-only"> Subscription settings</span></a>
+				<a class={ subscriptionTabClass(view.Tab,"access") } href={ subscriptionTabPath(view,subscription.ID,"access") }>Account Access</a>
+				<a class={ subscriptionTabClass(view.Tab,"mail") } href={ subscriptionTabPath(view,subscription.ID,"mail") }>Mail</a>
+				<a class={ subscriptionTabClass(view.Tab,"tasks") } href={ subscriptionTabPath(view,subscription.ID,"tasks") }>Scheduled Tasks</a>
+				<a class={ subscriptionTabClass(view.Tab,"applications") } href={ subscriptionTabPath(view,subscription.ID,"applications") }>Applications</a>
+				<a class={ subscriptionTabClass(view.Tab,"backups") } href={ subscriptionTabPath(view,subscription.ID,"backups") }>Backups</a>
+				<a class={ subscriptionTabClass(view.Tab,"activity") } href={ subscriptionTabPath(view,subscription.ID,"activity") }>Activity</a>
+			</nav>
+			if view.Tab == "overview" {
+			<section class="np-panel np-subscription-domains"><div class="np-panel-title"><div><h2>Websites &amp; Domains</h2><span class="np-muted">Everything hosted under this subscription</span></div>
 			if actions.CanCreateSite {
 				<button type="button" data-np-dialog-open="site-dialog" data-np-subscription-id={ formatJobID(subscription.ID) }>@icon("globe")<span>Add Domain</span></button>
 			}
@@ -781,9 +808,10 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 					@subscriptionDomainBlock(site,data,view)
 					}
 				</div>
+				}
+			</section>
 			}
-		</section>
-		if user.Role != auth.RoleClient {
+			if user.Role != auth.RoleClient && view.Tab == "resources" {
 		<section class="np-panel np-subscription-settings"><div class="np-panel-title"><h2>Subscription settings</h2><span class={ "np-status-pill " + customerStatusClass(subscription.Status) }>{ subscription.Status }</span></div>
 			<dl class="np-facts"><div><dt>Entitlements</dt><dd>{ subscription.SyncMode }</dd></div><div><dt>Synchronization</dt><dd>@statusPill(subscription.SyncStatus)</dd></div><div><dt>Plan revision</dt><dd>{ formatPlanLimit(subscription.PlanRevision) }</dd></div><div><dt>Provider</dt><dd>{ formatProviderID(subscription.ResellerID) }</dd></div></dl>
 			if subscription.SyncError != "" {
@@ -835,15 +863,153 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 			} else if subscription.SyncMode == "custom" {
 				<p class="np-muted">Custom subscriptions use their saved entitlement snapshot and cannot attach add-ons.</p>
 			}
-			@customEntitlementEditor(subscription,data,view)
+				@customEntitlementEditor(subscription,data,view)
+				@subscriptionPolicyEditor(subscription,data,view)
 			if isSiteRetryNotice(data.Notice) {
 				<div class="np-panel-actions"><button type="button" data-np-dialog-open="site-dialog">Retry website setup</button></div>
 			}
-		</section>
-		}
+			</section>
+			}
+			if view.Tab == "access" {
+				@subscriptionAccessPanel(subscription,data,view)
+			} else if view.Tab == "tasks" {
+				@subscriptionTasksPanel(subscription,data,view)
+			} else if view.Tab == "mail" {
+				@subscriptionMailPanel(subscription,data,view)
+			} else if view.Tab == "applications" {
+				@subscriptionApplicationsPanel(subscription,data,view)
+			} else if view.Tab == "backups" {
+				<section class="np-panel"><div class="np-panel-title"><h2>Subscription backups</h2></div>@subscriptionBackupRows(data.Phase6.Backups,subscription.ID)</section>
+			} else if view.Tab == "activity" {
+				<section class="np-panel"><div class="np-panel-title"><h2>Convergence &amp; activity</h2></div>
+					if account, found := accountForSubscription(data.SubscriptionServices.Accounts,subscription.ID); found {
+						<dl class="np-facts"><div><dt>Desired state</dt><dd>{ account.DesiredState }</dd></div><div><dt>Applied state</dt><dd>{ account.AppliedState }</dd></div><div><dt>Convergence</dt><dd>@statusPill(account.ConvergenceStatus)</dd></div><div><dt>Migration</dt><dd>@statusPill(account.MigrationStatus)</dd></div></dl>
+						if account.LastError != "" {
+							<p class="np-error">{ account.LastError }</p>
+						}
+					}
+				</section>
+			}
 	} else {
 		<p class="np-empty">Subscription not found.</p>
 	}
+}
+
+templ subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	if account, found := accountForSubscription(data.SubscriptionServices.Accounts,subscription.ID); found {
+		<details class="np-disclosure" open><summary>Hosting policy overrides</summary>
+			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/policy") } data-np-policy-builder>
+				@csrfInput(view)
+				<input type="hidden" name="policy_patch" value="{}" data-np-policy-patch/>
+				<div class="np-plan-field-grid">
+					<label>CPU quota %<input type="number" min="-1" name="policy_cpu_percent" value={ formatJobID(int64(account.EffectivePolicy.Resources.CPUPercent)) }/></label>
+					<label>Memory MB<input type="number" min="-1" name="policy_memory_mb" value={ formatJobID(int64(account.EffectivePolicy.Resources.MemoryMB)) }/></label>
+					<label>I/O read MB/s<input type="number" min="-1" name="policy_io_read_mbps" value={ formatJobID(int64(account.EffectivePolicy.Resources.IOReadMBPS)) }/></label>
+					<label>I/O write MB/s<input type="number" min="-1" name="policy_io_write_mbps" value={ formatJobID(int64(account.EffectivePolicy.Resources.IOWriteMBPS)) }/></label>
+					<label>Process limit<input type="number" min="-1" name="policy_max_tasks" value={ formatJobID(int64(account.EffectivePolicy.Resources.MaxTasks)) }/></label>
+					<label>Scheduled tasks<input type="number" min="-1" name="policy_max_scheduled_tasks" value={ formatJobID(int64(account.EffectivePolicy.Resources.MaxScheduledTasks)) }/></label>
+					<label>Applications<input type="number" min="-1" name="policy_max_applications" value={ formatJobID(int64(account.EffectivePolicy.Resources.MaxApplications)) }/></label>
+					<label>Container storage MB<input type="number" min="-1" name="policy_container_storage_mb" value={ formatJobID(int64(account.EffectivePolicy.Resources.ContainerStorageMB)) }/></label>
+				</div>
+				<fieldset><legend>Provisioned capabilities</legend><div class="np-permission-list">
+					@planToggle("policy_sftp","SFTP access",account.EffectivePolicy.Permissions.SFTP)
+					@planToggle("policy_scheduled_tasks","Scheduled tasks",account.EffectivePolicy.Permissions.ScheduledTasks)
+					@planToggle("policy_mail","Mail hosting",account.EffectivePolicy.Permissions.Mail)
+					@planToggle("policy_applications","Applications",account.EffectivePolicy.Permissions.Applications)
+					@planToggle("policy_custom_images","Custom OCI images",account.EffectivePolicy.Permissions.CustomOCIImages)
+				</div></fieldset>
+				<label>Allowed OCI registries<input name="policy_registries" value={ joinStrings(account.EffectivePolicy.Applications.AllowedRegistries) } placeholder="registry.example.com"/></label>
+				<button type="submit">Apply hosting policy</button>
+			</form>
+		</details>
+	}
+}
+
+templ subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h2>Account Access</h2><span class="np-muted">Shared Linux account and scoped SFTP identities</span></div></div>
+		if account, found := accountForSubscription(data.SubscriptionServices.Accounts,subscription.ID); found {
+			<dl class="np-facts"><div><dt>System user</dt><dd>{ account.Username }</dd></div><div><dt>Home</dt><dd>{ account.HomePath }</dd></div><div><dt>Shell mode</dt><dd>{ account.ShellMode }</dd></div><div><dt>State</dt><dd>@statusPill(account.ConvergenceStatus)</dd></div></dl>
+		}
+		<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Identity</th><th>Directory</th><th>Status</th><th></th></tr></thead><tbody>
+			for _, item := range sftpForSubscription(data.SubscriptionServices.SFTP,subscription.ID) {
+				<tr><td data-label="Identity">{ item.Name }</td><td data-label="Directory">{ item.RelativeRoot }</td><td data-label="Status">{ formatEnabled(item.Enabled) }</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID,"sftp",item.ID,view)</td></tr>
+			}
+		</tbody></table></div>
+		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/sftp") }>@csrfInput(view)<div class="np-form-grid"><label>Name<input name="name" required/></label><label>Directory<input name="relative_root" value="." required/></label><label class="np-wide-field">SSH public key<textarea name="public_key" rows="3" required></textarea></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Add SFTP identity</button></form>
+	</section>
+}
+
+templ subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h2>Scheduled Tasks</h2><span class="np-muted">Commands run as the subscription account</span></div></div>
+		<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Task</th><th>Schedule</th><th>Command</th><th>Status</th><th></th></tr></thead><tbody>
+			for _, item := range tasksForSubscription(data.SubscriptionServices.Tasks,subscription.ID) {
+				<tr><td data-label="Task">{ item.Name }</td><td data-label="Schedule">{ item.Schedule }</td><td data-label="Command"><code>{ item.Command }</code></td><td data-label="Status">@statusPill(item.Status)</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID,"task",item.ID,view)</td></tr>
+			}
+		</tbody></table></div>
+		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/scheduled-tasks") }>@csrfInput(view)<div class="np-form-grid"><label>Name<input name="name" required/></label><label>Schedule<input name="schedule" placeholder="0 2 * * *" required/></label><label>Working directory<input name="working_directory" value="." required/></label><label>Timeout seconds<input type="number" min="1" max="86400" name="timeout_seconds" value="300" required/></label><label class="np-wide-field">Command<input name="command" required/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Add scheduled task</button></form>
+	</section>
+}
+
+templ subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h2>Mail</h2><span class="np-muted">Stalwart domains and signing policy</span></div></div>
+		<div class="np-object-list">
+			for _, item := range mailForSubscription(data.SubscriptionServices.MailDomains,subscription.ID) {
+				<div class="np-object-row"><span class="np-object-icon">@icon("mail")</span><span><strong>{ item.Domain }</strong><small>DKIM { formatEnabled(item.DKIM) } · DMARC { item.DMARCPolicy }</small></span>@statusPill(item.Status)@subscriptionServiceDelete(subscription.ID,"mail",item.ID,view)</div>
+			}
+		</div>
+		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mail-domains") }>@csrfInput(view)<div class="np-form-grid"><label>Domain<select name="domain">
+			for _, site := range sitesForSubscription(data.Sites,subscription.ID) {
+				<option value={ site.Domain }>{ site.Domain }</option>
+			}
+		</select></label><label>DMARC policy<select name="dmarc_policy"><option value="none">Monitor</option><option value="quarantine">Quarantine</option><option value="reject">Reject</option></select></label><label class="np-check"><input type="checkbox" name="dkim" value="true" checked/>DKIM signing</label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Enable mail domain</button></form>
+		<div class="np-panel-title"><div><h3>Mailboxes</h3><span class="np-muted">Accounts served by Stalwart IMAP/SMTP</span></div></div>
+		<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Address</th><th>Quota</th><th>Status</th><th></th></tr></thead><tbody>
+			for _, item := range mailboxesForSubscription(data.SubscriptionServices.Mailboxes,subscription.ID) {
+				<tr><td data-label="Address">{ item.Address }</td><td data-label="Quota">{ formatMailboxQuota(item.QuotaMB) }</td><td data-label="Status">{ formatEnabled(item.Enabled) }</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID,"mailbox",item.ID,view)</td></tr>
+			}
+		</tbody></table></div>
+		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mailboxes") }>@csrfInput(view)<div class="np-form-grid"><label>Mail domain<select name="mail_domain_id">
+			for _, item := range mailForSubscription(data.SubscriptionServices.MailDomains,subscription.ID) {
+				<option value={ formatJobID(item.ID) }>{ item.Domain }</option>
+			}
+		</select></label><label>Local part<input name="local_part" placeholder="user" required/></label><label>Password<input type="password" name="password" autocomplete="new-password" minlength="12" required/></label><label>Quota MB<input type="number" min="-1" name="quota_mb" value="0"/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Create mailbox</button></form>
+		<div class="np-panel-title"><div><h3>Aliases &amp; forwarders</h3><span class="np-muted">Deliver an address to one or more mailboxes of this subscription</span></div></div>
+		<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Address</th><th>Destinations</th><th></th></tr></thead><tbody>
+			for _, item := range mailAliasesForSubscription(data.SubscriptionServices.MailAliases,subscription.ID) {
+				<tr><td data-label="Address">{ item.Address }</td><td data-label="Destinations">{ item.Destinations }</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID,"mail_alias",item.ID,view)</td></tr>
+			}
+		</tbody></table></div>
+		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mail-aliases") }>@csrfInput(view)<div class="np-form-grid"><label>Mail domain<select name="mail_domain_id">
+			for _, item := range mailForSubscription(data.SubscriptionServices.MailDomains,subscription.ID) {
+				<option value={ formatJobID(item.ID) }>{ item.Domain }</option>
+			}
+		</select></label><label>Local part<input name="local_part" placeholder="sales" required/></label><label class="np-wide-field">Destination mailboxes<input name="destinations" placeholder="user@example.com, other@example.com" required/></label></div><button type="submit">Create alias</button></form>
+	</section>
+}
+
+templ subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h2>Applications</h2><span class="np-muted">Rootless application instances</span></div></div>
+		<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Application</th><th>Runtime</th><th>Image</th><th>State</th><th></th></tr></thead><tbody>
+			for _, item := range applicationsForSubscription(data.SubscriptionServices.Applications,subscription.ID) {
+				<tr><td data-label="Application">{ item.Name }</td><td data-label="Runtime">{ item.Runtime }</td><td data-label="Image"><code>{ item.ImageRef }</code></td><td data-label="State">@statusPill(item.Status)</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID,"application",item.ID,view)</td></tr>
+			}
+		</tbody></table></div>
+		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/applications") }>@csrfInput(view)<div class="np-form-grid"><label>Name<input name="name" pattern="[a-z][a-z0-9-]+" required/></label><label>Runtime<select name="runtime"><option value="php">PHP</option><option value="python">Python</option><option value="node">Node</option><option value="oci">OCI</option></select></label><label class="np-wide-field">Image<input name="image_ref" placeholder="registry.example.com/team/app:tag" required/></label><label>State<select name="desired_state"><option value="running">Running</option><option value="stopped">Stopped</option></select></label><label class="np-wide-field">Environment JSON<textarea name="environment" rows="4">{}</textarea></label></div><button type="submit">Create application</button></form>
+	</section>
+}
+
+templ subscriptionServiceDelete(subscriptionID int64, kind string, id int64, view WorkspaceView) {
+	<form class="np-inline-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscriptionID)+"/services/"+kind+"/"+formatJobID(id)+"/delete") }>@csrfInput(view)<button type="submit" class="np-icon-button np-danger-button" title="Delete" data-np-confirm="Delete this service configuration?">@icon("trash")</button></form>
+}
+
+templ subscriptionBackupRows(items []dashboard.Backup, subscriptionID int64) {
+	<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Target</th><th>Status</th><th>Size</th><th>Created</th></tr></thead><tbody>
+		for _, item := range items {
+			if item.SubscriptionID == subscriptionID {
+				<tr><td data-label="Target">{ item.TargetName }</td><td data-label="Status">@statusPill(item.Status)</td><td data-label="Size">{ formatBytes(item.SizeBytes) }</td><td data-label="Created">{ formatTime(item.CreatedAt) }</td></tr>
+			}
+		}
+	</tbody></table></div>
 }
 
 templ customEntitlementEditor(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
@@ -960,8 +1126,8 @@ templ routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) {
 					<option value={ formatPlanID(plan.ID) }>{ plan.Name }</option>
 				}
 			}
-		</select></label><label>Subscription name<input name="subscription_name" required/></label></div></section>
-		<section class="np-panel"><div class="np-step-head"><span>3</span><div><h2>First website</h2><p>Optional. Nakpanel will queue provisioning after the subscription is saved.</p></div></div><label class="np-check"><input type="checkbox" name="create_site" value="true" data-np-create-first-site/>Create the first website now</label><div class="np-form-grid" data-np-first-site hidden><label>Domain<input name="domain"/></label><label>System username<input name="username"/></label><label>PHP<select name="php_version"><option value="8.3">8.3</option><option value="8.2">8.2</option></select></label></div></section>
+			</select></label><label>Subscription name<input name="subscription_name" required/></label><label>System username<input name="system_username" pattern="[a-z][a-z0-9]{2,31}" placeholder="Generated if empty"/></label></div></section>
+			<section class="np-panel"><div class="np-step-head"><span>3</span><div><h2>First website</h2><p>Optional. Nakpanel will queue provisioning after the subscription is saved.</p></div></div><label class="np-check"><input type="checkbox" name="create_site" value="true" data-np-create-first-site/>Create the first website now</label><div class="np-form-grid" data-np-first-site hidden><label>Domain<input name="domain"/></label><label>PHP<select name="php_version"><option value="8.3">8.3</option><option value="8.2">8.2</option></select></label></div></section>
 		<div class="np-onboarding-actions"><a class="np-secondary-link" href="/subscriptions">Cancel</a><button type="submit">Create subscription</button></div>
 	</form>
 }
@@ -1181,16 +1347,19 @@ templ routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspa
 			if !addon {
 				<fieldset class="np-field-group"><legend>Overuse policy</legend><div class="np-overuse-options">@overuseOption(plan,"block","Overuse is not allowed") @overuseOption(plan,"normal","Overuse is allowed") @overuseOption(plan,"notify","Allow and notify") @overuseOption(plan,"not_suspend","Disk and traffic only") @overuseOption(plan,"not_suspend_notify","Disk and traffic with notifications")</div></fieldset>
 			}
-			<div class="np-plan-field-grid">@planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB") @planLimitField("Backup retention","backup_retention_days",plan.BackupRetentionDays,"days")
+				<div class="np-plan-field-grid">@planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB") @planLimitField("Backup retention","backup_retention_days",plan.BackupRetentionDays,"days")
 				if !addon {
 					@planLimitField("Subscription validity","validity_days",plan.ValidityDays,"days")
 				}
-			</div>
+				</div>
+				if !addon {
+					<div class="np-property-head"><h3>Enforced account resources</h3></div><div class="np-plan-field-grid">@planLimitField("CPU quota","cpu_percent",plan.HostingPolicy.Resources.CPUPercent,"percent") @planLimitField("Memory","memory_limit_mb",plan.HostingPolicy.Resources.MemoryMB,"MB") @planLimitField("I/O read","io_read_mbps",plan.HostingPolicy.Resources.IOReadMBPS,"MBps") @planLimitField("I/O write","io_write_mbps",plan.HostingPolicy.Resources.IOWriteMBPS,"MBps") @planLimitField("Processes","max_tasks",plan.HostingPolicy.Resources.MaxTasks,"count") @planLimitField("Database users","max_database_users",plan.HostingPolicy.Resources.MaxDatabaseUsers,"count") @planLimitField("Mail aliases","max_mail_aliases",plan.HostingPolicy.Resources.MaxMailAliases,"count") @planLimitField("Scheduled tasks","max_scheduled_tasks",plan.HostingPolicy.Resources.MaxScheduledTasks,"count") @planLimitField("Applications","max_applications",plan.HostingPolicy.Resources.MaxApplications,"count") @planLimitField("Container storage","container_storage_mb",plan.HostingPolicy.Resources.ContainerStorageMB,"MB")</div>
+				}
 			if !addon {
 				<div class="np-plan-field-grid np-threshold-grid"><label>Disk warning threshold<div class="np-input-suffix"><input type="number" name="disk_warning_percent" min="1" max="100" value={ formatPlanID(int64(plan.DiskWarningPercent)) } required/><span>%</span></div></label><label>Traffic warning threshold<div class="np-input-suffix"><input type="number" name="traffic_warning_percent" min="1" max="100" value={ formatPlanID(int64(plan.TrafficWarningPercent)) } required/><span>%</span></div></label></div>
 			}
 		</section>
-		<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ planEditorTab(view) != "permissions" }><div class="np-property-head"><h2>Permissions</h2><p>Choose which hosting tools the subscription may use.</p></div><div class="np-permission-list">@planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",plan.AllowTLS) @planToggle("allow_backups","Backup and restore management",plan.AllowBackups) @planToggle("allow_php_settings","PHP version and settings management",plan.AllowPHPSettings) @planToggle("allow_ssh","SSH access preset",plan.AllowSSH)</div></section>
+			<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ planEditorTab(view) != "permissions" }><div class="np-property-head"><h2>Permissions</h2><p>Choose which hosting tools the subscription may use.</p></div><div class="np-permission-list">@planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",plan.AllowTLS) @planToggle("allow_backups","Backup and restore management",plan.AllowBackups) @planToggle("allow_php_settings","PHP version and settings management",plan.AllowPHPSettings) @planToggle("allow_ssh","SSH access",plan.AllowSSH) @planToggle("allow_sftp","SFTP identities",plan.HostingPolicy.Permissions.SFTP) @planToggle("allow_scheduled_tasks","Scheduled tasks",plan.HostingPolicy.Permissions.ScheduledTasks) @planToggle("allow_mail","Mail hosting",plan.HostingPolicy.Permissions.Mail) @planToggle("allow_cgi","CGI execution",plan.HostingPolicy.Permissions.CGI) @planToggle("allow_applications","Applications",plan.HostingPolicy.Permissions.Applications) @planToggle("allow_custom_oci_images","Custom OCI images",plan.HostingPolicy.Permissions.CustomOCIImages) @planToggle("allow_application_egress","Application network egress",plan.HostingPolicy.Permissions.ApplicationEgress)</div><div class="np-plan-field-grid"><label>Shell mode<select name="shell_mode"><option value="disabled" selected?={ plan.HostingPolicy.Access.ShellMode == "disabled" }>Disabled</option><option value="sftp" selected?={ plan.HostingPolicy.Access.ShellMode == "sftp" }>SFTP only</option><option value="nspawn" selected?={ plan.HostingPolicy.Access.ShellMode == "nspawn" }>Isolated shell</option></select></label><label>nspawn image<input name="nspawn_image" value={ plan.HostingPolicy.Access.NspawnImage }/></label><label>SSH idle timeout<input type="number" min="0" name="ssh_idle_timeout_minutes" value={ formatPlanID(int64(plan.HostingPolicy.Access.SSHIdleTimeoutMins)) }/></label></div></section>
 		<section class="np-plan-property-panel" data-np-plan-panel="hosting" hidden?={ planEditorTab(view) != "hosting" }><div class="np-property-head"><h2>Hosting parameters</h2><p>Configure the default web-hosting runtime.</p></div>
 			if !addon && len(data.Capabilities.PHPVersions) == 0 {
 				<p class="np-gate is-blocked">No PHP-FPM runtime was reported by the agent. Install PHP-FPM before enabling web hosting in this plan.</p>
@@ -1201,7 +1370,7 @@ templ routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspa
 				}
 				@planLimitField("Per-site disk quota","site_disk_quota_mb",plan.SiteDiskQuotaMB,"MB")
 			</div></section>
-		<section class="np-plan-property-panel" data-np-plan-panel="php" hidden?={ planEditorTab(view) != "php" }><div class="np-property-head"><h2>PHP Settings</h2><p>Set the allowed runtimes and PHP-FPM defaults.</p></div><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">@phpVersionChecks(plan,data.Capabilities)</div></fieldset><div class="np-plan-field-grid">@planLimitField("PHP-FPM max children","php_max_children",plan.PHPFPMMaxChildren,"count") @planLimitField("PHP memory","php_memory_mb",plan.PHPMemoryMB,"MB")<label>Max execution time<input type="number" min="0" name="php_max_execution_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)) }/></label><label>Max input time<input type="number" min="0" name="php_max_input_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)) }/></label><label>POST max size, MB<input type="number" min="0" name="php_post_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.PostMaxMB)) }/></label><label>Upload max size, MB<input type="number" min="0" name="php_upload_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)) }/></label><label>FPM max requests<input type="number" min="0" name="php_fpm_max_requests" value={ formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)) }/></label></div><div class="np-permission-list">@planToggle("php_log_errors","Log PHP errors",plan.Presets.PHP.LogErrors) @planToggle("php_display_errors","Display PHP errors",plan.Presets.PHP.DisplayErrors) @planToggle("php_allow_url_fopen","Allow URL fopen",plan.Presets.PHP.AllowURLFOpen)</div></section>
+			<section class="np-plan-property-panel" data-np-plan-panel="php" hidden?={ planEditorTab(view) != "php" }><div class="np-property-head"><h2>PHP Settings</h2><p>Set the allowed runtimes and PHP-FPM defaults.</p></div><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">@phpVersionChecks(plan,data.Capabilities)</div></fieldset><div class="np-plan-field-grid">@planLimitField("PHP-FPM max children","php_max_children",plan.PHPFPMMaxChildren,"count") @planLimitField("PHP memory","php_memory_mb",plan.PHPMemoryMB,"MB")<label>Max execution time<input type="number" min="0" name="php_max_execution_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)) }/></label><label>Max input time<input type="number" min="0" name="php_max_input_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)) }/></label><label>POST max size, MB<input type="number" min="0" name="php_post_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.PostMaxMB)) }/></label><label>Upload max size, MB<input type="number" min="0" name="php_upload_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)) }/></label><label>FPM max requests<input type="number" min="0" name="php_fpm_max_requests" value={ formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)) }/></label></div><div class="np-permission-list">@planToggle("php_log_errors","Log PHP errors",plan.Presets.PHP.LogErrors) @planToggle("php_display_errors","Display PHP errors",plan.Presets.PHP.DisplayErrors) @planToggle("php_allow_url_fopen","Allow URL fopen",plan.Presets.PHP.AllowURLFOpen) @planToggle("php_exec_enabled","PHP process execution",plan.HostingPolicy.PHP.ExecEnabled)</div></section>
 		@planPresetPanels(plan,view)
 		<div class="np-plan-action-bar"><div><strong>{ planEditorSaveTitle(plan,addon) }</strong><span>{ planEditorSaveHint(plan,addon) }</span></div><div><a class="np-secondary-button" href={ templ.SafeURL(planListBackURL(addon)) }>Cancel</a><button type="submit" data-np-plan-submit>{ planEditorSubmitLabel(plan,addon) }</button></div></div>
 	</form>
@@ -1236,11 +1405,11 @@ templ phpVersionChecks(plan controlquota.Plan, capabilities types.RuntimeCapabil
 }
 
 templ planPresetPanels(plan controlquota.Plan, view WorkspaceView) {
-	<section class="np-plan-property-panel" data-np-plan-panel="mail" hidden?={ planEditorTab(view) != "mail" }><div class="np-property-head"><h2>Mail</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("mail_webmail_enabled","Webmail enabled",plan.Presets.Mail.WebmailEnabled) @planToggle("mail_spam_filter","Spam filtering",plan.Presets.Mail.SpamFilter) @planToggle("mail_dkim","DKIM signing",plan.Presets.Mail.DKIM)</div><label>DMARC policy<select name="mail_dmarc_policy"><option value="none" selected?={ plan.Presets.Mail.DMARCPolicy == "none" }>None</option><option value="quarantine" selected?={ plan.Presets.Mail.DMARCPolicy == "quarantine" }>Quarantine</option><option value="reject" selected?={ plan.Presets.Mail.DMARCPolicy == "reject" }>Reject</option></select></label></section>
-	<section class="np-plan-property-panel" data-np-plan-panel="dns" hidden?={ planEditorTab(view) != "dns" }><div class="np-property-head"><h2>DNS</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Zone mode<select name="dns_mode"><option value="primary" selected?={ plan.Presets.DNS.Mode == "primary" }>Primary</option><option value="secondary" selected?={ plan.Presets.DNS.Mode == "secondary" }>Secondary</option></select></label><label>Default TTL<input type="number" name="dns_default_ttl" min="60" value={ formatPlanID(int64(plan.Presets.DNS.DefaultTTL)) }/></label></div></section>
-	<section class="np-plan-property-panel" data-np-plan-panel="performance" hidden?={ planEditorTab(view) != "performance" }><div class="np-property-head"><h2>Performance</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Maximum connections<input type="number" min="0" name="performance_max_connections" value={ formatPlanID(int64(plan.Presets.Performance.MaxConnections)) }/></label>@planToggle("performance_static_cache","Static file caching",plan.Presets.Performance.StaticFileCache)</div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="mail" hidden?={ planEditorTab(view) != "mail" }><div class="np-property-head"><h2>Mail</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("mail_webmail_enabled","Webmail enabled",plan.Presets.Mail.WebmailEnabled) @planToggle("mail_spam_filter","Spam filtering",plan.Presets.Mail.SpamFilter) @planToggle("mail_dkim","DKIM signing",plan.Presets.Mail.DKIM) @planToggle("mail_autoresponders","Autoresponders",plan.HostingPolicy.Mail.Autoresponders) @planToggle("mail_catch_all","Catch-all mailbox",plan.HostingPolicy.Mail.CatchAll)</div><div class="np-plan-field-grid">@planLimitField("Mailbox quota","mailbox_quota_mb",plan.HostingPolicy.Mail.MailboxQuotaMB,"MB")<label>DMARC policy<select name="mail_dmarc_policy"><option value="none" selected?={ plan.Presets.Mail.DMARCPolicy == "none" }>None</option><option value="quarantine" selected?={ plan.Presets.Mail.DMARCPolicy == "quarantine" }>Quarantine</option><option value="reject" selected?={ plan.Presets.Mail.DMARCPolicy == "reject" }>Reject</option></select></label></div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="dns" hidden?={ planEditorTab(view) != "dns" }><div class="np-property-head"><h2>DNS</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Zone mode<select name="dns_mode"><option value="authoritative" selected?={ plan.Presets.DNS.Mode == "primary" || plan.HostingPolicy.DNS.Mode == "authoritative" }>Authoritative</option><option value="external" selected?={ plan.Presets.DNS.Mode == "secondary" || plan.HostingPolicy.DNS.Mode == "external" }>External</option></select></label><label>Default TTL<input type="number" name="dns_default_ttl" min="60" value={ formatPlanID(int64(plan.Presets.DNS.DefaultTTL)) }/></label></div><div class="np-permission-list">@planToggle("dnssec","DNSSEC",plan.HostingPolicy.DNS.DNSSEC)</div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="performance" hidden?={ planEditorTab(view) != "performance" }><div class="np-property-head"><h2>Performance</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Maximum connections<input type="number" min="0" name="performance_max_connections" value={ formatPlanID(int64(plan.Presets.Performance.MaxConnections)) }/></label><label>Request rate per second<input type="number" min="0" name="request_rate_per_second" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestRatePerSecond)) }/></label><label>Request burst<input type="number" min="0" name="request_burst" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestBurst)) }/></label></div><div class="np-permission-list">@planToggle("performance_static_cache","Static file caching",plan.Presets.Performance.StaticFileCache) @planToggle("fastcgi_microcache","FastCGI microcache",plan.HostingPolicy.Web.FastCGIMicrocache)</div></section>
 	<section class="np-plan-property-panel" data-np-plan-panel="logs" hidden?={ planEditorTab(view) != "logs" }><div class="np-property-head"><h2>Logs & Statistics</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Log retention, days<input type="number" min="1" name="logs_retention_days" value={ formatPlanID(int64(plan.Presets.Logs.RetentionDays)) }/></label>@planToggle("logs_rotation_enabled","Rotate logs",plan.Presets.Logs.RotationEnabled) @planToggle("logs_statistics_enabled","Traffic statistics",plan.Presets.Logs.StatisticsEnabled)</div></section>
-	<section class="np-plan-property-panel" data-np-plan-panel="applications" hidden?={ planEditorTab(view) != "applications" }><div class="np-property-head"><h2>Applications</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("applications_catalog_enabled","Application catalog",plan.Presets.Applications.CatalogEnabled)</div><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="applications_allowed" value="wordpress" checked?={ stringInSlice(plan.Presets.Applications.Allowed,"wordpress") }/>WordPress</label><label class="np-check"><input type="checkbox" name="applications_allowed" value="drupal" checked?={ stringInSlice(plan.Presets.Applications.Allowed,"drupal") }/>Drupal</label></div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="applications" hidden?={ planEditorTab(view) != "applications" }><div class="np-property-head"><h2>Applications</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("applications_catalog_enabled","Application catalog",plan.Presets.Applications.CatalogEnabled)</div><fieldset class="np-field-group"><legend>Allowed runtimes</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="php" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"php") }/>PHP</label><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="python" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"python") }/>Python</label><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="node" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"node") }/>Node.js</label><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="oci" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"oci") }/>OCI</label></div></fieldset><div class="np-plan-field-grid"><label>Allowed registries<input name="allowed_registries" value={ joinStrings(plan.HostingPolicy.Applications.AllowedRegistries) } placeholder="docker.io,ghcr.io"/></label></div><fieldset class="np-field-group"><legend>Application catalog</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="applications_allowed" value="wordpress" checked?={ stringInSlice(plan.Presets.Applications.Allowed,"wordpress") }/>WordPress</label><label class="np-check"><input type="checkbox" name="applications_allowed" value="drupal" checked?={ stringInSlice(plan.Presets.Applications.Allowed,"drupal") }/>Drupal</label></div></fieldset></section>
 }
 
 templ presetStatus() { <span class="np-preset-badge">Stored preset</span> }
@@ -1248,7 +1417,7 @@ templ presetStatus() { <span class="np-preset-badge">Stored preset</span> }
 templ planPreviewDialog(plan controlquota.Plan, view WorkspaceView) { <dialog class="np-dialog np-plan-preview-dialog" id="plan-preview-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Update & Sync</span><h2>Review synchronization impact</h2><p>Synced subscriptions receive the new revision. Locked and custom subscriptions retain their current snapshots.</p></div><dl class="np-preview-facts"><div><dt>Synced subscriptions</dt><dd data-np-preview-synced>-</dd></div><div><dt>Locked subscriptions</dt><dd data-np-preview-locked>-</dd></div><div><dt>Custom subscriptions</dt><dd data-np-preview-custom>-</dd></div><div><dt>Server committed disk</dt><dd data-np-preview-disk>-</dd></div><div data-np-preview-reseller-row hidden><dt>Reseller allocation</dt><dd data-np-preview-reseller>-</dd></div></dl><p class="np-gate" data-np-preview-warning></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="button" data-np-plan-confirm-submit>Update & Sync</button></div></dialog> }
 
 templ routedSiteDialog(subscriptions []types.SubscriptionSummary, view WorkspaceView) {
-	<dialog class="np-dialog" id="site-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Hosting services</span><h2>Add website</h2><p>Limits are derived from the selected subscription.</p></div><form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>@csrfInput(view)@subscriptionSelect(nil,subscriptions)<label>Domain<input name="domain" required/></label><label>System username<input name="username" required/></label><label>PHP<select name="php_version" data-np-site-php>
+	<dialog class="np-dialog" id="site-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Hosting services</span><h2>Add website</h2><p>Limits are derived from the selected subscription.</p></div><form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>@csrfInput(view)@subscriptionSelect(nil,subscriptions)<label>Domain<input name="domain" required/></label><input type="hidden" name="username" value="npsystem"/><label>PHP<select name="php_version" data-np-site-php>
 		for _, version := range subscriptionPHPVersions(subscriptions) {
 			<option value={ version }>{ version }</option>
 		}

@@ -96,15 +96,17 @@ type RuntimeCapabilityReader interface {
 }
 
 type Manager struct {
-	siteRepo          SiteRepository
-	databaseRepo      DatabaseRepository
-	certificateRepo   CertificateRepository
-	phase6Repo        Phase6Repository
-	quotaStore        controlquota.Store
-	quotaAdmin        controlquota.AdminStore
-	passwordGenerator PasswordGenerator
-	accessPolicy      AccessPolicy
-	capabilities      RuntimeCapabilityReader
+	siteRepo                SiteRepository
+	databaseRepo            DatabaseRepository
+	certificateRepo         CertificateRepository
+	phase6Repo              Phase6Repository
+	quotaStore              controlquota.Store
+	quotaAdmin              controlquota.AdminStore
+	passwordGenerator       PasswordGenerator
+	accessPolicy            AccessPolicy
+	capabilities            RuntimeCapabilityReader
+	customCertificateRepo   CustomCertificateRepository
+	customCertificateStager CustomCertificateStager
 }
 
 type ManagerOption func(*Manager)
@@ -136,6 +138,14 @@ func WithCertificateRepository(repo CertificateRepository) ManagerOption {
 	return func(m *Manager) {
 		m.certificateRepo = repo
 	}
+}
+
+func WithCustomCertificateRepository(repo CustomCertificateRepository) ManagerOption {
+	return func(m *Manager) { m.customCertificateRepo = repo }
+}
+
+func WithCustomCertificateStager(stager CustomCertificateStager) ManagerOption {
+	return func(m *Manager) { m.customCertificateStager = stager }
 }
 
 func WithPhase6Repository(repo Phase6Repository) ManagerOption {
@@ -634,6 +644,23 @@ func (m *Manager) ReconcileSystem(ctx context.Context, owner auth.SessionUser) (
 		return 0, errors.New("phase6 repository is not configured")
 	}
 	return m.phase6Repo.ReconcileSystem(ctx, owner.ID)
+}
+
+func (m *Manager) ReconcileSite(ctx context.Context, owner auth.SessionUser, domain string) (int64, error) {
+	normalized := site.NormalizeDomain(domain)
+	if err := site.ValidateDomain(normalized); err != nil {
+		return 0, err
+	}
+	if err := m.canManageDomain(ctx, owner, normalized); err != nil {
+		return 0, err
+	}
+	repository, ok := m.phase6Repo.(interface {
+		ReconcileSite(context.Context, int64, string) (int64, error)
+	})
+	if !ok {
+		return 0, errors.New("site reconciliation is not configured")
+	}
+	return repository.ReconcileSite(ctx, owner.ID, normalized)
 }
 
 func (m *Manager) CreateAdminerToken(ctx context.Context, owner auth.SessionUser) (types.AdminerSSO, error) {

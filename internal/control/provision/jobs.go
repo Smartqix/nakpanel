@@ -12,11 +12,12 @@ import (
 )
 
 type CreateSiteArgs struct {
-	SiteID     int64                    `json:"site_id" river:"unique"`
-	Username   string                   `json:"username"`
-	Domain     string                   `json:"domain"`
-	PHPVersion string                   `json:"php_version"`
-	Limits     types.SiteResourceLimits `json:"limits"`
+	SiteID        int64                    `json:"site_id" river:"unique"`
+	Username      string                   `json:"username"`
+	Domain        string                   `json:"domain"`
+	PHPVersion    string                   `json:"php_version"`
+	SharedAccount bool                     `json:"shared_account,omitempty"`
+	Limits        types.SiteResourceLimits `json:"limits"`
 }
 
 func (CreateSiteArgs) Kind() string { return "create_site" }
@@ -70,15 +71,17 @@ type AgentDatabaseClient interface {
 }
 
 type IssueCertArgs struct {
-	SiteID         int64            `json:"site_id" river:"unique"`
-	Username       string           `json:"username"`
-	Domain         string           `json:"domain"`
-	PHPVersion     string           `json:"php_version"`
-	Issuer         types.CertIssuer `json:"issuer"`
-	SubscriptionID int64            `json:"subscription_id,omitempty"`
-	CustomerID     int64            `json:"customer_id,omitempty"`
-	ActorUserID    int64            `json:"actor_user_id,omitempty"`
-	Automated      bool             `json:"automated,omitempty"`
+	SiteID         int64                    `json:"site_id" river:"unique"`
+	Username       string                   `json:"username"`
+	Domain         string                   `json:"domain"`
+	PHPVersion     string                   `json:"php_version"`
+	Issuer         types.CertIssuer         `json:"issuer"`
+	SharedAccount  bool                     `json:"shared_account,omitempty"`
+	Limits         types.SiteResourceLimits `json:"limits"`
+	SubscriptionID int64                    `json:"subscription_id,omitempty"`
+	CustomerID     int64                    `json:"customer_id,omitempty"`
+	ActorUserID    int64                    `json:"actor_user_id,omitempty"`
+	Automated      bool                     `json:"automated,omitempty"`
 }
 
 func (IssueCertArgs) Kind() string { return "issue_cert" }
@@ -138,10 +141,11 @@ func (w *CreateSiteWorker) Work(ctx context.Context, job *river.Job[CreateSiteAr
 	}
 
 	resp, err := w.agent.CreateSite(ctx, types.CreateSiteReq{
-		Username:   job.Args.Username,
-		Domain:     job.Args.Domain,
-		PHPVersion: job.Args.PHPVersion,
-		Limits:     job.Args.Limits,
+		Username:      job.Args.Username,
+		Domain:        job.Args.Domain,
+		PHPVersion:    job.Args.PHPVersion,
+		SharedAccount: job.Args.SharedAccount,
+		Limits:        job.Args.Limits,
 	})
 	if err != nil {
 		w.markFailed(ctx, job.Args.SiteID, err.Error())
@@ -244,10 +248,12 @@ func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs
 	}
 
 	resp, err := w.agent.IssueCert(ctx, types.IssueCertReq{
-		Username:   job.Args.Username,
-		Domain:     job.Args.Domain,
-		PHPVersion: job.Args.PHPVersion,
-		Issuer:     job.Args.Issuer,
+		Username:      job.Args.Username,
+		Domain:        job.Args.Domain,
+		PHPVersion:    job.Args.PHPVersion,
+		Issuer:        job.Args.Issuer,
+		SharedAccount: job.Args.SharedAccount,
+		Limits:        job.Args.Limits,
 	})
 	if err != nil {
 		return errors.Join(err, w.markFailed(ctx, job.Args.SiteID, err.Error()), w.report(ctx, job.Args, err))

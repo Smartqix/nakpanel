@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	controlpolicy "github.com/nakroteck/nakpanel/internal/control/policy"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
@@ -277,7 +278,44 @@ func ComposeEntitlements(base types.SubscriptionEntitlements, addons []types.Add
 	if result.PHPAllowlist != "" {
 		result.ServicePresets.Hosting.AllowedPHPVersions = strings.Split(result.PHPAllowlist, ",")
 	}
+	result.HostingPolicy = mergeLegacyEntitlementsPolicy(result, base.HostingPolicy)
 	return result, nil
+}
+
+func mergeLegacyEntitlementsPolicy(e types.SubscriptionEntitlements, previous types.HostingPolicy) types.HostingPolicy {
+	resolved := controlpolicy.DefaultFromEntitlements(e)
+	if previous.SchemaVersion != 1 {
+		return resolved
+	}
+	resolved.Resources.CPUPercent = previous.Resources.CPUPercent
+	resolved.Resources.MemoryMB = previous.Resources.MemoryMB
+	resolved.Resources.IOReadMBPS = previous.Resources.IOReadMBPS
+	resolved.Resources.IOWriteMBPS = previous.Resources.IOWriteMBPS
+	resolved.Resources.MaxTasks = previous.Resources.MaxTasks
+	resolved.Resources.MaxDatabaseUsers = previous.Resources.MaxDatabaseUsers
+	resolved.Resources.MaxMailAliases = previous.Resources.MaxMailAliases
+	resolved.Resources.MaxScheduledTasks = previous.Resources.MaxScheduledTasks
+	resolved.Resources.MaxApplications = previous.Resources.MaxApplications
+	resolved.Resources.ContainerStorageMB = previous.Resources.ContainerStorageMB
+	resolved.Permissions.ScheduledTasks = previous.Permissions.ScheduledTasks
+	resolved.Permissions.CGI = previous.Permissions.CGI
+	resolved.Permissions.Applications = previous.Permissions.Applications
+	resolved.Permissions.CustomOCIImages = previous.Permissions.CustomOCIImages
+	resolved.Permissions.ApplicationEgress = previous.Permissions.ApplicationEgress
+	resolved.Web.RequestRatePerSecond = previous.Web.RequestRatePerSecond
+	resolved.Web.RequestBurst = previous.Web.RequestBurst
+	resolved.Web.FastCGIMicrocache = previous.Web.FastCGIMicrocache
+	resolved.PHP.ExecEnabled = previous.PHP.ExecEnabled
+	resolved.Mail.MailboxQuotaMB = previous.Mail.MailboxQuotaMB
+	resolved.Mail.Autoresponders = previous.Mail.Autoresponders
+	resolved.Mail.CatchAll = previous.Mail.CatchAll
+	resolved.DNS.DNSSEC = previous.DNS.DNSSEC
+	resolved.Access = previous.Access
+	resolved.Backups.Schedule = previous.Backups.Schedule
+	resolved.Backups.RemoteTarget = previous.Backups.RemoteTarget
+	resolved.Applications = previous.Applications
+	resolved.Applications.CatalogEnabled = resolved.Applications.CatalogEnabled || e.ServicePresets.Applications.CatalogEnabled
+	return resolved
 }
 
 func composePresetIncrements(base, add types.PlanServicePresets) types.PlanServicePresets {
@@ -373,13 +411,13 @@ func planFromEntitlements(e types.SubscriptionEntitlements) Plan {
 		MaxDomainAliases: e.MaxDomainAliases, MaxFTPAccounts: e.MaxFTPAccounts,
 		ValidityDays: e.ValidityDays, HostingEnabled: e.HostingEnabled,
 		DefaultPHPVersion: e.DefaultPHPVersion, AllowTLS: e.AllowTLS,
-		AllowBackups: e.AllowBackups, AllowPHPSettings: e.AllowPHPSettings, Presets: e.ServicePresets}
+		AllowBackups: e.AllowBackups, AllowPHPSettings: e.AllowPHPSettings, Presets: e.ServicePresets, HostingPolicy: e.HostingPolicy}
 	return normalizePlanDefaults(plan)
 }
 
 func entitlementsFromPlan(plan Plan) types.SubscriptionEntitlements {
 	plan = normalizePlanDefaults(plan)
-	return types.SubscriptionEntitlements{PlanName: plan.Name, DiskMB: plan.DiskMB,
+	e := types.SubscriptionEntitlements{PlanName: plan.Name, DiskMB: plan.DiskMB,
 		MaxSites: plan.MaxSites, MaxDatabases: plan.MaxDatabases, BandwidthMB: plan.BandwidthMB,
 		MaxMailboxes: plan.MaxMailboxes, AllowSSH: plan.AllowSSH, AllowDNS: plan.AllowDNS,
 		BackupRetentionDays: plan.BackupRetentionDays, PHPAllowlist: plan.PHPAllowlist,
@@ -392,7 +430,11 @@ func entitlementsFromPlan(plan Plan) types.SubscriptionEntitlements {
 		ValidityDays: plan.ValidityDays, HostingEnabled: plan.HostingEnabled,
 		DefaultPHPVersion: plan.DefaultPHPVersion, AllowTLS: plan.AllowTLS,
 		AllowBackups: plan.AllowBackups, AllowPHPSettings: plan.AllowPHPSettings,
-		ServicePresets: plan.Presets}
+		ServicePresets: plan.Presets, HostingPolicy: plan.HostingPolicy}
+	if e.HostingPolicy.SchemaVersion == 0 {
+		e.HostingPolicy = controlpolicy.DefaultFromEntitlements(e)
+	}
+	return e
 }
 
 func writePlanEntitlementsTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, plan Plan) error {
@@ -427,14 +469,25 @@ func writeSubscriptionEntitlementsTx(ctx context.Context, tx *sql.Tx, e types.Su
 	if err != nil {
 		return fmt.Errorf("encode subscription service presets: %w", err)
 	}
+	policy := e.HostingPolicy
+	if policy.SchemaVersion == 0 {
+		policy = controlpolicy.DefaultFromEntitlements(e)
+	}
+	if err := controlpolicy.Validate(policy); err != nil {
+		return fmt.Errorf("validate subscription hosting policy: %w", err)
+	}
+	hostingPolicy, err := json.Marshal(policy)
+	if err != nil {
+		return fmt.Errorf("encode subscription hosting policy: %w", err)
+	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO subscription_entitlements (
 subscription_id, plan_name, disk_mb, max_sites, max_databases, bandwidth_mb, max_mailboxes,
 allow_ssh, allow_dns, backup_retention_days, php_allowlist, php_fpm_max_children,
 php_memory_mb, site_disk_quota_mb, max_backups, backup_storage_mb, source_revision,
 overuse_policy,disk_warning_percent,traffic_warning_percent,max_subdomains,max_domain_aliases,
 max_ftp_accounts,validity_days,hosting_enabled,default_php_version,allow_tls,allow_backups,
-allow_php_settings,service_presets
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
+	allow_php_settings,service_presets,hosting_policy
+	) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
 ON CONFLICT (subscription_id) DO UPDATE SET
 plan_name=EXCLUDED.plan_name, disk_mb=EXCLUDED.disk_mb, max_sites=EXCLUDED.max_sites,
 max_databases=EXCLUDED.max_databases, bandwidth_mb=EXCLUDED.bandwidth_mb,
@@ -449,21 +502,21 @@ max_domain_aliases=EXCLUDED.max_domain_aliases,max_ftp_accounts=EXCLUDED.max_ftp
 validity_days=EXCLUDED.validity_days,hosting_enabled=EXCLUDED.hosting_enabled,
 default_php_version=EXCLUDED.default_php_version,allow_tls=EXCLUDED.allow_tls,
 allow_backups=EXCLUDED.allow_backups,allow_php_settings=EXCLUDED.allow_php_settings,
-service_presets=EXCLUDED.service_presets,updated_at=now()`,
+	service_presets=EXCLUDED.service_presets,hosting_policy=EXCLUDED.hosting_policy,updated_at=now()`,
 		e.SubscriptionID, e.PlanName, e.DiskMB, e.MaxSites, e.MaxDatabases, e.BandwidthMB,
 		e.MaxMailboxes, e.AllowSSH, e.AllowDNS, e.BackupRetentionDays, e.PHPAllowlist,
 		e.PHPFPMMaxChildren, e.PHPMemoryMB, e.SiteDiskQuotaMB, e.MaxBackups,
 		e.BackupStorageMB, maxInt(e.SourceRevision, 1), e.OverusePolicy,
 		e.DiskWarningPercent, e.TrafficWarningPercent, e.MaxSubdomains,
 		e.MaxDomainAliases, e.MaxFTPAccounts, e.ValidityDays, e.HostingEnabled,
-		e.DefaultPHPVersion, e.AllowTLS, e.AllowBackups, e.AllowPHPSettings, presets)
+		e.DefaultPHPVersion, e.AllowTLS, e.AllowBackups, e.AllowPHPSettings, presets, hostingPolicy)
 	return err
 }
 
 func readSubscriptionEntitlementsTx(ctx context.Context, tx *sql.Tx, subscriptionID int64) (types.SubscriptionEntitlements, error) {
 	var e types.SubscriptionEntitlements
-	var presets []byte
-	err := tx.QueryRowContext(ctx, `SELECT subscription_id,plan_name,disk_mb,max_sites,max_databases,bandwidth_mb,max_mailboxes,allow_ssh,allow_dns,backup_retention_days,php_allowlist,php_fpm_max_children,php_memory_mb,site_disk_quota_mb,max_backups,backup_storage_mb,source_revision,overuse_policy,disk_warning_percent,traffic_warning_percent,max_subdomains,max_domain_aliases,max_ftp_accounts,validity_days,hosting_enabled,default_php_version,allow_tls,allow_backups,allow_php_settings,service_presets FROM subscription_entitlements WHERE subscription_id=$1`, subscriptionID).Scan(
+	var presets, hostingPolicy []byte
+	err := tx.QueryRowContext(ctx, `SELECT subscription_id,plan_name,disk_mb,max_sites,max_databases,bandwidth_mb,max_mailboxes,allow_ssh,allow_dns,backup_retention_days,php_allowlist,php_fpm_max_children,php_memory_mb,site_disk_quota_mb,max_backups,backup_storage_mb,source_revision,overuse_policy,disk_warning_percent,traffic_warning_percent,max_subdomains,max_domain_aliases,max_ftp_accounts,validity_days,hosting_enabled,default_php_version,allow_tls,allow_backups,allow_php_settings,service_presets,hosting_policy FROM subscription_entitlements WHERE subscription_id=$1`, subscriptionID).Scan(
 		&e.SubscriptionID, &e.PlanName, &e.DiskMB, &e.MaxSites, &e.MaxDatabases,
 		&e.BandwidthMB, &e.MaxMailboxes, &e.AllowSSH, &e.AllowDNS,
 		&e.BackupRetentionDays, &e.PHPAllowlist, &e.PHPFPMMaxChildren,
@@ -471,10 +524,13 @@ func readSubscriptionEntitlementsTx(ctx context.Context, tx *sql.Tx, subscriptio
 		&e.SourceRevision, &e.OverusePolicy, &e.DiskWarningPercent, &e.TrafficWarningPercent,
 		&e.MaxSubdomains, &e.MaxDomainAliases, &e.MaxFTPAccounts, &e.ValidityDays,
 		&e.HostingEnabled, &e.DefaultPHPVersion, &e.AllowTLS, &e.AllowBackups,
-		&e.AllowPHPSettings, &presets,
+		&e.AllowPHPSettings, &presets, &hostingPolicy,
 	)
 	if err == nil {
 		err = json.Unmarshal(presets, &e.ServicePresets)
+	}
+	if err == nil {
+		err = json.Unmarshal(hostingPolicy, &e.HostingPolicy)
 	}
 	return e, err
 }
@@ -1359,6 +1415,9 @@ func syncSubscriptionTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, f
 		}
 	}
 	if err = writeSubscriptionEntitlementsTx(ctx, tx, e); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE subscription_system_accounts SET convergence_status='pending',last_error='',updated_at=now() WHERE subscription_id=$1`, subscriptionID); err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE subscriptions SET sync_status='in_sync',plan_revision=$2,sync_error='',updated_at=now() WHERE id=$1`, subscriptionID, plan.Revision)

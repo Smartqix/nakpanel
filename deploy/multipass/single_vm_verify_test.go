@@ -22,6 +22,12 @@ func TestPhaseVerifiersUseSingleDefaultVM(t *testing.T) {
 		"phase10-verify.sh",
 		"phase11-verify.sh",
 		"phase12-verify.sh",
+		"phase13-verify.sh",
+		"phase14-verify.sh",
+		"phase15-verify.sh",
+		"phase16-verify.sh",
+		"phase17-verify.sh",
+		"phase18-verify.sh",
 	}
 	for _, path := range scripts {
 		t.Run(path, func(t *testing.T) {
@@ -66,7 +72,7 @@ func TestDeploymentVerifierResetsOneCanonicalVM(t *testing.T) {
 		"require_nakpanel_vm_name \"${NAKPANEL_MULTIPASS_VM}\"",
 		"destroy_vm \"${NAKPANEL_MULTIPASS_VM}\"",
 		"ensure_vm 2 3G 16G",
-		"phase12-verify.sh",
+		"phase18-verify.sh",
 		"nakpanel-lab",
 	} {
 		if !strings.Contains(script, want) {
@@ -92,6 +98,8 @@ func TestCommonHelperListsLegacyPhaseVMs(t *testing.T) {
 		"nakpanel-phase10",
 		"nakpanel-phase11",
 		"nakpanel-phase12",
+		"nakpanel-phase16",
+		"nakpanel-phase17",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("%s is missing %q", path, want)

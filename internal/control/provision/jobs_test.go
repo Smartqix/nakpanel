@@ -270,11 +270,13 @@ func TestIssueCertWorkerCallsAgentAndMarksTLSActive(t *testing.T) {
 	worker := NewIssueCertWorker(client, status)
 	job := &river.Job[IssueCertArgs]{
 		Args: IssueCertArgs{
-			SiteID:     7,
-			Username:   "npdemo",
-			Domain:     "example.test",
-			PHPVersion: "8.3",
-			Issuer:     types.CertIssuerLocalSelfSigned,
+			SiteID:        7,
+			Username:      "npdemo",
+			Domain:        "example.test",
+			PHPVersion:    "8.3",
+			Issuer:        types.CertIssuerLocalSelfSigned,
+			SharedAccount: true,
+			Limits:        types.SiteResourceLimits{RequestRatePerSecond: 5, MaxConnections: 20},
 		},
 	}
 
@@ -282,10 +284,12 @@ func TestIssueCertWorkerCallsAgentAndMarksTLSActive(t *testing.T) {
 		t.Fatalf("Work returned error: %v", err)
 	}
 	wantReq := types.IssueCertReq{
-		Username:   "npdemo",
-		Domain:     "example.test",
-		PHPVersion: "8.3",
-		Issuer:     types.CertIssuerLocalSelfSigned,
+		Username:      "npdemo",
+		Domain:        "example.test",
+		PHPVersion:    "8.3",
+		Issuer:        types.CertIssuerLocalSelfSigned,
+		SharedAccount: true,
+		Limits:        types.SiteResourceLimits{RequestRatePerSecond: 5, MaxConnections: 20},
 	}
 	if client.req != wantReq {
 		t.Fatalf("IssueCert request = %#v, want %#v", client.req, wantReq)

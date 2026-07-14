@@ -54,6 +54,7 @@ type AddonPlan struct {
 	AllowBackups        bool
 	AllowPhpSettings    bool
 	ServicePresets      json.RawMessage
+	HostingPolicy       json.RawMessage
 }
 
 type AdminerToken struct {
@@ -65,9 +66,45 @@ type AdminerToken struct {
 	CreatedAt   time.Time
 }
 
+type ApplicationInstance struct {
+	ID                int64
+	SubscriptionID    int64
+	SiteID            sql.NullInt64
+	Name              string
+	Runtime           string
+	CatalogSlug       string
+	ImageRef          string
+	DesiredState      string
+	AppliedState      string
+	Environment       json.RawMessage
+	Healthcheck       json.RawMessage
+	ConvergenceStatus string
+	LastError         string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeleteRequested   bool
+}
+
+type ApplicationPort struct {
+	ID            int64
+	ApplicationID int64
+	ContainerPort int32
+	HostPort      sql.NullInt32
+	Protocol      string
+	RouteHost     string
+}
+
+type ApplicationVolume struct {
+	ID            int64
+	ApplicationID int64
+	Name          string
+	ContainerPath string
+	SizeMb        int32
+}
+
 type AuditEvent struct {
 	ID             int64
-	ActorUserID    int64
+	ActorUserID    sql.NullInt64
 	CustomerID     sql.NullInt64
 	SubscriptionID sql.NullInt64
 	Action         string
@@ -75,6 +112,7 @@ type AuditEvent struct {
 	TargetID       sql.NullInt64
 	Metadata       json.RawMessage
 	CreatedAt      time.Time
+	ActorLabel     sql.NullString
 }
 
 type Backup struct {
@@ -149,6 +187,55 @@ type DnsZone struct {
 	UpdatedAt   time.Time
 }
 
+type MailAlias struct {
+	ID           int64
+	MailDomainID int64
+	LocalPart    string
+	Destinations []string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type MailDomain struct {
+	ID                int64
+	SubscriptionID    int64
+	SiteID            sql.NullInt64
+	Domain            string
+	Enabled           bool
+	DkimEnabled       bool
+	DmarcPolicy       string
+	CatchAll          string
+	ConvergenceStatus string
+	LastError         string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeleteRequested   bool
+}
+
+type MailSetting struct {
+	ID                  bool
+	MailHostname        string
+	SmarthostHost       string
+	SmarthostPort       int32
+	SmarthostUsername   string
+	SmarthostPassword   string
+	OutboundRateLimit   string
+	QueueAlertThreshold int32
+	UpdatedAt           time.Time
+}
+
+type Mailbox struct {
+	ID            int64
+	MailDomainID  int64
+	LocalPart     string
+	QuotaMb       int32
+	Enabled       bool
+	Autoresponder json.RawMessage
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	PasswordHash  string
+}
+
 type Notification struct {
 	ID              int64
 	RecipientUserID sql.NullInt64
@@ -215,6 +302,7 @@ type Plan struct {
 	AllowTls              bool
 	AllowBackups          bool
 	AllowPhpSettings      bool
+	HostingPolicy         json.RawMessage
 }
 
 type PlanServicePreset struct {
@@ -278,6 +366,7 @@ type ResellerPlan struct {
 	AllowTls         bool
 	AllowBackups     bool
 	AllowPhpSettings bool
+	HostingPolicy    json.RawMessage
 }
 
 type ResellerSubscription struct {
@@ -301,11 +390,39 @@ type RestoreRun struct {
 	UpdatedAt   time.Time
 }
 
+type ScheduledTask struct {
+	ID                int64
+	SubscriptionID    int64
+	SiteID            sql.NullInt64
+	Name              string
+	Schedule          string
+	Command           string
+	WorkingDirectory  string
+	TimeoutSeconds    int32
+	Enabled           bool
+	ConvergenceStatus string
+	LastError         string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type ScheduledTaskRun struct {
+	ID         int64
+	TaskID     int64
+	Status     string
+	ExitCode   sql.NullInt32
+	Output     string
+	StartedAt  sql.NullTime
+	FinishedAt sql.NullTime
+	CreatedAt  time.Time
+}
+
 type Session struct {
 	TokenHash string
 	UserID    int64
 	ExpiresAt time.Time
 	CreatedAt time.Time
+	ID        int64
 }
 
 type Setting struct {
@@ -314,6 +431,18 @@ type Setting struct {
 	ServerDiskCapacityMb int32
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+}
+
+type SftpAccessIdentity struct {
+	ID             int64
+	SubscriptionID int64
+	Name           string
+	PublicKey      string
+	RelativeRoot   string
+	Enabled        bool
+	LastError      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type Site struct {
@@ -341,6 +470,17 @@ type Site struct {
 	SettingsStatus       string
 	SettingsError        string
 	TlsAutoRenew         bool
+	SystemAccountID      int64
+	DocumentRoot         string
+}
+
+type SitePolicyOverride struct {
+	SiteID        int64
+	SchemaVersion int32
+	PolicyPatch   json.RawMessage
+	UpdatedBy     sql.NullInt64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 type SiteTrafficCursor struct {
@@ -351,6 +491,24 @@ type SiteTrafficCursor struct {
 	PeriodStart  time.Time
 	TrafficBytes int64
 	UpdatedAt    time.Time
+}
+
+type StalwartAccount struct {
+	Name        interface{}
+	Type        string
+	Secret      string
+	Description string
+	Quota       interface{}
+}
+
+type StalwartDomain struct {
+	Name string
+}
+
+type StalwartEmail struct {
+	Name    interface{}
+	Address interface{}
+	Type    string
 }
 
 type Subscription struct {
@@ -409,6 +567,36 @@ type SubscriptionEntitlement struct {
 	AllowBackups          bool
 	AllowPhpSettings      bool
 	ServicePresets        json.RawMessage
+	HostingPolicy         json.RawMessage
+}
+
+type SubscriptionPolicyOverride struct {
+	SubscriptionID int64
+	SchemaVersion  int32
+	PolicyPatch    json.RawMessage
+	UpdatedBy      sql.NullInt64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type SubscriptionSystemAccount struct {
+	ID                int64
+	SubscriptionID    int64
+	Username          string
+	HomePath          string
+	LinuxUid          sql.NullInt32
+	ShellMode         string
+	DesiredState      string
+	AppliedState      string
+	ConvergenceStatus string
+	LastError         string
+	MigrationStatus   string
+	MigrationError    string
+	LegacyHomes       json.RawMessage
+	MigratedAt        sql.NullTime
+	CleanupAfter      sql.NullTime
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type SubscriptionUsageCurrent struct {

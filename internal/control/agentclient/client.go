@@ -109,6 +109,42 @@ func (c *Client) CreateSite(ctx context.Context, req types.CreateSiteReq) (types
 	})
 }
 
+func (c *Client) EnsureSubscriptionAccount(ctx context.Context, req types.EnsureSubscriptionAccountReq) (types.Response, error) {
+	return c.doTyped(ctx, types.OpEnsureSubscriptionAccount, req)
+}
+
+func (c *Client) ApplyScheduledTasks(ctx context.Context, req types.ApplyScheduledTasksReq) (types.Response, error) {
+	return c.doTyped(ctx, types.OpApplyScheduledTasks, req)
+}
+
+func (c *Client) MigrateSubscriptionAccount(ctx context.Context, req types.MigrateSubscriptionAccountReq) (types.Response, error) {
+	return c.doTyped(ctx, types.OpMigrateSubscriptionAccount, req)
+}
+
+func (c *Client) CleanupLegacyHomes(ctx context.Context, req types.CleanupLegacyHomesReq) (types.Response, error) {
+	return c.doTyped(ctx, types.OpCleanupLegacyHomes, req)
+}
+
+func (c *Client) ConfigureMail(ctx context.Context, req types.ConfigureMailReq) (types.Response, error) {
+	return c.doTyped(ctx, types.OpConfigureMail, req)
+}
+
+func (c *Client) CollectMailQueue(ctx context.Context) (types.Response, error) {
+	return c.Do(ctx, types.Request{Op: types.OpCollectMailQueue, ID: newID(), Data: json.RawMessage(`{}`)})
+}
+
+func (c *Client) EnsureApplication(ctx context.Context, req types.EnsureApplicationReq) (types.Response, error) {
+	return c.doTyped(ctx, types.OpEnsureApplication, req)
+}
+
+func (c *Client) doTyped(ctx context.Context, op string, payload any) (types.Response, error) {
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return types.Response{}, fmt.Errorf("marshal %s request: %w", op, err)
+	}
+	return c.Do(ctx, types.Request{Op: op, ID: newID(), Data: data})
+}
+
 func (c *Client) CreateDatabase(ctx context.Context, req types.CreateDatabaseReq) (types.Response, error) {
 	data, err := json.Marshal(req)
 	if err != nil {
@@ -133,6 +169,10 @@ func (c *Client) IssueCert(ctx context.Context, req types.IssueCertReq) (types.R
 		ID:   newID(),
 		Data: data,
 	})
+}
+
+func (c *Client) InstallCustomCert(ctx context.Context, req types.InstallCustomCertReq) (types.Response, error) {
+	return c.doTyped(ctx, types.OpInstallCustomCert, req)
 }
 
 func (c *Client) CreateBackup(ctx context.Context, req types.CreateBackupReq) (types.Response, error) {
