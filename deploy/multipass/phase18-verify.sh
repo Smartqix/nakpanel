@@ -29,9 +29,10 @@ REMOTE
 # command has finished; give every short exec a watchdog and retry on hang.
 mp_exec() {
   local budget="${MP_TIMEOUT:-120}"
-  local attempt pid waited
+  local attempt pid waited output_dir status
   for attempt in 1 2 3; do
-    multipass exec "$@" &
+    output_dir="$(mktemp -d "${TMPDIR:-/tmp}/nakpanel-mp.XXXXXX")"
+    multipass exec "$@" >"${output_dir}/stdout" 2>"${output_dir}/stderr" &
     pid=$!
     waited=0
     while kill -0 "${pid}" 2>/dev/null && [[ "${waited}" -lt "${budget}" ]]; do
@@ -41,11 +42,23 @@ mp_exec() {
     if kill -0 "${pid}" 2>/dev/null; then
       kill -9 "${pid}" 2>/dev/null || true
       wait "${pid}" 2>/dev/null || true
+      cat "${output_dir}/stdout" || true
+      cat "${output_dir}/stderr" >&2 || true
+      rm -rf "${output_dir}"
       echo "multipass exec watchdog fired (attempt ${attempt}): $*" >&2
       continue
     fi
-    wait "${pid}"
-    return $?
+    if wait "${pid}"; then
+      status=0
+    else
+      status=$?
+    fi
+    # Multipass has fully exited before output reaches a consumer such as
+    # grep -q, so an early-closing pipe cannot strand the exec process.
+    cat "${output_dir}/stdout" || true
+    cat "${output_dir}/stderr" >&2 || true
+    rm -rf "${output_dir}"
+    return "${status}"
   done
   echo "multipass exec kept hanging: $*" >&2
   return 124
