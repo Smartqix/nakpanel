@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,21 @@ import (
 
 	"github.com/nakroteck/nakpanel/internal/types"
 )
+
+type mailStatusRunner struct{}
+
+func (mailStatusRunner) Run(_ context.Context, name string, _ ...string) ([]byte, error) {
+	switch name {
+	case "systemctl":
+		return []byte("active\n"), nil
+	case "stalwart-mail":
+		return []byte("Stalwart Mail Server v0.12.3\n"), nil
+	case "ss":
+		return []byte("LISTEN 0 128 0.0.0.0:25 0.0.0.0:*\nLISTEN 0 128 [::]:993 [::]:*\nLISTEN 0 128 127.0.0.1:8446 0.0.0.0:*\n"), nil
+	default:
+		return nil, errors.New("unexpected command")
+	}
+}
 
 // staticStateRunner answers every `systemctl is-active` probe with one state.
 type staticStateRunner struct{ state string }
@@ -245,6 +261,29 @@ func TestCollectMailQueueAggregatesSenderDomains(t *testing.T) {
 	}
 	if result.TotalQueued != 4 || result.SenderDomains["compromised.test"] != 2 || result.SenderDomains["calm.test"] != 1 {
 		t.Fatalf("queue aggregation = %+v", result)
+	}
+}
+
+func TestMailStatusReportsServiceListenersAndQueue(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"data":{"items":[{"return_path":"a@example.test"},{"return_path":"b@example.test"}],"status":true}}`))
+	}))
+	defer server.Close()
+	secretPath := filepath.Join(t.TempDir(), "admin-secret")
+	if err := os.WriteFile(secretPath, []byte("not-rendered\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := NewMailProvisioner(MailProvisionerOptions{Runner: mailStatusRunner{}, AdminSecretPath: secretPath, ManagementURL: server.URL})
+	status, err := p.MailStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != "active" || status.Version != "Stalwart Mail Server v0.12.3" || status.TotalQueued != 2 {
+		t.Fatalf("mail status = %+v", status)
+	}
+	if len(status.Listeners) != 2 || status.Listeners[0] != 25 || status.Listeners[1] != 993 {
+		t.Fatalf("mail listeners = %v", status.Listeners)
 	}
 }
 

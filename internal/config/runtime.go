@@ -8,17 +8,20 @@ import (
 )
 
 type PanelRuntimeConfig struct {
-	HTTPSAddr          string
-	DatabaseURL        string
-	TLSDir             string
-	SMTPHost           string
-	SMTPPort           int
-	SMTPUsername       string
-	SMTPPassword       string
-	SMTPFrom           string
-	SMTPTLSMode        string
-	FileTransferDir    string
-	FileUploadMaxBytes int64
+	HTTPSAddr            string
+	DatabaseURL          string
+	TLSDir               string
+	SMTPHost             string
+	SMTPPort             int
+	SMTPUsername         string
+	SMTPPassword         string
+	SMTPFrom             string
+	SMTPTLSMode          string
+	FileTransferDir      string
+	FileUploadMaxBytes   int64
+	PublicURL            string
+	BillingWebhookURL    string
+	BillingWebhookSecret string
 }
 
 func PanelRuntimeConfigFromEnv() PanelRuntimeConfig {
@@ -41,17 +44,20 @@ func PanelRuntimeConfigFromEnv() PanelRuntimeConfig {
 		tlsMode = "starttls"
 	}
 	return PanelRuntimeConfig{
-		HTTPSAddr:          fmt.Sprintf(":%d", PanelPort),
-		DatabaseURL:        databaseURL,
-		TLSDir:             tlsDir,
-		SMTPHost:           strings.TrimSpace(os.Getenv("NAKPANEL_SMTP_HOST")),
-		SMTPPort:           smtpPort,
-		SMTPUsername:       strings.TrimSpace(os.Getenv("NAKPANEL_SMTP_USERNAME")),
-		SMTPPassword:       os.Getenv("NAKPANEL_SMTP_PASSWORD"),
-		SMTPFrom:           strings.TrimSpace(os.Getenv("NAKPANEL_SMTP_FROM")),
-		SMTPTLSMode:        tlsMode,
-		FileTransferDir:    firstConfigured(os.Getenv("NAKPANEL_FILE_TRANSFER_DIR"), FileTransferDir),
-		FileUploadMaxBytes: positiveInt64(os.Getenv("NAKPANEL_FILE_UPLOAD_MAX_BYTES"), DefaultFileUploadMaxBytes),
+		HTTPSAddr:            fmt.Sprintf(":%d", PanelPort),
+		DatabaseURL:          databaseURL,
+		TLSDir:               tlsDir,
+		SMTPHost:             strings.TrimSpace(os.Getenv("NAKPANEL_SMTP_HOST")),
+		SMTPPort:             smtpPort,
+		SMTPUsername:         strings.TrimSpace(os.Getenv("NAKPANEL_SMTP_USERNAME")),
+		SMTPPassword:         os.Getenv("NAKPANEL_SMTP_PASSWORD"),
+		SMTPFrom:             strings.TrimSpace(os.Getenv("NAKPANEL_SMTP_FROM")),
+		SMTPTLSMode:          tlsMode,
+		FileTransferDir:      firstConfigured(os.Getenv("NAKPANEL_FILE_TRANSFER_DIR"), FileTransferDir),
+		FileUploadMaxBytes:   positiveInt64(os.Getenv("NAKPANEL_FILE_UPLOAD_MAX_BYTES"), DefaultFileUploadMaxBytes),
+		PublicURL:            strings.TrimRight(strings.TrimSpace(os.Getenv("NAKPANEL_PUBLIC_URL")), "/"),
+		BillingWebhookURL:    strings.TrimSpace(os.Getenv("NAKPANEL_BILLING_WEBHOOK_URL")),
+		BillingWebhookSecret: os.Getenv("NAKPANEL_BILLING_WEBHOOK_SECRET"),
 	}
 }
 

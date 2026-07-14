@@ -95,7 +95,7 @@ func (s *Server) handleSFTPIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, subscriptionID, "sftp_identity.saved", "sftp_identity", id, nil)
-	s.redirectSubscriptionService(w, r, subscriptionID, "access")
+	s.redirectSubscriptionService(w, r, user, subscriptionID, "access")
 }
 
 func (s *Server) handleScheduledTask(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +115,7 @@ func (s *Server) handleScheduledTask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, subscriptionID, "scheduled_task.saved", "scheduled_task", id, nil)
-	s.redirectSubscriptionService(w, r, subscriptionID, "tasks")
+	s.redirectSubscriptionService(w, r, user, subscriptionID, "tasks")
 }
 
 func (s *Server) handleMailDomain(w http.ResponseWriter, r *http.Request) {
@@ -129,8 +129,12 @@ func (s *Server) handleMailDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	input := types.MailDomainInput{
 		ID: parseFormInt64Default(r, "resource_id", 0), SiteID: parseFormInt64Default(r, "site_id", 0),
-		Domain: strings.TrimSpace(r.Form.Get("domain")), Enabled: formBoolDefault(r, "enabled", true),
-		DKIM: formBoolDefault(r, "dkim", true), DMARCPolicy: policy, CatchAll: strings.TrimSpace(r.Form.Get("catch_all")),
+		Enabled: formBoolDefault(r, "enabled", true),
+		DKIM:    formBoolDefault(r, "dkim", true), DMARCPolicy: policy, CatchAll: strings.TrimSpace(r.Form.Get("catch_all")),
+	}
+	if input.SiteID <= 0 {
+		http.Error(w, "A hosted domain is required", http.StatusBadRequest)
+		return
 	}
 	id, err := services.UpsertMailDomain(r.Context(), user, subscriptionID, input)
 	if err != nil {
@@ -138,7 +142,7 @@ func (s *Server) handleMailDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, subscriptionID, "mail_domain.saved", "mail_domain", id, nil)
-	s.redirectSubscriptionService(w, r, subscriptionID, "mail")
+	s.redirectSubscriptionService(w, r, user, subscriptionID, "mail")
 }
 
 func (s *Server) handleMailbox(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +161,7 @@ func (s *Server) handleMailbox(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, subscriptionID, "mailbox.saved", "mailbox", id, nil)
-	s.redirectSubscriptionService(w, r, subscriptionID, "mail")
+	s.redirectSubscriptionService(w, r, user, subscriptionID, "mail")
 }
 
 func (s *Server) handleMailAlias(w http.ResponseWriter, r *http.Request) {
@@ -181,7 +185,7 @@ func (s *Server) handleMailAlias(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, subscriptionID, "mail_alias.saved", "mail_alias", id, nil)
-	s.redirectSubscriptionService(w, r, subscriptionID, "mail")
+	s.redirectSubscriptionService(w, r, user, subscriptionID, "mail")
 }
 
 func (s *Server) handleApplication(w http.ResponseWriter, r *http.Request) {
@@ -209,7 +213,7 @@ func (s *Server) handleApplication(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, subscriptionID, "application.saved", "application", id, nil)
-	s.redirectSubscriptionService(w, r, subscriptionID, "applications")
+	s.redirectSubscriptionService(w, r, user, subscriptionID, "applications")
 }
 
 func (s *Server) handleDeleteSubscriptionService(w http.ResponseWriter, r *http.Request) {
@@ -229,7 +233,7 @@ func (s *Server) handleDeleteSubscriptionService(w http.ResponseWriter, r *http.
 	}
 	s.recordAudit(r.Context(), user, 0, subscriptionID, kind+".deleted", kind, resourceID, nil)
 	tab := map[string]string{"sftp": "access", "task": "tasks", "mail": "mail", "mailbox": "mail", "mail_alias": "mail", "application": "applications"}[kind]
-	s.redirectSubscriptionService(w, r, subscriptionID, tab)
+	s.redirectSubscriptionService(w, r, user, subscriptionID, tab)
 }
 
 func (s *Server) subscriptionServiceRequest(w http.ResponseWriter, r *http.Request) (auth.SessionUser, int64, SubscriptionServices, bool) {
@@ -249,6 +253,14 @@ func (s *Server) subscriptionServiceRequest(w http.ResponseWriter, r *http.Reque
 	return user, subscriptionID, services, true
 }
 
-func (s *Server) redirectSubscriptionService(w http.ResponseWriter, r *http.Request, subscriptionID int64, tab string) {
+func (s *Server) redirectSubscriptionService(w http.ResponseWriter, r *http.Request, user auth.SessionUser, subscriptionID int64, tab string) {
+	if r.Form.Get("return_to") == "site-mail" {
+		s.redirectSiteMail(w, r, user, parseFormInt64Default(r, "site_id", 0), subscriptionID, "", "service-saved")
+		return
+	}
+	if r.Form.Get("return_to") == "mail" {
+		http.Redirect(w, r, "/mail?subscription_id="+strconv.FormatInt(subscriptionID, 10)+"&notice=service-saved", http.StatusSeeOther)
+		return
+	}
 	http.Redirect(w, r, "/subscriptions/"+strconv.FormatInt(subscriptionID, 10)+"?tab="+tab+"&notice=service-saved", http.StatusSeeOther)
 }

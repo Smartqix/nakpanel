@@ -15,7 +15,7 @@ ensure_vm 2 3G 16G
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"
-"${ROOT_DIR}/deploy/multipass/phase18-verify.sh"
+"${ROOT_DIR}/deploy/multipass/phase19-verify.sh"
 
 VM_IP="$(vm_ip)"
 if [[ -z "${VM_IP}" ]]; then

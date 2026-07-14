@@ -20,6 +20,8 @@ management, and migration-sensitive control-plane behavior.
 - Customer records, service plans, subscriptions, and entitlement checks.
 - Site, database, TLS, backup, restore, DNS, webmail, and reconciliation jobs
   through River.
+- First-class, subscription-scoped Mail workspace for domains, mailboxes,
+  aliases, DKIM/DMARC, webmail, and administrator Stalwart controls.
 - `panelctl` operator and recovery commands that work without the web listener,
   while retaining subscription, quota, lifecycle, audit, and River gates.
 - ACME, self-signed, and system-trusted custom site certificates with atomic
@@ -101,8 +103,9 @@ deploy/multipass/deployment-verify.sh
 
 This creates a fresh `nakpanel-lab` Ubuntu 24.04 Multipass VM, removes old
 Nakpanel phase VMs, installs the service stack, runs migrations, builds the
-panel, agent, and CLI, installs systemd units, and runs the full Phase 18 verification
-chain (through mailbox hosting on Stalwart; see `docs/MAIL.md`).
+panel, agent, and CLI, installs systemd units, and runs the full Phase 19
+verification chain (through the routed Mail workspace and Stalwart server
+controls; see `docs/MAIL.md`).
 
 The verifier intentionally refuses to delete Multipass VMs whose names do not
 start with `nakpanel-`. Non-Nakpanel VMs such as unrelated local test machines
@@ -145,6 +148,9 @@ Important environment variables:
 | `NAKPANEL_ACME_DIRECTORY_URL` | ACME directory URL for certificate issuance. |
 | `NAKPANEL_ACME_ACCOUNT_KEY` | Path to the ACME account key. |
 | `NAKPANEL_ACME_EMAIL` | ACME account email. |
+| `NAKPANEL_PUBLIC_URL` | Canonical HTTPS panel origin used for five-minute customer SSO links. |
+| `NAKPANEL_BILLING_WEBHOOK_URL` | Optional external billing webhook endpoint; HTTPS is required except for loopback tests. |
+| `NAKPANEL_BILLING_WEBHOOK_SECRET` | HMAC-SHA256 webhook secret. Configure it only with the webhook URL. |
 | `NAKPANEL_MULTIPASS_VM` | Multipass VM name for deployment verification. Defaults to `nakpanel-lab`. |
 | `NAKPANEL_MULTIPASS_IMAGE` | Multipass image for deployment verification. Defaults to `24.04`. |
 
@@ -182,7 +188,18 @@ sudo -u nakpanel panelctl site reconcile example.test
 sudo -u nakpanel panelctl backup create example.test
 sudo -u nakpanel panelctl reconcile --system
 sudo -u nakpanel panelctl agent ping
+sudo -u nakpanel panelctl api-key create --name billing --cidrs 203.0.113.0/24
+sudo -u nakpanel panelctl api-key list
 ```
+
+The API key command prints the full `npk_...` value exactly once. Nakpanel stores
+only its prefix, per-key salt, and SHA-256 digest. External billing uses the
+bearer-authenticated `/api/v1` provisioning API; cookie sessions and CSRF tokens
+are intentionally not accepted on those routes. Provider-scoped plans are
+discoverable through `/api/v1/plans?provider=admin` or a `reseller:{id}` provider.
+
+Phase 20 deployment and contract verification is available at
+`deploy/multipass/phase20-verify.sh`.
 
 Destructive commands require an interactive confirmation or `--yes`. Custom
 site certificates can be queued without placing key material in River:
@@ -246,10 +263,10 @@ dumps, or generated junk outside the project’s expected generated files.
 
 ## Project Status
 
-Nakpanel currently covers the core control-plane and provisioning path, but it
-does not yet claim full cPanel/Plesk parity. Billing, invoices, mailbox
-management, advanced reseller hierarchy, and full production hardening are
-future work unless explicitly implemented in the codebase.
+Nakpanel currently covers the core control-plane, hosting provisioning, mail
+workspace, and external billing provisioning API, but it does not yet claim
+full cPanel/Plesk parity. Billing invoices, advanced reseller hierarchy, and
+full production hardening remain external or future work.
 
 ## License
 

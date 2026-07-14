@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"context"
+	"regexp"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -127,15 +128,16 @@ func TestSearchUsesActorRoleAndIdentity(t *testing.T) {
 	defer db.Close()
 	store := NewStore(db)
 	client := auth.SessionUser{ID: 42, Role: auth.RoleClient}
-	mock.ExpectQuery("WITH visible_customers").WithArgs("demo", "client", int64(42), 8).
+	mock.ExpectQuery(regexp.QuoteMeta("CASE WHEN site.id IS NULL THEN '/subscriptions/' || sub.id || '?tab=mail' ELSE '/sites/' || site.id || '?tab=mail' END")).WithArgs("demo", "client", int64(42), 8).
 		WillReturnRows(sqlmock.NewRows([]string{"kind", "id", "label", "detail", "url"}).
-			AddRow("site", int64(7), "demo.test", "active", "/sites/7"))
+			AddRow("site", int64(7), "demo.test", "active", "/sites/7").
+			AddRow("mailbox", int64(8), "hello@demo.test", "Demo hosting", "/sites/7?tab=mail"))
 
 	results, err := store.Search(context.Background(), client, " demo ", 8)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	if len(results) != 1 || results[0].URL != "/sites/7" {
+	if len(results) != 2 || results[0].URL != "/sites/7" || results[1].URL != "/sites/7?tab=mail" {
 		t.Fatalf("results = %#v", results)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
