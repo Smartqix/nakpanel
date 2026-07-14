@@ -32,6 +32,7 @@ type WorkspaceView struct {
 	Title                string
 	DetailID             int64
 	SelectedSubscription int64
+	SelectedMailDomain   int64
 	CSRFToken            string
 	SupportCustomerID    int64
 	SupportCustomerName  string
@@ -44,6 +45,8 @@ type WorkspaceView struct {
 	Tab                  string
 	FileManager          *FileManagerView
 	FileEditor           *FileEditorView
+	MailSettings         types.MailSettingsView
+	MailSettingsError    string
 }
 
 type FileManagerView struct {
@@ -151,6 +154,8 @@ func routeTitle(route string) string {
 		return "DNS"
 	case "certificates":
 		return "SSL/TLS Certificates"
+	case "mail":
+		return "Mail"
 	case "activity":
 		return "Activity"
 	case "customers", "customer-detail":

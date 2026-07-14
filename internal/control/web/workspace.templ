@@ -78,6 +78,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 			} else {
 				<span class="np-nav-label">Hosting services</span>
 				@navRoute(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(sitesForCustomer(data.Sites, view.SupportCustomerID))))
+				@navRoute(workspacePath(view, "/mail"), "Mail", "mail", routeActive(view.Route, "mail"), formatBadgeCount(len(data.SubscriptionServices.Mailboxes)))
 				@navRoute(workspacePath(view, "/subscriptions"), "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail"), formatBadgeCount(len(data.Subscriptions)))
 				@navRoute(workspacePath(view, "/databases"), "Databases", "database", routeActive(view.Route, "databases"), formatBadgeCount(len(databasesForCustomer(data.Databases, view.SupportCustomerID))))
 				@navRoute(workspacePath(view, "/backups"), "Backups", "archive", routeActive(view.Route, "backups"), "")
@@ -169,6 +170,8 @@ templ routedContent(user auth.SessionUser, data dashboard.Data, actions Dashboar
 			@routedDNS(data.Phase6, sitesForCustomer(data.Sites, view.SupportCustomerID), actions, view)
 		case "certificates":
 			@routedCertificates(sitesForCustomer(data.Sites, view.SupportCustomerID), actions, view)
+		case "mail":
+			@routedMail(user, data, view)
 		case "activity":
 			@routedActivity(data, user, view)
 		case "customers":
@@ -200,7 +203,7 @@ templ routedContent(user auth.SessionUser, data dashboard.Data, actions Dashboar
 				<p class="np-empty">Reseller plan not found.</p>
 			}
 		case "tools-settings":
-			@settingsSection(data, actions, view.CSRFToken)
+			@settingsSection(data, actions, view)
 		case "resellers":
 			@routedResellers(data, view)
 		case "reseller-detail":
@@ -292,6 +295,7 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 				}
 				@domainTab(item.ID, "hosting", "Hosting", view.Tab, view)
 				@domainTab(item.ID, "php", "PHP", view.Tab, view)
+				@domainTab(item.ID, "mail", "Mail", view.Tab, view)
 				@domainTab(item.ID, "dns", "DNS", view.Tab, view)
 				@domainTab(item.ID, "ssl", "SSL/TLS", view.Tab, view)
 				@domainTab(item.ID, "databases", "Databases", view.Tab, view)
@@ -304,7 +308,7 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 						if actions.CanUseFileManager {
 							<a href={ templ.SafeURL(fileBasePath(view,item.ID)) }>@icon("folder")<strong>File Manager</strong><span>Manage website content</span></a>
 						}
-						@domainTool(item.ID,"hosting","settings","Hosting","Status and HTTPS",view)@domainTool(item.ID,"php","activity","PHP","Runtime configuration",view)@domainTool(item.ID,"dns","network","DNS","Zone and records",view)@domainTool(item.ID,"ssl","shield","SSL/TLS","Certificates",view)@domainTool(item.ID,"databases","database","Databases","Site data",view)@domainTool(item.ID,"backups","archive","Backups","Recovery points",view)
+						@domainTool(item.ID,"hosting","settings","Hosting","Status and HTTPS",view)@domainTool(item.ID,"php","activity","PHP","Runtime configuration",view)@domainTool(item.ID,"mail","mail","Mail","Mailboxes and aliases",view)@domainTool(item.ID,"dns","network","DNS","Zone and records",view)@domainTool(item.ID,"ssl","shield","SSL/TLS","Certificates",view)@domainTool(item.ID,"databases","database","Databases","Site data",view)@domainTool(item.ID,"backups","archive","Backups","Recovery points",view)
 					</div></section>
 				</div>
 			} else if view.Tab == "hosting" {
@@ -336,6 +340,8 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 						</form>
 					}
 				</section>
+			} else if view.Tab == "mail" {
+				@domainMail(user, item, subscription, data, view)
 			} else if view.Tab == "dns" {
 				@domainDNS(user, item, data.Phase6, subscription, actions, view)
 			} else if view.Tab == "ssl" {
@@ -951,39 +957,20 @@ templ subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashbo
 }
 
 templ subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
-	<section class="np-panel"><div class="np-panel-title"><div><h2>Mail</h2><span class="np-muted">Stalwart domains and signing policy</span></div></div>
-		<div class="np-object-list">
-			for _, item := range mailForSubscription(data.SubscriptionServices.MailDomains,subscription.ID) {
-				<div class="np-object-row"><span class="np-object-icon">@icon("mail")</span><span><strong>{ item.Domain }</strong><small>DKIM { formatEnabled(item.DKIM) } · DMARC { item.DMARCPolicy }</small></span>@statusPill(item.Status)@subscriptionServiceDelete(subscription.ID,"mail",item.ID,view)</div>
-			}
-		</div>
-		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mail-domains") }>@csrfInput(view)<div class="np-form-grid"><label>Domain<select name="domain">
-			for _, site := range sitesForSubscription(data.Sites,subscription.ID) {
-				<option value={ site.Domain }>{ site.Domain }</option>
-			}
-		</select></label><label>DMARC policy<select name="dmarc_policy"><option value="none">Monitor</option><option value="quarantine">Quarantine</option><option value="reject">Reject</option></select></label><label class="np-check"><input type="checkbox" name="dkim" value="true" checked/>DKIM signing</label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Enable mail domain</button></form>
-		<div class="np-panel-title"><div><h3>Mailboxes</h3><span class="np-muted">Accounts served by Stalwart IMAP/SMTP</span></div></div>
-		<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Address</th><th>Quota</th><th>Status</th><th></th></tr></thead><tbody>
-			for _, item := range mailboxesForSubscription(data.SubscriptionServices.Mailboxes,subscription.ID) {
-				<tr><td data-label="Address">{ item.Address }</td><td data-label="Quota">{ formatMailboxQuota(item.QuotaMB) }</td><td data-label="Status">{ formatEnabled(item.Enabled) }</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID,"mailbox",item.ID,view)</td></tr>
-			}
-		</tbody></table></div>
-		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mailboxes") }>@csrfInput(view)<div class="np-form-grid"><label>Mail domain<select name="mail_domain_id">
-			for _, item := range mailForSubscription(data.SubscriptionServices.MailDomains,subscription.ID) {
-				<option value={ formatJobID(item.ID) }>{ item.Domain }</option>
-			}
-		</select></label><label>Local part<input name="local_part" placeholder="user" required/></label><label>Password<input type="password" name="password" autocomplete="new-password" minlength="12" required/></label><label>Quota MB<input type="number" min="-1" name="quota_mb" value="0"/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Create mailbox</button></form>
-		<div class="np-panel-title"><div><h3>Aliases &amp; forwarders</h3><span class="np-muted">Deliver an address to one or more mailboxes of this subscription</span></div></div>
-		<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Address</th><th>Destinations</th><th></th></tr></thead><tbody>
-			for _, item := range mailAliasesForSubscription(data.SubscriptionServices.MailAliases,subscription.ID) {
-				<tr><td data-label="Address">{ item.Address }</td><td data-label="Destinations">{ item.Destinations }</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID,"mail_alias",item.ID,view)</td></tr>
-			}
-		</tbody></table></div>
-		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mail-aliases") }>@csrfInput(view)<div class="np-form-grid"><label>Mail domain<select name="mail_domain_id">
-			for _, item := range mailForSubscription(data.SubscriptionServices.MailDomains,subscription.ID) {
-				<option value={ formatJobID(item.ID) }>{ item.Domain }</option>
-			}
-		</select></label><label>Local part<input name="local_part" placeholder="sales" required/></label><label class="np-wide-field">Destination mailboxes<input name="destinations" placeholder="user@example.com, other@example.com" required/></label></div><button type="submit">Create alias</button></form>
+	<section class="np-panel"><div class="np-panel-title"><div><h2>Mail domains</h2><span class="np-muted">Mail is managed from each hosted domain</span></div></div>
+		if len(sitesForSubscription(data.Sites,subscription.ID)) == 0 {
+			<p class="np-empty">No domains are hosted by this subscription.</p>
+		} else {
+			<div class="np-object-list">
+				for _, site := range sitesForSubscription(data.Sites,subscription.ID) {
+					if domain, found := mailDomainForSite(data.SubscriptionServices.MailDomains,site); found {
+						<a class="np-object-row" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=mail") }><span class="np-object-icon">@icon("mail")</span><span><strong>{ site.Domain }</strong><small>{ formatPlanLimit(len(mailboxesForWorkspace(data.SubscriptionServices.Mailboxes,[]dashboard.MailDomain{domain}))) } mailboxes · DKIM { formatEnabled(domain.DKIM) } · DMARC { domain.DMARCPolicy }</small></span>@statusPill(domain.Status)<span class="np-secondary-button">Manage Mail</span></a>
+					} else {
+						<a class="np-object-row" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=mail") }><span class="np-object-icon">@icon("mail")</span><span><strong>{ site.Domain }</strong><small>Mail service is not configured</small></span>@statusPill("not configured")<span class="np-secondary-button">Configure Mail</span></a>
+					}
+				}
+			</div>
+		}
 	</section>
 }
 

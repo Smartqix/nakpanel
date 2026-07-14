@@ -127,7 +127,7 @@ REMOTE
 SUBSCRIPTION_ID="$(db_value "SELECT subscription_id FROM sites WHERE domain='${DOMAIN}'")"
 [[ -n "${SUBSCRIPTION_ID}" ]] || fail "no subscription hosts ${DOMAIN}"
 # Give the subscription a mailbox entitlement of 2 (fail-closed gate below).
-mp_exec "${VM_NAME}" -- bash -c "sudo -u postgres psql -qd nakpanel -c \"UPDATE subscription_entitlements SET max_mailboxes=2, hosting_policy='{\\\"schema_version\\\":1}'::jsonb WHERE subscription_id=${SUBSCRIPTION_ID}\""
+mp_exec "${VM_NAME}" -- bash -c "sudo -u postgres psql -qd nakpanel -c \"UPDATE subscription_entitlements SET max_mailboxes=2, hosting_policy=jsonb_set(jsonb_set(jsonb_set(('{\\\"resources\\\":{},\\\"permissions\\\":{},\\\"mail\\\":{}}'::jsonb || COALESCE(hosting_policy,'{}'::jsonb)),'{resources,max_mailboxes}','2'::jsonb,true),'{permissions,mail}','true'::jsonb,true),'{mail}',COALESCE(hosting_policy->'mail','{}'::jsonb) || '{\\\"enabled\\\":true,\\\"webmail\\\":true}'::jsonb,true) WHERE subscription_id=${SUBSCRIPTION_ID}\""
 
 # Ensure the panel manages the domain's DNS zone.
 panel_ready=0

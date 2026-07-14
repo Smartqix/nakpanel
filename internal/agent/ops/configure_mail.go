@@ -459,3 +459,45 @@ func (p *MailProvisioner) CollectMailQueue(ctx context.Context) (types.CollectMa
 	}
 	return result, nil
 }
+
+func (p *MailProvisioner) MailStatus(ctx context.Context) (types.MailServerStatus, error) {
+	status := types.MailServerStatus{State: "unknown", TotalQueued: -1, CheckedAt: time.Now().UTC()}
+	state, stateErr := p.runner.Run(ctx, "systemctl", "show", "--property=ActiveState", "--value", p.service)
+	if stateErr == nil {
+		status.State = strings.TrimSpace(string(state))
+	} else {
+		status.LastError = "service status unavailable"
+	}
+	if version, err := p.runner.Run(ctx, "stalwart-mail", "--version"); err == nil {
+		status.Version = strings.TrimSpace(string(version))
+	}
+	if listeners, err := p.runner.Run(ctx, "ss", "-ltnH"); err == nil {
+		wanted := map[int]bool{25: true, 143: true, 465: true, 587: true, 993: true}
+		seen := map[int]bool{}
+		for _, field := range strings.Fields(string(listeners)) {
+			_, portText, err := net.SplitHostPort(field)
+			if err != nil {
+				if index := strings.LastIndex(field, ":"); index >= 0 {
+					portText = field[index+1:]
+				}
+			}
+			port, _ := strconv.Atoi(portText)
+			if wanted[port] && !seen[port] {
+				seen[port] = true
+				status.Listeners = append(status.Listeners, port)
+			}
+		}
+		sort.Ints(status.Listeners)
+	}
+	if status.State == "active" {
+		queue, err := p.CollectMailQueue(ctx)
+		if err != nil {
+			if status.LastError == "" {
+				status.LastError = "mail queue unavailable"
+			}
+		} else {
+			status.TotalQueued = queue.TotalQueued
+		}
+	}
+	return status, nil
+}

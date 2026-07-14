@@ -513,6 +513,25 @@ allow_backups=EXCLUDED.allow_backups,allow_php_settings=EXCLUDED.allow_php_setti
 	return err
 }
 
+// ValidateProvisioningCapacityTx applies the same provider and server-capacity
+// gates used by the panel while an external provisioning transaction is open.
+func ValidateProvisioningCapacityTx(ctx context.Context, tx *sql.Tx, resellerID, subscriptionID int64) error {
+	entitlements, err := readSubscriptionEntitlementsTx(ctx, tx, subscriptionID)
+	if err != nil {
+		return err
+	}
+	if resellerID > 0 {
+		if err = ensureResellerActiveTx(ctx, tx, resellerID); err != nil {
+			return err
+		}
+		if err = validateResellerCapacityTx(ctx, tx, resellerID, subscriptionID, entitlements); err != nil {
+			return err
+		}
+	}
+	_, err = subscriptionOversellWarningForSubscriptionTx(ctx, tx, subscriptionID, planFromEntitlements(entitlements), "active")
+	return err
+}
+
 func readSubscriptionEntitlementsTx(ctx context.Context, tx *sql.Tx, subscriptionID int64) (types.SubscriptionEntitlements, error) {
 	var e types.SubscriptionEntitlements
 	var presets, hostingPolicy []byte

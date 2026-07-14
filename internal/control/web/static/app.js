@@ -197,6 +197,54 @@
     }, 180);
   }
 
+  function securePassword(length) {
+    var groups = ["ABCDEFGHJKLMNPQRSTUVWXYZ", "abcdefghijkmnopqrstuvwxyz", "23456789", "!@#$%*-_+"];
+    var alphabet = groups.join("");
+    var bytes = new Uint32Array(length);
+    window.crypto.getRandomValues(bytes);
+    var password = groups.map(function (group, index) { return group[bytes[index] % group.length]; });
+    for (var i = groups.length; i < length; i += 1) password.push(alphabet[bytes[i] % alphabet.length]);
+    for (var j = password.length - 1; j > 0; j -= 1) {
+      var swap = bytes[j] % (j + 1);
+      var value = password[j];
+      password[j] = password[swap];
+      password[swap] = value;
+    }
+    return password.join("");
+  }
+
+  function passwordInput(trigger) {
+    var field = trigger && trigger.closest(".np-password-field");
+    return field && field.querySelector("[data-np-generated-password]");
+  }
+
+  function loadMailStatus() {
+    var status = document.querySelector("[data-np-mail-status]");
+    if (!status || !window.fetch) return;
+    fetch("/mail/status", { credentials: "same-origin" })
+      .then(function (response) { return response.json().then(function (data) { if (!response.ok || !data.ok) throw new Error("status unavailable"); return data.status; }); })
+      .then(function (data) {
+        var state = document.querySelector("[data-np-mail-state]");
+        var version = document.querySelector("[data-np-mail-version]");
+        var listeners = document.querySelector("[data-np-mail-listeners]");
+        var queue = document.querySelector("[data-np-mail-queue]");
+		var error = document.querySelector("[data-np-mail-status-error]");
+        if (state) { state.textContent = data.state || "unknown"; state.className = "np-pill " + (data.state === "active" ? "np-pill-ok" : "np-pill-fail"); }
+        if (version) version.textContent = data.version || data.state || "Unknown";
+        if (listeners) listeners.textContent = (data.listeners || []).join(", ") || "None detected";
+        if (queue) queue.textContent = String(data.total_queued || 0);
+		if (error) { error.textContent = data.last_error || ""; error.hidden = !data.last_error; }
+      })
+      .catch(function () {
+        var state = document.querySelector("[data-np-mail-state]");
+        var version = document.querySelector("[data-np-mail-version]");
+        if (state) { state.textContent = "unavailable"; state.className = "np-pill np-pill-fail"; }
+        if (version) version.textContent = "Status unavailable";
+		var error = document.querySelector("[data-np-mail-status-error]");
+		if (error) { error.textContent = "Could not read Stalwart status from the agent."; error.hidden = false; }
+      });
+  }
+
   function submitSite(form) {
     var submit = form.querySelector("[data-np-create-submit]");
     var gate = form.querySelector("[data-np-customer-gate]");
@@ -534,6 +582,25 @@
     if (event.target.matches("dialog[open]")) closeDialog(event.target);
     var confirmButton = event.target.closest("[data-np-confirm]");
     if (confirmButton && !window.confirm(confirmButton.getAttribute("data-np-confirm"))) event.preventDefault();
+    var generator = event.target.closest("[data-np-generate-password]");
+    if (generator) {
+      var generatedInput = passwordInput(generator);
+      if (generatedInput && window.crypto && window.crypto.getRandomValues) {
+        generatedInput.value = securePassword(24);
+        generatedInput.type = "text";
+        generatedInput.dispatchEvent(new Event("input", { bubbles: true }));
+      }
+    }
+    var copier = event.target.closest("[data-np-copy-password]");
+    if (copier) {
+      var copyInput = passwordInput(copier);
+      if (copyInput && copyInput.value && navigator.clipboard) {
+        navigator.clipboard.writeText(copyInput.value).then(function () {
+          copier.setAttribute("title", "Copied");
+          window.setTimeout(function () { copier.setAttribute("title", "Copy password"); }, 1500);
+        });
+      }
+    }
     var planTab = event.target.closest("[data-np-plan-tab]");
     if (planTab) {
       event.preventDefault();
@@ -696,4 +763,5 @@
   each("[data-np-unlimited]", document, updateUnlimited);
   each("[data-np-file-manager]", document, updateFileSelection);
   initializeCodeEditor();
+  loadMailStatus();
 })();

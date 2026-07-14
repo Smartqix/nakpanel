@@ -365,6 +365,7 @@ type fakePhase6Manager struct {
 	adminerOwner          auth.SessionUser
 	restoreOwner          auth.SessionUser
 	restoreBackup         int64
+	err                   error
 }
 
 type fakeWorkspaceService struct {
@@ -403,7 +404,7 @@ func (m *fakePhase6Manager) CreateBackupFor(ctx context.Context, owner auth.Sess
 func (m *fakePhase6Manager) ConfigureWebmail(ctx context.Context, owner auth.SessionUser, domain string) (int64, error) {
 	m.webmailOwner = owner
 	m.webmailDomain = domain
-	return 102, nil
+	return 102, m.err
 }
 
 func (m *fakePhase6Manager) ConfigureDNS(ctx context.Context, owner auth.SessionUser, domain string, address string) (int64, error) {
@@ -919,10 +920,11 @@ func TestAdminCanUsePhase6Actions(t *testing.T) {
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
 	tests := []struct {
-		name   string
-		target string
-		form   url.Values
-		check  func(t *testing.T)
+		name           string
+		target         string
+		form           url.Values
+		locationPrefix string
+		check          func(t *testing.T)
 	}{
 		{
 			name:   "backup",
@@ -935,9 +937,10 @@ func TestAdminCanUsePhase6Actions(t *testing.T) {
 			},
 		},
 		{
-			name:   "webmail",
-			target: "https://panel.test/webmail",
-			form:   url.Values{"domain": {"example.test"}},
+			name:           "webmail",
+			target:         "https://panel.test/webmail",
+			form:           url.Values{"domain": {"example.test"}},
+			locationPrefix: "/mail?notice=",
 			check: func(t *testing.T) {
 				if manager.webmailOwner.Role != auth.RoleAdmin || manager.webmailDomain != "example.test" {
 					t.Fatalf("webmail request = owner:%#v domain:%q", manager.webmailOwner, manager.webmailDomain)
@@ -987,8 +990,12 @@ func TestAdminCanUsePhase6Actions(t *testing.T) {
 			if rec.Code != http.StatusSeeOther {
 				t.Fatalf("POST %s status = %d, want 303; body:\n%s", test.target, rec.Code, rec.Body.String())
 			}
-			if location := rec.Header().Get("Location"); !strings.HasPrefix(location, "/?notice=") {
-				t.Fatalf("Location = %q, want dashboard notice redirect", location)
+			locationPrefix := test.locationPrefix
+			if locationPrefix == "" {
+				locationPrefix = "/?notice="
+			}
+			if location := rec.Header().Get("Location"); !strings.HasPrefix(location, locationPrefix) {
+				t.Fatalf("Location = %q, want %q prefix", location, locationPrefix)
 			}
 			test.check(t)
 		})
@@ -1101,7 +1108,6 @@ func TestClientCannotUsePhase6Actions(t *testing.T) {
 
 	for _, target := range []string{
 		"https://panel.test/backups",
-		"https://panel.test/webmail",
 		"https://panel.test/dns",
 		"https://panel.test/reconcile",
 		"https://panel.test/restores",
@@ -1117,14 +1123,23 @@ func TestClientCannotUsePhase6Actions(t *testing.T) {
 		}
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/db", nil)
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/webmail", strings.NewReader("domain=example.test"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || manager.webmailOwner.Role != auth.RoleClient {
+		t.Fatalf("client webmail status=%d owner=%#v, want 303 client", rec.Code, manager.webmailOwner)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "https://panel.test/db", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("GET /db status = %d, want 403", rec.Code)
 	}
-	if manager.backupReq.Domain != "" || manager.webmailDomain != "" || manager.dnsDomain != "" || manager.reconcileOwner.Role != "" || manager.adminerOwner.Role != "" || manager.restoreOwner.Role != "" {
+	if manager.backupReq.Domain != "" || manager.webmailDomain != "example.test" || manager.dnsDomain != "" || manager.reconcileOwner.Role != "" || manager.adminerOwner.Role != "" || manager.restoreOwner.Role != "" {
 		t.Fatalf("client invoked phase6 manager: %#v", manager)
 	}
 }

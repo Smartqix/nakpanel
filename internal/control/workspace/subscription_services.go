@@ -119,6 +119,14 @@ LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id WHERE `
 			data.MailAliases = append(data.MailAliases, item)
 			return nil
 		}},
+		{`SELECT item.id,site.subscription_id,item.site_id,site.domain,item.hostname,item.status,item.config_path,item.last_error,item.created_at FROM webmail_hosts item JOIN sites site ON site.id=item.site_id JOIN subscriptions sub ON sub.id=site.subscription_id JOIN customers customer ON customer.id=sub.customer_id LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id WHERE ` + where + ` ORDER BY item.id`, func(rows *sql.Rows) error {
+			var item dashboard.WebmailHost
+			if err := rows.Scan(&item.ID, &item.SubscriptionID, &item.SiteID, &item.Domain, &item.Hostname, &item.Status, &item.ConfigPath, &item.LastError, &item.CreatedAt); err != nil {
+				return err
+			}
+			data.WebmailHosts = append(data.WebmailHosts, item)
+			return nil
+		}},
 		{`SELECT item.id,item.subscription_id,COALESCE(item.site_id,0),item.name,item.runtime,item.image_ref,item.desired_state,item.applied_state,item.convergence_status,item.last_error FROM application_instances item JOIN subscriptions sub ON sub.id=item.subscription_id JOIN customers customer ON customer.id=sub.customer_id LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id WHERE ` + where + ` ORDER BY item.id`, func(rows *sql.Rows) error {
 			var item dashboard.Application
 			if err := rows.Scan(&item.ID, &item.SubscriptionID, &item.SiteID, &item.Name, &item.Runtime, &item.ImageRef, &item.DesiredState, &item.AppliedState, &item.Status, &item.LastError); err != nil {

@@ -20,6 +20,17 @@ type fakeQuotaStore struct {
 	lastLimitUserID int64
 	lastLimitSubID  int64
 	lastUsageSubID  int64
+	mailSiteID      int64
+	mailSubID       int64
+	mailPolicy      types.HostingPolicy
+	mailPolicyErr   error
+}
+
+func (s *fakeQuotaStore) MailSitePolicy(context.Context, string) (int64, int64, types.HostingPolicy, error) {
+	if s.mailPolicyErr != nil {
+		return 0, 0, types.HostingPolicy{}, s.mailPolicyErr
+	}
+	return s.mailSiteID, s.mailSubID, s.mailPolicy, nil
 }
 
 func (s *fakeQuotaStore) GetLimits(ctx context.Context, userID int64) (controlquota.Limits, bool, error) {

@@ -93,6 +93,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runMail(ctx, service, args[1:], stdin, stdout, stderr)
 	case "subscription":
 		return runSubscription(ctx, service, args[1:], stdout, stderr)
+	case "api-key":
+		return runAPIKey(ctx, service, args[1:], stdin, stdout, stderr)
 	case "reconcile":
 		if len(args) != 2 || args[1] != "--system" {
 			return errors.New("usage: panelctl reconcile --system")
@@ -742,8 +744,87 @@ Commands:
   ssl renew DOMAIN [--yes] | ssl set-custom DOMAIN --cert FILE --key FILE [--chain FILE] [--yes]
   backup create DOMAIN | backup list [DOMAIN] | restore BACKUP-ID --yes
   plan list | subscription list [--customer EMAIL]
+  api-key create --name NAME [--cidrs CIDR,...] [--rate-limit N] [--expires DURATION|RFC3339]
+  api-key list | api-key revoke PREFIX --yes
   mail enable DOMAIN [--dkim=false] [--dmarc POLICY] | mail add ADDRESS [--quota-mb N]
   mail list DOMAIN | mail del ADDRESS --yes | mail alias add ADDRESS --to DEST[,DEST...]
   mail relay set --host HOST [--port N] | mail relay clear | mail settings [--rate-limit R]
   reconcile --system | agent ping`)
+}
+
+func runAPIKey(ctx context.Context, service *operator.Service, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	if len(args) == 0 {
+		return errors.New("usage: panelctl api-key create|list|revoke")
+	}
+	switch args[0] {
+	case "create":
+		set := flag.NewFlagSet("api-key create", flag.ContinueOnError)
+		set.SetOutput(stderr)
+		name := set.String("name", "", "API key name")
+		cidrsRaw := set.String("cidrs", "", "comma-separated CIDR allowlist")
+		rate := set.Int("rate-limit", 120, "requests per minute")
+		expiresRaw := set.String("expires", "", "duration or RFC3339 expiry")
+		if err := set.Parse(args[1:]); err != nil {
+			return err
+		}
+		var expires time.Time
+		if value := strings.TrimSpace(*expiresRaw); value != "" {
+			if duration, err := time.ParseDuration(value); err == nil {
+				expires = time.Now().Add(duration)
+			} else if expires, err = time.Parse(time.RFC3339, value); err != nil {
+				return errors.New("expires must be a duration or RFC3339 timestamp")
+			}
+		}
+		var cidrs []string
+		for _, value := range strings.Split(*cidrsRaw, ",") {
+			if value = strings.TrimSpace(value); value != "" {
+				cidrs = append(cidrs, value)
+			}
+		}
+		key, raw, err := service.CreateAPIKey(ctx, *name, cidrs, *rate, expires)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "API key %s created with prefix %s. This value is shown once:\n%s\n", key.Name, key.Prefix, raw)
+		return nil
+	case "list":
+		if len(args) != 1 {
+			return errors.New("usage: panelctl api-key list")
+		}
+		items, err := service.ListAPIKeys(ctx)
+		if err != nil {
+			return err
+		}
+		w := table(stdout)
+		fmt.Fprintln(w, "PREFIX\tNAME\tSCOPE\tRATE/MIN\tEXPIRES\tSTATE")
+		for _, item := range items {
+			state := "active"
+			if !item.RevokedAt.IsZero() {
+				state = "revoked"
+			} else if !item.ExpiresAt.IsZero() && !item.ExpiresAt.After(time.Now()) {
+				state = "expired"
+			}
+			expires := "never"
+			if !item.ExpiresAt.IsZero() {
+				expires = item.ExpiresAt.UTC().Format(time.RFC3339)
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%s\t%s\n", item.Prefix, item.Name, item.Scope, item.RateLimitPerMinute, expires, state)
+		}
+		return w.Flush()
+	case "revoke":
+		yes, rest := extractBoolFlag(args[1:], "--yes")
+		if len(rest) != 1 {
+			return errors.New("API key prefix is required")
+		}
+		if err := confirm(stdin, stdout, yes, "Revoke API key "+rest[0]+"?"); err != nil {
+			return err
+		}
+		if err := service.RevokeAPIKey(ctx, rest[0]); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "API key %s revoked.\n", rest[0])
+		return nil
+	default:
+		return fmt.Errorf("unknown api-key command %q", args[0])
+	}
 }

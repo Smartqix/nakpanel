@@ -19,6 +19,7 @@ import (
 	panelhttp "github.com/nakroteck/nakpanel/internal/control/http"
 	controlmaintenance "github.com/nakroteck/nakpanel/internal/control/maintenance"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
+	"github.com/nakroteck/nakpanel/internal/control/provisioningapi"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/store"
 	paneltls "github.com/nakroteck/nakpanel/internal/control/tls"
@@ -35,6 +36,10 @@ func main() {
 	defer stop()
 
 	cfg := config.PanelRuntimeConfigFromEnv()
+	webhookConfig := provisioningapi.WebhookConfig{URL: cfg.BillingWebhookURL, Secret: cfg.BillingWebhookSecret}
+	if err := webhookConfig.Validate(); err != nil {
+		log.Fatalf("billing webhook configuration: %v", err)
+	}
 
 	db, err := sql.Open("pgx", cfg.DatabaseURL)
 	if err != nil {
@@ -97,13 +102,14 @@ func main() {
 		provision.WithQuotaStore(quotaStore),
 		provision.WithAccessPolicy(workspaceStore),
 		provision.WithRuntimeCapabilities(agentCapabilities),
+		provision.WithMailAgent(agentCapabilities),
 	)
 	if err := provision.SweepCustomTLSStagingForJobs(ctx, db, provision.DefaultCustomTLSStagingDir, 24*time.Hour); err != nil {
 		log.Printf("sweep stale custom TLS staging files: %v", err)
 	}
 	go sweepCustomTLSStaging(ctx, db)
 	jobRetrier := provision.NewSQLJobRetrier(db)
-	handler := panelhttp.NewServer(authStore, sessionManager, panelhttp.ServerOptions{
+	uiHandler := panelhttp.NewServer(authStore, sessionManager, panelhttp.ServerOptions{
 		SiteCreator:                siteManager,
 		DatabaseCreator:            siteManager,
 		CertificateIssuer:          siteManager,
@@ -115,7 +121,13 @@ func main() {
 		Workspace:                  workspaceStore,
 		DomainManager:              siteManager,
 		FileManager:                fileManager,
+		MailManager:                siteManager,
 	}).Handler()
+	accountService := &provisioningapi.AccountService{DB: db, River: riverClient, PublicURL: cfg.PublicURL, Quota: quotaStore}
+	apiHandler := provisioningapi.NewHandler(provisioningapi.HandlerOptions{
+		DB: db, PanelVersion: "phase20", PublicURL: cfg.PublicURL, Sessions: sessionManager, Accounts: accountService,
+	})
+	handler := provisioningapi.NewRootHandler(provisioningapi.RootOptions{API: apiHandler, UI: uiHandler, DB: db, Sessions: sessionManager})
 
 	certFile, keyFile, err := paneltls.EnsureSelfSigned(cfg.TLSDir)
 	if err != nil {
@@ -215,6 +227,12 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		Host: runtimeConfig.SMTPHost, Port: runtimeConfig.SMTPPort, Username: runtimeConfig.SMTPUsername,
 		Password: runtimeConfig.SMTPPassword, From: runtimeConfig.SMTPFrom, TLSMode: runtimeConfig.SMTPTLSMode,
 	}))
+	river.AddWorker(workers, provisioningapi.NewFinalizeAccountWorker(db))
+	river.AddWorker(workers, provisioningapi.NewTeardownAccountWorker(db, agent))
+	webhookConfig := provisioningapi.WebhookConfig{URL: runtimeConfig.BillingWebhookURL, Secret: runtimeConfig.BillingWebhookSecret}
+	webhookSweepWorker := provisioningapi.NewSweepWebhookWorker(db, webhookConfig.URL != "")
+	river.AddWorker(workers, webhookSweepWorker)
+	river.AddWorker(workers, provisioningapi.NewDeliverWebhookWorker(db, webhookConfig))
 
 	backupSchedule, err := cron.ParseStandard("0 2 * * *")
 	if err != nil {
@@ -226,6 +244,9 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
 		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) {
+				return provisioningapi.SweepWebhookArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(15*time.Minute), func() (river.JobArgs, *river.InsertOpts) {
 				return controlquota.CollectUsageArgs{}, nil
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
@@ -258,10 +279,11 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
 		},
 		Queues: map[string]river.QueueConfig{
-			river.QueueDefault:          {MaxWorkers: 4},
-			controlquota.HeavyQueue:     {MaxWorkers: 2},
-			controlquota.MigrationQueue: {MaxWorkers: 1},
-			controlmaintenance.Queue:    {MaxWorkers: 2},
+			river.QueueDefault:           {MaxWorkers: 4},
+			controlquota.HeavyQueue:      {MaxWorkers: 2},
+			controlquota.MigrationQueue:  {MaxWorkers: 1},
+			controlmaintenance.Queue:     {MaxWorkers: 2},
+			provisioningapi.WebhookQueue: {MaxWorkers: 4},
 		},
 		Workers: workers,
 	})
@@ -276,6 +298,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	cleanupSweepWorker.SetRiverClient(client)
 	migrationWorker.SetRiverClient(client)
 	maintenanceService.SetRiverClient(client)
+	webhookSweepWorker.SetRiverClient(client)
 	return client, nil
 }
 

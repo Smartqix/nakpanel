@@ -112,6 +112,7 @@ type SubscriptionServicesData struct {
 	MailDomains  []MailDomain
 	Mailboxes    []Mailbox
 	MailAliases  []MailAlias
+	WebmailHosts []WebmailHost
 	Applications []Application
 	SitePolicies []SitePolicy
 }
@@ -270,12 +271,15 @@ type RestoreRun struct {
 }
 
 type WebmailHost struct {
-	ID         int64
-	Hostname   string
-	Status     string
-	ConfigPath string
-	LastError  string
-	CreatedAt  time.Time
+	ID             int64
+	SubscriptionID int64
+	SiteID         int64
+	Domain         string
+	Hostname       string
+	Status         string
+	ConfigPath     string
+	LastError      string
+	CreatedAt      time.Time
 }
 
 type DNSZone struct {

@@ -8,8 +8,24 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
+
+func (s *SQLStore) MailSitePolicy(ctx context.Context, domain string) (int64, int64, types.HostingPolicy, error) {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return 0, 0, types.HostingPolicy{}, err
+	}
+	defer tx.Rollback()
+	var siteID, subscriptionID int64
+	err = tx.QueryRowContext(ctx, `SELECT id,subscription_id FROM sites WHERE domain=$1 AND status='active'`, site.NormalizeDomain(domain)).Scan(&siteID, &subscriptionID)
+	if err != nil {
+		return 0, 0, types.HostingPolicy{}, err
+	}
+	policy, err := EffectiveSitePolicyTx(ctx, tx, siteID)
+	return siteID, subscriptionID, policy, err
+}
 
 func (s *SQLStore) SiteDomain(ctx context.Context, siteID int64) (string, error) {
 	var domain string

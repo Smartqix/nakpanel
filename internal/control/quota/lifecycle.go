@@ -112,6 +112,9 @@ func (w *SetHostingStateWorker) Work(ctx context.Context, job *river.Job[SetHost
 	for attempt := 0; attempt < 3; attempt++ {
 		var err error
 		state, err = w.desiredHostingState(ctx, job.Args.SiteID, state)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -139,6 +142,9 @@ func (w *SetHostingStateWorker) Work(ctx context.Context, job *river.Job[SetHost
 			return nil
 		}
 		latest, err := w.desiredHostingState(ctx, job.Args.SiteID, state)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}

@@ -116,6 +116,14 @@ type SubscriptionServices interface {
 	DeleteSubscriptionService(context.Context, auth.SessionUser, int64, string, int64) error
 }
 
+type MailManager interface {
+	MailSettings(context.Context, auth.SessionUser) (types.MailSettingsView, error)
+	UpdateMailSettings(context.Context, auth.SessionUser, types.MailSettingsUpdate) (types.MailSettingsView, error)
+	ReconfigureMail(context.Context, auth.SessionUser) error
+	MailServerStatus(context.Context, auth.SessionUser) (types.MailServerStatus, error)
+	RestartMail(context.Context, auth.SessionUser) error
+}
+
 type WorkspaceService interface {
 	Search(ctx context.Context, actor auth.SessionUser, query string, limit int) ([]types.SearchResult, error)
 	RecordAudit(ctx context.Context, event types.AuditEvent) error
@@ -156,6 +164,7 @@ type ServerOptions struct {
 	Workspace                  WorkspaceService
 	DomainManager              DomainManager
 	FileManager                FileManagerService
+	MailManager                MailManager
 }
 
 type Server struct {
@@ -172,6 +181,7 @@ type Server struct {
 	workspace          WorkspaceService
 	domains            DomainManager
 	files              FileManagerService
+	mail               MailManager
 }
 
 func NewServer(users UserStore, sessions *auth.SessionManager, options ...ServerOptions) *Server {
@@ -193,6 +203,7 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		workspace:          opts.Workspace,
 		domains:            opts.DomainManager,
 		files:              opts.FileManager,
+		mail:               opts.MailManager,
 	}
 }
 
@@ -211,6 +222,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /backups", s.handleCreateBackup)
 	mux.HandleFunc("POST /restores", s.handleRestoreBackup)
 	mux.HandleFunc("POST /webmail", s.handleConfigureWebmail)
+	mux.HandleFunc("POST /settings/mail", s.handleUpdateMailSettings)
+	mux.HandleFunc("POST /settings/mail/reconfigure", s.handleReconfigureMail)
+	mux.HandleFunc("POST /settings/mail/restart", s.handleRestartMail)
 	mux.HandleFunc("POST /dns", s.handleConfigureDNS)
 	mux.HandleFunc("POST /reconcile", s.handleReconcileSystem)
 	mux.HandleFunc("POST /quotas", s.handleUpsertQuota)
@@ -260,6 +274,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /subscriptions/{id}/mode", s.handleSetSubscriptionMode)
 	mux.HandleFunc("GET /db", s.handleAdminer)
 	mux.HandleFunc("GET /search", s.handleSearch)
+	mux.HandleFunc("GET /mail/status", s.handleMailStatus)
+	mux.HandleFunc("GET /email", s.handleEmailRedirect)
 	mux.HandleFunc("GET /dashboard", s.handleWorkspace("dashboard"))
 	mux.HandleFunc("GET /sites", s.handleWorkspace("sites"))
 	mux.HandleFunc("GET /sites/{id}", s.handleWorkspace("site-detail"))
@@ -267,6 +283,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /backups", s.handleWorkspace("backups"))
 	mux.HandleFunc("GET /dns", s.handleWorkspace("dns"))
 	mux.HandleFunc("GET /certificates", s.handleWorkspace("certificates"))
+	mux.HandleFunc("GET /mail", s.handleMailWorkspace)
 	mux.HandleFunc("GET /activity", s.handleWorkspace("activity"))
 	mux.HandleFunc("GET /customers", s.handleWorkspace("customers"))
 	mux.HandleFunc("GET /customers/{id}", s.handleWorkspace("customer-detail"))
@@ -431,6 +448,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			}
 		}
 		view.SelectedSubscription = parseQueryInt64(r, "subscription_id")
+		view.SelectedMailDomain = parseQueryInt64(r, "domain_id")
 		view.PlanType = strings.TrimSpace(r.URL.Query().Get("type"))
 		if user.Role != auth.RoleAdmin && view.PlanType == "reseller" {
 			view.PlanType = "hosting"
@@ -449,6 +467,12 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		}
 		if route == "subscription-new" {
 			view.DetailID = parseQueryInt64(r, "customer_id")
+		}
+		if route == "tools-settings" && user.Role == auth.RoleAdmin && s.mail != nil {
+			view.MailSettings, err = s.mail.MailSettings(r.Context(), user)
+			if err != nil {
+				view.MailSettingsError = err.Error()
+			}
 		}
 		if !workspaceDetailVisible(route, view.DetailID, data) {
 			http.NotFound(w, r)
@@ -529,6 +553,9 @@ func validWorkspaceTab(route, tab string) bool {
 	if route == "subscription-detail" {
 		return map[string]bool{"overview": true, "resources": true, "access": true, "mail": true, "tasks": true, "applications": true, "backups": true, "activity": true}[tab]
 	}
+	if route == "site-detail" {
+		return map[string]bool{"overview": true, "hosting": true, "php": true, "mail": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
+	}
 	return map[string]bool{"overview": true, "hosting": true, "php": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
 }
 
@@ -590,10 +617,12 @@ func workspaceDetailVisible(route string, id int64, data dashboard.Data) bool {
 
 func filterDashboardForCustomer(data dashboard.Data, customerID int64) dashboard.Data {
 	sites := make([]dashboard.Site, 0)
+	siteIDs := make(map[int64]bool)
 	domains := make(map[string]bool)
 	for _, item := range data.Sites {
 		if item.CustomerID == customerID {
 			sites = append(sites, item)
+			siteIDs[item.ID] = true
 			domains[item.Domain] = true
 		}
 	}
@@ -604,9 +633,11 @@ func filterDashboardForCustomer(data dashboard.Data, customerID int64) dashboard
 		}
 	}
 	subscriptions := make([]types.SubscriptionSummary, 0)
+	subscriptionIDs := make(map[int64]bool)
 	for _, item := range data.Subscriptions {
 		if item.CustomerID == customerID {
 			subscriptions = append(subscriptions, item)
+			subscriptionIDs[item.ID] = true
 		}
 	}
 	backups := make([]dashboard.Backup, 0)
@@ -629,6 +660,60 @@ func filterDashboardForCustomer(data dashboard.Data, customerID int64) dashboard
 			zones = append(zones, item)
 		}
 	}
+	webmailHosts := make([]dashboard.WebmailHost, 0)
+	for _, item := range data.SubscriptionServices.WebmailHosts {
+		if subscriptionIDs[item.SubscriptionID] && siteIDs[item.SiteID] {
+			webmailHosts = append(webmailHosts, item)
+		}
+	}
+	accounts := make([]types.SubscriptionSystemAccount, 0)
+	for _, item := range data.SubscriptionServices.Accounts {
+		if subscriptionIDs[item.SubscriptionID] {
+			accounts = append(accounts, item)
+		}
+	}
+	sftp := make([]dashboard.SFTPIdentity, 0)
+	for _, item := range data.SubscriptionServices.SFTP {
+		if subscriptionIDs[item.SubscriptionID] {
+			sftp = append(sftp, item)
+		}
+	}
+	tasks := make([]dashboard.ScheduledTask, 0)
+	for _, item := range data.SubscriptionServices.Tasks {
+		if subscriptionIDs[item.SubscriptionID] {
+			tasks = append(tasks, item)
+		}
+	}
+	mailDomains := make([]dashboard.MailDomain, 0)
+	for _, item := range data.SubscriptionServices.MailDomains {
+		if subscriptionIDs[item.SubscriptionID] {
+			mailDomains = append(mailDomains, item)
+		}
+	}
+	mailboxes := make([]dashboard.Mailbox, 0)
+	for _, item := range data.SubscriptionServices.Mailboxes {
+		if subscriptionIDs[item.SubscriptionID] {
+			mailboxes = append(mailboxes, item)
+		}
+	}
+	mailAliases := make([]dashboard.MailAlias, 0)
+	for _, item := range data.SubscriptionServices.MailAliases {
+		if subscriptionIDs[item.SubscriptionID] {
+			mailAliases = append(mailAliases, item)
+		}
+	}
+	applications := make([]dashboard.Application, 0)
+	for _, item := range data.SubscriptionServices.Applications {
+		if subscriptionIDs[item.SubscriptionID] {
+			applications = append(applications, item)
+		}
+	}
+	sitePolicies := make([]dashboard.SitePolicy, 0)
+	for _, item := range data.SubscriptionServices.SitePolicies {
+		if subscriptionIDs[item.SubscriptionID] && siteIDs[item.SiteID] {
+			sitePolicies = append(sitePolicies, item)
+		}
+	}
 	audit := make([]types.AuditEvent, 0)
 	for _, item := range data.AuditEvents {
 		if item.CustomerID == customerID {
@@ -641,6 +726,11 @@ func filterDashboardForCustomer(data dashboard.Data, customerID int64) dashboard
 	data.Jobs = nil
 	data.AuditEvents = audit
 	data.Phase6 = dashboard.Phase6Data{Backups: backups, Restores: restores, DNSZones: zones}
+	data.SubscriptionServices = dashboard.SubscriptionServicesData{
+		Accounts: accounts, SFTP: sftp, Tasks: tasks, MailDomains: mailDomains,
+		Mailboxes: mailboxes, MailAliases: mailAliases, WebmailHosts: webmailHosts,
+		Applications: applications, SitePolicies: sitePolicies,
+	}
 	return data
 }
 
@@ -652,7 +742,7 @@ func (s *Server) loadDashboard(ctx context.Context, user auth.SessionUser) (dash
 }
 
 func workspaceRouteAllowed(role auth.Role, route string) bool {
-	clientRoutes := map[string]bool{"dashboard": true, "sites": true, "site-detail": true, "site-files": true, "site-file-edit": true, "subscriptions": true, "databases": true, "backups": true, "dns": true, "certificates": true, "activity": true, "subscription-detail": true}
+	clientRoutes := map[string]bool{"dashboard": true, "sites": true, "site-detail": true, "site-files": true, "site-file-edit": true, "subscriptions": true, "databases": true, "backups": true, "dns": true, "certificates": true, "mail": true, "activity": true, "subscription-detail": true}
 	if role == auth.RoleAdmin {
 		return true
 	}
@@ -660,13 +750,13 @@ func workspaceRouteAllowed(role auth.Role, route string) bool {
 		return clientRoutes[route]
 	}
 	if role == auth.RoleReseller {
-		return map[string]bool{"dashboard": true, "sites": true, "site-detail": true, "site-files": true, "site-file-edit": true, "databases": true, "backups": true, "dns": true, "certificates": true, "activity": true, "customers": true, "customer-detail": true, "subscriptions": true, "subscription-detail": true, "subscription-new": true, "service-plans": true, "plan-detail": true, "plan-new": true, "addon-detail": true, "addon-new": true, "my-resources": true}[route]
+		return map[string]bool{"dashboard": true, "sites": true, "site-detail": true, "site-files": true, "site-file-edit": true, "databases": true, "backups": true, "dns": true, "certificates": true, "mail": true, "activity": true, "customers": true, "customer-detail": true, "subscriptions": true, "subscription-detail": true, "subscription-new": true, "service-plans": true, "plan-detail": true, "plan-new": true, "addon-detail": true, "addon-new": true, "my-resources": true}[route]
 	}
 	return false
 }
 
 func routeTitle(route string) string {
-	return map[string]string{"dashboard": "Home", "sites": "Domains", "site-detail": "Domain", "site-files": "File Manager", "site-file-edit": "Edit File", "databases": "Databases", "backups": "Backups", "dns": "DNS", "certificates": "SSL/TLS Certificates", "activity": "Activity", "customers": "Customers", "customer-detail": "Customer", "subscriptions": "Subscriptions", "subscription-detail": "Subscription", "subscription-new": "Add Subscription", "service-plans": "Service Plans", "plan-detail": "Service Plan", "plan-new": "Add a Plan", "addon-detail": "Add-on Plan", "addon-new": "Add an Add-on", "reseller-plan-new": "Add Reseller Plan", "reseller-plan-detail": "Reseller Plan", "tools-settings": "Tools & Settings", "resellers": "Resellers", "reseller-detail": "Reseller", "reseller-plans": "Reseller Plans", "my-resources": "My Resources"}[route]
+	return map[string]string{"dashboard": "Home", "sites": "Domains", "site-detail": "Domain", "site-files": "File Manager", "site-file-edit": "Edit File", "databases": "Databases", "backups": "Backups", "dns": "DNS", "certificates": "SSL/TLS Certificates", "mail": "Mail", "activity": "Activity", "customers": "Customers", "customer-detail": "Customer", "subscriptions": "Subscriptions", "subscription-detail": "Subscription", "subscription-new": "Add Subscription", "service-plans": "Service Plans", "plan-detail": "Service Plan", "plan-new": "Add a Plan", "addon-detail": "Add-on Plan", "addon-new": "Add an Add-on", "reseller-plan-new": "Add Reseller Plan", "reseller-plan-detail": "Reseller Plan", "tools-settings": "Tools & Settings", "resellers": "Resellers", "reseller-detail": "Reseller", "reseller-plans": "Reseller Plans", "my-resources": "My Resources"}[route]
 }
 
 func parseQueryInt64(r *http.Request, name string) int64 {
@@ -1285,7 +1375,7 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConfigureWebmail(w http.ResponseWriter, r *http.Request) {
-	user, ok := s.requireAdmin(w, r)
+	user, ok := s.currentUser(w, r)
 	if !ok {
 		return
 	}
@@ -1297,11 +1387,27 @@ func (s *Server) handleConfigureWebmail(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Invalid webmail form", http.StatusBadRequest)
 		return
 	}
-	if _, err := s.phase6.ConfigureWebmail(r.Context(), user, strings.TrimSpace(r.Form.Get("domain"))); err != nil {
-		http.Error(w, "Could not configure webmail: "+err.Error(), http.StatusBadRequest)
+	domain := strings.TrimSpace(r.Form.Get("domain"))
+	jobID, err := s.phase6.ConfigureWebmail(r.Context(), user, domain)
+	if err != nil {
+		writeQuotaError(w, r, "Could not configure webmail", err)
 		return
 	}
-	http.Redirect(w, r, "/?notice=webmail-queued", http.StatusSeeOther)
+	subscriptionID := parseFormInt64Default(r, "subscription_id", 0)
+	customerID := int64(0)
+	if s.workspace != nil {
+		customerID, _ = s.workspace.CustomerIDForDomain(r.Context(), domain)
+	}
+	s.recordAudit(r.Context(), user, customerID, subscriptionID, "webmail.configure_queued", "webmail_host", jobID, map[string]any{"domain": domain})
+	if r.Form.Get("return_to") == "site-mail" {
+		s.redirectSiteMail(w, r, user, parseFormInt64Default(r, "site_id", 0), subscriptionID, domain, "webmail-queued")
+		return
+	}
+	target := "/mail?notice=webmail-queued"
+	if subscriptionID > 0 {
+		target += "&subscription_id=" + strconv.FormatInt(subscriptionID, 10)
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
 func (s *Server) handleConfigureDNS(w http.ResponseWriter, r *http.Request) {
@@ -2447,6 +2553,12 @@ func dashboardNotice(code string) string {
 		return "Restore queued. Refresh in a moment to see the updated status."
 	case "webmail-queued":
 		return "Webmail configuration queued."
+	case "mail-settings-saved":
+		return "Mail server settings saved and convergence queued."
+	case "mail-reconfigure-queued":
+		return "Mail server reconfiguration queued."
+	case "mail-restarted":
+		return "Stalwart mail service restarted."
 	case "dns-queued":
 		return "DNS zone configuration queued."
 	case "reconcile-queued":

@@ -3,6 +3,7 @@ package provision
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -36,6 +37,10 @@ type Phase6Repository interface {
 	ReconcileSystem(ctx context.Context, ownerID int64) (int64, error)
 	CreateAdminerToken(ctx context.Context, ownerID int64) (types.AdminerSSO, error)
 	RestoreBackup(ctx context.Context, ownerID int64, backupID int64) (int64, error)
+}
+
+type MailSitePolicyStore interface {
+	MailSitePolicy(context.Context, string) (int64, int64, types.HostingPolicy, error)
 }
 
 type DNSRecordUpserter interface {
@@ -95,6 +100,11 @@ type RuntimeCapabilityReader interface {
 	RuntimeCapabilities(context.Context) (types.RuntimeCapabilities, error)
 }
 
+type MailAdminAgent interface {
+	MailStatus(context.Context) (types.MailServerStatus, error)
+	ReloadService(context.Context, string) (types.Response, error)
+}
+
 type Manager struct {
 	siteRepo                SiteRepository
 	databaseRepo            DatabaseRepository
@@ -105,6 +115,7 @@ type Manager struct {
 	passwordGenerator       PasswordGenerator
 	accessPolicy            AccessPolicy
 	capabilities            RuntimeCapabilityReader
+	mailAgent               MailAdminAgent
 	customCertificateRepo   CustomCertificateRepository
 	customCertificateStager CustomCertificateStager
 }
@@ -167,6 +178,10 @@ func WithRuntimeCapabilities(reader RuntimeCapabilityReader) ManagerOption {
 	return func(m *Manager) {
 		m.capabilities = reader
 	}
+}
+
+func WithMailAgent(agent MailAdminAgent) ManagerOption {
+	return func(m *Manager) { m.mailAgent = agent }
 }
 
 func (m *Manager) validateInstalledPHP(ctx context.Context, version string) error {
@@ -609,15 +624,32 @@ func (m *Manager) CreateBackupForSubscription(ctx context.Context, actor auth.Se
 }
 
 func (m *Manager) ConfigureWebmail(ctx context.Context, owner auth.SessionUser, domain string) (int64, error) {
-	if owner.Role != auth.RoleAdmin {
-		return 0, ErrForbidden
-	}
 	if m.phase6Repo == nil {
 		return 0, errors.New("phase6 repository is not configured")
 	}
 	normalized := site.NormalizeDomain(domain)
 	if err := site.ValidateDomain(normalized); err != nil {
 		return 0, err
+	}
+	store, ok := m.quotaStore.(MailSitePolicyStore)
+	if !ok {
+		return 0, errors.New("mail policy is not configured")
+	}
+	_, subscriptionID, policy, err := store.MailSitePolicy(ctx, normalized)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrForbidden
+		}
+		return 0, err
+	}
+	if err := m.canManageSubscription(ctx, owner, subscriptionID); err != nil {
+		return 0, err
+	}
+	if err := m.canManageDomain(ctx, owner, normalized); err != nil {
+		return 0, err
+	}
+	if !policy.Permissions.Mail || !policy.Mail.Enabled || !policy.Mail.Webmail {
+		return 0, errors.New("webmail is disabled by the subscription policy")
 	}
 	return m.phase6Repo.ConfigureWebmail(ctx, owner.ID, normalized)
 }

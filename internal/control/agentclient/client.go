@@ -125,12 +125,38 @@ func (c *Client) CleanupLegacyHomes(ctx context.Context, req types.CleanupLegacy
 	return c.doTyped(ctx, types.OpCleanupLegacyHomes, req)
 }
 
+func (c *Client) TeardownSubscription(ctx context.Context, req types.TeardownSubscriptionReq) error {
+	response, err := c.doTyped(ctx, types.OpTeardownSubscription, req)
+	if err != nil {
+		return err
+	}
+	if !response.OK {
+		return errors.New(response.Error)
+	}
+	return nil
+}
+
 func (c *Client) ConfigureMail(ctx context.Context, req types.ConfigureMailReq) (types.Response, error) {
 	return c.doTyped(ctx, types.OpConfigureMail, req)
 }
 
 func (c *Client) CollectMailQueue(ctx context.Context) (types.Response, error) {
 	return c.Do(ctx, types.Request{Op: types.OpCollectMailQueue, ID: newID(), Data: json.RawMessage(`{}`)})
+}
+
+func (c *Client) MailStatus(ctx context.Context) (types.MailServerStatus, error) {
+	var result types.MailServerStatus
+	response, err := c.Do(ctx, types.Request{Op: types.OpGetMailStatus, ID: newID(), Data: json.RawMessage(`{}`)})
+	if err != nil {
+		return result, err
+	}
+	if !response.OK {
+		return result, errors.New(response.Error)
+	}
+	if err := json.Unmarshal(response.Data, &result); err != nil {
+		return result, fmt.Errorf("decode mail status response: %w", err)
+	}
+	return result, nil
 }
 
 func (c *Client) EnsureApplication(ctx context.Context, req types.EnsureApplicationReq) (types.Response, error) {

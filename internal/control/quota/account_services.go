@@ -283,14 +283,21 @@ WHERE scheduled_tasks.subscription_id=EXCLUDED.subscription_id RETURNING id`, in
 
 func (s *SQLStore) UpsertMailDomain(ctx context.Context, subscriptionID, actorID int64, input types.MailDomainInput) (int64, error) {
 	input.Domain = site.NormalizeDomain(input.Domain)
-	if site.ValidateDomain(input.Domain) != nil || (input.DMARCPolicy != "none" && input.DMARCPolicy != "quarantine" && input.DMARCPolicy != "reject") {
+	if (input.SiteID == 0 && site.ValidateDomain(input.Domain) != nil) || (input.DMARCPolicy != "none" && input.DMARCPolicy != "quarantine" && input.DMARCPolicy != "reject") {
 		return 0, errors.New("invalid mail domain settings")
 	}
 	return s.upsertAccountService(ctx, subscriptionID, func(tx *sql.Tx, policy types.HostingPolicy) (int64, error) {
 		if !policy.Permissions.Mail || !policy.Mail.Enabled {
 			return 0, errors.New("mail is disabled by the subscription policy")
 		}
-		if err := ensureSiteBelongsTx(ctx, tx, subscriptionID, input.SiteID); err != nil {
+		if input.SiteID > 0 {
+			if err := tx.QueryRowContext(ctx, `SELECT domain FROM sites WHERE id=$1 AND subscription_id=$2 AND status='active'`, input.SiteID, subscriptionID).Scan(&input.Domain); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return 0, errors.New("active domain does not belong to the subscription")
+				}
+				return 0, err
+			}
+		} else if err := ensureSiteBelongsTx(ctx, tx, subscriptionID, input.SiteID); err != nil {
 			return 0, err
 		}
 		var id int64

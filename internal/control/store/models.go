@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"time"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 type AccountQuota struct {
@@ -64,6 +66,35 @@ type AdminerToken struct {
 	ExpiresAt   time.Time
 	UsedAt      sql.NullTime
 	CreatedAt   time.Time
+}
+
+type ApiIdempotencyRecord struct {
+	ID             int64
+	ApiKeyID       int64
+	IdempotencyKey string
+	Method         string
+	Path           string
+	RequestHash    []byte
+	ResponseStatus sql.NullInt32
+	ResponseBody   pqtype.NullRawMessage
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
+}
+
+type ApiKey struct {
+	ID                 int64
+	Name               string
+	KeyPrefix          string
+	KeySalt            []byte
+	KeyHash            []byte
+	Scope              string
+	IpAllowlist        []pqtype.CIDR
+	RateLimitPerMinute int32
+	ExpiresAt          sql.NullTime
+	RevokedAt          sql.NullTime
+	LastUsedAt         sql.NullTime
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 type ApplicationInstance struct {
@@ -133,6 +164,41 @@ type Backup struct {
 	ScheduledFor   sql.NullTime
 }
 
+type BillingAccount struct {
+	ID                 int64
+	SubscriptionID     int64
+	PublicID           string
+	ExternalRef        string
+	ProviderResellerID sql.NullInt64
+	PrimarySiteID      sql.NullInt64
+	ProvisioningState  string
+	OverLimit          bool
+	LastError          string
+	CancelledAt        sql.NullTime
+	PurgeEligibleAt    sql.NullTime
+	PurgeRequestedAt   sql.NullTime
+	TerminatedAt       sql.NullTime
+	CreatedByApiKeyID  sql.NullInt64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type BillingWebhookOutbox struct {
+	ID               int64
+	DeliveryID       string
+	BillingAccountID int64
+	EventType        string
+	DedupeKey        string
+	Payload          json.RawMessage
+	Status           string
+	Attempts         int32
+	ResponseStatus   sql.NullInt32
+	LastError        string
+	SentAt           sql.NullTime
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 type Customer struct {
 	ID          int64
 	LoginUserID sql.NullInt64
@@ -144,6 +210,16 @@ type Customer struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	ResellerID  sql.NullInt64
+}
+
+type CustomerLoginToken struct {
+	ID               int64
+	BillingAccountID int64
+	UserID           int64
+	TokenHash        []byte
+	ExpiresAt        time.Time
+	UsedAt           sql.NullTime
+	CreatedAt        time.Time
 }
 
 type Database struct {
@@ -303,6 +379,7 @@ type Plan struct {
 	AllowBackups          bool
 	AllowPhpSettings      bool
 	HostingPolicy         json.RawMessage
+	ApiSlug               string
 }
 
 type PlanServicePreset struct {

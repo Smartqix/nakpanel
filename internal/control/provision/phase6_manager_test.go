@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
@@ -60,7 +61,8 @@ func (r *fakePhase6Repository) RestoreBackup(ctx context.Context, ownerID int64,
 
 func TestManagerPhase6ActionsRequireAdmin(t *testing.T) {
 	repo := &fakePhase6Repository{}
-	manager := NewManager(nil, WithPhase6Repository(repo))
+	quotas := &fakeQuotaStore{hasLimits: true, limits: controlquota.Limits{MaxBackups: -1, BackupStorageMB: -1, AllowBackups: true}, mailSiteID: 11, mailSubID: 12, mailPolicy: types.HostingPolicy{Permissions: types.HostingPermissionPolicy{Mail: true}, Mail: types.HostingMailPolicy{Enabled: true, Webmail: true}}}
+	manager := NewManager(nil, WithPhase6Repository(repo), WithQuotaStore(quotas), WithAccessPolicy(fakeAccessPolicy{allow: false}))
 	client := auth.SessionUser{ID: 2, Role: auth.RoleClient}
 
 	if _, err := manager.CreateBackup(context.Background(), client, types.CreateBackupReq{Domain: "example.test"}); !errors.Is(err, ErrForbidden) {
@@ -109,10 +111,11 @@ func TestManagerClientDNSRequiresPlanPermission(t *testing.T) {
 
 func TestManagerPhase6ActionsNormalizeAndForwardAdminRequests(t *testing.T) {
 	repo := &fakePhase6Repository{}
-	manager := NewManager(nil, WithPhase6Repository(repo))
+	quotas := &fakeQuotaStore{hasLimits: true, limits: controlquota.Limits{MaxBackups: -1, BackupStorageMB: -1, AllowBackups: true}, mailSiteID: 11, mailSubID: 12, mailPolicy: types.HostingPolicy{Permissions: types.HostingPermissionPolicy{Mail: true}, Mail: types.HostingMailPolicy{Enabled: true, Webmail: true}}}
+	manager := NewManager(nil, WithPhase6Repository(repo), WithQuotaStore(quotas))
 	admin := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
 
-	if id, err := manager.CreateBackup(context.Background(), admin, types.CreateBackupReq{Domain: " EXAMPLE.TEST. "}); err != nil || id != 101 {
+	if id, err := manager.CreateBackup(context.Background(), admin, types.CreateBackupReq{Domain: " EXAMPLE.TEST. ", SubscriptionID: 12}); err != nil || id != 101 {
 		t.Fatalf("CreateBackup id=%d err=%v, want 101 nil", id, err)
 	}
 	if id, err := manager.ConfigureWebmail(context.Background(), admin, " EXAMPLE.TEST. "); err != nil || id != 102 {

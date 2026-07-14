@@ -27,7 +27,7 @@ func TestPhaseVerifiersUseSingleDefaultVM(t *testing.T) {
 		"phase15-verify.sh",
 		"phase16-verify.sh",
 		"phase17-verify.sh",
-		"phase18-verify.sh",
+		"phase19-verify.sh",
 	}
 	for _, path := range scripts {
 		t.Run(path, func(t *testing.T) {
@@ -72,7 +72,7 @@ func TestDeploymentVerifierResetsOneCanonicalVM(t *testing.T) {
 		"require_nakpanel_vm_name \"${NAKPANEL_MULTIPASS_VM}\"",
 		"destroy_vm \"${NAKPANEL_MULTIPASS_VM}\"",
 		"ensure_vm 2 3G 16G",
-		"phase18-verify.sh",
+		"phase19-verify.sh",
 		"nakpanel-lab",
 	} {
 		if !strings.Contains(script, want) {

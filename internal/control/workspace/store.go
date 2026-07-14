@@ -288,6 +288,18 @@ WITH visible_customers AS (
   SELECT 'subscription', sub.id, COALESCE(NULLIF(sub.name,''),'Subscription ' || sub.id), e.plan_name, '/subscriptions/' || sub.id, 3
   FROM subscriptions sub JOIN subscription_entitlements e ON e.subscription_id=sub.id WHERE sub.customer_id IN (SELECT id FROM visible_customers) AND (sub.name ILIKE '%' || $1 || '%' OR e.plan_name ILIKE '%' || $1 || '%')
   UNION ALL
+  SELECT 'mail_domain', md.id, md.domain, COALESCE(NULLIF(sub.name,''),'Subscription ' || sub.id),
+    CASE WHEN site.id IS NULL THEN '/subscriptions/' || sub.id || '?tab=mail' ELSE '/sites/' || site.id || '?tab=mail' END, 4
+  FROM mail_domains md JOIN subscriptions sub ON sub.id=md.subscription_id
+  LEFT JOIN sites site ON site.id=md.site_id OR (md.site_id IS NULL AND site.subscription_id=md.subscription_id AND lower(site.domain)=lower(md.domain))
+  WHERE sub.customer_id IN (SELECT id FROM visible_customers) AND md.domain ILIKE '%' || $1 || '%'
+  UNION ALL
+  SELECT 'mailbox', mb.id, lower(mb.local_part)||'@'||md.domain, COALESCE(NULLIF(sub.name,''),'Subscription ' || sub.id),
+    CASE WHEN site.id IS NULL THEN '/subscriptions/' || sub.id || '?tab=mail' ELSE '/sites/' || site.id || '?tab=mail' END, 5
+  FROM mailboxes mb JOIN mail_domains md ON md.id=mb.mail_domain_id JOIN subscriptions sub ON sub.id=md.subscription_id
+  LEFT JOIN sites site ON site.id=md.site_id OR (md.site_id IS NULL AND site.subscription_id=md.subscription_id AND lower(site.domain)=lower(md.domain))
+  WHERE sub.customer_id IN (SELECT id FROM visible_customers) AND (lower(mb.local_part)||'@'||md.domain) ILIKE '%' || $1 || '%'
+  UNION ALL
   SELECT 'customer', c.id, COALESCE(NULLIF(c.display_name,''),c.email), c.email, '/customers/' || c.id, 4
   FROM customers c WHERE ($2::text = 'admin' OR ($2::text='reseller' AND c.reseller_id=(SELECT id FROM reseller_accounts WHERE login_user_id=$3))) AND (c.email ILIKE '%' || $1 || '%' OR c.display_name ILIKE '%' || $1 || '%')
 )

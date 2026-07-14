@@ -53,10 +53,24 @@ const (
 	OpApplyScheduledTasks        = "apply_scheduled_tasks"
 	OpConfigureMail              = "configure_mail"
 	OpCollectMailQueue           = "collect_mail_queue"
+	OpGetMailStatus              = "get_mail_status"
 	OpEnsureApplication          = "ensure_application"
 	OpMigrateSubscriptionAccount = "migrate_subscription_account"
 	OpCleanupLegacyHomes         = "cleanup_legacy_homes"
+	OpTeardownSubscription       = "teardown_subscription"
 )
+
+type TeardownSubscriptionReq struct {
+	SubscriptionID int64    `json:"subscription_id"`
+	Username       string   `json:"username"`
+	HomePath       string   `json:"home_path"`
+	Domains        []string `json:"domains"`
+	DatabaseNames  []string `json:"database_names"`
+}
+
+type TeardownSubscriptionResult struct {
+	Removed []string `json:"removed"`
+}
 
 type FileKind string
 
@@ -664,6 +678,46 @@ type SearchResult struct {
 	Label  string `json:"label"`
 	Detail string `json:"detail"`
 	URL    string `json:"url"`
+}
+
+type MailWorkspaceSummary struct {
+	Domains         int `json:"domains"`
+	ActiveDomains   int `json:"active_domains"`
+	Mailboxes       int `json:"mailboxes"`
+	Aliases         int `json:"aliases"`
+	FailedResources int `json:"failed_resources"`
+}
+
+// MailSettingsView is safe to render or return as JSON. Relay credentials are
+// represented only by a boolean and never leave the control plane.
+type MailSettingsView struct {
+	MailHostname        string `json:"mail_hostname"`
+	SmarthostHost       string `json:"smarthost_host"`
+	SmarthostPort       int    `json:"smarthost_port"`
+	SmarthostUsername   string `json:"smarthost_username"`
+	SmarthostConfigured bool   `json:"smarthost_configured"`
+	OutboundRateLimit   string `json:"outbound_rate_limit"`
+	QueueAlertThreshold int    `json:"queue_alert_threshold"`
+}
+
+type MailSettingsUpdate struct {
+	MailHostname        string `json:"mail_hostname"`
+	SmarthostHost       string `json:"smarthost_host"`
+	SmarthostPort       int    `json:"smarthost_port"`
+	SmarthostUsername   string `json:"smarthost_username"`
+	SmarthostPassword   string `json:"-"`
+	ClearSmarthost      bool   `json:"clear_smarthost"`
+	OutboundRateLimit   string `json:"outbound_rate_limit"`
+	QueueAlertThreshold int    `json:"queue_alert_threshold"`
+}
+
+type MailServerStatus struct {
+	State       string    `json:"state"`
+	Version     string    `json:"version"`
+	Listeners   []int     `json:"listeners"`
+	TotalQueued int       `json:"total_queued"`
+	LastError   string    `json:"last_error,omitempty"`
+	CheckedAt   time.Time `json:"checked_at"`
 }
 
 type AuditEvent struct {

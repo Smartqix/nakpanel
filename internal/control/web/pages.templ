@@ -208,7 +208,7 @@ templ dashboardSections(data dashboard.Data, actions DashboardActions) {
 		@planSection(data.Quotas, data.Customers, data.Subscriptions, data.Plans, data.Settings, data.CommittedDiskMB, data.QuotaLoadError, data.PlanLoadError, actions)
 	</section>
 	<section class="np-view" data-np-panel="settings" id="view-settings" aria-labelledby="settings-title">
-		@settingsSection(data, actions, "")
+		@settingsSection(data, actions, WorkspaceView{})
 	</section>
 	<section class="np-view" data-np-panel="activity" id="view-activity" aria-labelledby="jobs-title">
 		@jobsSection(data.Jobs, data.JobLoadError, actions, "")
@@ -741,7 +741,7 @@ templ planSection(quotas []controlquota.Summary, customers []types.Customer, sub
 	</section>
 }
 
-templ settingsSection(data dashboard.Data, actions DashboardActions, csrfToken string) {
+templ settingsSection(data dashboard.Data, actions DashboardActions, view WorkspaceView) {
 	<section class="np-settings-page" aria-labelledby="settings-title">
 		<div class="np-page-head">
 			<div>
@@ -751,6 +751,24 @@ templ settingsSection(data dashboard.Data, actions DashboardActions, csrfToken s
 			<span class="np-pill np-pill-run">admin only</span>
 		</div>
 		<div class="np-settings-grid">
+			<article class="np-settings-card np-mail-settings-card">
+				<div class="np-settings-card-head">
+					<div><span class="np-kicker">Mail</span><h3>Mail Server</h3></div>
+					<span class="np-pill np-pill-pend" data-np-mail-state>checking</span>
+				</div>
+				if view.MailSettingsError != "" {
+					<p class="np-inline-error" role="alert">{ view.MailSettingsError }</p>
+				} else {
+					<dl class="np-settings-facts" data-np-mail-status>
+						<div><dt>Stalwart</dt><dd data-np-mail-version>Checking status...</dd></div>
+						<div><dt>Listeners</dt><dd data-np-mail-listeners>-</dd></div>
+						<div><dt>Queue</dt><dd data-np-mail-queue>-</dd></div>
+						<div><dt>Relay</dt><dd>{ mailRelayStatus(view.MailSettings) }</dd></div>
+					</dl>
+					<p class="np-inline-error" data-np-mail-status-error hidden></p>
+					<button type="button" class="np-link-button" data-np-dialog-open="mail-settings-dialog">Mail settings</button>
+				}
+			</article>
 			<article class="np-settings-card">
 				<div class="np-settings-card-head">
 					<div>
@@ -846,15 +864,18 @@ templ settingsSection(data dashboard.Data, actions DashboardActions, csrfToken s
 				</dl>
 			</article>
 		</div>
+		if view.MailSettingsError == "" {
+			@mailSettingsDialog(view)
+		}
 		if actions.CanManageQuotas {
 			<section class="np-section" aria-labelledby="settings-capacity-title">
 				<div class="np-section-heading">
 					<h2 id="settings-capacity-title">Capacity &amp; Overselling</h2>
 				</div>
 				<div class="np-settings-control-row">
-					@capacityCard(data.Settings, data.CommittedDiskMB, data.Quotas, actions, csrfToken)
+					@capacityCard(data.Settings, data.CommittedDiskMB, data.Quotas, actions, view.CSRFToken)
 					<form class="np-form np-action-form np-settings-form" method="post" action="/settings/oversell">
-						@csrfTokenInput(csrfToken)
+						@csrfTokenInput(view.CSRFToken)
 						<label>Oversell <select name="oversell_policy"><option value="warn">warn</option><option value="cap">cap</option></select></label>
 						<label>Capacity MB <input type="number" min="0" name="server_disk_capacity_mb" value={ formatSettingsCapacity(data.Settings.ServerDiskCapacityMB) } required/></label>
 						<button type="submit">Save settings</button>
@@ -869,6 +890,33 @@ templ settingsSection(data dashboard.Data, actions DashboardActions, csrfToken s
 			</section>
 		}
 	</section>
+}
+
+templ mailSettingsDialog(view WorkspaceView) {
+	<dialog class="np-dialog np-mail-settings-dialog" id="mail-settings-dialog" data-np-dialog>
+		<form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form>
+		<div class="np-dialog-head"><span class="np-kicker">Server management</span><h2>Mail server settings</h2><p>Configure Stalwart identity, outbound relay, queue alerts, and service convergence.</p></div>
+		<form class="np-form np-dialog-form" method="post" action="/settings/mail">
+			@csrfInput(view)
+			<label>Mail hostname<input name="mail_hostname" value={ view.MailSettings.MailHostname } placeholder="mail.example.com" required/></label>
+			<div class="np-form-grid">
+				<label>Smarthost<input name="smarthost_host" value={ view.MailSettings.SmarthostHost } placeholder="smtp.example.com"/></label>
+				<label>Port<input type="number" min="1" max="65535" name="smarthost_port" value={ formatPlanLimit(view.MailSettings.SmarthostPort) }/></label>
+				<label>Username<input name="smarthost_username" value={ view.MailSettings.SmarthostUsername } autocomplete="off"/></label>
+				<label>Replacement password <span class="np-muted">leave blank to preserve</span><input type="password" name="smarthost_password" autocomplete="new-password"/></label>
+				<label>Outbound rate limit<input name="outbound_rate_limit" value={ view.MailSettings.OutboundRateLimit } placeholder="100/hour" required/></label>
+				<label>Queue alert threshold<input type="number" min="0" name="queue_alert_threshold" value={ formatPlanLimit(view.MailSettings.QueueAlertThreshold) } required/></label>
+			</div>
+			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save mail settings</button></div>
+		</form>
+		<div class="np-mail-server-actions">
+			<form method="post" action="/settings/mail/reconfigure">@csrfInput(view)<button type="submit" class="np-secondary-button">Reconfigure Stalwart</button></form>
+			if view.MailSettings.SmarthostHost != "" {
+				<form method="post" action="/settings/mail">@csrfInput(view)<input type="hidden" name="mail_hostname" value={ view.MailSettings.MailHostname }/><input type="hidden" name="outbound_rate_limit" value={ view.MailSettings.OutboundRateLimit }/><input type="hidden" name="queue_alert_threshold" value={ formatPlanLimit(view.MailSettings.QueueAlertThreshold) }/><input type="hidden" name="clear_smarthost" value="true"/><button type="submit" class="np-danger-button" data-np-confirm="Clear the outbound relay and its stored credential?">Clear relay</button></form>
+			}
+			<form method="post" action="/settings/mail/restart">@csrfInput(view)<button type="submit" class="np-danger-button" data-np-confirm="Restart Stalwart Mail now? Active connections may be interrupted.">Restart mail service</button></form>
+		</div>
+	</dialog>
 }
 
 templ subscriptionToolbar(actions DashboardActions) {

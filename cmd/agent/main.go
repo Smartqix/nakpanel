@@ -51,6 +51,7 @@ func main() {
 		DiskQuota:       ops.NewLinuxDiskQuotaManager(nil),
 		SiteProvisioner: siteProvisioner,
 	})
+	teardownProvisioner := ops.NewSubscriptionTeardownProvisioner(ops.SubscriptionTeardownOptions{HomeRoot: "/home", Paths: ops.DefaultSitePathConfig()})
 	mailProvisioner := ops.NewMailProvisioner(ops.MailProvisionerOptions{
 		ManagementURL: os.Getenv("NAKPANEL_STALWART_URL"),
 		Reloader:      reloader,
@@ -98,6 +99,7 @@ func main() {
 			SubscriptionAccounts:    accountProvisioner,
 			Mail:                    mailProvisioner,
 			Applications:            podmanProvisioner,
+			SubscriptionTeardown:    teardownProvisioner,
 		},
 	)
 	server := agentrpc.NewServer(dispatcher, agentrpc.WithAllowedPeerUID(allowedUID))

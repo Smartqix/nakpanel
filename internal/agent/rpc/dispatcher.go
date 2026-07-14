@@ -76,10 +76,15 @@ type SubscriptionAccountProvisioner interface {
 type MailProvisioner interface {
 	ConfigureMail(context.Context, types.ConfigureMailReq) (types.ConfigureMailResult, error)
 	CollectMailQueue(context.Context) (types.CollectMailQueueResult, error)
+	MailStatus(context.Context) (types.MailServerStatus, error)
 }
 
 type ApplicationProvisioner interface {
 	EnsureApplication(context.Context, types.EnsureApplicationReq) error
+}
+
+type SubscriptionTeardownProvisioner interface {
+	TeardownSubscription(context.Context, types.TeardownSubscriptionReq) (types.TeardownSubscriptionResult, error)
 }
 
 type UsageCollector interface {
@@ -121,6 +126,7 @@ type Options struct {
 	SubscriptionAccounts      SubscriptionAccountProvisioner
 	Mail                      MailProvisioner
 	Applications              ApplicationProvisioner
+	SubscriptionTeardown      SubscriptionTeardownProvisioner
 }
 
 type Dispatcher struct {
@@ -142,6 +148,7 @@ type Dispatcher struct {
 	subscriptionAccounts      SubscriptionAccountProvisioner
 	mail                      MailProvisioner
 	applications              ApplicationProvisioner
+	subscriptionTeardown      SubscriptionTeardownProvisioner
 	allowed                   map[string]struct{}
 
 	mu            sync.Mutex
@@ -185,6 +192,7 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 		subscriptionAccounts:      opts.SubscriptionAccounts,
 		mail:                      opts.Mail,
 		applications:              opts.Applications,
+		subscriptionTeardown:      opts.SubscriptionTeardown,
 		allowed:                   allowed,
 		responses:                 make(map[string]*responseEntry),
 	}
@@ -470,6 +478,19 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, result)
+	case types.OpTeardownSubscription:
+		var payload types.TeardownSubscriptionReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.subscriptionTeardown == nil {
+			return errorResponse(req.ID, "subscription teardown provisioner is not configured")
+		}
+		result, err := d.subscriptionTeardown.TeardownSubscription(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
 	case types.OpConfigureMail:
 		var payload types.ConfigureMailReq
 		if err := decodeStrict(req.Data, &payload); err != nil {
@@ -491,6 +512,18 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, "mail provisioner is not configured")
 		}
 		result, err := d.mail.CollectMailQueue(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpGetMailStatus:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.mail == nil {
+			return errorResponse(req.ID, "mail provisioner is not configured")
+		}
+		result, err := d.mail.MailStatus(ctx)
 		if err != nil {
 			return errorResponse(req.ID, err.Error())
 		}

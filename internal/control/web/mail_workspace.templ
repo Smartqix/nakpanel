@@ -1,0 +1,240 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/types"
+)
+
+templ routedMail(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
+	<section class="np-mail-workspace" aria-labelledby="mail-title">
+		<div class="np-page-head">
+			<div>
+				<span class="np-kicker">Hosting services</span>
+				<h1 id="mail-title">Mail</h1>
+				<p>Manage subscription mail domains, mailboxes, aliases, signing policy, and webmail.</p>
+			</div>
+		</div>
+		<form class="np-mail-filters" method="get" action={ templ.SafeURL(workspacePath(view, "/mail")) } aria-label="Filter mail workspace">
+			<label>Subscription
+				<select name="subscription_id" onchange="this.form.submit()">
+					<option value="0">All subscriptions</option>
+					for _, subscription := range data.Subscriptions {
+						<option value={ formatJobID(subscription.ID) } selected?={ view.SelectedSubscription == subscription.ID }>{ subscriptionSelectLabel(subscription) }</option>
+					}
+				</select>
+			</label>
+			<label>Domain
+				<select name="domain_id" onchange="this.form.submit()">
+					<option value="0">All mail domains</option>
+					for _, domain := range data.SubscriptionServices.MailDomains {
+						if view.SelectedSubscription == 0 || domain.SubscriptionID == view.SelectedSubscription {
+							<option value={ formatJobID(domain.ID) } selected?={ view.SelectedMailDomain == domain.ID }>{ mailDomainOptionLabel(domain) }</option>
+						}
+					}
+				</select>
+			</label>
+			<noscript><button type="submit">Apply filters</button></noscript>
+		</form>
+		@mailSummaryCards(mailWorkspaceSummary(data, mailWorkspaceSubscriptions(data.Subscriptions, view.SelectedSubscription), view.SelectedMailDomain))
+		if alerts := mailAlerts(data.UsageAlerts, mailWorkspaceSubscriptions(data.Subscriptions, view.SelectedSubscription)); len(alerts) > 0 {
+			<section class="np-panel np-mail-alerts" aria-labelledby="mail-alerts-title"><div class="np-panel-title"><div><h2 id="mail-alerts-title">Mail alerts</h2><span class="np-muted">Active delivery and convergence notices</span></div></div><div class="np-object-list">
+				for _, alert := range alerts {
+					<div class="np-object-row"><span class="np-object-icon">@icon("triangle-alert")</span><span><strong>{ alert.Title }</strong><small>{ alert.Body }</small></span>@statusPill(alert.Severity)</div>
+				}
+			</div></section>
+		}
+		if len(mailWorkspaceSubscriptions(data.Subscriptions, view.SelectedSubscription)) == 0 {
+			<section class="np-empty-state"><span class="np-empty-icon">@icon("mail")</span><h2>No subscriptions available</h2><p>A mail workspace appears after a customer has a subscription.</p></section>
+		} else {
+			<div class="np-mail-subscriptions">
+				for _, subscription := range mailWorkspaceSubscriptions(data.Subscriptions, view.SelectedSubscription) {
+					@mailSubscriptionPanel(user, subscription, data, view)
+				}
+			</div>
+		}
+	</section>
+}
+
+templ mailSummaryCards(summary types.MailWorkspaceSummary) {
+	<div class="np-mail-summary" aria-label="Mail summary">
+		<article><span>@icon("mail")</span><div><strong>{ formatPlanLimit(summary.Mailboxes) }</strong><small>Mailboxes</small></div></article>
+		<article><span>@icon("globe")</span><div><strong>{ formatPlanLimit(summary.ActiveDomains) } / { formatPlanLimit(summary.Domains) }</strong><small>Active domains</small></div></article>
+		<article><span>@icon("corner-up-left")</span><div><strong>{ formatPlanLimit(summary.Aliases) }</strong><small>Aliases</small></div></article>
+		<article class={ mailFailureCardClass(summary.FailedResources) }><span>@icon("activity")</span><div><strong>{ formatPlanLimit(summary.FailedResources) }</strong><small>Needs attention</small></div></article>
+	</div>
+}
+
+templ mailSubscriptionPanel(user auth.SessionUser, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	if domains := mailDomainsForWorkspace(data.SubscriptionServices.MailDomains, subscription.ID, view.SelectedMailDomain); true {
+		<section class="np-panel np-mail-subscription" aria-labelledby={ "mail-subscription-" + formatJobID(subscription.ID) }>
+			<div class="np-panel-title np-mail-subscription-head">
+				<div><span class="np-kicker">{ subscription.CustomerName }</span><h2 id={ "mail-subscription-" + formatJobID(subscription.ID) }>{ subscription.SubscriptionName }</h2><span class="np-muted">{ subscription.PlanName } · { mailQuotaUsage(mailboxesForWorkspace(data.SubscriptionServices.Mailboxes, domains), subscription.MaxMailboxes) } mailboxes</span></div>
+				<div class="np-panel-actions"><a class="np-secondary-button" href={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "?tab=mail") }>Subscription details</a></div>
+			</div>
+			if !subscriptionMailEnabled(subscription, data.SubscriptionServices) || subscription.Status != "active" {
+				<div class="np-mail-unavailable" role="status"><span>@icon("shield")</span><div><h3>Mail unavailable</h3><p>{ mailSubscriptionGate(subscription) }</p>
+					if user.Role == auth.RoleClient {
+						<p>Contact your hosting provider to enable mail for this subscription.</p>
+					} else {
+						if subscription.PlanID > 0 {
+							<a href={ templ.SafeURL("/service-plans/" + formatJobID(subscription.PlanID)) }>Edit the service plan</a><span>&nbsp;or synchronize the subscription after updating it.</span>
+						} else {
+							<a href={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "?tab=resources") }>Edit the custom subscription entitlements</a>.
+						}
+					}
+				</div></div>
+			} else {
+				<div class="np-mail-section-head"><div><h3>Mail domains</h3><p>Domains are derived from active websites in this subscription.</p></div>
+					if len(sitesForSubscription(data.Sites, subscription.ID)) > 0 {
+						<button type="button" data-np-dialog-open={ mailDialogID("domain", subscription.ID, 0) }>@icon("plus")<span>Add mail domain</span></button>
+					}
+				</div>
+				if len(domains) == 0 {
+					<div class="np-mail-empty"><p>No mail domains match this view.</p></div>
+				} else {
+					<div class="np-mail-domain-grid">
+						for _, domain := range domains {
+						@mailDomainCard(subscription, domain, data, view, "mail", 0)
+						}
+					</div>
+				}
+				@mailDomainDialog(subscription, dashboard.MailDomain{}, data, view, "mail", 0)
+			}
+		</section>
+	}
+}
+
+templ domainMail(user auth.SessionUser, site dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	<section class="np-mail-workspace np-domain-mail" aria-labelledby="domain-mail-title">
+		<div class="np-panel-title"><div><h2 id="domain-mail-title">Mail for { site.Domain }</h2><span class="np-muted">Mailboxes, aliases, signing policy, and webmail for this domain</span></div></div>
+		if !subscriptionMailEnabled(subscription, data.SubscriptionServices) || subscription.Status != "active" {
+			<div class="np-mail-unavailable" role="status"><span>@icon("shield")</span><div><h3>Mail unavailable</h3><p>{ mailSubscriptionGate(subscription) }</p>
+				if user.Role == auth.RoleClient {
+					<p>Contact your hosting provider to enable mail for this subscription.</p>
+				} else if subscription.PlanID > 0 {
+					<a href={ templ.SafeURL("/service-plans/" + formatJobID(subscription.PlanID)) }>Edit the service plan</a><span>&nbsp;then synchronize this subscription.</span>
+				} else {
+					<a href={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "?tab=resources") }>Edit the custom subscription entitlements</a>.
+				}
+			</div></div>
+		} else if domain, found := mailDomainForSite(data.SubscriptionServices.MailDomains, site); found {
+			@mailSummaryCards(mailWorkspaceSummary(data, []types.SubscriptionSummary{subscription}, domain.ID))
+			if alerts := mailAlerts(data.UsageAlerts, []types.SubscriptionSummary{subscription}); len(alerts) > 0 {
+				<section class="np-panel np-mail-alerts"><div class="np-panel-title"><h3>Mail alerts</h3><span class="np-muted">Delivery and convergence notices</span></div><div class="np-object-list">
+					for _, alert := range alerts {
+						<div class="np-object-row"><span class="np-object-icon">@icon("triangle-alert")</span><span><strong>{ alert.Title }</strong><small>{ alert.Body }</small></span>@statusPill(alert.Severity)</div>
+					}
+				</div></section>
+			}
+			<div class="np-mail-domain-grid">@mailDomainCard(subscription, domain, data, view, "site-mail", site.ID)</div>
+		} else {
+			<section class="np-panel np-mail-empty-domain"><div class="np-mail-section-head"><div><h3>Mail service is not configured</h3><p>Enable Stalwart mail service for this hosted domain before creating mailboxes.</p></div><button type="button" data-np-dialog-open={ mailDialogID("domain", subscription.ID, 0) }>@icon("plus")<span>Enable mail</span></button></div></section>
+			@mailDomainDialog(subscription, dashboard.MailDomain{SiteID: site.ID, Domain: site.Domain}, data, view, "site-mail", site.ID)
+		}
+	</section>
+}
+
+templ mailDomainCard(subscription types.SubscriptionSummary, domain dashboard.MailDomain, data dashboard.Data, view WorkspaceView, returnTo string, returnSiteID int64) {
+	if site, siteFound := siteForMailDomain(data.Sites, domain); true {
+		if webmail, webmailFound := webmailForSite(data.SubscriptionServices.WebmailHosts, site.ID); true {
+			<article class="np-mail-domain-card">
+				<header><div><span class="np-object-icon">@icon("mail")</span><span><strong>{ domain.Domain }</strong><small>{ subscription.SubscriptionName }</small></span></div>@statusPill(domain.Status)</header>
+				<dl class="np-mail-domain-facts"><div><dt>DKIM</dt><dd>{ formatEnabled(domain.DKIM) }</dd></div><div><dt>DMARC</dt><dd>{ domain.DMARCPolicy }</dd></div><div><dt>Webmail</dt><dd>{ mailWebmailStatus(webmail, webmailFound) }</dd></div></dl>
+				if domain.LastError != "" {
+					<p class="np-inline-error" role="alert">{ domain.LastError }</p>
+				}
+				<div class="np-mail-card-actions">
+					<button type="button" class="np-secondary-button" data-np-dialog-open={ mailDialogID("domain", subscription.ID, domain.ID) }>Manage domain</button>
+					<button type="button" class="np-secondary-button" data-np-dialog-open={ mailDialogID("mailbox", subscription.ID, domain.ID) }>@icon("plus")<span>Mailbox</span></button>
+					<button type="button" class="np-secondary-button" data-np-dialog-open={ mailDialogID("alias", subscription.ID, domain.ID) }>@icon("plus")<span>Alias</span></button>
+				</div>
+				@mailboxTable(subscription, domain, mailboxesForWorkspace(data.SubscriptionServices.Mailboxes, []dashboard.MailDomain{domain}), view, returnTo, returnSiteID)
+				@mailAliasTable(subscription, domain, mailAliasesForWorkspace(data.SubscriptionServices.MailAliases, []dashboard.MailDomain{domain}), view, returnTo, returnSiteID)
+				@mailDomainDialog(subscription, domain, data, view, returnTo, returnSiteID)
+				@mailboxDialog(subscription, domain, dashboard.Mailbox{}, view, returnTo, returnSiteID)
+				for _, mailbox := range mailboxesForWorkspace(data.SubscriptionServices.Mailboxes, []dashboard.MailDomain{domain}) {
+					@mailboxDialog(subscription, domain, mailbox, view, returnTo, returnSiteID)
+				}
+				@mailAliasDialog(subscription, domain, dashboard.MailAlias{}, view, returnTo, returnSiteID)
+				for _, alias := range mailAliasesForWorkspace(data.SubscriptionServices.MailAliases, []dashboard.MailDomain{domain}) {
+					@mailAliasDialog(subscription, domain, alias, view, returnTo, returnSiteID)
+				}
+				if siteFound && subscriptionWebmailEnabled(subscription, data.SubscriptionServices) {
+					<div class="np-webmail-action"><button type="button" class="np-secondary-button" data-np-dialog-open={ mailDialogID("webmail", subscription.ID, domain.ID) }>@icon("globe")<span>{ mailWebmailAction(webmailFound) }</span></button></div>
+					<dialog class="np-dialog" id={ mailDialogID("webmail", subscription.ID, domain.ID) } data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Webmail</span><h2>{ mailWebmailAction(webmailFound) }</h2><p>Nakpanel will configure Roundcube for { site.Domain } and connect it to this subscription's Stalwart mail service.</p></div><form class="np-form np-dialog-form" method="post" action="/webmail">@csrfInput(view)@mailReturnFields(view, returnTo, site.ID)<input type="hidden" name="domain" value={ site.Domain }/><input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">{ mailWebmailAction(webmailFound) }</button></div></form></dialog>
+				}
+			</article>
+		}
+	}
+}
+
+templ mailboxTable(subscription types.SubscriptionSummary, domain dashboard.MailDomain, mailboxes []dashboard.Mailbox, view WorkspaceView, returnTo string, returnSiteID int64) {
+	<div class="np-mail-resource-block"><div class="np-mail-resource-title"><h4>Mailboxes</h4><span>{ formatPlanLimit(len(mailboxes)) }</span></div>
+		if len(mailboxes) == 0 {
+			<p class="np-muted">No mailboxes for this domain.</p>
+		} else {
+			<div class="np-table-wrap"><table class="np-table np-mail-table"><thead><tr><th>Address</th><th>Quota</th><th>Status</th><th></th></tr></thead><tbody>
+				for _, mailbox := range mailboxes {
+					<tr><td data-label="Address"><strong>{ mailbox.Address }</strong></td><td data-label="Quota">{ formatMailboxQuota(mailbox.QuotaMB) }</td><td data-label="Status">@statusPill(mailEnabledStatus(mailbox.Enabled))</td><td data-label="Actions"><div class="np-row-actions"><button type="button" class="np-icon-button" title="Edit mailbox" data-np-dialog-open={ mailDialogID("mailbox-edit", subscription.ID, mailbox.ID) }>@icon("pencil")</button>@mailServiceDelete(subscription.ID,"mailbox",mailbox.ID,view,returnTo,returnSiteID)</div></td></tr>
+				}
+			</tbody></table></div>
+		}
+	</div>
+}
+
+templ mailAliasTable(subscription types.SubscriptionSummary, domain dashboard.MailDomain, aliases []dashboard.MailAlias, view WorkspaceView, returnTo string, returnSiteID int64) {
+	<div class="np-mail-resource-block"><div class="np-mail-resource-title"><h4>Aliases</h4><span>{ formatPlanLimit(len(aliases)) }</span></div>
+		if len(aliases) == 0 {
+			<p class="np-muted">No aliases for this domain.</p>
+		} else {
+			<div class="np-table-wrap"><table class="np-table np-mail-table"><thead><tr><th>Address</th><th>Destinations</th><th></th></tr></thead><tbody>
+				for _, alias := range aliases {
+					<tr><td data-label="Address"><strong>{ alias.Address }</strong></td><td data-label="Destinations">{ alias.Destinations }</td><td data-label="Actions"><div class="np-row-actions"><button type="button" class="np-icon-button" title="Edit alias" data-np-dialog-open={ mailDialogID("alias-edit", subscription.ID, alias.ID) }>@icon("pencil")</button>@mailServiceDelete(subscription.ID,"mail_alias",alias.ID,view,returnTo,returnSiteID)</div></td></tr>
+				}
+			</tbody></table></div>
+		}
+	</div>
+}
+
+templ mailDomainDialog(subscription types.SubscriptionSummary, domain dashboard.MailDomain, data dashboard.Data, view WorkspaceView, returnTo string, returnSiteID int64) {
+	<dialog class="np-dialog" id={ mailDialogID("domain", subscription.ID, domain.ID) } data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Mail domain</span><h2>{ mailDomainDialogTitle(domain.ID) }</h2><p>The domain is taken from a hosted website owned by this subscription.</p></div>
+		<form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mail-domains") }>@csrfInput(view)@mailReturnFields(view,returnTo,returnSiteID)<input type="hidden" name="resource_id" value={ formatJobID(domain.ID) }/>
+			if returnSiteID > 0 {
+				<div class="np-readonly-field"><span>Hosted domain</span><strong>{ domain.Domain }</strong></div>
+			} else {
+				<label>Hosted domain<select name="site_id" required>
+					for _, site := range sitesForSubscription(data.Sites, subscription.ID) {
+						<option value={ formatJobID(site.ID) } selected?={ domain.SiteID == site.ID }>{ site.Domain }</option>
+					}
+				</select></label>
+			}
+			<label>DMARC policy<select name="dmarc_policy"><option value="none" selected?={ domain.DMARCPolicy == "" || domain.DMARCPolicy == "none" }>Monitor only</option><option value="quarantine" selected?={ domain.DMARCPolicy == "quarantine" }>Quarantine</option><option value="reject" selected?={ domain.DMARCPolicy == "reject" }>Reject</option></select></label><label class="np-check"><input type="checkbox" name="dkim" value="true" checked?={ domain.ID == 0 || domain.DKIM }/>Enable DKIM signing</label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked?={ domain.ID == 0 || domain.Enabled }/>Mail service enabled</label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save mail domain</button></div></form>
+	</dialog>
+}
+
+templ mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.MailDomain, mailbox dashboard.Mailbox, view WorkspaceView, returnTo string, returnSiteID int64) {
+	<dialog class="np-dialog" id={ mailDialogID(mailboxDialogKind(mailbox.ID), subscription.ID, mailboxDialogResourceID(mailbox.ID, domain.ID)) } data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">{ domain.Domain }</span><h2>{ mailboxDialogTitle(mailbox.ID) }</h2><p>Passwords are write-only. Existing passwords are never returned by Nakpanel.</p></div>
+		<form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mailboxes") }>@csrfInput(view)@mailReturnFields(view,returnTo,returnSiteID)<input type="hidden" name="resource_id" value={ formatJobID(mailbox.ID) }/><input type="hidden" name="mail_domain_id" value={ formatJobID(domain.ID) }/><label>Local part<input name="local_part" value={ mailLocalPart(mailbox.Address) } required/></label><label>Password <span class="np-muted">{ mailboxPasswordHint(mailbox.ID) }</span><span class="np-password-field"><input type="password" name="password" autocomplete="new-password" minlength="12" required?={ mailbox.ID == 0 } data-np-generated-password/><button type="button" class="np-icon-button" title="Generate secure password" data-np-generate-password>@icon("activity")</button><button type="button" class="np-icon-button" title="Copy password" data-np-copy-password>@icon("copy")</button></span></label><label>Quota MB<input type="number" min="-1" name="quota_mb" value={ formatMailboxQuotaInput(mailbox.QuotaMB) }/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked?={ mailbox.ID == 0 || mailbox.Enabled }/>Mailbox enabled</label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">{ mailboxSubmitLabel(mailbox.ID) }</button></div></form>
+	</dialog>
+}
+
+templ mailAliasDialog(subscription types.SubscriptionSummary, domain dashboard.MailDomain, alias dashboard.MailAlias, view WorkspaceView, returnTo string, returnSiteID int64) {
+	<dialog class="np-dialog" id={ mailDialogID(aliasDialogKind(alias.ID), subscription.ID, aliasDialogResourceID(alias.ID, domain.ID)) } data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">{ domain.Domain }</span><h2>{ aliasDialogTitle(alias.ID) }</h2><p>Destinations must be existing mailboxes in this subscription.</p></div>
+		<form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/mail-aliases") }>@csrfInput(view)@mailReturnFields(view,returnTo,returnSiteID)<input type="hidden" name="resource_id" value={ formatJobID(alias.ID) }/><input type="hidden" name="mail_domain_id" value={ formatJobID(domain.ID) }/><label>Local part<input name="local_part" value={ mailLocalPart(alias.Address) } required/></label><label>Destination mailboxes<textarea name="destinations" rows="3" required>{ alias.Destinations }</textarea></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save alias</button></div></form>
+	</dialog>
+}
+
+templ mailServiceDelete(subscriptionID int64, kind string, id int64, view WorkspaceView, returnTo string, returnSiteID int64) {
+	<form class="np-inline-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscriptionID)+"/services/"+kind+"/"+formatJobID(id)+"/delete") }>@csrfInput(view)@mailReturnFields(view,returnTo,returnSiteID)<button type="submit" class="np-icon-button np-danger-button" title="Delete" data-np-confirm="Delete this mail resource?">@icon("trash")</button></form>
+}
+
+templ mailReturnFields(view WorkspaceView, returnTo string, siteID int64) {
+	<input type="hidden" name="return_to" value={ returnTo }/>
+	if returnTo == "site-mail" {
+		<input type="hidden" name="site_id" value={ formatJobID(siteID) }/>
+		if view.SupportCustomerID > 0 {
+			<input type="hidden" name="support_customer_id" value={ formatJobID(view.SupportCustomerID) }/>
+		}
+	}
+}
