@@ -691,15 +691,20 @@ type CollectUsageResult struct {
 }
 
 type RuntimeCapabilities struct {
-	PHPVersions          []string `json:"php_versions"`
-	DiskQuota            bool     `json:"disk_quota"`
-	PodmanVersion        string   `json:"podman_version,omitempty"`
-	RootlessPodman       bool     `json:"rootless_podman"`
-	SubordinateIDSupport bool     `json:"subordinate_id_support"`
-	CgroupVersion        int      `json:"cgroup_version"`
-	ApplicationHealth    []string `json:"application_health_checks,omitempty"`
-	ApplicationPortFrom  int      `json:"application_port_from,omitempty"`
-	ApplicationPortTo    int      `json:"application_port_to,omitempty"`
+	PHPVersions          []string               `json:"php_versions"`
+	PHPRuntimes          []PHPRuntimeCapability `json:"php_runtimes,omitempty"`
+	ComposerAvailable    bool                   `json:"composer_available"`
+	ComposerVersion      string                 `json:"composer_version,omitempty"`
+	WPCLIAvailable       bool                   `json:"wp_cli_available"`
+	WPCLIVersion         string                 `json:"wp_cli_version,omitempty"`
+	DiskQuota            bool                   `json:"disk_quota"`
+	PodmanVersion        string                 `json:"podman_version,omitempty"`
+	RootlessPodman       bool                   `json:"rootless_podman"`
+	SubordinateIDSupport bool                   `json:"subordinate_id_support"`
+	CgroupVersion        int                    `json:"cgroup_version"`
+	ApplicationHealth    []string               `json:"application_health_checks,omitempty"`
+	ApplicationPortFrom  int                    `json:"application_port_from,omitempty"`
+	ApplicationPortTo    int                    `json:"application_port_to,omitempty"`
 }
 
 type AddonPlan struct {
@@ -721,17 +726,19 @@ type SetHostingStateReq struct {
 }
 
 type ApplySiteRuntimeReq struct {
-	SiteID            int64              `json:"site_id,omitempty"`
-	Username          string             `json:"username"`
-	Domain            string             `json:"domain"`
-	CurrentPHPVersion string             `json:"current_php_version"`
-	DesiredPHPVersion string             `json:"desired_php_version"`
-	State             string             `json:"state"`
-	SharedAccount     bool               `json:"shared_account,omitempty"`
-	HTTPSRedirect     bool               `json:"https_redirect"`
-	TLSCertPath       string             `json:"tls_cert_path,omitempty"`
-	TLSKeyPath        string             `json:"tls_key_path,omitempty"`
-	Limits            SiteResourceLimits `json:"limits"`
+	SiteID            int64               `json:"site_id,omitempty"`
+	Username          string              `json:"username"`
+	Domain            string              `json:"domain"`
+	CurrentPHPVersion string              `json:"current_php_version"`
+	DesiredPHPVersion string              `json:"desired_php_version"`
+	State             string              `json:"state"`
+	SharedAccount     bool                `json:"shared_account,omitempty"`
+	HTTPSRedirect     bool                `json:"https_redirect"`
+	TLSCertPath       string              `json:"tls_cert_path,omitempty"`
+	TLSKeyPath        string              `json:"tls_key_path,omitempty"`
+	Limits            SiteResourceLimits  `json:"limits"`
+	HostingMode       HostingMode         `json:"hosting_mode,omitempty"`
+	Application       *PHPApplicationSpec `json:"php_application,omitempty"`
 }
 
 type UpdateSiteSettingsReq struct {
@@ -978,6 +985,8 @@ type ReconcileSiteReq struct {
 	Limits            SiteResourceLimits   `json:"limits,omitempty"`
 	DNSRecords        []DNSRecord          `json:"dns_records,omitempty"`
 	DNSZone           *ConfigureDNSZoneReq `json:"dns_zone,omitempty"`
+	HostingMode       HostingMode          `json:"hosting_mode,omitempty"`
+	Application       *PHPApplicationSpec  `json:"php_application,omitempty"`
 }
 
 type ReconcileDatabaseReq struct {

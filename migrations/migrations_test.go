@@ -259,3 +259,55 @@ func TestPhase28ManifestCompatibilityMigration(t *testing.T) {
 		}
 	}
 }
+
+func TestPhase30ProductionPHPMigrationIsConstrainedAndClassicByDefault(t *testing.T) {
+	data, err := os.ReadFile("20260829000044_phase30_production_php.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, marker := range []string{
+		"CREATE TABLE php_applications",
+		"UNIQUE(site_id)",
+		"hosting_mode IN ('classic','managed')",
+		"CREATE TABLE php_deployments",
+		"CREATE TABLE php_environment_bindings",
+		"REFERENCES service_secrets(id) ON DELETE RESTRICT",
+		"CREATE TABLE php_workers",
+		"INSERT INTO php_applications",
+		"SELECT site.subscription_id,site.id,'classic'",
+		"php_applications_account_teardown_guard",
+		"php_deployments_account_teardown_guard",
+		"php_environment_bindings_account_teardown_guard",
+		"php_workers_account_teardown_guard",
+		"-- +goose Down",
+	} {
+		if !strings.Contains(script, marker) {
+			t.Fatalf("Phase 30 migration is missing %q", marker)
+		}
+	}
+	for _, forbidden := range []string{"secret_plaintext", "secret_value", "environment_secret"} {
+		if strings.Contains(strings.ToLower(script), forbidden) {
+			t.Fatalf("Phase 30 migration contains forbidden secret storage %q", forbidden)
+		}
+	}
+}
+
+func TestPhase30DownRemovesNotificationsBeforeRestoringConstraint(t *testing.T) {
+	data, err := os.ReadFile("20260829000044_phase30_production_php.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	down := string(data)
+	if marker := strings.Index(down, "-- +goose Down"); marker >= 0 {
+		down = down[marker:]
+	}
+	removeRows := strings.Index(down, "DELETE FROM notifications WHERE kind IN ('php_deployment_failed','php_runtime_unsupported','php_reconciliation_failed')")
+	restoreConstraint := strings.LastIndex(down, "ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check")
+	if removeRows < 0 || restoreConstraint < 0 || removeRows > restoreConstraint {
+		t.Fatal("Phase 30 down migration must remove PHP notifications before restoring the older kind constraint")
+	}
+	if strings.Contains(down[restoreConstraint:], "'php_deployment_failed'") {
+		t.Fatal("Phase 30 down constraint still permits Phase 30 notification kinds")
+	}
+}

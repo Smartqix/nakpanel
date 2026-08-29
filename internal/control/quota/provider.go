@@ -375,6 +375,8 @@ func composeHostingPolicyAddon(base, addon types.HostingPolicy) (types.HostingPo
 		{&base.Resources.ContainerStorageMB, addon.Resources.ContainerStorageMB},
 		{&base.Resources.MaxFTPAccounts, addon.Resources.MaxFTPAccounts},
 		{&base.Resources.ValkeyMemoryMB, addon.Resources.ValkeyMemoryMB},
+		{&base.Resources.MaxPHPWorkers, addon.Resources.MaxPHPWorkers},
+		{&base.Resources.MaxPHPReleases, addon.Resources.MaxPHPReleases},
 	} {
 		value, err := additiveLimit(*limit.current, limit.delta)
 		if err != nil {
@@ -406,6 +408,10 @@ func composeHostingPolicyAddon(base, addon types.HostingPolicy) (types.HostingPo
 	base.Permissions.Applications = base.Permissions.Applications || addon.Permissions.Applications
 	base.Permissions.CustomOCIImages = base.Permissions.CustomOCIImages || addon.Permissions.CustomOCIImages
 	base.Permissions.ApplicationEgress = base.Permissions.ApplicationEgress || addon.Permissions.ApplicationEgress
+	base.Permissions.Composer = base.Permissions.Composer || addon.Permissions.Composer
+	base.Permissions.ComposerCodeExecution = base.Permissions.ComposerCodeExecution || addon.Permissions.ComposerCodeExecution
+	base.Permissions.ManagedPHPDeployments = base.Permissions.ManagedPHPDeployments || addon.Permissions.ManagedPHPDeployments
+	base.Permissions.PHPWorkers = base.Permissions.PHPWorkers || addon.Permissions.PHPWorkers
 	base.Access.FTPSEnabled = base.Access.FTPSEnabled || addon.Access.FTPSEnabled
 	base.Web.RequestRatePerSecond = highestLimit(base.Web.RequestRatePerSecond, addon.Web.RequestRatePerSecond)
 	base.Web.RequestBurst = highestLimit(base.Web.RequestBurst, addon.Web.RequestBurst)

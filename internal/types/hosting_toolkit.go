@@ -55,13 +55,15 @@ type EnsureFTPSResult struct {
 }
 
 type SiteRuntimeSpec struct {
-	SiteID     int64              `json:"site_id"`
-	Username   string             `json:"username"`
-	Domain     string             `json:"domain"`
-	PHPVersion string             `json:"php_version"`
-	State      string             `json:"state"`
-	Policy     HostingPolicy      `json:"policy"`
-	Limits     SiteResourceLimits `json:"limits"`
+	SiteID      int64               `json:"site_id"`
+	Username    string              `json:"username"`
+	Domain      string              `json:"domain"`
+	PHPVersion  string              `json:"php_version"`
+	State       string              `json:"state"`
+	Policy      HostingPolicy       `json:"policy"`
+	Limits      SiteResourceLimits  `json:"limits"`
+	HostingMode HostingMode         `json:"hosting_mode,omitempty"`
+	Application *PHPApplicationSpec `json:"php_application,omitempty"`
 }
 
 type SiteLogSource string

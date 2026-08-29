@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -15,6 +16,100 @@ func testPolicy() types.HostingPolicy {
 		DNS:           types.HostingDNSPolicy{Enabled: true, Mode: "authoritative", DefaultTTL: 3600},
 		Access:        types.HostingAccessPolicy{ShellMode: "disabled", SFTPOnly: true},
 		Mail:          types.HostingMailPolicy{DMARCPolicy: "none"},
+	}
+}
+
+func TestUpgradeV1AndV2ToV3PreservesLegacyValuesWithPHPHostingDisabled(t *testing.T) {
+	for _, version := range []int{1, 2} {
+		legacy := testPolicy()
+		legacy.SchemaVersion = version
+		legacy.Permissions.Git = true
+		legacy.Resources.MaxSites = 7
+
+		got := Upgrade(legacy)
+		if got.SchemaVersion != 3 || !got.Permissions.Git || got.Resources.MaxSites != 7 {
+			t.Fatalf("Upgrade(v%d) did not preserve legacy policy: %#v", version, got)
+		}
+		if got.Permissions.Composer || got.Permissions.ComposerCodeExecution ||
+			got.Permissions.ManagedPHPDeployments || got.Permissions.PHPWorkers ||
+			got.Resources.MaxPHPWorkers != 0 || got.Resources.MaxPHPReleases != 0 {
+			t.Fatalf("Upgrade(v%d) granted Phase 30 capability: %#v", version, got)
+		}
+	}
+}
+
+func TestHostingPolicyV3RoundTripsPHPHostingFields(t *testing.T) {
+	want := testPolicy()
+	want.SchemaVersion = 3
+	want.Resources.MaxPHPWorkers = 4
+	want.Resources.MaxPHPReleases = 8
+	want.Permissions.Composer = true
+	want.Permissions.ComposerCodeExecution = true
+	want.Permissions.ManagedPHPDeployments = true
+	want.Permissions.PHPWorkers = true
+
+	encoded, err := json.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got types.HostingPolicy
+	if err := json.Unmarshal(encoded, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Resources.MaxPHPWorkers != 4 || got.Resources.MaxPHPReleases != 8 ||
+		!got.Permissions.Composer || !got.Permissions.ComposerCodeExecution ||
+		!got.Permissions.ManagedPHPDeployments || !got.Permissions.PHPWorkers {
+		t.Fatalf("round-tripped Phase 30 policy = %#v", got)
+	}
+}
+
+func TestValidateV3RejectsInvalidPHPHostingLimits(t *testing.T) {
+	for name, mutate := range map[string]func(*types.HostingPolicy){
+		"workers":  func(p *types.HostingPolicy) { p.Resources.MaxPHPWorkers = -2 },
+		"releases": func(p *types.HostingPolicy) { p.Resources.MaxPHPReleases = -2 },
+	} {
+		policy := Upgrade(testPolicy())
+		mutate(&policy)
+		if err := Validate(policy); err == nil {
+			t.Fatalf("negative max PHP %s was accepted", name)
+		}
+	}
+}
+
+func TestValidateWithinIncludesPHPHostingCeilings(t *testing.T) {
+	ceiling := Upgrade(testPolicy())
+	ceiling.Resources.MaxPHPWorkers = 2
+	ceiling.Resources.MaxPHPReleases = 5
+	ceiling.Permissions.Composer = true
+	ceiling.Permissions.ManagedPHPDeployments = true
+	child := ceiling
+	if err := ValidateWithin(child, ceiling); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, mutate := range map[string]func(*types.HostingPolicy){
+		"worker limit":       func(p *types.HostingPolicy) { p.Resources.MaxPHPWorkers = 3 },
+		"release limit":      func(p *types.HostingPolicy) { p.Resources.MaxPHPReleases = 6 },
+		"composer execution": func(p *types.HostingPolicy) { p.Permissions.ComposerCodeExecution = true },
+		"PHP workers":        func(p *types.HostingPolicy) { p.Permissions.PHPWorkers = true },
+	} {
+		candidate := child
+		mutate(&candidate)
+		if err := ValidateWithin(candidate, ceiling); err == nil {
+			t.Fatalf("%s exceeded provider ceiling", name)
+		}
+	}
+}
+
+func TestDefaultPolicyUsesV3WithoutGrantingPHPHosting(t *testing.T) {
+	got := DefaultFromEntitlements(types.SubscriptionEntitlements{HostingEnabled: true})
+	if got.SchemaVersion != 3 {
+		t.Fatalf("schema version = %d, want 3", got.SchemaVersion)
+	}
+	if got.Permissions.Composer || got.Permissions.ComposerCodeExecution ||
+		got.Permissions.ManagedPHPDeployments || got.Permissions.PHPWorkers ||
+		got.Resources.MaxPHPWorkers != 0 || got.Resources.MaxPHPReleases != 0 {
+		t.Fatalf("legacy entitlements granted Phase 30 capability: %#v", got)
 	}
 }
 

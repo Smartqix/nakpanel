@@ -44,28 +44,34 @@ type HostingResourcePolicy struct {
 	ContainerStorageMB int `json:"container_storage_mb"`
 	MaxFTPAccounts     int `json:"max_ftp_accounts"`
 	ValkeyMemoryMB     int `json:"valkey_memory_mb"`
+	MaxPHPWorkers      int `json:"max_php_workers"`
+	MaxPHPReleases     int `json:"max_php_releases"`
 }
 
 type HostingPermissionPolicy struct {
-	Hosting           bool `json:"hosting"`
-	SSH               bool `json:"ssh"`
-	SFTP              bool `json:"sftp"`
-	ScheduledTasks    bool `json:"scheduled_tasks"`
-	DNS               bool `json:"dns"`
-	TLS               bool `json:"tls"`
-	Mail              bool `json:"mail"`
-	Databases         bool `json:"databases"`
-	Backups           bool `json:"backups"`
-	PHPSettings       bool `json:"php_settings"`
-	CGI               bool `json:"cgi"`
-	Applications      bool `json:"applications"`
-	CustomOCIImages   bool `json:"custom_oci_images"`
-	ApplicationEgress bool `json:"application_egress"`
-	FTPS              bool `json:"ftps"`
-	Logs              bool `json:"logs"`
-	Git               bool `json:"git"`
-	Staging           bool `json:"staging"`
-	Valkey            bool `json:"valkey"`
+	Hosting               bool `json:"hosting"`
+	SSH                   bool `json:"ssh"`
+	SFTP                  bool `json:"sftp"`
+	ScheduledTasks        bool `json:"scheduled_tasks"`
+	DNS                   bool `json:"dns"`
+	TLS                   bool `json:"tls"`
+	Mail                  bool `json:"mail"`
+	Databases             bool `json:"databases"`
+	Backups               bool `json:"backups"`
+	PHPSettings           bool `json:"php_settings"`
+	CGI                   bool `json:"cgi"`
+	Applications          bool `json:"applications"`
+	CustomOCIImages       bool `json:"custom_oci_images"`
+	ApplicationEgress     bool `json:"application_egress"`
+	FTPS                  bool `json:"ftps"`
+	Logs                  bool `json:"logs"`
+	Git                   bool `json:"git"`
+	Staging               bool `json:"staging"`
+	Valkey                bool `json:"valkey"`
+	Composer              bool `json:"composer"`
+	ComposerCodeExecution bool `json:"composer_code_execution"`
+	ManagedPHPDeployments bool `json:"managed_php_deployments"`
+	PHPWorkers            bool `json:"php_workers"`
 }
 
 type HostingWebPolicy struct {

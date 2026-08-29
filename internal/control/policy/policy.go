@@ -124,7 +124,7 @@ func decodeStrict(data []byte, target any) error {
 }
 
 func Validate(p types.HostingPolicy) error {
-	if p.SchemaVersion != 1 && p.SchemaVersion != 2 {
+	if p.SchemaVersion != 1 && p.SchemaVersion != 2 && p.SchemaVersion != 3 {
 		return fmt.Errorf("unsupported schema version %d", p.SchemaVersion)
 	}
 	limits := map[string]int{
@@ -138,6 +138,7 @@ func Validate(p types.HostingPolicy) error {
 		"max_backups": p.Resources.MaxBackups, "backup_storage_mb": p.Resources.BackupStorageMB,
 		"max_applications": p.Resources.MaxApplications, "container_storage_mb": p.Resources.ContainerStorageMB,
 		"max_ftp_accounts": p.Resources.MaxFTPAccounts, "valkey_memory_mb": p.Resources.ValkeyMemoryMB,
+		"max_php_workers": p.Resources.MaxPHPWorkers, "max_php_releases": p.Resources.MaxPHPReleases,
 		"fpm_max_children": p.PHP.FPMMaxChildren, "fpm_max_requests": p.PHP.FPMMaxRequests,
 		"php_memory_limit_mb": p.PHP.MemoryLimitMB, "mailbox_quota_mb": p.Mail.MailboxQuotaMB,
 		"backup_retention_days": p.Backups.RetentionDays, "opcache_memory_mb": p.PHP.OPcacheMemoryMB,
@@ -218,41 +219,43 @@ func Validate(p types.HostingPolicy) error {
 	return nil
 }
 
-// Upgrade preserves v1 values while supplying safe v2 defaults. Stored v1
-// snapshots remain readable and are not rewritten until an operator saves
-// them.
+// Upgrade preserves stored values while supplying versioned safe defaults.
+// Stored snapshots remain readable and are not rewritten until an operator
+// saves them. Phase 30 permissions and limits use their disabled zero values.
 func Upgrade(p types.HostingPolicy) types.HostingPolicy {
-	if p.SchemaVersion != 1 {
+	if p.SchemaVersion != 1 && p.SchemaVersion != 2 {
 		return p
 	}
-	p.SchemaVersion = 2
-	if p.PHP.FPMMode == "" {
-		p.PHP.FPMMode = "ondemand"
+	if p.SchemaVersion == 1 {
+		if p.PHP.FPMMode == "" {
+			p.PHP.FPMMode = "ondemand"
+		}
+		if p.PHP.FPMIdleTimeoutSecs == 0 {
+			p.PHP.FPMIdleTimeoutSecs = 10
+		}
+		if p.PHP.RequestTerminateSecs == 0 {
+			p.PHP.RequestTerminateSecs = p.PHP.MaxExecutionSeconds + 5
+		}
+		if p.Web.IndexFiles == "" {
+			p.Web.IndexFiles = "index.php index.html"
+		}
+		if p.Web.RequestBodyLimitMB == 0 {
+			p.Web.RequestBodyLimitMB = p.PHP.PostMaxMB
+		}
+		if p.Web.SecurityHeaderPreset == "" {
+			p.Web.SecurityHeaderPreset = "balanced"
+		}
+		if p.Access.FTPSPassiveStart == 0 {
+			p.Access.FTPSPassiveStart = 49152
+		}
+		if p.Access.FTPSPassiveEnd == 0 {
+			p.Access.FTPSPassiveEnd = 49252
+		}
+		if p.Valkey.EvictionPolicy == "" {
+			p.Valkey.EvictionPolicy = "allkeys-lru"
+		}
 	}
-	if p.PHP.FPMIdleTimeoutSecs == 0 {
-		p.PHP.FPMIdleTimeoutSecs = 10
-	}
-	if p.PHP.RequestTerminateSecs == 0 {
-		p.PHP.RequestTerminateSecs = p.PHP.MaxExecutionSeconds + 5
-	}
-	if p.Web.IndexFiles == "" {
-		p.Web.IndexFiles = "index.php index.html"
-	}
-	if p.Web.RequestBodyLimitMB == 0 {
-		p.Web.RequestBodyLimitMB = p.PHP.PostMaxMB
-	}
-	if p.Web.SecurityHeaderPreset == "" {
-		p.Web.SecurityHeaderPreset = "balanced"
-	}
-	if p.Access.FTPSPassiveStart == 0 {
-		p.Access.FTPSPassiveStart = 49152
-	}
-	if p.Access.FTPSPassiveEnd == 0 {
-		p.Access.FTPSPassiveEnd = 49252
-	}
-	if p.Valkey.EvictionPolicy == "" {
-		p.Valkey.EvictionPolicy = "allkeys-lru"
-	}
+	p.SchemaVersion = 3
 	return p
 }
 
@@ -270,7 +273,7 @@ func DefaultFromEntitlements(e types.SubscriptionEntitlements) types.HostingPoli
 		dnsMode = "external"
 	}
 	return types.HostingPolicy{
-		SchemaVersion: 2,
+		SchemaVersion: 3,
 		Resources: types.HostingResourcePolicy{
 			DiskMB: e.DiskMB, TrafficMB: e.BandwidthMB, MaxSites: e.MaxSites,
 			MaxDatabases: e.MaxDatabases, MaxMailboxes: e.MaxMailboxes,
@@ -324,6 +327,7 @@ func ValidateWithin(child, ceiling types.HostingPolicy) error {
 		child.Resources.MaxSFTPIdentities, child.Resources.MaxScheduledTasks, child.Resources.MaxBackups,
 		child.Resources.BackupStorageMB, child.Resources.MaxApplications, child.Resources.ContainerStorageMB,
 		child.Resources.MaxFTPAccounts, child.Resources.ValkeyMemoryMB,
+		child.Resources.MaxPHPWorkers, child.Resources.MaxPHPReleases,
 	}
 	ceilingLimits := []int{
 		ceiling.Resources.DiskMB, ceiling.Resources.TrafficMB, ceiling.Resources.CPUPercent,
@@ -333,6 +337,7 @@ func ValidateWithin(child, ceiling types.HostingPolicy) error {
 		ceiling.Resources.MaxSFTPIdentities, ceiling.Resources.MaxScheduledTasks, ceiling.Resources.MaxBackups,
 		ceiling.Resources.BackupStorageMB, ceiling.Resources.MaxApplications, ceiling.Resources.ContainerStorageMB,
 		ceiling.Resources.MaxFTPAccounts, ceiling.Resources.ValkeyMemoryMB,
+		ceiling.Resources.MaxPHPWorkers, ceiling.Resources.MaxPHPReleases,
 	}
 	for i := range childLimits {
 		if !limitWithin(childLimits[i], ceilingLimits[i]) {
@@ -347,6 +352,8 @@ func ValidateWithin(child, ceiling types.HostingPolicy) error {
 		child.Permissions.CustomOCIImages, child.Permissions.ApplicationEgress,
 		child.Permissions.FTPS, child.Permissions.Logs, child.Permissions.Git,
 		child.Permissions.Staging, child.Permissions.Valkey,
+		child.Permissions.Composer, child.Permissions.ComposerCodeExecution,
+		child.Permissions.ManagedPHPDeployments, child.Permissions.PHPWorkers,
 	}
 	ceilingPermissions := []bool{
 		ceiling.Permissions.Hosting, ceiling.Permissions.SSH, ceiling.Permissions.SFTP,
@@ -356,6 +363,8 @@ func ValidateWithin(child, ceiling types.HostingPolicy) error {
 		ceiling.Permissions.CustomOCIImages, ceiling.Permissions.ApplicationEgress,
 		ceiling.Permissions.FTPS, ceiling.Permissions.Logs, ceiling.Permissions.Git,
 		ceiling.Permissions.Staging, ceiling.Permissions.Valkey,
+		ceiling.Permissions.Composer, ceiling.Permissions.ComposerCodeExecution,
+		ceiling.Permissions.ManagedPHPDeployments, ceiling.Permissions.PHPWorkers,
 	}
 	for i := range childPermissions {
 		if childPermissions[i] && !ceilingPermissions[i] {

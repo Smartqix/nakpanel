@@ -125,6 +125,42 @@ func TestComposeEntitlementsCombinesTypedAddonPolicy(t *testing.T) {
 	}
 }
 
+func TestComposeEntitlementsCombinesPHPHostingAddonWithoutImplicitGrant(t *testing.T) {
+	base := types.SubscriptionEntitlements{
+		HostingPolicy: types.HostingPolicy{SchemaVersion: 2},
+	}
+	withoutAddon, err := ComposeEntitlements(base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if withoutAddon.HostingPolicy.Permissions.Composer ||
+		withoutAddon.HostingPolicy.Permissions.ComposerCodeExecution ||
+		withoutAddon.HostingPolicy.Permissions.ManagedPHPDeployments ||
+		withoutAddon.HostingPolicy.Permissions.PHPWorkers {
+		t.Fatalf("legacy subscription gained PHP hosting permissions: %#v", withoutAddon.HostingPolicy)
+	}
+
+	addon := types.AddonPlan{Name: "Managed PHP", Entitlements: types.SubscriptionEntitlements{
+		HostingPolicy: types.HostingPolicy{
+			SchemaVersion: 3,
+			Resources:     types.HostingResourcePolicy{MaxPHPWorkers: 2, MaxPHPReleases: 5},
+			Permissions: types.HostingPermissionPolicy{
+				Composer: true, ComposerCodeExecution: true,
+				ManagedPHPDeployments: true, PHPWorkers: true,
+			},
+		},
+	}}
+	got, err := ComposeEntitlements(base, []types.AddonPlan{addon})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HostingPolicy.Resources.MaxPHPWorkers != 2 || got.HostingPolicy.Resources.MaxPHPReleases != 5 ||
+		!got.HostingPolicy.Permissions.Composer || !got.HostingPolicy.Permissions.ComposerCodeExecution ||
+		!got.HostingPolicy.Permissions.ManagedPHPDeployments || !got.HostingPolicy.Permissions.PHPWorkers {
+		t.Fatalf("PHP hosting add-on was not composed: %#v", got.HostingPolicy)
+	}
+}
+
 func TestSetSubscriptionModeCustomQueuesHostConvergence(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
