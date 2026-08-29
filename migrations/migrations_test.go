@@ -272,8 +272,13 @@ func TestPhase30ProductionPHPMigrationIsConstrainedAndClassicByDefault(t *testin
 		"hosting_mode IN ('classic','managed')",
 		"CREATE TABLE php_deployments",
 		"CREATE TABLE php_environment_bindings",
-		"REFERENCES service_secrets(id) ON DELETE RESTRICT",
 		"CREATE TABLE php_workers",
+		"FOREIGN KEY (site_id,subscription_id) REFERENCES sites(id,subscription_id)",
+		"FOREIGN KEY (repository_id,site_id) REFERENCES git_repositories(id,site_id)",
+		"FOREIGN KEY (application_id,subscription_id) REFERENCES php_applications(id,subscription_id)",
+		"FOREIGN KEY (active_deployment_id,id) REFERENCES php_deployments(id,application_id)",
+		"FOREIGN KEY (previous_deployment_id,application_id) REFERENCES php_deployments(id,application_id)",
+		"FOREIGN KEY (secret_id,secret_scope) REFERENCES service_secrets(id,scope)",
 		"INSERT INTO php_applications",
 		"SELECT site.subscription_id,site.id,'classic'",
 		"php_applications_account_teardown_guard",
@@ -289,6 +294,32 @@ func TestPhase30ProductionPHPMigrationIsConstrainedAndClassicByDefault(t *testin
 	for _, forbidden := range []string{"secret_plaintext", "secret_value", "environment_secret"} {
 		if strings.Contains(strings.ToLower(script), forbidden) {
 			t.Fatalf("Phase 30 migration contains forbidden secret storage %q", forbidden)
+		}
+	}
+}
+
+func TestPhase30DownRequiresCanonicalClassicBackfill(t *testing.T) {
+	data, err := os.ReadFile("20260829000044_phase30_production_php.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	down := string(data)
+	if marker := strings.Index(down, "-- +goose Down"); marker >= 0 {
+		down = down[marker:]
+	}
+	for _, marker := range []string{
+		"application.subscription_id <> site.subscription_id",
+		"application.php_version <> site.php_version",
+		"application.desired_state <> site.desired_status",
+		"application.repository_id IS NOT NULL",
+		"application.composer_install",
+		"application.desired_revision <> 1",
+		"application.applied_revision <> 1",
+		"LEFT JOIN php_applications application ON application.site_id=site.id",
+		"application.id IS NULL",
+	} {
+		if !strings.Contains(down, marker) {
+			t.Fatalf("Phase 30 Down canonical guard is missing %q", marker)
 		}
 	}
 }

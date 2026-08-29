@@ -2,12 +2,18 @@ package types
 
 import "time"
 
-type HostingMode string
+type PHPHostingMode string
 
 const (
-	HostingModeClassic HostingMode = "classic"
-	HostingModeManaged HostingMode = "managed"
+	PHPHostingModeClassic PHPHostingMode = "classic"
+	PHPHostingModeManaged PHPHostingMode = "managed"
+
+	HostingModeClassic = PHPHostingModeClassic
+	HostingModeManaged = PHPHostingModeManaged
 )
+
+// HostingMode remains an alias for compatibility with early Phase 30 callers.
+type HostingMode = PHPHostingMode
 
 type PHPSupportStatus string
 
@@ -55,7 +61,7 @@ type PHPApplicationSpec struct {
 	DesiredRevision  int64           `json:"desired_revision,omitempty"`
 	Username         string          `json:"username,omitempty"`
 	Domain           string          `json:"domain,omitempty"`
-	HostingMode      HostingMode     `json:"hosting_mode"`
+	HostingMode      PHPHostingMode  `json:"hosting_mode"`
 	PHPVersion       string          `json:"php_version"`
 	RepositoryID     int64           `json:"repository_id,omitempty"`
 	RepositoryRef    string          `json:"repository_ref,omitempty"`
@@ -85,16 +91,24 @@ type PHPDeployment struct {
 	CreatedAt            time.Time `json:"created_at"`
 }
 
-// PHPEnvironmentVariable exposes only the service-secret reference. Secret is
-// populated in protected worker memory and is deliberately excluded from JSON.
+// PHPEnvironmentVariable is the API-safe environment binding. Secret values
+// are represented only by their service-secret reference.
 type PHPEnvironmentVariable struct {
 	ID            int64     `json:"id,omitempty"`
 	ApplicationID int64     `json:"application_id,omitempty"`
 	Name          string    `json:"name"`
 	Value         string    `json:"value,omitempty"`
 	SecretID      int64     `json:"secret_id,omitempty"`
-	Secret        string    `json:"-"`
 	UpdatedAt     time.Time `json:"updated_at,omitempty"`
+}
+
+// PHPEnvironmentPayload is used only by protected control-plane-to-agent RPC
+// contracts. The control plane populates Secret immediately before transport;
+// it must never be used in HTTP views, audit metadata, or River arguments.
+type PHPEnvironmentPayload struct {
+	Name   string `json:"name"`
+	Value  string `json:"value,omitempty"`
+	Secret string `json:"secret,omitempty"`
 }
 
 type PHPWorker struct {
@@ -115,9 +129,9 @@ type PHPWorker struct {
 }
 
 type DeployPHPApplicationReq struct {
-	Application PHPApplicationSpec       `json:"application"`
-	Deployment  PHPDeployment            `json:"deployment"`
-	Environment []PHPEnvironmentVariable `json:"environment,omitempty"`
+	Application PHPApplicationSpec      `json:"application"`
+	Deployment  PHPDeployment           `json:"deployment"`
+	Environment []PHPEnvironmentPayload `json:"environment,omitempty"`
 }
 
 type DeployPHPApplicationResult struct {
@@ -131,10 +145,10 @@ type DeployPHPApplicationResult struct {
 }
 
 type RollbackPHPApplicationReq struct {
-	Application      PHPApplicationSpec       `json:"application"`
-	DeploymentID     int64                    `json:"deployment_id"`
-	TargetDeployment PHPDeployment            `json:"target_deployment"`
-	Environment      []PHPEnvironmentVariable `json:"environment,omitempty"`
+	Application      PHPApplicationSpec      `json:"application"`
+	DeploymentID     int64                   `json:"deployment_id"`
+	TargetDeployment PHPDeployment           `json:"target_deployment"`
+	Environment      []PHPEnvironmentPayload `json:"environment,omitempty"`
 }
 
 type RollbackPHPApplicationResult struct {
@@ -146,10 +160,10 @@ type RollbackPHPApplicationResult struct {
 }
 
 type ReconcilePHPApplicationReq struct {
-	Application        PHPApplicationSpec       `json:"application"`
-	ActiveDeployment   *PHPDeployment           `json:"active_deployment,omitempty"`
-	PreviousDeployment *PHPDeployment           `json:"previous_deployment,omitempty"`
-	Environment        []PHPEnvironmentVariable `json:"environment,omitempty"`
+	Application        PHPApplicationSpec      `json:"application"`
+	ActiveDeployment   *PHPDeployment          `json:"active_deployment,omitempty"`
+	PreviousDeployment *PHPDeployment          `json:"previous_deployment,omitempty"`
+	Environment        []PHPEnvironmentPayload `json:"environment,omitempty"`
 }
 
 type ReconcilePHPApplicationResult struct {
@@ -161,9 +175,9 @@ type ReconcilePHPApplicationResult struct {
 }
 
 type ReconcilePHPWorkersReq struct {
-	Application PHPApplicationSpec       `json:"application"`
-	Workers     []PHPWorker              `json:"workers"`
-	Environment []PHPEnvironmentVariable `json:"environment,omitempty"`
+	Application PHPApplicationSpec      `json:"application"`
+	Workers     []PHPWorker             `json:"workers"`
+	Environment []PHPEnvironmentPayload `json:"environment,omitempty"`
 }
 
 type ReconcilePHPWorkersResult struct {

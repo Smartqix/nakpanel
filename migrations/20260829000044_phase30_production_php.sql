@@ -1,12 +1,19 @@
 -- +goose Up
+ALTER TABLE sites
+    ADD CONSTRAINT sites_phase30_identity_key UNIQUE(id,subscription_id);
+ALTER TABLE git_repositories
+    ADD CONSTRAINT git_repositories_phase30_identity_key UNIQUE(id,site_id);
+ALTER TABLE service_secrets
+    ADD CONSTRAINT service_secrets_phase30_identity_key UNIQUE(id,scope);
+
 CREATE TABLE php_applications (
     id BIGSERIAL PRIMARY KEY,
-    subscription_id BIGINT NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
-    site_id BIGINT NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+    subscription_id BIGINT NOT NULL,
+    site_id BIGINT NOT NULL,
     hosting_mode TEXT NOT NULL DEFAULT 'classic'
         CHECK (hosting_mode IN ('classic','managed')),
     php_version TEXT NOT NULL CHECK (php_version ~ '^[0-9]+\.[0-9]+$'),
-    repository_id BIGINT REFERENCES git_repositories(id) ON DELETE SET NULL,
+    repository_id BIGINT,
     repository_ref TEXT NOT NULL DEFAULT 'main'
         CHECK (repository_ref <> '' AND repository_ref !~ '[\r\n]'),
     public_path TEXT NOT NULL DEFAULT ''
@@ -29,7 +36,10 @@ CREATE TABLE php_applications (
     last_reconciled_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(site_id)
+    UNIQUE(site_id),
+    UNIQUE(id,subscription_id),
+    FOREIGN KEY (site_id,subscription_id) REFERENCES sites(id,subscription_id) ON DELETE CASCADE,
+    FOREIGN KEY (repository_id,site_id) REFERENCES git_repositories(id,site_id)
 );
 CREATE INDEX php_applications_subscription_idx
     ON php_applications(subscription_id,hosting_mode,site_id);
@@ -38,14 +48,14 @@ CREATE INDEX php_applications_convergence_idx
 
 CREATE TABLE php_deployments (
     id BIGSERIAL PRIMARY KEY,
-    subscription_id BIGINT NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
-    application_id BIGINT NOT NULL REFERENCES php_applications(id) ON DELETE CASCADE,
+    subscription_id BIGINT NOT NULL,
+    application_id BIGINT NOT NULL,
     requested_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     requested_revision TEXT NOT NULL CHECK (requested_revision <> '' AND requested_revision !~ '[\r\n]'),
     resolved_revision TEXT NOT NULL DEFAULT ''
         CHECK (resolved_revision = '' OR resolved_revision ~ '^[a-f0-9]{40,64}$'),
     release_number BIGINT NOT NULL CHECK (release_number > 0),
-    previous_deployment_id BIGINT REFERENCES php_deployments(id) ON DELETE SET NULL,
+    previous_deployment_id BIGINT,
     status TEXT NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending','preparing','validating','activating','healthy','failed','rolled_back','retired')),
     composer_audit JSONB NOT NULL DEFAULT '{}'::jsonb
@@ -56,7 +66,10 @@ CREATE TABLE php_deployments (
     activated_at TIMESTAMPTZ,
     finished_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(application_id,release_number)
+    UNIQUE(application_id,release_number),
+    UNIQUE(id,application_id),
+    FOREIGN KEY (application_id,subscription_id) REFERENCES php_applications(id,subscription_id) ON DELETE CASCADE,
+    FOREIGN KEY (previous_deployment_id,application_id) REFERENCES php_deployments(id,application_id)
 );
 CREATE INDEX php_deployments_status_idx
     ON php_deployments(application_id,status,created_at DESC,id DESC);
@@ -66,31 +79,34 @@ CREATE UNIQUE INDEX php_deployments_active_idx
 
 ALTER TABLE php_applications
     ADD CONSTRAINT php_applications_active_deployment_fk
-        FOREIGN KEY (active_deployment_id) REFERENCES php_deployments(id) ON DELETE SET NULL,
+        FOREIGN KEY (active_deployment_id,id) REFERENCES php_deployments(id,application_id),
     ADD CONSTRAINT php_applications_previous_deployment_fk
-        FOREIGN KEY (previous_deployment_id) REFERENCES php_deployments(id) ON DELETE SET NULL;
+        FOREIGN KEY (previous_deployment_id,id) REFERENCES php_deployments(id,application_id);
 
 CREATE TABLE php_environment_bindings (
     id BIGSERIAL PRIMARY KEY,
-    subscription_id BIGINT NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
-    application_id BIGINT NOT NULL REFERENCES php_applications(id) ON DELETE CASCADE,
+    subscription_id BIGINT NOT NULL,
+    application_id BIGINT NOT NULL,
     name TEXT NOT NULL CHECK (name ~ '^[A-Z_][A-Z0-9_]{0,127}$'),
     plain_value TEXT,
-    secret_id BIGINT REFERENCES service_secrets(id) ON DELETE RESTRICT,
+    secret_id BIGINT,
+    secret_scope TEXT GENERATED ALWAYS AS ('php.application.' || application_id::TEXT) STORED,
     desired_revision BIGINT NOT NULL DEFAULT 1 CHECK (desired_revision > 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK ((plain_value IS NOT NULL) <> (secret_id IS NOT NULL)),
     UNIQUE(application_id,name),
-    UNIQUE(secret_id)
+    UNIQUE(secret_id),
+    FOREIGN KEY (application_id,subscription_id) REFERENCES php_applications(id,subscription_id) ON DELETE CASCADE,
+    FOREIGN KEY (secret_id,secret_scope) REFERENCES service_secrets(id,scope) ON DELETE RESTRICT
 );
 CREATE INDEX php_environment_bindings_subscription_idx
     ON php_environment_bindings(subscription_id,application_id);
 
 CREATE TABLE php_workers (
     id BIGSERIAL PRIMARY KEY,
-    subscription_id BIGINT NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
-    application_id BIGINT NOT NULL REFERENCES php_applications(id) ON DELETE CASCADE,
+    subscription_id BIGINT NOT NULL,
+    application_id BIGINT NOT NULL,
     name TEXT NOT NULL CHECK (name ~ '^[a-z][a-z0-9-]{0,47}$'),
     script TEXT NOT NULL
         CHECK (script <> '' AND script !~ '^/' AND script !~ '(^|/)\.\.(/|$)' AND script !~ '[\r\n]'),
@@ -108,7 +124,8 @@ CREATE TABLE php_workers (
     last_reconciled_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE(application_id,name)
+    UNIQUE(application_id,name),
+    FOREIGN KEY (application_id,subscription_id) REFERENCES php_applications(id,subscription_id) ON DELETE CASCADE
 );
 CREATE INDEX php_workers_subscription_idx
     ON php_workers(subscription_id,application_id);
@@ -194,11 +211,40 @@ CREATE TRIGGER php_workers_account_teardown_guard
 -- +goose StatementBegin
 DO $$
 BEGIN
-    IF EXISTS (SELECT 1 FROM php_applications WHERE hosting_mode <> 'classic')
+    IF EXISTS (
+        SELECT 1
+        FROM php_applications application
+        JOIN sites site ON site.id=application.site_id
+        WHERE application.subscription_id <> site.subscription_id
+           OR application.hosting_mode <> 'classic'
+           OR application.php_version <> site.php_version
+           OR application.repository_id IS NOT NULL
+           OR application.repository_ref <> 'main'
+           OR application.public_path <> ''
+           OR application.composer_install
+           OR application.composer_allow_scripts
+           OR application.composer_allow_plugins
+           OR application.desired_state <> site.desired_status
+           OR application.observed_state <> 'classic'
+           OR application.active_deployment_id IS NOT NULL
+           OR application.previous_deployment_id IS NOT NULL
+           OR application.desired_revision <> 1
+           OR application.applied_revision <> 1
+           OR application.convergence_status <> 'in_sync'
+           OR application.observed_message <> ''
+           OR application.last_error <> ''
+           OR application.last_reconciled_at IS NOT NULL
+    )
+       OR EXISTS (
+           SELECT 1
+           FROM sites site
+           LEFT JOIN php_applications application ON application.site_id=site.id
+           WHERE application.id IS NULL
+       )
        OR EXISTS (SELECT 1 FROM php_deployments)
        OR EXISTS (SELECT 1 FROM php_environment_bindings)
        OR EXISTS (SELECT 1 FROM php_workers) THEN
-        RAISE EXCEPTION 'cannot roll back Phase 30 while managed PHP state exists';
+        RAISE EXCEPTION 'cannot roll back Phase 30 unless application rows equal the canonical Classic backfill';
     END IF;
 END;
 $$;
@@ -225,3 +271,6 @@ DROP TABLE IF EXISTS php_workers;
 DROP TABLE IF EXISTS php_environment_bindings;
 DROP TABLE IF EXISTS php_deployments;
 DROP TABLE IF EXISTS php_applications;
+ALTER TABLE service_secrets DROP CONSTRAINT IF EXISTS service_secrets_phase30_identity_key;
+ALTER TABLE git_repositories DROP CONSTRAINT IF EXISTS git_repositories_phase30_identity_key;
+ALTER TABLE sites DROP CONSTRAINT IF EXISTS sites_phase30_identity_key;

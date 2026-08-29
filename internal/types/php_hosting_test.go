@@ -26,8 +26,11 @@ func TestPhase30PHPHostingTypesPreserveLegacyRuntimeJSON(t *testing.T) {
 	}
 }
 
-func TestPhase30PHPHostingTypesDoNotSerializeSecretPlaintext(t *testing.T) {
-	variable := PHPEnvironmentVariable{Name: "APP_KEY", SecretID: 42, Secret: "must-not-leak"}
+func TestPhase30PublicEnvironmentBindingsDoNotCarrySecretPlaintext(t *testing.T) {
+	variable := PHPEnvironmentVariable{Name: "APP_KEY", SecretID: 42}
+	if err := json.Unmarshal([]byte(`{"name":"APP_KEY","secret_id":42,"secret":"must-not-leak"}`), &variable); err != nil {
+		t.Fatal(err)
+	}
 	encoded, err := json.Marshal(variable)
 	if err != nil {
 		t.Fatal(err)
@@ -46,10 +49,35 @@ func TestPhase30PHPHostingTypesDoNotSerializeSecretPlaintext(t *testing.T) {
 	}
 }
 
+func TestPhase30ProtectedRPCEnvironmentRoundTripsDecryptedSecret(t *testing.T) {
+	request := DeployPHPApplicationReq{
+		Application: PHPApplicationSpec{ApplicationID: 9},
+		Deployment:  PHPDeployment{ID: 10},
+		Environment: []PHPEnvironmentPayload{
+			{Name: "APP_ENV", Value: "production"},
+			{Name: "APP_KEY", Secret: "rpc-only-secret"},
+		},
+	}
+	encoded, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), `"secret":"rpc-only-secret"`) {
+		t.Fatalf("protected RPC request lost decrypted secret: %s", encoded)
+	}
+	var decoded DeployPHPApplicationReq
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Environment[1].Secret != "rpc-only-secret" {
+		t.Fatalf("protected RPC secret = %q", decoded.Environment[1].Secret)
+	}
+}
+
 func TestPhase30PHPHostingPublicContractsRoundTrip(t *testing.T) {
 	spec := PHPApplicationSpec{
 		ApplicationID: 12, SubscriptionID: 4, SiteID: 7,
-		HostingMode: HostingModeManaged, PHPVersion: "8.4",
+		HostingMode: PHPHostingModeManaged, PHPVersion: "8.4",
 		RepositoryID: 15, RepositoryRef: "main", PublicPath: "public",
 		Composer: PHPComposerSpec{Install: true, AllowScripts: false},
 		Workers:  []PHPWorkerSpec{{WorkerID: 18, Name: "queue", Script: "artisan", Arguments: []string{"queue:work"}, Processes: 2}},
@@ -57,20 +85,20 @@ func TestPhase30PHPHostingPublicContractsRoundTrip(t *testing.T) {
 	request := DeployPHPApplicationReq{
 		Application: spec,
 		Deployment:  PHPDeployment{ID: 22, ApplicationID: 12, RequestedRevision: "main"},
-		Environment: []PHPEnvironmentVariable{{Name: "APP_ENV", Value: "production"}, {Name: "APP_KEY", SecretID: 41, Secret: "runtime-only"}},
+		Environment: []PHPEnvironmentPayload{{Name: "APP_ENV", Value: "production"}, {Name: "APP_KEY", Secret: "runtime-only"}},
 	}
 	encoded, err := json.Marshal(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(encoded), "runtime-only") {
-		t.Fatalf("deploy request leaked secret: %s", encoded)
+	if !strings.Contains(string(encoded), `"secret":"runtime-only"`) {
+		t.Fatalf("protected deploy RPC lost secret: %s", encoded)
 	}
 	var decoded DeployPHPApplicationReq
 	if err := json.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Application.HostingMode != HostingModeManaged || decoded.Application.Workers[0].Processes != 2 || decoded.Environment[0].Value != "production" {
+	if decoded.Application.HostingMode != PHPHostingModeManaged || decoded.Application.Workers[0].Processes != 2 || decoded.Environment[0].Value != "production" {
 		t.Fatalf("decoded deploy request = %#v", decoded)
 	}
 
