@@ -104,7 +104,7 @@ func TestPhase30PHPHostingPublicContractsRoundTrip(t *testing.T) {
 
 	capabilities := RuntimeCapabilities{
 		PHPVersions:       []string{"8.4"},
-		PHPRuntimes:       []PHPRuntimeCapability{{Version: "8.4", Ready: true, SupportStatus: PHPSupportActive}},
+		PHPRuntimes:       []PHPRuntimeCapability{{Version: "8.4", Ready: true, SupportStatus: PHPSupportActive, CLIPath: "/usr/bin/php8.4", FPMPath: "/usr/sbin/php-fpm8.4"}},
 		ComposerAvailable: true, ComposerVersion: "2.8.10",
 		WPCLIAvailable: true, WPCLIVersion: "2.12.0",
 	}
@@ -114,6 +114,8 @@ func TestPhase30PHPHostingPublicContractsRoundTrip(t *testing.T) {
 	}
 	if !strings.Contains(string(capJSON), `"php_versions":["8.4"]`) ||
 		!strings.Contains(string(capJSON), `"php_runtimes"`) ||
+		!strings.Contains(string(capJSON), `"cli_path":"/usr/bin/php8.4"`) ||
+		!strings.Contains(string(capJSON), `"fpm_path":"/usr/sbin/php-fpm8.4"`) ||
 		!strings.Contains(string(capJSON), `"composer_available":true`) ||
 		!strings.Contains(string(capJSON), `"wp_cli_available":true`) {
 		t.Fatalf("runtime capabilities JSON = %s", capJSON)

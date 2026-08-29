@@ -19,20 +19,7 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-PHP_VERSIONS=(8.3 8.4 8.5)
-if [[ -n "${NAKPANEL_PHP_VERSIONS:-}" ]]; then
-  read -r -a PHP_VERSIONS <<<"${NAKPANEL_PHP_VERSIONS}"
-fi
-if [[ "${#PHP_VERSIONS[@]}" -eq 0 ]]; then
-  echo "NAKPANEL_PHP_VERSIONS requested no PHP runtimes" >&2
-  exit 1
-fi
-for version in "${PHP_VERSIONS[@]}"; do
-  case "${version}" in
-    8.3|8.4|8.5) ;;
-    *) echo "unsupported requested PHP runtime: ${version}" >&2; exit 1 ;;
-  esac
-done
+readonly -a PHP_VERSIONS=(8.3 8.4 8.5)
 
 apt-get update
 apt-get install -y ca-certificates curl gnupg software-properties-common
@@ -152,7 +139,7 @@ required_extensions=(
 )
 
 validate_php_runtime() {
-  local version="$1" php fpm config loaded actual extension
+  local version="$1" php fpm loaded actual extension fpm_identity fpm_version_re
   php="$(command -v "php${version}" || true)"
   fpm="$(command -v "php-fpm${version}" || true)"
   if [[ -z "${php}" || -z "${fpm}" ]]; then
@@ -164,6 +151,12 @@ validate_php_runtime() {
     echo "PHP ${version} CLI reported ${actual:-no version}" >&2
     return 1
   fi
+  fpm_identity="$("${fpm}" -v 2>&1)"
+  fpm_version_re="${version//./\\.}"
+  if [[ ! "${fpm_identity}" =~ PHP[[:space:]]+${fpm_version_re}([.]|[[:space:]]) ]]; then
+    echo "PHP ${version} FPM reported an unexpected identity: ${fpm_identity}" >&2
+    return 1
+  fi
   loaded="$("${php}" -r 'foreach (array_merge(get_loaded_extensions(), get_loaded_extensions(true)) as $extension) { echo $extension, PHP_EOL; }')"
   for extension in "${required_extensions[@]}"; do
     if ! grep -Fqix "${extension}" <<<"${loaded}"; then
@@ -171,11 +164,33 @@ validate_php_runtime() {
       return 1
     fi
   done
-  config="$(mktemp "/tmp/nakpanel-php${version}-fpm.XXXXXX.conf")"
-  cat >"${config}" <<EOF
+  (
+    local config fpm_pid deadline ready ready_checks
+    config="$(mktemp "/tmp/nakpanel-php${version}-fpm.XXXXXX.conf")"
+    fpm_pid=""
+    cleanup_fpm_probe() {
+      if [[ -n "${fpm_pid}" ]] && kill -0 "${fpm_pid}" 2>/dev/null; then
+        kill -TERM "${fpm_pid}" 2>/dev/null || true
+      fi
+      if [[ -n "${fpm_pid}" ]]; then
+        for _ in {1..20}; do
+          if ! kill -0 "${fpm_pid}" 2>/dev/null; then
+            break
+          fi
+          sleep 0.05
+        done
+        if kill -0 "${fpm_pid}" 2>/dev/null; then
+          kill -KILL "${fpm_pid}" 2>/dev/null || true
+        fi
+        wait "${fpm_pid}" 2>/dev/null || true
+      fi
+      rm -f "${config}" "${config}.pid" "${config}.log" "${config}.output" "${config}.sock"
+    }
+    trap cleanup_fpm_probe EXIT
+    cat >"${config}" <<EOF
 [global]
 pid = ${config}.pid
-error_log = /dev/stderr
+error_log = ${config}.log
 daemonize = no
 
 [nakpanel-probe]
@@ -185,12 +200,36 @@ listen = ${config}.sock
 pm = static
 pm.max_children = 1
 EOF
-  if ! "${fpm}" -t -y "${config}"; then
-    echo "PHP ${version} FPM rejected the isolated validation config" >&2
-    rm -f "${config}"
-    return 1
-  fi
-  rm -f "${config}"
+    if ! "${fpm}" -t -y "${config}"; then
+      echo "PHP ${version} FPM rejected the isolated validation config" >&2
+      exit 1
+    fi
+    "${fpm}" -F -y "${config}" >"${config}.output" 2>&1 &
+    fpm_pid=$!
+    deadline=$((SECONDS + 5))
+    ready=0
+    ready_checks=0
+    while ((SECONDS < deadline)); do
+      if [[ -S "${config}.sock" ]] && kill -0 "${fpm_pid}" 2>/dev/null; then
+        ((ready_checks += 1))
+        if [[ "${ready_checks}" -ge 3 ]]; then
+          ready=1
+          break
+        fi
+      else
+        ready_checks=0
+      fi
+      if ! kill -0 "${fpm_pid}" 2>/dev/null; then
+        break
+      fi
+      sleep 0.1
+    done
+    if [[ "${ready}" != "1" ]]; then
+      echo "PHP ${version} FPM did not start a healthy isolated probe pool" >&2
+      sed -n '1,20p' "${config}.output" >&2 || true
+      exit 1
+    fi
+  )
 }
 
 for version in "${PHP_VERSIONS[@]}"; do

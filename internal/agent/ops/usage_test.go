@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,10 +18,57 @@ import (
 )
 
 type fakeRuntimeCapabilityProbe struct {
-	paths      map[string]string
-	outputs    map[string][]byte
-	errors     map[string]error
-	fpmConfigs []string
+	paths         map[string]string
+	outputs       map[string][]byte
+	errors        map[string]error
+	startErrors   map[string]error
+	exitDelays    map[string]time.Duration
+	exitErrors    map[string]error
+	fpmConfigs    []string
+	startedPaths  []string
+	socketPaths   []string
+	processes     []*fakeRuntimeCapabilityProcess
+	startDeadline time.Time
+}
+
+type fakeRuntimeCapabilityProcess struct {
+	done        chan error
+	listener    net.Listener
+	once        sync.Once
+	signalCount atomic.Int32
+	killCount   atomic.Int32
+	waitCount   atomic.Int32
+}
+
+func (p *fakeRuntimeCapabilityProcess) Wait() error {
+	err := <-p.done
+	p.waitCount.Add(1)
+	return err
+}
+
+func (p *fakeRuntimeCapabilityProcess) Signal(os.Signal) error {
+	p.signalCount.Add(1)
+	p.stop(nil)
+	return nil
+}
+
+func (p *fakeRuntimeCapabilityProcess) Kill() error {
+	p.killCount.Add(1)
+	p.stop(errors.New("killed"))
+	return nil
+}
+
+func (p *fakeRuntimeCapabilityProcess) Output() []byte {
+	return nil
+}
+
+func (p *fakeRuntimeCapabilityProcess) stop(err error) {
+	p.once.Do(func() {
+		if p.listener != nil {
+			_ = p.listener.Close()
+		}
+		p.done <- err
+	})
 }
 
 func (p *fakeRuntimeCapabilityProbe) LookPath(name string) (string, error) {
@@ -42,15 +92,60 @@ func (p *fakeRuntimeCapabilityProbe) Run(_ context.Context, name string, args ..
 	return p.outputs[key], p.errors[key]
 }
 
+func (p *fakeRuntimeCapabilityProbe) Start(ctx context.Context, name string, args ...string) (RuntimeCapabilityProcess, error) {
+	key := runtimeCommandKey(name, "-F", "-y")
+	if err := p.startErrors[key]; err != nil {
+		return nil, err
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		p.startDeadline = deadline
+	}
+	if len(args) != 3 || args[0] != "-F" || args[1] != "-y" {
+		return nil, fmt.Errorf("unexpected FPM start args: %#v", args)
+	}
+	config, err := os.ReadFile(args[2])
+	if err != nil {
+		return nil, err
+	}
+	socketPath := ""
+	for _, line := range strings.Split(string(config), "\n") {
+		if strings.HasPrefix(line, "listen = ") {
+			socketPath = strings.TrimSpace(strings.TrimPrefix(line, "listen = "))
+			break
+		}
+	}
+	if socketPath == "" {
+		return nil, errors.New("probe config has no listen socket")
+	}
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		return nil, err
+	}
+	process := &fakeRuntimeCapabilityProcess{done: make(chan error, 1), listener: listener}
+	p.startedPaths = append(p.startedPaths, args[2])
+	p.socketPaths = append(p.socketPaths, socketPath)
+	p.processes = append(p.processes, process)
+	if delay := p.exitDelays[key]; delay > 0 {
+		exitErr := p.exitErrors[key]
+		time.AfterFunc(delay, func() {
+			process.stop(exitErr)
+		})
+	}
+	return process, nil
+}
+
 func runtimeCommandKey(name string, args ...string) string {
 	return strings.Join(append([]string{name}, args...), "\x00")
 }
 
 func completeRuntimeProbe(versions ...string) *fakeRuntimeCapabilityProbe {
 	probe := &fakeRuntimeCapabilityProbe{
-		paths:   make(map[string]string),
-		outputs: make(map[string][]byte),
-		errors:  make(map[string]error),
+		paths:       make(map[string]string),
+		outputs:     make(map[string][]byte),
+		errors:      make(map[string]error),
+		startErrors: make(map[string]error),
+		exitDelays:  make(map[string]time.Duration),
+		exitErrors:  make(map[string]error),
 	}
 	extensions := "[PHP Modules]\nBCMath\ncURL\ndom\nexif\nfileinfo\ngd\nimagick\nintl\nmbstring\nmysqli\nOpenSSL\nredis\nSimpleXML\nsoap\nxml\nzip\n[Zend Modules]\nZend OPcache\n"
 	for _, version := range versions {
@@ -60,6 +155,7 @@ func completeRuntimeProbe(versions ...string) *fakeRuntimeCapabilityProbe {
 		probe.paths["php-fpm"+version] = fpm
 		probe.outputs[runtimeCommandKey(php, "-r", `echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;`)] = []byte(version)
 		probe.outputs[runtimeCommandKey(php, "-m")] = []byte(extensions)
+		probe.outputs[runtimeCommandKey(fpm, "-v")] = []byte("PHP " + version + ".12 (fpm-fcgi)\n")
 		probe.outputs[runtimeCommandKey(fpm, "-t", "-y")] = nil
 	}
 	return probe
@@ -102,6 +198,9 @@ func TestRuntimeCapabilitiesReportsOnlyFullyReadyPHPVersions(t *testing.T) {
 	}
 	if runtime := findPHPRuntime(t, got.PHPRuntimes, "8.5"); !runtime.Ready || runtime.SupportStatus != types.PHPSupportActive {
 		t.Fatalf("PHP 8.5 runtime = %#v, want ready and active", runtime)
+	}
+	if runtime := findPHPRuntime(t, got.PHPRuntimes, "8.5"); runtime.CLIPath != "/usr/bin/php8.5" || runtime.FPMPath != "/usr/sbin/php-fpm8.5" {
+		t.Fatalf("PHP 8.5 binary paths = CLI %q FPM %q", runtime.CLIPath, runtime.FPMPath)
 	}
 	if runtime := findPHPRuntime(t, got.PHPRuntimes, "8.4"); !runtime.Ready || runtime.SupportStatus != types.PHPSupportActive {
 		t.Fatalf("PHP 8.4 runtime = %#v, want ready and active", runtime)
@@ -147,6 +246,83 @@ func TestRuntimeCapabilitiesValidatesGeneratedIsolatedFPMConfig(t *testing.T) {
 	if strings.Contains(config, "include=") || strings.Contains(config, "pool.d") {
 		t.Fatalf("generated FPM config is not isolated:\n%s", config)
 	}
+	if len(probe.processes) != 1 {
+		t.Fatalf("started FPM processes = %d, want 1", len(probe.processes))
+	}
+	process := probe.processes[0]
+	if process.signalCount.Load() != 1 || process.waitCount.Load() != 1 || process.killCount.Load() != 0 {
+		t.Fatalf("FPM cleanup signal=%d wait=%d kill=%d", process.signalCount.Load(), process.waitCount.Load(), process.killCount.Load())
+	}
+	if probe.startDeadline.IsZero() || time.Until(probe.startDeadline) > 4*time.Second {
+		t.Fatalf("FPM probe deadline = %v, want a bounded internal timeout", probe.startDeadline)
+	}
+	for _, path := range append(append([]string(nil), probe.startedPaths...), probe.socketPaths...) {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("FPM probe artifact %s remains after cleanup: %v", path, err)
+		}
+	}
+}
+
+func TestRuntimeCapabilitiesRejectsWrongVersionFPMBinary(t *testing.T) {
+	probe := completeRuntimeProbe("8.4")
+	fpm := probe.paths["php-fpm8.4"]
+	probe.outputs[runtimeCommandKey(fpm, "-v")] = []byte("PHP 8.3.27 (fpm-fcgi)\n")
+
+	collector := NewUsageCollector("", "", "", WithRuntimeCapabilityProbe(probe))
+	got, err := collector.RuntimeCapabilities(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := findPHPRuntime(t, got.PHPRuntimes, "8.4")
+	if runtime.Ready || len(got.PHPVersions) != 0 {
+		t.Fatalf("wrong-version FPM runtime = %#v, PHPVersions = %#v", runtime, got.PHPVersions)
+	}
+	if !strings.Contains(strings.Join(runtime.ValidationErrors, "\n"), "FPM reported") || len(probe.processes) != 0 {
+		t.Fatalf("wrong-version FPM errors = %#v, started processes = %d", runtime.ValidationErrors, len(probe.processes))
+	}
+}
+
+func TestRuntimeCapabilitiesRejectsFPMStartupFailureAfterValidConfig(t *testing.T) {
+	probe := completeRuntimeProbe("8.4")
+	fpm := probe.paths["php-fpm8.4"]
+	probe.startErrors[runtimeCommandKey(fpm, "-F", "-y")] = errors.New("worker spawn failed")
+
+	collector := NewUsageCollector("", "", "", WithRuntimeCapabilityProbe(probe))
+	got, err := collector.RuntimeCapabilities(context.Background())
+	if err != nil {
+		t.Fatalf("RuntimeCapabilities returned a top-level error: %v", err)
+	}
+	runtime := findPHPRuntime(t, got.PHPRuntimes, "8.4")
+	if runtime.Ready || !runtime.FPMConfigValid || len(got.PHPVersions) != 0 {
+		t.Fatalf("startup-failed FPM runtime = %#v, PHPVersions = %#v", runtime, got.PHPVersions)
+	}
+	if !strings.Contains(strings.Join(runtime.ValidationErrors, "\n"), "worker spawn failed") {
+		t.Fatalf("startup failure errors = %#v", runtime.ValidationErrors)
+	}
+	if len(probe.startedPaths) != 0 {
+		t.Fatalf("successful FPM starts = %#v, want none", probe.startedPaths)
+	}
+}
+
+func TestRuntimeCapabilitiesRejectsFPMThatExitsAfterCreatingSocket(t *testing.T) {
+	probe := completeRuntimeProbe("8.4")
+	fpm := probe.paths["php-fpm8.4"]
+	key := runtimeCommandKey(fpm, "-F", "-y")
+	probe.exitDelays[key] = 10 * time.Millisecond
+	probe.exitErrors[key] = errors.New("worker exited during startup")
+
+	collector := NewUsageCollector("", "", "", WithRuntimeCapabilityProbe(probe))
+	got, err := collector.RuntimeCapabilities(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime := findPHPRuntime(t, got.PHPRuntimes, "8.4")
+	if runtime.Ready || len(got.PHPVersions) != 0 {
+		t.Fatalf("unstable FPM runtime = %#v, PHPVersions = %#v", runtime, got.PHPVersions)
+	}
+	if !strings.Contains(strings.Join(runtime.ValidationErrors, "\n"), "worker exited during startup") {
+		t.Fatalf("unstable FPM errors = %#v", runtime.ValidationErrors)
+	}
 }
 
 func TestRuntimeCapabilitiesKeepsValidationFailuresInsideRuntimeRecord(t *testing.T) {
@@ -191,6 +367,9 @@ func TestRuntimeCapabilitiesDescribesPartiallyInstalledRuntime(t *testing.T) {
 	}
 	if !reflect.DeepEqual(runtime.MissingExtensions, requiredPHPExtensions) {
 		t.Fatalf("missing extensions = %#v, want full baseline %#v", runtime.MissingExtensions, requiredPHPExtensions)
+	}
+	if runtime.CLIPath != "" || runtime.FPMPath != "/usr/sbin/php-fpm8.5" {
+		t.Fatalf("partial runtime paths = CLI %q FPM %q", runtime.CLIPath, runtime.FPMPath)
 	}
 	if len(got.PHPVersions) != 0 {
 		t.Fatalf("PHPVersions = %#v, want none", got.PHPVersions)

@@ -30,6 +30,8 @@ type PHPRuntimeCapability struct {
 	Version           string           `json:"version"`
 	Ready             bool             `json:"ready"`
 	SupportStatus     PHPSupportStatus `json:"support_status"`
+	CLIPath           string           `json:"cli_path,omitempty"`
+	FPMPath           string           `json:"fpm_path,omitempty"`
 	CLIAvailable      bool             `json:"cli_available"`
 	FPMAvailable      bool             `json:"fpm_available"`
 	FPMConfigValid    bool             `json:"fpm_config_valid"`

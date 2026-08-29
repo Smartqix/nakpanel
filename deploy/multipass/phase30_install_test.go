@@ -35,10 +35,16 @@ func TestPhase30InstallerPinsAndValidatesProductionPHPToolchain(t *testing.T) {
 		`sha256sum --check`, `sha512sum --check`,
 		`self-update is disabled`, `cli update is disabled`, `chmod 0555`,
 		`php-fpm${version}`, `PHP_MAJOR_VERSION`, `get_loaded_extensions`, `Zend OPcache`,
+		`"${fpm}" -v`, `"${fpm}" -F -y`, `[[ -S "${config}.sock" ]]`,
+		`kill -0 "${fpm_pid}"`, `SECONDS + 5`, `wait "${fpm_pid}"`,
+		`ready_checks`, `kill -KILL "${fpm_pid}"`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("phase30 installer is missing %q", want)
 		}
+	}
+	if strings.Contains(script, "NAKPANEL_PHP_VERSIONS") {
+		t.Fatal("canonical installer must not inherit a runtime subset override")
 	}
 }
 
