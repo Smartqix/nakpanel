@@ -102,13 +102,23 @@ func (w *CollectUsageWorker) collectSubscription(ctx context.Context, subscripti
 	if err != nil {
 		return err
 	}
-	result, err := w.agent.CollectUsage(ctx, types.CollectUsageReq{Sites: sites, Databases: databaseNames, PeriodStart: period})
+	accountUsernames := make([]string, 0, len(sites))
+	seenAccounts := make(map[string]bool, len(sites))
+	for _, site := range sites {
+		if !seenAccounts[site.Username] {
+			seenAccounts[site.Username] = true
+			accountUsernames = append(accountUsernames, site.Username)
+		}
+	}
+	result, err := w.agent.CollectUsage(ctx, types.CollectUsageReq{
+		SubscriptionID: subscriptionID, Sites: sites, AccountUsernames: accountUsernames,
+		Databases: databaseNames, PeriodStart: period,
+	})
 	if err != nil {
 		return err
 	}
-	var siteBytes, trafficDelta int64
+	var trafficDelta int64
 	for _, site := range result.Sites {
-		siteBytes += site.HomeBytes
 		trafficDelta += site.TrafficBytes
 	}
 	var backupBytes int64
@@ -129,6 +139,19 @@ traffic_bytes=CASE WHEN site_traffic_cursors.period_start=EXCLUDED.period_start 
 updated_at=now()`, site.SiteID, site.Cursor.DeviceID, site.Cursor.Inode, site.Cursor.Offset, period, site.TrafficBytes); err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO site_usage_current
+(site_id,period_start,document_root_bytes,traffic_bytes,request_count,error_count,php_state,collected_at,last_error)
+VALUES ($1,$2,$3,$4,$5,$6,'unknown',$7,'')
+ON CONFLICT(site_id) DO UPDATE SET
+period_start=EXCLUDED.period_start,
+document_root_bytes=EXCLUDED.document_root_bytes,
+traffic_bytes=CASE WHEN site_usage_current.period_start=EXCLUDED.period_start THEN site_usage_current.traffic_bytes+EXCLUDED.traffic_bytes ELSE EXCLUDED.traffic_bytes END,
+request_count=CASE WHEN site_usage_current.period_start=EXCLUDED.period_start THEN site_usage_current.request_count+EXCLUDED.request_count ELSE EXCLUDED.request_count END,
+error_count=CASE WHEN site_usage_current.period_start=EXCLUDED.period_start THEN site_usage_current.error_count+EXCLUDED.error_count ELSE EXCLUDED.error_count END,
+collected_at=EXCLUDED.collected_at,last_error=''`,
+			site.SiteID, period, site.HomeBytes, site.TrafficBytes, site.RequestCount, site.ErrorCount, now); err != nil {
+			return err
+		}
 	}
 	var previousTraffic int64
 	var previousPeriod time.Time
@@ -140,9 +163,10 @@ updated_at=now()`, site.SiteID, site.Cursor.DeviceID, site.Cursor.Inode, site.Cu
 		previousTraffic = 0
 	}
 	usage := types.SubscriptionUsage{SubscriptionID: subscriptionID, PeriodStart: period,
-		SiteBytes: siteBytes, DatabaseBytes: result.DatabaseBytes, BackupBytes: backupBytes,
-		DiskBytes: siteBytes + result.DatabaseBytes + backupBytes, TrafficBytes: previousTraffic + trafficDelta,
-		Complete: true, CollectedAt: now}
+		SiteBytes: result.AccountBytes, DatabaseBytes: result.DatabaseBytes, BackupBytes: backupBytes,
+		DiskBytes:    result.AccountBytes + result.ContainerBytes + result.DatabaseBytes + backupBytes,
+		TrafficBytes: previousTraffic + trafficDelta,
+		Complete:     true, CollectedAt: now}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO subscription_usage_current
 (subscription_id,period_start,site_bytes,database_bytes,backup_bytes,disk_bytes,traffic_bytes,is_complete,collected_at,last_error)
 VALUES ($1,$2,$3,$4,$5,$6,$7,true,$8,'')
@@ -185,6 +209,7 @@ WHERE s.subscription_id=$1 AND s.status<>'failed' ORDER BY s.id`, subscriptionID
 		if err := rows.Scan(&site.SiteID, &site.Username, &domain, &site.Cursor.DeviceID, &site.Cursor.Inode, &site.Cursor.Offset); err != nil {
 			return nil, err
 		}
+		site.Domain = domain
 		site.AccessLog = site.Username + "-" + strings.ReplaceAll(domain, ".", "-") + ".access.log"
 		out = append(out, site)
 	}

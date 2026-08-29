@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
+IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 
 if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
   "${ROOT_DIR}/deploy/multipass/phase19-verify.sh"
@@ -36,7 +37,7 @@ sudo systemctl restart nakpanel-agent.service nakpanel.service
 REMOTE
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 fail(){ echo "phase20: $*" >&2; exit 1; }
 db(){ multipass exec "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "$1" | tr -d '\r'; }
 cli(){ multipass exec "${VM_NAME}" -- sudo -u nakpanel env NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' panelctl --actor phase20-verifier "$@"; }

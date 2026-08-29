@@ -1,8 +1,10 @@
 package web
 
 import (
+	"encoding/json"
 	"testing"
 
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -16,6 +18,26 @@ func TestAddonsForProviderExcludesForeignAndInactivePlans(t *testing.T) {
 	got := addonsForProvider(items, 17)
 	if len(got) != 1 || got[0].ID != 1 {
 		t.Fatalf("addonsForProvider() = %#v, want only matching active add-on", got)
+	}
+}
+
+func TestAddonAsPlanPreservesTypedHostingPolicyForEditing(t *testing.T) {
+	addon := types.AddonPlan{
+		ID: 19,
+		Entitlements: types.SubscriptionEntitlements{
+			HostingPolicy: types.HostingPolicy{
+				SchemaVersion: 2,
+				Resources:     types.HostingResourcePolicy{MaxScheduledTasks: 8, ValkeyMemoryMB: 256},
+				Permissions:   types.HostingPermissionPolicy{ScheduledTasks: true, Valkey: true},
+			},
+		},
+	}
+	plan := addonAsPlan(addon)
+	if plan.HostingPolicy.Resources.MaxScheduledTasks != 8 ||
+		plan.HostingPolicy.Resources.ValkeyMemoryMB != 256 ||
+		!plan.HostingPolicy.Permissions.ScheduledTasks ||
+		!plan.HostingPolicy.Permissions.Valkey {
+		t.Fatalf("addonAsPlan lost typed policy: %#v", plan.HostingPolicy)
 	}
 }
 
@@ -225,5 +247,64 @@ func TestFileSortPathPreservesSupportScopeAndFilters(t *testing.T) {
 	want := "/support/customers/88/sites/7/files?order=desc&path=assets&q=php&sort=size"
 	if got != want {
 		t.Fatalf("fileSortPath() = %q, want %q", got, want)
+	}
+}
+
+func TestDatabaseWorkspaceHelpers(t *testing.T) {
+	if !databaseLimitReached(types.SubscriptionSummary{MaxDatabases: 2, DatabasesUsed: 2}) {
+		t.Fatal("databaseLimitReached() = false at the subscription limit")
+	}
+	if databaseLimitReached(types.SubscriptionSummary{MaxDatabases: -1, DatabasesUsed: 50}) {
+		t.Fatal("databaseLimitReached() = true for an unlimited subscription")
+	}
+	if got := databaseEngineLabel("mariadb"); got != "MariaDB" {
+		t.Fatalf("databaseEngineLabel() = %q, want MariaDB", got)
+	}
+}
+
+func TestPHPVersionsRequireInstalledAllowedRuntime(t *testing.T) {
+	capabilities := types.RuntimeCapabilities{PHPVersions: []string{"8.4", "8.3"}}
+	if got := phpVersionsFromCapabilities(capabilities, "8.3,8.2"); len(got) != 1 || got[0] != "8.3" {
+		t.Fatalf("phpVersionsFromCapabilities() = %#v, want only installed and allowed 8.3", got)
+	}
+	if got := phpVersionsFromCapabilities(types.RuntimeCapabilities{}, "8.3,8.2"); len(got) != 0 {
+		t.Fatalf("missing capabilities must fail closed, got %#v", got)
+	}
+	if got := phpVersions(""); len(got) != 0 {
+		t.Fatalf("empty allowlist must not invent a runtime, got %#v", got)
+	}
+}
+
+func TestApplicationDeploymentRequiresPresetOrCustomOCI(t *testing.T) {
+	policy := types.HostingPolicy{
+		Permissions:  types.HostingPermissionPolicy{Applications: true},
+		Applications: types.HostingApplicationPolicy{AllowedCatalogSlugs: []string{"wordpress"}, AllowedRuntimes: []string{"php"}},
+	}
+	if applicationDeploymentAvailable(nil, policy) {
+		t.Fatal("application form is available without an allowed preset or custom OCI")
+	}
+	presets := []types.ApplicationPreset{{Slug: "wordpress", Runtime: "php", Active: true}}
+	if !applicationDeploymentAvailable(presets, policy) {
+		t.Fatal("allowed active preset did not enable application deployment")
+	}
+	policy.Permissions.CustomOCIImages = true
+	if !applicationDeploymentAvailable(nil, policy) {
+		t.Fatal("custom OCI permission did not enable application deployment")
+	}
+}
+
+func TestSitePolicyScopeCustomized(t *testing.T) {
+	item := dashboard.SitePolicy{SiteOverride: json.RawMessage(`{"php":{"memory_limit_mb":256}}`)}
+	if !sitePolicyScopeCustomized(item, "php") {
+		t.Fatal("PHP override was not marked customized")
+	}
+	if sitePolicyScopeCustomized(item, "web") {
+		t.Fatal("missing web override was marked customized")
+	}
+	if got := domainToolLabel("scheduled-tasks"); got != "Scheduled Tasks" {
+		t.Fatalf("domainToolLabel() = %q", got)
+	}
+	if got := domainMoreActive("databases"); got != "is-active" {
+		t.Fatalf("domainMoreActive() = %q", got)
 	}
 }

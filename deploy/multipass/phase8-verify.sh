@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'status=$?; echo "phase8 verifier failed at line ${LINENO}: ${BASH_COMMAND}" >&2; exit "${status}"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
@@ -9,7 +10,9 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"
-"${ROOT_DIR}/deploy/multipass/phase7-verify.sh"
+if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
+  "${ROOT_DIR}/deploy/multipass/phase7-verify.sh"
+fi
 
 VM_IP="$(multipass info "${VM_NAME}" | awk '/IPv4/{print $2; exit}')"
 if [[ -z "${VM_IP}" ]]; then
@@ -18,7 +21,7 @@ if [[ -z "${VM_IP}" ]]; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1"
@@ -187,22 +190,55 @@ fi
 
 username="$(sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase8-quota.test'" | xargs)"
 docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase8-quota.test'" | xargs)"
-pool="/etc/php/8.3/fpm/pool.d/nakpanel-${username}-phase8-quota-test.conf"
-test -f "${pool}"
-grep -Fq 'pm.max_children = 2' "${pool}"
-grep -Fq 'php_admin_value[memory_limit] = 64M' "${pool}"
+site_id="$(sudo -u postgres psql -d nakpanel -tAc "SELECT id FROM sites WHERE domain='phase8-quota.test'" | xargs)"
+pool="/etc/nakpanel/php-fpm/sites/${site_id}.conf"
+runtime_ready=0
+for _ in $(seq 1 180); do
+  if sudo test -f "${pool}" && sudo systemctl is-active --quiet "nakpanel-php-fpm@${site_id}.service"; then
+    runtime_ready=1
+    break
+  fi
+  sleep 1
+done
+if [[ "${runtime_ready}" != "1" ]]; then
+  sudo systemctl --no-pager --full status "nakpanel-php-fpm@${site_id}.service" >&2 || true
+  sudo journalctl -u nakpanel -u nakpanel-agent --no-pager -n 250 >&2 || true
+  echo "phase8 dedicated PHP runtime did not converge" >&2
+  exit 1
+fi
+sudo test -f "${pool}"
+sudo grep -Fq 'pm.max_children = 2' "${pool}"
+sudo grep -Fq 'php_admin_value[memory_limit] = 64M' "${pool}"
+sudo systemctl is-active --quiet "nakpanel-php-fpm@${site_id}.service"
 
-quota_target="$(findmnt -n -o TARGET --target "${docroot}")"
+quota_target="$(sudo findmnt -n -o TARGET --target "${docroot}")"
+sudo systemctl stop nakpanel.service nakpanel-agent.service
 sudo setquota -u "${username}" 0 1024 0 0 "${quota_target}"
 sudo quota -u "${username}" | tee /tmp/nakpanel-phase8-quota.txt
 grep -Eq '(^|[[:space:]])1024([[:space:]]|$)' /tmp/nakpanel-phase8-quota.txt
 
-if sudo -u "${username}" dd if=/dev/zero of="${docroot}/too-big.bin" bs=1M count=3 status=none; then
+write_succeeded=0
+sudo -u "${username}" dd if=/dev/zero of="${docroot}/too-big.bin" bs=1M count=3 status=none && write_succeeded=1
+sudo rm -f "${docroot}/too-big.bin"
+sudo systemctl start nakpanel-agent.service nakpanel.service
+if [[ "${write_succeeded}" == "1" ]]; then
   echo "over-quota write succeeded for ${username}" >&2
   exit 1
 fi
-sudo rm -f "${docroot}/too-big.bin"
 REMOTE
+
+panel_ready=0
+for _ in $(seq 1 60); do
+  if curl -sk --fail "https://${VM_IP}:7443/healthz" >/dev/null; then
+    panel_ready=1
+    break
+  fi
+  sleep 1
+done
+if [[ "${panel_ready}" != "1" ]]; then
+  echo "panel did not recover after the disk-quota probe" >&2
+  exit 1
+fi
 
 post_admin phase8-db databases \
   -d 'engine=mariadb' \

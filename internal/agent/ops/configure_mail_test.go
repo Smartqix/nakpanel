@@ -35,6 +35,25 @@ func (r staticStateRunner) Run(context.Context, string, ...string) ([]byte, erro
 	return []byte(r.state + "\n"), nil
 }
 
+type destructiveMailReloader struct {
+	blockedDirectory string
+	calls            int
+}
+
+func (r *destructiveMailReloader) ReloadService(context.Context, string) error {
+	r.calls++
+	if r.calls == 1 {
+		if err := os.RemoveAll(r.blockedDirectory); err != nil {
+			return err
+		}
+		if err := os.WriteFile(r.blockedDirectory, []byte("blocks restore"), 0o600); err != nil {
+			return err
+		}
+		return errors.New("apply reload failed")
+	}
+	return errors.New("rollback reload failed")
+}
+
 func testMailProvisioner(t *testing.T, reloader SiteServiceReloader) *MailProvisioner {
 	t.Helper()
 	root := t.TempDir()
@@ -145,6 +164,7 @@ func TestConfigureMailRendersExpectedSections(t *testing.T) {
 		`sql_query('nakpanel', 'SELECT EXISTS(SELECT 1 FROM stalwart_domains WHERE name = $1)', rcpt_domain)`,
 		`else = "'smarthost'"`,
 		`[remote."smarthost"]`,
+		`tls.allow-invalid-certs = false`,
 		`auth.username = "relay-user"`,
 		`[queue.limiter.outbound."sender-domain"]`,
 		`rate = "100/1h"`,
@@ -216,6 +236,8 @@ func TestConfigureMailRestoresConfigWhenReloadFails(t *testing.T) {
 	req.OutboundRateLimit = "9/1h"
 	if _, err := p.ConfigureMail(context.Background(), req); err == nil {
 		t.Fatal("reload failure must fail the operation")
+	} else if !strings.Contains(err.Error(), "reload restored Stalwart configuration") {
+		t.Fatalf("rollback reload failure was discarded: %v", err)
 	}
 	after, err := os.ReadFile(p.configPath)
 	if err != nil {
@@ -223,6 +245,27 @@ func TestConfigureMailRestoresConfigWhenReloadFails(t *testing.T) {
 	}
 	if string(after) != string(before) {
 		t.Fatal("failed reload must restore the previous config")
+	}
+}
+
+func TestConfigureMailReportsRestoreAndRollbackReloadFailures(t *testing.T) {
+	t.Parallel()
+	p := testMailProvisioner(t, &recordingPhase6Reloader{})
+	req := types.ConfigureMailReq{Hostname: "mail.node.test"}
+	if _, err := p.ConfigureMail(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	blocker := &destructiveMailReloader{blockedDirectory: filepath.Dir(p.configPath)}
+	p.reloader = blocker
+	req.OutboundRateLimit = "9/1h"
+	_, err := p.ConfigureMail(context.Background(), req)
+	if err == nil {
+		t.Fatal("reload and restore failures must fail the operation")
+	}
+	for _, want := range []string{"apply reload failed", "roll back Stalwart configuration", "rollback reload failed"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("combined rollback error is missing %q: %v", want, err)
+		}
 	}
 }
 
@@ -261,6 +304,29 @@ func TestCollectMailQueueAggregatesSenderDomains(t *testing.T) {
 	}
 	if result.TotalQueued != 4 || result.SenderDomains["compromised.test"] != 2 || result.SenderDomains["calm.test"] != 1 {
 		t.Fatalf("queue aggregation = %+v", result)
+	}
+}
+
+func TestCollectMailQueueMarksIncompleteSnapshot(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("limit") != "1000" || r.URL.Query().Get("max-total") != "1001" {
+			t.Errorf("queue bounds = %q", r.URL.RawQuery)
+		}
+		_, _ = w.Write([]byte(`{"data":{"items":[{"return_path":"wp@compromised.test"}],"total":1001,"status":true}}`))
+	}))
+	defer server.Close()
+	secretPath := filepath.Join(t.TempDir(), "admin-secret")
+	if err := os.WriteFile(secretPath, []byte("hunter2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := NewMailProvisioner(MailProvisionerOptions{AdminSecretPath: secretPath, ManagementURL: server.URL})
+	result, err := p.CollectMailQueue(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.TotalQueued != 1001 || !result.Truncated || result.SenderDomains["compromised.test"] != 1 {
+		t.Fatalf("incomplete queue snapshot = %+v", result)
 	}
 }
 

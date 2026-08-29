@@ -18,7 +18,7 @@ if [[ -z "${VM_IP}" ]]; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1"
@@ -63,6 +63,19 @@ DELETE FROM webmail_hosts WHERE hostname = 'webmail.phase5-ui.test';
 DELETE FROM dns_zones WHERE domain = 'phase5-ui.test';
 DELETE FROM reconciliation_runs;
 DELETE FROM adminer_tokens;
+UPDATE subscription_entitlements
+SET hosting_policy = jsonb_set(
+  jsonb_set(
+    jsonb_set(COALESCE(hosting_policy, '{"schema_version":2}'::jsonb), '{permissions,mail}', 'true'::jsonb, true),
+    '{mail,enabled}', 'true'::jsonb, true
+  ),
+  '{mail,webmail}', 'true'::jsonb, true
+)
+WHERE subscription_id = (
+  SELECT id FROM subscriptions
+  WHERE name = 'Phase verifier unlimited' AND status = 'active'
+  ORDER BY id DESC LIMIT 1
+);
 SQL
 sudo rm -f /etc/nginx/sites-enabled/webmail.phase5-ui.test.conf /etc/nginx/sites-available/webmail.phase5-ui.test.conf
 sudo rm -f /etc/bind/nakpanel/zones/db.phase5-ui.test
@@ -74,7 +87,8 @@ sudo systemctl is-active --quiet nakpanel-agent.service
 sudo systemctl is-active --quiet nakpanel.service
 REMOTE
 
-curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
+curl -sk --fail --retry 30 --retry-all-errors --retry-delay 1 \
+  -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' \
   -d 'legacy=1' \
   -d 'password=NakpanelAdmin!2026' \
@@ -151,7 +165,7 @@ zone_path="$(sudo -u postgres psql -d nakpanel -tAc "SELECT zone_path FROM dns_z
 test -f "${zone_path}"
 grep -Fq '$ORIGIN phase5-ui.test.' "${zone_path}"
 grep -Eq "^@ (3600 )?IN A ${vm_ip}$" "${zone_path}"
-grep -Fq "webmail IN A ${vm_ip}" "${zone_path}"
+grep -Eq "^webmail (3600 )?IN A ${vm_ip}$" "${zone_path}"
 
 archive_path="$(sudo -u postgres psql -d nakpanel -tAc "SELECT archive_path FROM backups WHERE target_name = 'phase5-ui.test' ORDER BY id DESC LIMIT 1" | tr -d '[:space:]')"
 sudo test -f "${archive_path}"

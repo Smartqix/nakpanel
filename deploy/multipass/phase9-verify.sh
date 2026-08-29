@@ -9,7 +9,9 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"
-"${ROOT_DIR}/deploy/multipass/phase8-verify.sh"
+if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
+  "${ROOT_DIR}/deploy/multipass/phase8-verify.sh"
+fi
 
 VM_IP="$(multipass info "${VM_NAME}" | awk '/IPv4/{print $2; exit}')"
 if [[ -z "${VM_IP}" ]]; then
@@ -18,7 +20,7 @@ if [[ -z "${VM_IP}" ]]; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1"
@@ -189,11 +191,24 @@ if ! sudo -u postgres psql -d nakpanel -tAc "SELECT status FROM sites WHERE doma
 fi
 username="$(sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase9-client.test' ORDER BY id DESC LIMIT 1" | xargs)"
 docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase9-client.test' ORDER BY id DESC LIMIT 1" | xargs)"
-pool="/etc/php/8.3/fpm/pool.d/nakpanel-${username}-phase9-client-test.conf"
-test -f "${pool}"
-grep -Fq 'pm.max_children = 2' "${pool}"
-grep -Fq 'php_admin_value[memory_limit] = 64M' "${pool}"
-quota_target="$(findmnt -n -o TARGET --target "${docroot}")"
+site_id="$(sudo -u postgres psql -d nakpanel -tAc "SELECT id FROM sites WHERE domain='phase9-client.test' ORDER BY id DESC LIMIT 1" | xargs)"
+pool="/etc/nakpanel/php-fpm/sites/${site_id}.conf"
+runtime_ready=0
+for _ in $(seq 1 180); do
+  if sudo test -f "${pool}" && sudo systemctl is-active --quiet "nakpanel-php-fpm@${site_id}.service"; then
+    runtime_ready=1
+    break
+  fi
+  sleep 1
+done
+if [[ "${runtime_ready}" != "1" ]]; then
+  sudo systemctl --no-pager --full status "nakpanel-php-fpm@${site_id}.service" >&2 || true
+  echo "phase9 dedicated PHP runtime did not converge" >&2
+  exit 1
+fi
+sudo grep -Fq 'pm.max_children = 2' "${pool}"
+sudo grep -Fq 'php_admin_value[memory_limit] = 64M' "${pool}"
+quota_target="$(sudo findmnt -n -o TARGET --target "${docroot}")"
 sudo quota -u "${username}" | tee /tmp/nakpanel-phase9-quota.txt
 grep -Eq '(^|[[:space:]])2048([[:space:]]|$)' /tmp/nakpanel-phase9-quota.txt
 if sudo -u "${username}" dd if=/dev/zero of="${docroot}/too-big.bin" bs=1M count=3 status=none; then
@@ -282,7 +297,8 @@ post_admin phase9-huge-plan plans \
 huge_plan_id="$(multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -tAc "SELECT id FROM plans WHERE name = 'Phase9 Huge'" | tr -d '[:space:]')"
 post_admin phase9-warn-settings settings/oversell \
   -d 'oversell_policy=warn' \
-  -d 'server_disk_capacity_mb=1'
+  -d 'server_disk_capacity_mb=1' \
+  -d 'valkey_capacity_mb=0'
 post_admin phase9-warn-subscription subscriptions \
   -d "customer_user_id=${phase9_user_id}" \
   -d "plan_id=${huge_plan_id}"
@@ -292,7 +308,8 @@ post_admin phase9-reset-subscription subscriptions \
   -d "plan_id=${tiny_plan_id}"
 post_admin phase9-cap-settings settings/oversell \
   -d 'oversell_policy=cap' \
-  -d 'server_disk_capacity_mb=200000'
+  -d 'server_disk_capacity_mb=200000' \
+  -d 'valkey_capacity_mb=0'
 post_expect_400 phase9-cap-block subscriptions 'oversell cap exceeded' \
   -d "customer_user_id=${phase9_user_id}" \
   -d "plan_id=${huge_plan_id}"

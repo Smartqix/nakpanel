@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -15,15 +16,19 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/agentclient"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/control/databaseadmin"
+	"github.com/nakroteck/nakpanel/internal/control/dnstemplate"
 	controlfiles "github.com/nakroteck/nakpanel/internal/control/filemanager"
 	panelhttp "github.com/nakroteck/nakpanel/internal/control/http"
 	controlmaintenance "github.com/nakroteck/nakpanel/internal/control/maintenance"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
 	"github.com/nakroteck/nakpanel/internal/control/provisioningapi"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/control/store"
 	paneltls "github.com/nakroteck/nakpanel/internal/control/tls"
 	"github.com/nakroteck/nakpanel/internal/control/workspace"
+	"github.com/nakroteck/nakpanel/internal/version"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
 	"github.com/robfig/cron/v3"
@@ -53,8 +58,12 @@ func main() {
 	queries := store.New(db)
 	authStore := store.NewAuthStore(queries)
 	sessionManager := auth.NewSessionManager(authStore, auth.SessionOptions{})
+	securityKeyring, err := serveradmin.LoadKeyring(cfg.SecretKeyFile)
+	if err != nil {
+		log.Fatalf("load secret keyring: %v", err)
+	}
 
-	riverClient, err := newRiverClient(db, queries, cfg)
+	riverClient, serverAdminManager, databaseAdminManager, dnsTemplateManager, err := newRiverClient(db, queries, cfg)
 	if err != nil {
 		log.Fatalf("create river client: %v", err)
 	}
@@ -68,9 +77,10 @@ func main() {
 	}()
 
 	siteRepo := provision.NewSQLSiteRepository(db, queries, riverClient)
-	databaseRepo := provision.NewSQLDatabaseRepository(db, queries, riverClient)
+	databaseRepo := provision.NewSQLDatabaseRepository(db, queries, riverClient, serverAdminManager.Store())
 	phase6Repo := provision.NewSQLPhase6Repository(db, riverClient)
 	quotaStore := controlquota.NewSQLStore(db, riverClient)
+	quotaStore.SetServiceSecretStore(serverAdminManager.Store())
 	workspaceStore := workspace.NewStore(db)
 	fileManager := controlfiles.NewManager(controlfiles.ManagerOptions{
 		Store: controlfiles.NewSQLStore(db), Access: workspaceStore, Agent: agentclient.New(config.AgentSocket),
@@ -103,6 +113,7 @@ func main() {
 		provision.WithAccessPolicy(workspaceStore),
 		provision.WithRuntimeCapabilities(agentCapabilities),
 		provision.WithMailAgent(agentCapabilities),
+		provision.WithHostingToolkitAgent(agentCapabilities),
 	)
 	if err := provision.SweepCustomTLSStagingForJobs(ctx, db, provision.DefaultCustomTLSStagingDir, 24*time.Hour); err != nil {
 		log.Printf("sweep stale custom TLS staging files: %v", err)
@@ -122,10 +133,17 @@ func main() {
 		DomainManager:              siteManager,
 		FileManager:                fileManager,
 		MailManager:                siteManager,
+		ServerAdmin:                serverAdminManager,
+		DatabaseAdmin:              databaseAdminManager,
+		DNSTemplates:               dnsTemplateManager,
+		ApplicationLogs:            agentCapabilities,
+		SMTPConfigured:             cfg.SMTPHost != "" && cfg.SMTPFrom != "",
+		SecurityDB:                 db,
+		SecurityKeyring:            securityKeyring,
 	}).Handler()
 	accountService := &provisioningapi.AccountService{DB: db, River: riverClient, PublicURL: cfg.PublicURL, Quota: quotaStore}
 	apiHandler := provisioningapi.NewHandler(provisioningapi.HandlerOptions{
-		DB: db, PanelVersion: "phase20", PublicURL: cfg.PublicURL, Sessions: sessionManager, Accounts: accountService,
+		DB: db, PanelVersion: version.String(), PublicURL: cfg.PublicURL, Sessions: sessionManager, Accounts: accountService,
 	})
 	handler := provisioningapi.NewRootHandler(provisioningapi.RootOptions{API: apiHandler, UI: uiHandler, DB: db, Sessions: sessionManager})
 
@@ -177,25 +195,34 @@ func (q dashboardQuerier) ListDatabases(ctx context.Context) ([]store.Database, 
 	return q.queries.ListDatabases(ctx)
 }
 
-func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelRuntimeConfig) (*river.Client[*sql.Tx], error) {
+func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelRuntimeConfig) (*river.Client[*sql.Tx], *serveradmin.Manager, *databaseadmin.Manager, *dnstemplate.Manager, error) {
 	workers := river.NewWorkers()
 	agent := agentclient.New(config.AgentSocket)
 	var runtimeConfig config.PanelRuntimeConfig
 	if len(configs) > 0 {
 		runtimeConfig = configs[0]
 	}
+	keyring, err := serveradmin.LoadKeyring(runtimeConfig.SecretKeyFile)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("load server secret keyring: %w", err)
+	}
+	serverAdminStore := serveradmin.NewStore(db, keyring)
+	serverAdminManager := serveradmin.NewManager(serverAdminStore, nil, agent)
+	databaseAdminManager := databaseadmin.NewManager(db, agent, serverAdminStore, nil)
+	dnsTemplateManager := dnstemplate.NewManager(db, nil)
 	siteStatus := provision.NewSQLSiteStatusStore(queries)
-	databaseStatus := provision.NewSQLDatabaseStatusStore(db, queries)
+	databaseStatus := provision.NewSQLDatabaseStatusStore(db, queries, serverAdminStore)
 	phase6Status := provision.NewSQLPhase6StatusStore(db)
-	maintenanceService := controlmaintenance.NewService(db, nil, agent)
+	maintenanceService := controlmaintenance.NewService(db, nil, agent, serverAdminStore)
 	river.AddWorker(workers, provision.NewCreateSiteWorker(agent, siteStatus))
-	river.AddWorker(workers, provision.NewCreateDatabaseWorker(agent, databaseStatus))
+	river.AddWorker(workers, provision.NewCreateDatabaseWorker(agent, databaseStatus, serverAdminStore))
 	river.AddWorker(workers, provision.NewIssueCertWorker(agent, siteStatus, maintenanceService))
 	river.AddWorker(workers, provision.NewInstallCustomCertWorker(agent, siteStatus))
 	river.AddWorker(workers, provision.NewCreateBackupWorker(agent, phase6Status, maintenanceService))
 	river.AddWorker(workers, provision.NewRestoreBackupWorker(agent, phase6Status))
 	river.AddWorker(workers, provision.NewConfigureWebmailWorker(agent, phase6Status))
 	river.AddWorker(workers, provision.NewConfigureDNSZoneWorker(agent, phase6Status))
+	river.AddWorker(workers, dnstemplate.NewSyncTemplateWorker(dnsTemplateManager))
 	river.AddWorker(workers, provision.NewReconcileSystemWorker(agent, phase6Status, maintenanceService))
 	river.AddWorker(workers, controlmaintenance.NewRenewCertsWorker(maintenanceService))
 	river.AddWorker(workers, controlmaintenance.NewScheduledBackupsWorker(maintenanceService))
@@ -205,15 +232,23 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	river.AddWorker(workers, controlmaintenance.NewReconcileWorker(maintenanceService))
 	river.AddWorker(workers, controlmaintenance.NewMailQueueSweepWorker(maintenanceService, agent))
 	river.AddWorker(workers, controlquota.NewSetHostingStateWorker(agent, db))
-	river.AddWorker(workers, controlquota.NewSyncPlanWorker(db))
-	river.AddWorker(workers, controlquota.NewSyncAddonWorker(db))
+	syncPlanWorker := controlquota.NewSyncPlanWorker(db)
+	river.AddWorker(workers, syncPlanWorker)
+	syncAddonWorker := controlquota.NewSyncAddonWorker(db)
+	river.AddWorker(workers, syncAddonWorker)
 	convergenceWorker := controlquota.NewConvergeSubscriptionWorker(db, agent)
 	river.AddWorker(workers, convergenceWorker)
-	configureMailWorker := provision.NewConfigureMailWorker(db, agent)
+	configureMailWorker := provision.NewConfigureMailWorker(db, agent, serverAdminStore)
 	river.AddWorker(workers, configureMailWorker)
-	river.AddWorker(workers, controlquota.NewConvergeApplicationWorker(db, agent))
+	river.AddWorker(workers, controlquota.NewConvergeApplicationWorker(db, agent, serverAdminStore))
+	river.AddWorker(workers, controlquota.NewStagingOperationWorker(db, agent))
+	scheduledTaskSweepWorker := controlquota.NewSweepScheduledTasksWorker(db)
+	river.AddWorker(workers, scheduledTaskSweepWorker)
+	river.AddWorker(workers, controlquota.NewRunScheduledTaskWorker(db, agent))
 	pendingConvergenceWorker := controlquota.NewConvergePendingSubscriptionsWorker(db)
 	river.AddWorker(workers, pendingConvergenceWorker)
+	applicationReconcileWorker := controlquota.NewReconcileApplicationsWorker(db, agent)
+	river.AddWorker(workers, applicationReconcileWorker)
 	migrationSweepWorker := controlquota.NewSweepLegacyAccountMigrationsWorker(db)
 	migrationWorker := controlquota.NewMigrateSubscriptionAccountWorker(db, agent)
 	cleanupSweepWorker := controlquota.NewSweepLegacyAccountCleanupWorker(db)
@@ -228,19 +263,30 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		Password: runtimeConfig.SMTPPassword, From: runtimeConfig.SMTPFrom, TLSMode: runtimeConfig.SMTPTLSMode,
 	}))
 	river.AddWorker(workers, provisioningapi.NewFinalizeAccountWorker(db))
-	river.AddWorker(workers, provisioningapi.NewTeardownAccountWorker(db, agent))
+	teardownAccountWorker := provisioningapi.NewTeardownAccountWorker(db, agent)
+	river.AddWorker(workers, teardownAccountWorker)
 	webhookConfig := provisioningapi.WebhookConfig{URL: runtimeConfig.BillingWebhookURL, Secret: runtimeConfig.BillingWebhookSecret}
 	webhookSweepWorker := provisioningapi.NewSweepWebhookWorker(db, webhookConfig.URL != "")
 	river.AddWorker(workers, webhookSweepWorker)
 	river.AddWorker(workers, provisioningapi.NewDeliverWebhookWorker(db, webhookConfig))
+	river.AddWorker(workers, serveradmin.NewRefreshInventoryWorker(serverAdminManager))
+	river.AddWorker(workers, serveradmin.NewControlServiceWorker(serverAdminManager))
+	river.AddWorker(workers, databaseadmin.NewMutationWorker(databaseAdminManager))
+	river.AddWorker(workers, serveradmin.NewApplyUpdatesWorker(serverAdminManager))
+	river.AddWorker(workers, serveradmin.NewHostPowerWorker(serverAdminManager))
+	river.AddWorker(workers, serveradmin.NewServerBackupWorker(serverAdminManager))
+	river.AddWorker(workers, serveradmin.NewPruneServerBackupsWorker(serverAdminManager))
+	river.AddWorker(workers, serveradmin.NewServerBackupSweepWorker(serverAdminManager))
+	river.AddWorker(workers, serveradmin.NewApplyFail2BanWorker(serverAdminManager))
+	river.AddWorker(workers, serveradmin.NewStageFirewallWorker(serverAdminManager))
 
 	backupSchedule, err := cron.ParseStandard("0 2 * * *")
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	pruneSchedule, err := cron.ParseStandard("0 3 * * *")
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
 		PeriodicJobs: []*river.PeriodicJob{
@@ -253,6 +299,9 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) {
 				return controlquota.DeliverNotificationsArgs{}, nil
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) {
+				return controlquota.SweepScheduledTasksArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(5*time.Minute), func() (river.JobArgs, *river.InsertOpts) {
 				return controlquota.SweepLegacyAccountMigrationsArgs{}, nil
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
@@ -261,6 +310,12 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) {
 				return controlquota.ConvergePendingSubscriptionsArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) {
+				return controlquota.ReconcileApplicationsArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(5*time.Minute), func() (river.JobArgs, *river.InsertOpts) {
+				return controlquota.NewConfigureMailArgs(), nil
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(6*time.Hour), func() (river.JobArgs, *river.InsertOpts) {
 				return controlmaintenance.RenewCertsArgs{}, nil
@@ -277,29 +332,54 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 			river.NewPeriodicJob(river.PeriodicInterval(15*time.Minute), func() (river.JobArgs, *river.InsertOpts) {
 				return controlmaintenance.MailQueueSweepArgs{}, nil
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) {
+				return serveradmin.RefreshInventoryArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) {
+				return serveradmin.ServerBackupSweepArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
 		},
-		Queues: map[string]river.QueueConfig{
-			river.QueueDefault:           {MaxWorkers: 4},
-			controlquota.HeavyQueue:      {MaxWorkers: 2},
-			controlquota.MigrationQueue:  {MaxWorkers: 1},
-			controlmaintenance.Queue:     {MaxWorkers: 2},
-			provisioningapi.WebhookQueue: {MaxWorkers: 4},
-		},
+		Queues:  panelQueueConfig(),
 		Workers: workers,
+		// Server backups legitimately run for hours (archive + upload +
+		// verify) and override Timeout() to 12h. River's default rescue
+		// window is 1h, which would re-queue a healthy in-flight backup and
+		// leave the original running against the single backup queue slot.
+		RescueStuckJobsAfter: 13 * time.Hour,
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, nil, err
 	}
 	usageWorker.SetRiverClient(client)
+	syncPlanWorker.SetRiverClient(client)
+	syncAddonWorker.SetRiverClient(client)
+	scheduledTaskSweepWorker.SetRiverClient(client)
 	convergenceWorker.SetRiverClient(client)
 	configureMailWorker.SetRiverClient(client)
 	pendingConvergenceWorker.SetRiverClient(client)
+	applicationReconcileWorker.SetRiverClient(client)
 	migrationSweepWorker.SetRiverClient(client)
 	cleanupSweepWorker.SetRiverClient(client)
 	migrationWorker.SetRiverClient(client)
 	maintenanceService.SetRiverClient(client)
 	webhookSweepWorker.SetRiverClient(client)
-	return client, nil
+	serverAdminManager.SetRiverClient(client)
+	databaseAdminManager.SetRiverClient(client)
+	teardownAccountWorker.SetRiverClient(client)
+	dnsTemplateManager.SetRiverClient(client)
+	return client, serverAdminManager, databaseAdminManager, dnsTemplateManager, nil
+}
+
+func panelQueueConfig() map[string]river.QueueConfig {
+	return map[string]river.QueueConfig{
+		river.QueueDefault:           {MaxWorkers: 4},
+		controlquota.HeavyQueue:      {MaxWorkers: 2},
+		controlquota.MigrationQueue:  {MaxWorkers: 1},
+		controlmaintenance.Queue:     {MaxWorkers: 2},
+		provisioningapi.WebhookQueue: {MaxWorkers: 4},
+		serveradmin.SystemQueue:      {MaxWorkers: 1},
+		serveradmin.BackupQueue:      {MaxWorkers: 1},
+	}
 }
 
 func sweepCustomTLSStaging(ctx context.Context, db *sql.DB) {

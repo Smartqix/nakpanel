@@ -51,8 +51,8 @@ func TestUpsertLimitsHonorsOversellCap(t *testing.T) {
 		WithArgs(int64(10), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery("SELECT oversell_policy").
-		WillReturnRows(sqlmock.NewRows([]string{"oversell_policy", "server_disk_capacity_mb", "created_at", "updated_at"}).
-			AddRow(OversellPolicyCap, 100, now, now))
+		WillReturnRows(sqlmock.NewRows([]string{"oversell_policy", "server_disk_capacity_mb", "valkey_capacity_mb", "created_at", "updated_at"}).
+			AddRow(OversellPolicyCap, 100, 256, now, now))
 	mock.ExpectQuery("FROM subscriptions s").
 		WithArgs(int64(2)).
 		WillReturnRows(sqlmock.NewRows([]string{"committed", "unlimited"}).AddRow(int64(90), false))

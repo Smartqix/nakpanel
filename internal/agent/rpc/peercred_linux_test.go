@@ -5,10 +5,12 @@ package rpc
 import (
 	"bufio"
 	"context"
+	"errors"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -80,6 +82,13 @@ func TestServerRejectsWrongPeerUIDLinux(t *testing.T) {
 		t.Fatalf("set client deadline: %v", err)
 	}
 	if _, err := client.Write([]byte(`{"op":"ping","id":"01JPHASE900000000000000099","data":{}}` + "\n")); err != nil {
+		// The server authorizes immediately after accept. On a fast Linux
+		// scheduler it can send the denial and close before this write reaches
+		// the socket, which is the same security outcome as reading the JSON
+		// denial below.
+		if errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET) {
+			return
+		}
 		t.Fatalf("write request: %v", err)
 	}
 	line, err := bufio.NewReader(client).ReadString('\n')

@@ -9,7 +9,9 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"
-"${ROOT_DIR}/deploy/multipass/phase9-verify.sh"
+if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
+  "${ROOT_DIR}/deploy/multipass/phase9-verify.sh"
+fi
 
 VM_IP="$(multipass info "${VM_NAME}" | awk '/IPv4/{print $2; exit}')"
 if [[ -z "${VM_IP}" ]]; then
@@ -18,7 +20,7 @@ if [[ -z "${VM_IP}" ]]; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1"
@@ -120,7 +122,8 @@ REMOTE
 
 post_admin phase10-settings settings/oversell \
   -d 'oversell_policy=warn' \
-  -d 'server_disk_capacity_mb=200000'
+  -d 'server_disk_capacity_mb=200000' \
+  -d 'valkey_capacity_mb=0'
 
 for plan in One Two; do
   post_admin "phase10-plan-${plan}" plans \

@@ -54,7 +54,7 @@ func (f *fakeRPCFileManager) ExportTransfer(context.Context, types.FileTransferE
 func TestDispatchListFilesUsesTypedFileManager(t *testing.T) {
 	files := &fakeRPCFileManager{}
 	dispatcher := NewDispatcher(&fakeReloader{}, Options{FileManager: files})
-	response := dispatcher.Dispatch(context.Background(), types.Request{Op: types.OpListFiles, ID: "files-1", Data: json.RawMessage(`{"username":"npdemo","path":"","page":1,"per_page":100,"sort":"name","order":"asc"}`)})
+	response := dispatcher.Dispatch(context.Background(), types.Request{Op: types.OpListFiles, ID: "files-1", Data: json.RawMessage(`{"site_id":7,"username":"npdemo","domain":"example.test","path":"","page":1,"per_page":100,"sort":"name","order":"asc"}`)})
 	if !response.OK || files.username != "npdemo" {
 		t.Fatalf("response=%#v username=%q", response, files.username)
 	}

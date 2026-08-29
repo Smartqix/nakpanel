@@ -76,12 +76,20 @@ func TestEnsureSubscriptionAccountCreatesSharedLayoutAndLimits(t *testing.T) {
 	if result.LinuxUID != 1201 || len(users.names) != 1 || quota.limit != 1024 {
 		t.Fatalf("result=%#v users=%v quota=%#v", result, users.names, quota)
 	}
-	keys, err := os.ReadFile(filepath.Join(home, ".ssh", "authorized_keys"))
+	keys, err := os.ReadFile(filepath.Join(root, "ssh", "authorized_keys", "npaccount"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(keys), `restrict,command="internal-sftp -d `+filepath.Join(home, "domains", "example.test")+`"`) {
+	if !strings.Contains(string(keys), `restrict,command="internal-sftp -d /domains/example.test"`) {
 		t.Fatalf("authorized_keys = %q", keys)
+	}
+	sshConfig, err := os.ReadFile(filepath.Join(root, "ssh", "sshd_config.d", "90-nakpanel-npaccount.conf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(sshConfig), "ChrootDirectory "+home) ||
+		!strings.Contains(string(sshConfig), "DisableForwarding yes") {
+		t.Fatalf("sshd account config = %q", sshConfig)
 	}
 	slice, err := os.ReadFile(filepath.Join(units, "user-1201.slice.d", "50-nakpanel.conf"))
 	if err != nil {
@@ -91,6 +99,50 @@ func TestEnsureSubscriptionAccountCreatesSharedLayoutAndLimits(t *testing.T) {
 		if !strings.Contains(string(slice), want) {
 			t.Fatalf("slice missing %q: %s", want, slice)
 		}
+	}
+	for _, path := range []string{home, filepath.Join(home, "domains"), filepath.Join(home, "domains", "example.test")} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != 0o711 {
+			t.Fatalf("%s mode = %o, want 711 traversal-only anchor", path, got)
+		}
+	}
+}
+
+func TestEnsureSubscriptionAccountRejectsSymlinkedDomainRoot(t *testing.T) {
+	root := t.TempDir()
+	homeRoot := filepath.Join(root, "homes")
+	home := filepath.Join(homeRoot, "npaccount")
+	domains := filepath.Join(home, "domains")
+	outside := filepath.Join(root, "outside")
+	for _, dir := range []string{domains, outside} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Symlink(outside, filepath.Join(domains, "example.test")); err != nil {
+		t.Fatal(err)
+	}
+	p := NewSubscriptionAccountProvisioner(SubscriptionAccountProvisionerOptions{
+		HomeRoot: homeRoot, SystemdUnitDir: filepath.Join(root, "units"),
+		UserManager: &accountTestUsers{}, Ownership: accountTestOwnership{},
+		DiskQuota: &accountTestQuota{}, Runner: &accountTestRunner{},
+	})
+	req := types.EnsureSubscriptionAccountReq{
+		SubscriptionID: 42, Username: "npaccount", HomePath: home, State: "active", Policy: validAccountPolicy(),
+		Domains: []types.SubscriptionDomain{{
+			SiteID: 7, Domain: "example.test",
+			DocumentRoot: filepath.Join(domains, "example.test", "public_html"),
+			State:        "active", Policy: validAccountPolicy(),
+		}},
+	}
+	if _, err := p.EnsureSubscriptionAccount(context.Background(), req); err == nil {
+		t.Fatal("expected symlinked domain root to be rejected")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "public_html")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("outside target was modified: %v", err)
 	}
 }
 
@@ -151,7 +203,7 @@ func TestCronToCalendarUsesValidSystemdShape(t *testing.T) {
 	}
 }
 
-func TestApplyScheduledTasksRemovesDeletedUnits(t *testing.T) {
+func TestApplyScheduledTasksRetiresLegacyTimersForRiverScheduling(t *testing.T) {
 	root := t.TempDir()
 	units := filepath.Join(root, "units")
 	state := filepath.Join(root, "state")
@@ -167,8 +219,8 @@ func TestApplyScheduledTasksRemovesDeletedUnits(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, suffix := range []string{".service", ".timer"} {
-		if _, err := os.Stat(filepath.Join(units, "nakpanel-task-41"+suffix)); err != nil {
-			t.Fatal(err)
+		if _, err := os.Stat(filepath.Join(units, "nakpanel-task-41"+suffix)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("legacy task unit exists after River migration: %v", err)
 		}
 	}
 	req.Tasks = nil
@@ -181,7 +233,7 @@ func TestApplyScheduledTasksRemovesDeletedUnits(t *testing.T) {
 		}
 	}
 	if !strings.Contains(strings.Join(runner.calls, "\n"), "systemctl disable --now nakpanel-task-41.timer") {
-		t.Fatalf("removed timer was not disabled: %v", runner.calls)
+		t.Fatalf("legacy timer was not disabled: %v", runner.calls)
 	}
 }
 

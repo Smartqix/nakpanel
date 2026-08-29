@@ -33,20 +33,22 @@ func main() {
 		log.Fatalf("resolve allowed panel uid: %v", err)
 	}
 
-	reloader := ops.NewSystemdReloader(ops.SystemdReloaderOptions{AllowedServices: []string{"nginx", "php8.3-fpm", "php8.2-fpm", "bind9", "named.service", "stalwart-mail.service"}})
+	reloader := ops.NewSystemdReloader(ops.SystemdReloaderOptions{AllowedServices: []string{"nginx", "php8.1-fpm", "php8.2-fpm", "php8.3-fpm", "php8.4-fpm", "php8.5-fpm", "bind9", "named.service", "stalwart-mail.service"}})
 	siteProvisioner := ops.NewSiteProvisioner(ops.SiteProvisionerOptions{
 		Paths:            ops.DefaultSitePathConfig(),
-		UserManager:      ops.NewLinuxUserManager(ops.LinuxUserManagerOptions{}),
+		UserManager:      ops.NewLinuxUserManager(ops.LinuxUserManagerOptions{ManageSubIDs: true}),
 		OwnershipManager: ops.NewLinuxOwnershipManager(nil),
 		DiskQuotaManager: ops.NewLinuxDiskQuotaManager(nil),
 		Reloader:         reloader,
+		NginxTester:      ops.NewCommandNginxConfigTester(nil),
+		PHPTester:        ops.NewCommandPHPConfigTester(nil),
 	})
 	webmailProvisioner := ops.NewWebmailProvisioner(ops.WebmailProvisionerOptions{Reloader: reloader})
 	dnsProvisioner := ops.NewDNSProvisioner(ops.DNSProvisionerOptions{Reloader: reloader})
 	usageCollector := ops.NewUsageCollector("/home", "/var/log/nginx", os.Getenv("NAKPANEL_MARIADB_DSN"))
 	fileManager := ops.NewFileManager(ops.FileManagerOptions{TransferDir: config.FileTransferDir, PanelUser: config.PanelUser})
 	accountProvisioner := ops.NewSubscriptionAccountProvisioner(ops.SubscriptionAccountProvisionerOptions{
-		UserManager:     ops.NewLinuxUserManager(ops.LinuxUserManagerOptions{}),
+		UserManager:     ops.NewLinuxUserManager(ops.LinuxUserManagerOptions{ManageSubIDs: true}),
 		Ownership:       ops.NewLinuxOwnershipManager(nil),
 		DiskQuota:       ops.NewLinuxDiskQuotaManager(nil),
 		SiteProvisioner: siteProvisioner,
@@ -57,10 +59,25 @@ func main() {
 		Reloader:      reloader,
 	})
 	podmanProvisioner := ops.NewPodmanProvisioner(ops.PodmanProvisionerOptions{})
+	hostingToolkit := ops.NewHostingToolkitProvisioner(ops.HostingToolkitOptions{
+		ValkeyImage:       os.Getenv("NAKPANEL_VALKEY_IMAGE"),
+		FTPSPublicAddress: os.Getenv("NAKPANEL_FTPS_PUBLIC_ADDRESS"),
+		FTPSTLSCertPath:   os.Getenv("NAKPANEL_FTPS_TLS_CERT"),
+		FTPSTLSKeyPath:    os.Getenv("NAKPANEL_FTPS_TLS_KEY"),
+	})
+	serverAdminInspector := ops.NewServerAdminInspector(ops.ServerAdminInspectorOptions{})
+	managedOperations := ops.NewManagedOperations(ops.ManagedOperationsOptions{Services: serverAdminInspector})
+	securityController := ops.NewServerSecurityController(ops.ServerSecurityControllerOptions{})
+	go securityController.RunRecovery(ctx, func(err error) {
+		log.Printf("recover staged server security policy: %v", err)
+	})
+	databaseAdministration := ops.NewMariaDBAdministration(os.Getenv("NAKPANEL_MARIADB_DSN"))
+	serverBackups := ops.NewServerBackupProvisioner(ops.ServerBackupProvisionerOptions{})
+	fail2banController := ops.NewFail2BanController(ops.Fail2BanControllerOptions{})
 	dispatcher := agentrpc.NewDispatcher(
 		reloader,
 		agentrpc.Options{
-			AllowedServices: []string{"nginx", "php8.3-fpm", "php8.2-fpm", "bind9", "named.service", "stalwart-mail.service"},
+			AllowedServices: []string{"nginx", "php8.1-fpm", "php8.2-fpm", "php8.3-fpm", "php8.4-fpm", "php8.5-fpm", "bind9", "named.service", "stalwart-mail.service"},
 			SiteProvisioner: siteProvisioner,
 			DatabaseProvisioner: ops.NewDatabaseProvisioner(map[types.DBEngine]ops.DatabaseEngine{
 				types.EngineMariaDB: ops.NewLazyMariaDBEngine(os.Getenv("NAKPANEL_MARIADB_DSN")),
@@ -100,6 +117,16 @@ func main() {
 			Mail:                    mailProvisioner,
 			Applications:            podmanProvisioner,
 			SubscriptionTeardown:    teardownProvisioner,
+			HostingToolkit:          hostingToolkit,
+			ServerAdmin:             serverAdminInspector,
+			ServiceController:       managedOperations,
+			Journal:                 managedOperations,
+			Updates:                 managedOperations,
+			Security:                securityController,
+			HostPower:               managedOperations,
+			DatabaseAdmin:           databaseAdministration,
+			ServerBackups:           serverBackups,
+			Fail2Ban:                fail2banController,
 		},
 	)
 	server := agentrpc.NewServer(dispatcher, agentrpc.WithAllowedPeerUID(allowedUID))

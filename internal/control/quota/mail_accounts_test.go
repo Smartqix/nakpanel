@@ -140,6 +140,11 @@ func TestDeleteMailboxAndAliasScopeToSubscription(t *testing.T) {
 			}
 			defer db.Close()
 			mock.ExpectBegin()
+			expectSubscriptionMutationLock(mock, 83)
+			mock.ExpectQuery(`SELECT subscription\.status,customer\.status,customer\.reseller_id`).
+				WithArgs(int64(83)).
+				WillReturnRows(sqlmock.NewRows([]string{"subscription_status", "customer_status", "reseller_id"}).
+					AddRow("active", "active", nil))
 			mock.ExpectExec(test.query).WithArgs(int64(7), int64(83)).WillReturnResult(sqlmock.NewResult(0, 0))
 			mock.ExpectRollback()
 			if err := test.call(NewSQLStore(db)); !errors.Is(err, sql.ErrNoRows) {
@@ -190,6 +195,11 @@ func TestMailTenantIsolationTwoTenants(t *testing.T) {
 		if err := db.QueryRowContext(ctx, `INSERT INTO subscriptions(customer_user_id,customer_id,plan_id,name,status) VALUES($1,$2,$3,$4,'active') RETURNING id`,
 			userID, customerID, planID, label+" subscription").Scan(&subscriptionID); err != nil {
 			t.Fatalf("create subscription %s: %v", label, err)
+		}
+		accountUsername := fmt.Sprintf("npt%d", subscriptionID)
+		if _, err := db.ExecContext(ctx, `INSERT INTO subscription_system_accounts(subscription_id,username,home_path)
+VALUES($1,$2,$3)`, subscriptionID, accountUsername, "/home/"+accountUsername); err != nil {
+			t.Fatalf("create subscription account %s: %v", label, err)
 		}
 		mailDomainID, err = store.UpsertMailDomain(ctx, subscriptionID, userID, types.MailDomainInput{
 			Domain: domain, Enabled: true, DKIM: true, DMARCPolicy: "none",
@@ -247,6 +257,9 @@ func TestMailTenantIsolationTwoTenants(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("tenant A alias create: %v", err)
 	}
+	if _, err := db.ExecContext(ctx, `UPDATE mail_domains SET effective_enabled=true WHERE id IN ($1,$2)`, domainAID, domainBID); err != nil {
+		t.Fatalf("mark converged mail domains effective: %v", err)
+	}
 
 	// The plan gate fails closed: the (max_mailboxes+1)th mailbox is rejected.
 	if _, err := store.UpsertMailbox(ctx, subA, 0, types.MailboxInput{
@@ -279,13 +292,25 @@ func TestMailTenantIsolationTwoTenants(t *testing.T) {
 	if resolved != "alice@"+domainA {
 		t.Fatalf("alias resolved to %q", resolved)
 	}
+	var remaining int
+	if _, err := db.ExecContext(ctx, `UPDATE mail_domains SET effective_enabled=false WHERE id=$1`, domainAID); err != nil {
+		t.Fatalf("suspend effective mail delivery: %v", err)
+	}
+	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM stalwart_accounts WHERE name=$1`, "alice@"+domainA).Scan(&remaining); err != nil {
+		t.Fatal(err)
+	}
+	if remaining != 0 {
+		t.Fatal("effectively suspended mailbox is still visible to Stalwart")
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE mail_domains SET effective_enabled=true WHERE id=$1`, domainAID); err != nil {
+		t.Fatalf("restore effective mail delivery: %v", err)
+	}
 
 	// Deleting the mailbox removes it from the directory views immediately —
 	// this is what makes Stalwart stop authenticating and accepting mail.
 	if err := store.DeleteMailbox(ctx, subA, aliceID); err != nil {
 		t.Fatalf("tenant A mailbox delete: %v", err)
 	}
-	var remaining int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM stalwart_accounts WHERE name=$1`, "alice@"+domainA).Scan(&remaining); err != nil {
 		t.Fatal(err)
 	}

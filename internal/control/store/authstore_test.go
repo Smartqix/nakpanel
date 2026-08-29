@@ -38,6 +38,10 @@ func (q *fakeAuthQuerier) DeleteSession(ctx context.Context, tokenHash string) e
 	return nil
 }
 
+func (q *fakeAuthQuerier) MarkSessionReauthenticated(context.Context, string) (int64, error) {
+	return 1, nil
+}
+
 func TestAuthStoreFindUserByEmailMapsUser(t *testing.T) {
 	store := NewAuthStore(&fakeAuthQuerier{
 		user: User{
@@ -71,7 +75,7 @@ func TestAuthStoreCreatesAndDeletesSession(t *testing.T) {
 	store := NewAuthStore(q)
 	expiresAt := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
 
-	if err := store.CreateSession(context.Background(), "hash", 42, expiresAt); err != nil {
+	if err := store.CreateSession(context.Background(), "hash", 42, expiresAt, auth.SessionMeta{IPAddress: "203.0.113.5", UserAgent: "test-agent"}); err != nil {
 		t.Fatalf("CreateSession returned error: %v", err)
 	}
 	if q.createdSession.TokenHash != "hash" || q.createdSession.UserID != 42 || !q.createdSession.ExpiresAt.Equal(expiresAt) {

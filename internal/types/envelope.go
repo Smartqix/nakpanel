@@ -19,53 +19,77 @@ type Response struct {
 }
 
 const (
-	OpPing                       = "ping"
-	OpReloadService              = "reload_service"
-	OpCreateSystemUser           = "create_system_user"
-	OpCreateSite                 = "create_site"
-	OpIssueCert                  = "issue_cert"
-	OpInstallCustomCert          = "install_custom_cert"
-	OpCreateDatabase             = "create_database"
-	OpCreateBackup               = "create_backup"
-	OpDeleteBackup               = "delete_backup"
-	OpRestoreBackup              = "restore_backup"
-	OpConfigureWebmail           = "configure_webmail"
-	OpConfigureDNSZone           = "configure_dns_zone"
-	OpReconcileSystem            = "reconcile_system"
-	OpSetHostingState            = "set_hosting_state"
-	OpApplySiteRuntime           = "apply_site_runtime"
-	OpCollectUsage               = "collect_usage"
-	OpRuntimeCapabilities        = "runtime_capabilities"
-	OpListFiles                  = "list_files"
-	OpSearchFiles                = "search_files"
-	OpReadFile                   = "read_file"
-	OpWriteFile                  = "write_file"
-	OpCreateFileEntry            = "create_file_entry"
-	OpCopyFiles                  = "copy_files"
-	OpMoveFiles                  = "move_files"
-	OpDeleteFiles                = "delete_files"
-	OpArchiveFiles               = "archive_files"
-	OpExtractArchive             = "extract_archive"
-	OpSetFileMode                = "set_file_mode"
-	OpImportFileTransfer         = "import_file_transfer"
-	OpExportFileTransfer         = "export_file_transfer"
-	OpEnsureSubscriptionAccount  = "ensure_subscription_account"
-	OpApplyScheduledTasks        = "apply_scheduled_tasks"
-	OpConfigureMail              = "configure_mail"
-	OpCollectMailQueue           = "collect_mail_queue"
-	OpGetMailStatus              = "get_mail_status"
-	OpEnsureApplication          = "ensure_application"
-	OpMigrateSubscriptionAccount = "migrate_subscription_account"
-	OpCleanupLegacyHomes         = "cleanup_legacy_homes"
-	OpTeardownSubscription       = "teardown_subscription"
+	OpPing                        = "ping"
+	OpReloadService               = "reload_service"
+	OpCreateSystemUser            = "create_system_user"
+	OpCreateSite                  = "create_site"
+	OpIssueCert                   = "issue_cert"
+	OpInstallCustomCert           = "install_custom_cert"
+	OpCreateDatabase              = "create_database"
+	OpCreateBackup                = "create_backup"
+	OpDeleteBackup                = "delete_backup"
+	OpRestoreBackup               = "restore_backup"
+	OpConfigureWebmail            = "configure_webmail"
+	OpConfigureDNSZone            = "configure_dns_zone"
+	OpReconcileSystem             = "reconcile_system"
+	OpSetHostingState             = "set_hosting_state"
+	OpApplySiteRuntime            = "apply_site_runtime"
+	OpCollectUsage                = "collect_usage"
+	OpRuntimeCapabilities         = "runtime_capabilities"
+	OpListFiles                   = "list_files"
+	OpSearchFiles                 = "search_files"
+	OpReadFile                    = "read_file"
+	OpWriteFile                   = "write_file"
+	OpCreateFileEntry             = "create_file_entry"
+	OpCopyFiles                   = "copy_files"
+	OpMoveFiles                   = "move_files"
+	OpDeleteFiles                 = "delete_files"
+	OpArchiveFiles                = "archive_files"
+	OpExtractArchive              = "extract_archive"
+	OpSetFileMode                 = "set_file_mode"
+	OpImportFileTransfer          = "import_file_transfer"
+	OpExportFileTransfer          = "export_file_transfer"
+	OpEnsureSubscriptionAccount   = "ensure_subscription_account"
+	OpApplyScheduledTasks         = "apply_scheduled_tasks"
+	OpConfigureMail               = "configure_mail"
+	OpCollectMailQueue            = "collect_mail_queue"
+	OpGetMailStatus               = "get_mail_status"
+	OpEnsureApplication           = "ensure_application"
+	OpDeployApplicationGeneration = "deploy_application_generation"
+	OpGetApplicationStatus        = "get_application_status"
+	OpReadApplicationLog          = "read_application_log"
+	OpControlApplication          = "control_application"
+	OpReconcileApplications       = "reconcile_applications"
+	OpMigrateSubscriptionAccount  = "migrate_subscription_account"
+	OpCleanupLegacyHomes          = "cleanup_legacy_homes"
+	OpTeardownSubscription        = "teardown_subscription"
+	OpEnsureFTPS                  = "ensure_ftps"
+	OpFTPSStatus                  = "ftps_status"
+	OpReadSiteLog                 = "read_site_log"
+	OpRunScheduledTask            = "run_scheduled_task"
+	OpEnsureValkey                = "ensure_valkey"
+	OpValkeyStatus                = "valkey_status"
+	OpEnsureGitRepository         = "ensure_git_repository"
+	OpEnsureProtectedDirectories  = "ensure_protected_directories"
+	OpRunStagingOperation         = "run_staging_operation"
 )
 
 type TeardownSubscriptionReq struct {
-	SubscriptionID int64    `json:"subscription_id"`
-	Username       string   `json:"username"`
-	HomePath       string   `json:"home_path"`
-	Domains        []string `json:"domains"`
-	DatabaseNames  []string `json:"database_names"`
+	SubscriptionID      int64                 `json:"subscription_id"`
+	Username            string                `json:"username"`
+	HomePath            string                `json:"home_path"`
+	SiteIDs             []int64               `json:"site_ids,omitempty"`
+	Domains             []string              `json:"domains"`
+	DatabaseNames       []string              `json:"database_names"`
+	TaskIDs             []int64               `json:"task_ids,omitempty"`
+	StagingOperationIDs []int64               `json:"staging_operation_ids,omitempty"`
+	Applications        []TeardownApplication `json:"applications,omitempty"`
+	ValkeyPresent       bool                  `json:"valkey_present,omitempty"`
+}
+
+type TeardownApplication struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 type TeardownSubscriptionResult struct {
@@ -98,8 +122,19 @@ type FileEntry struct {
 	Archive      bool      `json:"archive"`
 }
 
-type FileListReq struct {
+// FileSiteRef is populated by the control plane after it has authorized the
+// site. The agent validates it again and derives the document root; browsers
+// never provide filesystem roots.
+type FileSiteRef struct {
+	SiteID   int64  `json:"site_id"`
 	Username string `json:"username"`
+	Domain   string `json:"domain"`
+}
+
+type FileListReq struct {
+	SiteID   int64  `json:"site_id"`
+	Username string `json:"username"`
+	Domain   string `json:"domain"`
 	Path     string `json:"path"`
 	Page     int    `json:"page"`
 	PerPage  int    `json:"per_page"`
@@ -117,7 +152,9 @@ type FileListResult struct {
 }
 
 type FileSearchReq struct {
+	SiteID   int64  `json:"site_id"`
 	Username string `json:"username"`
+	Domain   string `json:"domain"`
 	Path     string `json:"path"`
 	Query    string `json:"query"`
 	Limit    int    `json:"limit"`
@@ -131,7 +168,9 @@ type FileSearchResult struct {
 }
 
 type FileReadReq struct {
+	SiteID   int64  `json:"site_id"`
 	Username string `json:"username"`
+	Domain   string `json:"domain"`
 	Path     string `json:"path"`
 }
 
@@ -143,20 +182,26 @@ type FileReadResult struct {
 }
 
 type FileWriteReq struct {
+	SiteID         int64  `json:"site_id"`
 	Username       string `json:"username"`
+	Domain         string `json:"domain"`
 	Path           string `json:"path"`
 	Content        string `json:"content"`
 	ExpectedSHA256 string `json:"expected_sha256"`
 }
 
 type FileCreateReq struct {
+	SiteID   int64    `json:"site_id"`
 	Username string   `json:"username"`
+	Domain   string   `json:"domain"`
 	Path     string   `json:"path"`
 	Kind     FileKind `json:"kind"`
 }
 
 type FileBatchReq struct {
+	SiteID      int64    `json:"site_id"`
 	Username    string   `json:"username"`
+	Domain      string   `json:"domain"`
 	Paths       []string `json:"paths"`
 	Destination string   `json:"destination"`
 	NewName     string   `json:"new_name,omitempty"`
@@ -164,34 +209,44 @@ type FileBatchReq struct {
 }
 
 type FileArchiveReq struct {
+	SiteID      int64    `json:"site_id"`
 	Username    string   `json:"username"`
+	Domain      string   `json:"domain"`
 	Paths       []string `json:"paths"`
 	Destination string   `json:"destination"`
 }
 
 type FileExtractReq struct {
+	SiteID      int64  `json:"site_id"`
 	Username    string `json:"username"`
+	Domain      string `json:"domain"`
 	Path        string `json:"path"`
 	Destination string `json:"destination"`
 	Overwrite   bool   `json:"overwrite"`
 }
 
 type FileModeReq struct {
+	SiteID    int64  `json:"site_id"`
 	Username  string `json:"username"`
+	Domain    string `json:"domain"`
 	Path      string `json:"path"`
 	Mode      uint32 `json:"mode"`
 	Recursive bool   `json:"recursive"`
 }
 
 type FileTransferImportReq struct {
+	SiteID        int64  `json:"site_id"`
 	Username      string `json:"username"`
+	Domain        string `json:"domain"`
 	TransferToken string `json:"transfer_token"`
 	Destination   string `json:"destination"`
 	Overwrite     bool   `json:"overwrite"`
 }
 
 type FileTransferExportReq struct {
+	SiteID   int64  `json:"site_id"`
 	Username string `json:"username"`
+	Domain   string `json:"domain"`
 	Path     string `json:"path"`
 }
 
@@ -207,6 +262,7 @@ type FileMutationResult struct {
 }
 
 type CreateSiteReq struct {
+	SiteID         int64              `json:"site_id,omitempty"`
 	SubscriptionID int64              `json:"subscription_id"`
 	Username       string             `json:"username"`
 	Domain         string             `json:"domain"`
@@ -217,22 +273,39 @@ type CreateSiteReq struct {
 }
 
 type SiteResourceLimits struct {
-	DiskQuotaMB            int  `json:"disk_quota_mb"`
-	PHPFPMMaxChildren      int  `json:"php_max_children"`
-	PHPMemoryMB            int  `json:"php_memory_mb"`
-	PHPFPMMaxRequests      int  `json:"php_fpm_max_requests,omitempty"`
-	PHPMaxExecutionSeconds int  `json:"php_max_execution_seconds,omitempty"`
-	PHPMaxInputSeconds     int  `json:"php_max_input_seconds,omitempty"`
-	PHPPostMaxMB           int  `json:"php_post_max_mb,omitempty"`
-	PHPUploadMaxMB         int  `json:"php_upload_max_mb,omitempty"`
-	PHPDisplayErrors       bool `json:"php_display_errors,omitempty"`
-	PHPLogErrors           bool `json:"php_log_errors,omitempty"`
-	PHPAllowURLFOpen       bool `json:"php_allow_url_fopen,omitempty"`
-	PHPExecEnabled         bool `json:"php_exec_enabled,omitempty"`
-	RequestRatePerSecond   int  `json:"request_rate_per_second,omitempty"`
-	RequestBurst           int  `json:"request_burst,omitempty"`
-	MaxConnections         int  `json:"max_connections,omitempty"`
-	StaticCache            bool `json:"static_cache,omitempty"`
+	DiskQuotaMB             int    `json:"disk_quota_mb"`
+	PHPFPMMaxChildren       int    `json:"php_max_children"`
+	PHPMemoryMB             int    `json:"php_memory_mb"`
+	PHPFPMMaxRequests       int    `json:"php_fpm_max_requests,omitempty"`
+	PHPMaxExecutionSeconds  int    `json:"php_max_execution_seconds,omitempty"`
+	PHPMaxInputSeconds      int    `json:"php_max_input_seconds,omitempty"`
+	PHPPostMaxMB            int    `json:"php_post_max_mb,omitempty"`
+	PHPUploadMaxMB          int    `json:"php_upload_max_mb,omitempty"`
+	PHPDisplayErrors        bool   `json:"php_display_errors,omitempty"`
+	PHPLogErrors            bool   `json:"php_log_errors,omitempty"`
+	PHPAllowURLFOpen        bool   `json:"php_allow_url_fopen,omitempty"`
+	PHPExecEnabled          bool   `json:"php_exec_enabled,omitempty"`
+	RequestRatePerSecond    int    `json:"request_rate_per_second,omitempty"`
+	RequestBurst            int    `json:"request_burst,omitempty"`
+	MaxConnections          int    `json:"max_connections,omitempty"`
+	StaticCache             bool   `json:"static_cache,omitempty"`
+	FastCGIMicrocache       bool   `json:"fastcgi_microcache,omitempty"`
+	RequestBodyLimitMB      int    `json:"request_body_limit_mb,omitempty"`
+	Compression             bool   `json:"compression,omitempty"`
+	CacheTTLSeconds         int    `json:"cache_ttl_seconds,omitempty"`
+	ConnectTimeoutSeconds   int    `json:"connect_timeout_seconds,omitempty"`
+	ReadTimeoutSeconds      int    `json:"read_timeout_seconds,omitempty"`
+	SecurityHeaderPreset    string `json:"security_header_preset,omitempty"`
+	IndexFiles              string `json:"index_files,omitempty"`
+	PreferredDomain         string `json:"preferred_domain,omitempty"`
+	AllowedCIDRs            string `json:"allowed_cidrs,omitempty"`
+	ErrorDocument404        string `json:"error_document_404,omitempty"`
+	ErrorDocument50X        string `json:"error_document_50x,omitempty"`
+	PHPFPMMode              string `json:"php_fpm_mode,omitempty"`
+	PHPFPMIdleTimeoutSecs   int    `json:"php_fpm_idle_timeout_seconds,omitempty"`
+	PHPRequestTerminateSecs int    `json:"php_request_terminate_timeout_seconds,omitempty"`
+	PHPOPcacheEnabled       bool   `json:"php_opcache_enabled,omitempty"`
+	PHPOPcacheMemoryMB      int    `json:"php_opcache_memory_mb,omitempty"`
 }
 
 type ReloadServiceReq struct {
@@ -365,30 +438,31 @@ type Reseller struct {
 }
 
 type ResellerPlan struct {
-	ID               int64     `json:"id"`
-	Name             string    `json:"name"`
-	Description      string    `json:"description"`
-	MaxCustomers     int       `json:"max_customers"`
-	MaxSubscriptions int       `json:"max_subscriptions"`
-	DiskMB           int       `json:"disk_mb"`
-	MaxSites         int       `json:"max_sites"`
-	MaxSubdomains    int       `json:"max_subdomains"`
-	MaxDomainAliases int       `json:"max_domain_aliases"`
-	MaxDatabases     int       `json:"max_databases"`
-	BandwidthMB      int       `json:"bandwidth_mb"`
-	MaxMailboxes     int       `json:"max_mailboxes"`
-	MaxFTPAccounts   int       `json:"max_ftp_accounts"`
-	MaxBackups       int       `json:"max_backups"`
-	BackupStorageMB  int       `json:"backup_storage_mb"`
-	AllowCustomPlans bool      `json:"allow_custom_plans"`
-	AllowSSH         bool      `json:"allow_ssh"`
-	AllowDNS         bool      `json:"allow_dns"`
-	AllowTLS         bool      `json:"allow_tls"`
-	AllowBackups     bool      `json:"allow_backups"`
-	AllowPHPSettings bool      `json:"allow_php_settings"`
-	IsActive         bool      `json:"is_active"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID               int64         `json:"id"`
+	Name             string        `json:"name"`
+	Description      string        `json:"description"`
+	MaxCustomers     int           `json:"max_customers"`
+	MaxSubscriptions int           `json:"max_subscriptions"`
+	DiskMB           int           `json:"disk_mb"`
+	MaxSites         int           `json:"max_sites"`
+	MaxSubdomains    int           `json:"max_subdomains"`
+	MaxDomainAliases int           `json:"max_domain_aliases"`
+	MaxDatabases     int           `json:"max_databases"`
+	BandwidthMB      int           `json:"bandwidth_mb"`
+	MaxMailboxes     int           `json:"max_mailboxes"`
+	MaxFTPAccounts   int           `json:"max_ftp_accounts"`
+	MaxBackups       int           `json:"max_backups"`
+	BackupStorageMB  int           `json:"backup_storage_mb"`
+	AllowCustomPlans bool          `json:"allow_custom_plans"`
+	AllowSSH         bool          `json:"allow_ssh"`
+	AllowDNS         bool          `json:"allow_dns"`
+	AllowTLS         bool          `json:"allow_tls"`
+	AllowBackups     bool          `json:"allow_backups"`
+	AllowPHPSettings bool          `json:"allow_php_settings"`
+	HostingPolicy    HostingPolicy `json:"hosting_policy"`
+	IsActive         bool          `json:"is_active"`
+	CreatedAt        time.Time     `json:"created_at"`
+	UpdatedAt        time.Time     `json:"updated_at"`
 }
 
 type ResellerSubscription struct {
@@ -587,31 +661,45 @@ type UsageCursor struct {
 type SiteUsageInput struct {
 	SiteID    int64       `json:"site_id"`
 	Username  string      `json:"username"`
+	Domain    string      `json:"domain"`
 	AccessLog string      `json:"access_log"`
 	Cursor    UsageCursor `json:"cursor"`
 }
 
 type CollectUsageReq struct {
-	Sites       []SiteUsageInput `json:"sites"`
-	Databases   []string         `json:"databases"`
-	PeriodStart time.Time        `json:"period_start"`
+	SubscriptionID   int64            `json:"subscription_id,omitempty"`
+	Sites            []SiteUsageInput `json:"sites"`
+	AccountUsernames []string         `json:"account_usernames"`
+	Databases        []string         `json:"databases"`
+	PeriodStart      time.Time        `json:"period_start"`
 }
 
 type SiteUsageResult struct {
 	SiteID       int64       `json:"site_id"`
 	HomeBytes    int64       `json:"home_bytes"`
 	TrafficBytes int64       `json:"traffic_bytes"`
+	RequestCount int64       `json:"request_count"`
+	ErrorCount   int64       `json:"error_count"`
 	Cursor       UsageCursor `json:"cursor"`
 }
 
 type CollectUsageResult struct {
-	Sites         []SiteUsageResult `json:"sites"`
-	DatabaseBytes int64             `json:"database_bytes"`
+	Sites          []SiteUsageResult `json:"sites"`
+	AccountBytes   int64             `json:"account_bytes"`
+	ContainerBytes int64             `json:"container_bytes"`
+	DatabaseBytes  int64             `json:"database_bytes"`
 }
 
 type RuntimeCapabilities struct {
-	PHPVersions []string `json:"php_versions"`
-	DiskQuota   bool     `json:"disk_quota"`
+	PHPVersions          []string `json:"php_versions"`
+	DiskQuota            bool     `json:"disk_quota"`
+	PodmanVersion        string   `json:"podman_version,omitempty"`
+	RootlessPodman       bool     `json:"rootless_podman"`
+	SubordinateIDSupport bool     `json:"subordinate_id_support"`
+	CgroupVersion        int      `json:"cgroup_version"`
+	ApplicationHealth    []string `json:"application_health_checks,omitempty"`
+	ApplicationPortFrom  int      `json:"application_port_from,omitempty"`
+	ApplicationPortTo    int      `json:"application_port_to,omitempty"`
 }
 
 type AddonPlan struct {
@@ -625,6 +713,7 @@ type AddonPlan struct {
 }
 
 type SetHostingStateReq struct {
+	SiteID     int64  `json:"site_id,omitempty"`
 	Username   string `json:"username"`
 	Domain     string `json:"domain"`
 	PHPVersion string `json:"php_version"`
@@ -632,6 +721,7 @@ type SetHostingStateReq struct {
 }
 
 type ApplySiteRuntimeReq struct {
+	SiteID            int64              `json:"site_id,omitempty"`
 	Username          string             `json:"username"`
 	Domain            string             `json:"domain"`
 	CurrentPHPVersion string             `json:"current_php_version"`
@@ -652,14 +742,30 @@ type UpdateSiteSettingsReq struct {
 	DesiredHTTPSRedirect bool   `json:"desired_https_redirect"`
 }
 
+type UpdateSitePHPSettingsReq struct {
+	SiteID               int64           `json:"site_id"`
+	ActorUserID          int64           `json:"-"`
+	DesiredStatus        string          `json:"desired_status"`
+	DesiredPHPVersion    string          `json:"desired_php_version"`
+	DesiredHTTPSRedirect bool            `json:"desired_https_redirect"`
+	PolicyPatch          json.RawMessage `json:"policy_patch"`
+}
+
 type DNSRecord struct {
-	ID       int64  `json:"id,omitempty"`
-	ZoneID   int64  `json:"zone_id,omitempty"`
-	Host     string `json:"host"`
-	Type     string `json:"type"`
-	Value    string `json:"value"`
-	Priority int    `json:"priority,omitempty"`
-	TTL      int    `json:"ttl"`
+	ID                int64  `json:"id,omitempty"`
+	ZoneID            int64  `json:"zone_id,omitempty"`
+	OwnerSiteID       int64  `json:"owner_site_id,omitempty"`
+	Host              string `json:"host"`
+	Type              string `json:"type"`
+	Value             string `json:"value"`
+	Priority          int    `json:"priority,omitempty"`
+	Weight            int    `json:"weight,omitempty"`
+	Port              int    `json:"port,omitempty"`
+	TTL               int    `json:"ttl"`
+	Origin            string `json:"origin,omitempty"`
+	TemplateRecordKey string `json:"template_record_key,omitempty"`
+	TemplateRevision  int64  `json:"template_revision,omitempty"`
+	LocallyModified   bool   `json:"locally_modified,omitempty"`
 }
 
 type OnboardSubscriptionReq struct {
@@ -828,40 +934,50 @@ type ConfigureWebmailResult struct {
 }
 
 type ConfigureDNSZoneReq struct {
-	Domain  string      `json:"domain"`
-	Address string      `json:"address"`
-	Serial  int64       `json:"serial"`
-	ZoneDir string      `json:"zone_dir"`
-	Records []DNSRecord `json:"records,omitempty"`
+	ZoneID            int64          `json:"zone_id,omitempty"`
+	DesiredRevision   int64          `json:"desired_revision,omitempty"`
+	Domain            string         `json:"domain"`
+	Address           string         `json:"address"`
+	IPv6Address       string         `json:"ipv6_address,omitempty"`
+	Serial            int64          `json:"serial"`
+	ZoneDir           string         `json:"zone_dir"`
+	Mode              string         `json:"mode,omitempty"`
+	UpstreamPrimaries []string       `json:"upstream_primaries,omitempty"`
+	TransferCIDRs     []string       `json:"transfer_cidrs,omitempty"`
+	SOA               DNSSOASettings `json:"soa"`
+	Records           []DNSRecord    `json:"records,omitempty"`
 }
 
 type ConfigureDNSZoneResult struct {
-	Domain      string `json:"domain"`
-	ZonePath    string `json:"zone_path"`
-	IncludePath string `json:"include_path"`
-	Serial      int64  `json:"serial"`
+	Domain          string `json:"domain"`
+	ZonePath        string `json:"zone_path"`
+	IncludePath     string `json:"include_path"`
+	Serial          int64  `json:"serial"`
+	DesiredRevision int64  `json:"desired_revision,omitempty"`
+	Mode            string `json:"mode,omitempty"`
 }
 
 type ReconcileSiteReq struct {
-	SiteID            int64              `json:"site_id,omitempty"`
-	CustomerID        int64              `json:"customer_id,omitempty"`
-	SubscriptionID    int64              `json:"subscription_id,omitempty"`
-	Username          string             `json:"username"`
-	Domain            string             `json:"domain"`
-	SharedAccount     bool               `json:"shared_account,omitempty"`
-	PHPVersion        string             `json:"php_version"`
-	DesiredPHPVersion string             `json:"desired_php_version,omitempty"`
-	EnableWebmail     bool               `json:"enable_webmail"`
-	EnableDNS         bool               `json:"enable_dns"`
-	DNSZoneID         int64              `json:"dns_zone_id,omitempty"`
-	DNSSerial         int64              `json:"dns_serial,omitempty"`
-	Address           string             `json:"address"`
-	State             string             `json:"state,omitempty"`
-	HTTPSRedirect     bool               `json:"https_redirect,omitempty"`
-	TLSCertPath       string             `json:"tls_cert_path,omitempty"`
-	TLSKeyPath        string             `json:"tls_key_path,omitempty"`
-	Limits            SiteResourceLimits `json:"limits,omitempty"`
-	DNSRecords        []DNSRecord        `json:"dns_records,omitempty"`
+	SiteID            int64                `json:"site_id,omitempty"`
+	CustomerID        int64                `json:"customer_id,omitempty"`
+	SubscriptionID    int64                `json:"subscription_id,omitempty"`
+	Username          string               `json:"username"`
+	Domain            string               `json:"domain"`
+	SharedAccount     bool                 `json:"shared_account,omitempty"`
+	PHPVersion        string               `json:"php_version"`
+	DesiredPHPVersion string               `json:"desired_php_version,omitempty"`
+	EnableWebmail     bool                 `json:"enable_webmail"`
+	EnableDNS         bool                 `json:"enable_dns"`
+	DNSZoneID         int64                `json:"dns_zone_id,omitempty"`
+	DNSSerial         int64                `json:"dns_serial,omitempty"`
+	Address           string               `json:"address"`
+	State             string               `json:"state,omitempty"`
+	HTTPSRedirect     bool                 `json:"https_redirect,omitempty"`
+	TLSCertPath       string               `json:"tls_cert_path,omitempty"`
+	TLSKeyPath        string               `json:"tls_key_path,omitempty"`
+	Limits            SiteResourceLimits   `json:"limits,omitempty"`
+	DNSRecords        []DNSRecord          `json:"dns_records,omitempty"`
+	DNSZone           *ConfigureDNSZoneReq `json:"dns_zone,omitempty"`
 }
 
 type ReconcileDatabaseReq struct {

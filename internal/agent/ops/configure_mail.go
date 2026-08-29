@@ -73,6 +73,7 @@ const (
 	DKIMSelector = "nak1"
 
 	defaultStalwartManagementURL = "http://127.0.0.1:8446"
+	maxCollectedMailQueueBytes   = 8 << 20
 )
 
 var outboundRateLimitRE = regexp.MustCompile(`^[0-9]{1,9}/[0-9]{1,4}[smhd]$`)
@@ -187,9 +188,14 @@ func (p *MailProvisioner) ConfigureMail(ctx context.Context, req types.Configure
 		if err == nil {
 			return
 		}
-		_ = restoreSnapshots(snapshots)
+		rollbackErr := restoreSnapshots(snapshots)
 		if reloadAttempted && p.reloader != nil {
-			_ = p.reloader.ReloadService(context.Background(), p.service)
+			if reloadErr := p.reloader.ReloadService(context.Background(), p.service); reloadErr != nil {
+				rollbackErr = errors.Join(rollbackErr, fmt.Errorf("reload restored Stalwart configuration: %w", reloadErr))
+			}
+		}
+		if rollbackErr != nil {
+			err = errors.Join(err, fmt.Errorf("roll back Stalwart configuration: %w", rollbackErr))
 		}
 	}()
 	if err = writeFileAtomic(p.configPath, rendered, 0o600); err != nil {
@@ -384,10 +390,7 @@ ttl.negative = "5s"
 	}
 	fmt.Fprintf(&b, "[queue.outbound]\nnext-hop = [ { if = \"sql_query('nakpanel', 'SELECT EXISTS(SELECT 1 FROM stalwart_domains WHERE name = $1)', rcpt_domain)\", then = \"'local'\" },\n             { else = %s } ]\n\n", next)
 	if req.Smarthost != nil {
-		// Relay certificates are accepted unverified in v1 so self-hosted
-		// relays with private CAs work; pinning/verification is a documented
-		// follow-up in docs/MAIL.md.
-		fmt.Fprintf(&b, "[remote.\"smarthost\"]\naddress = %s\nport = %d\nprotocol = \"smtp\"\ntls.implicit = %t\ntls.allow-invalid-certs = true\n", tomlString(req.Smarthost.Host), req.Smarthost.Port, req.Smarthost.Port == 465)
+		fmt.Fprintf(&b, "[remote.\"smarthost\"]\naddress = %s\nport = %d\nprotocol = \"smtp\"\ntls.implicit = %t\ntls.allow-invalid-certs = false\n", tomlString(req.Smarthost.Host), req.Smarthost.Port, req.Smarthost.Port == 465)
 		if req.Smarthost.Username != "" {
 			fmt.Fprintf(&b, "auth.username = %s\nauth.secret = %s\n", tomlString(req.Smarthost.Username), tomlString(req.Smarthost.Password))
 		}
@@ -424,7 +427,7 @@ func (p *MailProvisioner) CollectMailQueue(ctx context.Context) (types.CollectMa
 	if err != nil {
 		return types.CollectMailQueueResult{}, fmt.Errorf("read stalwart admin secret: %w", err)
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.managementURL+"/api/queue/messages?values=1&limit=1000", nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.managementURL+"/api/queue/messages?values=1&limit=1000&max-total=1001", nil)
 	if err != nil {
 		return types.CollectMailQueueResult{}, err
 	}
@@ -434,9 +437,12 @@ func (p *MailProvisioner) CollectMailQueue(ctx context.Context) (types.CollectMa
 		return types.CollectMailQueueResult{}, fmt.Errorf("query stalwart queue: %w", err)
 	}
 	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, 8<<20))
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxCollectedMailQueueBytes+1))
 	if err != nil {
 		return types.CollectMailQueueResult{}, err
+	}
+	if len(body) > maxCollectedMailQueueBytes {
+		return types.CollectMailQueueResult{}, errors.New("Stalwart queue response exceeded the configured limit")
 	}
 	if response.StatusCode != http.StatusOK {
 		return types.CollectMailQueueResult{}, fmt.Errorf("stalwart queue query failed: status %d", response.StatusCode)
@@ -446,12 +452,23 @@ func (p *MailProvisioner) CollectMailQueue(ctx context.Context) (types.CollectMa
 			Items []struct {
 				ReturnPath string `json:"return_path"`
 			} `json:"items"`
+			Total *int `json:"total"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return types.CollectMailQueueResult{}, fmt.Errorf("decode stalwart queue: %w", err)
 	}
-	result := types.CollectMailQueueResult{TotalQueued: len(payload.Data.Items), SenderDomains: map[string]int{}}
+	result := types.CollectMailQueueResult{
+		TotalQueued: len(payload.Data.Items), SenderDomains: map[string]int{},
+		Truncated: len(payload.Data.Items) == 1000,
+	}
+	if payload.Data.Total != nil {
+		if *payload.Data.Total < len(payload.Data.Items) {
+			return types.CollectMailQueueResult{}, errors.New("Stalwart queue response reported an invalid total")
+		}
+		result.TotalQueued = *payload.Data.Total
+		result.Truncated = result.Truncated || *payload.Data.Total > len(payload.Data.Items)
+	}
 	for _, item := range payload.Data.Items {
 		if _, domain, ok := strings.Cut(item.ReturnPath, "@"); ok && domain != "" {
 			result.SenderDomains[strings.ToLower(domain)]++

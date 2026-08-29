@@ -22,11 +22,13 @@ type SetHostingStateArgs struct {
 }
 
 type SyncPlanArgs struct {
-	PlanID int64 `json:"plan_id" river:"unique"`
+	PlanID   int64 `json:"plan_id" river:"unique"`
+	Revision int64 `json:"revision" river:"unique"`
 }
 
 type SyncAddonArgs struct {
-	AddonID int64 `json:"addon_id" river:"unique"`
+	AddonID  int64 `json:"addon_id" river:"unique"`
+	Revision int64 `json:"revision" river:"unique"`
 }
 
 func (SyncPlanArgs) Kind() string { return "sync_plan_subscriptions" }
@@ -51,32 +53,84 @@ func (a SyncAddonArgs) InsertOpts() river.InsertOpts {
 	}}}
 }
 
-type SyncPlanWorker struct {
-	river.WorkerDefaults[SyncPlanArgs]
-	db *sql.DB
+func NewSyncPlanArgs(planID int64, revisions ...int64) SyncPlanArgs {
+	revision := nextMutationRevision()
+	if len(revisions) > 0 {
+		revision = revisions[0]
+	}
+	return SyncPlanArgs{PlanID: planID, Revision: revision}
 }
 
-func NewSyncPlanWorker(db *sql.DB) *SyncPlanWorker { return &SyncPlanWorker{db: db} }
+func NewSyncAddonArgs(addonID int64, revisions ...int64) SyncAddonArgs {
+	revision := nextMutationRevision()
+	if len(revisions) > 0 {
+		revision = revisions[0]
+	}
+	return SyncAddonArgs{AddonID: addonID, Revision: revision}
+}
+
+type SyncPlanWorker struct {
+	river.WorkerDefaults[SyncPlanArgs]
+	db    *sql.DB
+	river *river.Client[*sql.Tx]
+}
+
+func NewSyncPlanWorker(db *sql.DB) *SyncPlanWorker                     { return &SyncPlanWorker{db: db} }
+func (w *SyncPlanWorker) SetRiverClient(client *river.Client[*sql.Tx]) { w.river = client }
 
 func (w *SyncPlanWorker) Work(ctx context.Context, job *river.Job[SyncPlanArgs]) error {
 	if w.db == nil {
 		return errors.New("plan synchronization database is not configured")
 	}
-	return NewSQLStore(w.db).SyncPlan(ctx, job.Args.PlanID)
+	workErr := NewSQLStore(w.db, w.river).SyncPlan(ctx, job.Args.PlanID)
+	return errors.Join(workErr, enqueueLatestPlanRevision(ctx, w.db, w.river, job.Args.PlanID, job.Args.Revision))
 }
 
 type SyncAddonWorker struct {
 	river.WorkerDefaults[SyncAddonArgs]
-	db *sql.DB
+	db    *sql.DB
+	river *river.Client[*sql.Tx]
 }
 
-func NewSyncAddonWorker(db *sql.DB) *SyncAddonWorker { return &SyncAddonWorker{db: db} }
+func NewSyncAddonWorker(db *sql.DB) *SyncAddonWorker                    { return &SyncAddonWorker{db: db} }
+func (w *SyncAddonWorker) SetRiverClient(client *river.Client[*sql.Tx]) { w.river = client }
 
 func (w *SyncAddonWorker) Work(ctx context.Context, job *river.Job[SyncAddonArgs]) error {
 	if w.db == nil {
 		return errors.New("add-on synchronization database is not configured")
 	}
-	return NewSQLStore(w.db).SyncAddon(ctx, job.Args.AddonID)
+	workErr := NewSQLStore(w.db, w.river).SyncAddon(ctx, job.Args.AddonID)
+	return errors.Join(workErr, enqueueLatestAddonRevision(ctx, w.db, w.river, job.Args.AddonID, job.Args.Revision))
+}
+
+func enqueueLatestPlanRevision(ctx context.Context, db *sql.DB, client *river.Client[*sql.Tx], planID, processedRevision int64) error {
+	if client == nil {
+		return nil
+	}
+	var current int64
+	if err := db.QueryRowContext(ctx, `SELECT revision FROM plans WHERE id=$1`, planID).Scan(&current); err != nil {
+		return err
+	}
+	if current <= processedRevision {
+		return nil
+	}
+	_, err := client.Insert(ctx, NewSyncPlanArgs(planID, current), nil)
+	return err
+}
+
+func enqueueLatestAddonRevision(ctx context.Context, db *sql.DB, client *river.Client[*sql.Tx], addonID, processedRevision int64) error {
+	if client == nil {
+		return nil
+	}
+	var current int64
+	if err := db.QueryRowContext(ctx, `SELECT revision FROM addon_plans WHERE id=$1`, addonID).Scan(&current); err != nil {
+		return err
+	}
+	if current <= processedRevision {
+		return nil
+	}
+	_, err := client.Insert(ctx, NewSyncAddonArgs(addonID, current), nil)
+	return err
 }
 
 func (SetHostingStateArgs) Kind() string { return "set_hosting_state" }
@@ -129,7 +183,7 @@ func (w *SetHostingStateWorker) Work(ctx context.Context, job *river.Job[SetHost
 				resp, agentErr = runtimeAgent.ApplySiteRuntime(ctx, runtimeReq)
 			}
 		} else {
-			resp, agentErr = w.agent.SetHostingState(ctx, types.SetHostingStateReq{Username: job.Args.Username, Domain: job.Args.Domain, PHPVersion: job.Args.PHPVersion, State: state})
+			resp, agentErr = w.agent.SetHostingState(ctx, types.SetHostingStateReq{SiteID: job.Args.SiteID, Username: job.Args.Username, Domain: job.Args.Domain, PHPVersion: job.Args.PHPVersion, State: state})
 		}
 		if agentErr == nil && !resp.OK {
 			agentErr = errors.New(resp.Error)
@@ -190,6 +244,7 @@ WHERE s.id=$1`, siteID).Scan(&state)
 
 func (w *SetHostingStateWorker) siteRuntimeRequest(ctx context.Context, siteID int64, fallbackState string) (types.ApplySiteRuntimeReq, error) {
 	var req types.ApplySiteRuntimeReq
+	req.SiteID = siteID
 	var tlsStatus string
 	var documentRoot string
 	tx, err := w.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})

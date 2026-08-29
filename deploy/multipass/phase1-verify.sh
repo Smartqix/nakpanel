@@ -16,7 +16,7 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl postgresql postgresql-contrib nginx build-essential
+sudo apt-get install -y acl ca-certificates curl postgresql postgresql-contrib nginx build-essential
 
 arch="$(uname -m)"
 case "${arch}" in
@@ -75,6 +75,17 @@ sudo -u nakpanel env \
   HOME=/var/lib/nakpanel \
   task build
 sudo install -m 0755 bin/panel /usr/local/bin/nakpanel-panel
+sudo install -m 0755 bin/panelctl /usr/local/bin/panelctl
+
+# The panel refuses to start without the secret keyring (Phase 26+); mirror
+# the production installer's bootstrap.
+sudo install -d -o root -g nakpanel -m 0750 /etc/nakpanel
+if sudo test ! -s /etc/nakpanel/secret-keys.json; then
+  sudo /usr/local/bin/panelctl secret-key init --path /etc/nakpanel/secret-keys.json
+fi
+sudo chown nakpanel:nakpanel /etc/nakpanel/secret-keys.json
+sudo chmod 0600 /etc/nakpanel/secret-keys.json
+
 sudo install -m 0644 deploy/systemd/nakpanel.service /etc/systemd/system/nakpanel.service
 sudo systemctl daemon-reload
 sudo systemctl enable nakpanel.service
@@ -113,7 +124,7 @@ if [[ -z "${VM_IP}" ]]; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1"

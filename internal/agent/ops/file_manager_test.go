@@ -72,6 +72,38 @@ func TestFileManagerRejectsTraversalAndExternalSymlink(t *testing.T) {
 	}
 }
 
+func TestFileManagerTrustsConfiguredRootSymlinkButRejectsTenantRootSymlink(t *testing.T) {
+	account, err := user.Current()
+	if err != nil || !fileManagerUsernameRE.MatchString(account.Username) {
+		t.Skip("current user is not compatible with file manager username validation")
+	}
+	realHome := t.TempDir()
+	realRoot := filepath.Join(realHome, account.Username, "public_html")
+	if err := os.MkdirAll(realRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configuredHome := filepath.Join(t.TempDir(), "home")
+	if err := os.Symlink(realHome, configuredHome); err != nil {
+		t.Fatal(err)
+	}
+	manager := NewFileManager(FileManagerOptions{HomeRoot: configuredHome, PanelUser: account.Username})
+	if _, err := manager.ListFiles(context.Background(), types.FileListReq{Username: account.Username}); err != nil {
+		t.Fatalf("trusted configured home-root symlink was rejected: %v", err)
+	}
+
+	if err := os.Remove(realRoot); err != nil {
+		t.Fatal(err)
+	}
+	outside := t.TempDir()
+	if err := os.Symlink(outside, realRoot); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ListFiles(context.Background(), types.FileListReq{Username: account.Username}); err == nil ||
+		!strings.Contains(err.Error(), "document root must not contain symbolic links") {
+		t.Fatalf("tenant-controlled document-root symlink was accepted: %v", err)
+	}
+}
+
 func TestFileManagerEditorUsesOptimisticHashAndAtomicWrite(t *testing.T) {
 	manager, username, root := testFileManager(t)
 	file := filepath.Join(root, "index.php")

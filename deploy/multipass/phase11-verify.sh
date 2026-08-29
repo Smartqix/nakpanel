@@ -9,11 +9,13 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"
-"${ROOT_DIR}/deploy/multipass/phase10-verify.sh"
+if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
+  "${ROOT_DIR}/deploy/multipass/phase10-verify.sh"
+fi
 
 VM_IP="$(vm_ip)"
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1" needle="$2"
@@ -128,7 +130,7 @@ assert_contains "${tmpdir}/support.html" 'phase11-client.test'
 curl -sk --fail -b "${tmpdir}/client.cookies" "https://${VM_IP}:7443/search?q=phase11-client" > "${tmpdir}/search.json"
 assert_contains "${tmpdir}/search.json" 'phase11-client.test'
 
-csrf_status="$(curl -sk -o /dev/null -w '%{http_code}' -b "${tmpdir}/admin.cookies" -H "Origin: https://${VM_IP}:7443" -d 'oversell_policy=warn' -d 'server_disk_capacity_mb=200000' "https://${VM_IP}:7443/settings/oversell")"
+csrf_status="$(curl -sk -o /dev/null -w '%{http_code}' -b "${tmpdir}/admin.cookies" -H "Origin: https://${VM_IP}:7443" -d 'oversell_policy=warn' -d 'server_disk_capacity_mb=200000' -d 'valkey_capacity_mb=0' "https://${VM_IP}:7443/settings/oversell")"
 [[ "${csrf_status}" == "403" ]] || { echo "browser-like POST without CSRF returned ${csrf_status}, want 403" >&2; exit 1; }
 
 audit_count="$(multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -tAc "SELECT COUNT(*) FROM audit_events WHERE action IN ('site.queued','plan.saved','subscription.saved')")"

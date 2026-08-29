@@ -27,10 +27,26 @@ management, and migration-sensitive control-plane behavior.
 - ACME, self-signed, and system-trusted custom site certificates with atomic
   agent installation and custom-certificate expiry warnings.
 - Privileged Unix-socket agent for Linux provisioning work.
-- PHP-FPM pool rendering, Linux users, nginx vhosts, MariaDB databases, and
-  per-site disk quota enforcement.
+- Subscription system accounts with honest account-level disk quotas and
+  per-domain document-root usage.
+- Domain-centered hosting tools for File Manager, confined SFTP, TLS-only
+  FTPS, dedicated PHP-FPM services, structured nginx controls, logs,
+  statistics, scheduled tasks, Git, protected directories, and staging.
+- Operational OCI containers with digest-pinned images, rootless
+  subscription identities, loopback-only nginx ingress, health-gated
+  generations, encrypted write-only secrets, rollback, and reboot
+  reconciliation.
+- One disposable, socket-only Valkey cache per entitled subscription with
+  memory/CPU/process ceilings and restricted ACL commands.
+- PHP runtime discovery from agent capabilities instead of browser-hardcoded
+  version choices.
 - Adminer SSO for database access from the authenticated panel.
 - Single-VM Ubuntu 24.04 Multipass deployment verification.
+
+The Applications page does not currently advertise managed WordPress, Node.js,
+Python, or generic PHP runtimes as deployable. Those adapters are planned for
+later phases; normal domain PHP-FPM remains available independently. Advanced
+OCI workloads live under the domain's Containers workspace.
 
 ## Architecture
 
@@ -45,7 +61,8 @@ Nakpanel is intentionally split into a control plane and a privileged agent:
   logic, provisioning managers, stores, TLS bootstrap, and embedded web assets.
 - `internal/agent`: RPC server, peer credential checks, and Linux operations.
 - `migrations`: goose migrations from users/sessions through subscription
-  accounts, operator identity, and custom TLS notifications.
+  accounts, operator identity, custom TLS, the hosting toolkit, and
+  subscription cache services.
 - `deploy`: systemd units, install scripts, and Multipass verification scripts.
 
 The panel communicates with the agent over `/run/nakpanel/agent.sock`. On Linux,
@@ -66,10 +83,31 @@ For full deployment verification:
 - Multipass
 - Ubuntu `24.04` VM image
 - Enough local disk and memory for PostgreSQL, nginx, PHP-FPM, MariaDB, bind9,
-  quota tooling, and Go builds
+  quota tooling, Podman, ProFTPD, Valkey, and Go builds
 
 The realistic end-to-end target is Ubuntu 24.04. Some agent operations are
 Linux-specific and cannot be fully exercised on macOS.
+
+## Production Installation (Ubuntu 24.04)
+
+One command from a checkout on the target server:
+
+```bash
+sudo deploy/install/install.sh --yes
+```
+
+The installer detects fresh installs versus upgrades (`panelctl version` /
+`/etc/nakpanel/version`). Upgrades take a full pre-upgrade backup set and
+roll back automatically when migrations or the post-upgrade health gate fail;
+downgrades are refused without `--allow-downgrade`. To rebuild a server from
+an encrypted backup archive:
+
+```bash
+sudo deploy/install/install.sh --restore /path/to/archive.nkbk --backup-key-file /path/to/key --yes
+```
+
+See `docs/RECOVERY.md` for server backups, disaster recovery, and
+administrator recovery, and `docs/SOAK.md` for the long-run soak procedure.
 
 ## Quick Start
 
@@ -103,9 +141,9 @@ deploy/multipass/deployment-verify.sh
 
 This creates a fresh `nakpanel-lab` Ubuntu 24.04 Multipass VM, removes old
 Nakpanel phase VMs, installs the service stack, runs migrations, builds the
-panel, agent, and CLI, installs systemd units, and runs the full Phase 19
-verification chain (through the routed Mail workspace and Stalwart server
-controls; see `docs/MAIL.md`).
+panel, agent, and CLI, installs systemd units, and runs the Phase 26 server
+operations checks, the complete Phase 25 hosting-toolkit chain, and the
+adversarial security suite.
 
 The verifier intentionally refuses to delete Multipass VMs whose names do not
 start with `nakpanel-`. Non-Nakpanel VMs such as unrelated local test machines
@@ -148,6 +186,10 @@ Important environment variables:
 | `NAKPANEL_ACME_DIRECTORY_URL` | ACME directory URL for certificate issuance. |
 | `NAKPANEL_ACME_ACCOUNT_KEY` | Path to the ACME account key. |
 | `NAKPANEL_ACME_EMAIL` | ACME account email. |
+| `NAKPANEL_FTPS_PUBLIC_ADDRESS` | Public address advertised for FTPS passive data connections. |
+| `NAKPANEL_FTPS_TLS_CERT` | Certificate path for the Nakpanel-managed TLS-only ProFTPD service. |
+| `NAKPANEL_FTPS_TLS_KEY` | Private-key path for the Nakpanel-managed TLS-only ProFTPD service. |
+| `NAKPANEL_VALKEY_IMAGE` | Optional official `docker.io/valkey/valkey` image pinned by SHA-256 digest. The Ubuntu installer resolves and pins `8.1-alpine` when omitted. |
 | `NAKPANEL_PUBLIC_URL` | Canonical HTTPS panel origin used for five-minute customer SSO links. |
 | `NAKPANEL_BILLING_WEBHOOK_URL` | Optional external billing webhook endpoint; HTTPS is required except for loopback tests. |
 | `NAKPANEL_BILLING_WEBHOOK_SECRET` | HMAC-SHA256 webhook secret. Configure it only with the webhook URL. |
@@ -198,8 +240,11 @@ bearer-authenticated `/api/v1` provisioning API; cookie sessions and CSRF tokens
 are intentionally not accepted on those routes. Provider-scoped plans are
 discoverable through `/api/v1/plans?provider=admin` or a `reseller:{id}` provider.
 
-Phase 20 deployment and contract verification is available at
-`deploy/multipass/phase20-verify.sh`.
+Hosting-toolkit verification is split across
+`deploy/multipass/phase21-verify.sh` through
+`deploy/multipass/phase25-verify.sh`. Each script reuses `nakpanel-lab` and
+chains its prerequisite; `deployment-verify.sh` remains the canonical clean
+deployment gate.
 
 Destructive commands require an interactive confirmation or `--yes`. Custom
 site certificates can be queued without placing key material in River:
@@ -253,7 +298,11 @@ operationally sensitive areas need extra care:
 
 - Authentication, session, and RBAC logic.
 - Privileged agent RPC and Unix socket permissions.
-- Linux user creation, ownership, disk quotas, and PHP-FPM/nginx rendering.
+- Linux user creation, SFTP/FTPS confinement, ownership, disk quotas, and
+  PHP-FPM/nginx rendering.
+- Path-derived File Manager, Git, staging, scheduled-task, and log operations.
+- Rootless Podman container generations and Valkey isolation, Unix-socket
+  ownership, subordinate-ID allocation, and ACLs.
 - Database migrations and data backfills.
 - Plan, subscription, entitlement, and oversell behavior.
 - Backup, restore, DNS, TLS, and reconciliation jobs.

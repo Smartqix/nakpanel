@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
@@ -126,13 +127,26 @@ func (s *Server) handleUpdateMailSettings(w http.ResponseWriter, r *http.Request
 		SmarthostPassword: r.Form.Get("smarthost_password"), ClearSmarthost: parseFormBool(r, "clear_smarthost"),
 		OutboundRateLimit: strings.TrimSpace(r.Form.Get("outbound_rate_limit")), QueueAlertThreshold: int(parseFormInt64Default(r, "queue_alert_threshold", 50)),
 	}
+	current, currentErr := s.mail.MailSettings(r.Context(), user)
+	sensitiveChange := update.ClearSmarthost || update.SmarthostPassword != ""
+	if currentErr == nil {
+		sensitiveChange = sensitiveChange ||
+			!strings.EqualFold(update.SmarthostHost, current.SmarthostHost) ||
+			update.SmarthostUsername != current.SmarthostUsername
+	} else if update.SmarthostHost != "" || update.SmarthostUsername != "" {
+		sensitiveChange = true
+	}
+	if sensitiveChange && !s.sessions.RecentlyAuthenticated(user, 10*time.Minute) {
+		http.Error(w, "Recent authentication is required", http.StatusPreconditionRequired)
+		return
+	}
 	view, err := s.mail.UpdateMailSettings(r.Context(), user, update)
 	if err != nil {
 		if errors.Is(err, provision.ErrForbidden) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		http.Error(w, "Could not save mail settings: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Could not save mail settings", http.StatusBadRequest)
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "mail_settings.updated", "mail_settings", 1, map[string]any{
@@ -150,8 +164,12 @@ func (s *Server) handleReconfigureMail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Mail management is not configured", http.StatusServiceUnavailable)
 		return
 	}
+	if !s.sessions.RecentlyAuthenticated(user, 10*time.Minute) {
+		http.Error(w, "Recent authentication is required", http.StatusPreconditionRequired)
+		return
+	}
 	if err := s.mail.ReconfigureMail(r.Context(), user); err != nil {
-		http.Error(w, "Could not queue mail reconfiguration: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Could not queue mail reconfiguration", http.StatusBadRequest)
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "mail.reconfigure_queued", "mail_server", 1, nil)
@@ -167,10 +185,25 @@ func (s *Server) handleRestartMail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Mail management is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	if err := s.mail.RestartMail(r.Context(), user); err != nil {
-		http.Error(w, "Could not restart mail service: "+err.Error(), http.StatusBadGateway)
+	if s.serverAdmin == nil {
+		http.Error(w, "Server service management is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	s.recordAudit(r.Context(), user, 0, 0, "mail.restarted", "mail_server", 1, nil)
-	http.Redirect(w, r, "/tools-settings?notice=mail-restarted", http.StatusSeeOther)
+	if !s.sessions.RecentlyAuthenticated(user, 10*time.Minute) {
+		http.Error(w, "Recent authentication is required", http.StatusPreconditionRequired)
+		return
+	}
+	operationID, err := newServerAdminOperationID()
+	if err != nil {
+		http.Error(w, "Could not start mail service operation", http.StatusInternalServerError)
+		return
+	}
+	if _, err := s.serverAdmin.ControlManagedService(r.Context(), types.ControlManagedServiceReq{
+		ServiceID: "mail", Action: "restart", OperationID: operationID, ActorUserID: user.ID,
+	}); err != nil {
+		http.Error(w, "Could not queue mail service restart", http.StatusBadGateway)
+		return
+	}
+	s.recordAudit(r.Context(), user, 0, 0, "mail.restart_queued", "mail_server", 1, map[string]any{"operation_id": operationID})
+	http.Redirect(w, r, "/tools-settings?notice=mail-reconfigure-queued", http.StatusSeeOther)
 }

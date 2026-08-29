@@ -144,6 +144,18 @@ func (c *Client) CollectMailQueue(ctx context.Context) (types.Response, error) {
 	return c.Do(ctx, types.Request{Op: types.OpCollectMailQueue, ID: newID(), Data: json.RawMessage(`{}`)})
 }
 
+func (c *Client) QueryMailQueue(ctx context.Context, req types.MailQueueQueryReq) (types.MailQueueQueryResult, error) {
+	var result types.MailQueueQueryResult
+	err := c.doResult(ctx, types.OpQueryMailQueue, req, &result)
+	return result, err
+}
+
+func (c *Client) InspectQueuedMail(ctx context.Context, req types.InspectQueuedMailReq) (types.MailQueueMessage, error) {
+	var result types.MailQueueMessage
+	err := c.doResult(ctx, types.OpInspectQueuedMail, req, &result)
+	return result, err
+}
+
 func (c *Client) MailStatus(ctx context.Context) (types.MailServerStatus, error) {
 	var result types.MailServerStatus
 	response, err := c.Do(ctx, types.Request{Op: types.OpGetMailStatus, ID: newID(), Data: json.RawMessage(`{}`)})
@@ -159,8 +171,131 @@ func (c *Client) MailStatus(ctx context.Context) (types.MailServerStatus, error)
 	return result, nil
 }
 
+func (c *Client) InspectServer(ctx context.Context) (types.ServerInventory, error) {
+	var result types.ServerInventory
+	err := c.doResult(ctx, types.OpInspectServer, types.InspectServerReq{}, &result)
+	return result, err
+}
+
+func (c *Client) InspectManagedServices(ctx context.Context, serviceIDs []string) ([]types.ManagedService, error) {
+	var result []types.ManagedService
+	err := c.doResult(ctx, types.OpInspectManagedServices, types.InspectManagedServicesReq{ServiceIDs: serviceIDs}, &result)
+	return result, err
+}
+
+func (c *Client) ControlManagedService(ctx context.Context, req types.ControlManagedServiceReq) (types.ControlManagedServiceResult, error) {
+	var result types.ControlManagedServiceResult
+	// The operation ID is durable in PostgreSQL and remains stable across River
+	// retries. Reuse it as the RPC ID so the agent dispatcher can return its
+	// cached outcome instead of executing a restart or reload twice.
+	err := c.doResultWithID(ctx, types.OpControlManagedService, req.OperationID, req, &result)
+	return result, err
+}
+
+func (c *Client) InspectTime(ctx context.Context) (types.TimeState, error) {
+	var result types.TimeState
+	err := c.doResult(ctx, types.OpInspectTime, types.InspectTimeReq{}, &result)
+	return result, err
+}
+
+func (c *Client) InspectPHP(ctx context.Context) ([]types.PHPHandlerState, error) {
+	var result []types.PHPHandlerState
+	err := c.doResult(ctx, types.OpInspectPHP, types.InspectPHPReq{}, &result)
+	return result, err
+}
+
+func (c *Client) ReadJournal(ctx context.Context, req types.ReadJournalReq) (types.ReadJournalResult, error) {
+	var result types.ReadJournalResult
+	err := c.doResult(ctx, types.OpReadJournal, req, &result)
+	return result, err
+}
+
+func (c *Client) InspectUpdates(ctx context.Context) (types.UpdateState, error) {
+	var result types.UpdateState
+	err := c.doResult(ctx, types.OpInspectUpdates, types.InspectUpdatesReq{}, &result)
+	return result, err
+}
+
+func (c *Client) InspectDatabaseAdmin(ctx context.Context, req types.InspectDatabaseAdminReq) (types.DatabaseAdminSnapshot, error) {
+	var result types.DatabaseAdminSnapshot
+	err := c.doResult(ctx, types.OpInspectDatabaseAdmin, req, &result)
+	return result, err
+}
+
+func (c *Client) ManageDatabaseAdmin(ctx context.Context, req types.ManageDatabaseAdminReq) (types.ManageDatabaseAdminResult, error) {
+	var result types.ManageDatabaseAdminResult
+	err := c.doResultWithID(ctx, types.OpManageDatabaseAdmin, req.OperationID, req, &result)
+	return result, err
+}
+
+func (c *Client) InspectServerSecurity(ctx context.Context) (types.ServerSecurityPolicy, error) {
+	var result types.ServerSecurityPolicy
+	err := c.doResult(ctx, types.OpInspectServerSecurity, struct{}{}, &result)
+	return result, err
+}
+
+func (c *Client) StageServerSecurity(ctx context.Context, req types.StageServerSecurityReq) (types.StagedSecurityResult, error) {
+	var result types.StagedSecurityResult
+	err := c.doResult(ctx, types.OpStageServerSecurity, req, &result)
+	return result, err
+}
+
+func (c *Client) ConfirmServerSecurity(ctx context.Context, operationID string) (types.StagedSecurityResult, error) {
+	var result types.StagedSecurityResult
+	err := c.doResult(ctx, types.OpConfirmServerSecurity, types.SecurityOperationReq{OperationID: operationID}, &result)
+	return result, err
+}
+
+func (c *Client) RevertServerSecurity(ctx context.Context, operationID string) (types.StagedSecurityResult, error) {
+	var result types.StagedSecurityResult
+	err := c.doResult(ctx, types.OpRevertServerSecurity, types.SecurityOperationReq{OperationID: operationID}, &result)
+	return result, err
+}
+
+func (c *Client) ApplyFail2BanPolicy(ctx context.Context, req types.ApplyFail2BanPolicyReq) (types.ApplyFail2BanPolicyResult, error) {
+	var result types.ApplyFail2BanPolicyResult
+	if req.OperationID != "" {
+		return result, c.doResultWithID(ctx, types.OpApplyFail2BanPolicy, req.OperationID, req, &result)
+	}
+	return result, c.doResult(ctx, types.OpApplyFail2BanPolicy, req, &result)
+}
+
+func (c *Client) ListSecurityBans(ctx context.Context) (types.SecurityBansResult, error) {
+	var result types.SecurityBansResult
+	return result, c.doResult(ctx, types.OpListSecurityBans, struct{}{}, &result)
+}
+
+func (c *Client) UnbanSecurityAddress(ctx context.Context, req types.UnbanSecurityAddressReq) (types.UnbanSecurityAddressResult, error) {
+	var result types.UnbanSecurityAddressResult
+	return result, c.doResult(ctx, types.OpUnbanSecurityAddress, req, &result)
+}
+
 func (c *Client) EnsureApplication(ctx context.Context, req types.EnsureApplicationReq) (types.Response, error) {
 	return c.doTyped(ctx, types.OpEnsureApplication, req)
+}
+
+func (c *Client) DeployApplicationGeneration(ctx context.Context, req types.EnsureApplicationReq) (types.DeployApplicationGenerationResult, error) {
+	var result types.DeployApplicationGenerationResult
+	err := c.doResult(ctx, types.OpDeployApplicationGeneration, req, &result)
+	return result, err
+}
+
+func (c *Client) ApplicationStatus(ctx context.Context, req types.ApplicationControlReq) (types.ApplicationObservedState, error) {
+	var result types.ApplicationObservedState
+	err := c.doResult(ctx, types.OpGetApplicationStatus, req, &result)
+	return result, err
+}
+
+func (c *Client) ControlApplication(ctx context.Context, req types.ApplicationControlReq) (types.ApplicationObservedState, error) {
+	var result types.ApplicationObservedState
+	err := c.doResult(ctx, types.OpControlApplication, req, &result)
+	return result, err
+}
+
+func (c *Client) ReadApplicationLog(ctx context.Context, req types.ApplicationLogReq) (types.ApplicationLogResult, error) {
+	var result types.ApplicationLogResult
+	err := c.doResult(ctx, types.OpReadApplicationLog, req, &result)
+	return result, err
 }
 
 func (c *Client) doTyped(ctx context.Context, op string, payload any) (types.Response, error) {
@@ -389,14 +524,75 @@ func (c *Client) ExportFileTransfer(ctx context.Context, req types.FileTransferE
 	return result, c.doFileOp(ctx, types.OpExportFileTransfer, req, &result)
 }
 
+func (c *Client) EnsureFTPS(ctx context.Context, req types.EnsureFTPSReq) (types.EnsureFTPSResult, error) {
+	var result types.EnsureFTPSResult
+	return result, c.doResult(ctx, types.OpEnsureFTPS, req, &result)
+}
+
+func (c *Client) FTPSStatus(ctx context.Context) (types.FTPSStatus, error) {
+	var result types.FTPSStatus
+	return result, c.doResult(ctx, types.OpFTPSStatus, struct{}{}, &result)
+}
+
+func (c *Client) ReadSiteLog(ctx context.Context, req types.SiteLogRequest) (types.SiteLogResult, error) {
+	var result types.SiteLogResult
+	return result, c.doResult(ctx, types.OpReadSiteLog, req, &result)
+}
+
+func (c *Client) RunScheduledTask(ctx context.Context, req types.RunScheduledTaskReq) (types.RunScheduledTaskResult, error) {
+	var result types.RunScheduledTaskResult
+	return result, c.doResult(ctx, types.OpRunScheduledTask, req, &result)
+}
+
+func (c *Client) EnsureValkey(ctx context.Context, req types.EnsureValkeyReq) (types.EnsureValkeyResult, error) {
+	var result types.EnsureValkeyResult
+	err := c.doResult(ctx, types.OpEnsureValkey, req, &result)
+	return result, err
+}
+
+func (c *Client) ValkeyStatus(ctx context.Context, subscriptionID int64) (types.ValkeyStatus, error) {
+	var result types.ValkeyStatus
+	err := c.doResult(ctx, types.OpValkeyStatus, types.ValkeyStatusReq{SubscriptionID: subscriptionID}, &result)
+	return result, err
+}
+
+func (c *Client) EnsureGitRepository(ctx context.Context, req types.EnsureGitRepositoryReq) (types.EnsureGitRepositoryResult, error) {
+	var result types.EnsureGitRepositoryResult
+	return result, c.doResult(ctx, types.OpEnsureGitRepository, req, &result)
+}
+
+func (c *Client) EnsureProtectedDirectories(ctx context.Context, req types.EnsureProtectedDirectoriesReq) (types.EnsureProtectedDirectoriesResult, error) {
+	var result types.EnsureProtectedDirectoriesResult
+	return result, c.doResult(ctx, types.OpEnsureProtectedDirectories, req, &result)
+}
+
+func (c *Client) RunStagingOperation(ctx context.Context, req types.RunStagingOperationReq) (types.RunStagingOperationResult, error) {
+	var result types.RunStagingOperationResult
+	return result, c.doResult(ctx, types.OpRunStagingOperation, req, &result)
+}
+
 func (c *Client) doFileOp(ctx context.Context, op string, payload any, result any) error {
+	return c.doResult(ctx, op, payload, result)
+}
+
+func (c *Client) doResult(ctx context.Context, op string, payload any, result any) error {
+	return c.doResultWithID(ctx, op, newID(), payload, result)
+}
+
+func (c *Client) doResultWithID(ctx context.Context, op, requestID string, payload any, result any) error {
+	if requestID == "" {
+		return fmt.Errorf("%s request id is required", op)
+	}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("marshal %s request: %w", op, err)
 	}
-	response, err := c.Do(ctx, types.Request{Op: op, ID: newID(), Data: data})
+	response, err := c.Do(ctx, types.Request{Op: op, ID: requestID, Data: data})
 	if err != nil {
 		return err
+	}
+	if response.ID != requestID {
+		return fmt.Errorf("%s response id mismatch", op)
 	}
 	if !response.OK {
 		return errors.New(response.Error)

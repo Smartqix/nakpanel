@@ -1,8 +1,9 @@
 // smtpsink is a minimal SMTP server used only by the phase 18 multipass
 // verifier: it accepts every message and appends one "MAIL FROM=<...>" line
 // per delivery to the output file, so the verifier can count what a
-// smarthost relay actually received. It offers STARTTLS with a throwaway
-// self-signed certificate because Stalwart requires TLS towards relays.
+// smarthost relay actually received. It offers STARTTLS using a supplied
+// trusted test certificate, or a throwaway self-signed certificate when run
+// manually without certificate flags.
 package main
 
 import (
@@ -26,8 +27,10 @@ import (
 func main() {
 	addr := flag.String("addr", "127.0.0.1:2525", "listen address")
 	out := flag.String("out", "/tmp/smtpsink.log", "delivery log file")
+	certPath := flag.String("cert", "", "PEM certificate chain")
+	keyPath := flag.String("key", "", "PEM private key")
 	flag.Parse()
-	tlsConfig, err := selfSignedConfig()
+	tlsConfig, err := serverTLSConfig(*certPath, *keyPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,6 +46,23 @@ func main() {
 		}
 		go handle(conn, *out, tlsConfig)
 	}
+}
+
+func serverTLSConfig(certPath, keyPath string) (*tls.Config, error) {
+	if (certPath == "") != (keyPath == "") {
+		return nil, fmt.Errorf("both -cert and -key are required")
+	}
+	if certPath == "" {
+		return selfSignedConfig()
+	}
+	certificate, err := tls.LoadX509KeyPair(certPath, keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("load SMTP sink certificate: %w", err)
+	}
+	return &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{certificate},
+	}, nil
 }
 
 func selfSignedConfig() (*tls.Config, error) {
@@ -62,7 +82,10 @@ func selfSignedConfig() (*tls.Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &tls.Config{Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}}}, nil
+	return &tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		Certificates: []tls.Certificate{{Certificate: [][]byte{der}, PrivateKey: key}},
+	}, nil
 }
 
 func handle(conn net.Conn, out string, tlsConfig *tls.Config) {

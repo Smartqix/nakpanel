@@ -117,7 +117,8 @@ func validatePlanWithinResellerTx(ctx context.Context, tx *sql.Tx, p Plan) error
 		return nil
 	}
 	var rp types.ResellerPlan
-	err := tx.QueryRowContext(ctx, `SELECT x.disk_mb,x.max_sites,x.max_subdomains,x.max_domain_aliases,x.max_databases,x.bandwidth_mb,x.max_mailboxes,x.max_ftp_accounts,x.max_backups,x.backup_storage_mb,x.allow_ssh,x.allow_dns,x.allow_tls,x.allow_backups,x.allow_php_settings FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans x ON x.id=rs.reseller_plan_id WHERE r.id=$1 FOR UPDATE OF r,rs,x`, p.ResellerID).Scan(&rp.DiskMB, &rp.MaxSites, &rp.MaxSubdomains, &rp.MaxDomainAliases, &rp.MaxDatabases, &rp.BandwidthMB, &rp.MaxMailboxes, &rp.MaxFTPAccounts, &rp.MaxBackups, &rp.BackupStorageMB, &rp.AllowSSH, &rp.AllowDNS, &rp.AllowTLS, &rp.AllowBackups, &rp.AllowPHPSettings)
+	var policyRaw []byte
+	err := tx.QueryRowContext(ctx, `SELECT x.disk_mb,x.max_sites,x.max_subdomains,x.max_domain_aliases,x.max_databases,x.bandwidth_mb,x.max_mailboxes,x.max_ftp_accounts,x.max_backups,x.backup_storage_mb,x.allow_ssh,x.allow_dns,x.allow_tls,x.allow_backups,x.allow_php_settings,x.hosting_policy FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans x ON x.id=rs.reseller_plan_id WHERE r.id=$1 FOR UPDATE OF r,rs,x`, p.ResellerID).Scan(&rp.DiskMB, &rp.MaxSites, &rp.MaxSubdomains, &rp.MaxDomainAliases, &rp.MaxDatabases, &rp.BandwidthMB, &rp.MaxMailboxes, &rp.MaxFTPAccounts, &rp.MaxBackups, &rp.BackupStorageMB, &rp.AllowSSH, &rp.AllowDNS, &rp.AllowTLS, &rp.AllowBackups, &rp.AllowPHPSettings, &policyRaw)
 	if err != nil {
 		return err
 	}
@@ -144,6 +145,20 @@ func validatePlanWithinResellerTx(ctx context.Context, tx *sql.Tx, p Plan) error
 	}
 	if p.AllowPHPSettings && !rp.AllowPHPSettings {
 		return fmt.Errorf("%w: PHP settings permission is unavailable", ErrResellerCapacity)
+	}
+	if hasConfiguredPolicy(policyRaw) {
+		if err := json.Unmarshal(policyRaw, &rp.HostingPolicy); err != nil {
+			return fmt.Errorf("decode reseller hosting policy: %w", err)
+		}
+	} else {
+		rp.HostingPolicy = resellerHostingPolicyFromLegacy(rp)
+	}
+	child := p.HostingPolicy
+	if child.SchemaVersion == 0 {
+		child = hostingPolicyFromPlan(p)
+	}
+	if err := controlpolicy.ValidateWithin(controlpolicy.Upgrade(child), controlpolicy.Upgrade(rp.HostingPolicy)); err != nil {
+		return fmt.Errorf("%w: %v", ErrResellerCapacity, err)
 	}
 	return nil
 }
@@ -228,6 +243,7 @@ func ComposeEntitlements(base types.SubscriptionEntitlements, addons []types.Add
 		return types.SubscriptionEntitlements{}, err
 	}
 	result := base
+	composedPolicy := base.HostingPolicy
 	php := csvSet(base.PHPAllowlist)
 	for _, addon := range addons {
 		if err := ValidateEntitlements(addon.Entitlements); err != nil {
@@ -266,6 +282,13 @@ func ComposeEntitlements(base types.SubscriptionEntitlements, addons []types.Add
 		result.AllowBackups = result.AllowBackups || add.AllowBackups
 		result.AllowPHPSettings = result.AllowPHPSettings || add.AllowPHPSettings
 		result.ServicePresets = composePresetIncrements(result.ServicePresets, add.ServicePresets)
+		if add.HostingPolicy.SchemaVersion > 0 {
+			var composeErr error
+			composedPolicy, composeErr = composeHostingPolicyAddon(composedPolicy, add.HostingPolicy)
+			if composeErr != nil {
+				return types.SubscriptionEntitlements{}, fmt.Errorf("add-on %q hosting policy: %w", addon.Name, composeErr)
+			}
+		}
 		for version := range csvSet(add.PHPAllowlist) {
 			php[version] = struct{}{}
 		}
@@ -278,44 +301,207 @@ func ComposeEntitlements(base types.SubscriptionEntitlements, addons []types.Add
 	if result.PHPAllowlist != "" {
 		result.ServicePresets.Hosting.AllowedPHPVersions = strings.Split(result.PHPAllowlist, ",")
 	}
-	result.HostingPolicy = mergeLegacyEntitlementsPolicy(result, base.HostingPolicy)
+	result.HostingPolicy = mergeLegacyEntitlementsPolicy(result, composedPolicy)
 	return result, nil
 }
 
 func mergeLegacyEntitlementsPolicy(e types.SubscriptionEntitlements, previous types.HostingPolicy) types.HostingPolicy {
 	resolved := controlpolicy.DefaultFromEntitlements(e)
-	if previous.SchemaVersion != 1 {
+	if previous.SchemaVersion == 0 {
 		return resolved
 	}
-	resolved.Resources.CPUPercent = previous.Resources.CPUPercent
-	resolved.Resources.MemoryMB = previous.Resources.MemoryMB
-	resolved.Resources.IOReadMBPS = previous.Resources.IOReadMBPS
-	resolved.Resources.IOWriteMBPS = previous.Resources.IOWriteMBPS
-	resolved.Resources.MaxTasks = previous.Resources.MaxTasks
-	resolved.Resources.MaxDatabaseUsers = previous.Resources.MaxDatabaseUsers
-	resolved.Resources.MaxMailAliases = previous.Resources.MaxMailAliases
-	resolved.Resources.MaxScheduledTasks = previous.Resources.MaxScheduledTasks
-	resolved.Resources.MaxApplications = previous.Resources.MaxApplications
-	resolved.Resources.ContainerStorageMB = previous.Resources.ContainerStorageMB
-	resolved.Permissions.ScheduledTasks = previous.Permissions.ScheduledTasks
-	resolved.Permissions.CGI = previous.Permissions.CGI
-	resolved.Permissions.Applications = previous.Permissions.Applications
-	resolved.Permissions.CustomOCIImages = previous.Permissions.CustomOCIImages
-	resolved.Permissions.ApplicationEgress = previous.Permissions.ApplicationEgress
-	resolved.Web.RequestRatePerSecond = previous.Web.RequestRatePerSecond
-	resolved.Web.RequestBurst = previous.Web.RequestBurst
-	resolved.Web.FastCGIMicrocache = previous.Web.FastCGIMicrocache
-	resolved.PHP.ExecEnabled = previous.PHP.ExecEnabled
-	resolved.Mail.MailboxQuotaMB = previous.Mail.MailboxQuotaMB
-	resolved.Mail.Autoresponders = previous.Mail.Autoresponders
-	resolved.Mail.CatchAll = previous.Mail.CatchAll
-	resolved.DNS.DNSSEC = previous.DNS.DNSSEC
-	resolved.Access = previous.Access
-	resolved.Backups.Schedule = previous.Backups.Schedule
-	resolved.Backups.RemoteTarget = previous.Backups.RemoteTarget
-	resolved.Applications = previous.Applications
-	resolved.Applications.CatalogEnabled = resolved.Applications.CatalogEnabled || e.ServicePresets.Applications.CatalogEnabled
-	return resolved
+	preserved := controlpolicy.Upgrade(previous)
+	preserved.Resources.DiskMB = resolved.Resources.DiskMB
+	preserved.Resources.TrafficMB = resolved.Resources.TrafficMB
+	preserved.Resources.MaxSites = resolved.Resources.MaxSites
+	preserved.Resources.MaxDatabases = resolved.Resources.MaxDatabases
+	preserved.Resources.MaxMailboxes = resolved.Resources.MaxMailboxes
+	preserved.Resources.MaxSFTPIdentities = highestLimit(preserved.Resources.MaxSFTPIdentities, resolved.Resources.MaxSFTPIdentities)
+	preserved.Resources.MaxBackups = resolved.Resources.MaxBackups
+	preserved.Resources.BackupStorageMB = resolved.Resources.BackupStorageMB
+	preserved.Permissions.Hosting = resolved.Permissions.Hosting
+	preserved.Permissions.SSH = resolved.Permissions.SSH
+	preserved.Permissions.SFTP = preserved.Permissions.SFTP || resolved.Permissions.SFTP
+	preserved.Permissions.DNS = resolved.Permissions.DNS
+	preserved.Permissions.TLS = resolved.Permissions.TLS
+	preserved.Permissions.Mail = resolved.Permissions.Mail
+	preserved.Permissions.Databases = resolved.Permissions.Databases
+	preserved.Permissions.Backups = resolved.Permissions.Backups
+	preserved.Permissions.PHPSettings = resolved.Permissions.PHPSettings
+	preserved.PHP.DefaultVersion = resolved.PHP.DefaultVersion
+	preserved.PHP.AllowedVersions = resolved.PHP.AllowedVersions
+	preserved.PHP.FPMMaxChildren = resolved.PHP.FPMMaxChildren
+	preserved.PHP.FPMMaxRequests = resolved.PHP.FPMMaxRequests
+	preserved.PHP.MemoryLimitMB = resolved.PHP.MemoryLimitMB
+	preserved.PHP.MaxExecutionSeconds = resolved.PHP.MaxExecutionSeconds
+	preserved.PHP.MaxInputSeconds = resolved.PHP.MaxInputSeconds
+	preserved.PHP.PostMaxMB = resolved.PHP.PostMaxMB
+	preserved.PHP.UploadMaxMB = resolved.PHP.UploadMaxMB
+	preserved.PHP.DisplayErrors = resolved.PHP.DisplayErrors
+	preserved.PHP.LogErrors = resolved.PHP.LogErrors
+	preserved.PHP.AllowURLFOpen = resolved.PHP.AllowURLFOpen
+	preserved.Mail.Enabled = resolved.Mail.Enabled
+	preserved.Mail.DKIM = resolved.Mail.DKIM
+	preserved.Mail.DMARCPolicy = resolved.Mail.DMARCPolicy
+	preserved.Mail.SpamFilter = resolved.Mail.SpamFilter
+	preserved.Mail.Webmail = resolved.Mail.Webmail
+	preserved.DNS.Enabled = resolved.DNS.Enabled
+	preserved.DNS.Mode = resolved.DNS.Mode
+	preserved.DNS.DefaultTTL = resolved.DNS.DefaultTTL
+	preserved.Backups.Enabled = resolved.Backups.Enabled
+	preserved.Backups.RetentionDays = resolved.Backups.RetentionDays
+	preserved.Web.PreferredDomain = resolved.Web.PreferredDomain
+	preserved.Web.MaxConnections = resolved.Web.MaxConnections
+	preserved.Web.StaticCache = resolved.Web.StaticCache
+	preserved.Applications.CatalogEnabled = preserved.Applications.CatalogEnabled || e.ServicePresets.Applications.CatalogEnabled
+	return preserved
+}
+
+func composeHostingPolicyAddon(base, addon types.HostingPolicy) (types.HostingPolicy, error) {
+	if base.SchemaVersion == 0 {
+		base = controlpolicy.DefaultFromEntitlements(types.SubscriptionEntitlements{})
+	}
+	base = controlpolicy.Upgrade(base)
+	addon = controlpolicy.Upgrade(addon)
+	for _, limit := range []struct {
+		current *int
+		delta   int
+	}{
+		{&base.Resources.MaxDatabaseUsers, addon.Resources.MaxDatabaseUsers},
+		{&base.Resources.MaxMailAliases, addon.Resources.MaxMailAliases},
+		{&base.Resources.MaxSFTPIdentities, addon.Resources.MaxSFTPIdentities},
+		{&base.Resources.MaxScheduledTasks, addon.Resources.MaxScheduledTasks},
+		{&base.Resources.MaxApplications, addon.Resources.MaxApplications},
+		{&base.Resources.ContainerStorageMB, addon.Resources.ContainerStorageMB},
+		{&base.Resources.MaxFTPAccounts, addon.Resources.MaxFTPAccounts},
+		{&base.Resources.ValkeyMemoryMB, addon.Resources.ValkeyMemoryMB},
+	} {
+		value, err := additiveLimit(*limit.current, limit.delta)
+		if err != nil {
+			return types.HostingPolicy{}, err
+		}
+		*limit.current = value
+	}
+	base.Resources.CPUPercent = highestLimit(base.Resources.CPUPercent, addon.Resources.CPUPercent)
+	base.Resources.MemoryMB = highestLimit(base.Resources.MemoryMB, addon.Resources.MemoryMB)
+	base.Resources.IOReadMBPS = highestLimit(base.Resources.IOReadMBPS, addon.Resources.IOReadMBPS)
+	base.Resources.IOWriteMBPS = highestLimit(base.Resources.IOWriteMBPS, addon.Resources.IOWriteMBPS)
+	base.Resources.MaxTasks = highestLimit(base.Resources.MaxTasks, addon.Resources.MaxTasks)
+	base.Permissions.Hosting = base.Permissions.Hosting || addon.Permissions.Hosting
+	base.Permissions.SSH = base.Permissions.SSH || addon.Permissions.SSH
+	base.Permissions.SFTP = base.Permissions.SFTP || addon.Permissions.SFTP
+	base.Permissions.FTPS = base.Permissions.FTPS || addon.Permissions.FTPS
+	base.Permissions.Logs = base.Permissions.Logs || addon.Permissions.Logs
+	base.Permissions.Git = base.Permissions.Git || addon.Permissions.Git
+	base.Permissions.Staging = base.Permissions.Staging || addon.Permissions.Staging
+	base.Permissions.Valkey = base.Permissions.Valkey || addon.Permissions.Valkey
+	base.Permissions.ScheduledTasks = base.Permissions.ScheduledTasks || addon.Permissions.ScheduledTasks
+	base.Permissions.DNS = base.Permissions.DNS || addon.Permissions.DNS
+	base.Permissions.TLS = base.Permissions.TLS || addon.Permissions.TLS
+	base.Permissions.Mail = base.Permissions.Mail || addon.Permissions.Mail
+	base.Permissions.Databases = base.Permissions.Databases || addon.Permissions.Databases
+	base.Permissions.Backups = base.Permissions.Backups || addon.Permissions.Backups
+	base.Permissions.PHPSettings = base.Permissions.PHPSettings || addon.Permissions.PHPSettings
+	base.Permissions.CGI = base.Permissions.CGI || addon.Permissions.CGI
+	base.Permissions.Applications = base.Permissions.Applications || addon.Permissions.Applications
+	base.Permissions.CustomOCIImages = base.Permissions.CustomOCIImages || addon.Permissions.CustomOCIImages
+	base.Permissions.ApplicationEgress = base.Permissions.ApplicationEgress || addon.Permissions.ApplicationEgress
+	base.Access.FTPSEnabled = base.Access.FTPSEnabled || addon.Access.FTPSEnabled
+	base.Web.RequestRatePerSecond = highestLimit(base.Web.RequestRatePerSecond, addon.Web.RequestRatePerSecond)
+	base.Web.RequestBurst = highestLimit(base.Web.RequestBurst, addon.Web.RequestBurst)
+	base.Web.RequestBodyLimitMB = highestLimit(base.Web.RequestBodyLimitMB, addon.Web.RequestBodyLimitMB)
+	base.Web.RateLimitPerSecond = highestLimit(base.Web.RateLimitPerSecond, addon.Web.RateLimitPerSecond)
+	base.Web.RateLimitBurst = highestLimit(base.Web.RateLimitBurst, addon.Web.RateLimitBurst)
+	base.Web.MaxConnections = highestLimit(base.Web.MaxConnections, addon.Web.MaxConnections)
+	base.Web.CacheTTLSeconds = highestLimit(base.Web.CacheTTLSeconds, addon.Web.CacheTTLSeconds)
+	base.Web.ConnectTimeoutSecs = highestLimit(base.Web.ConnectTimeoutSecs, addon.Web.ConnectTimeoutSecs)
+	base.Web.ReadTimeoutSecs = highestLimit(base.Web.ReadTimeoutSecs, addon.Web.ReadTimeoutSecs)
+	base.Web.HTTPSRedirect = base.Web.HTTPSRedirect || addon.Web.HTTPSRedirect
+	base.Web.StaticCache = base.Web.StaticCache || addon.Web.StaticCache
+	base.Web.FastCGIMicrocache = base.Web.FastCGIMicrocache || addon.Web.FastCGIMicrocache
+	base.Web.Compression = base.Web.Compression || addon.Web.Compression
+	base.Web.AllowedCIDRs = unionStrings(base.Web.AllowedCIDRs, addon.Web.AllowedCIDRs)
+	base.PHP.AllowedVersions = unionStrings(base.PHP.AllowedVersions, addon.PHP.AllowedVersions)
+	base.PHP.FPMMaxChildren = highestLimit(base.PHP.FPMMaxChildren, addon.PHP.FPMMaxChildren)
+	base.PHP.FPMMaxRequests = highestLimit(base.PHP.FPMMaxRequests, addon.PHP.FPMMaxRequests)
+	base.PHP.MemoryLimitMB = highestLimit(base.PHP.MemoryLimitMB, addon.PHP.MemoryLimitMB)
+	base.PHP.MaxExecutionSeconds = highestLimit(base.PHP.MaxExecutionSeconds, addon.PHP.MaxExecutionSeconds)
+	base.PHP.MaxInputSeconds = highestLimit(base.PHP.MaxInputSeconds, addon.PHP.MaxInputSeconds)
+	base.PHP.PostMaxMB = highestLimit(base.PHP.PostMaxMB, addon.PHP.PostMaxMB)
+	base.PHP.UploadMaxMB = highestLimit(base.PHP.UploadMaxMB, addon.PHP.UploadMaxMB)
+	base.PHP.FPMIdleTimeoutSecs = highestLimit(base.PHP.FPMIdleTimeoutSecs, addon.PHP.FPMIdleTimeoutSecs)
+	base.PHP.RequestTerminateSecs = highestLimit(base.PHP.RequestTerminateSecs, addon.PHP.RequestTerminateSecs)
+	base.PHP.OPcacheMemoryMB = highestLimit(base.PHP.OPcacheMemoryMB, addon.PHP.OPcacheMemoryMB)
+	base.PHP.OPcacheEnabled = base.PHP.OPcacheEnabled || addon.PHP.OPcacheEnabled
+	base.PHP.ExecEnabled = base.PHP.ExecEnabled || addon.PHP.ExecEnabled
+	base.PHP.DisplayErrors = base.PHP.DisplayErrors || addon.PHP.DisplayErrors
+	base.PHP.LogErrors = base.PHP.LogErrors || addon.PHP.LogErrors
+	base.PHP.AllowURLFOpen = base.PHP.AllowURLFOpen || addon.PHP.AllowURLFOpen
+	if base.PHP.DefaultVersion == "" && addon.PHP.DefaultVersion != "" {
+		base.PHP.DefaultVersion = addon.PHP.DefaultVersion
+	}
+	if base.PHP.FPMMode == "" && addon.PHP.FPMMode != "" {
+		base.PHP.FPMMode = addon.PHP.FPMMode
+	}
+	base.Mail.MailboxQuotaMB = highestLimit(base.Mail.MailboxQuotaMB, addon.Mail.MailboxQuotaMB)
+	base.Mail.Enabled = base.Mail.Enabled || addon.Mail.Enabled
+	base.Mail.DKIM = base.Mail.DKIM || addon.Mail.DKIM
+	base.Mail.SpamFilter = base.Mail.SpamFilter || addon.Mail.SpamFilter
+	base.Mail.Webmail = base.Mail.Webmail || addon.Mail.Webmail
+	base.Mail.Autoresponders = base.Mail.Autoresponders || addon.Mail.Autoresponders
+	base.Mail.CatchAll = base.Mail.CatchAll || addon.Mail.CatchAll
+	base.Mail.DMARCPolicy = strongerDMARCPolicy(base.Mail.DMARCPolicy, addon.Mail.DMARCPolicy)
+	base.DNS.Enabled = base.DNS.Enabled || addon.DNS.Enabled
+	base.DNS.DNSSEC = base.DNS.DNSSEC || addon.DNS.DNSSEC
+	base.DNS.DefaultTTL = highestLimit(base.DNS.DefaultTTL, addon.DNS.DefaultTTL)
+	base.Access.SFTPOnly = base.Access.SFTPOnly || addon.Access.SFTPOnly
+	base.Access.SSHIdleTimeoutMins = highestLimit(base.Access.SSHIdleTimeoutMins, addon.Access.SSHIdleTimeoutMins)
+	base.Backups.Enabled = base.Backups.Enabled || addon.Backups.Enabled
+	base.Backups.RetentionDays = highestLimit(base.Backups.RetentionDays, addon.Backups.RetentionDays)
+	base.Applications.CatalogEnabled = base.Applications.CatalogEnabled || addon.Applications.CatalogEnabled
+	base.Applications.AllowedCatalogSlugs = unionStrings(base.Applications.AllowedCatalogSlugs, addon.Applications.AllowedCatalogSlugs)
+	base.Applications.AllowedRegistries = unionStrings(base.Applications.AllowedRegistries, addon.Applications.AllowedRegistries)
+	base.Applications.AllowedRuntimes = unionStrings(base.Applications.AllowedRuntimes, addon.Applications.AllowedRuntimes)
+	base.Applications.Rootless = base.Applications.Rootless || addon.Applications.Rootless
+	base.Applications.EgressEnabled = base.Applications.EgressEnabled || addon.Applications.EgressEnabled
+	base.Valkey.Enabled = base.Valkey.Enabled || addon.Valkey.Enabled
+	base.Valkey.MemoryMB = highestLimit(base.Valkey.MemoryMB, addon.Valkey.MemoryMB)
+	base.Valkey.MaxClients = highestLimit(base.Valkey.MaxClients, addon.Valkey.MaxClients)
+	base.Valkey.IdleTimeoutSeconds = highestLimit(base.Valkey.IdleTimeoutSeconds, addon.Valkey.IdleTimeoutSeconds)
+	base.Valkey.CPUPercent = highestLimit(base.Valkey.CPUPercent, addon.Valkey.CPUPercent)
+	base.Valkey.ProcessLimit = highestLimit(base.Valkey.ProcessLimit, addon.Valkey.ProcessLimit)
+	if base.Valkey.EvictionPolicy == "" && addon.Valkey.EvictionPolicy != "" {
+		base.Valkey.EvictionPolicy = addon.Valkey.EvictionPolicy
+	}
+	return base, controlpolicy.Validate(base)
+}
+
+func strongerDMARCPolicy(base, addon string) string {
+	rank := map[string]int{"": 0, "none": 1, "quarantine": 2, "reject": 3}
+	if rank[addon] > rank[base] {
+		return addon
+	}
+	return base
+}
+
+func unionStrings(base, add []string) []string {
+	seen := make(map[string]struct{}, len(base)+len(add))
+	result := make([]string, 0, len(base)+len(add))
+	for _, list := range [][]string{base, add} {
+		for _, value := range list {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			if _, exists := seen[value]; exists {
+				continue
+			}
+			seen[value] = struct{}{}
+			result = append(result, value)
+		}
+	}
+	sort.Strings(result)
+	return result
 }
 
 func composePresetIncrements(base, add types.PlanServicePresets) types.PlanServicePresets {
@@ -595,7 +781,7 @@ LEFT JOIN reseller_plans p ON p.id=rs.reseller_plan_id ORDER BY r.id`)
 
 func (s *SQLStore) ListResellerPlans(ctx context.Context) ([]types.ResellerPlan, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id,name,description,max_customers,max_subscriptions,disk_mb,max_sites,max_subdomains,max_domain_aliases,max_databases,
-bandwidth_mb,max_mailboxes,max_ftp_accounts,max_backups,backup_storage_mb,allow_custom_plans,allow_ssh,allow_dns,allow_tls,allow_backups,allow_php_settings,is_active,created_at,updated_at
+bandwidth_mb,max_mailboxes,max_ftp_accounts,max_backups,backup_storage_mb,allow_custom_plans,allow_ssh,allow_dns,allow_tls,allow_backups,allow_php_settings,hosting_policy,is_active,created_at,updated_at
 FROM reseller_plans ORDER BY id`)
 	if err != nil {
 		return nil, err
@@ -617,15 +803,26 @@ type resellerPlanScanner interface {
 }
 
 func scanResellerPlan(row resellerPlanScanner, p *types.ResellerPlan) error {
-	return row.Scan(&p.ID, &p.Name, &p.Description, &p.MaxCustomers, &p.MaxSubscriptions, &p.DiskMB,
+	var raw []byte
+	err := row.Scan(&p.ID, &p.Name, &p.Description, &p.MaxCustomers, &p.MaxSubscriptions, &p.DiskMB,
 		&p.MaxSites, &p.MaxSubdomains, &p.MaxDomainAliases, &p.MaxDatabases, &p.BandwidthMB,
 		&p.MaxMailboxes, &p.MaxFTPAccounts, &p.MaxBackups, &p.BackupStorageMB, &p.AllowCustomPlans,
-		&p.AllowSSH, &p.AllowDNS, &p.AllowTLS, &p.AllowBackups, &p.AllowPHPSettings, &p.IsActive,
+		&p.AllowSSH, &p.AllowDNS, &p.AllowTLS, &p.AllowBackups, &p.AllowPHPSettings, &raw, &p.IsActive,
 		&p.CreatedAt, &p.UpdatedAt)
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(raw, &p.HostingPolicy); err != nil {
+		return err
+	}
+	if !hasConfiguredPolicy(raw) {
+		p.HostingPolicy = resellerHostingPolicyFromLegacy(*p)
+	}
+	return nil
 }
 
 func (s *SQLStore) ListResellerPlansForUser(ctx context.Context, userID int64) ([]types.ResellerPlan, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT p.id,p.name,p.description,p.max_customers,p.max_subscriptions,p.disk_mb,p.max_sites,p.max_subdomains,p.max_domain_aliases,p.max_databases,p.bandwidth_mb,p.max_mailboxes,p.max_ftp_accounts,p.max_backups,p.backup_storage_mb,p.allow_custom_plans,p.allow_ssh,p.allow_dns,p.allow_tls,p.allow_backups,p.allow_php_settings,p.is_active,p.created_at,p.updated_at FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans p ON p.id=rs.reseller_plan_id WHERE r.login_user_id=$1`, userID)
+	rows, err := s.db.QueryContext(ctx, `SELECT p.id,p.name,p.description,p.max_customers,p.max_subscriptions,p.disk_mb,p.max_sites,p.max_subdomains,p.max_domain_aliases,p.max_databases,p.bandwidth_mb,p.max_mailboxes,p.max_ftp_accounts,p.max_backups,p.backup_storage_mb,p.allow_custom_plans,p.allow_ssh,p.allow_dns,p.allow_tls,p.allow_backups,p.allow_php_settings,p.hosting_policy,p.is_active,p.created_at,p.updated_at FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans p ON p.id=rs.reseller_plan_id WHERE r.login_user_id=$1`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -664,12 +861,22 @@ func (s *SQLStore) UpsertResellerPlan(ctx context.Context, p types.ResellerPlan)
 			return types.ResellerPlan{}, errors.New("reseller plan limits cannot be less than -1")
 		}
 	}
-	rowQuery := `INSERT INTO reseller_plans (name,description,max_customers,max_subscriptions,disk_mb,max_sites,max_subdomains,max_domain_aliases,max_databases,bandwidth_mb,max_mailboxes,max_ftp_accounts,max_backups,backup_storage_mb,allow_custom_plans,allow_ssh,allow_dns,allow_tls,allow_backups,allow_php_settings,is_active)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
-RETURNING id,name,description,max_customers,max_subscriptions,disk_mb,max_sites,max_subdomains,max_domain_aliases,max_databases,bandwidth_mb,max_mailboxes,max_ftp_accounts,max_backups,backup_storage_mb,allow_custom_plans,allow_ssh,allow_dns,allow_tls,allow_backups,allow_php_settings,is_active,created_at,updated_at`
-	args := []any{strings.TrimSpace(p.Name), strings.TrimSpace(p.Description), p.MaxCustomers, p.MaxSubscriptions, p.DiskMB, p.MaxSites, p.MaxSubdomains, p.MaxDomainAliases, p.MaxDatabases, p.BandwidthMB, p.MaxMailboxes, p.MaxFTPAccounts, p.MaxBackups, p.BackupStorageMB, p.AllowCustomPlans, p.AllowSSH, p.AllowDNS, p.AllowTLS, p.AllowBackups, p.AllowPHPSettings, p.IsActive}
+	if p.HostingPolicy.SchemaVersion == 0 {
+		p.HostingPolicy = resellerHostingPolicyFromLegacy(p)
+	}
+	if err := controlpolicy.Validate(p.HostingPolicy); err != nil {
+		return types.ResellerPlan{}, fmt.Errorf("reseller hosting policy: %w", err)
+	}
+	policyJSON, err := json.Marshal(p.HostingPolicy)
+	if err != nil {
+		return types.ResellerPlan{}, err
+	}
+	rowQuery := `INSERT INTO reseller_plans (name,description,max_customers,max_subscriptions,disk_mb,max_sites,max_subdomains,max_domain_aliases,max_databases,bandwidth_mb,max_mailboxes,max_ftp_accounts,max_backups,backup_storage_mb,allow_custom_plans,allow_ssh,allow_dns,allow_tls,allow_backups,allow_php_settings,hosting_policy,is_active)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+RETURNING id,name,description,max_customers,max_subscriptions,disk_mb,max_sites,max_subdomains,max_domain_aliases,max_databases,bandwidth_mb,max_mailboxes,max_ftp_accounts,max_backups,backup_storage_mb,allow_custom_plans,allow_ssh,allow_dns,allow_tls,allow_backups,allow_php_settings,hosting_policy,is_active,created_at,updated_at`
+	args := []any{strings.TrimSpace(p.Name), strings.TrimSpace(p.Description), p.MaxCustomers, p.MaxSubscriptions, p.DiskMB, p.MaxSites, p.MaxSubdomains, p.MaxDomainAliases, p.MaxDatabases, p.BandwidthMB, p.MaxMailboxes, p.MaxFTPAccounts, p.MaxBackups, p.BackupStorageMB, p.AllowCustomPlans, p.AllowSSH, p.AllowDNS, p.AllowTLS, p.AllowBackups, p.AllowPHPSettings, policyJSON, p.IsActive}
 	if p.ID > 0 {
-		rowQuery = `UPDATE reseller_plans SET name=$2,description=$3,max_customers=$4,max_subscriptions=$5,disk_mb=$6,max_sites=$7,max_subdomains=$8,max_domain_aliases=$9,max_databases=$10,bandwidth_mb=$11,max_mailboxes=$12,max_ftp_accounts=$13,max_backups=$14,backup_storage_mb=$15,allow_custom_plans=$16,allow_ssh=$17,allow_dns=$18,allow_tls=$19,allow_backups=$20,allow_php_settings=$21,is_active=$22,updated_at=now() WHERE id=$1 RETURNING id,name,description,max_customers,max_subscriptions,disk_mb,max_sites,max_subdomains,max_domain_aliases,max_databases,bandwidth_mb,max_mailboxes,max_ftp_accounts,max_backups,backup_storage_mb,allow_custom_plans,allow_ssh,allow_dns,allow_tls,allow_backups,allow_php_settings,is_active,created_at,updated_at`
+		rowQuery = `UPDATE reseller_plans SET name=$2,description=$3,max_customers=$4,max_subscriptions=$5,disk_mb=$6,max_sites=$7,max_subdomains=$8,max_domain_aliases=$9,max_databases=$10,bandwidth_mb=$11,max_mailboxes=$12,max_ftp_accounts=$13,max_backups=$14,backup_storage_mb=$15,allow_custom_plans=$16,allow_ssh=$17,allow_dns=$18,allow_tls=$19,allow_backups=$20,allow_php_settings=$21,hosting_policy=$22,is_active=$23,updated_at=now() WHERE id=$1 RETURNING id,name,description,max_customers,max_subscriptions,disk_mb,max_sites,max_subdomains,max_domain_aliases,max_databases,bandwidth_mb,max_mailboxes,max_ftp_accounts,max_backups,backup_storage_mb,allow_custom_plans,allow_ssh,allow_dns,allow_tls,allow_backups,allow_php_settings,hosting_policy,is_active,created_at,updated_at`
 		args = append([]any{p.ID}, args...)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -698,6 +905,9 @@ RETURNING id,name,description,max_customers,max_subscriptions,disk_mb,max_sites,
 		return types.ResellerPlan{}, err
 	}
 	for _, resellerID := range resellerIDs {
+		if err = validateResellerSubscriptionsTx(ctx, tx, resellerID); err != nil {
+			return types.ResellerPlan{}, err
+		}
 		if err = validateResellerCapacityTx(ctx, tx, resellerID, 0, types.SubscriptionEntitlements{}); err != nil {
 			return types.ResellerPlan{}, err
 		}
@@ -706,6 +916,65 @@ RETURNING id,name,description,max_customers,max_subscriptions,disk_mb,max_sites,
 		return types.ResellerPlan{}, err
 	}
 	return saved, nil
+}
+
+func resellerHostingPolicyFromLegacy(p types.ResellerPlan) types.HostingPolicy {
+	e := types.SubscriptionEntitlements{
+		DiskMB: p.DiskMB, MaxSites: p.MaxSites, MaxDatabases: p.MaxDatabases,
+		BandwidthMB: p.BandwidthMB, MaxMailboxes: p.MaxMailboxes,
+		MaxBackups: p.MaxBackups, BackupStorageMB: p.BackupStorageMB,
+		MaxSubdomains: p.MaxSubdomains, MaxDomainAliases: p.MaxDomainAliases,
+		MaxFTPAccounts: p.MaxFTPAccounts, HostingEnabled: true,
+		AllowSSH: p.AllowSSH, AllowDNS: p.AllowDNS, AllowTLS: p.AllowTLS,
+		AllowBackups: p.AllowBackups, AllowPHPSettings: p.AllowPHPSettings,
+	}
+	policy := controlpolicy.DefaultFromEntitlements(e)
+	policy.Resources.CPUPercent = -1
+	policy.Resources.MemoryMB = -1
+	policy.Resources.IOReadMBPS = -1
+	policy.Resources.IOWriteMBPS = -1
+	policy.Resources.MaxTasks = -1
+	policy.Resources.MaxDatabaseUsers = -1
+	policy.Resources.MaxMailAliases = -1
+	policy.Resources.MaxScheduledTasks = -1
+	policy.Resources.MaxApplications = -1
+	policy.Resources.ContainerStorageMB = -1
+	policy.Resources.ValkeyMemoryMB = -1
+	policy.Permissions.SFTP = true
+	policy.Permissions.FTPS = true
+	policy.Permissions.Logs = true
+	policy.Permissions.Git = true
+	policy.Permissions.Staging = true
+	policy.Permissions.Valkey = true
+	policy.Permissions.ScheduledTasks = true
+	policy.Permissions.Applications = true
+	policy.Permissions.CustomOCIImages = true
+	policy.Permissions.ApplicationEgress = true
+	policy.Web.StaticCache = true
+	policy.Web.FastCGIMicrocache = true
+	policy.Web.Compression = true
+	policy.Web.SecurityHeaderPreset = "off"
+	policy.PHP.AllowedVersions = []string{"8.2", "8.3"}
+	policy.PHP.DefaultVersion = "8.3"
+	policy.PHP.DisplayErrors = true
+	policy.PHP.LogErrors = true
+	policy.PHP.AllowURLFOpen = true
+	policy.PHP.ExecEnabled = true
+	policy.PHP.OPcacheEnabled = true
+	policy.Mail.Enabled = true
+	policy.Mail.DKIM = true
+	policy.Mail.Webmail = true
+	policy.DNS.Enabled = true
+	policy.DNS.DNSSEC = true
+	policy.Access.FTPSEnabled = true
+	policy.Applications.CatalogEnabled = true
+	policy.Applications.AllowedCatalogSlugs = nil
+	policy.Applications.AllowedRegistries = []string{"docker.io", "ghcr.io"}
+	policy.Applications.AllowedRuntimes = []string{"php", "python", "node", "oci"}
+	policy.Applications.EgressEnabled = true
+	policy.Valkey.Enabled = true
+	policy.Valkey.MemoryMB = 0
+	return policy
 }
 
 func (s *SQLStore) CreateReseller(ctx context.Context, req types.CreateCustomerReq, resellerPlanID int64) (types.Reseller, error) {
@@ -911,8 +1180,9 @@ func validateResellerSubscriptionsTx(ctx context.Context, tx *sql.Tx, resellerID
 
 func validateResellerCapacityTx(ctx context.Context, tx *sql.Tx, resellerID, excludeSubscriptionID int64, candidate types.SubscriptionEntitlements) error {
 	var limits types.ResellerPlan
-	err := tx.QueryRowContext(ctx, `SELECT p.max_customers,p.max_subscriptions,p.disk_mb,p.max_sites,p.max_subdomains,p.max_domain_aliases,p.max_databases,p.bandwidth_mb,p.max_mailboxes,p.max_ftp_accounts,p.max_backups,p.backup_storage_mb,p.allow_custom_plans,p.allow_ssh,p.allow_dns,p.allow_tls,p.allow_backups,p.allow_php_settings
-FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans p ON p.id=rs.reseller_plan_id WHERE r.id=$1 FOR UPDATE OF r,rs,p`, resellerID).Scan(&limits.MaxCustomers, &limits.MaxSubscriptions, &limits.DiskMB, &limits.MaxSites, &limits.MaxSubdomains, &limits.MaxDomainAliases, &limits.MaxDatabases, &limits.BandwidthMB, &limits.MaxMailboxes, &limits.MaxFTPAccounts, &limits.MaxBackups, &limits.BackupStorageMB, &limits.AllowCustomPlans, &limits.AllowSSH, &limits.AllowDNS, &limits.AllowTLS, &limits.AllowBackups, &limits.AllowPHPSettings)
+	var resellerPolicyRaw []byte
+	err := tx.QueryRowContext(ctx, `SELECT p.max_customers,p.max_subscriptions,p.disk_mb,p.max_sites,p.max_subdomains,p.max_domain_aliases,p.max_databases,p.bandwidth_mb,p.max_mailboxes,p.max_ftp_accounts,p.max_backups,p.backup_storage_mb,p.allow_custom_plans,p.allow_ssh,p.allow_dns,p.allow_tls,p.allow_backups,p.allow_php_settings,p.hosting_policy
+FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans p ON p.id=rs.reseller_plan_id WHERE r.id=$1 FOR UPDATE OF r,rs,p`, resellerID).Scan(&limits.MaxCustomers, &limits.MaxSubscriptions, &limits.DiskMB, &limits.MaxSites, &limits.MaxSubdomains, &limits.MaxDomainAliases, &limits.MaxDatabases, &limits.BandwidthMB, &limits.MaxMailboxes, &limits.MaxFTPAccounts, &limits.MaxBackups, &limits.BackupStorageMB, &limits.AllowCustomPlans, &limits.AllowSSH, &limits.AllowDNS, &limits.AllowTLS, &limits.AllowBackups, &limits.AllowPHPSettings, &resellerPolicyRaw)
 	if err != nil {
 		return err
 	}
@@ -946,7 +1216,78 @@ FROM customers c LEFT JOIN subscriptions s ON s.customer_id=c.id AND s.status='a
 			return fmt.Errorf("%w: %s allocation exceeds %d", ErrResellerCapacity, c.name, c.limit)
 		}
 	}
+	if hasConfiguredPolicy(resellerPolicyRaw) {
+		if err = json.Unmarshal(resellerPolicyRaw, &limits.HostingPolicy); err != nil {
+			return err
+		}
+	} else {
+		limits.HostingPolicy = resellerHostingPolicyFromLegacy(limits)
+	}
+	typedUsed := make([]int, 11)
+	typedUnlimited := make([]bool, len(typedUsed))
+	rows, err := tx.QueryContext(ctx, `SELECT entitlement.hosting_policy
+FROM subscription_entitlements entitlement
+JOIN subscriptions subscription ON subscription.id=entitlement.subscription_id AND subscription.status='active'
+JOIN customers customer ON customer.id=subscription.customer_id
+WHERE customer.reseller_id=$1 AND ($2::bigint=0 OR subscription.id<>$2)
+ORDER BY subscription.id`, resellerID, excludeSubscriptionID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var raw []byte
+		if err = rows.Scan(&raw); err != nil {
+			rows.Close()
+			return err
+		}
+		var policy types.HostingPolicy
+		if err = json.Unmarshal(raw, &policy); err != nil {
+			rows.Close()
+			return err
+		}
+		accumulateTypedPolicy(typedUsed, typedUnlimited, policy)
+	}
+	if err = rows.Close(); err != nil {
+		return err
+	}
+	candidatePolicy := candidate.HostingPolicy
+	if candidatePolicy.SchemaVersion == 0 {
+		candidatePolicy = controlpolicy.DefaultFromEntitlements(candidate)
+	}
+	candidateValues := typedPolicyLimits(candidatePolicy)
+	ceilingValues := typedPolicyLimits(limits.HostingPolicy)
+	names := []string{"CPU", "memory", "read I/O", "write I/O", "processes", "database users", "mail aliases", "scheduled tasks", "applications", "container storage", "Valkey memory"}
+	for index, ceiling := range ceilingValues {
+		if ceiling < 0 {
+			continue
+		}
+		add := candidateValues[index]
+		if typedUnlimited[index] || add < 0 || typedUsed[index]+add > ceiling {
+			return fmt.Errorf("%w: %s allocation exceeds %d", ErrResellerCapacity, names[index], ceiling)
+		}
+	}
 	return nil
+}
+
+func typedPolicyLimits(policy types.HostingPolicy) []int {
+	return []int{
+		policy.Resources.CPUPercent, policy.Resources.MemoryMB,
+		policy.Resources.IOReadMBPS, policy.Resources.IOWriteMBPS,
+		policy.Resources.MaxTasks, policy.Resources.MaxDatabaseUsers,
+		policy.Resources.MaxMailAliases, policy.Resources.MaxScheduledTasks,
+		policy.Resources.MaxApplications, policy.Resources.ContainerStorageMB,
+		policy.Resources.ValkeyMemoryMB,
+	}
+}
+
+func accumulateTypedPolicy(used []int, unlimited []bool, policy types.HostingPolicy) {
+	for index, value := range typedPolicyLimits(policy) {
+		if value < 0 {
+			unlimited[index] = true
+		} else {
+			used[index] += value
+		}
+	}
 }
 
 func boolInt(v bool) int {
@@ -1002,12 +1343,23 @@ func (s *SQLStore) UpsertAddonPlan(ctx context.Context, addon types.AddonPlan) (
 	if err != nil {
 		return types.AddonPlan{}, err
 	}
-	query := `INSERT INTO addon_plans (reseller_id,name,description,disk_mb,max_sites,max_databases,bandwidth_mb,max_mailboxes,backup_retention_days,php_allowlist,php_fpm_max_children,php_memory_mb,site_disk_quota_mb,max_backups,backup_storage_mb,allow_ssh,allow_dns,is_active,max_subdomains,max_domain_aliases,max_ftp_accounts,allow_tls,allow_backups,allow_php_settings,service_presets)
-VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id`
-	args := []any{nullableInt64(addon.ResellerID), strings.TrimSpace(addon.Name), strings.TrimSpace(addon.Description), e.DiskMB, e.MaxSites, e.MaxDatabases, e.BandwidthMB, e.MaxMailboxes, e.BackupRetentionDays, e.PHPAllowlist, e.PHPFPMMaxChildren, e.PHPMemoryMB, e.SiteDiskQuotaMB, e.MaxBackups, e.BackupStorageMB, e.AllowSSH, e.AllowDNS, addon.IsActive, e.MaxSubdomains, e.MaxDomainAliases, e.MaxFTPAccounts, e.AllowTLS, e.AllowBackups, e.AllowPHPSettings, presets}
+	policy := e.HostingPolicy
+	if policy.SchemaVersion == 0 {
+		policy = controlpolicy.DefaultFromEntitlements(e)
+	}
+	if err = controlpolicy.Validate(policy); err != nil {
+		return types.AddonPlan{}, fmt.Errorf("add-on hosting policy: %w", err)
+	}
+	policyJSON, err := json.Marshal(policy)
+	if err != nil {
+		return types.AddonPlan{}, err
+	}
+	query := `INSERT INTO addon_plans (reseller_id,name,description,disk_mb,max_sites,max_databases,bandwidth_mb,max_mailboxes,backup_retention_days,php_allowlist,php_fpm_max_children,php_memory_mb,site_disk_quota_mb,max_backups,backup_storage_mb,allow_ssh,allow_dns,is_active,max_subdomains,max_domain_aliases,max_ftp_accounts,allow_tls,allow_backups,allow_php_settings,service_presets,hosting_policy)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26) RETURNING id`
+	args := []any{nullableInt64(addon.ResellerID), strings.TrimSpace(addon.Name), strings.TrimSpace(addon.Description), e.DiskMB, e.MaxSites, e.MaxDatabases, e.BandwidthMB, e.MaxMailboxes, e.BackupRetentionDays, e.PHPAllowlist, e.PHPFPMMaxChildren, e.PHPMemoryMB, e.SiteDiskQuotaMB, e.MaxBackups, e.BackupStorageMB, e.AllowSSH, e.AllowDNS, addon.IsActive, e.MaxSubdomains, e.MaxDomainAliases, e.MaxFTPAccounts, e.AllowTLS, e.AllowBackups, e.AllowPHPSettings, presets, policyJSON}
 	var id int64
 	if addon.ID > 0 {
-		query = `UPDATE addon_plans SET name=$3,description=$4,disk_mb=$5,max_sites=$6,max_databases=$7,bandwidth_mb=$8,max_mailboxes=$9,backup_retention_days=$10,php_allowlist=$11,php_fpm_max_children=$12,php_memory_mb=$13,site_disk_quota_mb=$14,max_backups=$15,backup_storage_mb=$16,allow_ssh=$17,allow_dns=$18,is_active=$19,max_subdomains=$20,max_domain_aliases=$21,max_ftp_accounts=$22,allow_tls=$23,allow_backups=$24,allow_php_settings=$25,service_presets=$26,revision=revision+1,updated_at=now() WHERE id=$1 AND reseller_id IS NOT DISTINCT FROM $2 RETURNING id`
+		query = `UPDATE addon_plans SET name=$3,description=$4,disk_mb=$5,max_sites=$6,max_databases=$7,bandwidth_mb=$8,max_mailboxes=$9,backup_retention_days=$10,php_allowlist=$11,php_fpm_max_children=$12,php_memory_mb=$13,site_disk_quota_mb=$14,max_backups=$15,backup_storage_mb=$16,allow_ssh=$17,allow_dns=$18,is_active=$19,max_subdomains=$20,max_domain_aliases=$21,max_ftp_accounts=$22,allow_tls=$23,allow_backups=$24,allow_php_settings=$25,service_presets=$26,hosting_policy=$27,revision=revision+1,updated_at=now() WHERE id=$1 AND reseller_id IS NOT DISTINCT FROM $2 RETURNING id`
 		args = append([]any{addon.ID}, args...)
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -1015,6 +1367,14 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$
 		return types.AddonPlan{}, err
 	}
 	defer tx.Rollback()
+	if addon.ResellerID > 0 {
+		e.HostingPolicy = policy
+		candidate := planFromEntitlements(e)
+		candidate.ResellerID = addon.ResellerID
+		if err = validatePlanWithinResellerTx(ctx, tx, candidate); err != nil {
+			return types.AddonPlan{}, err
+		}
+	}
 	if err := tx.QueryRowContext(ctx, query, args...).Scan(&id); err != nil {
 		return types.AddonPlan{}, err
 	}
@@ -1026,7 +1386,11 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$
 			if _, err = tx.ExecContext(ctx, `UPDATE subscriptions s SET sync_status='pending',sync_error='',updated_at=now() FROM subscription_addons sa WHERE sa.subscription_id=s.id AND sa.addon_plan_id=$1 AND s.sync_mode='synced'`, id); err != nil {
 				return types.AddonPlan{}, err
 			}
-			if _, err = s.river.InsertTx(ctx, tx, SyncAddonArgs{AddonID: id}, nil); err != nil {
+			var revision int64
+			if err = tx.QueryRowContext(ctx, `SELECT revision FROM addon_plans WHERE id=$1`, id).Scan(&revision); err != nil {
+				return types.AddonPlan{}, err
+			}
+			if _, err = s.river.InsertTx(ctx, tx, NewSyncAddonArgs(id, revision), nil); err != nil {
 				return types.AddonPlan{}, fmt.Errorf("enqueue add-on synchronization: %w", err)
 			}
 		} else {
@@ -1085,17 +1449,23 @@ func (s *SQLStore) getAddonPlan(ctx context.Context, id int64) (types.AddonPlan,
 	return scanAddonPlan(s.db.QueryRowContext(ctx, addonPlanSelect+` WHERE a.id=$1`, id))
 }
 
-const addonPlanSelect = `SELECT a.id,COALESCE(a.reseller_id,0),a.name,a.description,a.disk_mb,a.max_sites,a.max_databases,a.bandwidth_mb,a.max_mailboxes,a.backup_retention_days,a.php_allowlist,a.php_fpm_max_children,a.php_memory_mb,a.site_disk_quota_mb,a.max_backups,a.backup_storage_mb,a.allow_ssh,a.allow_dns,a.is_active,a.revision,a.max_subdomains,a.max_domain_aliases,a.max_ftp_accounts,a.allow_tls,a.allow_backups,a.allow_php_settings,a.service_presets FROM addon_plans a`
+const addonPlanSelect = `SELECT a.id,COALESCE(a.reseller_id,0),a.name,a.description,a.disk_mb,a.max_sites,a.max_databases,a.bandwidth_mb,a.max_mailboxes,a.backup_retention_days,a.php_allowlist,a.php_fpm_max_children,a.php_memory_mb,a.site_disk_quota_mb,a.max_backups,a.backup_storage_mb,a.allow_ssh,a.allow_dns,a.is_active,a.revision,a.max_subdomains,a.max_domain_aliases,a.max_ftp_accounts,a.allow_tls,a.allow_backups,a.allow_php_settings,a.service_presets,a.hosting_policy FROM addon_plans a`
 
 type addonScanner interface{ Scan(...any) error }
 
 func scanAddonPlan(row addonScanner) (types.AddonPlan, error) {
 	var a types.AddonPlan
 	e := &a.Entitlements
-	var presets []byte
-	err := row.Scan(&a.ID, &a.ResellerID, &a.Name, &a.Description, &e.DiskMB, &e.MaxSites, &e.MaxDatabases, &e.BandwidthMB, &e.MaxMailboxes, &e.BackupRetentionDays, &e.PHPAllowlist, &e.PHPFPMMaxChildren, &e.PHPMemoryMB, &e.SiteDiskQuotaMB, &e.MaxBackups, &e.BackupStorageMB, &e.AllowSSH, &e.AllowDNS, &a.IsActive, &a.Revision, &e.MaxSubdomains, &e.MaxDomainAliases, &e.MaxFTPAccounts, &e.AllowTLS, &e.AllowBackups, &e.AllowPHPSettings, &presets)
+	var presets, policyRaw []byte
+	err := row.Scan(&a.ID, &a.ResellerID, &a.Name, &a.Description, &e.DiskMB, &e.MaxSites, &e.MaxDatabases, &e.BandwidthMB, &e.MaxMailboxes, &e.BackupRetentionDays, &e.PHPAllowlist, &e.PHPFPMMaxChildren, &e.PHPMemoryMB, &e.SiteDiskQuotaMB, &e.MaxBackups, &e.BackupStorageMB, &e.AllowSSH, &e.AllowDNS, &a.IsActive, &a.Revision, &e.MaxSubdomains, &e.MaxDomainAliases, &e.MaxFTPAccounts, &e.AllowTLS, &e.AllowBackups, &e.AllowPHPSettings, &presets, &policyRaw)
 	if err == nil {
 		err = json.Unmarshal(presets, &e.ServicePresets)
+	}
+	if err == nil {
+		err = json.Unmarshal(policyRaw, &e.HostingPolicy)
+	}
+	if err == nil && !hasConfiguredPolicy(policyRaw) {
+		e.HostingPolicy = controlpolicy.DefaultFromEntitlements(*e)
 	}
 	return a, err
 }
@@ -1106,6 +1476,9 @@ func (s *SQLStore) SetSubscriptionAddons(ctx context.Context, subscriptionID int
 		return err
 	}
 	defer tx.Rollback()
+	if err = LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
 	var mode string
 	var resellerID int64
 	if err = tx.QueryRowContext(ctx, `SELECT s.sync_mode,COALESCE(c.reseller_id,0) FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, subscriptionID).Scan(&mode, &resellerID); err != nil {
@@ -1147,6 +1520,11 @@ func (s *SQLStore) SetSubscriptionAddons(ctx context.Context, subscriptionID int
 	if err = enforceCommittedAllocationCapTx(ctx, tx); err != nil {
 		return err
 	}
+	if mode == "custom" || mode == "synced" {
+		if err = s.markSubscriptionPendingTx(ctx, tx, subscriptionID); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 
@@ -1160,10 +1538,16 @@ func (s *SQLStore) syncSubscriptionSnapshot(ctx context.Context, subscriptionID 
 		return err
 	}
 	defer tx.Rollback()
+	if err = LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
 	if err = syncSubscriptionTx(ctx, tx, subscriptionID, force); err != nil {
 		return err
 	}
 	if err = enforceCommittedAllocationCapTx(ctx, tx); err != nil {
+		return err
+	}
+	if err = s.markSubscriptionPendingTx(ctx, tx, subscriptionID); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -1273,6 +1657,9 @@ func (s *SQLStore) SetSubscriptionMode(ctx context.Context, subscriptionID int64
 		return err
 	}
 	defer tx.Rollback()
+	if err = LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
 	var resellerID int64
 	var status string
 	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(c.reseller_id,0),s.status FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, subscriptionID).Scan(&resellerID, &status); err != nil {
@@ -1331,6 +1718,9 @@ func (s *SQLStore) SetSubscriptionMode(ctx context.Context, subscriptionID int64
 	if err = enforceCommittedAllocationCapTx(ctx, tx); err != nil {
 		return err
 	}
+	if err = s.markSubscriptionPendingTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -1352,6 +1742,9 @@ func syncPlanSubscriptionsTx(ctx context.Context, tx *sql.Tx, planID int64) erro
 		return err
 	}
 	for _, id := range ids {
+		if err = LockSubscriptionMutationTx(ctx, tx, id); err != nil {
+			return err
+		}
 		if err = syncSubscriptionTx(ctx, tx, id, false); err != nil {
 			if _, markErr := tx.ExecContext(ctx, `UPDATE subscriptions SET sync_status='out_of_sync',sync_error=$2,updated_at=now() WHERE id=$1`, id, err.Error()); markErr != nil {
 				return markErr
@@ -1359,6 +1752,9 @@ func syncPlanSubscriptionsTx(ctx context.Context, tx *sql.Tx, planID int64) erro
 			if _, notifyErr := upsertNotificationTx(ctx, tx, id, "sync_failed", "critical", "Service plan synchronization failed", "Nakpanel retained the previous valid entitlement snapshot. "+truncateError(err), fmt.Sprintf("sync:plan:%d:subscription:%d", planID, id)); notifyErr != nil {
 				return notifyErr
 			}
+		}
+		if _, err = EnqueueSubscriptionConvergenceTx(ctx, tx, nil, id); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1382,6 +1778,9 @@ func syncAddonSubscriptionsTx(ctx context.Context, tx *sql.Tx, addonID int64) er
 		return err
 	}
 	for _, id := range ids {
+		if err = LockSubscriptionMutationTx(ctx, tx, id); err != nil {
+			return err
+		}
 		if err = syncSubscriptionTx(ctx, tx, id, false); err != nil {
 			if _, markErr := tx.ExecContext(ctx, `UPDATE subscriptions SET sync_status='out_of_sync',sync_error=$2,updated_at=now() WHERE id=$1`, id, err.Error()); markErr != nil {
 				return markErr
@@ -1389,6 +1788,9 @@ func syncAddonSubscriptionsTx(ctx context.Context, tx *sql.Tx, addonID int64) er
 			if _, notifyErr := upsertNotificationTx(ctx, tx, id, "sync_failed", "critical", "Add-on synchronization failed", "Nakpanel retained the previous valid entitlement snapshot. "+truncateError(err), fmt.Sprintf("sync:addon:%d:subscription:%d", addonID, id)); notifyErr != nil {
 				return notifyErr
 			}
+		}
+		if _, err = EnqueueSubscriptionConvergenceTx(ctx, tx, nil, id); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -1434,9 +1836,6 @@ func syncSubscriptionTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, f
 		}
 	}
 	if err = writeSubscriptionEntitlementsTx(ctx, tx, e); err != nil {
-		return err
-	}
-	if _, err = tx.ExecContext(ctx, `UPDATE subscription_system_accounts SET convergence_status='pending',last_error='',updated_at=now() WHERE subscription_id=$1`, subscriptionID); err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE subscriptions SET sync_status='in_sync',plan_revision=$2,sync_error='',updated_at=now() WHERE id=$1`, subscriptionID, plan.Revision)

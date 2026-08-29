@@ -5,6 +5,7 @@ const (
 	AgentSocket                     = "/run/nakpanel/agent.sock"
 	PanelUser                       = "nakpanel"
 	PanelTLSDir                     = "/var/lib/nakpanel/tls"
+	DefaultSecretKeyFile            = "/etc/nakpanel/secret-keys.json"
 	FileTransferDir                 = "/var/lib/nakpanel/transfers"
 	DefaultFileUploadMaxBytes int64 = 512 << 20
 	DefaultDatabaseURL              = "postgres://postgres@localhost:5432/nakpanel?sslmode=disable"

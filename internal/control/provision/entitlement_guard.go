@@ -22,6 +22,9 @@ type lockedSubscriptionLimits struct {
 
 func lockActiveSubscriptionLimits(ctx context.Context, tx *sql.Tx, subscriptionID int64) (lockedSubscriptionLimits, error) {
 	var limits lockedSubscriptionLimits
+	if err := controlquota.LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+		return limits, err
+	}
 	err := tx.QueryRowContext(ctx, `SELECT e.max_sites,e.max_databases,e.max_backups,e.backup_storage_mb,e.overuse_policy,e.hosting_enabled,e.allow_backups
 FROM subscriptions s
 JOIN subscription_entitlements e ON e.subscription_id=s.id

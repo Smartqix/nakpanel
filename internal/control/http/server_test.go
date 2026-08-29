@@ -42,10 +42,12 @@ type fakeSessionStore struct {
 	deleted   bool
 }
 
-func (s *fakeSessionStore) CreateSession(ctx context.Context, tokenHash string, userID int64, expiresAt time.Time) error {
+func (s *fakeSessionStore) CreateSession(ctx context.Context, tokenHash string, userID int64, expiresAt time.Time, meta auth.SessionMeta) error {
 	s.tokenHash = tokenHash
 	s.expiresAt = expiresAt
 	s.deleted = false
+	s.user.AuthenticatedAt = time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+	s.user.LastSeenAt = s.user.AuthenticatedAt
 	return nil
 }
 
@@ -61,6 +63,21 @@ func (s *fakeSessionStore) DeleteSession(ctx context.Context, tokenHash string) 
 		s.deleted = true
 	}
 	return nil
+}
+
+func (s *fakeSessionStore) MarkSessionReauthenticated(ctx context.Context, tokenHash string) (int64, error) {
+	if s.deleted || tokenHash != s.tokenHash {
+		return 0, nil
+	}
+	s.user.AuthenticatedAt = time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+	s.user.LastSeenAt = s.user.AuthenticatedAt
+	return 1, nil
+}
+
+func (s *fakeSessionStore) RecentlyAuthenticated(user auth.SessionUser, within time.Duration) bool {
+	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+	return within > 0 && !user.AuthenticatedAt.IsZero() &&
+		!user.AuthenticatedAt.After(now) && now.Sub(user.AuthenticatedAt) <= within
 }
 
 type fakeSiteCreator struct {
@@ -114,9 +131,14 @@ type fakeDomainManager struct {
 	siteID    int64
 	autoRenew bool
 	called    bool
+	phpReq    types.UpdateSitePHPSettingsReq
 }
 
 func (m *fakeDomainManager) UpdateSiteSettings(context.Context, auth.SessionUser, types.UpdateSiteSettingsReq) error {
+	return nil
+}
+func (m *fakeDomainManager) UpdateSitePHPSettings(_ context.Context, _ auth.SessionUser, req types.UpdateSitePHPSettingsReq) error {
+	m.phpReq = req
 	return nil
 }
 func (m *fakeDomainManager) SetTLSAutoRenew(_ context.Context, _ auth.SessionUser, siteID int64, enabled bool) error {
@@ -505,6 +527,11 @@ func TestEmbeddedStylesheetIsServedByPanel(t *testing.T) {
 	if body := rec.Body.String(); !strings.Contains(body, "overflow-y:auto") || !strings.Contains(body, "overscroll-behavior:contain") {
 		t.Fatalf("embedded stylesheet missing scrollable sidebar rules:\n%s", body)
 	}
+	if body := rec.Body.String(); !strings.Contains(body, ".np-routed{--np-ink:#1f2733") ||
+		!strings.Contains(body, ".np-routed .np-table td{color:var(--np-ink-soft);font-size:13px") ||
+		!strings.Contains(body, ".np-routed .np-routed-page-head p{color:var(--np-muted);font-size:13px") {
+		t.Fatalf("embedded stylesheet missing operator readability rules:\n%s", body)
+	}
 }
 
 func TestEmbeddedScriptIsServedByPanel(t *testing.T) {
@@ -520,7 +547,7 @@ func TestEmbeddedScriptIsServedByPanel(t *testing.T) {
 		t.Fatalf("Content-Type = %q, want javascript", contentType)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"nakpanel", "data-np-view", "data-np-dialog-open", "X-Nakpanel-SPA", "X-Nakpanel-CSRF", "data-np-search-input"} {
+	for _, want := range []string{"nakpanel", "data-np-view", "data-np-dialog-open", "X-Nakpanel-SPA", "X-Nakpanel-CSRF", "data-np-search-input", "data-np-bulk-menu"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("embedded script missing %q:\n%s", want, body)
 		}
@@ -1467,22 +1494,19 @@ func TestAdminDashboardRendersPleskStyleSettingsHub(t *testing.T) {
 		`data-np-panel="settings"`,
 		"Tools &amp; Settings",
 		"General Server",
-		"Global PHP",
+		"PHP Runtime Inventory",
 		"Database Server",
 		"Backup Settings",
 		"Firewall",
-		"SSH Terminal",
-		"Privileged agent op pending",
-		"Timezone/NTP summary",
-		"Default PHP version",
+		"SSH Access Policy",
+		"Date &amp; Time",
 		"MariaDB",
-		`href="/db"`,
+		`href="/tools-settings/databases"`,
 		`action="/settings/oversell"`,
 		"Business",
 		"8.3,8.2",
 		"14 days",
-		"nftables preview",
-		"Root terminal disabled",
+		"Browser shell is unavailable",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("settings hub missing %q:\n%s", want, body)
@@ -1490,6 +1514,11 @@ func TestAdminDashboardRendersPleskStyleSettingsHub(t *testing.T) {
 	}
 	if strings.Contains(body, `data-np-view="settings" disabled`) {
 		t.Fatalf("settings nav is still disabled:\n%s", body)
+	}
+	for _, forbidden := range []string{"Privileged agent op pending", "nftables preview", "Root terminal disabled"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("settings hub still renders placeholder %q", forbidden)
+		}
 	}
 }
 
@@ -1666,7 +1695,7 @@ func TestAdminCanAssignSubscriptionAndUpdateOversellSettings(t *testing.T) {
 		t.Fatalf("subscription call = called:%v customer:%d plan:%d", manager.subCalled, manager.customerUserID, manager.planID)
 	}
 
-	settingsForm := url.Values{"oversell_policy": {"cap"}, "server_disk_capacity_mb": {"50000"}}
+	settingsForm := url.Values{"oversell_policy": {"cap"}, "server_disk_capacity_mb": {"50000"}, "valkey_capacity_mb": {"2048"}}
 	req = httptest.NewRequest(http.MethodPost, "https://panel.test/settings/oversell", strings.NewReader(settingsForm.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	addAuthenticatedCookie(req, cookie)
@@ -1675,7 +1704,7 @@ func TestAdminCanAssignSubscriptionAndUpdateOversellSettings(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("POST /settings/oversell status = %d, want 303; body:\n%s", rec.Code, rec.Body.String())
 	}
-	if !manager.settingsCalled || manager.settings.OversellPolicy != controlquota.OversellPolicyCap || manager.settings.ServerDiskCapacityMB != 50000 {
+	if !manager.settingsCalled || manager.settings.OversellPolicy != controlquota.OversellPolicyCap || manager.settings.ServerDiskCapacityMB != 50000 || manager.settings.ValkeyCapacityMB != 2048 {
 		t.Fatalf("settings call = called:%v settings:%#v", manager.settingsCalled, manager.settings)
 	}
 }
@@ -1993,8 +2022,14 @@ func TestHealthzReturnsOK(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /healthz status = %d, want 200", rec.Code)
 	}
-	if strings.TrimSpace(rec.Body.String()) != "ok" {
-		t.Fatalf("GET /healthz body = %q, want ok", rec.Body.String())
+	lines := strings.Split(strings.TrimSpace(rec.Body.String()), "\n")
+	// Line 1 must stay exactly "ok" (external probes grep it line-based); the
+	// second line carries the product version.
+	if lines[0] != "ok" {
+		t.Fatalf("GET /healthz first line = %q, want ok", lines[0])
+	}
+	if len(lines) < 2 || !strings.HasPrefix(lines[1], "version=") {
+		t.Fatalf("GET /healthz body = %q, want a version= line", rec.Body.String())
 	}
 }
 
@@ -2028,7 +2063,10 @@ func TestAdminCanCreateSite(t *testing.T) {
 		t.Fatalf("resource owner id = %d, want selected customer 2", creator.resourceOwnerID)
 	}
 	want := types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3"}
-	if len(creator.requests) != 1 || creator.requests[0] != want {
+	if len(creator.requests) != 1 ||
+		creator.requests[0].Username != want.Username ||
+		creator.requests[0].Domain != want.Domain ||
+		creator.requests[0].PHPVersion != want.PHPVersion {
 		t.Fatalf("site requests = %#v, want %#v", creator.requests, []types.CreateSiteReq{want})
 	}
 }
@@ -2406,9 +2444,9 @@ func TestHandlerRejectsOversizedPostBody(t *testing.T) {
 func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 	reader := &fakeDashboardReader{data: dashboard.Data{
 		Sites:         []dashboard.Site{{ID: 7, Domain: "owned.test", Username: "owned", DocumentRoot: "/home/owned/domains/owned.test/public_html", PHPVersion: "8.3", Status: "active", CustomerID: 88, SubscriptionID: 20}},
-		Databases:     []dashboard.Database{{ID: 8, Name: "owned_db", User: "owned_user", Engine: "mariadb", Status: "active", CustomerID: 88, SubscriptionID: 20}},
+		Databases:     []dashboard.Database{{ID: 8, Name: "owned_db", User: "owned_user", Engine: "mariadb", Status: "active", CustomerID: 88, SubscriptionID: 20, SiteID: 7}},
 		Customers:     []types.Customer{{ID: 88, Email: "owner@test", DisplayName: "Owner", Status: "active"}},
-		Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, CustomerName: "Owner", SubscriptionName: "Owned hosting", PlanID: 10, PlanName: "Business", Status: "active", MaxSites: 5}},
+		Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, CustomerName: "Owner", SubscriptionName: "Owned hosting", PlanID: 10, PlanName: "Business", Status: "active", MaxSites: 5, MaxDatabases: 5, DatabasesUsed: 1}},
 		Plans:         []controlquota.Plan{{ID: 10, Name: "Business", IsActive: true, DiskMB: 1024, MaxSites: 5, MaxDatabases: 5, MaxBackups: 5}},
 		Resellers:     []types.Reseller{{ID: 91, Email: "provider@test", DisplayName: "Provider", Status: "active", PlanName: "Agency"}},
 		ResellerPlans: []types.ResellerPlan{{ID: 92, Name: "Agency", IsActive: true, MaxCustomers: 10}},
@@ -2418,7 +2456,7 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 	cases := map[string]string{
-		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Hosting overview", "/sites/7?tab=hosting": "Hosting settings", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "Audit events", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
+		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Hosting overview", "/sites/7?tab=hosting": "Hosting settings", "/sites/7?tab=databases": "Database allocation summary", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "Audit events", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
 	}
 	for path, marker := range cases {
 		req := httptest.NewRequest(http.MethodGet, "https://panel.test"+path, nil)
@@ -2432,7 +2470,7 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 			t.Fatalf("GET %s missing routed assets or CSRF metadata", path)
 		}
 		if path == "/subscriptions" {
-			for _, want := range []string{"Change Plan", "Change Subscriber", "Service Plans", "Subscription", "Subscriber", "Resources", "data-np-subscription-row", "data-np-subscription-check", "np-subscription-check", "data-customer-user-id", "data-plan-name", "data-subscriber-email"} {
+			for _, want := range []string{"Change Plan", "Change Subscriber", "Service Plans", "Subscription", "Subscriber", "Usage", "data-np-subscription-row", "data-np-subscription-check", "np-subscription-check", "data-np-bulk-menu", "np-subscription-identity-cell", "np-subscription-usage-cell", "data-customer-user-id", "data-plan-name", "data-subscriber-email"} {
 				if !strings.Contains(rec.Body.String(), want) {
 					t.Fatalf("GET /subscriptions missing %q", want)
 				}
@@ -2456,6 +2494,13 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 			for _, want := range []string{`class="np-readonly-field"`, "/home/owned/domains/owned.test/public_html"} {
 				if !strings.Contains(rec.Body.String(), want) {
 					t.Fatalf("GET /sites/7?tab=hosting missing %q", want)
+				}
+			}
+		}
+		if path == "/sites/7?tab=databases" {
+			for _, want := range []string{"data-np-domain-databases", "owned_db", "owned_user", "Create database", `name="site_id" value="7"`} {
+				if !strings.Contains(rec.Body.String(), want) {
+					t.Fatalf("GET /sites/7?tab=databases missing %q", want)
 				}
 			}
 		}
@@ -2492,6 +2537,52 @@ func TestTLSAutoRenewRendersAndUpdates(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther || !domains.called || domains.siteID != 7 || domains.autoRenew {
 		t.Fatalf("POST auto-renew status=%d manager=%#v", rec.Code, domains)
+	}
+}
+
+func TestCombinedPHPSettingsWorkspaceAndPost(t *testing.T) {
+	policy := types.HostingPolicy{
+		PHP: types.HostingPHPPolicy{
+			AllowedVersions: []string{"8.3"}, FPMMode: "ondemand", FPMMaxChildren: 3,
+			MemoryLimitMB: 128, LogErrors: true, OPcacheEnabled: true, OPcacheMemoryMB: 64,
+		},
+	}
+	reader := &fakeDashboardReader{data: dashboard.Data{
+		Sites:         []dashboard.Site{{ID: 7, Domain: "owned.test", Status: "active", DesiredStatus: "active", PHPVersion: "8.3", DesiredPHPVersion: "8.3", CustomerID: 88, SubscriptionID: 20}},
+		Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, Status: "active", AllowPHPSettings: true, PHPAllowlist: "8.3"}},
+		Capabilities:  types.RuntimeCapabilities{PHPVersions: []string{"8.3"}},
+		SubscriptionServices: dashboard.SubscriptionServicesData{SitePolicies: []dashboard.SitePolicy{{
+			SiteID: 7, SubscriptionID: 20, InheritedPolicy: policy,
+			SiteOverride: json.RawMessage(`{"php":{"memory_limit_mb":128}}`), EffectivePolicy: policy,
+		}}},
+	}}
+	domains := &fakeDomainManager{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader, DomainManager: domains})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/7?tab=php", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	for _, marker := range []string{`action="/sites/7/php-settings"`, "Process Manager", "Resource limits", "Error handling &amp; security", "data-np-dirty-guard", "Reset PHP"} {
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), marker) {
+			t.Fatalf("PHP workspace status=%d missing %q\n%s", rec.Code, marker, rec.Body.String())
+		}
+	}
+
+	form := url.Values{
+		"desired_status": {"active"}, "desired_php_version": {"8.3"},
+		"site_fpm_mode": {"ondemand"}, "site_fpm_children": {"3"},
+		"site_php_memory": {"128"}, "site_php_log_errors": {"true"},
+		"site_php_opcache": {"true"}, "site_php_opcache_memory": {"64"},
+	}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || domains.phpReq.SiteID != 7 || domains.phpReq.DesiredPHPVersion != "8.3" || !strings.Contains(string(domains.phpReq.PolicyPatch), `"php"`) {
+		t.Fatalf("combined PHP POST status=%d req=%#v patch=%s", rec.Code, domains.phpReq, domains.phpReq.PolicyPatch)
 	}
 }
 
@@ -2537,7 +2628,7 @@ func TestClientSubscriptionToolbarHidesProviderActions(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /subscriptions = %d", rec.Code)
 	}
-	for _, hidden := range []string{"Change Plan", "Change Subscriber", "Service Plans", "data-np-subscription-check"} {
+	for _, hidden := range []string{"Change Plan", "Change Subscriber", "Service Plans", "data-np-subscription-check", "data-np-bulk-menu"} {
 		if strings.Contains(rec.Body.String(), hidden) {
 			t.Fatalf("client subscription page exposed provider control %q", hidden)
 		}
@@ -2798,6 +2889,25 @@ func TestSupportViewFiltersCustomerInventory(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("cross-customer support detail = %d, want 404", rec.Code)
+	}
+}
+
+func TestSupportRedirectPathPreservesOnlyAdminObjectScope(t *testing.T) {
+	form := url.Values{"support_customer_id": {"88"}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/policy", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := req.ParseForm(); err != nil {
+		t.Fatal(err)
+	}
+	admin := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
+	if got := supportRedirectPath(req, admin, "/sites/7/web-server?notice=saved"); got != "/support/customers/88/sites/7/web-server?notice=saved" {
+		t.Fatalf("supportRedirectPath() = %q", got)
+	}
+	if got := supportRedirectPath(req, auth.SessionUser{ID: 2, Role: auth.RoleClient}, "/sites/7"); got != "/sites/7" {
+		t.Fatalf("client controlled support scope = %q", got)
+	}
+	if got := supportRedirectPath(req, admin, "/tools-settings"); got != "/tools-settings" {
+		t.Fatalf("non-object support redirect = %q", got)
 	}
 }
 

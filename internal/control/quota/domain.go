@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	controlpolicy "github.com/nakroteck/nakpanel/internal/control/policy"
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -31,6 +32,12 @@ func (s *SQLStore) SiteDomain(ctx context.Context, siteID int64) (string, error)
 	var domain string
 	err := s.db.QueryRowContext(ctx, `SELECT domain FROM sites WHERE id=$1`, siteID).Scan(&domain)
 	return domain, err
+}
+
+func (s *SQLStore) SiteRuntimeIdentity(ctx context.Context, siteID int64) (string, string, error) {
+	var username, domain string
+	err := s.db.QueryRowContext(ctx, `SELECT username,domain FROM sites WHERE id=$1`, siteID).Scan(&username, &domain)
+	return username, domain, err
 }
 
 func (s *SQLStore) SetTLSAutoRenew(ctx context.Context, siteID int64, enabled bool) error {
@@ -100,6 +107,94 @@ FROM sites site WHERE site.id=$1 FOR UPDATE`, req.SiteID).Scan(&username, &domai
 	return tx.Commit()
 }
 
+func (s *SQLStore) UpdateSitePHPSettings(ctx context.Context, req types.UpdateSitePHPSettingsReq) error {
+	if s == nil || s.db == nil {
+		return errors.New("quota database is not configured")
+	}
+	if req.SiteID <= 0 {
+		return errors.New("site id is required")
+	}
+	req.DesiredStatus = strings.ToLower(strings.TrimSpace(req.DesiredStatus))
+	if req.DesiredStatus != "active" && req.DesiredStatus != "suspended" {
+		return errors.New("site status must be active or suspended")
+	}
+	req.DesiredPHPVersion = strings.TrimSpace(req.DesiredPHPVersion)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var subscriptionID int64
+	if err = tx.QueryRowContext(ctx, `SELECT subscription_id FROM sites WHERE id=$1`, req.SiteID).Scan(&subscriptionID); err != nil {
+		return err
+	}
+	if err = LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
+	var lockedSubscriptionID int64
+	var tlsStatus string
+	if err = tx.QueryRowContext(ctx, `SELECT subscription_id,tls_status FROM sites WHERE id=$1 FOR UPDATE`, req.SiteID).Scan(&lockedSubscriptionID, &tlsStatus); err != nil {
+		return err
+	}
+	if lockedSubscriptionID != subscriptionID {
+		return errors.New("domain ownership changed while acquiring its mutation lock")
+	}
+	if err = lockActiveSubscriptionTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
+	base, subscriptionPatch, err := effectiveSubscriptionPolicyTx(ctx, tx, subscriptionID)
+	if err != nil {
+		return err
+	}
+	inherited, err := controlpolicy.Resolve(base, subscriptionPatch, nil)
+	if err != nil {
+		return err
+	}
+	currentPatch, err := sitePolicyPatchTx(ctx, tx, req.SiteID)
+	if err != nil {
+		return err
+	}
+	mergedPatch, err := mergeSitePolicyPatch(currentPatch, req.PolicyPatch)
+	if err != nil {
+		return err
+	}
+	effective, err := controlpolicy.Resolve(base, subscriptionPatch, mergedPatch)
+	if err != nil {
+		return err
+	}
+	if err = controlpolicy.ValidateSiteWithin(effective, inherited); err != nil {
+		return fmt.Errorf("site policy exceeds subscription: %w", err)
+	}
+	allowed := false
+	for _, version := range effective.PHP.AllowedVersions {
+		if version == req.DesiredPHPVersion {
+			allowed = true
+			break
+		}
+	}
+	if !allowed {
+		return fmt.Errorf("PHP %s is not allowed by this subscription", req.DesiredPHPVersion)
+	}
+	if req.DesiredHTTPSRedirect && tlsStatus != "active" {
+		return errors.New("https redirect requires an active certificate")
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO site_policy_overrides(site_id,policy_patch,updated_by)
+VALUES($1,$2,$3) ON CONFLICT(site_id) DO UPDATE SET policy_patch=EXCLUDED.policy_patch,updated_by=EXCLUDED.updated_by,updated_at=now()`, req.SiteID, []byte(mergedPatch), nullableInt64(req.ActorUserID)); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE sites SET desired_status=$2,desired_php_version=$3,desired_https_redirect=$4,settings_status='pending',settings_error='',updated_at=now() WHERE id=$1`, req.SiteID, req.DesiredStatus, req.DesiredPHPVersion, req.DesiredHTTPSRedirect); err != nil {
+		return err
+	}
+	if err = s.markSubscriptionPendingTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
+	if err = s.enqueueSubscriptionHostingStateTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *SQLStore) ChangeSubscriptionPlans(ctx context.Context, ids []int64, planID int64) error {
 	if len(ids) == 0 || planID <= 0 {
 		return errors.New("subscriptions and plan are required")
@@ -120,6 +215,9 @@ func (s *SQLStore) ChangeSubscriptionPlans(ctx context.Context, ids []int64, pla
 		return fmt.Errorf("plan %q is inactive", plan.Name)
 	}
 	for _, id := range uniqueSortedIDs(ids) {
+		if err = LockSubscriptionMutationTx(ctx, tx, id); err != nil {
+			return err
+		}
 		var resellerID int64
 		var status string
 		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(c.reseller_id,0),s.status FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, id).Scan(&resellerID, &status); err != nil {
@@ -135,6 +233,9 @@ func (s *SQLStore) ChangeSubscriptionPlans(ctx context.Context, ids []int64, pla
 			return err
 		}
 		if err = syncSubscriptionTx(ctx, tx, id, true); err != nil {
+			return err
+		}
+		if err = s.markSubscriptionPendingTx(ctx, tx, id); err != nil {
 			return err
 		}
 		if err = s.enqueueSubscriptionHostingStateTx(ctx, tx, id); err != nil {
@@ -164,6 +265,9 @@ func (s *SQLStore) ChangeSubscriptionSubscriber(ctx context.Context, ids []int64
 		return fmt.Errorf("customer %d is %s", target.ID, target.Status)
 	}
 	for _, id := range uniqueSortedIDs(ids) {
+		if err = LockSubscriptionMutationTx(ctx, tx, id); err != nil {
+			return err
+		}
 		var resellerID int64
 		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(c.reseller_id,0) FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, id).Scan(&resellerID); err != nil {
 			return err

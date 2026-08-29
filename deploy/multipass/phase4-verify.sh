@@ -16,7 +16,7 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl postgresql postgresql-contrib nginx php8.3-fpm mariadb-server build-essential python3
+sudo apt-get install -y acl ca-certificates curl postgresql postgresql-contrib nginx php8.3-fpm mariadb-server build-essential python3
 
 arch="$(uname -m)"
 case "${arch}" in
@@ -119,7 +119,7 @@ if [[ -z "${VM_IP}" ]]; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1"

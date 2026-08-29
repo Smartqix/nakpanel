@@ -19,7 +19,9 @@ import (
 type fakeMailDomainServices struct {
 	fakeDomainManager
 	input          types.MailDomainInput
+	application    types.ApplicationInput
 	subscriptionID int64
+	appCalled      bool
 	err            error
 }
 
@@ -27,6 +29,9 @@ func (*fakeMailDomainServices) SetSubscriptionPolicy(context.Context, auth.Sessi
 	return nil
 }
 func (*fakeMailDomainServices) SetSitePolicy(context.Context, auth.SessionUser, int64, json.RawMessage) error {
+	return nil
+}
+func (*fakeMailDomainServices) ResetSitePolicy(context.Context, auth.SessionUser, int64, string) error {
 	return nil
 }
 func (*fakeMailDomainServices) UpsertSFTPIdentity(context.Context, auth.SessionUser, int64, types.SFTPIdentityInput) (int64, error) {
@@ -45,11 +50,30 @@ func (*fakeMailDomainServices) UpsertMailbox(context.Context, auth.SessionUser, 
 func (*fakeMailDomainServices) UpsertMailAlias(context.Context, auth.SessionUser, int64, types.MailAliasInput) (int64, error) {
 	return 0, nil
 }
-func (*fakeMailDomainServices) UpsertApplication(context.Context, auth.SessionUser, int64, types.ApplicationInput) (int64, error) {
-	return 0, nil
+func (s *fakeMailDomainServices) UpsertApplication(_ context.Context, _ auth.SessionUser, subscriptionID int64, input types.ApplicationInput) (int64, error) {
+	s.subscriptionID, s.application, s.appCalled = subscriptionID, input, true
+	return 91, s.err
+}
+func (*fakeMailDomainServices) UpsertProtectedDirectory(context.Context, auth.SessionUser, int64, types.ProtectedDirectoryInput) (int64, string, error) {
+	return 0, "", nil
 }
 func (*fakeMailDomainServices) DeleteSubscriptionService(context.Context, auth.SessionUser, int64, string, int64) error {
 	return nil
+}
+func (*fakeMailDomainServices) UpsertFTPAccount(context.Context, auth.SessionUser, int64, types.FTPAccountInput) (int64, string, error) {
+	return 0, "", nil
+}
+func (*fakeMailDomainServices) UpsertGitRepository(context.Context, auth.SessionUser, int64, int64, types.GitRepositoryInput) (int64, error) {
+	return 0, nil
+}
+func (*fakeMailDomainServices) ConfigureValkey(context.Context, auth.SessionUser, int64, types.ValkeyInput) (string, error) {
+	return "", nil
+}
+func (*fakeMailDomainServices) ReadSiteLog(context.Context, auth.SessionUser, int64, types.SiteLogRequest) (types.SiteLogResult, error) {
+	return types.SiteLogResult{}, nil
+}
+func (*fakeMailDomainServices) RunScheduledTask(context.Context, auth.SessionUser, int64, int64) (types.ScheduledTaskRun, error) {
+	return types.ScheduledTaskRun{}, nil
 }
 
 type fakeMailManager struct {
@@ -254,6 +278,9 @@ func TestAdminMailSettingsStatusAndSecretHandling(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"total_queued":3`) {
 		t.Fatalf("mail status response=%d %s", rec.Code, rec.Body.String())
+	}
+	if rec.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("mail status cache-control = %q", rec.Header().Get("Cache-Control"))
 	}
 
 	form := url.Values{"mail_hostname": {"mail.changed.test"}, "smarthost_host": {"smtp.changed.test"}, "smarthost_port": {"465"}, "smarthost_username": {"changed"}, "smarthost_password": {"relay-secret"}, "outbound_rate_limit": {"100/1h"}, "queue_alert_threshold": {"25"}}

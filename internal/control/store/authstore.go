@@ -14,6 +14,7 @@ type AuthQuerier interface {
 	FindUserByEmail(ctx context.Context, email string) (User, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) error
 	GetSessionUser(ctx context.Context, arg GetSessionUserParams) (GetSessionUserRow, error)
+	MarkSessionReauthenticated(ctx context.Context, tokenHash string) (int64, error)
 	DeleteSession(ctx context.Context, tokenHash string) error
 }
 
@@ -47,11 +48,13 @@ func (s *AuthStore) FindUserByEmail(ctx context.Context, email string) (auth.Use
 	}, nil
 }
 
-func (s *AuthStore) CreateSession(ctx context.Context, tokenHash string, userID int64, expiresAt time.Time) error {
+func (s *AuthStore) CreateSession(ctx context.Context, tokenHash string, userID int64, expiresAt time.Time, meta auth.SessionMeta) error {
 	return s.queries.CreateSession(ctx, CreateSessionParams{
 		TokenHash: tokenHash,
 		UserID:    userID,
 		ExpiresAt: expiresAt,
+		IpAddress: meta.IPAddress,
+		UserAgent: meta.UserAgent,
 	})
 }
 
@@ -73,10 +76,16 @@ func (s *AuthStore) GetSession(ctx context.Context, tokenHash string, now time.T
 	}
 
 	return auth.SessionUser{
-		ID:    user.ID,
-		Email: user.Email,
-		Role:  role,
+		ID:              user.ID,
+		Email:           user.Email,
+		Role:            role,
+		AuthenticatedAt: user.AuthenticatedAt,
+		LastSeenAt:      user.LastSeenAt,
 	}, nil
+}
+
+func (s *AuthStore) MarkSessionReauthenticated(ctx context.Context, tokenHash string) (int64, error) {
+	return s.queries.MarkSessionReauthenticated(ctx, tokenHash)
 }
 
 func (s *AuthStore) DeleteSession(ctx context.Context, tokenHash string) error {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/nakroteck/nakpanel/internal/control/provision"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -72,14 +73,19 @@ type AgentDeleteClient interface {
 }
 
 type Service struct {
-	db    *sql.DB
-	river *river.Client[*sql.Tx]
-	agent AgentDeleteClient
-	now   func() time.Time
+	db      *sql.DB
+	river   *river.Client[*sql.Tx]
+	agent   AgentDeleteClient
+	secrets *serveradmin.Store
+	now     func() time.Time
 }
 
-func NewService(db *sql.DB, client *river.Client[*sql.Tx], agent AgentDeleteClient) *Service {
-	return &Service{db: db, river: client, agent: agent, now: time.Now}
+func NewService(db *sql.DB, client *river.Client[*sql.Tx], agent AgentDeleteClient, secrets ...*serveradmin.Store) *Service {
+	service := &Service{db: db, river: client, agent: agent, now: time.Now}
+	if len(secrets) > 0 {
+		service.secrets = secrets[0]
+	}
+	return service
 }
 
 func (s *Service) SetRiverClient(client *river.Client[*sql.Tx]) { s.river = client }
@@ -613,23 +619,12 @@ WHERE site.status<>'failed' ORDER BY site.domain`)
 		if !sites[i].EnableDNS {
 			continue
 		}
-		recordRows, qerr := tx.QueryContext(ctx, `SELECT r.id,r.zone_id,r.host,r.record_type,r.value,COALESCE(r.priority,0),r.ttl FROM dns_records r JOIN dns_zones z ON z.id=r.zone_id WHERE z.site_id=$1 ORDER BY r.host,r.record_type,r.id`, sites[i].SiteID)
+		request, qerr := provision.LoadDNSZoneRequest(ctx, tx, sites[i].DNSZoneID)
 		if qerr != nil {
 			return qerr
 		}
-		for recordRows.Next() {
-			var record types.DNSRecord
-			if qerr = recordRows.Scan(&record.ID, &record.ZoneID, &record.Host, &record.Type, &record.Value, &record.Priority, &record.TTL); qerr != nil {
-				break
-			}
-			sites[i].DNSRecords = append(sites[i].DNSRecords, record)
-		}
-		if closeErr := recordRows.Close(); qerr == nil {
-			qerr = closeErr
-		}
-		if qerr != nil {
-			return qerr
-		}
+		sites[i].DNSZone = &request
+		sites[i].DNSRecords = request.Records
 	}
 	dbRows, err := tx.QueryContext(ctx, `SELECT d.id,d.customer_id,d.subscription_id,d.db_name FROM databases d JOIN subscriptions sub ON sub.id=d.subscription_id JOIN customers c ON c.id=d.customer_id WHERE d.status='active' AND sub.status='active' AND c.status='active' ORDER BY d.id`)
 	if err != nil {

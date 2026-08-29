@@ -105,6 +105,13 @@ type MailAdminAgent interface {
 	ReloadService(context.Context, string) (types.Response, error)
 }
 
+type HostingToolkitAgent interface {
+	ReadSiteLog(context.Context, types.SiteLogRequest) (types.SiteLogResult, error)
+	RunScheduledTask(context.Context, types.RunScheduledTaskReq) (types.RunScheduledTaskResult, error)
+	FTPSStatus(context.Context) (types.FTPSStatus, error)
+	ValkeyStatus(context.Context, int64) (types.ValkeyStatus, error)
+}
+
 type Manager struct {
 	siteRepo                SiteRepository
 	databaseRepo            DatabaseRepository
@@ -116,6 +123,7 @@ type Manager struct {
 	accessPolicy            AccessPolicy
 	capabilities            RuntimeCapabilityReader
 	mailAgent               MailAdminAgent
+	hostingToolkitAgent     HostingToolkitAgent
 	customCertificateRepo   CustomCertificateRepository
 	customCertificateStager CustomCertificateStager
 }
@@ -182,6 +190,10 @@ func WithRuntimeCapabilities(reader RuntimeCapabilityReader) ManagerOption {
 
 func WithMailAgent(agent MailAdminAgent) ManagerOption {
 	return func(m *Manager) { m.mailAgent = agent }
+}
+
+func WithHostingToolkitAgent(agent HostingToolkitAgent) ManagerOption {
+	return func(m *Manager) { m.hostingToolkitAgent = agent }
 }
 
 func (m *Manager) validateInstalledPHP(ctx context.Context, version string) error {
@@ -1007,6 +1019,33 @@ func (m *Manager) UpdateSiteSettings(ctx context.Context, owner auth.SessionUser
 	return store.UpdateSiteSettings(ctx, req)
 }
 
+func (m *Manager) UpdateSitePHPSettings(ctx context.Context, owner auth.SessionUser, req types.UpdateSitePHPSettingsReq) error {
+	if owner.Role != auth.RoleAdmin && owner.Role != auth.RoleClient && owner.Role != auth.RoleReseller {
+		return ErrForbidden
+	}
+	store, ok := m.quotaStore.(controlquota.DomainSettingsStore)
+	if !ok {
+		return errors.New("domain settings are not configured")
+	}
+	domain, err := store.SiteDomain(ctx, req.SiteID)
+	if err != nil {
+		return err
+	}
+	if err := m.canManageDomain(ctx, owner, domain); err != nil {
+		return err
+	}
+	if owner.Role != auth.RoleAdmin {
+		if err := m.canManagePHP(ctx, owner, domain); err != nil {
+			return err
+		}
+	}
+	if err := m.validateInstalledPHP(ctx, req.DesiredPHPVersion); err != nil {
+		return err
+	}
+	req.ActorUserID = owner.ID
+	return store.UpdateSitePHPSettings(ctx, req)
+}
+
 func (m *Manager) SetTLSAutoRenew(ctx context.Context, owner auth.SessionUser, siteID int64, enabled bool) error {
 	if owner.Role != auth.RoleAdmin && owner.Role != auth.RoleClient && owner.Role != auth.RoleReseller {
 		return ErrForbidden
@@ -1128,6 +1167,25 @@ func (m *Manager) UpsertAddonPlan(ctx context.Context, owner auth.SessionUser, a
 			return types.AddonPlan{}, err
 		}
 		a.ResellerID = scope.ResellerID
+	} else if a.ID > 0 {
+		// Provider ownership is server-derived. The edit form intentionally
+		// does not carry reseller_id because accepting it would permit a
+		// cross-provider transfer through a mutable browser field.
+		addons, err := m.quotaAdmin.ListAddonPlans(ctx)
+		if err != nil {
+			return types.AddonPlan{}, err
+		}
+		found := false
+		for _, existing := range addons {
+			if existing.ID == a.ID {
+				a.ResellerID = existing.ResellerID
+				found = true
+				break
+			}
+		}
+		if !found {
+			return types.AddonPlan{}, sql.ErrNoRows
+		}
 	}
 	return m.quotaAdmin.UpsertAddonPlan(ctx, a)
 }

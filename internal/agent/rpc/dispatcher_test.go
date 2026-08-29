@@ -48,6 +48,27 @@ type fakeCertificateProvisioner struct {
 	err      error
 }
 
+type fakeServerSecurityManager struct {
+	staged types.StageServerSecurityReq
+}
+
+func (f *fakeServerSecurityManager) InspectServerSecurity(context.Context) (types.ServerSecurityPolicy, error) {
+	return types.ServerSecurityPolicy{Revision: 7}, nil
+}
+
+func (f *fakeServerSecurityManager) StageServerSecurity(_ context.Context, req types.StageServerSecurityReq) (types.StagedSecurityResult, error) {
+	f.staged = req
+	return types.StagedSecurityResult{OperationID: req.OperationID, Scope: req.Scope, State: "pending_confirmation"}, nil
+}
+
+func (f *fakeServerSecurityManager) ConfirmServerSecurity(_ context.Context, operationID string) (types.StagedSecurityResult, error) {
+	return types.StagedSecurityResult{OperationID: operationID, State: "confirmed"}, nil
+}
+
+func (f *fakeServerSecurityManager) RevertServerSecurity(_ context.Context, operationID string) (types.StagedSecurityResult, error) {
+	return types.StagedSecurityResult{OperationID: operationID, State: "rolled_back"}, nil
+}
+
 func (p *fakeCertificateProvisioner) IssueCert(ctx context.Context, req types.IssueCertReq) (types.IssueCertResult, error) {
 	p.requests = append(p.requests, req)
 	return p.result, p.err
@@ -70,6 +91,37 @@ func TestDispatchPing(t *testing.T) {
 	}
 	if !strings.Contains(string(resp.Data), `"pong":true`) {
 		t.Fatalf("Ping data = %s, want pong true", resp.Data)
+	}
+}
+
+func TestDispatchServerSecurityUsesTypedManagerAndStrictJSON(t *testing.T) {
+	manager := &fakeServerSecurityManager{}
+	dispatcher := NewDispatcher(&fakeReloader{}, Options{Security: manager})
+	request := types.Request{
+		Op: types.OpStageServerSecurity, ID: "security-stage",
+		Data: json.RawMessage(`{
+			"scope":"firewall",
+			"operation_id":"op_dispatch_123",
+			"client_address":"192.0.2.2",
+			"policy":{
+				"revision":2,
+				"firewall":{"enabled":true,"default_inbound":"drop"},
+				"fail2ban":{"enabled":false},
+				"ssh":{"port":22},
+				"tls":{"profile":""}
+			}
+		}`),
+	}
+	response := dispatcher.Dispatch(context.Background(), request)
+	if !response.OK || manager.staged.OperationID != "op_dispatch_123" || manager.staged.Scope != "firewall" {
+		t.Fatalf("stage response = %+v, request = %+v", response, manager.staged)
+	}
+
+	request.ID = "security-stage-invalid"
+	request.Data = json.RawMessage(`{"scope":"firewall","operation_id":"op_dispatch_124","policy":{},"raw_config":"flush ruleset"}`)
+	response = dispatcher.Dispatch(context.Background(), request)
+	if response.OK || !strings.Contains(response.Error, "unknown field") {
+		t.Fatalf("raw security input response = %+v", response)
 	}
 }
 

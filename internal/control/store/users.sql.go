@@ -14,27 +14,45 @@ const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (
     token_hash,
     user_id,
-    expires_at
+    expires_at,
+    ip_address,
+    user_agent
 ) VALUES (
     $1,
     $2,
-    $3
+    $3,
+    $4,
+    $5
 )
 ON CONFLICT (token_hash) DO UPDATE
 SET
     user_id = EXCLUDED.user_id,
     expires_at = EXCLUDED.expires_at,
-    created_at = now()
+    ip_address = EXCLUDED.ip_address,
+    user_agent = EXCLUDED.user_agent,
+    created_at = now(),
+    authenticated_at = now(),
+    last_seen_at = now(),
+    revoked_at = NULL,
+    revoked_reason = ''
 `
 
 type CreateSessionParams struct {
 	TokenHash string
 	UserID    int64
 	ExpiresAt time.Time
+	IpAddress string
+	UserAgent string
 }
 
 func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) error {
-	_, err := q.db.ExecContext(ctx, createSession, arg.TokenHash, arg.UserID, arg.ExpiresAt)
+	_, err := q.db.ExecContext(ctx, createSession,
+		arg.TokenHash,
+		arg.UserID,
+		arg.ExpiresAt,
+		arg.IpAddress,
+		arg.UserAgent,
+	)
 	return err
 }
 
@@ -113,11 +131,12 @@ func (q *Queries) FindUserByEmail(ctx context.Context, lower string) (User, erro
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT users.id, users.email, users.role
+SELECT users.id, users.email, users.role, sessions.authenticated_at, sessions.last_seen_at
 FROM sessions
 INNER JOIN users ON users.id = sessions.user_id
 WHERE sessions.token_hash = $1
   AND sessions.expires_at > $2
+  AND sessions.revoked_at IS NULL
   AND users.login_disabled = false
   AND (
     users.role = 'admin'
@@ -135,15 +154,23 @@ type GetSessionUserParams struct {
 }
 
 type GetSessionUserRow struct {
-	ID    int64
-	Email string
-	Role  string
+	ID              int64
+	Email           string
+	Role            string
+	AuthenticatedAt time.Time
+	LastSeenAt      time.Time
 }
 
 func (q *Queries) GetSessionUser(ctx context.Context, arg GetSessionUserParams) (GetSessionUserRow, error) {
 	row := q.db.QueryRowContext(ctx, getSessionUser, arg.TokenHash, arg.ExpiresAt)
 	var i GetSessionUserRow
-	err := row.Scan(&i.ID, &i.Email, &i.Role)
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Role,
+		&i.AuthenticatedAt,
+		&i.LastSeenAt,
+	)
 	return i, err
 }
 
@@ -203,4 +230,21 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const markSessionReauthenticated = `-- name: MarkSessionReauthenticated :execrows
+UPDATE sessions
+SET authenticated_at = now(),
+    last_seen_at = now()
+WHERE token_hash = $1
+  AND expires_at > now()
+  AND revoked_at IS NULL
+`
+
+func (q *Queries) MarkSessionReauthenticated(ctx context.Context, tokenHash string) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markSessionReauthenticated, tokenHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

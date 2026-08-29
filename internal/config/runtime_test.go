@@ -5,6 +5,7 @@ import "testing"
 func TestPanelRuntimeConfigDefaults(t *testing.T) {
 	t.Setenv("NAKPANEL_DATABASE_URL", "")
 	t.Setenv("NAKPANEL_TLS_DIR", "")
+	t.Setenv("NAKPANEL_SECRET_KEY_FILE", "")
 
 	cfg := PanelRuntimeConfigFromEnv()
 
@@ -20,6 +21,9 @@ func TestPanelRuntimeConfigDefaults(t *testing.T) {
 	if cfg.FileTransferDir != FileTransferDir || cfg.FileUploadMaxBytes != DefaultFileUploadMaxBytes {
 		t.Fatalf("file manager defaults = %q %d", cfg.FileTransferDir, cfg.FileUploadMaxBytes)
 	}
+	if cfg.SecretKeyFile != DefaultSecretKeyFile {
+		t.Fatalf("SecretKeyFile = %q, want %q", cfg.SecretKeyFile, DefaultSecretKeyFile)
+	}
 }
 
 func TestPanelRuntimeConfigEnvOverrides(t *testing.T) {
@@ -27,6 +31,7 @@ func TestPanelRuntimeConfigEnvOverrides(t *testing.T) {
 	t.Setenv("NAKPANEL_TLS_DIR", "/tmp/nakpanel-tls")
 	t.Setenv("NAKPANEL_FILE_TRANSFER_DIR", "/tmp/nakpanel-files")
 	t.Setenv("NAKPANEL_FILE_UPLOAD_MAX_BYTES", "1048576")
+	t.Setenv("NAKPANEL_SECRET_KEY_FILE", "/run/credentials/nakpanel.service/secret-keys.json")
 
 	cfg := PanelRuntimeConfigFromEnv()
 
@@ -38,5 +43,8 @@ func TestPanelRuntimeConfigEnvOverrides(t *testing.T) {
 	}
 	if cfg.FileTransferDir != "/tmp/nakpanel-files" || cfg.FileUploadMaxBytes != 1048576 {
 		t.Fatalf("file manager overrides = %q %d", cfg.FileTransferDir, cfg.FileUploadMaxBytes)
+	}
+	if cfg.SecretKeyFile != "/run/credentials/nakpanel.service/secret-keys.json" {
+		t.Fatalf("SecretKeyFile = %q", cfg.SecretKeyFile)
 	}
 }

@@ -15,7 +15,7 @@ fi
 
 VM_IP="$(vm_ip)"
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1" needle="$2"
@@ -152,7 +152,8 @@ post_as admin phase12-reseller-plan reseller-plans \
   -d 'max_customers=2' -d 'max_subscriptions=2' -d 'disk_mb=200' \
   -d 'max_sites=4' -d 'max_databases=4' -d 'bandwidth_mb=-1' \
   -d 'max_mailboxes=0' -d 'max_backups=4' -d 'backup_storage_mb=200' \
-  -d 'allow_custom_plans=true' -d 'allow_dns=true' -d 'is_active=true'
+  -d 'allow_custom_plans=true' -d 'allow_dns=true' -d 'allow_logs=true' \
+  -d 'php_versions=8.3' -d 'is_active=true'
 reseller_plan_id="$(db_value "SELECT id FROM reseller_plans WHERE name='Phase12 Agency'")"
 
 post_as admin phase12-reseller resellers \
@@ -297,18 +298,18 @@ post_as reseller phase12-site sites \
 site_id="$(db_value "SELECT id FROM sites WHERE domain='phase12-reseller.test'")"
 wait_for_value 'site provisioning' "SELECT status FROM sites WHERE id=${site_id}" 'active'
 site_username="$(db_value "SELECT username FROM sites WHERE id=${site_id}")"
-site_home="$(db_value "SELECT '/home/'||username FROM sites WHERE id=${site_id}")"
-site_pool="/etc/php/8.3/fpm/pool.d/nakpanel-${site_username}-phase12-reseller-test.conf"
+site_docroot="$(db_value "SELECT document_root FROM sites WHERE id=${site_id}")"
+site_pool="/etc/nakpanel/php-fpm/sites/${site_id}.conf"
 
 post_as reseller phase12-suspend customers/status -d "customer_id=${customer_id}" -d 'status=suspended'
 wait_for_value 'site suspension' "SELECT status FROM sites WHERE id=${site_id}" 'suspended'
 wait_for_http_status 'suspended website' 'phase12-reseller.test' '503'
-multipass exec "${VM_NAME}" -- test -f "${site_pool}.suspended"
+multipass exec "${VM_NAME}" -- sudo test -f "${site_pool}.suspended"
 
 post_as reseller phase12-activate customers/status -d "customer_id=${customer_id}" -d 'status=active'
 wait_for_value 'site reactivation' "SELECT status FROM sites WHERE id=${site_id}" 'active'
 wait_for_http_status 'reactivated website' 'phase12-reseller.test' '200'
-multipass exec "${VM_NAME}" -- test -f "${site_pool}"
+multipass exec "${VM_NAME}" -- sudo test -f "${site_pool}"
 
 # Two opposing jobs may overlap in River. The worker must converge on the
 # current database intent rather than letting a stale suspend win last.
@@ -331,7 +332,10 @@ post_as reseller phase12-overuse-plan plans \
   -d 'max_domain_aliases=0' -d 'max_ftp_accounts=0' -d 'validity_days=-1' \
   -d 'allow_dns=true' -d 'allow_tls=true' -d 'allow_backups=true' -d 'is_active=true'
 wait_for_value 'overuse plan snapshot' "SELECT disk_mb FROM subscription_entitlements WHERE subscription_id=${synced_id}" '1'
-multipass exec "${VM_NAME}" -- sudo -u "${site_username}" dd if=/dev/zero of="${site_home}/overuse.bin" bs=1M count=2 status=none
+# Write the measurement fixture as root so the kernel's subscription-account
+# quota remains intact while this older lifecycle check exercises the panel's
+# independent directory-usage collector and overuse suspension.
+multipass exec "${VM_NAME}" -- sudo dd if=/dev/zero of="${site_docroot}/overuse.bin" bs=1M count=2 status=none
 multipass exec "${VM_NAME}" -- sudo systemctl restart nakpanel
 wait_for_value 'usage collection completed' "SELECT is_complete::text FROM subscription_usage_current WHERE subscription_id=${synced_id}" 'true'
 wait_for_value 'overuse subscription suspension' "SELECT status FROM subscriptions WHERE id=${synced_id}" 'suspended'
@@ -339,7 +343,7 @@ wait_for_http_status 'overuse website' 'phase12-reseller.test' '503'
 overuse_alerts="$(db_value "SELECT COUNT(*) FROM notifications WHERE subscription_id=${synced_id} AND kind IN ('over_limit','suspended') AND resolved_at IS NULL")"
 [[ "${overuse_alerts}" -ge 2 ]] || { echo "overuse notifications are incomplete: ${overuse_alerts}" >&2; exit 1; }
 
-multipass exec "${VM_NAME}" -- sudo rm -f "${site_home}/overuse.bin"
+multipass exec "${VM_NAME}" -- sudo rm -f "${site_docroot}/overuse.bin"
 multipass exec "${VM_NAME}" -- sudo systemctl restart nakpanel
 wait_for_value 'usage returned below plan' "SELECT (is_complete AND disk_bytes<=1048576)::text FROM subscription_usage_current WHERE subscription_id=${synced_id}" 'true'
 post_as reseller phase12-overuse-reactivate "subscriptions/${synced_id}/status" \

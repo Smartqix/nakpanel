@@ -49,6 +49,10 @@ func TestRenderPHPFPMPoolUsesResourceLimits(t *testing.T) {
 			t.Fatalf("PHP-FPM pool missing %q:\n%s", want, pool)
 		}
 	}
+	unit := RenderPHPFPMUnit(plan)
+	if !strings.Contains(unit, "MemoryMax=256M") {
+		t.Fatalf("PHP-FPM unit is missing the derived memory cgroup ceiling:\n%s", unit)
+	}
 }
 
 func TestSiteProvisionerAppliesUserDiskQuota(t *testing.T) {

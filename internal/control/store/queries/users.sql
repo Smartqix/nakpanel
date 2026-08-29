@@ -38,24 +38,35 @@ WHERE lower(users.email) = lower($1)
 INSERT INTO sessions (
     token_hash,
     user_id,
-    expires_at
+    expires_at,
+    ip_address,
+    user_agent
 ) VALUES (
     $1,
     $2,
-    $3
+    $3,
+    $4,
+    $5
 )
 ON CONFLICT (token_hash) DO UPDATE
 SET
     user_id = EXCLUDED.user_id,
     expires_at = EXCLUDED.expires_at,
-    created_at = now();
+    ip_address = EXCLUDED.ip_address,
+    user_agent = EXCLUDED.user_agent,
+    created_at = now(),
+    authenticated_at = now(),
+    last_seen_at = now(),
+    revoked_at = NULL,
+    revoked_reason = '';
 
 -- name: GetSessionUser :one
-SELECT users.id, users.email, users.role
+SELECT users.id, users.email, users.role, sessions.authenticated_at, sessions.last_seen_at
 FROM sessions
 INNER JOIN users ON users.id = sessions.user_id
 WHERE sessions.token_hash = $1
   AND sessions.expires_at > $2
+  AND sessions.revoked_at IS NULL
   AND users.login_disabled = false
   AND (
     users.role = 'admin'
@@ -65,6 +76,14 @@ WHERE sessions.token_hash = $1
       WHERE r.login_user_id=users.id AND r.status='active' AND rs.status='active'
     ))
   );
+
+-- name: MarkSessionReauthenticated :execrows
+UPDATE sessions
+SET authenticated_at = now(),
+    last_seen_at = now()
+WHERE token_hash = $1
+  AND expires_at > now()
+  AND revoked_at IS NULL;
 
 -- name: DeleteSession :exec
 DELETE FROM sessions

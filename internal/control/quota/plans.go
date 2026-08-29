@@ -63,6 +63,7 @@ type Plan struct {
 type Settings struct {
 	OversellPolicy       string
 	ServerDiskCapacityMB int
+	ValkeyCapacityMB     int
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
 }
@@ -154,6 +155,9 @@ func ValidateSettings(settings Settings) error {
 	}
 	if settings.ServerDiskCapacityMB < 0 {
 		return errors.New("server disk capacity cannot be negative")
+	}
+	if settings.ValkeyCapacityMB < 0 {
+		return errors.New("Valkey capacity cannot be negative")
 	}
 	return nil
 }
@@ -254,7 +258,7 @@ func (s *SQLStore) UpsertPlan(ctx context.Context, plan Plan) (Plan, error) {
 			if _, err := tx.ExecContext(ctx, `UPDATE subscriptions SET sync_status='pending',sync_error='',updated_at=now() WHERE plan_id=$1 AND sync_mode='synced'`, saved.ID); err != nil {
 				return Plan{}, err
 			}
-			if _, err := s.river.InsertTx(ctx, tx, SyncPlanArgs{PlanID: saved.ID}, nil); err != nil {
+			if _, err := s.river.InsertTx(ctx, tx, NewSyncPlanArgs(saved.ID, int64(saved.Revision)), nil); err != nil {
 				return Plan{}, fmt.Errorf("enqueue plan synchronization: %w", err)
 			}
 		} else {
@@ -479,6 +483,9 @@ func (s *SQLStore) AssignSubscription(ctx context.Context, customerUserID int64,
 	if err := relinkResourcesTx(ctx, tx, customerUserID, subscriptionID); err != nil {
 		return SubscriptionAssignment{}, err
 	}
+	if _, err := EnqueueSubscriptionConvergenceTx(ctx, tx, s.river, subscriptionID); err != nil {
+		return SubscriptionAssignment{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return SubscriptionAssignment{}, err
 	}
@@ -494,8 +501,8 @@ func (s *SQLStore) GetSettings(ctx context.Context) (Settings, error) {
 	if s == nil || s.db == nil {
 		return Settings{}, errors.New("quota database is not configured")
 	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO settings (id, oversell_policy, server_disk_capacity_mb)
-VALUES (true, 'warn', 0)
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO settings (id, oversell_policy, server_disk_capacity_mb, valkey_capacity_mb)
+VALUES (true, 'warn', 0, 0)
 ON CONFLICT (id) DO NOTHING`); err != nil {
 		return Settings{}, err
 	}
@@ -514,15 +521,19 @@ func (s *SQLStore) UpdateSettings(ctx context.Context, settings Settings) error 
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO settings (id, oversell_policy, server_disk_capacity_mb)
-VALUES (true, $1, $2)
+	if _, err := tx.ExecContext(ctx, `INSERT INTO settings (id, oversell_policy, server_disk_capacity_mb, valkey_capacity_mb)
+VALUES (true, $1, $2, $3)
 ON CONFLICT (id) DO UPDATE SET
     oversell_policy = EXCLUDED.oversell_policy,
     server_disk_capacity_mb = EXCLUDED.server_disk_capacity_mb,
-    updated_at = now()`, settings.OversellPolicy, settings.ServerDiskCapacityMB); err != nil {
+    valkey_capacity_mb = EXCLUDED.valkey_capacity_mb,
+    updated_at = now()`, settings.OversellPolicy, settings.ServerDiskCapacityMB, settings.ValkeyCapacityMB); err != nil {
 		return err
 	}
 	if err := enforceCommittedAllocationCapTx(ctx, tx); err != nil {
+		return err
+	}
+	if err := enforceValkeyCapacityTx(ctx, tx, settings.ValkeyCapacityMB); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -745,8 +756,7 @@ func assignSubscriptionTx(ctx context.Context, tx *sql.Tx, customerUserID int64,
 FROM subscriptions
 WHERE customer_user_id=$1 AND status IN ('active','suspended')
 ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END,id
-LIMIT 1
-FOR UPDATE`, customerUserID).Scan(&subscriptionID)
+LIMIT 1`, customerUserID).Scan(&subscriptionID)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		err = tx.QueryRowContext(ctx, `INSERT INTO subscriptions
@@ -754,6 +764,12 @@ FOR UPDATE`, customerUserID).Scan(&subscriptionID)
 VALUES($1,$2,$3,$4,'active','synced','in_sync',$5,'')
 RETURNING id`, customerID, customerUserID, planID, plan.Name+" subscription", maxInt(plan.Revision, 1)).Scan(&subscriptionID)
 	case err == nil:
+		if err = LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+			return 0, err
+		}
+		if err = tx.QueryRowContext(ctx, `SELECT id FROM subscriptions WHERE id=$1 FOR UPDATE`, subscriptionID).Scan(&subscriptionID); err != nil {
+			return 0, err
+		}
 		_, err = tx.ExecContext(ctx, `UPDATE subscriptions
 SET customer_id=$2,customer_user_id=$3,plan_id=$4,name=$5,status='active',
     sync_mode='synced',sync_status='in_sync',plan_revision=$6,sync_error='',updated_at=now()
@@ -771,7 +787,7 @@ WHERE id=$1`, subscriptionID, customerID, customerUserID, planID, plan.Name+" su
 		_, err = createSubscriptionSystemAccountTx(ctx, tx, subscriptionID, "", "active")
 	} else if err == nil {
 		_, err = tx.ExecContext(ctx, `UPDATE subscription_system_accounts
-SET desired_state='active',convergence_status='pending',last_error='',updated_at=now()
+SET desired_state='active',updated_at=now()
 WHERE id=$1`, accountID)
 	}
 	if err != nil {
@@ -870,24 +886,40 @@ func enforceCommittedAllocationCapTx(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+func enforceValkeyCapacityTx(ctx context.Context, tx *sql.Tx, capacityMB int) error {
+	if capacityMB == 0 {
+		return nil
+	}
+	var committedMB int
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(memory_mb), 0)
+FROM valkey_instances
+WHERE desired_state = 'enabled'`).Scan(&committedMB); err != nil {
+		return err
+	}
+	if committedMB > capacityMB {
+		return fmt.Errorf("%w: committed Valkey memory %d MB exceeds capacity %d MB", ErrExceeded, committedMB, capacityMB)
+	}
+	return nil
+}
+
 type queryRower interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
 func getSettingsTx(ctx context.Context, q queryRower) (Settings, error) {
 	var settings Settings
-	err := q.QueryRowContext(ctx, `SELECT oversell_policy, server_disk_capacity_mb, created_at, updated_at
+	err := q.QueryRowContext(ctx, `SELECT oversell_policy, server_disk_capacity_mb, valkey_capacity_mb, created_at, updated_at
 FROM settings
-WHERE id = true`).Scan(&settings.OversellPolicy, &settings.ServerDiskCapacityMB, &settings.CreatedAt, &settings.UpdatedAt)
+WHERE id = true`).Scan(&settings.OversellPolicy, &settings.ServerDiskCapacityMB, &settings.ValkeyCapacityMB, &settings.CreatedAt, &settings.UpdatedAt)
 	return settings, err
 }
 
 func getSettingsForUpdateTx(ctx context.Context, tx *sql.Tx) (Settings, error) {
 	var settings Settings
-	err := tx.QueryRowContext(ctx, `SELECT oversell_policy, server_disk_capacity_mb, created_at, updated_at
+	err := tx.QueryRowContext(ctx, `SELECT oversell_policy, server_disk_capacity_mb, valkey_capacity_mb, created_at, updated_at
 FROM settings
 WHERE id = true
-FOR UPDATE`).Scan(&settings.OversellPolicy, &settings.ServerDiskCapacityMB, &settings.CreatedAt, &settings.UpdatedAt)
+FOR UPDATE`).Scan(&settings.OversellPolicy, &settings.ServerDiskCapacityMB, &settings.ValkeyCapacityMB, &settings.CreatedAt, &settings.UpdatedAt)
 	return settings, err
 }
 

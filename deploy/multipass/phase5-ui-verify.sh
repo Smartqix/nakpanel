@@ -16,7 +16,7 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update
-sudo apt-get install -y ca-certificates curl postgresql postgresql-contrib nginx php8.3-fpm mariadb-server build-essential python3
+sudo apt-get install -y acl ca-certificates curl postgresql postgresql-contrib nginx php8.3-fpm mariadb-server build-essential python3
 
 arch="$(uname -m)"
 case "${arch}" in
@@ -105,12 +105,12 @@ INSERT INTO subscription_entitlements (
   subscription_id, plan_name, disk_mb, max_sites, max_databases, bandwidth_mb,
   max_mailboxes, allow_ssh, allow_dns, backup_retention_days, php_allowlist,
   php_fpm_max_children, php_memory_mb, site_disk_quota_mb, max_backups,
-  backup_storage_mb, source_revision
+  backup_storage_mb, source_revision, hosting_policy
 )
 SELECT s.id,p.name,p.disk_mb,p.max_sites,p.max_databases,p.bandwidth_mb,
   p.max_mailboxes,p.allow_ssh,p.allow_dns,p.backup_retention_days,p.php_allowlist,
   p.php_fpm_max_children,p.php_memory_mb,p.site_disk_quota_mb,p.max_backups,
-  p.backup_storage_mb,p.revision
+  p.backup_storage_mb,p.revision,p.hosting_policy
 FROM subscriptions s JOIN plans p ON p.id=s.plan_id
 WHERE s.name='Phase verifier unlimited' AND s.status='active'
 ON CONFLICT (subscription_id) DO NOTHING;
@@ -172,7 +172,7 @@ if [[ -z "${VM_IP}" ]]; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1"
@@ -260,7 +260,19 @@ echo "phase5 UI site did not become active" >&2
 exit 1
 REMOTE
 
-curl -s --fail -H 'Host: phase5-ui.test' "http://${VM_IP}/" | grep -qx 'nakpanel placeholder for phase5-ui.test'
+site_ready=0
+for _ in $(seq 1 30); do
+  if curl -s --fail -H 'Host: phase5-ui.test' "http://${VM_IP}/" | grep -qx 'nakpanel placeholder for phase5-ui.test'; then
+    site_ready=1
+    break
+  fi
+  sleep 1
+done
+if [[ "${site_ready}" != "1" ]]; then
+  echo "phase5 UI site did not serve its PHP placeholder" >&2
+  curl -sS -i -H 'Host: phase5-ui.test' "http://${VM_IP}/" >&2 || true
+  exit 1
+fi
 
 db_status="$(curl -sk -o "${tmpdir}/database-create.out" -w '%{http_code}' \
   -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \

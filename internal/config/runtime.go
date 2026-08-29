@@ -19,6 +19,7 @@ type PanelRuntimeConfig struct {
 	SMTPTLSMode          string
 	FileTransferDir      string
 	FileUploadMaxBytes   int64
+	SecretKeyFile        string
 	PublicURL            string
 	BillingWebhookURL    string
 	BillingWebhookSecret string
@@ -55,6 +56,7 @@ func PanelRuntimeConfigFromEnv() PanelRuntimeConfig {
 		SMTPTLSMode:          tlsMode,
 		FileTransferDir:      firstConfigured(os.Getenv("NAKPANEL_FILE_TRANSFER_DIR"), FileTransferDir),
 		FileUploadMaxBytes:   positiveInt64(os.Getenv("NAKPANEL_FILE_UPLOAD_MAX_BYTES"), DefaultFileUploadMaxBytes),
+		SecretKeyFile:        firstConfigured(os.Getenv("NAKPANEL_SECRET_KEY_FILE"), DefaultSecretKeyFile),
 		PublicURL:            strings.TrimRight(strings.TrimSpace(os.Getenv("NAKPANEL_PUBLIC_URL")), "/"),
 		BillingWebhookURL:    strings.TrimSpace(os.Getenv("NAKPANEL_BILLING_WEBHOOK_URL")),
 		BillingWebhookSecret: os.Getenv("NAKPANEL_BILLING_WEBHOOK_SECRET"),

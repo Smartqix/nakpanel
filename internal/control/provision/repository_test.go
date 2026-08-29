@@ -14,6 +14,31 @@ import (
 	"github.com/riverqueue/river"
 )
 
+func TestNormalizeDNSRecordSupportsSRVAndRejectsTypedFieldOverflow(t *testing.T) {
+	record, err := normalizeDNSRecord("example.test", types.DNSRecord{
+		Host: "_sip._tcp", Type: "SRV", Value: "SIP.EXAMPLE.TEST.",
+		Priority: 10, Weight: 5, Port: 5060, TTL: 3600,
+	})
+	if err != nil {
+		t.Fatalf("normalize SRV record: %v", err)
+	}
+	if record.Value != "sip.example.test" {
+		t.Fatalf("canonical SRV target = %q", record.Value)
+	}
+
+	invalid := []types.DNSRecord{
+		{Host: "sip._tcp", Type: "SRV", Value: "sip.example.test", Priority: 10, Weight: 5, Port: 5060, TTL: 3600},
+		{Host: "@", Type: "CAA", Value: `256 issue "letsencrypt.org"`, TTL: 3600},
+		{Host: "@", Type: "DS", Value: "65536 13 2 " + strings.Repeat("A", 64), TTL: 3600},
+		{Host: "@", Type: "DS", Value: "12345 0 2 " + strings.Repeat("A", 64), TTL: 3600},
+	}
+	for _, candidate := range invalid {
+		if _, err := normalizeDNSRecord("example.test", candidate); err == nil {
+			t.Fatalf("normalizeDNSRecord(%#v) succeeded, want validation error", candidate)
+		}
+	}
+}
+
 func TestSQLSiteRepositoryRejectsTLSForInactiveSites(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -136,10 +161,12 @@ func TestSelectReconcileDNSRecordsUsesCurrentSchema(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mock.ExpectQuery(`SELECT id,zone_id,host,record_type,value,COALESCE\(priority,0\),ttl FROM dns_records`).
+	mock.ExpectQuery(`SELECT id,zone_id,COALESCE\(owner_site_id,0\),host,record_type,value`).
 		WithArgs(int64(7)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "zone_id", "host", "record_type", "value", "priority", "ttl"}).
-			AddRow(int64(11), int64(7), "@", "A", "192.0.2.10", 0, 3600))
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "zone_id", "owner_site_id", "host", "record_type", "value", "priority",
+			"weight", "port", "ttl", "origin", "template_record_key", "template_revision", "locally_modified",
+		}).AddRow(int64(11), int64(7), int64(3), "@", "A", "192.0.2.10", 0, 0, 0, 3600, "custom", "", 0, false))
 	records, err := selectReconcileDNSRecords(context.Background(), tx, 7)
 	if err != nil {
 		t.Fatal(err)
@@ -149,6 +176,90 @@ func TestSelectReconcileDNSRecordsUsesCurrentSchema(t *testing.T) {
 	}
 	mock.ExpectRollback()
 	_ = tx.Rollback()
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRefreshDNSSyncRunsBindsZoneID(t *testing.T) {
+	t.Parallel()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectExec(`WITH affected AS \(\s*SELECT DISTINCT run_id FROM dns_template_sync_items WHERE zone_id=\$1`).
+		WithArgs(int64(17)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	if err := refreshDNSSyncRunsTx(context.Background(), tx, 17); err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectRollback()
+	_ = tx.Rollback()
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEnsureSystemDNSRecordsReplacesProtectedDefaults(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectExec(`DELETE FROM dns_records`).
+		WithArgs(int64(17)).
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectExec(`INSERT INTO dns_records`).
+		WithArgs(int64(17), int64(23), "ns1.example.test", "192.0.2.10").
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	if err = ensureSystemDNSRecordsTx(context.Background(), tx, 17, 23, "example.test", "192.0.2.10"); err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectRollback()
+	_ = tx.Rollback()
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMarkDNSActiveCompletesSupersededSyncRevisions(t *testing.T) {
+	t.Parallel()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	mock.ExpectExec(`UPDATE dns_zones SET status='active'`).
+		WithArgs(int64(17), "/etc/bind/nakpanel/zones/db.example.test", int64(2026072405), int64(5)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE dns_template_sync_items\s+SET outcome='applied'.*desired_revision<=\$2`).
+		WithArgs(int64(17), int64(5)).
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectExec(`WITH affected AS \(\s*SELECT DISTINCT run_id FROM dns_template_sync_items WHERE zone_id=\$1`).
+		WithArgs(int64(17)).
+		WillReturnResult(sqlmock.NewResult(0, 3))
+	mock.ExpectCommit()
+
+	store := NewSQLPhase6StatusStore(db)
+	err = store.MarkDNSActive(context.Background(), 17, types.ConfigureDNSZoneResult{
+		ZonePath: "/etc/bind/nakpanel/zones/db.example.test", Serial: 2026072405,
+		DesiredRevision: 5,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
 	}

@@ -1,12 +1,60 @@
 package quota
 
 import (
+	"context"
+	"errors"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
+
+func TestValidateSettingsRejectsNegativeValkeyCapacity(t *testing.T) {
+	err := ValidateSettings(Settings{
+		OversellPolicy:       OversellPolicyWarn,
+		ServerDiskCapacityMB: 1024,
+		ValkeyCapacityMB:     -1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "Valkey capacity") {
+		t.Fatalf("ValidateSettings error = %v, want Valkey capacity error", err)
+	}
+}
+
+func TestUpdateSettingsRejectsValkeyCapacityBelowEnabledAllocations(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	now := time.Date(2026, 7, 23, 12, 0, 0, 0, time.UTC)
+	mock.ExpectBegin()
+	mock.ExpectExec(`INSERT INTO settings`).
+		WithArgs(OversellPolicyWarn, 1024, 64).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT oversell_policy, server_disk_capacity_mb, valkey_capacity_mb`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"oversell_policy", "server_disk_capacity_mb", "valkey_capacity_mb", "created_at", "updated_at",
+		}).AddRow(OversellPolicyWarn, 1024, 64, now, now))
+	mock.ExpectQuery(`SELECT COALESCE\(SUM\(memory_mb\), 0\)`).
+		WillReturnRows(sqlmock.NewRows([]string{"committed_mb"}).AddRow(96))
+	mock.ExpectRollback()
+
+	err = NewSQLStore(db).UpdateSettings(context.Background(), Settings{
+		OversellPolicy:       OversellPolicyWarn,
+		ServerDiskCapacityMB: 1024,
+		ValkeyCapacityMB:     64,
+	})
+	if !errors.Is(err, ErrExceeded) {
+		t.Fatalf("UpdateSettings error = %v, want ErrExceeded", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestPleskOveruseModesControlCountLimits(t *testing.T) {
 	tests := []struct {

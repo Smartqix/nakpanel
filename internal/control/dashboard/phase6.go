@@ -101,7 +101,22 @@ func (s *SQLPhase6Store) listWebmail(ctx context.Context) ([]WebmailHost, error)
 }
 
 func (s *SQLPhase6Store) listDNS(ctx context.Context) ([]DNSZone, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, domain, address, serial, status, zone_path, last_error, created_at, site_id FROM dns_zones ORDER BY created_at DESC, id DESC LIMIT 50`)
+	rows, err := s.db.QueryContext(ctx, `SELECT zone.id,zone.domain,zone.address,zone.ipv6_address,zone.serial,
+zone.status,zone.zone_path,zone.last_error,zone.created_at,zone.site_id,COALESCE(zone.parent_zone_id,0),
+zone.mode,array_to_string(zone.upstream_primaries,E'\n'),
+array_to_string(COALESCE(zone.transfer_cidrs,revision.transfer_cidrs),E'\n'),
+COALESCE(zone.template_revision,0),zone.template_status,zone.desired_revision,zone.applied_revision,
+COALESCE(zone.soa_override->>'primary_nameserver',replace(revision.primary_nameserver,'<domain>',zone.domain)),
+COALESCE(zone.soa_override->>'responsible_mailbox',replace(revision.responsible_mailbox,'<domain>',zone.domain)),
+COALESCE(zone.soa_override->>'serial_format',revision.serial_format),
+COALESCE((zone.soa_override->>'default_ttl')::int,revision.default_ttl),
+COALESCE((zone.soa_override->>'refresh_seconds')::int,revision.refresh_seconds),
+COALESCE((zone.soa_override->>'retry_seconds')::int,revision.retry_seconds),
+COALESCE((zone.soa_override->>'expire_seconds')::int,revision.expire_seconds),
+COALESCE((zone.soa_override->>'minimum_ttl')::int,revision.minimum_ttl)
+FROM dns_zones zone
+JOIN dns_template_revisions revision ON revision.revision=zone.template_revision
+ORDER BY zone.created_at DESC,zone.id DESC LIMIT 100`)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +124,13 @@ func (s *SQLPhase6Store) listDNS(ctx context.Context) ([]DNSZone, error) {
 	var zones []DNSZone
 	for rows.Next() {
 		var zone DNSZone
-		if err := rows.Scan(&zone.ID, &zone.Domain, &zone.Address, &zone.Serial, &zone.Status, &zone.ZonePath, &zone.LastError, &zone.CreatedAt, &zone.SiteID); err != nil {
+		if err := rows.Scan(&zone.ID, &zone.Domain, &zone.Address, &zone.IPv6Address, &zone.Serial,
+			&zone.Status, &zone.ZonePath, &zone.LastError, &zone.CreatedAt, &zone.SiteID,
+			&zone.ParentZoneID, &zone.Mode, &zone.UpstreamPrimaries, &zone.TransferCIDRs,
+			&zone.TemplateRevision, &zone.TemplateStatus, &zone.DesiredRevision, &zone.AppliedRevision,
+			&zone.SOA.PrimaryNameserver, &zone.SOA.ResponsibleMailbox, &zone.SOA.SerialFormat,
+			&zone.SOA.DefaultTTL, &zone.SOA.RefreshSeconds, &zone.SOA.RetrySeconds,
+			&zone.SOA.ExpireSeconds, &zone.SOA.MinimumTTL); err != nil {
 			return nil, err
 		}
 		zones = append(zones, zone)
@@ -118,7 +139,10 @@ func (s *SQLPhase6Store) listDNS(ctx context.Context) ([]DNSZone, error) {
 }
 
 func (s *SQLPhase6Store) listDNSRecords(ctx context.Context) ([]types.DNSRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id,zone_id,host,record_type,value,COALESCE(priority,0),ttl FROM dns_records ORDER BY zone_id,host,record_type,id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id,zone_id,COALESCE(owner_site_id,0),host,record_type,value,
+COALESCE(priority,0),COALESCE(weight,0),COALESCE(port,0),ttl,origin,
+COALESCE(template_record_key,''),COALESCE(template_revision,0),locally_modified
+FROM dns_records ORDER BY zone_id,host,record_type,id`)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +150,10 @@ func (s *SQLPhase6Store) listDNSRecords(ctx context.Context) ([]types.DNSRecord,
 	var records []types.DNSRecord
 	for rows.Next() {
 		var record types.DNSRecord
-		if err := rows.Scan(&record.ID, &record.ZoneID, &record.Host, &record.Type, &record.Value, &record.Priority, &record.TTL); err != nil {
+		if err := rows.Scan(&record.ID, &record.ZoneID, &record.OwnerSiteID, &record.Host,
+			&record.Type, &record.Value, &record.Priority, &record.Weight, &record.Port,
+			&record.TTL, &record.Origin, &record.TemplateRecordKey, &record.TemplateRevision,
+			&record.LocallyModified); err != nil {
 			return nil, err
 		}
 		records = append(records, record)

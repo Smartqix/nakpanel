@@ -111,9 +111,17 @@ FROM settings
 WHERE id = true
 `
 
-func (q *Queries) GetSettings(ctx context.Context) (Setting, error) {
+type GetSettingsRow struct {
+	ID                   bool
+	OversellPolicy       string
+	ServerDiskCapacityMb int32
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+func (q *Queries) GetSettings(ctx context.Context) (GetSettingsRow, error) {
 	row := q.db.QueryRowContext(ctx, getSettings)
-	var i Setting
+	var i GetSettingsRow
 	err := row.Scan(
 		&i.ID,
 		&i.OversellPolicy,

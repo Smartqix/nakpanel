@@ -306,7 +306,8 @@ func RenderNginxTLSVHost(plan SitePlan, certPath, keyPath string) string {
     listen [::]:80;
     server_name %[1]s;
     root %[2]s;
-    index index.php index.html;
+    index %[10]s;
+%[11]s
 
     access_log %[3]s;
     error_log %[4]s;
@@ -318,6 +319,7 @@ func RenderNginxTLSVHost(plan SitePlan, certPath, keyPath string) string {
 
     location ~ \.php$ {
         include %[5]s;
+%[12]s
         fastcgi_pass unix:%[6]s;
     }
 
@@ -331,7 +333,8 @@ server {
     listen [::]:443 ssl;
     server_name %[1]s;
     root %[2]s;
-    index index.php index.html;
+    index %[10]s;
+%[11]s
 
     ssl_certificate %[7]s;
     ssl_certificate_key %[8]s;
@@ -347,6 +350,7 @@ server {
 
     location ~ \.php$ {
         include %[5]s;
+%[12]s
         fastcgi_pass unix:%[6]s;
     }
 
@@ -354,7 +358,7 @@ server {
         deny all;
     }
 }
-`, plan.Domain, plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath, renderNginxLocationControls(plan))
+`, nginxServerNames(plan), plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath, renderNginxLocationControls(plan), nginxIndexFiles(plan), renderNginxServerControls(plan), renderNginxPHPControls(plan))
 }
 
 func (p *CertificateProvisioner) writeSelfSignedCertificate(domain, certPath, keyPath string) (time.Time, error) {

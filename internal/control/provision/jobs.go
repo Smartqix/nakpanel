@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -41,12 +42,24 @@ type AgentSiteClient interface {
 	CreateSite(ctx context.Context, req types.CreateSiteReq) (types.Response, error)
 }
 
+const databaseCredentialScope = "database"
+
+func databaseCredentialName(databaseID int64) (string, error) {
+	if databaseID <= 0 {
+		return "", errors.New("database ID must be positive")
+	}
+	return fmt.Sprintf("provision-%d", databaseID), nil
+}
+
 type CreateDatabaseArgs struct {
-	DatabaseID int64          `json:"database_id" river:"unique"`
-	Engine     types.DBEngine `json:"engine"`
-	DBName     string         `json:"db_name"`
-	DBUser     string         `json:"db_user"`
-	Password   string         `json:"password"`
+	DatabaseID    int64          `json:"database_id" river:"unique"`
+	Engine        types.DBEngine `json:"engine"`
+	DBName        string         `json:"db_name"`
+	DBUser        string         `json:"db_user"`
+	CredentialRef string         `json:"credential_ref,omitempty"`
+	// Password is accepted only for jobs created before encrypted credential
+	// references were introduced. New jobs must leave it empty.
+	Password string `json:"password,omitempty"`
 }
 
 func (CreateDatabaseArgs) Kind() string { return "create_database" }
@@ -113,7 +126,12 @@ type SiteStatusStore interface {
 type DatabaseStatusStore interface {
 	MarkDatabaseActive(ctx context.Context, id int64) error
 	MarkDatabaseFailed(ctx context.Context, id int64, message string) error
+	MigrateDatabaseJobCredential(ctx context.Context, jobID, databaseID int64, plaintext []byte) (string, error)
 	ScrubDatabaseJobPassword(ctx context.Context, jobID int64) error
+}
+
+type DatabaseCredentialStore interface {
+	GetSecret(ctx context.Context, scope, name string) ([]byte, serveradmin.SecretReference, error)
 }
 
 type SiteTLSStatusStore interface {
@@ -141,6 +159,7 @@ func (w *CreateSiteWorker) Work(ctx context.Context, job *river.Job[CreateSiteAr
 	}
 
 	resp, err := w.agent.CreateSite(ctx, types.CreateSiteReq{
+		SiteID:        job.Args.SiteID,
 		Username:      job.Args.Username,
 		Domain:        job.Args.Domain,
 		PHPVersion:    job.Args.PHPVersion,
@@ -175,13 +194,18 @@ type CreateDatabaseWorker struct {
 
 	agent    AgentDatabaseClient
 	database DatabaseStatusStore
+	secrets  DatabaseCredentialStore
 }
 
-func NewCreateDatabaseWorker(agent AgentDatabaseClient, database DatabaseStatusStore) *CreateDatabaseWorker {
-	return &CreateDatabaseWorker{
+func NewCreateDatabaseWorker(agent AgentDatabaseClient, database DatabaseStatusStore, secretStores ...DatabaseCredentialStore) *CreateDatabaseWorker {
+	worker := &CreateDatabaseWorker{
 		agent:    agent,
 		database: database,
 	}
+	if len(secretStores) > 0 {
+		worker.secrets = secretStores[0]
+	}
+	return worker
 }
 
 func (w *CreateDatabaseWorker) Work(ctx context.Context, job *river.Job[CreateDatabaseArgs]) error {
@@ -189,11 +213,18 @@ func (w *CreateDatabaseWorker) Work(ctx context.Context, job *river.Job[CreateDa
 		return errors.New("agent database client is not configured")
 	}
 
+	password, err := w.databasePassword(ctx, job)
+	if err != nil {
+		w.markFailed(ctx, job.Args.DatabaseID, err.Error())
+		return err
+	}
+	defer clear(password)
+
 	resp, err := w.agent.CreateDatabase(ctx, types.CreateDatabaseReq{
 		Engine:   job.Args.Engine,
 		DBName:   job.Args.DBName,
 		DBUser:   job.Args.DBUser,
-		Password: job.Args.Password,
+		Password: string(password),
 	})
 	if err != nil {
 		w.markFailed(ctx, job.Args.DatabaseID, err.Error())
@@ -215,6 +246,52 @@ func (w *CreateDatabaseWorker) Work(ctx context.Context, job *river.Job[CreateDa
 		}
 	}
 	return nil
+}
+
+func (w *CreateDatabaseWorker) databasePassword(ctx context.Context, job *river.Job[CreateDatabaseArgs]) ([]byte, error) {
+	expectedRef, err := databaseCredentialName(job.Args.DatabaseID)
+	if err != nil {
+		return nil, err
+	}
+	if job.Args.CredentialRef != "" {
+		if job.Args.CredentialRef != expectedRef {
+			return nil, errors.New("database credential reference does not match the database")
+		}
+		if job.Args.Password != "" && w.database != nil && job.JobRow != nil {
+			if err := w.database.ScrubDatabaseJobPassword(ctx, job.ID); err != nil {
+				return nil, fmt.Errorf("scrub redundant database job password: %w", err)
+			}
+			job.Args.Password = ""
+		}
+		if w.secrets == nil {
+			return nil, errors.New("database credential store is not configured")
+		}
+		plaintext, _, err := w.secrets.GetSecret(ctx, databaseCredentialScope, expectedRef)
+		if err != nil {
+			return nil, fmt.Errorf("resolve database credential: %w", err)
+		}
+		return plaintext, nil
+	}
+
+	if job.Args.Password == "" {
+		return nil, errors.New("database credential is unavailable")
+	}
+	plaintext := []byte(job.Args.Password)
+	if w.secrets == nil || w.database == nil || job.JobRow == nil {
+		return plaintext, nil
+	}
+	credentialRef, err := w.database.MigrateDatabaseJobCredential(ctx, job.ID, job.Args.DatabaseID, plaintext)
+	if err != nil {
+		clear(plaintext)
+		return nil, fmt.Errorf("migrate legacy database credential job: %w", err)
+	}
+	if credentialRef != expectedRef {
+		clear(plaintext)
+		return nil, errors.New("legacy database credential migration returned an invalid reference")
+	}
+	job.Args.Password = ""
+	job.Args.CredentialRef = credentialRef
+	return plaintext, nil
 }
 
 func (w *CreateDatabaseWorker) markFailed(ctx context.Context, id int64, message string) {

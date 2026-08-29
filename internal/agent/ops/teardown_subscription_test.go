@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -17,8 +18,33 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := &teardownRunner{}
-	p := NewSubscriptionTeardownProvisioner(SubscriptionTeardownOptions{HomeRoot: root, Paths: SitePathConfig{HomeRoot: root, NginxAvailableDir: t.TempDir(), NginxEnabledDir: t.TempDir(), NginxConfDir: t.TempDir(), PHPFPMPoolDir: t.TempDir()}, Runner: runner})
-	result, err := p.TeardownSubscription(context.Background(), types.TeardownSubscriptionReq{SubscriptionID: 4, Username: "npaccount", HomePath: home, Domains: []string{"example.test"}, DatabaseNames: []string{"np_4_app"}})
+	stateRoot := t.TempDir()
+	systemdRoot := filepath.Join(stateRoot, "systemd")
+	if err := os.MkdirAll(systemdRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, unit := range []string{
+		"nakpanel-php-fpm@17.service",
+		"nakpanel-task-23.service",
+		"nakpanel-task-23.timer",
+		"nakpanel-valkey@4.service",
+	} {
+		if err := os.WriteFile(filepath.Join(systemdRoot, unit), []byte("[Unit]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := NewSubscriptionTeardownProvisioner(SubscriptionTeardownOptions{
+		HomeRoot: root, SystemdUnitDir: systemdRoot, TaskStateDir: filepath.Join(stateRoot, "tasks"),
+		ValkeyConfigRoot: filepath.Join(stateRoot, "valkey-config"), ValkeyRuntimeRoot: filepath.Join(stateRoot, "valkey-runtime"),
+		GitRoot: filepath.Join(stateRoot, "git"), StagingRoot: filepath.Join(stateRoot, "staging"), PodmanBinary: "/usr/bin/podman",
+		Paths:  SitePathConfig{HomeRoot: root, NginxAvailableDir: t.TempDir(), NginxEnabledDir: t.TempDir(), NginxConfDir: t.TempDir(), PHPFPMPoolDir: t.TempDir()},
+		Runner: runner,
+	})
+	result, err := p.TeardownSubscription(context.Background(), types.TeardownSubscriptionReq{
+		SubscriptionID: 4, Username: "npaccount", HomePath: home, SiteIDs: []int64{17}, Domains: []string{"example.test"},
+		DatabaseNames: []string{"np_4_app"}, TaskIDs: []int64{23}, StagingOperationIDs: []int64{31},
+		Applications: []types.TeardownApplication{{ID: 29, Name: "wordpress"}}, ValkeyPresent: true,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,6 +56,23 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 	}
 	if !runner.saw("userdel", "--", "npaccount") {
 		t.Fatalf("userdel not bounded to account: %#v", runner.calls)
+	}
+	if !runner.saw("systemctl", "disable", "--now", "nakpanel-php-fpm@17.service") ||
+		!runner.saw("systemctl", "daemon-reload") {
+		t.Fatalf("dedicated PHP service was not removed: %#v", runner.calls)
+	}
+	if !runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-app-29") ||
+		!runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-app-29-candidate") ||
+		!runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-app-29-previous") ||
+		!runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-29-wordpress") ||
+		!runner.saw("systemctl", "disable", "--now", "nakpanel-valkey@4.service") {
+		t.Fatalf("application or Valkey state was not removed: %#v", runner.calls)
+	}
+	if !runner.saw("systemctl", "disable", "--now", "nakpanel-task-23.timer") {
+		t.Fatalf("scheduled task service was not removed: %#v", runner.calls)
+	}
+	if !runner.saw("setfacl", "-x", "u:npaccount", stateRoot) {
+		t.Fatalf("subscription cache traversal ACL was not removed: %#v", runner.calls)
 	}
 }
 
@@ -46,7 +89,11 @@ func TestSubscriptionTeardownRejectsTraversalAndSymlinks(t *testing.T) {
 		{SubscriptionID: 1, Username: "npaccount;rm", HomePath: filepath.Join(root, "npaccount;rm")},
 		{SubscriptionID: 1, Username: "npaccount", HomePath: link},
 		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), Domains: []string{"../bad"}},
+		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), SiteIDs: []int64{1}},
+		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), SiteIDs: []int64{0}, Domains: []string{"example.test"}},
 		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), DatabaseNames: []string{"db;DROP"}},
+		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), TaskIDs: []int64{0}},
+		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), Applications: []types.TeardownApplication{{ID: 1, Name: "../bad"}}},
 	}
 	for i, req := range requests {
 		if _, err := p.TeardownSubscription(context.Background(), req); err == nil {
@@ -58,11 +105,58 @@ func TestSubscriptionTeardownRejectsTraversalAndSymlinks(t *testing.T) {
 	}
 }
 
-type teardownRunner struct{ calls [][]string }
+func TestSubscriptionTeardownAcceptsConfirmedMissingACLOnRetry(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "npaccount")
+	if err := os.MkdirAll(home, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	stateRoot := t.TempDir()
+	runner := &teardownRunner{failName: "setfacl", outputs: map[string][]byte{
+		"getfacl": []byte("user::rwx\ngroup::---\nother::---\n"),
+	}}
+	p := NewSubscriptionTeardownProvisioner(SubscriptionTeardownOptions{
+		HomeRoot:          root,
+		SystemdUnitDir:    filepath.Join(stateRoot, "systemd"),
+		TaskStateDir:      filepath.Join(stateRoot, "tasks"),
+		SSHConfigDir:      filepath.Join(stateRoot, "ssh-config"),
+		AuthorizedKeysDir: filepath.Join(stateRoot, "authorized-keys"),
+		ValkeyConfigRoot:  filepath.Join(stateRoot, "valkey-config"),
+		ValkeyRuntimeRoot: filepath.Join(stateRoot, "valkey-runtime"),
+		GitRoot:           filepath.Join(stateRoot, "git"),
+		StagingRoot:       filepath.Join(stateRoot, "staging"),
+		Runner:            runner,
+	})
+	_, err := p.TeardownSubscription(context.Background(), types.TeardownSubscriptionReq{
+		SubscriptionID: 4, Username: "npaccount", HomePath: home, ValkeyPresent: true,
+	})
+	if err != nil {
+		t.Fatalf("retry teardown failed for already-absent ACL: %v", err)
+	}
+	if !runner.saw("getfacl", "-cp", stateRoot) {
+		t.Fatalf("ACL absence was not verified: %#v", runner.calls)
+	}
+}
+
+func TestNormalizedPHPVersionDirectoriesIncludesInstalledFutureVersions(t *testing.T) {
+	got := normalizedPHPVersionDirectories([]string{"8.3", "8.4", "8.2", "8.4", "../unsafe"})
+	if strings.Join(got, ",") != "8.2,8.3,8.4" {
+		t.Fatalf("normalized PHP versions = %v", got)
+	}
+}
+
+type teardownRunner struct {
+	calls    [][]string
+	failName string
+	outputs  map[string][]byte
+}
 
 func (r *teardownRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
 	r.calls = append(r.calls, append([]string{name}, args...))
-	return nil, nil
+	if name == r.failName {
+		return []byte("forced failure"), errors.New("forced failure")
+	}
+	return r.outputs[name], nil
 }
 func (r *teardownRunner) saw(want ...string) bool {
 	for _, call := range r.calls {

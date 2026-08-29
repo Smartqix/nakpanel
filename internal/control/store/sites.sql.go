@@ -8,6 +8,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"time"
 )
 
 const getSite = `-- name: GetSite :one
@@ -16,9 +17,38 @@ FROM sites
 WHERE id = $1
 `
 
-func (q *Queries) GetSite(ctx context.Context, id int64) (Site, error) {
+type GetSiteRow struct {
+	ID                   int64
+	OwnerUserID          int64
+	Username             string
+	Domain               string
+	PhpVersion           string
+	Status               string
+	LastError            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TlsStatus            string
+	TlsIssuer            string
+	TlsCertPath          string
+	TlsKeyPath           string
+	TlsExpiresAt         sql.NullTime
+	TlsLastError         string
+	SubscriptionID       int64
+	CustomerID           int64
+	DesiredStatus        string
+	DesiredPhpVersion    string
+	HttpsRedirect        bool
+	DesiredHttpsRedirect bool
+	SettingsStatus       string
+	SettingsError        string
+	TlsAutoRenew         bool
+	SystemAccountID      int64
+	DocumentRoot         string
+}
+
+func (q *Queries) GetSite(ctx context.Context, id int64) (GetSiteRow, error) {
 	row := q.db.QueryRowContext(ctx, getSite, id)
-	var i Site
+	var i GetSiteRow
 	err := row.Scan(
 		&i.ID,
 		&i.OwnerUserID,
@@ -56,9 +86,38 @@ FROM sites
 WHERE domain = $1
 `
 
-func (q *Queries) GetSiteByDomain(ctx context.Context, domain string) (Site, error) {
+type GetSiteByDomainRow struct {
+	ID                   int64
+	OwnerUserID          int64
+	Username             string
+	Domain               string
+	PhpVersion           string
+	Status               string
+	LastError            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TlsStatus            string
+	TlsIssuer            string
+	TlsCertPath          string
+	TlsKeyPath           string
+	TlsExpiresAt         sql.NullTime
+	TlsLastError         string
+	SubscriptionID       int64
+	CustomerID           int64
+	DesiredStatus        string
+	DesiredPhpVersion    string
+	HttpsRedirect        bool
+	DesiredHttpsRedirect bool
+	SettingsStatus       string
+	SettingsError        string
+	TlsAutoRenew         bool
+	SystemAccountID      int64
+	DocumentRoot         string
+}
+
+func (q *Queries) GetSiteByDomain(ctx context.Context, domain string) (GetSiteByDomainRow, error) {
 	row := q.db.QueryRowContext(ctx, getSiteByDomain, domain)
-	var i Site
+	var i GetSiteByDomainRow
 	err := row.Scan(
 		&i.ID,
 		&i.OwnerUserID,
@@ -91,20 +150,51 @@ func (q *Queries) GetSiteByDomain(ctx context.Context, domain string) (Site, err
 }
 
 const listSites = `-- name: ListSites :many
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew, system_account_id, document_root
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew, system_account_id, document_root, parent_site_id, dns_zone_mode
 FROM sites
 ORDER BY id
 `
 
-func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
+type ListSitesRow struct {
+	ID                   int64
+	OwnerUserID          int64
+	Username             string
+	Domain               string
+	PhpVersion           string
+	Status               string
+	LastError            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TlsStatus            string
+	TlsIssuer            string
+	TlsCertPath          string
+	TlsKeyPath           string
+	TlsExpiresAt         sql.NullTime
+	TlsLastError         string
+	SubscriptionID       int64
+	CustomerID           int64
+	DesiredStatus        string
+	DesiredPhpVersion    string
+	HttpsRedirect        bool
+	DesiredHttpsRedirect bool
+	SettingsStatus       string
+	SettingsError        string
+	TlsAutoRenew         bool
+	SystemAccountID      int64
+	DocumentRoot         string
+	ParentSiteID         sql.NullInt64
+	DnsZoneMode          string
+}
+
+func (q *Queries) ListSites(ctx context.Context) ([]ListSitesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSites)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Site
+	var items []ListSitesRow
 	for rows.Next() {
-		var i Site
+		var i ListSitesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.OwnerUserID,
@@ -132,6 +222,8 @@ func (q *Queries) ListSites(ctx context.Context) ([]Site, error) {
 			&i.TlsAutoRenew,
 			&i.SystemAccountID,
 			&i.DocumentRoot,
+			&i.ParentSiteID,
+			&i.DnsZoneMode,
 		); err != nil {
 			return nil, err
 		}
@@ -260,6 +352,8 @@ INSERT INTO sites (
     username,
     domain,
     document_root,
+    parent_site_id,
+    dns_zone_mode,
     php_version,
     status,
     last_error
@@ -271,11 +365,28 @@ INSERT INTO sites (
     account.username,
     $2,
     account.home_path || '/domains/' || $2 || '/public_html',
+    parent.id,
+    CASE
+        WHEN parent.id IS NULL THEN 'separate'
+        ELSE template_revision.subdomain_policy
+    END,
     $3,
     'pending',
     ''
 FROM subscriptions s
 JOIN subscription_system_accounts account ON account.subscription_id = s.id
+JOIN dns_template_state template_state ON template_state.singleton
+JOIN dns_template_revisions template_revision
+  ON template_revision.id=template_state.active_revision_id
+LEFT JOIN LATERAL (
+    SELECT candidate.id
+    FROM sites candidate
+    WHERE candidate.subscription_id=s.id
+      AND candidate.domain<>$2
+      AND $2 LIKE '%.' || candidate.domain
+    ORDER BY length(candidate.domain) DESC,candidate.id
+    LIMIT 1
+) parent ON true
 WHERE s.id = $4
   AND s.status = 'active'
 ON CONFLICT (domain) DO UPDATE
@@ -286,6 +397,7 @@ SET
     system_account_id = EXCLUDED.system_account_id,
     username = EXCLUDED.username,
     document_root = EXCLUDED.document_root,
+    parent_site_id = EXCLUDED.parent_site_id,
     php_version = EXCLUDED.php_version,
     status = 'pending',
     last_error = '',
@@ -301,14 +413,43 @@ type UpsertSiteIntentParams struct {
 	SubscriptionID int64
 }
 
-func (q *Queries) UpsertSiteIntent(ctx context.Context, arg UpsertSiteIntentParams) (Site, error) {
+type UpsertSiteIntentRow struct {
+	ID                   int64
+	OwnerUserID          int64
+	Username             string
+	Domain               string
+	PhpVersion           string
+	Status               string
+	LastError            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	TlsStatus            string
+	TlsIssuer            string
+	TlsCertPath          string
+	TlsKeyPath           string
+	TlsExpiresAt         sql.NullTime
+	TlsLastError         string
+	SubscriptionID       int64
+	CustomerID           int64
+	DesiredStatus        string
+	DesiredPhpVersion    string
+	HttpsRedirect        bool
+	DesiredHttpsRedirect bool
+	SettingsStatus       string
+	SettingsError        string
+	TlsAutoRenew         bool
+	SystemAccountID      int64
+	DocumentRoot         string
+}
+
+func (q *Queries) UpsertSiteIntent(ctx context.Context, arg UpsertSiteIntentParams) (UpsertSiteIntentRow, error) {
 	row := q.db.QueryRowContext(ctx, upsertSiteIntent,
 		arg.OwnerUserID,
 		arg.Domain,
 		arg.PhpVersion,
 		arg.SubscriptionID,
 	)
-	var i Site
+	var i UpsertSiteIntentRow
 	err := row.Scan(
 		&i.ID,
 		&i.OwnerUserID,
