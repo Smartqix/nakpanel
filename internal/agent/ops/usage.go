@@ -9,10 +9,8 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -34,9 +32,20 @@ type UsageCollector struct {
 	logRoot       string
 	mariaDSN      string
 	containerRoot string
+	runtimeProbe  RuntimeCapabilityProbe
 }
 
-func NewUsageCollector(homeRoot, logRoot, mariaDSN string) *UsageCollector {
+type UsageCollectorOption func(*UsageCollector)
+
+func WithRuntimeCapabilityProbe(probe RuntimeCapabilityProbe) UsageCollectorOption {
+	return func(collector *UsageCollector) {
+		if probe != nil {
+			collector.runtimeProbe = probe
+		}
+	}
+}
+
+func NewUsageCollector(homeRoot, logRoot, mariaDSN string, options ...UsageCollectorOption) *UsageCollector {
 	if homeRoot == "" {
 		homeRoot = "/home"
 	}
@@ -46,10 +55,14 @@ func NewUsageCollector(homeRoot, logRoot, mariaDSN string) *UsageCollector {
 	if mariaDSN == "" {
 		mariaDSN = DefaultMariaDBDSN()
 	}
-	return &UsageCollector{
+	collector := &UsageCollector{
 		homeRoot: filepath.Clean(homeRoot), logRoot: filepath.Clean(logRoot), mariaDSN: mariaDSN,
-		containerRoot: "/var/lib/nakpanel/containers",
+		containerRoot: "/var/lib/nakpanel/containers", runtimeProbe: systemRuntimeCapabilityProbe{},
 	}
+	for _, option := range options {
+		option(collector)
+	}
+	return collector
 }
 
 func (c *UsageCollector) CollectUsage(ctx context.Context, req types.CollectUsageReq) (types.CollectUsageResult, error) {
@@ -117,31 +130,26 @@ func (c *UsageCollector) CollectUsage(ctx context.Context, req types.CollectUsag
 }
 
 func (c *UsageCollector) RuntimeCapabilities(ctx context.Context) (types.RuntimeCapabilities, error) {
-	matches, err := filepath.Glob("/etc/php/*/fpm/pool.d")
-	if err != nil {
-		return types.RuntimeCapabilities{}, err
+	probe := c.runtimeProbe
+	if probe == nil {
+		probe = systemRuntimeCapabilityProbe{}
 	}
-	versions := make([]string, 0, len(matches))
-	for _, match := range matches {
-		version := filepath.Base(filepath.Dir(filepath.Dir(match)))
-		if regexp.MustCompile(`^[0-9]+\.[0-9]+$`).MatchString(version) {
-			versions = append(versions, version)
-		}
-	}
-	sort.Sort(sort.Reverse(sort.StringSlice(versions)))
-	_, quotaErr := exec.LookPath("setquota")
+	runtimes, versions := probePHPRuntimes(ctx, probe)
+	_, quotaErr := probe.LookPath("setquota")
 	capabilities := types.RuntimeCapabilities{
-		PHPVersions: versions, DiskQuota: quotaErr == nil,
+		PHPVersions: versions, PHPRuntimes: runtimes, DiskQuota: quotaErr == nil,
 		ApplicationHealth:   []string{types.ApplicationHealthHTTP, types.ApplicationHealthTCP},
 		ApplicationPortFrom: 20000, ApplicationPortTo: 29999,
 	}
-	if podman, err := exec.LookPath("podman"); err == nil {
-		output, versionErr := exec.CommandContext(ctx, podman, "--version").CombinedOutput()
+	capabilities.ComposerAvailable, capabilities.ComposerVersion = probeToolVersion(ctx, probe, "composer", []string{"--no-plugins", "--no-scripts", "--version", "--no-ansi"}, composerVersionRE)
+	capabilities.WPCLIAvailable, capabilities.WPCLIVersion = probeToolVersion(ctx, probe, "wp", []string{"--version", "--allow-root"}, wpCLIVersionRE)
+	if podman, err := probe.LookPath("podman"); err == nil {
+		output, versionErr := probe.Run(ctx, podman, "--version")
 		if versionErr == nil {
 			capabilities.PodmanVersion = strings.TrimSpace(string(output))
 		}
-		_, newUIDErr := exec.LookPath("newuidmap")
-		_, newGIDErr := exec.LookPath("newgidmap")
+		_, newUIDErr := probe.LookPath("newuidmap")
+		_, newGIDErr := probe.LookPath("newgidmap")
 		_, subUIDErr := os.Stat("/etc/subuid")
 		_, subGIDErr := os.Stat("/etc/subgid")
 		capabilities.SubordinateIDSupport = newUIDErr == nil && newGIDErr == nil && subUIDErr == nil && subGIDErr == nil

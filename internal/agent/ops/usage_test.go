@@ -2,14 +2,200 @@ package ops
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/types"
 )
+
+type fakeRuntimeCapabilityProbe struct {
+	paths      map[string]string
+	outputs    map[string][]byte
+	errors     map[string]error
+	fpmConfigs []string
+}
+
+func (p *fakeRuntimeCapabilityProbe) LookPath(name string) (string, error) {
+	path, ok := p.paths[name]
+	if !ok {
+		return "", fmt.Errorf("%s not found", name)
+	}
+	return path, nil
+}
+
+func (p *fakeRuntimeCapabilityProbe) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	key := strings.Join(append([]string{name}, args...), "\x00")
+	if strings.Contains(filepath.Base(name), "php-fpm") && len(args) == 3 && args[0] == "-t" && args[1] == "-y" {
+		config, err := os.ReadFile(args[2])
+		if err != nil {
+			return nil, err
+		}
+		p.fpmConfigs = append(p.fpmConfigs, string(config))
+		key = runtimeCommandKey(name, "-t", "-y")
+	}
+	return p.outputs[key], p.errors[key]
+}
+
+func runtimeCommandKey(name string, args ...string) string {
+	return strings.Join(append([]string{name}, args...), "\x00")
+}
+
+func completeRuntimeProbe(versions ...string) *fakeRuntimeCapabilityProbe {
+	probe := &fakeRuntimeCapabilityProbe{
+		paths:   make(map[string]string),
+		outputs: make(map[string][]byte),
+		errors:  make(map[string]error),
+	}
+	extensions := "[PHP Modules]\nBCMath\ncURL\ndom\nexif\nfileinfo\ngd\nimagick\nintl\nmbstring\nmysqli\nOpenSSL\nredis\nSimpleXML\nsoap\nxml\nzip\n[Zend Modules]\nZend OPcache\n"
+	for _, version := range versions {
+		php := "/usr/bin/php" + version
+		fpm := "/usr/sbin/php-fpm" + version
+		probe.paths["php"+version] = php
+		probe.paths["php-fpm"+version] = fpm
+		probe.outputs[runtimeCommandKey(php, "-r", `echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;`)] = []byte(version)
+		probe.outputs[runtimeCommandKey(php, "-m")] = []byte(extensions)
+		probe.outputs[runtimeCommandKey(fpm, "-t", "-y")] = nil
+	}
+	return probe
+}
+
+func (p *fakeRuntimeCapabilityProbe) addTool(name, path string, output []byte) {
+	p.paths[name] = path
+	p.outputs[runtimeCommandKey(path, "--no-plugins", "--no-scripts", "--version", "--no-ansi")] = output
+	p.outputs[runtimeCommandKey(path, "--version", "--allow-root")] = output
+}
+
+func findPHPRuntime(t *testing.T, runtimes []types.PHPRuntimeCapability, version string) types.PHPRuntimeCapability {
+	t.Helper()
+	for _, runtime := range runtimes {
+		if runtime.Version == version {
+			return runtime
+		}
+	}
+	t.Fatalf("PHP runtime %s not found in %#v", version, runtimes)
+	return types.PHPRuntimeCapability{}
+}
+
+func TestRuntimeCapabilitiesReportsOnlyFullyReadyPHPVersions(t *testing.T) {
+	probe := completeRuntimeProbe("8.3", "8.4", "8.5")
+	probe.addTool("composer", "/usr/local/bin/composer", []byte("Composer version 2.8.11 2025-08-21 11:29:39\n"))
+	probe.addTool("wp", "/usr/local/bin/wp", []byte("WP-CLI 2.12.0\n"))
+	php83 := probe.paths["php8.3"]
+	probe.outputs[runtimeCommandKey(php83, "-m")] = []byte("bcmath\ncurl\ndom\nexif\nfileinfo\ngd\nimagick\nintl\nmbstring\nmysqli\nopenssl\nredis\nSimpleXML\nsoap\nxml\nZend OPcache\n")
+
+	collector := NewUsageCollector("", "", "", WithRuntimeCapabilityProbe(probe))
+	got, err := collector.RuntimeCapabilities(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"8.5", "8.4"}; !reflect.DeepEqual(got.PHPVersions, want) {
+		t.Fatalf("PHPVersions = %#v, want %#v", got.PHPVersions, want)
+	}
+	if len(got.PHPRuntimes) != 3 {
+		t.Fatalf("PHPRuntimes = %#v, want three discovered runtimes", got.PHPRuntimes)
+	}
+	if runtime := findPHPRuntime(t, got.PHPRuntimes, "8.5"); !runtime.Ready || runtime.SupportStatus != types.PHPSupportActive {
+		t.Fatalf("PHP 8.5 runtime = %#v, want ready and active", runtime)
+	}
+	if runtime := findPHPRuntime(t, got.PHPRuntimes, "8.4"); !runtime.Ready || runtime.SupportStatus != types.PHPSupportActive {
+		t.Fatalf("PHP 8.4 runtime = %#v, want ready and active", runtime)
+	}
+	runtime83 := findPHPRuntime(t, got.PHPRuntimes, "8.3")
+	if runtime83.Ready || runtime83.SupportStatus != types.PHPSupportSecuritySupported {
+		t.Fatalf("PHP 8.3 runtime = %#v, want degraded and security-supported", runtime83)
+	}
+	if want := []string{"zip"}; !reflect.DeepEqual(runtime83.MissingExtensions, want) {
+		t.Fatalf("PHP 8.3 missing extensions = %#v, want %#v", runtime83.MissingExtensions, want)
+	}
+	if len(runtime83.ValidationErrors) != 1 || !strings.Contains(runtime83.ValidationErrors[0], "zip") {
+		t.Fatalf("PHP 8.3 validation errors = %#v, want an individual zip error", runtime83.ValidationErrors)
+	}
+	if !got.ComposerAvailable || got.ComposerVersion != "2.8.11" {
+		t.Fatalf("Composer capability = available %t version %q", got.ComposerAvailable, got.ComposerVersion)
+	}
+	if !got.WPCLIAvailable || got.WPCLIVersion != "2.12.0" {
+		t.Fatalf("WP-CLI capability = available %t version %q", got.WPCLIAvailable, got.WPCLIVersion)
+	}
+}
+
+func TestRuntimeCapabilitiesValidatesGeneratedIsolatedFPMConfig(t *testing.T) {
+	probe := completeRuntimeProbe("8.4")
+	collector := NewUsageCollector("", "", "", WithRuntimeCapabilityProbe(probe))
+
+	got, err := collector.RuntimeCapabilities(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime := findPHPRuntime(t, got.PHPRuntimes, "8.4"); !runtime.FPMConfigValid {
+		t.Fatalf("PHP 8.4 runtime = %#v, want valid FPM config", runtime)
+	}
+	if len(probe.fpmConfigs) != 1 {
+		t.Fatalf("validated FPM configs = %d, want 1", len(probe.fpmConfigs))
+	}
+	config := probe.fpmConfigs[0]
+	for _, want := range []string{"[global]", "daemonize = no", "[nakpanel-probe]", "pm.max_children = 1"} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("generated FPM config is missing %q:\n%s", want, config)
+		}
+	}
+	if strings.Contains(config, "include=") || strings.Contains(config, "pool.d") {
+		t.Fatalf("generated FPM config is not isolated:\n%s", config)
+	}
+}
+
+func TestRuntimeCapabilitiesKeepsValidationFailuresInsideRuntimeRecord(t *testing.T) {
+	probe := completeRuntimeProbe("8.3", "8.4")
+	php84 := probe.paths["php8.4"]
+	fpm84 := probe.paths["php-fpm8.4"]
+	probe.outputs[runtimeCommandKey(php84, "-r", `echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;`)] = []byte("8.3")
+	probe.errors[runtimeCommandKey(fpm84, "-t", "-y")] = errors.New("configuration rejected")
+
+	collector := NewUsageCollector("", "", "", WithRuntimeCapabilityProbe(probe))
+	got, err := collector.RuntimeCapabilities(context.Background())
+	if err != nil {
+		t.Fatalf("RuntimeCapabilities returned a top-level error: %v", err)
+	}
+	runtime := findPHPRuntime(t, got.PHPRuntimes, "8.4")
+	if runtime.Ready || runtime.FPMConfigValid {
+		t.Fatalf("PHP 8.4 runtime = %#v, want not ready", runtime)
+	}
+	joined := strings.Join(runtime.ValidationErrors, "\n")
+	for _, want := range []string{"expected 8.4", "configuration rejected"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("PHP 8.4 validation errors = %#v, want %q", runtime.ValidationErrors, want)
+		}
+	}
+	if want := []string{"8.3"}; !reflect.DeepEqual(got.PHPVersions, want) {
+		t.Fatalf("PHPVersions = %#v, want %#v", got.PHPVersions, want)
+	}
+}
+
+func TestRuntimeCapabilitiesDescribesPartiallyInstalledRuntime(t *testing.T) {
+	probe := completeRuntimeProbe("8.5")
+	delete(probe.paths, "php8.5")
+
+	collector := NewUsageCollector("", "", "", WithRuntimeCapabilityProbe(probe))
+	got, err := collector.RuntimeCapabilities(context.Background())
+	if err != nil {
+		t.Fatalf("RuntimeCapabilities returned a top-level error: %v", err)
+	}
+	runtime := findPHPRuntime(t, got.PHPRuntimes, "8.5")
+	if runtime.Ready || runtime.CLIAvailable || !runtime.FPMAvailable || !runtime.FPMConfigValid {
+		t.Fatalf("partially installed PHP 8.5 runtime = %#v", runtime)
+	}
+	if !reflect.DeepEqual(runtime.MissingExtensions, requiredPHPExtensions) {
+		t.Fatalf("missing extensions = %#v, want full baseline %#v", runtime.MissingExtensions, requiredPHPExtensions)
+	}
+	if len(got.PHPVersions) != 0 {
+		t.Fatalf("PHPVersions = %#v, want none", got.PHPVersions)
+	}
+}
 
 func TestUsageCollectorMeasuresHomeAndIncrementalNginxTraffic(t *testing.T) {
 	root := t.TempDir()

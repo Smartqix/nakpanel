@@ -232,6 +232,7 @@ install_panel_binary() {
 run_component_installers() {
   bash "${SCRIPT_DIR}/phase8-install.sh"
   bash "${SCRIPT_DIR}/phase21-25-install.sh"
+  bash "${SCRIPT_DIR}/phase30-install.sh"
 }
 
 # The mail installer adds `include "/etc/bind/nakpanel/named.conf"` to BIND's
