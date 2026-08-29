@@ -21,7 +21,7 @@ func TestPhase15VerifierCoversAccountProvisioning(t *testing.T) {
 	}
 	for _, want := range []string{
 		"phase14-verify.sh", "Phase 15 schema is incomplete", "phase15acct", "account convergence",
-		"shared domain provisioning", "subscription_policy_overrides", "Domain policy", "queue='heavy'",
+		"shared domain provisioning", "subscription_policy_overrides", "Requests / second", "PHP settings", "queue='heavy'",
 		"subscription account and provisioning verification passed",
 	} {
 		if !strings.Contains(string(data), want) {

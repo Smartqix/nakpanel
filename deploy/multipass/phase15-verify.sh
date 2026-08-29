@@ -37,7 +37,7 @@ REMOTE
 
 VM_IP="$(vm_ip)"
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 db_value() {
   multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -tAc "$1" | tr -d '[:space:]'
@@ -93,17 +93,34 @@ else
     -d 'subscription_name=Phase15 Account Boundary' -d 'status=active' -d 'sync_mode=synced'
 fi
 wait_for_value 'account convergence' "SELECT convergence_status FROM subscription_system_accounts WHERE subscription_id=${subscription_id}" 'in_sync'
-[[ "$(db_value "SELECT username||':'||home_path FROM subscription_system_accounts WHERE subscription_id=${subscription_id}")" == 'phase15acct:/home/phase15acct' ]] || exit 1
+system_username="$(db_value "SELECT username FROM subscription_system_accounts WHERE subscription_id=${subscription_id}")"
+system_home="$(db_value "SELECT home_path FROM subscription_system_accounts WHERE subscription_id=${subscription_id}")"
+[[ -n "${system_username}" && "${system_home}" == "/home/${system_username}" ]] || {
+  echo "subscription system identity is invalid: ${system_username}:${system_home}" >&2
+  exit 1
+}
 
 site_id="$(db_value "SELECT id FROM sites WHERE domain='phase15-account.test'")"
-if [[ -z "${site_id}" ]]; then
+if [[ -n "${site_id}" ]]; then
+  existing_subscription_id="$(db_value "SELECT subscription_id FROM sites WHERE id=${site_id}")"
+  if [[ "${existing_subscription_id}" != "${subscription_id}" ]]; then
+    multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -v ON_ERROR_STOP=1 \
+      -c "UPDATE sites site
+SET subscription_id=${subscription_id},customer_id=subscription.customer_id,
+    system_account_id=account.id,username=account.username,
+    document_root=account.home_path||'/domains/'||site.domain||'/public_html'
+FROM subscriptions subscription
+JOIN subscription_system_accounts account ON account.subscription_id=subscription.id
+WHERE site.id=${site_id} AND subscription.id=${subscription_id};"
+  fi
+else
   post_admin phase15-domain sites -d "subscription_id=${subscription_id}" -d 'domain=phase15-account.test' -d 'username=phase15acct' -d 'php_version=8.3'
   site_id="$(db_value "SELECT id FROM sites WHERE domain='phase15-account.test'")"
 fi
 wait_for_value 'shared domain provisioning' "SELECT status FROM sites WHERE id=${site_id}" 'active'
-expected_root='/home/phase15acct/domains/phase15-account.test/public_html'
-[[ "$(db_value "SELECT username||':'||document_root FROM sites WHERE id=${site_id}")" == "phase15acct:${expected_root}" ]] || exit 1
-[[ "$(multipass exec "${VM_NAME}" -- sudo stat -c %U "${expected_root}" | tr -d '[:space:]')" == 'phase15acct' ]] || { echo 'shared document root ownership is incorrect' >&2; exit 1; }
+expected_root="${system_home}/domains/phase15-account.test/public_html"
+[[ "$(db_value "SELECT username||':'||document_root FROM sites WHERE id=${site_id}")" == "${system_username}:${expected_root}" ]] || exit 1
+[[ "$(multipass exec "${VM_NAME}" -- sudo stat -c %U "${expected_root}" | tr -d '[:space:]')" == "${system_username}" ]] || { echo 'shared document root ownership is incorrect' >&2; exit 1; }
 
 backup_id="$(db_value "SELECT id FROM backups WHERE site_id=${site_id} ORDER BY id DESC LIMIT 1")"
 if [[ -z "${backup_id}" ]]; then
@@ -115,29 +132,31 @@ wait_for_value 'heavy queue backup' "SELECT status FROM backups WHERE id=${backu
 post_admin phase15-subscription-policy "subscriptions/${subscription_id}/policy" \
   --data-urlencode 'policy_patch={"resources":{"max_sftp_identities":2,"max_scheduled_tasks":2},"permissions":{"sftp":true,"scheduled_tasks":true},"access":{"shell_mode":"sftp","sftp_only":true},"web":{"request_rate_per_second":0,"request_burst":0,"max_connections":0,"static_cache":true}}'
 post_admin phase15-site-policy "sites/${site_id}/policy" \
-  --data-urlencode 'policy_patch={"web":{"request_rate_per_second":0,"request_burst":0,"max_connections":0,"static_cache":true},"php":{"memory_limit_mb":0}}'
+  --data-urlencode 'policy_patch={"web":{"request_rate_per_second":0,"request_burst":0,"max_connections":0,"static_cache":true},"php":{"memory_limit_mb":64}}'
 
 sftp_id="$(db_value "SELECT id FROM sftp_access_identities WHERE subscription_id=${subscription_id} AND name='phase15-deploy'")"
-if [[ -z "${sftp_id}" ]]; then
-  post_admin phase15-sftp "subscriptions/${subscription_id}/sftp" -d 'name=phase15-deploy' -d 'relative_root=domains/phase15-account.test' \
-    --data-urlencode 'public_key=ssh-ed25519 YWJjZA== phase15-verify' -d 'enabled=true'
-  sftp_id="$(db_value "SELECT id FROM sftp_access_identities WHERE subscription_id=${subscription_id} AND name='phase15-deploy'")"
-fi
+post_admin phase15-sftp "subscriptions/${subscription_id}/sftp" -d "resource_id=${sftp_id:-0}" \
+  -d 'name=phase15-deploy' -d 'relative_root=domains/phase15-account.test' \
+  --data-urlencode 'public_key=ssh-ed25519 YWJjZA== phase15-verify' -d 'enabled=true'
+sftp_id="$(db_value "SELECT id FROM sftp_access_identities WHERE subscription_id=${subscription_id} AND name='phase15-deploy'")"
 task_id="$(db_value "SELECT id FROM scheduled_tasks WHERE subscription_id=${subscription_id} AND name='phase15-daily'")"
-if [[ -z "${task_id}" ]]; then
-  post_admin phase15-task "subscriptions/${subscription_id}/scheduled-tasks" -d 'name=phase15-daily' -d 'schedule=0 2 * * *' \
-    -d 'working_directory=.' -d 'timeout_seconds=60' -d 'command=/usr/bin/true' -d 'enabled=true'
-  task_id="$(db_value "SELECT id FROM scheduled_tasks WHERE subscription_id=${subscription_id} AND name='phase15-daily'")"
-fi
+post_admin phase15-task "subscriptions/${subscription_id}/scheduled-tasks" -d "resource_id=${task_id:-0}" \
+  -d "site_id=${site_id}" -d 'name=phase15-daily' -d 'schedule=0 2 * * *' \
+  -d 'working_directory=.' -d 'timeout_seconds=60' -d 'command=/usr/bin/true' -d 'enabled=true'
+task_id="$(db_value "SELECT id FROM scheduled_tasks WHERE subscription_id=${subscription_id} AND name='phase15-daily'")"
 wait_for_value 'task convergence' "SELECT convergence_status FROM scheduled_tasks WHERE id=${task_id}" 'in_sync'
-multipass exec "${VM_NAME}" -- sudo grep -Fq 'phase15-verify' /home/phase15acct/.ssh/authorized_keys
-multipass exec "${VM_NAME}" -- sudo test -f "/etc/systemd/system/nakpanel-task-${task_id}.timer"
+authorized_keys="/etc/nakpanel/ssh/authorized_keys/${system_username}"
+multipass exec "${VM_NAME}" -- sudo grep -Fq 'phase15-verify' "${authorized_keys}"
+# Scheduled tasks are now dispatched by River so every execution has bounded
+# output, durable run history, and failure notifications. Convergence removes
+# the older timer units to prevent duplicate execution.
+multipass exec "${VM_NAME}" -- sudo test ! -e "/etc/systemd/system/nakpanel-task-${task_id}.timer"
 
 post_admin phase15-task-delete "subscriptions/${subscription_id}/services/task/${task_id}/delete"
 post_admin phase15-sftp-delete "subscriptions/${subscription_id}/services/sftp/${sftp_id}/delete"
 wait_for_value 'service cleanup convergence' "SELECT convergence_status FROM subscription_system_accounts WHERE subscription_id=${subscription_id}" 'in_sync'
 multipass exec "${VM_NAME}" -- sudo test ! -e "/etc/systemd/system/nakpanel-task-${task_id}.timer"
-if multipass exec "${VM_NAME}" -- sudo grep -Fq 'phase15-verify' /home/phase15acct/.ssh/authorized_keys; then
+if multipass exec "${VM_NAME}" -- sudo grep -Fq 'phase15-verify' "${authorized_keys}"; then
   echo 'deleted SFTP identity remains in authorized_keys' >&2
   exit 1
 fi
@@ -146,9 +165,13 @@ curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/subscription
 for marker in 'Websites &amp; Domains' 'Resources' 'Account Access' 'Mail' 'Scheduled Tasks' 'Applications' 'Activity' 'phase15-account.test'; do
   assert_contains "${tmpdir}/subscription.html" "${marker}"
 done
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}?tab=hosting" > "${tmpdir}/domain.html"
-for marker in 'Domain policy' 'Request rate per second' 'PHP-FPM children' 'data-np-site-policy-builder'; do
-  assert_contains "${tmpdir}/domain.html" "${marker}"
+curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}/web-server" > "${tmpdir}/web-server.html"
+for marker in 'Hosting' 'Requests / second' 'data-np-site-policy-builder'; do
+  assert_contains "${tmpdir}/web-server.html" "${marker}"
+done
+curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}?tab=php" > "${tmpdir}/php.html"
+for marker in 'PHP settings' 'PHP-FPM master' 'data-np-site-policy-builder'; do
+  assert_contains "${tmpdir}/php.html" "${marker}"
 done
 
 [[ "$(db_value "SELECT COUNT(*) FROM river_job WHERE kind='create_site' AND queue='default' AND args->>'site_id'='${site_id}'")" -gt 0 ]] || { echo 'interactive site provisioning left the default queue' >&2; exit 1; }

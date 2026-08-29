@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# The security suite is a required gate: no production deploy until both jobs
+# below are green. Mark `unit` and `security-suite` as required status checks
+# in branch protection for `main`.
+jobs:
+  unit:
+    name: unit + generated-code + go test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+      - name: Verify generated code is committed (templ/sqlc)
+        run: |
+          make generate
+          git diff --exit-code || { echo "generated code is stale; run 'make generate'"; exit 1; }
+      - name: go vet
+        run: go vet ./...
+      - name: go test (includes the in-process security guards)
+        run: go test ./... -count=1
+
+  security-suite:
+    name: adversarial security + reliability gate (Multipass)
+    # The end-to-end suites provision real tenants on a throwaway Multipass
+    # VM, so they must run on a self-hosted runner that has Multipass
+    # installed. Label such a runner [self-hosted, multipass].
+    runs-on: [self-hosted, multipass]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - name: Run the adversarial validation suite (Parts A-H)
+        run: ./deploy/multipass/security-verify.sh
+        env:
+          NAKPANEL_MULTIPASS_VM: nakpanel-security-ci
+      - name: Run the Phase 29 reliability gate (upgrade, reboot, DR)
+        # Reuses the VM the security suite just provisioned; the disaster
+        # recovery leg brings up (and destroys) a second short-lived VM.
+        run: ./deploy/multipass/phase29-verify.sh
+        env:
+          NAKPANEL_MULTIPASS_VM: nakpanel-security-ci
+          NAKPANEL_MULTIPASS_DR_VM: nakpanel-relgate-dr-ci
+          NAKPANEL_SKIP_PRIOR_PHASES: '1'

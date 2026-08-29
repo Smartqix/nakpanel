@@ -61,16 +61,24 @@ func (RestoreBackupArgs) InsertOpts() river.InsertOpts {
 }
 
 type ConfigureDNSZoneArgs struct {
-	ZoneID  int64             `json:"zone_id" river:"unique"`
-	Domain  string            `json:"domain"`
-	Address string            `json:"address"`
-	Serial  int64             `json:"serial"`
-	Records []types.DNSRecord `json:"records,omitempty"`
+	ZoneID          int64             `json:"zone_id" river:"unique"`
+	DesiredRevision int64             `json:"desired_revision,omitempty"`
+	Bulk            bool              `json:"bulk,omitempty"`
+	Domain          string            `json:"domain,omitempty"`
+	Address         string            `json:"address,omitempty"`
+	Serial          int64             `json:"serial,omitempty"`
+	Records         []types.DNSRecord `json:"records,omitempty"`
 }
 
 func (ConfigureDNSZoneArgs) Kind() string { return "configure_dns_zone" }
 
-func (ConfigureDNSZoneArgs) InsertOpts() river.InsertOpts { return activeUniqueOpts() }
+func (args ConfigureDNSZoneArgs) InsertOpts() river.InsertOpts {
+	opts := activeUniqueOpts()
+	if args.Bulk {
+		opts.Queue = "system"
+	}
+	return opts
+}
 
 type ReconcileSystemArgs struct {
 	RunID       int64                        `json:"run_id"`
@@ -135,6 +143,11 @@ type Phase6StatusStore interface {
 	MarkDNSFailed(ctx context.Context, id int64, message string) error
 	MarkReconcileActive(ctx context.Context, id int64, result types.ReconcileSystemResult) error
 	MarkReconcileFailed(ctx context.Context, id int64, message string) error
+}
+
+type DNSIntentStore interface {
+	DNSZoneRequest(context.Context, int64) (types.ConfigureDNSZoneReq, error)
+	MarkDNSRevisionFailed(context.Context, int64, int64, string) error
 }
 
 type AutomatedReporter interface {
@@ -294,23 +307,40 @@ func (w *ConfigureDNSZoneWorker) Work(ctx context.Context, job *river.Job[Config
 	if w.agent == nil {
 		return errors.New("agent dns client is not configured")
 	}
-	resp, err := w.agent.ConfigureDNSZone(ctx, types.ConfigureDNSZoneReq{Domain: job.Args.Domain, Address: job.Args.Address, Serial: job.Args.Serial, Records: job.Args.Records})
+	req := types.ConfigureDNSZoneReq{
+		ZoneID: job.Args.ZoneID, DesiredRevision: job.Args.DesiredRevision,
+		Domain: job.Args.Domain, Address: job.Args.Address, Serial: job.Args.Serial, Records: job.Args.Records,
+	}
+	if intents, ok := w.store.(DNSIntentStore); ok {
+		var err error
+		req, err = intents.DNSZoneRequest(ctx, job.Args.ZoneID)
+		if err != nil {
+			return err
+		}
+	}
+	resp, err := w.agent.ConfigureDNSZone(ctx, req)
 	if err != nil {
-		w.markDNSFailed(ctx, job.Args.ZoneID, err.Error())
+		w.markDNSFailed(ctx, job.Args.ZoneID, req.DesiredRevision, err.Error())
 		return err
 	}
 	var result types.ConfigureDNSZoneResult
 	if err := decodeAgentResult(resp, &result); err != nil {
-		w.markDNSFailed(ctx, job.Args.ZoneID, err.Error())
+		w.markDNSFailed(ctx, job.Args.ZoneID, req.DesiredRevision, err.Error())
 		return err
 	}
+	result.DesiredRevision = req.DesiredRevision
+	result.Mode = req.Mode
 	if w.store != nil {
 		return w.store.MarkDNSActive(ctx, job.Args.ZoneID, result)
 	}
 	return nil
 }
 
-func (w *ConfigureDNSZoneWorker) markDNSFailed(ctx context.Context, id int64, message string) {
+func (w *ConfigureDNSZoneWorker) markDNSFailed(ctx context.Context, id, desiredRevision int64, message string) {
+	if intents, ok := w.store.(DNSIntentStore); ok {
+		_ = intents.MarkDNSRevisionFailed(ctx, id, desiredRevision, message)
+		return
+	}
 	if w.store != nil {
 		_ = w.store.MarkDNSFailed(ctx, id, message)
 	}

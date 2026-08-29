@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -102,24 +103,38 @@ type Data struct {
 	SubscriptionUsage    []types.SubscriptionUsage
 	UsageAlerts          []types.UsageAlert
 	Capabilities         types.RuntimeCapabilities
+	CapabilityLoadError  string
 	SubscriptionServices SubscriptionServicesData
+	ServiceLoadError     string
 }
 
 type SubscriptionServicesData struct {
-	Accounts     []types.SubscriptionSystemAccount
-	SFTP         []SFTPIdentity
-	Tasks        []ScheduledTask
-	MailDomains  []MailDomain
-	Mailboxes    []Mailbox
-	MailAliases  []MailAlias
-	WebmailHosts []WebmailHost
-	Applications []Application
-	SitePolicies []SitePolicy
+	Accounts               []types.SubscriptionSystemAccount
+	SFTP                   []SFTPIdentity
+	Tasks                  []ScheduledTask
+	MailDomains            []MailDomain
+	Mailboxes              []Mailbox
+	MailAliases            []MailAlias
+	WebmailHosts           []WebmailHost
+	Applications           []Application
+	ApplicationGenerations []types.ApplicationGeneration
+	ApplicationPresets     []types.ApplicationPreset
+	ProtectedDirectories   []types.ProtectedDirectory
+	SitePolicies           []SitePolicy
+	FTP                    []types.FTPAccount
+	Git                    []types.GitRepository
+	GitDeployments         []types.GitDeployment
+	Valkey                 []types.ValkeyInstance
+	Staging                []types.StagingOperation
+	TaskRuns               []types.ScheduledTaskRun
+	SiteUsage              []SiteUsage
 }
 
 type SitePolicy struct {
 	SiteID          int64
 	SubscriptionID  int64
+	InheritedPolicy types.HostingPolicy
+	SiteOverride    json.RawMessage
 	EffectivePolicy types.HostingPolicy
 }
 
@@ -143,6 +158,22 @@ type ScheduledTask struct {
 	Enabled          bool
 	Status           string
 	LastError        string
+	Kind             string
+	URL              string
+	Script           string
+	Timezone         string
+}
+
+type SiteUsage struct {
+	SiteID            int64
+	PeriodStart       time.Time
+	DocumentRootBytes int64
+	TrafficBytes      int64
+	RequestCount      int64
+	ErrorCount        int64
+	PHPState          string
+	CollectedAt       NullableTime
+	LastError         string
 }
 
 type MailDomain struct {
@@ -175,16 +206,26 @@ type MailAlias struct {
 }
 
 type Application struct {
-	ID             int64
-	SubscriptionID int64
-	SiteID         int64
-	Name           string
-	Runtime        string
-	ImageRef       string
-	DesiredState   string
-	AppliedState   string
-	Status         string
-	LastError      string
+	ID              int64
+	SubscriptionID  int64
+	SiteID          int64
+	Name            string
+	Runtime         string
+	ImageRef        string
+	DesiredState    string
+	AppliedState    string
+	Status          string
+	LastError       string
+	RouteMode       string
+	RoutePrefix     string
+	ContainerPort   int
+	EndpointPort    int
+	HealthKind      string
+	HealthPath      string
+	ActiveRevision  int64
+	ObservedState   string
+	ObservedMessage string
+	ObservedAt      NullableTime
 }
 
 type Site struct {
@@ -210,6 +251,8 @@ type Site struct {
 	DesiredHTTPSRedirect bool
 	SettingsStatus       string
 	SettingsError        string
+	ParentSiteID         int64
+	DNSZoneMode          string
 }
 
 type Database struct {
@@ -283,15 +326,25 @@ type WebmailHost struct {
 }
 
 type DNSZone struct {
-	ID        int64
-	Domain    string
-	Address   string
-	Serial    int64
-	Status    string
-	ZonePath  string
-	LastError string
-	CreatedAt time.Time
-	SiteID    int64
+	ID                int64
+	Domain            string
+	Address           string
+	IPv6Address       string
+	Serial            int64
+	Status            string
+	ZonePath          string
+	LastError         string
+	CreatedAt         time.Time
+	SiteID            int64
+	ParentZoneID      int64
+	Mode              string
+	UpstreamPrimaries string
+	TransferCIDRs     string
+	TemplateRevision  int64
+	TemplateStatus    string
+	DesiredRevision   int64
+	AppliedRevision   int64
+	SOA               types.DNSSOASettings
 }
 
 type ReconciliationRun struct {
@@ -384,10 +437,18 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			}
 		}
 		if s.capabilities != nil {
-			data.Capabilities, _ = s.capabilities.RuntimeCapabilities(ctx)
+			var err error
+			data.Capabilities, err = s.capabilities.RuntimeCapabilities(ctx)
+			if err != nil {
+				data.CapabilityLoadError = "runtime capabilities unavailable"
+			}
 		}
 		if services, ok := s.scoped.(SubscriptionServiceReader); ok {
-			data.SubscriptionServices, _ = services.ListSubscriptionServices(ctx, user)
+			var err error
+			data.SubscriptionServices, err = services.ListSubscriptionServices(ctx, user)
+			if err != nil {
+				data.ServiceLoadError = "hosting service policy unavailable"
+			}
 		}
 		return data, nil
 	}
@@ -437,8 +498,12 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 		usageAlerts, _ = usage.ListUsageAlerts(ctx, user, 25)
 	}
 	capabilities := types.RuntimeCapabilities{}
+	capabilityLoadError := ""
 	if s.capabilities != nil {
-		capabilities, _ = s.capabilities.RuntimeCapabilities(ctx)
+		capabilities, err = s.capabilities.RuntimeCapabilities(ctx)
+		if err != nil {
+			capabilityLoadError = "runtime capabilities unavailable"
+		}
 	}
 	plans := []controlquota.Plan(nil)
 	settings := controlquota.Settings{}
@@ -487,30 +552,34 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 	}
 
 	data := Data{
-		Sites:             make([]Site, 0, len(sites)),
-		Databases:         make([]Database, 0, len(databases)),
-		Jobs:              jobs,
-		JobLoadError:      jobLoadError,
-		Phase6:            phase6,
-		Phase6Error:       phase6Error,
-		Quotas:            quotas,
-		QuotaLoadError:    quotaLoadError,
-		Plans:             plans,
-		Customers:         customers,
-		Subscriptions:     subscriptions,
-		Settings:          settings,
-		CommittedDiskMB:   committedDiskMB,
-		PlanLoadError:     planLoadError,
-		AuditEvents:       auditEvents,
-		Resellers:         resellers,
-		ResellerPlans:     resellerPlans,
-		AddonPlans:        addonPlans,
-		SubscriptionUsage: usageItems,
-		UsageAlerts:       usageAlerts,
-		Capabilities:      capabilities,
+		Sites:               make([]Site, 0, len(sites)),
+		Databases:           make([]Database, 0, len(databases)),
+		Jobs:                jobs,
+		JobLoadError:        jobLoadError,
+		Phase6:              phase6,
+		Phase6Error:         phase6Error,
+		Quotas:              quotas,
+		QuotaLoadError:      quotaLoadError,
+		Plans:               plans,
+		Customers:           customers,
+		Subscriptions:       subscriptions,
+		Settings:            settings,
+		CommittedDiskMB:     committedDiskMB,
+		PlanLoadError:       planLoadError,
+		AuditEvents:         auditEvents,
+		Resellers:           resellers,
+		ResellerPlans:       resellerPlans,
+		AddonPlans:          addonPlans,
+		SubscriptionUsage:   usageItems,
+		UsageAlerts:         usageAlerts,
+		Capabilities:        capabilities,
+		CapabilityLoadError: capabilityLoadError,
 	}
 	if services, ok := s.scoped.(SubscriptionServiceReader); ok {
-		data.SubscriptionServices, _ = services.ListSubscriptionServices(ctx, user)
+		data.SubscriptionServices, err = services.ListSubscriptionServices(ctx, user)
+		if err != nil {
+			data.ServiceLoadError = "hosting service policy unavailable"
+		}
 	}
 	for _, site := range sites {
 		data.Sites = append(data.Sites, Site{
@@ -536,6 +605,8 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			DesiredHTTPSRedirect: site.DesiredHttpsRedirect,
 			SettingsStatus:       site.SettingsStatus,
 			SettingsError:        site.SettingsError,
+			ParentSiteID:         site.ParentSiteID.Int64,
+			DNSZoneMode:          site.DnsZoneMode,
 		})
 	}
 	for _, database := range databases {

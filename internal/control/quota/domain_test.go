@@ -2,6 +2,7 @@ package quota
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 	"time"
@@ -37,6 +38,8 @@ func TestChangeSubscriptionSubscriberRollsBackWholeBatch(t *testing.T) {
 	mock.ExpectQuery("FROM customers").WithArgs(int64(42)).WillReturnRows(sqlmock.NewRows([]string{
 		"id", "login_user_id", "email", "display_name", "company", "status", "notes", "created_at", "updated_at", "reseller_id",
 	}).AddRow(int64(42), nil, "new@example.test", "New owner", "", "active", "", now, now, int64(9)))
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs(int64(10)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT provisioning_state`).WithArgs(int64(10)).WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery("FROM subscriptions s JOIN customers c").WithArgs(int64(10)).WillReturnRows(
 		sqlmock.NewRows([]string{"reseller_id"}).AddRow(int64(9)),
 	)
@@ -44,6 +47,8 @@ func TestChangeSubscriptionSubscriberRollsBackWholeBatch(t *testing.T) {
 	mock.ExpectExec("UPDATE sites SET customer_id").WithArgs(int64(10), int64(42)).WillReturnResult(sqlmock.NewResult(0, 2))
 	mock.ExpectExec("UPDATE databases SET customer_id").WithArgs(int64(10), int64(42)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("UPDATE backups SET customer_id").WithArgs(int64(10), int64(42)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs(int64(11)).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT provisioning_state`).WithArgs(int64(11)).WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery("FROM subscriptions s JOIN customers c").WithArgs(int64(11)).WillReturnError(errors.New("injected second-subscription failure"))
 	mock.ExpectRollback()
 

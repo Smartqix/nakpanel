@@ -24,6 +24,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
@@ -82,10 +83,15 @@ func NewFileManager(opts FileManagerOptions) *FileManager {
 }
 
 func (m *FileManager) ListFiles(ctx context.Context, req types.FileListReq) (types.FileListResult, error) {
-	id, err := m.identity(req.Username)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
 	if err != nil {
 		return types.FileListResult{}, err
 	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileListResult{}, err
+	}
+	defer restoreIdentity()
 	rel, err := cleanManagedPath(req.Path, true)
 	if err != nil {
 		return types.FileListResult{}, err
@@ -158,10 +164,15 @@ func (m *FileManager) ListFiles(ctx context.Context, req types.FileListReq) (typ
 }
 
 func (m *FileManager) SearchFiles(ctx context.Context, req types.FileSearchReq) (types.FileSearchResult, error) {
-	id, err := m.identity(req.Username)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
 	if err != nil {
 		return types.FileSearchResult{}, err
 	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileSearchResult{}, err
+	}
+	defer restoreIdentity()
 	rel, err := cleanManagedPath(req.Path, true)
 	if err != nil {
 		return types.FileSearchResult{}, err
@@ -232,7 +243,16 @@ func (m *FileManager) SearchFiles(ctx context.Context, req types.FileSearchReq) 
 }
 
 func (m *FileManager) ReadFile(ctx context.Context, req types.FileReadReq) (types.FileReadResult, error) {
-	id, rel, full, info, err := m.regularFile(req.Username, req.Path)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
+	if err != nil {
+		return types.FileReadResult{}, err
+	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileReadResult{}, err
+	}
+	defer restoreIdentity()
+	rel, full, info, err := m.regularFileForIdentity(id, req.Path)
 	if err != nil {
 		return types.FileReadResult{}, err
 	}
@@ -257,7 +277,16 @@ func (m *FileManager) ReadFile(ctx context.Context, req types.FileReadReq) (type
 }
 
 func (m *FileManager) WriteFile(ctx context.Context, req types.FileWriteReq) (types.FileMutationResult, error) {
-	id, rel, full, info, err := m.regularFile(req.Username, req.Path)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	defer restoreIdentity()
+	rel, full, info, err := m.regularFileForIdentity(id, req.Path)
 	if err != nil {
 		return types.FileMutationResult{}, err
 	}
@@ -282,10 +311,15 @@ func (m *FileManager) WriteFile(ctx context.Context, req types.FileWriteReq) (ty
 }
 
 func (m *FileManager) CreateEntry(ctx context.Context, req types.FileCreateReq) (types.FileMutationResult, error) {
-	id, err := m.identity(req.Username)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
 	if err != nil {
 		return types.FileMutationResult{}, err
 	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	defer restoreIdentity()
 	rel, err := cleanManagedPath(req.Path, false)
 	if err != nil {
 		return types.FileMutationResult{}, err
@@ -331,10 +365,15 @@ func (m *FileManager) MoveFiles(ctx context.Context, req types.FileBatchReq) (ty
 }
 
 func (m *FileManager) copyOrMove(ctx context.Context, req types.FileBatchReq, move bool) (types.FileMutationResult, error) {
-	id, err := m.identity(req.Username)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
 	if err != nil {
 		return types.FileMutationResult{}, err
 	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	defer restoreIdentity()
 	destRel, err := cleanManagedPath(req.Destination, true)
 	if err != nil {
 		return types.FileMutationResult{}, err
@@ -415,10 +454,15 @@ func (m *FileManager) copyOrMove(ctx context.Context, req types.FileBatchReq, mo
 }
 
 func (m *FileManager) DeleteFiles(ctx context.Context, req types.FileBatchReq) (types.FileMutationResult, error) {
-	id, err := m.identity(req.Username)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
 	if err != nil {
 		return types.FileMutationResult{}, err
 	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	defer restoreIdentity()
 	paths, err := normalizeManagedPaths(req.Paths)
 	if err != nil {
 		return types.FileMutationResult{}, err
@@ -477,10 +521,15 @@ func (m *FileManager) DeleteFiles(ctx context.Context, req types.FileBatchReq) (
 }
 
 func (m *FileManager) ArchiveFiles(ctx context.Context, req types.FileArchiveReq) (types.FileMutationResult, error) {
-	id, err := m.identity(req.Username)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
 	if err != nil {
 		return types.FileMutationResult{}, err
 	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	defer restoreIdentity()
 	paths, err := normalizeManagedPaths(req.Paths)
 	if err != nil {
 		return types.FileMutationResult{}, err
@@ -608,7 +657,16 @@ func (m *FileManager) ArchiveFiles(ctx context.Context, req types.FileArchiveReq
 }
 
 func (m *FileManager) ExtractArchive(ctx context.Context, req types.FileExtractReq) (types.FileMutationResult, error) {
-	id, archiveRel, archivePath, info, err := m.regularFile(req.Username, req.Path)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	defer restoreIdentity()
+	archiveRel, archivePath, info, err := m.regularFileForIdentity(id, req.Path)
 	if err != nil {
 		return types.FileMutationResult{}, err
 	}
@@ -714,10 +772,15 @@ func (m *FileManager) ExtractArchive(ctx context.Context, req types.FileExtractR
 }
 
 func (m *FileManager) SetFileMode(ctx context.Context, req types.FileModeReq) (types.FileMutationResult, error) {
-	id, err := m.identity(req.Username)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
 	if err != nil {
 		return types.FileMutationResult{}, err
 	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	defer restoreIdentity()
 	rel, err := cleanManagedPath(req.Path, false)
 	if err != nil {
 		return types.FileMutationResult{}, err
@@ -759,23 +822,12 @@ func (m *FileManager) SetFileMode(ctx context.Context, req types.FileModeReq) (t
 }
 
 func (m *FileManager) ImportTransfer(ctx context.Context, req types.FileTransferImportReq) (types.FileMutationResult, error) {
-	id, err := m.identity(req.Username)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
 	if err != nil {
 		return types.FileMutationResult{}, err
 	}
 	if !transferTokenRE.MatchString(req.TransferToken) || !strings.HasPrefix(req.TransferToken, "upload-") {
 		return types.FileMutationResult{}, errors.New("invalid upload transfer token")
-	}
-	rel, err := cleanManagedPath(req.Destination, false)
-	if err != nil {
-		return types.FileMutationResult{}, err
-	}
-	destination, err := m.resolve(id, rel, true, false)
-	if err != nil {
-		return types.FileMutationResult{}, err
-	}
-	if _, err := os.Lstat(destination); err == nil && !req.Overwrite {
-		return types.FileMutationResult{}, fmt.Errorf("%w: destination already exists", errFileConflict)
 	}
 	transfer := filepath.Join(m.transferDir, req.TransferToken)
 	info, err := os.Lstat(transfer)
@@ -787,9 +839,32 @@ func (m *FileManager) ImportTransfer(ctx context.Context, req types.FileTransfer
 		return types.FileMutationResult{}, err
 	}
 	defer input.Close()
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	identityRestored := false
+	defer func() {
+		if !identityRestored {
+			restoreIdentity()
+		}
+	}()
+	rel, err := cleanManagedPath(req.Destination, false)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	destination, err := m.resolve(id, rel, true, false)
+	if err != nil {
+		return types.FileMutationResult{}, err
+	}
+	if _, err := os.Lstat(destination); err == nil && !req.Overwrite {
+		return types.FileMutationResult{}, fmt.Errorf("%w: destination already exists", errFileConflict)
+	}
 	if err := writeOwnedFileAtomic(ctx, destination, input, 0o644, id); err != nil {
 		return types.FileMutationResult{}, err
 	}
+	restoreIdentity()
+	identityRestored = true
 	if err := os.Remove(transfer); err != nil && !os.IsNotExist(err) {
 		return types.FileMutationResult{}, err
 	}
@@ -797,13 +872,34 @@ func (m *FileManager) ImportTransfer(ctx context.Context, req types.FileTransfer
 }
 
 func (m *FileManager) ExportTransfer(ctx context.Context, req types.FileTransferExportReq) (types.FileTransferResult, error) {
-	id, _, source, info, err := m.regularFile(req.Username, req.Path)
+	id, err := m.identity(req.SiteID, req.Username, req.Domain)
+	if err != nil {
+		return types.FileTransferResult{}, err
+	}
+	restoreIdentity, err := assumeFileSystemIdentity(id)
+	if err != nil {
+		return types.FileTransferResult{}, err
+	}
+	identityRestored := false
+	defer func() {
+		if !identityRestored {
+			restoreIdentity()
+		}
+	}()
+	_, source, info, err := m.regularFileForIdentity(id, req.Path)
 	if err != nil {
 		return types.FileTransferResult{}, err
 	}
 	if !canAccess(info, id, 0o4) {
 		return types.FileTransferResult{}, errFileForbidden
 	}
+	input, err := os.Open(source)
+	if err != nil {
+		return types.FileTransferResult{}, err
+	}
+	defer input.Close()
+	restoreIdentity()
+	identityRestored = true
 	if err := os.MkdirAll(m.transferDir, 0o700); err != nil {
 		return types.FileTransferResult{}, err
 	}
@@ -812,11 +908,6 @@ func (m *FileManager) ExportTransfer(ctx context.Context, req types.FileTransfer
 		return types.FileTransferResult{}, err
 	}
 	target := filepath.Join(m.transferDir, token)
-	input, err := os.Open(source)
-	if err != nil {
-		return types.FileTransferResult{}, err
-	}
-	defer input.Close()
 	output, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 	if err != nil {
 		return types.FileTransferResult{}, err
@@ -848,10 +939,17 @@ func (m *FileManager) ExportTransfer(ctx context.Context, req types.FileTransfer
 	return types.FileTransferResult{TransferToken: token, Name: filepath.Base(source), Size: info.Size(), ModifiedAt: info.ModTime()}, nil
 }
 
-func (m *FileManager) identity(username string) (siteIdentity, error) {
+func (m *FileManager) identity(siteID int64, username, domain string) (siteIdentity, error) {
 	username = strings.TrimSpace(username)
 	if !fileManagerUsernameRE.MatchString(username) {
 		return siteIdentity{}, fmt.Errorf("unsafe file manager username %q", username)
+	}
+	domain = site.NormalizeDomain(domain)
+	if domain != "" && site.ValidateDomain(domain) != nil {
+		return siteIdentity{}, fmt.Errorf("unsafe file manager domain %q", domain)
+	}
+	if (siteID == 0) != (domain == "") {
+		return siteIdentity{}, errors.New("file manager site identity is incomplete")
 	}
 	account, err := user.Lookup(username)
 	if err != nil {
@@ -873,16 +971,48 @@ func (m *FileManager) identity(username string) (siteIdentity, error) {
 			}
 		}
 	}
-	root := filepath.Join(m.homeRoot, username, "public_html")
+	resolvedHomeRoot, err := filepath.EvalSymlinks(m.homeRoot)
+	if err != nil {
+		return siteIdentity{}, fmt.Errorf("resolve configured home root: %w", err)
+	}
+	root := filepath.Join(resolvedHomeRoot, username, "public_html")
+	if siteID > 0 {
+		root = filepath.Join(resolvedHomeRoot, username, "domains", domain, "public_html")
+	}
 	resolvedRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
 		return siteIdentity{}, fmt.Errorf("resolve site document root: %w", err)
+	}
+	if filepath.Clean(resolvedRoot) != filepath.Clean(root) {
+		return siteIdentity{}, errors.New("site document root must not contain symbolic links")
+	}
+	accountHome := filepath.Join(resolvedHomeRoot, username)
+	if err := ensureWithinRoot(accountHome, resolvedRoot); err != nil {
+		return siteIdentity{}, err
+	}
+	info, err := os.Lstat(root)
+	if err != nil {
+		return siteIdentity{}, err
+	}
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return siteIdentity{}, errors.New("site document root must be a real directory")
 	}
 	return siteIdentity{username: username, uid: uid, gid: gid, groups: groups, root: resolvedRoot}, nil
 }
 
 func (m *FileManager) resolve(id siteIdentity, rel string, allowMissing, followFinal bool) (string, error) {
 	if rel == "" {
+		info, err := os.Lstat(id.root)
+		if err != nil {
+			return "", err
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return "", errors.New("site document root changed during the request")
+		}
+		resolved, err := filepath.EvalSymlinks(id.root)
+		if err != nil || filepath.Clean(resolved) != filepath.Clean(id.root) {
+			return "", errors.New("site document root changed during the request")
+		}
 		return id.root, nil
 	}
 	joined := filepath.Join(id.root, filepath.FromSlash(rel))
@@ -917,27 +1047,23 @@ func (m *FileManager) resolve(id siteIdentity, rel string, allowMissing, followF
 	return resolved, nil
 }
 
-func (m *FileManager) regularFile(username, requestedPath string) (siteIdentity, string, string, os.FileInfo, error) {
-	id, err := m.identity(username)
-	if err != nil {
-		return siteIdentity{}, "", "", nil, err
-	}
+func (m *FileManager) regularFileForIdentity(id siteIdentity, requestedPath string) (string, string, os.FileInfo, error) {
 	rel, err := cleanManagedPath(requestedPath, false)
 	if err != nil {
-		return siteIdentity{}, "", "", nil, err
+		return "", "", nil, err
 	}
 	full, err := m.resolve(id, rel, false, true)
 	if err != nil {
-		return siteIdentity{}, "", "", nil, err
+		return "", "", nil, err
 	}
 	info, err := os.Stat(full)
 	if err != nil {
-		return siteIdentity{}, "", "", nil, err
+		return "", "", nil, err
 	}
 	if !info.Mode().IsRegular() {
-		return siteIdentity{}, "", "", nil, errors.New("path is not a regular file")
+		return "", "", nil, errors.New("path is not a regular file")
 	}
-	return id, rel, full, info, nil
+	return rel, full, info, nil
 }
 
 func cleanManagedPath(raw string, allowRoot bool) (string, error) {
@@ -1054,6 +1180,9 @@ func chownPath(name string, id siteIdentity) error {
 	if os.Geteuid() != 0 {
 		return nil
 	}
+	if info, err := os.Lstat(name); err == nil && ownedByIdentity(info, id) {
+		return nil
+	}
 	return os.Chown(name, id.uid, id.gid)
 }
 
@@ -1061,7 +1190,15 @@ func chownOpenFile(file *os.File, id siteIdentity) error {
 	if os.Geteuid() != 0 {
 		return nil
 	}
+	if info, err := file.Stat(); err == nil && ownedByIdentity(info, id) {
+		return nil
+	}
 	return file.Chown(id.uid, id.gid)
+}
+
+func ownedByIdentity(info os.FileInfo, id siteIdentity) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && int(stat.Uid) == id.uid && int(stat.Gid) == id.gid
 }
 
 func writeOwnedFileAtomic(ctx context.Context, destination string, reader io.Reader, mode os.FileMode, id siteIdentity) error {

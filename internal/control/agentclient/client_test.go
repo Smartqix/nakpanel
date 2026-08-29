@@ -80,6 +80,66 @@ func TestClientCreateDatabaseOverUnixSocket(t *testing.T) {
 	}
 }
 
+func TestClientInspectServerReturnsDecodedResult(t *testing.T) {
+	socketPath, stop := startTestAgent(t)
+	defer stop()
+
+	inventory, err := New(socketPath).InspectServer(context.Background())
+	if err != nil {
+		t.Fatalf("InspectServer returned error: %v", err)
+	}
+	if inventory.Hostname != "phase26.test" || inventory.Status != types.ServerStateHealthy {
+		t.Fatalf("InspectServer returned zero or unexpected inventory: %#v", inventory)
+	}
+}
+
+func TestControlManagedServiceUsesDurableOperationIDAsRPCID(t *testing.T) {
+	dir, err := os.MkdirTemp("/tmp", "nakagent-operation-id-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	socketPath := filepath.Join(dir, "agent.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+
+	requests := make(chan types.Request, 1)
+	go func() {
+		conn, acceptErr := listener.Accept()
+		if acceptErr != nil {
+			return
+		}
+		defer conn.Close()
+		var req types.Request
+		if json.NewDecoder(conn).Decode(&req) == nil {
+			requests <- req
+			payload, _ := json.Marshal(types.ControlManagedServiceResult{
+				ServiceID: "web", Action: "restart",
+			})
+			_ = json.NewEncoder(conn).Encode(types.Response{ID: req.ID, OK: true, Data: payload})
+		}
+	}()
+
+	const operationID = "op_12345678901234567890"
+	_, err = New(socketPath).ControlManagedService(context.Background(), types.ControlManagedServiceReq{
+		ServiceID: "web", Action: "restart", OperationID: operationID,
+	})
+	if err != nil {
+		t.Fatalf("ControlManagedService error = %v", err)
+	}
+	select {
+	case req := <-requests:
+		if req.ID != operationID {
+			t.Fatalf("RPC request ID = %q, want %q", req.ID, operationID)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("agent did not receive managed service request")
+	}
+}
+
 func TestClientIssueCertOverUnixSocket(t *testing.T) {
 	socketPath, stop := startTestAgent(t)
 	defer stop()
@@ -209,6 +269,7 @@ func startTestAgent(t *testing.T) (string, func()) {
 		SiteProvisioner:        testSiteProvisioner{},
 		DatabaseProvisioner:    testDatabaseProvisioner{},
 		CertificateProvisioner: testCertificateProvisioner{},
+		ServerAdmin:            testServerAdmin{},
 	})
 	server := agentrpc.NewServer(dispatcher)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -252,4 +313,22 @@ func (testCertificateProvisioner) IssueCert(ctx context.Context, req types.Issue
 		CertPath: "/tmp/fullchain.pem",
 		KeyPath:  "/tmp/privkey.pem",
 	}, nil
+}
+
+type testServerAdmin struct{}
+
+func (testServerAdmin) InspectServer(context.Context) (types.ServerInventory, error) {
+	return types.ServerInventory{Hostname: "phase26.test", Status: types.ServerStateHealthy}, nil
+}
+
+func (testServerAdmin) InspectManagedServices(context.Context, types.InspectManagedServicesReq) ([]types.ManagedService, error) {
+	return []types.ManagedService{{ID: "web", ActiveState: "active"}}, nil
+}
+
+func (testServerAdmin) InspectTime(context.Context) (types.TimeState, error) {
+	return types.TimeState{Timezone: "UTC", Available: true}, nil
+}
+
+func (testServerAdmin) InspectPHP(context.Context) ([]types.PHPHandlerState, error) {
+	return []types.PHPHandlerState{{ID: "php82", Version: "8.2", ServiceID: "php-8.2"}}, nil
 }

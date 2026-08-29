@@ -23,7 +23,7 @@ REMOTE
 
 VM_IP="$(vm_ip)"
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 fail() { echo "phase19: $*" >&2; exit 1; }
 db_value() {
   multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -tAc "$1" | tr -d '[:space:]'
@@ -92,34 +92,48 @@ if grep -Fq "phase19-ui@${domain}" "${tmpdir}/client-mail.html"; then
   fail "client can see another customer's mailbox"
 fi
 
-# Admin-only status and settings, including blank-password preservation and
-# explicit relay clearing. The secret is inserted only to prove it never
-# needs to round-trip through HTML.
+# Admin-only status and settings, including encrypted replacement,
+# blank-password preservation, and explicit relay clearing.
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/mail/status" -o "${tmpdir}/mail-status.json"
 grep -Fq '"state":"active"' "${tmpdir}/mail-status.json" || fail "Stalwart is not active in /mail/status"
 grep -Fq '"listeners"' "${tmpdir}/mail-status.json" || fail "mail status has no listener summary"
-multipass exec "${VM_NAME}" -- sudo -u postgres psql -qd nakpanel -c "UPDATE mail_settings SET smarthost_password='phase19-preserve-secret'" >/dev/null
 mail_host="$(db_value 'SELECT mail_hostname FROM mail_settings WHERE id')"
 relay_host="$(db_value 'SELECT smarthost_host FROM mail_settings WHERE id')"
 relay_port="$(db_value 'SELECT smarthost_port FROM mail_settings WHERE id')"
 relay_user="$(db_value 'SELECT smarthost_username FROM mail_settings WHERE id')"
 rate_limit="$(db_value 'SELECT outbound_rate_limit FROM mail_settings WHERE id')"
 threshold="$(db_value 'SELECT queue_alert_threshold FROM mail_settings WHERE id')"
-curl -sk -o /dev/null -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
+curl -sk --fail -o /dev/null -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
+  -d "mail_hostname=${mail_host}" -d "smarthost_host=${relay_host}" -d "smarthost_port=${relay_port}" \
+  -d "smarthost_username=${relay_user}" --data-urlencode 'smarthost_password=phase19-preserve-secret' -d "outbound_rate_limit=${rate_limit}" \
+  -d "queue_alert_threshold=${threshold}" "https://${VM_IP}:7443/settings/mail"
+[[ "$(db_value "SELECT COUNT(*) FROM service_secrets WHERE scope='mail' AND name='smarthost'")" == '1' ]] || fail "replacement relay credential was not encrypted"
+[[ -z "$(db_value 'SELECT smarthost_password FROM mail_settings WHERE id')" ]] || fail "replacement relay credential remained in the legacy plaintext column"
+[[ "$(db_value "SELECT COUNT(*) FROM audit_events WHERE metadata::text LIKE '%phase19-preserve-secret%'")" == '0' ]] || fail "relay credential leaked into audit metadata"
+curl -sk --fail -o /dev/null -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
   -d "mail_hostname=${mail_host}" -d "smarthost_host=${relay_host}" -d "smarthost_port=${relay_port}" \
   -d "smarthost_username=${relay_user}" -d 'smarthost_password=' -d "outbound_rate_limit=${rate_limit}" \
   -d "queue_alert_threshold=${threshold}" "https://${VM_IP}:7443/settings/mail"
-[[ "$(db_value "SELECT smarthost_password FROM mail_settings WHERE id")" == 'phase19-preserve-secret' ]] || fail "blank relay password did not preserve the current credential"
+[[ "$(db_value "SELECT COUNT(*) FROM service_secrets WHERE scope='mail' AND name='smarthost'")" == '1' ]] || fail "blank relay password did not preserve the encrypted credential"
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/tools-settings" -o "${tmpdir}/settings.html"
 if grep -Fq 'phase19-preserve-secret' "${tmpdir}/settings.html"; then
   fail "relay password rendered in Tools & Settings"
 fi
-curl -sk -o /dev/null -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
+curl -sk --fail -o /dev/null -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
   -d "mail_hostname=${mail_host}" -d 'clear_smarthost=true' -d "outbound_rate_limit=${rate_limit}" \
   -d "queue_alert_threshold=${threshold}" "https://${VM_IP}:7443/settings/mail"
 [[ -z "$(db_value 'SELECT smarthost_password FROM mail_settings WHERE id')" ]] || fail "Clear relay retained the relay credential"
+[[ "$(db_value "SELECT COUNT(*) FROM service_secrets WHERE scope='mail' AND name='smarthost'")" == '0' ]] || fail "Clear relay retained the encrypted relay credential"
 
-multipass exec "${VM_NAME}" -- sudo systemctl is-active --quiet stalwart-mail.service || fail "Stalwart is not healthy"
+stalwart_ready=0
+for _ in $(seq 1 60); do
+  if multipass exec "${VM_NAME}" -- sudo systemctl is-active --quiet stalwart-mail.service; then
+    stalwart_ready=1
+    break
+  fi
+  sleep 2
+done
+[[ "${stalwart_ready}" == '1' ]] || fail "Stalwart is not healthy"
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
 cd "${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"

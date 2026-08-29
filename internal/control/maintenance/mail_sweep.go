@@ -67,7 +67,7 @@ WHERE md.enabled AND NOT md.delete_requested ORDER BY md.domain`)
 	if len(tenants) == 0 {
 		return nil
 	}
-	settings, err := controlquota.ReadMailSettings(ctx, s.db)
+	settings, err := controlquota.ReadMailSettings(ctx, s.db, s.secrets)
 	if err != nil {
 		return err
 	}
@@ -90,6 +90,11 @@ WHERE md.enabled AND NOT md.delete_requested ORDER BY md.domain`)
 		backlog := queue.SenderDomains[tenant.domain]
 		key := "mail-spike:" + tenant.domain
 		if backlog < settings.QueueAlertThreshold {
+			// A capped snapshot proves only a lower bound. Preserve an existing
+			// alert until a complete collection confirms the backlog recovered.
+			if queue.Truncated {
+				continue
+			}
 			if _, err := s.db.ExecContext(ctx, `UPDATE notifications SET resolved_at=now(),updated_at=now() WHERE dedupe_key=$1 AND resolved_at IS NULL`, key); err != nil {
 				return err
 			}

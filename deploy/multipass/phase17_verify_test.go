@@ -11,7 +11,7 @@ func TestPhase17VerifierCoversTrustedCustomTLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"phase16-verify.sh", "update-ca-certificates", "ssl set-custom", "custom:active:false", "does not match certificate", "certificate_expiring", "PRIVATE KEY", "Upload custom certificate", "Phase 17 custom TLS verification passed"} {
+	for _, want := range []string{"phase16-verify.sh", "update-ca-certificates", "ssl set-custom", "custom:active:false", "does not match certificate", "certificate_expiring", "PRIVATE KEY", "Install custom certificate", "Phase 17 custom TLS verification passed"} {
 		if !strings.Contains(string(data), want) {
 			t.Fatalf("phase17-verify.sh is missing %q", want)
 		}

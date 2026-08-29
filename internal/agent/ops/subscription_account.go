@@ -9,11 +9,13 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/policy"
@@ -27,25 +29,29 @@ var (
 )
 
 type SubscriptionAccountProvisionerOptions struct {
-	HomeRoot        string
-	SystemdUnitDir  string
-	TaskStateDir    string
-	UserManager     SystemUserManager
-	Ownership       OwnershipManager
-	DiskQuota       DiskQuotaManager
-	Runner          CommandRunner
-	SiteProvisioner *SiteProvisioner
+	HomeRoot          string
+	SystemdUnitDir    string
+	TaskStateDir      string
+	UserManager       SystemUserManager
+	Ownership         OwnershipManager
+	DiskQuota         DiskQuotaManager
+	Runner            CommandRunner
+	SiteProvisioner   *SiteProvisioner
+	SSHConfigDir      string
+	AuthorizedKeysDir string
 }
 
 type SubscriptionAccountProvisioner struct {
-	homeRoot       string
-	systemdUnitDir string
-	taskStateDir   string
-	users          SystemUserManager
-	ownership      OwnershipManager
-	diskQuota      DiskQuotaManager
-	runner         CommandRunner
-	sites          *SiteProvisioner
+	homeRoot          string
+	systemdUnitDir    string
+	taskStateDir      string
+	users             SystemUserManager
+	ownership         OwnershipManager
+	diskQuota         DiskQuotaManager
+	runner            CommandRunner
+	sites             *SiteProvisioner
+	sshConfigDir      string
+	authorizedKeysDir string
 }
 
 func NewSubscriptionAccountProvisioner(opts SubscriptionAccountProvisionerOptions) *SubscriptionAccountProvisioner {
@@ -61,6 +67,22 @@ func NewSubscriptionAccountProvisioner(opts SubscriptionAccountProvisionerOption
 	if taskStateDir == "" {
 		taskStateDir = "/var/lib/nakpanel/tasks"
 	}
+	sshConfigDir := opts.SSHConfigDir
+	if sshConfigDir == "" {
+		if homeRoot == "/home" {
+			sshConfigDir = "/etc/ssh/sshd_config.d"
+		} else {
+			sshConfigDir = filepath.Join(filepath.Dir(homeRoot), "ssh", "sshd_config.d")
+		}
+	}
+	authorizedKeysDir := opts.AuthorizedKeysDir
+	if authorizedKeysDir == "" {
+		if homeRoot == "/home" {
+			authorizedKeysDir = "/etc/nakpanel/ssh/authorized_keys"
+		} else {
+			authorizedKeysDir = filepath.Join(filepath.Dir(homeRoot), "ssh", "authorized_keys")
+		}
+	}
 	runner := opts.Runner
 	if runner == nil {
 		runner = ExecRunner{}
@@ -68,7 +90,7 @@ func NewSubscriptionAccountProvisioner(opts SubscriptionAccountProvisionerOption
 	return &SubscriptionAccountProvisioner{
 		homeRoot: homeRoot, systemdUnitDir: unitDir, taskStateDir: taskStateDir, users: opts.UserManager,
 		ownership: opts.Ownership, diskQuota: opts.DiskQuota, runner: runner,
-		sites: opts.SiteProvisioner,
+		sites: opts.SiteProvisioner, sshConfigDir: sshConfigDir, authorizedKeysDir: authorizedKeysDir,
 	}
 }
 
@@ -78,6 +100,13 @@ func (p *SubscriptionAccountProvisioner) MigrateSubscriptionAccount(ctx context.
 	}
 	if p.sites == nil {
 		return types.MigrateSubscriptionAccountResult{}, errors.New("site provisioner is not configured for account migration")
+	}
+	if adopter, ok := p.users.(interface {
+		AdoptLegacyUser(context.Context, string) error
+	}); ok {
+		if err := adopter.AdoptLegacyUser(ctx, req.Username); err != nil {
+			return types.MigrateSubscriptionAccountResult{}, fmt.Errorf("adopt legacy subscription user: %w", err)
+		}
 	}
 	if _, err := p.EnsureSubscriptionAccount(ctx, types.EnsureSubscriptionAccountReq{
 		SubscriptionID: req.SubscriptionID, Username: req.Username, HomePath: req.HomePath,
@@ -114,11 +143,11 @@ func (p *SubscriptionAccountProvisioner) MigrateSubscriptionAccount(ctx context.
 			_ = os.RemoveAll(path)
 		}
 		for _, item := range suspended {
-			_ = p.sites.SetHostingState(ctx, types.SetHostingStateReq{Username: item.LegacyUsername, Domain: item.Domain, PHPVersion: item.PHPVersion, State: "active"})
+			_ = p.sites.SetHostingState(ctx, types.SetHostingStateReq{SiteID: item.SiteID, Username: item.LegacyUsername, Domain: item.Domain, PHPVersion: item.PHPVersion, State: "active"})
 		}
 	}
 	for _, item := range req.Sites {
-		if err := p.sites.SetHostingState(ctx, types.SetHostingStateReq{Username: item.LegacyUsername, Domain: item.Domain, PHPVersion: item.PHPVersion, State: "suspended"}); err != nil {
+		if err := p.sites.SetHostingState(ctx, types.SetHostingStateReq{SiteID: item.SiteID, Username: item.LegacyUsername, Domain: item.Domain, PHPVersion: item.PHPVersion, State: "suspended"}); err != nil {
 			rollback()
 			return types.MigrateSubscriptionAccountResult{}, fmt.Errorf("suspend %s for final sync: %w", item.Domain, err)
 		}
@@ -156,6 +185,22 @@ func (p *SubscriptionAccountProvisioner) MigrateSubscriptionAccount(ctx context.
 		if err := p.ownership.ChownRecursive(ctx, req.HomePath, req.Username); err != nil {
 			rollback()
 			return types.MigrateSubscriptionAccountResult{}, err
+		}
+	}
+	for _, anchor := range []string{req.HomePath, filepath.Join(req.HomePath, "domains")} {
+		if err := secureDirectoryAnchor(anchor, 0, 0, 0o711); err != nil {
+			rollback()
+			return types.MigrateSubscriptionAccountResult{}, fmt.Errorf("secure migrated account directory %q: %w", anchor, err)
+		}
+	}
+	for _, item := range req.Sites {
+		if err := secureDirectoryAnchor(filepath.Dir(item.TargetDocroot), 0, 0, 0o711); err != nil {
+			rollback()
+			return types.MigrateSubscriptionAccountResult{}, fmt.Errorf("secure migrated domain directory %q: %w", item.Domain, err)
+		}
+		if err := secureHostedDocumentTree(item.TargetDocroot); err != nil {
+			rollback()
+			return types.MigrateSubscriptionAccountResult{}, fmt.Errorf("secure migrated document root %q: %w", item.Domain, err)
 		}
 	}
 	legacyHomes := make([]string, 0, len(req.Sites))
@@ -301,6 +346,94 @@ func createMigrationSnapshot(path string, sites []types.LegacySiteMigration) (er
 	return nil
 }
 
+func restoreMigrationSnapshot(path, target string, siteID int64) error {
+	target = filepath.Clean(target)
+	resolved, err := filepath.EvalSymlinks(target)
+	if err != nil || resolved != target {
+		return errors.New("staging rollback target is missing or unsafe")
+	}
+	entries, err := os.ReadDir(target)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(target, entry.Name())); err != nil {
+			return err
+		}
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	gz, err := gzip.NewReader(file)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+	reader := tar.NewReader(gz)
+	prefix := filepath.ToSlash(filepath.Join("sites", strconv.FormatInt(siteID, 10)))
+	for {
+		header, readErr := reader.Next()
+		if errors.Is(readErr, io.EOF) {
+			break
+		}
+		if readErr != nil {
+			return readErr
+		}
+		name := filepath.ToSlash(filepath.Clean(header.Name))
+		if name != prefix && !strings.HasPrefix(name, prefix+"/") {
+			continue
+		}
+		relative := strings.TrimPrefix(strings.TrimPrefix(name, prefix), "/")
+		destination := filepath.Join(target, filepath.FromSlash(relative))
+		if destination != target && !strings.HasPrefix(destination, target+string(filepath.Separator)) {
+			return errors.New("staging rollback archive escapes the target")
+		}
+		parent := filepath.Dir(destination)
+		if destination == target {
+			parent = target
+		}
+		if err := ensureNoSymlinkComponents(target, parent); err != nil {
+			return err
+		}
+		mode := os.FileMode(header.Mode).Perm()
+		switch header.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(destination, mode); err != nil {
+				return err
+			}
+		case tar.TypeReg:
+			if err := os.MkdirAll(filepath.Dir(destination), 0o750); err != nil {
+				return err
+			}
+			output, err := os.OpenFile(destination, os.O_CREATE|os.O_EXCL|os.O_WRONLY, mode)
+			if err != nil {
+				return err
+			}
+			_, copyErr := io.Copy(output, reader)
+			closeErr := output.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+		case tar.TypeSymlink:
+			link := filepath.Clean(header.Linkname)
+			if filepath.IsAbs(link) || link == ".." || strings.HasPrefix(link, ".."+string(filepath.Separator)) {
+				return errors.New("staging rollback archive contains an escaping symlink")
+			}
+			if err := os.Symlink(header.Linkname, destination); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported staging rollback entry %q", header.Name)
+		}
+	}
+	return nil
+}
+
 func copyMigrationTree(source, target string) error {
 	resolvedSource, err := filepath.EvalSymlinks(source)
 	if err != nil || filepath.Clean(resolvedSource) != filepath.Clean(source) {
@@ -323,7 +456,11 @@ func copyMigrationTree(source, target string) error {
 		if destination != target && !strings.HasPrefix(destination, target+string(filepath.Separator)) {
 			return errors.New("migration destination escapes target")
 		}
-		if err := ensureNoSymlinkComponents(target, filepath.Dir(destination)); err != nil {
+		parent := filepath.Dir(destination)
+		if destination == target {
+			parent = target
+		}
+		if err := ensureNoSymlinkComponents(target, parent); err != nil {
 			return err
 		}
 		if info.Mode()&os.ModeSymlink != 0 {
@@ -422,13 +559,13 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 	if err := p.users.EnsureUser(ctx, req.Username); err != nil {
 		return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("ensure subscription user: %w", err)
 	}
-	for _, dir := range []string{req.HomePath, filepath.Join(req.HomePath, "domains"), filepath.Join(req.HomePath, ".ssh")} {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
+	for _, dir := range []string{req.HomePath, filepath.Join(req.HomePath, "domains")} {
+		if err := ensureManagedDirectory(p.homeRoot, dir, 0o700); err != nil {
 			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("create account directory %q: %w", dir, err)
 		}
 	}
 	for _, domain := range req.Domains {
-		if err := os.MkdirAll(domain.DocumentRoot, 0o750); err != nil {
+		if err := ensureManagedDirectory(p.homeRoot, domain.DocumentRoot, 0o750); err != nil {
 			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("create document root %q: %w", domain.DocumentRoot, err)
 		}
 	}
@@ -438,6 +575,17 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 	if p.ownership != nil {
 		if err := p.ownership.ChownRecursive(ctx, req.HomePath, req.Username); err != nil {
 			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("set account ownership: %w", err)
+		}
+	}
+	for _, anchor := range []string{req.HomePath, filepath.Join(req.HomePath, "domains")} {
+		if err := secureDirectoryAnchor(anchor, 0, 0, 0o711); err != nil {
+			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("secure account directory %q: %w", anchor, err)
+		}
+	}
+	for _, domain := range req.Domains {
+		domainRoot := filepath.Dir(domain.DocumentRoot)
+		if err := secureDirectoryAnchor(domainRoot, 0, 0, 0o711); err != nil {
+			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("secure domain directory %q: %w", domain.Domain, err)
 		}
 	}
 	if req.Policy.Resources.DiskMB > 0 {
@@ -455,16 +603,21 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 				phpVersion = "8.3"
 			}
 			if err := p.sites.CreateSite(ctx, types.CreateSiteReq{
-				SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain.Domain,
+				SiteID: domain.SiteID, SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain.Domain,
 				PHPVersion: phpVersion, SharedAccount: true, Limits: siteLimitsFromPolicy(domain.Policy),
 			}); err != nil {
 				return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("converge domain %q: %w", domain.Domain, err)
 			}
 			if req.State == "suspended" || domain.State == "suspended" {
-				if err := p.sites.SetHostingState(ctx, types.SetHostingStateReq{Username: req.Username, Domain: domain.Domain, PHPVersion: phpVersion, State: "suspended"}); err != nil {
+				if err := p.sites.SetHostingState(ctx, types.SetHostingStateReq{SiteID: domain.SiteID, Username: req.Username, Domain: domain.Domain, PHPVersion: phpVersion, State: "suspended"}); err != nil {
 					return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("suspend domain %q: %w", domain.Domain, err)
 				}
 			}
+		}
+	}
+	for _, domain := range req.Domains {
+		if err := secureHostedDocumentTree(domain.DocumentRoot); err != nil {
+			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("secure document root %q: %w", domain.DocumentRoot, err)
 		}
 	}
 	uid, err := p.lookupUID(ctx, req.Username)
@@ -477,7 +630,39 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 	if _, err := p.runner.Run(ctx, "systemctl", "daemon-reload"); err != nil {
 		return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("reload systemd units: %w", err)
 	}
+	if _, err := p.runner.Run(ctx, "sshd", "-t"); err != nil {
+		return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("validate Nakpanel SFTP configuration: %w", err)
+	}
+	if _, err := p.runner.Run(ctx, "systemctl", "reload", "ssh.service"); err != nil {
+		return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("reload OpenSSH: %w", err)
+	}
 	return types.EnsureSubscriptionAccountResult{Username: req.Username, HomePath: req.HomePath, LinuxUID: uid, Changed: true}, nil
+}
+
+func secureHostedDocumentTree(root string) error {
+	if os.Geteuid() != 0 {
+		return nil
+	}
+	group, err := user.LookupGroup("www-data")
+	if err != nil {
+		return fmt.Errorf("lookup nginx group: %w", err)
+	}
+	gid, err := strconv.Atoi(group.Gid)
+	if err != nil {
+		return err
+	}
+	return filepath.Walk(root, func(name string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if _, ok := info.Sys().(*syscall.Stat_t); !ok {
+			return fmt.Errorf("read ownership for %q", name)
+		}
+		return secureHostedPath(root, name, info, gid)
+	})
 }
 
 func siteLimitsFromPolicy(p types.HostingPolicy) types.SiteResourceLimits {
@@ -490,6 +675,16 @@ func siteLimitsFromPolicy(p types.HostingPolicy) types.SiteResourceLimits {
 		PHPAllowURLFOpen: p.PHP.AllowURLFOpen, PHPExecEnabled: p.PHP.ExecEnabled,
 		RequestRatePerSecond: p.Web.RequestRatePerSecond, RequestBurst: p.Web.RequestBurst,
 		MaxConnections: p.Web.MaxConnections, StaticCache: p.Web.StaticCache,
+		PreferredDomain:   p.Web.PreferredDomain,
+		FastCGIMicrocache: p.Web.FastCGIMicrocache, RequestBodyLimitMB: p.Web.RequestBodyLimitMB,
+		Compression: p.Web.Compression, CacheTTLSeconds: p.Web.CacheTTLSeconds,
+		ConnectTimeoutSeconds: p.Web.ConnectTimeoutSecs, ReadTimeoutSeconds: p.Web.ReadTimeoutSecs,
+		SecurityHeaderPreset: p.Web.SecurityHeaderPreset, IndexFiles: p.Web.IndexFiles,
+		AllowedCIDRs:     strings.Join(p.Web.AllowedCIDRs, ","),
+		ErrorDocument404: p.Web.ErrorDocument404, ErrorDocument50X: p.Web.ErrorDocument50X,
+		PHPFPMMode: p.PHP.FPMMode, PHPFPMIdleTimeoutSecs: p.PHP.FPMIdleTimeoutSecs,
+		PHPRequestTerminateSecs: p.PHP.RequestTerminateSecs, PHPOPcacheEnabled: p.PHP.OPcacheEnabled,
+		PHPOPcacheMemoryMB: p.PHP.OPcacheMemoryMB,
 	}
 }
 
@@ -499,6 +694,9 @@ func ValidateSubscriptionAccountRequest(req types.EnsureSubscriptionAccountReq, 
 	}
 	if !accountUsernameRE.MatchString(req.Username) {
 		return fmt.Errorf("unsafe subscription username %q", req.Username)
+	}
+	if err := site.ValidateUsername(req.Username); err != nil {
+		return err
 	}
 	wantHome := filepath.Join(homeRoot, req.Username)
 	if filepath.Clean(req.HomePath) != wantHome {
@@ -535,11 +733,8 @@ func validateSFTPIdentity(identity types.SFTPAccessIdentity) error {
 		return fmt.Errorf("invalid SSH public key for %q", identity.Name)
 	}
 	root := filepath.Clean(strings.TrimSpace(identity.RelativeRoot))
-	if root == "" || root == "." {
-		return nil
-	}
-	if filepath.IsAbs(root) || root == ".." || strings.HasPrefix(root, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("SFTP root for %q escapes the subscription home", identity.Name)
+	if err := site.ValidateSFTPRelativeRoot(root); err != nil {
+		return fmt.Errorf("SFTP root for %q: %w", identity.Name, err)
 	}
 	return nil
 }
@@ -552,15 +747,33 @@ func (p *SubscriptionAccountProvisioner) renderSFTPKeys(req types.EnsureSubscrip
 		}
 		root := filepath.Clean(identity.RelativeRoot)
 		if root == "." || root == "" {
-			root = req.HomePath
+			root = "/"
 		} else {
-			root = filepath.Join(req.HomePath, root)
+			root = "/" + filepath.ToSlash(root)
 		}
 		line := fmt.Sprintf(`restrict,command="internal-sftp -d %s" %s`, root, strings.TrimSpace(identity.PublicKey))
 		lines = append(lines, line)
 	}
-	path := filepath.Join(req.HomePath, ".ssh", "authorized_keys")
-	return writeFileAtomic(path, []byte(strings.Join(lines, "\n")+conditionalNewline(len(lines))), 0o600)
+	if err := os.MkdirAll(p.authorizedKeysDir, 0o700); err != nil {
+		return err
+	}
+	path := filepath.Join(p.authorizedKeysDir, req.Username)
+	if err := writeFileAtomic(path, []byte(strings.Join(lines, "\n")+conditionalNewline(len(lines))), 0o600); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(p.sshConfigDir, 0o755); err != nil {
+		return err
+	}
+	config := fmt.Sprintf(`Match User %s
+    ChrootDirectory %s
+    AuthorizedKeysFile %s
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    DisableForwarding yes
+    PermitTTY no
+    PermitUserRC no
+`, req.Username, req.HomePath, path)
+	return writeFileAtomic(filepath.Join(p.sshConfigDir, "90-nakpanel-"+req.Username+".conf"), []byte(config), 0o600)
 }
 
 func conditionalNewline(count int) string {
@@ -625,20 +838,15 @@ func (p *SubscriptionAccountProvisioner) ApplyScheduledTasks(ctx context.Context
 			return fmt.Errorf("task %q: %w", task.Name, err)
 		}
 		desired[task.ID] = true
-		base := fmt.Sprintf("nakpanel-task-%d", task.ID)
-		service := renderTaskService(base, req.Username, req.HomePath, task)
-		timer := renderTaskTimer(base, task)
-		if err := writeFileAtomic(filepath.Join(p.systemdUnitDir, base+".service"), []byte(service), 0o644); err != nil {
-			return err
-		}
-		if err := writeFileAtomic(filepath.Join(p.systemdUnitDir, base+".timer"), []byte(timer), 0o644); err != nil {
-			return err
-		}
 	}
+	cleanup := make(map[int64]bool, len(previous)+len(desired))
 	for _, id := range previous {
-		if desired[id] {
-			continue
-		}
+		cleanup[id] = true
+	}
+	for id := range desired {
+		cleanup[id] = true
+	}
+	for id := range cleanup {
 		unit := fmt.Sprintf("nakpanel-task-%d.timer", id)
 		if _, err := p.runner.Run(ctx, "systemctl", "disable", "--now", unit); err != nil {
 			servicePath := filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-task-%d.service", id))
@@ -655,16 +863,6 @@ func (p *SubscriptionAccountProvisioner) ApplyScheduledTasks(ctx context.Context
 	}
 	if _, err := p.runner.Run(ctx, "systemctl", "daemon-reload"); err != nil {
 		return fmt.Errorf("reload scheduled task units: %w", err)
-	}
-	for _, task := range req.Tasks {
-		unit := fmt.Sprintf("nakpanel-task-%d.timer", task.ID)
-		action := "disable"
-		if task.Enabled {
-			action = "enable"
-		}
-		if _, err := p.runner.Run(ctx, "systemctl", action, "--now", unit); err != nil {
-			return fmt.Errorf("%s %s: %w", action, unit, err)
-		}
 	}
 	ids := make([]int64, 0, len(desired))
 	for id := range desired {
@@ -707,23 +905,50 @@ func validateScheduledTask(task types.ScheduledTask, home string) error {
 	if task.ID <= 0 || strings.TrimSpace(task.Name) == "" {
 		return errors.New("id and name are required")
 	}
-	if strings.ContainsAny(task.Name+task.Command+task.Schedule+task.WorkingDirectory, "\x00\r\n") {
+	if strings.ContainsAny(task.Name+task.Command+task.URL+task.Script+task.Schedule+task.WorkingDirectory+task.Timezone, "\x00\r\n") {
 		return errors.New("task fields cannot contain control characters")
 	}
-	if strings.TrimSpace(task.Command) == "" {
+	if task.Kind == "" {
+		task.Kind = "command"
+	}
+	if task.Kind != "command" && task.Kind != "url" && task.Kind != "php" {
+		return errors.New("unsupported scheduled task kind")
+	}
+	if task.Kind == "command" && strings.TrimSpace(task.Command) == "" {
 		return errors.New("command is required")
+	}
+	if task.Kind == "url" && !strings.HasPrefix(task.URL, "https://") && !strings.HasPrefix(task.URL, "http://") {
+		return errors.New("URL task requires HTTP or HTTPS")
+	}
+	if task.Kind == "php" {
+		script := filepath.Clean(task.Script)
+		if filepath.IsAbs(script) || script == "." || script == ".." || strings.HasPrefix(script, ".."+string(filepath.Separator)) {
+			return errors.New("PHP task script escapes the site")
+		}
+	}
+	if task.SiteID > 0 && site.ValidateDomain(task.Domain) != nil {
+		return errors.New("site task has an invalid domain")
 	}
 	if task.TimeoutSeconds < 1 || task.TimeoutSeconds > 86400 {
 		return errors.New("timeout must be between 1 and 86400 seconds")
 	}
+	root := home
+	if task.SiteID > 0 {
+		root = filepath.Join(home, "domains", task.Domain, "public_html")
+	}
 	work := filepath.Clean(task.WorkingDirectory)
 	if work == "." || work == "" {
-		work = home
+		work = root
 	} else if !filepath.IsAbs(work) {
-		work = filepath.Join(home, work)
+		work = filepath.Join(root, work)
 	}
-	if work != home && !strings.HasPrefix(work, home+string(filepath.Separator)) {
+	if work != root && !strings.HasPrefix(work, root+string(filepath.Separator)) {
 		return errors.New("working directory escapes subscription home")
+	}
+	if task.Timezone != "" {
+		if _, err := time.LoadLocation(task.Timezone); err != nil {
+			return errors.New("invalid scheduled-task timezone")
+		}
 	}
 	if _, err := cronToCalendar(task.Schedule); err != nil {
 		return err
@@ -779,17 +1004,31 @@ func systemdWeekday(value string) (string, error) {
 }
 
 func renderTaskService(base, username, home string, task types.ScheduledTask) string {
+	root := home
+	if task.SiteID > 0 {
+		root = filepath.Join(home, "domains", task.Domain, "public_html")
+	}
 	work := filepath.Clean(task.WorkingDirectory)
 	if work == "." || work == "" {
-		work = home
+		work = root
 	} else if !filepath.IsAbs(work) {
-		work = filepath.Join(home, work)
+		work = filepath.Join(root, work)
 	}
-	return fmt.Sprintf("[Unit]\nDescription=Nakpanel scheduled task %s\n\n[Service]\nType=oneshot\nUser=%s\nWorkingDirectory=%s\nTimeoutStartSec=%d\nExecStart=/bin/sh -lc %s\n", systemdEscape(task.Name), username, work, task.TimeoutSeconds, systemdQuote(task.Command))
+	execStart := "/bin/sh -lc " + systemdQuote(task.Command)
+	switch task.Kind {
+	case "url":
+		execStart = "/usr/bin/curl --fail --silent --show-error --max-time " + strconv.Itoa(task.TimeoutSeconds) + " " + systemdQuote(task.URL)
+	case "php":
+		execStart = "/usr/bin/php " + systemdQuote(filepath.Join(root, filepath.Clean(task.Script)))
+	}
+	return fmt.Sprintf("[Unit]\nDescription=Nakpanel scheduled task %s\n\n[Service]\nType=oneshot\nUser=%s\nWorkingDirectory=%s\nTimeoutStartSec=%d\nNoNewPrivileges=yes\nPrivateTmp=yes\nProtectSystem=strict\nReadWritePaths=%s\nExecStart=%s\n", systemdEscape(task.Name), username, work, task.TimeoutSeconds, root, execStart)
 }
 
 func renderTaskTimer(base string, task types.ScheduledTask) string {
 	calendar, _ := cronToCalendar(task.Schedule)
+	if task.Timezone != "" {
+		calendar += " " + task.Timezone
+	}
 	return fmt.Sprintf("[Unit]\nDescription=Nakpanel timer %s\n\n[Timer]\nOnCalendar=%s\nPersistent=true\nUnit=%s.service\n\n[Install]\nWantedBy=timers.target\n", systemdEscape(task.Name), calendar, base)
 }
 

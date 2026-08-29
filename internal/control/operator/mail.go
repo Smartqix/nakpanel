@@ -224,11 +224,11 @@ FROM mail_aliases alias JOIN mail_domains md ON md.id=alias.mail_domain_id WHERE
 }
 
 func (s *Service) MailSettings(ctx context.Context) (controlquota.MailSettings, error) {
-	return controlquota.ReadMailSettings(ctx, s.db)
+	return s.quota.MailSettings(ctx)
 }
 
 func (s *Service) UpdateMailSettings(ctx context.Context, mutate func(*controlquota.MailSettings)) (controlquota.MailSettings, error) {
-	settings, err := controlquota.ReadMailSettings(ctx, s.db)
+	settings, err := s.quota.MailSettings(ctx)
 	if err != nil {
 		return settings, err
 	}

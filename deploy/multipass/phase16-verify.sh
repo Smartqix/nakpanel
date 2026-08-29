@@ -47,7 +47,7 @@ cli site show phase15-account.test | grep -Fq 'phase15-account.test'
 cli site reconcile phase15-account.test >/tmp/phase16-site-reconcile.out
 cli reconcile --system >/tmp/phase16-system-reconcile.out
 multipass exec "${VM_NAME}" -- sudo systemctl stop nakpanel.service
-cli ssl renew phase15-account.test >/tmp/phase16-ssl-renew.out
+cli ssl renew phase15-account.test --yes >/tmp/phase16-ssl-renew.out
 issue_job_id="$(db_value "SELECT id FROM river_job WHERE kind='issue_cert' AND args->>'domain'='phase15-account.test' ORDER BY id DESC LIMIT 1")"
 [[ -n "${issue_job_id}" ]]
 multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -v ON_ERROR_STOP=1 -c \
@@ -103,7 +103,7 @@ REMOTE
 
 VM_IP="$(vm_ip)"
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 ready=0
 for _ in $(seq 1 60); do
   if curl -sk --fail "https://${VM_IP}:7443/healthz" >/dev/null; then

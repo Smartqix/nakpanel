@@ -17,6 +17,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/control/store"
 	"github.com/nakroteck/nakpanel/internal/control/workspace"
 	"github.com/nakroteck/nakpanel/internal/site"
@@ -26,21 +27,24 @@ import (
 )
 
 type Service struct {
-	db         *sql.DB
-	river      *river.Client[*sql.Tx]
-	manager    *provision.Manager
-	quota      *controlquota.SQLStore
-	agent      *agentclient.Client
-	actorLabel string
-	stagingDir string
-	closeDB    bool
+	db          *sql.DB
+	river       *river.Client[*sql.Tx]
+	manager     *provision.Manager
+	quota       *controlquota.SQLStore
+	agent       *agentclient.Client
+	serverAdmin *serveradmin.Manager
+	secrets     *serveradmin.Store
+	actorLabel  string
+	stagingDir  string
+	closeDB     bool
 }
 
 type Options struct {
-	DatabaseURL string
-	AgentSocket string
-	ActorLabel  string
-	StagingDir  string
+	DatabaseURL   string
+	AgentSocket   string
+	ActorLabel    string
+	StagingDir    string
+	SecretKeyFile string
 }
 
 type User struct {
@@ -130,6 +134,16 @@ func New(db *sql.DB, opts Options) (*Service, error) {
 	siteRepo := provision.NewSQLSiteRepository(db, queries, riverClient)
 	phase6Repo := provision.NewSQLPhase6Repository(db, riverClient)
 	quotaStore := controlquota.NewSQLStore(db, riverClient)
+	var serverAdmin *serveradmin.Manager
+	var secretStore *serveradmin.Store
+	if path := strings.TrimSpace(opts.SecretKeyFile); path != "" {
+		keyring, err := serveradmin.LoadKeyring(path)
+		if err != nil {
+			return nil, fmt.Errorf("load service secret keyring: %w", err)
+		}
+		secretStore = serveradmin.NewStore(db, keyring)
+		quotaStore.SetServiceSecretStore(secretStore)
+	}
 	policy := workspace.NewStore(db)
 	stagingDir := strings.TrimSpace(opts.StagingDir)
 	if stagingDir == "" {
@@ -143,9 +157,13 @@ func New(db *sql.DB, opts Options) (*Service, error) {
 		provision.WithQuotaStore(quotaStore),
 		provision.WithAccessPolicy(policy),
 	)
+	agent := agentclient.New(strings.TrimSpace(opts.AgentSocket))
+	if secretStore != nil {
+		serverAdmin = serveradmin.NewManager(secretStore, riverClient, agent)
+	}
 	return &Service{
 		db: db, river: riverClient, manager: manager, quota: quotaStore, actorLabel: actor, stagingDir: stagingDir,
-		agent: agentclient.New(strings.TrimSpace(opts.AgentSocket)),
+		agent: agent, serverAdmin: serverAdmin, secrets: secretStore,
 	}, nil
 }
 
@@ -182,6 +200,52 @@ func (s *Service) CreateAdmin(ctx context.Context, email, password string) (int6
 		return 0, err
 	}
 	return id, tx.Commit()
+}
+
+// EnsureAdmin creates the administrator when missing and resets the password
+// when the account already exists. It is idempotent so the installer can run
+// it on every invocation.
+func (s *Service) EnsureAdmin(ctx context.Context, email, password string) (int64, bool, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	address, err := mail.ParseAddress(email)
+	if err != nil || !strings.EqualFold(address.Address, email) {
+		return 0, false, errors.New("a valid admin email is required")
+	}
+	if len(password) < 12 {
+		return 0, false, errors.New("admin password must contain at least 12 characters")
+	}
+	var id int64
+	var role string
+	err = s.db.QueryRowContext(ctx, `SELECT id, role FROM users WHERE email = $1`, email).Scan(&id, &role)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		id, err = s.CreateAdmin(ctx, email, password)
+		return id, true, err
+	case err != nil:
+		return 0, false, err
+	}
+	if role != "admin" {
+		return 0, false, fmt.Errorf("user %s exists with role %q; refusing to promote", email, role)
+	}
+	hash, err := auth.HashPassword(password, auth.DefaultPasswordParams)
+	if err != nil {
+		return 0, false, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, false, err
+	}
+	defer tx.Rollback()
+	if _, err = tx.ExecContext(ctx, `UPDATE users SET password_hash = $1, login_disabled = false WHERE id = $2`, hash, id); err != nil {
+		return 0, false, fmt.Errorf("update administrator password: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM sessions WHERE user_id = $1`, id); err != nil {
+		return 0, false, fmt.Errorf("revoke administrator sessions: %w", err)
+	}
+	if err = s.auditTx(ctx, tx, "admin.password_reset", "user", id, map[string]any{"email": email}); err != nil {
+		return 0, false, err
+	}
+	return id, false, tx.Commit()
 }
 
 func (s *Service) ListUsers(ctx context.Context) ([]User, error) {

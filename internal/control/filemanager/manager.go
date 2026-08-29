@@ -127,7 +127,7 @@ func (m *Manager) List(ctx context.Context, actor auth.SessionUser, siteID int64
 	}
 	ctx, cancel := context.WithTimeout(ctx, normalFileOperationTimeout)
 	defer cancel()
-	req.Username = site.Username
+	req.SiteID, req.Username, req.Domain = site.ID, site.Username, site.Domain
 	result, err := m.agent.ListFiles(ctx, req)
 	return site, result, classifyAgentError(err)
 }
@@ -142,7 +142,7 @@ func (m *Manager) Search(ctx context.Context, actor auth.SessionUser, siteID int
 	}
 	ctx, cancel := context.WithTimeout(ctx, normalFileOperationTimeout)
 	defer cancel()
-	req.Username = site.Username
+	req.SiteID, req.Username, req.Domain = site.ID, site.Username, site.Domain
 	result, err := m.agent.SearchFiles(ctx, req)
 	return site, result, classifyAgentError(err)
 }
@@ -157,7 +157,7 @@ func (m *Manager) Read(ctx context.Context, actor auth.SessionUser, siteID int64
 	}
 	ctx, cancel := context.WithTimeout(ctx, normalFileOperationTimeout)
 	defer cancel()
-	result, err := m.agent.ReadFile(ctx, types.FileReadReq{Username: site.Username, Path: path})
+	result, err := m.agent.ReadFile(ctx, types.FileReadReq{SiteID: site.ID, Username: site.Username, Domain: site.Domain, Path: path})
 	return site, result, classifyAgentError(err)
 }
 
@@ -171,7 +171,7 @@ func (m *Manager) Write(ctx context.Context, actor auth.SessionUser, siteID int6
 	}
 	opCtx, cancel := context.WithTimeout(ctx, normalFileOperationTimeout)
 	defer cancel()
-	req.Username = site.Username
+	req.SiteID, req.Username, req.Domain = site.ID, site.Username, site.Domain
 	result, err := m.agent.WriteFile(opCtx, req)
 	return result, m.auditResult(ctx, actor, site, "file.edit", map[string]any{"path": req.Path, "bytes": len(req.Content)}, result, err)
 }
@@ -186,7 +186,7 @@ func (m *Manager) Create(ctx context.Context, actor auth.SessionUser, siteID int
 	}
 	opCtx, cancel := context.WithTimeout(ctx, normalFileOperationTimeout)
 	defer cancel()
-	req.Username = site.Username
+	req.SiteID, req.Username, req.Domain = site.ID, site.Username, site.Domain
 	result, err := m.agent.CreateFileEntry(opCtx, req)
 	return result, m.auditResult(ctx, actor, site, "file.create", map[string]any{"path": req.Path, "kind": req.Kind}, result, err)
 }
@@ -219,7 +219,7 @@ func (m *Manager) batch(ctx context.Context, actor auth.SessionUser, siteID int6
 	}
 	opCtx, cancel := context.WithTimeout(ctx, bulkFileOperationTimeout)
 	defer cancel()
-	req.Username = site.Username
+	req.SiteID, req.Username, req.Domain = site.ID, site.Username, site.Domain
 	result, err := call(opCtx, req)
 	return result, m.auditResult(ctx, actor, site, action, map[string]any{"paths": req.Paths, "destination": req.Destination, "new_name": req.NewName, "overwrite": req.Overwrite}, result, err)
 }
@@ -234,7 +234,7 @@ func (m *Manager) Archive(ctx context.Context, actor auth.SessionUser, siteID in
 	}
 	opCtx, cancel := context.WithTimeout(ctx, bulkFileOperationTimeout)
 	defer cancel()
-	req.Username = site.Username
+	req.SiteID, req.Username, req.Domain = site.ID, site.Username, site.Domain
 	result, err := m.agent.ArchiveFiles(opCtx, req)
 	return result, m.auditResult(ctx, actor, site, "file.archive", map[string]any{"paths": req.Paths, "destination": req.Destination}, result, err)
 }
@@ -249,7 +249,7 @@ func (m *Manager) Extract(ctx context.Context, actor auth.SessionUser, siteID in
 	}
 	opCtx, cancel := context.WithTimeout(ctx, bulkFileOperationTimeout)
 	defer cancel()
-	req.Username = site.Username
+	req.SiteID, req.Username, req.Domain = site.ID, site.Username, site.Domain
 	result, err := m.agent.ExtractArchive(opCtx, req)
 	return result, m.auditResult(ctx, actor, site, "file.extract", map[string]any{"path": req.Path, "destination": req.Destination, "overwrite": req.Overwrite}, result, err)
 }
@@ -264,7 +264,7 @@ func (m *Manager) Chmod(ctx context.Context, actor auth.SessionUser, siteID int6
 	}
 	opCtx, cancel := context.WithTimeout(ctx, normalFileOperationTimeout)
 	defer cancel()
-	req.Username = site.Username
+	req.SiteID, req.Username, req.Domain = site.ID, site.Username, site.Domain
 	result, err := m.agent.SetFileMode(opCtx, req)
 	return result, m.auditResult(ctx, actor, site, "file.permissions", map[string]any{"path": req.Path, "mode": req.Mode, "recursive": req.Recursive}, result, err)
 }
@@ -322,7 +322,7 @@ func (m *Manager) Import(ctx context.Context, actor auth.SessionUser, siteID int
 	}
 	opCtx, cancel := context.WithTimeout(ctx, bulkFileOperationTimeout)
 	defer cancel()
-	result, err := m.agent.ImportFileTransfer(opCtx, types.FileTransferImportReq{Username: site.Username, TransferToken: token, Destination: destination, Overwrite: overwrite})
+	result, err := m.agent.ImportFileTransfer(opCtx, types.FileTransferImportReq{SiteID: site.ID, Username: site.Username, Domain: site.Domain, TransferToken: token, Destination: destination, Overwrite: overwrite})
 	return result, m.auditResult(ctx, actor, site, "file.upload", map[string]any{"path": destination, "bytes": bytes, "overwrite": overwrite}, result, err)
 }
 
@@ -336,7 +336,7 @@ func (m *Manager) Download(ctx context.Context, actor auth.SessionUser, siteID i
 	}
 	ctx, cancel := context.WithTimeout(ctx, bulkFileOperationTimeout)
 	defer cancel()
-	result, err := m.agent.ExportFileTransfer(ctx, types.FileTransferExportReq{Username: site.Username, Path: path})
+	result, err := m.agent.ExportFileTransfer(ctx, types.FileTransferExportReq{SiteID: site.ID, Username: site.Username, Domain: site.Domain, Path: path})
 	if err != nil {
 		return site, types.FileTransferResult{}, "", classifyAgentError(err)
 	}

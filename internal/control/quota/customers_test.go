@@ -51,3 +51,32 @@ func TestLockedSubscriptionEditPreservesSnapshotOnlyForSamePlan(t *testing.T) {
 		}
 	}
 }
+
+func TestEnsureSubscriptionNotTerminatingTxRejectsPurgeState(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).
+		WithArgs(int64(83)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT provisioning_state`).
+		WithArgs(int64(83)).
+		WillReturnRows(sqlmock.NewRows([]string{"provisioning_state"}).AddRow("terminating"))
+	mock.ExpectRollback()
+
+	err = ensureSubscriptionNotTerminatingTx(context.Background(), tx, 83)
+	if err == nil || err.Error() != "billing account teardown has started" {
+		t.Fatalf("ensureSubscriptionNotTerminatingTx error = %v", err)
+	}
+	_ = tx.Rollback()
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/site"
 )
 
@@ -27,18 +28,36 @@ type MailSettings struct {
 
 var mailRateLimitRE = regexp.MustCompile(`^[0-9]{1,9}/[0-9]{1,4}[smhd]$`)
 
-func ReadMailSettings(ctx context.Context, db *sql.DB) (MailSettings, error) {
+func ReadMailSettings(ctx context.Context, db *sql.DB, secretStores ...*serveradmin.Store) (MailSettings, error) {
 	var settings MailSettings
 	err := db.QueryRowContext(ctx, `SELECT mail_hostname,smarthost_host,smarthost_port,smarthost_username,smarthost_password,outbound_rate_limit,queue_alert_threshold FROM mail_settings WHERE id`).Scan(
 		&settings.MailHostname, &settings.SmarthostHost, &settings.SmarthostPort,
 		&settings.SmarthostUsername, &settings.SmarthostPassword,
 		&settings.OutboundRateLimit, &settings.QueueAlertThreshold,
 	)
+	if err != nil {
+		return settings, err
+	}
+	if len(secretStores) > 0 && secretStores[0] != nil && settings.SmarthostHost != "" {
+		plaintext, _, secretErr := secretStores[0].GetSecret(ctx, "mail", "smarthost")
+		if secretErr != nil {
+			// A relay may intentionally require no authentication. Missing
+			// encrypted state is acceptable only when neither the current
+			// username nor a legacy plaintext password claims otherwise.
+			if errors.Is(secretErr, sql.ErrNoRows) &&
+				settings.SmarthostUsername == "" && settings.SmarthostPassword == "" {
+				return settings, nil
+			}
+			return MailSettings{}, fmt.Errorf("read encrypted smarthost credential: %w", secretErr)
+		}
+		settings.SmarthostPassword = string(plaintext)
+		clear(plaintext)
+	}
 	return settings, err
 }
 
 func (s *SQLStore) MailSettings(ctx context.Context) (MailSettings, error) {
-	return ReadMailSettings(ctx, s.db)
+	return ReadMailSettings(ctx, s.db, s.secrets)
 }
 
 // UpdateMailSettings persists the node mail settings and queues a Stalwart
@@ -70,9 +89,24 @@ func (s *SQLStore) UpdateMailSettings(ctx context.Context, settings MailSettings
 		return err
 	}
 	defer tx.Rollback()
+	legacyPassword := settings.SmarthostPassword
+	if s.secrets != nil {
+		legacyPassword = ""
+		if settings.SmarthostHost == "" || settings.SmarthostPassword == "" {
+			if err := s.secrets.DeleteSecretTx(ctx, tx, "mail", "smarthost"); err != nil {
+				return fmt.Errorf("clear encrypted smarthost credential: %w", err)
+			}
+		} else {
+			if _, err := s.secrets.PutSecretTx(ctx, tx, serveradmin.PutSecretParams{
+				Scope: "mail", Name: "smarthost", Plaintext: []byte(settings.SmarthostPassword),
+			}); err != nil {
+				return fmt.Errorf("store encrypted smarthost credential: %w", err)
+			}
+		}
+	}
 	if _, err = tx.ExecContext(ctx, `UPDATE mail_settings SET mail_hostname=$1,smarthost_host=$2,smarthost_port=$3,smarthost_username=$4,smarthost_password=$5,outbound_rate_limit=$6,queue_alert_threshold=$7,updated_at=now() WHERE id`,
 		settings.MailHostname, settings.SmarthostHost, settings.SmarthostPort,
-		settings.SmarthostUsername, settings.SmarthostPassword,
+		settings.SmarthostUsername, legacyPassword,
 		settings.OutboundRateLimit, settings.QueueAlertThreshold); err != nil {
 		return err
 	}

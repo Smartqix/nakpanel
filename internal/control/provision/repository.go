@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/control/store"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
@@ -66,6 +67,22 @@ func (r *SQLSiteRepository) CreateSite(ctx context.Context, ownerID int64, req t
 	if err != nil {
 		return 0, fmt.Errorf("upsert site intent: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, `UPDATE sites child
+SET parent_site_id=$1
+WHERE child.subscription_id=$2
+  AND child.id<>$1
+  AND child.domain LIKE '%.' || $3
+  AND $1=(
+      SELECT candidate.id
+      FROM sites candidate
+      WHERE candidate.subscription_id=child.subscription_id
+        AND candidate.id<>child.id
+        AND child.domain LIKE '%.' || candidate.domain
+      ORDER BY length(candidate.domain) DESC,candidate.id
+      LIMIT 1
+  )`, site.ID, req.SubscriptionID, site.Domain); err != nil {
+		return 0, fmt.Errorf("update DNS parent relationships: %w", err)
+	}
 
 	_, err = r.river.InsertTx(ctx, tx, CreateSiteArgs{
 		SiteID:        site.ID,
@@ -78,7 +95,7 @@ func (r *SQLSiteRepository) CreateSite(ctx context.Context, ownerID int64, req t
 	if err != nil {
 		return 0, fmt.Errorf("enqueue create_site job: %w", err)
 	}
-	if _, err = r.river.InsertTx(ctx, tx, controlquota.ConvergeSubscriptionArgs{SubscriptionID: req.SubscriptionID}, nil); err != nil {
+	if _, err = controlquota.EnqueueSubscriptionConvergenceTx(ctx, tx, r.river, req.SubscriptionID); err != nil {
 		return 0, fmt.Errorf("enqueue subscription convergence: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -252,14 +269,19 @@ type SQLDatabaseRepository struct {
 	db      *sql.DB
 	queries *store.Queries
 	river   *river.Client[*sql.Tx]
+	secrets *serveradmin.Store
 }
 
-func NewSQLDatabaseRepository(db *sql.DB, queries *store.Queries, riverClient *river.Client[*sql.Tx]) *SQLDatabaseRepository {
-	return &SQLDatabaseRepository{
+func NewSQLDatabaseRepository(db *sql.DB, queries *store.Queries, riverClient *river.Client[*sql.Tx], secretStores ...*serveradmin.Store) *SQLDatabaseRepository {
+	repository := &SQLDatabaseRepository{
 		db:      db,
 		queries: queries,
 		river:   riverClient,
 	}
+	if len(secretStores) > 0 {
+		repository.secrets = secretStores[0]
+	}
+	return repository
 }
 
 func (r *SQLDatabaseRepository) CreateDatabase(ctx context.Context, ownerID int64, req types.CreateDatabaseReq) (int64, error) {
@@ -271,6 +293,9 @@ func (r *SQLDatabaseRepository) CreateDatabase(ctx context.Context, ownerID int6
 	}
 	if r.river == nil {
 		return 0, errors.New("river client is not configured")
+	}
+	if r.secrets == nil {
+		return 0, errors.New("database credential store is not configured")
 	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -294,12 +319,25 @@ func (r *SQLDatabaseRepository) CreateDatabase(ctx context.Context, ownerID int6
 		return 0, fmt.Errorf("upsert database intent: %w", err)
 	}
 
+	credentialName, err := databaseCredentialName(database.ID)
+	if err != nil {
+		return 0, err
+	}
+	if _, err := r.secrets.PutSecretTx(ctx, tx, serveradmin.PutSecretParams{
+		Scope:       databaseCredentialScope,
+		Name:        credentialName,
+		Plaintext:   []byte(req.Password),
+		Metadata:    []byte(fmt.Sprintf(`{"database_id":%d}`, database.ID)),
+		ActorUserID: ownerID,
+	}); err != nil {
+		return 0, fmt.Errorf("store encrypted database credential: %w", err)
+	}
 	_, err = r.river.InsertTx(ctx, tx, CreateDatabaseArgs{
-		DatabaseID: database.ID,
-		Engine:     types.DBEngine(database.Engine),
-		DBName:     database.DbName,
-		DBUser:     database.DbUser,
-		Password:   req.Password,
+		DatabaseID:    database.ID,
+		Engine:        types.DBEngine(database.Engine),
+		DBName:        database.DbName,
+		DBUser:        database.DbUser,
+		CredentialRef: credentialName,
 	}, nil)
 	if err != nil {
 		return 0, fmt.Errorf("enqueue create_database job: %w", err)
@@ -313,10 +351,15 @@ func (r *SQLDatabaseRepository) CreateDatabase(ctx context.Context, ownerID int6
 type SQLDatabaseStatusStore struct {
 	db      *sql.DB
 	queries *store.Queries
+	secrets *serveradmin.Store
 }
 
-func NewSQLDatabaseStatusStore(db *sql.DB, queries *store.Queries) *SQLDatabaseStatusStore {
-	return &SQLDatabaseStatusStore{db: db, queries: queries}
+func NewSQLDatabaseStatusStore(db *sql.DB, queries *store.Queries, secretStores ...*serveradmin.Store) *SQLDatabaseStatusStore {
+	statusStore := &SQLDatabaseStatusStore{db: db, queries: queries}
+	if len(secretStores) > 0 {
+		statusStore.secrets = secretStores[0]
+	}
+	return statusStore
 }
 
 func (s *SQLDatabaseStatusStore) MarkDatabaseActive(ctx context.Context, id int64) error {
@@ -342,4 +385,48 @@ func (s *SQLDatabaseStatusStore) ScrubDatabaseJobPassword(ctx context.Context, j
 	}
 	_, err := s.db.ExecContext(ctx, "UPDATE river_job SET args = args - 'password' WHERE id = $1 AND kind = 'create_database'", jobID)
 	return err
+}
+
+func (s *SQLDatabaseStatusStore) MigrateDatabaseJobCredential(ctx context.Context, jobID, databaseID int64, plaintext []byte) (string, error) {
+	if s.db == nil {
+		return "", errors.New("database is not configured")
+	}
+	if s.secrets == nil {
+		return "", errors.New("database credential store is not configured")
+	}
+	credentialRef, err := databaseCredentialName(databaseID)
+	if err != nil {
+		return "", err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", fmt.Errorf("begin legacy credential migration: %w", err)
+	}
+	defer tx.Rollback()
+	if _, err := s.secrets.PutSecretTx(ctx, tx, serveradmin.PutSecretParams{
+		Scope:     databaseCredentialScope,
+		Name:      credentialRef,
+		Plaintext: plaintext,
+		Metadata:  []byte(fmt.Sprintf(`{"database_id":%d}`, databaseID)),
+	}); err != nil {
+		return "", fmt.Errorf("encrypt legacy database credential: %w", err)
+	}
+	result, err := tx.ExecContext(ctx, `
+UPDATE river_job
+SET args = jsonb_set(args - 'password', '{credential_ref}', to_jsonb($2::text), true)
+WHERE id = $1 AND kind = 'create_database' AND args ? 'password'`, jobID, credentialRef)
+	if err != nil {
+		return "", err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return "", err
+	}
+	if affected != 1 {
+		return "", errors.New("database provisioning job was not found")
+	}
+	if err := tx.Commit(); err != nil {
+		return "", fmt.Errorf("commit legacy credential migration: %w", err)
+	}
+	return credentialRef, nil
 }

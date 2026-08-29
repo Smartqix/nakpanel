@@ -21,6 +21,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/agentclient"
 	"github.com/nakroteck/nakpanel/internal/control/operator"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/version"
 	"golang.org/x/term"
 )
 
@@ -46,6 +47,11 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		printUsage(stdout)
 		return nil
 	}
+	if args[0] == "version" {
+		// Must work on a broken install: no database or socket access.
+		fmt.Fprintln(stdout, version.String())
+		return nil
+	}
 	databaseURL := strings.TrimSpace(os.Getenv("NAKPANEL_DATABASE_URL"))
 	if databaseURL == "" {
 		databaseURL = config.DefaultDatabaseURL
@@ -66,7 +72,27 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		fmt.Fprintln(stdout, "agent connected")
 		return nil
 	}
-	service, err := operator.Open(ctx, operator.Options{DatabaseURL: databaseURL, AgentSocket: agentSocket, ActorLabel: actor})
+	if len(args) > 0 && args[0] == "secret-key" {
+		if len(args) > 1 && args[1] == "migrate" {
+			return runSecretMigration(ctx, databaseURL, args[2:], stdout, stderr)
+		}
+		return runSecretKey(args[1:], stdout, stderr)
+	}
+	if args[0] == "restore-server" {
+		// Dispatched before the operator service opens: this command drops
+		// and recreates the database it would otherwise connect to.
+		return runRestoreServer(ctx, actor, args[1:], stdin, stdout, stderr)
+	}
+	secretKeyFile := strings.TrimSpace(os.Getenv("NAKPANEL_SECRET_KEY_FILE"))
+	if secretKeyFile == "" {
+		if _, statErr := os.Stat(config.DefaultSecretKeyFile); statErr == nil {
+			secretKeyFile = config.DefaultSecretKeyFile
+		}
+	}
+	service, err := operator.Open(ctx, operator.Options{
+		DatabaseURL: databaseURL, AgentSocket: agentSocket, ActorLabel: actor,
+		SecretKeyFile: secretKeyFile,
+	})
 	if err != nil {
 		return err
 	}
@@ -75,6 +101,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	switch args[0] {
 	case "create-admin":
 		return runCreateAdmin(ctx, service, args[1:], stdin, stdout, stderr)
+	case "admin":
+		return runAdmin(ctx, service, args[1:], stdin, stdout, stderr)
 	case "user":
 		return runUser(ctx, service, args[1:], stdin, stdout, stderr)
 	case "session":
@@ -85,6 +113,12 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return runSSL(ctx, service, args[1:], stdin, stdout, stderr)
 	case "backup":
 		return runBackup(ctx, service, args[1:], stdout, stderr)
+	case "backup-server":
+		return runBackupServer(ctx, service, args[1:], stdin, stdout, stderr)
+	case "security":
+		return runSecurity(ctx, service, args[1:], stdout, stderr)
+	case "restore-server-post":
+		return runRestoreServerPost(ctx, service, args[1:], stdout, stderr)
 	case "restore":
 		return runRestore(ctx, service, args[1:], stdin, stdout, stderr)
 	case "plan":
@@ -141,6 +175,100 @@ func runCreateAdmin(ctx context.Context, service *operator.Service, args []strin
 	return nil
 }
 
+func runSecurity(ctx context.Context, service *operator.Service, args []string, stdout, stderr io.Writer) error {
+	if len(args) == 0 {
+		return errors.New("usage: panelctl security show | security set [--require-admin-2fa=BOOL] [--alert-email ADDRESS]")
+	}
+	switch args[0] {
+	case "show":
+		settings, err := service.GetSecuritySettings(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "require_admin_2fa: %t\n", settings.RequireTOTPAdmin)
+		alert := settings.AlertEmail
+		if alert == "" {
+			alert = "(unset; alerts go to every active administrator)"
+		}
+		fmt.Fprintf(stdout, "alert_email:       %s\n", alert)
+		return nil
+	case "set":
+		set := flag.NewFlagSet("security set", flag.ContinueOnError)
+		set.SetOutput(stderr)
+		requireAdmin2FA := set.String("require-admin-2fa", "", "true or false")
+		alertEmail := set.String("alert-email", "", "address for security alerts (empty clears)")
+		if err := set.Parse(args[1:]); err != nil {
+			return err
+		}
+		var requirePtr *bool
+		if value := strings.TrimSpace(*requireAdmin2FA); value != "" {
+			parsed, err := strconv.ParseBool(value)
+			if err != nil {
+				return errors.New("--require-admin-2fa must be true or false")
+			}
+			requirePtr = &parsed
+		}
+		var alertPtr *string
+		set.Visit(func(f *flag.Flag) {
+			if f.Name == "alert-email" {
+				value := *alertEmail
+				alertPtr = &value
+			}
+		})
+		if requirePtr == nil && alertPtr == nil {
+			return errors.New("nothing to change: pass --require-admin-2fa and/or --alert-email")
+		}
+		settings, err := service.SetSecuritySettings(ctx, requirePtr, alertPtr)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Security settings updated: require_admin_2fa=%t alert_email=%q\n",
+			settings.RequireTOTPAdmin, settings.AlertEmail)
+		return nil
+	default:
+		return fmt.Errorf("unknown security command %q", args[0])
+	}
+}
+
+func runAdmin(ctx context.Context, service *operator.Service, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	if len(args) == 0 || args[0] != "ensure" {
+		return errors.New("usage: panelctl admin ensure --email EMAIL [--password PASSWORD | --password-file FILE]")
+	}
+	set := flag.NewFlagSet("admin ensure", flag.ContinueOnError)
+	set.SetOutput(stderr)
+	email := set.String("email", "", "administrator email")
+	password := set.String("password", "", "administrator password")
+	passwordFile := set.String("password-file", "", "file containing the administrator password")
+	if err := set.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *password == "" && *passwordFile != "" {
+		data, err := os.ReadFile(*passwordFile)
+		if err != nil {
+			return err
+		}
+		*password = strings.TrimRight(string(data), "\r\n")
+	}
+	if *password == "" {
+		value, err := hiddenPassword(stdin, stdout)
+		if err != nil {
+			return err
+		}
+		*password = value
+	}
+	id, created, err := service.EnsureAdmin(ctx, *email, *password)
+	if err != nil {
+		return err
+	}
+	address := strings.ToLower(strings.TrimSpace(*email))
+	if created {
+		fmt.Fprintf(stdout, "Administrator %s created (user %d).\n", address, id)
+	} else {
+		fmt.Fprintf(stdout, "Administrator %s password updated (user %d); sessions revoked.\n", address, id)
+	}
+	return nil
+}
+
 func runUser(ctx context.Context, service *operator.Service, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 1 && args[0] == "list" {
 		items, err := service.ListUsers(ctx)
@@ -158,8 +286,71 @@ func runUser(ctx context.Context, service *operator.Service, args []string, stdi
 		}
 		return w.Flush()
 	}
+	switch args[0] {
+	case "set-password":
+		set := flag.NewFlagSet("user set-password", flag.ContinueOnError)
+		set.SetOutput(stderr)
+		password := set.String("password", "", "new password (prompted when omitted)")
+		if err := set.Parse(args[1:]); err != nil {
+			return err
+		}
+		if set.NArg() != 1 {
+			return errors.New("usage: panelctl user set-password EMAIL [--password P]")
+		}
+		if *password == "" {
+			value, err := hiddenPassword(stdin, stdout)
+			if err != nil {
+				return err
+			}
+			*password = value
+		}
+		if err := service.SetUserPassword(ctx, set.Arg(0), *password); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Password updated for %s; all sessions revoked.\n", set.Arg(0))
+		return nil
+	case "disable-2fa":
+		yes, rest := extractBoolFlag(args[1:], "--yes")
+		if len(rest) != 1 {
+			return errors.New("usage: panelctl user disable-2fa EMAIL --yes")
+		}
+		if err := confirm(stdin, stdout, yes, "Disable two-factor authentication for "+rest[0]+"?"); err != nil {
+			return err
+		}
+		if err := service.DisableUserTOTP(ctx, rest[0]); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Two-factor authentication disabled for %s; sessions revoked.\n", rest[0])
+		return nil
+	case "recovery-codes":
+		yes, rest := extractBoolFlag(args[1:], "--yes")
+		if len(rest) != 1 {
+			return errors.New("usage: panelctl user recovery-codes EMAIL --yes")
+		}
+		if err := confirm(stdin, stdout, yes, "Replace all recovery codes for "+rest[0]+"?"); err != nil {
+			return err
+		}
+		codes, err := service.RegenerateRecoveryCodes(ctx, rest[0])
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "New recovery codes for %s (shown once; previous codes are void):\n", rest[0])
+		for _, code := range codes {
+			fmt.Fprintln(stdout, "  "+code)
+		}
+		return nil
+	case "unlock":
+		if len(args) != 2 {
+			return errors.New("usage: panelctl user unlock EMAIL")
+		}
+		if err := service.UnlockUserLogin(ctx, args[1]); err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "Login throttle cleared for %s.\n", args[1])
+		return nil
+	}
 	if len(args) < 2 || (args[0] != "suspend" && args[0] != "unsuspend") {
-		return errors.New("usage: panelctl user list | user suspend|unsuspend <email> [--yes]")
+		return errors.New("usage: panelctl user list | user suspend|unsuspend EMAIL [--yes] | user set-password EMAIL | user disable-2fa EMAIL --yes | user recovery-codes EMAIL --yes | user unlock EMAIL")
 	}
 	yes, rest := extractBoolFlag(args[1:], "--yes")
 	if len(rest) != 1 {
@@ -738,6 +929,7 @@ func printUsage(w io.Writer) {
 
 Commands:
   create-admin --email EMAIL [--password PASSWORD]
+  admin ensure --email EMAIL [--password PASSWORD | --password-file FILE]
   user list | user suspend|unsuspend EMAIL [--yes]
   session list [--user EMAIL] | session revoke ID --yes | session revoke-user EMAIL --yes
   site list | site show DOMAIN | site reconcile DOMAIN
@@ -749,7 +941,14 @@ Commands:
   mail enable DOMAIN [--dkim=false] [--dmarc POLICY] | mail add ADDRESS [--quota-mb N]
   mail list DOMAIN | mail del ADDRESS --yes | mail alias add ADDRESS --to DEST[,DEST...]
   mail relay set --host HOST [--port N] | mail relay clear | mail settings [--rate-limit R]
-  reconcile --system | agent ping`)
+  backup-server key init [--force] | key status
+  backup-server destination add --name N --kind local|sftp|s3 [--settings-file F] [--credential-file F]
+  backup-server destination list | remove NAME --yes | test NAME
+  backup-server run --destination NAME [--wait] | backup-server list
+  restore-server --archive FILE --backup-key-file FILE [--yes] [--allow-schema-mismatch]
+  security show | security set [--require-admin-2fa=BOOL] [--alert-email ADDRESS]
+  secret-key init [--path FILE]
+  reconcile --system | agent ping | version`)
 }
 
 func runAPIKey(ctx context.Context, service *operator.Service, args []string, stdin io.Reader, stdout, stderr io.Writer) error {

@@ -61,6 +61,7 @@ func TestBackupProvisionerCreatesArchiveWithFilesAndDatabaseDumps(t *testing.T) 
 	dumper := &fakeDatabaseDumper{}
 	provisioner := NewBackupProvisioner(BackupProvisionerOptions{
 		OutputDir:      filepath.Join(root, "backups"),
+		HomeRoot:       filepath.Join(root, "home"),
 		DatabaseDumper: dumper,
 	})
 	result, err := provisioner.CreateBackup(context.Background(), types.CreateBackupReq{
@@ -172,7 +173,7 @@ func TestRestoreProvisionerRestoresFilesAndDatabaseDumps(t *testing.T) {
 		t.Fatalf("WriteFile old returned error: %v", err)
 	}
 
-	backupSource := filepath.Join(root, "backup-source")
+	backupSource := filepath.Join(root, "home", "npdemo", "backup-source")
 	if err := os.MkdirAll(filepath.Join(backupSource, "nested"), 0o755); err != nil {
 		t.Fatalf("MkdirAll backup source returned error: %v", err)
 	}
@@ -185,6 +186,7 @@ func TestRestoreProvisionerRestoresFilesAndDatabaseDumps(t *testing.T) {
 	dumper := &fakeDatabaseDumper{}
 	backup, err := NewBackupProvisioner(BackupProvisionerOptions{
 		OutputDir:      filepath.Join(root, "backups"),
+		HomeRoot:       filepath.Join(root, "home"),
 		DatabaseDumper: dumper,
 	}).CreateBackup(context.Background(), types.CreateBackupReq{
 		Domain:    "example.test",
@@ -199,6 +201,7 @@ func TestRestoreProvisionerRestoresFilesAndDatabaseDumps(t *testing.T) {
 	restorer := &fakeDatabaseRestorer{}
 	result, err := NewRestoreProvisioner(RestoreProvisionerOptions{
 		DatabaseRestorer: restorer,
+		HomeRoot:         filepath.Join(root, "home"),
 	}).RestoreBackup(context.Background(), types.RestoreBackupReq{
 		Domain:      "example.test",
 		Username:    "npdemo",
@@ -300,6 +303,13 @@ func TestDNSProvisionerWritesZoneAndReloadsBind(t *testing.T) {
 		Domain:  "example.test",
 		Address: "192.0.2.10",
 		Serial:  2026070701,
+		Records: []types.DNSRecord{
+			{Host: "@", Type: "NS", Value: "ns1.example.test", TTL: 3600},
+			{Host: "ns1", Type: "A", Value: "192.0.2.10", TTL: 3600},
+			{Host: "@", Type: "A", Value: "192.0.2.10", TTL: 3600},
+			{Host: "www", Type: "A", Value: "192.0.2.10", TTL: 3600},
+			{Host: "webmail", Type: "A", Value: "192.0.2.10", TTL: 3600},
+		},
 	})
 	if err != nil {
 		t.Fatalf("ConfigureDNSZone returned error: %v", err)
@@ -308,7 +318,7 @@ func TestDNSProvisionerWritesZoneAndReloadsBind(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ReadFile zone returned error: %v", err)
 	}
-	for _, want := range []string{"$ORIGIN example.test.", "2026070701", "@ IN A 192.0.2.10", "www IN A 192.0.2.10", "webmail IN A 192.0.2.10"} {
+	for _, want := range []string{"$ORIGIN example.test.", "2026070701", "@ 3600 IN A 192.0.2.10", "www 3600 IN A 192.0.2.10", "webmail 3600 IN A 192.0.2.10"} {
 		if !strings.Contains(string(zone), want) {
 			t.Fatalf("zone missing %q:\n%s", want, zone)
 		}
@@ -411,6 +421,66 @@ func TestRenderDNSZoneUsesCompleteStoredRecordSet(t *testing.T) {
 	}
 }
 
+func TestRenderDNSZoneSupportsNSServiceAndDNSSECRecordTypes(t *testing.T) {
+	zone := RenderDNSZone(types.ConfigureDNSZoneReq{
+		Domain: "example.test", Address: "192.0.2.10", Serial: 7,
+		SOA: types.DNSSOASettings{
+			PrimaryNameserver: "ns1.example.test", ResponsibleMailbox: "hostmaster.example.test",
+			DefaultTTL: 3600, RefreshSeconds: 3600, RetrySeconds: 900, ExpireSeconds: 604800, MinimumTTL: 300,
+		},
+		Records: []types.DNSRecord{
+			{Host: "@", Type: "NS", Value: "ns1.example.test", TTL: 3600},
+			{Host: "_sip._tcp", Type: "SRV", Value: "sip.example.test", Priority: 10, Weight: 5, Port: 5060, TTL: 600},
+			{Host: "@", Type: "CAA", Value: `0 issue "letsencrypt.org"`, TTL: 3600},
+			{Host: "@", Type: "DS", Value: "12345 13 2 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", TTL: 3600},
+		},
+	})
+	for _, want := range []string{
+		"@ 3600 IN NS ns1.example.test.",
+		"_sip._tcp 600 IN SRV 10 5 5060 sip.example.test.",
+		`@ 3600 IN CAA 0 issue "letsencrypt.org"`,
+		"@ 3600 IN DS 12345 13 2",
+	} {
+		if !strings.Contains(zone, want) {
+			t.Fatalf("zone missing %q:\n%s", want, zone)
+		}
+	}
+}
+
+func TestDNSProvisionerRendersSecondaryAndDisabledModes(t *testing.T) {
+	root := t.TempDir()
+	runner := &recordingCommandRunner{}
+	reloader := &recordingPhase6Reloader{}
+	p := NewDNSProvisioner(DNSProvisionerOptions{
+		ZoneDir: reloaderSafePath(filepath.Join(root, "zones")), IncludeDir: filepath.Join(root, "zones.d"),
+		AggregatePath: filepath.Join(root, "named.conf.nakpanel"), ValidatorRunner: runner, Reloader: reloader,
+	})
+	result, err := p.ConfigureDNSZone(context.Background(), types.ConfigureDNSZoneReq{
+		Domain: "secondary.example", Mode: "secondary", UpstreamPrimaries: []string{"192.0.2.53"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	include, err := os.ReadFile(result.IncludePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(include), "type slave;") || !strings.Contains(string(include), "192.0.2.53;") {
+		t.Fatalf("secondary include:\n%s", include)
+	}
+	if runner.sawCommand("named-checkzone") {
+		t.Fatalf("secondary zone unexpectedly ran named-checkzone: %#v", runner.calls)
+	}
+	if _, err := p.ConfigureDNSZone(context.Background(), types.ConfigureDNSZoneReq{
+		Domain: "secondary.example", Mode: "disabled",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(result.IncludePath); !os.IsNotExist(err) {
+		t.Fatalf("disabled include still exists: %v", err)
+	}
+}
+
 func TestReconciliationProvisionerRegeneratesSiteWebmailAndDNS(t *testing.T) {
 	site := &recordingSiteProvisioner{}
 	webmail := &recordingWebmailProvisioner{}
@@ -436,6 +506,66 @@ func TestReconciliationProvisionerRegeneratesSiteWebmailAndDNS(t *testing.T) {
 	}
 	if site.req.Domain != "example.test" || !site.req.SharedAccount || webmail.req.Hostname != "webmail.example.test" || dns.req.Address != "192.0.2.10" {
 		t.Fatalf("site=%#v webmail=%#v dns=%#v, want all phase6 regenerators called", site.req, webmail.req, dns.req)
+	}
+}
+
+func TestReconciliationProvisionerPreservesCompleteDNSZoneIntent(t *testing.T) {
+	dns := &recordingDNSProvisioner{}
+	provisioner := NewReconciliationProvisioner(&recordingSiteProvisioner{}, nil, dns)
+	zone := &types.ConfigureDNSZoneReq{
+		ZoneID: 17, DesiredRevision: 9, Domain: "child.example.test", Mode: "secondary",
+		UpstreamPrimaries: []string{"192.0.2.53"},
+	}
+
+	result, err := provisioner.ReconcileSystem(context.Background(), types.ReconcileSystemReq{
+		Sites: []types.ReconcileSiteReq{{
+			Domain: "workspace.example.test", PHPVersion: "8.3", EnableDNS: true,
+			DNSZoneID: 17, DNSZone: zone,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ReconcileSystem returned error: %v", err)
+	}
+	if result.Failed != 0 {
+		t.Fatalf("result = %#v, want successful secondary-zone reconciliation", result)
+	}
+	if dns.req.Mode != "secondary" || dns.req.Domain != "child.example.test" ||
+		dns.req.DesiredRevision != 9 || len(dns.req.UpstreamPrimaries) != 1 {
+		t.Fatalf("DNS request = %#v, want complete persisted zone intent", dns.req)
+	}
+}
+
+func TestNormalizeDNSZoneRejectsCNAMECoexistenceAndInvalidCAAFlags(t *testing.T) {
+	soa := types.DNSSOASettings{
+		PrimaryNameserver: "ns1.example.test", ResponsibleMailbox: "hostmaster.example.test",
+		DefaultTTL: 3600, RefreshSeconds: 3600, RetrySeconds: 900,
+		ExpireSeconds: 604800, MinimumTTL: 300,
+	}
+	for name, records := range map[string][]types.DNSRecord{
+		"apex CNAME": {
+			{Host: "@", Type: "CNAME", Value: "target.example.test", TTL: 3600},
+		},
+		"CNAME coexistence": {
+			{Host: "www", Type: "CNAME", Value: "target.example.test", TTL: 3600},
+			{Host: "www", Type: "TXT", Value: "conflict", TTL: 3600},
+		},
+		"multiple CNAME targets": {
+			{Host: "www", Type: "CNAME", Value: "one.example.test", TTL: 3600},
+			{Host: "www", Type: "CNAME", Value: "two.example.test", TTL: 3600},
+		},
+		"CAA flags": {
+			{Host: "@", Type: "CAA", Value: `256 issue "letsencrypt.org"`, TTL: 3600},
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := normalizeDNSZoneRequest(types.ConfigureDNSZoneReq{
+				Domain: "example.test", Address: "192.0.2.10", Mode: "primary",
+				SOA: soa, Records: records,
+			}, t.TempDir())
+			if err == nil {
+				t.Fatal("normalizeDNSZoneRequest succeeded, want validation error")
+			}
+		})
 	}
 }
 

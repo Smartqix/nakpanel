@@ -1,6 +1,9 @@
 package types
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
 
 // HostingPolicy is the versioned, typed desired-state contract shared by
 // plans, subscriptions, sites, the control plane, and the privileged agent.
@@ -17,6 +20,7 @@ type HostingPolicy struct {
 	Access        HostingAccessPolicy      `json:"access"`
 	Backups       HostingBackupPolicy      `json:"backups"`
 	Applications  HostingApplicationPolicy `json:"applications"`
+	Valkey        HostingValkeyPolicy      `json:"valkey"`
 }
 
 type HostingResourcePolicy struct {
@@ -38,6 +42,8 @@ type HostingResourcePolicy struct {
 	BackupStorageMB    int `json:"backup_storage_mb"`
 	MaxApplications    int `json:"max_applications"`
 	ContainerStorageMB int `json:"container_storage_mb"`
+	MaxFTPAccounts     int `json:"max_ftp_accounts"`
+	ValkeyMemoryMB     int `json:"valkey_memory_mb"`
 }
 
 type HostingPermissionPolicy struct {
@@ -55,32 +61,54 @@ type HostingPermissionPolicy struct {
 	Applications      bool `json:"applications"`
 	CustomOCIImages   bool `json:"custom_oci_images"`
 	ApplicationEgress bool `json:"application_egress"`
+	FTPS              bool `json:"ftps"`
+	Logs              bool `json:"logs"`
+	Git               bool `json:"git"`
+	Staging           bool `json:"staging"`
+	Valkey            bool `json:"valkey"`
 }
 
 type HostingWebPolicy struct {
-	PreferredDomain      string `json:"preferred_domain"`
-	HTTPSRedirect        bool   `json:"https_redirect"`
-	RequestRatePerSecond int    `json:"request_rate_per_second"`
-	RequestBurst         int    `json:"request_burst"`
-	MaxConnections       int    `json:"max_connections"`
-	StaticCache          bool   `json:"static_cache"`
-	FastCGIMicrocache    bool   `json:"fastcgi_microcache"`
+	PreferredDomain      string   `json:"preferred_domain"`
+	HTTPSRedirect        bool     `json:"https_redirect"`
+	RequestRatePerSecond int      `json:"request_rate_per_second"`
+	RequestBurst         int      `json:"request_burst"`
+	MaxConnections       int      `json:"max_connections"`
+	StaticCache          bool     `json:"static_cache"`
+	FastCGIMicrocache    bool     `json:"fastcgi_microcache"`
+	IndexFiles           string   `json:"index_files"`
+	RequestBodyLimitMB   int      `json:"request_body_limit_mb"`
+	Compression          bool     `json:"compression"`
+	CacheTTLSeconds      int      `json:"cache_ttl_seconds"`
+	RateLimitPerSecond   int      `json:"rate_limit_per_second"`
+	RateLimitBurst       int      `json:"rate_limit_burst"`
+	ConnectTimeoutSecs   int      `json:"connect_timeout_seconds"`
+	ReadTimeoutSecs      int      `json:"read_timeout_seconds"`
+	SecurityHeaderPreset string   `json:"security_header_preset"`
+	AllowedCIDRs         []string `json:"allowed_cidrs"`
+	ErrorDocument404     string   `json:"error_document_404"`
+	ErrorDocument50X     string   `json:"error_document_50x"`
 }
 
 type HostingPHPPolicy struct {
-	DefaultVersion      string   `json:"default_version"`
-	AllowedVersions     []string `json:"allowed_versions"`
-	FPMMaxChildren      int      `json:"fpm_max_children"`
-	FPMMaxRequests      int      `json:"fpm_max_requests"`
-	MemoryLimitMB       int      `json:"memory_limit_mb"`
-	MaxExecutionSeconds int      `json:"max_execution_seconds"`
-	MaxInputSeconds     int      `json:"max_input_seconds"`
-	PostMaxMB           int      `json:"post_max_mb"`
-	UploadMaxMB         int      `json:"upload_max_mb"`
-	DisplayErrors       bool     `json:"display_errors"`
-	LogErrors           bool     `json:"log_errors"`
-	AllowURLFOpen       bool     `json:"allow_url_fopen"`
-	ExecEnabled         bool     `json:"exec_enabled"`
+	DefaultVersion       string   `json:"default_version"`
+	AllowedVersions      []string `json:"allowed_versions"`
+	FPMMaxChildren       int      `json:"fpm_max_children"`
+	FPMMaxRequests       int      `json:"fpm_max_requests"`
+	MemoryLimitMB        int      `json:"memory_limit_mb"`
+	MaxExecutionSeconds  int      `json:"max_execution_seconds"`
+	MaxInputSeconds      int      `json:"max_input_seconds"`
+	PostMaxMB            int      `json:"post_max_mb"`
+	UploadMaxMB          int      `json:"upload_max_mb"`
+	DisplayErrors        bool     `json:"display_errors"`
+	LogErrors            bool     `json:"log_errors"`
+	AllowURLFOpen        bool     `json:"allow_url_fopen"`
+	ExecEnabled          bool     `json:"exec_enabled"`
+	FPMMode              string   `json:"fpm_mode"`
+	FPMIdleTimeoutSecs   int      `json:"fpm_idle_timeout_seconds"`
+	RequestTerminateSecs int      `json:"request_terminate_timeout_seconds"`
+	OPcacheEnabled       bool     `json:"opcache_enabled"`
+	OPcacheMemoryMB      int      `json:"opcache_memory_mb"`
 }
 
 type HostingMailPolicy struct {
@@ -106,6 +134,9 @@ type HostingAccessPolicy struct {
 	NspawnImage        string `json:"nspawn_image"`
 	SFTPOnly           bool   `json:"sftp_only"`
 	SSHIdleTimeoutMins int    `json:"ssh_idle_timeout_minutes"`
+	FTPSEnabled        bool   `json:"ftps_enabled"`
+	FTPSPassiveStart   int    `json:"ftps_passive_start"`
+	FTPSPassiveEnd     int    `json:"ftps_passive_end"`
 }
 
 type HostingBackupPolicy struct {
@@ -122,6 +153,16 @@ type HostingApplicationPolicy struct {
 	AllowedRuntimes     []string `json:"allowed_runtimes"`
 	Rootless            bool     `json:"rootless"`
 	EgressEnabled       bool     `json:"egress_enabled"`
+}
+
+type HostingValkeyPolicy struct {
+	Enabled            bool   `json:"enabled"`
+	MemoryMB           int    `json:"memory_mb"`
+	MaxClients         int    `json:"max_clients"`
+	IdleTimeoutSeconds int    `json:"idle_timeout_seconds"`
+	EvictionPolicy     string `json:"eviction_policy"`
+	CPUPercent         int    `json:"cpu_percent"`
+	ProcessLimit       int    `json:"process_limit"`
 }
 
 type SubscriptionSystemAccount struct {
@@ -175,6 +216,12 @@ type ScheduledTask struct {
 	WorkingDirectory string `json:"working_directory"`
 	TimeoutSeconds   int    `json:"timeout_seconds"`
 	Enabled          bool   `json:"enabled"`
+	SiteID           int64  `json:"site_id,omitempty"`
+	Domain           string `json:"domain,omitempty"`
+	Kind             string `json:"kind"`
+	URL              string `json:"url,omitempty"`
+	Script           string `json:"script,omitempty"`
+	Timezone         string `json:"timezone"`
 }
 
 type EnsureSubscriptionAccountResult struct {
@@ -185,15 +232,23 @@ type EnsureSubscriptionAccountResult struct {
 }
 
 type EnsureApplicationReq struct {
-	ApplicationID int64             `json:"application_id"`
-	Username      string            `json:"username"`
-	Name          string            `json:"name"`
-	Runtime       string            `json:"runtime"`
-	ImageRef      string            `json:"image_ref"`
-	DesiredState  string            `json:"desired_state"`
-	Remove        bool              `json:"remove,omitempty"`
-	Environment   map[string]string `json:"environment"`
-	Policy        HostingPolicy     `json:"policy"`
+	ApplicationID   int64                   `json:"application_id"`
+	SubscriptionID  int64                   `json:"subscription_id"`
+	SiteID          int64                   `json:"site_id"`
+	DesiredRevision int64                   `json:"desired_revision"`
+	Username        string                  `json:"username"`
+	Domain          string                  `json:"domain"`
+	Name            string                  `json:"name"`
+	Runtime         string                  `json:"runtime"`
+	ImageRef        string                  `json:"image_ref"`
+	DesiredState    string                  `json:"desired_state"`
+	Remove          bool                    `json:"remove,omitempty"`
+	Environment     map[string]string       `json:"environment"`
+	Secrets         map[string]string       `json:"secrets,omitempty"`
+	Endpoint        ApplicationEndpointSpec `json:"endpoint"`
+	Health          ApplicationHealthSpec   `json:"health"`
+	Volumes         []ApplicationVolumeSpec `json:"volumes,omitempty"`
+	Policy          HostingPolicy           `json:"policy"`
 }
 
 // ConfigureMailReq carries the full desired mail state for the node. The
@@ -242,6 +297,7 @@ type MailDomainDKIM struct {
 type CollectMailQueueResult struct {
 	TotalQueued   int            `json:"total_queued"`
 	SenderDomains map[string]int `json:"sender_domains,omitempty"`
+	Truncated     bool           `json:"truncated,omitempty"`
 }
 
 type ApplyScheduledTasksReq struct {
@@ -272,6 +328,10 @@ type ScheduledTaskInput struct {
 	WorkingDirectory string `json:"working_directory"`
 	TimeoutSeconds   int    `json:"timeout_seconds"`
 	Enabled          bool   `json:"enabled"`
+	Kind             string `json:"kind"`
+	URL              string `json:"url,omitempty"`
+	Script           string `json:"script,omitempty"`
+	Timezone         string `json:"timezone"`
 }
 
 type MailDomainInput struct {
@@ -307,14 +367,43 @@ type MailAliasInput struct {
 }
 
 type ApplicationInput struct {
-	ID           int64             `json:"id,omitempty"`
-	SiteID       int64             `json:"site_id,omitempty"`
-	Name         string            `json:"name"`
-	Runtime      string            `json:"runtime"`
-	CatalogSlug  string            `json:"catalog_slug"`
-	ImageRef     string            `json:"image_ref"`
-	DesiredState string            `json:"desired_state"`
-	Environment  map[string]string `json:"environment"`
+	ID                   int64                   `json:"id,omitempty"`
+	SiteID               int64                   `json:"site_id,omitempty"`
+	Name                 string                  `json:"name"`
+	Runtime              string                  `json:"runtime"`
+	CatalogSlug          string                  `json:"catalog_slug"`
+	ImageRef             string                  `json:"image_ref"`
+	DesiredState         string                  `json:"desired_state"`
+	RouteMode            string                  `json:"route_mode"`
+	RoutePrefix          string                  `json:"route_prefix"`
+	ContainerPort        int                     `json:"container_port"`
+	HealthKind           string                  `json:"health_kind"`
+	HealthPath           string                  `json:"health_path"`
+	HealthTimeoutSeconds int                     `json:"health_timeout_seconds"`
+	Environment          map[string]string       `json:"environment"`
+	Secrets              map[string]string       `json:"-"`
+	Volumes              []ApplicationVolumeSpec `json:"volumes,omitempty"`
+}
+
+type ApplicationPreset struct {
+	ID         int64     `json:"id"`
+	ResellerID int64     `json:"reseller_id,omitempty"`
+	Slug       string    `json:"slug"`
+	Name       string    `json:"name"`
+	Runtime    string    `json:"runtime"`
+	ImageRef   string    `json:"image_ref"`
+	Active     bool      `json:"active"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type ApplicationPresetInput struct {
+	ID       int64                       `json:"id,omitempty"`
+	Slug     string                      `json:"slug"`
+	Name     string                      `json:"name"`
+	Runtime  string                      `json:"runtime"`
+	ImageRef string                      `json:"image_ref"`
+	Active   bool                        `json:"active"`
+	Manifest ApplicationManifestRevision `json:"manifest"`
 }
 
 type LegacySiteMigration struct {

@@ -20,10 +20,13 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	controlfiles "github.com/nakroteck/nakpanel/internal/control/filemanager"
+	controlpolicy "github.com/nakroteck/nakpanel/internal/control/policy"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/web"
 	"github.com/nakroteck/nakpanel/internal/types"
+	"github.com/nakroteck/nakpanel/internal/version"
 )
 
 const (
@@ -53,6 +56,10 @@ type CustomCertificateInstaller interface {
 
 type DashboardReader interface {
 	GetDashboard(ctx context.Context, owner auth.SessionUser) (dashboard.Data, error)
+}
+
+type ApplicationLogReader interface {
+	ReadApplicationLog(context.Context, types.ApplicationLogReq) (types.ApplicationLogResult, error)
 }
 
 type JobRetrier interface {
@@ -97,6 +104,7 @@ type QuotaManager interface {
 
 type DomainManager interface {
 	UpdateSiteSettings(ctx context.Context, owner auth.SessionUser, req types.UpdateSiteSettingsReq) error
+	UpdateSitePHPSettings(ctx context.Context, owner auth.SessionUser, req types.UpdateSitePHPSettingsReq) error
 	SetTLSAutoRenew(ctx context.Context, owner auth.SessionUser, siteID int64, enabled bool) error
 	UpsertDNSRecord(ctx context.Context, owner auth.SessionUser, siteID int64, record types.DNSRecord) error
 	DeleteDNSRecord(ctx context.Context, owner auth.SessionUser, siteID, recordID int64) error
@@ -104,16 +112,58 @@ type DomainManager interface {
 	ChangeSubscriptionSubscriber(ctx context.Context, owner auth.SessionUser, subscriptionIDs []int64, customerID int64) error
 }
 
+type DNSTemplateManager interface {
+	View(context.Context, int64) (types.DNSTemplateView, error)
+	SaveSettings(context.Context, int64, types.DNSTemplateSettingsInput) (int64, error)
+	UpsertTemplateRecord(context.Context, int64, int64, int64, types.DNSTemplateRecord) (int64, error)
+	DeleteTemplateRecord(context.Context, int64, int64, int64) (int64, error)
+	ResetTemplate(context.Context, int64, int64) (int64, error)
+	Preview(context.Context, int64, string, int64) (types.DNSSyncRun, error)
+	ApplyPreview(context.Context, int64, int64, string, string) error
+	RetryPreview(context.Context, int64, int64) (types.DNSSyncRun, error)
+	ApplyZone(context.Context, int64, int64) (types.DNSSyncRun, error)
+	RestoreRecord(context.Context, int64, int64) error
+	SetZoneMode(context.Context, int64, types.DNSZoneModeInput) error
+	SetZoneSOA(context.Context, int64, int64, *types.DNSSOASettings, *[]string) error
+	ResetZone(context.Context, int64, int64, string) error
+	SetSubdomainZoneMode(context.Context, int64, int64, string) error
+}
+
 type SubscriptionServices interface {
 	SetSubscriptionPolicy(context.Context, auth.SessionUser, int64, json.RawMessage) error
 	SetSitePolicy(context.Context, auth.SessionUser, int64, json.RawMessage) error
+	ResetSitePolicy(context.Context, auth.SessionUser, int64, string) error
 	UpsertSFTPIdentity(context.Context, auth.SessionUser, int64, types.SFTPIdentityInput) (int64, error)
 	UpsertScheduledTask(context.Context, auth.SessionUser, int64, types.ScheduledTaskInput) (int64, error)
 	UpsertMailDomain(context.Context, auth.SessionUser, int64, types.MailDomainInput) (int64, error)
 	UpsertMailbox(context.Context, auth.SessionUser, int64, types.MailboxInput) (int64, error)
 	UpsertMailAlias(context.Context, auth.SessionUser, int64, types.MailAliasInput) (int64, error)
 	UpsertApplication(context.Context, auth.SessionUser, int64, types.ApplicationInput) (int64, error)
+	UpsertProtectedDirectory(context.Context, auth.SessionUser, int64, types.ProtectedDirectoryInput) (int64, string, error)
 	DeleteSubscriptionService(context.Context, auth.SessionUser, int64, string, int64) error
+	UpsertFTPAccount(context.Context, auth.SessionUser, int64, types.FTPAccountInput) (int64, string, error)
+	UpsertGitRepository(context.Context, auth.SessionUser, int64, int64, types.GitRepositoryInput) (int64, error)
+	ConfigureValkey(context.Context, auth.SessionUser, int64, types.ValkeyInput) (string, error)
+	ReadSiteLog(context.Context, auth.SessionUser, int64, types.SiteLogRequest) (types.SiteLogResult, error)
+	RunScheduledTask(context.Context, auth.SessionUser, int64, int64) (types.ScheduledTaskRun, error)
+}
+
+type StagingServices interface {
+	QueueStagingOperation(context.Context, auth.SessionUser, types.StagingOperationInput) (int64, error)
+}
+
+type ApplicationPresetServices interface {
+	UpsertApplicationPreset(context.Context, auth.SessionUser, types.ApplicationPresetInput) (int64, error)
+}
+
+type ApplicationLifecycleServices interface {
+	SetApplicationAction(context.Context, auth.SessionUser, int64, int64, string) error
+}
+
+type GitDeploymentServices interface {
+	QueueGitDeployment(context.Context, auth.SessionUser, int64, int64) (int64, error)
+	RotateGitWebhook(context.Context, auth.SessionUser, int64, int64) (string, error)
+	TriggerGitWebhook(context.Context, int64, string) error
 }
 
 type MailManager interface {
@@ -122,6 +172,11 @@ type MailManager interface {
 	ReconfigureMail(context.Context, auth.SessionUser) error
 	MailServerStatus(context.Context, auth.SessionUser) (types.MailServerStatus, error)
 	RestartMail(context.Context, auth.SessionUser) error
+}
+
+type ServerAdmin interface {
+	InspectServer(context.Context) (types.ServerInventory, error)
+	ControlManagedService(context.Context, types.ControlManagedServiceReq) (types.ControlManagedServiceResult, error)
 }
 
 type WorkspaceService interface {
@@ -165,6 +220,17 @@ type ServerOptions struct {
 	DomainManager              DomainManager
 	FileManager                FileManagerService
 	MailManager                MailManager
+	ServerAdmin                ServerAdmin
+	DatabaseAdmin              DatabaseAdminService
+	DNSTemplates               DNSTemplateManager
+	ApplicationLogs            ApplicationLogReader
+	SMTPConfigured             bool
+	// SecurityDB backs the durable login throttle, TOTP state, login
+	// challenges, and auth audit/alerting. Optional; without it the login
+	// flow degrades to password-only with no throttle (tests).
+	SecurityDB *sql.DB
+	// SecurityKeyring seals TOTP secrets at rest.
+	SecurityKeyring *serveradmin.Keyring
 }
 
 type Server struct {
@@ -182,6 +248,14 @@ type Server struct {
 	domains            DomainManager
 	files              FileManagerService
 	mail               MailManager
+	serverAdmin        ServerAdmin
+	databaseAdmin      DatabaseAdminService
+	dnsTemplates       DNSTemplateManager
+	applicationLogs    ApplicationLogReader
+	smtpConfigured     bool
+	securityDB         *sql.DB
+	securityKeyring    *serveradmin.Keyring
+	reauthLimiter      *reauthLimiter
 }
 
 func NewServer(users UserStore, sessions *auth.SessionManager, options ...ServerOptions) *Server {
@@ -204,6 +278,14 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		domains:            opts.DomainManager,
 		files:              opts.FileManager,
 		mail:               opts.MailManager,
+		serverAdmin:        opts.ServerAdmin,
+		databaseAdmin:      opts.DatabaseAdmin,
+		dnsTemplates:       opts.DNSTemplates,
+		applicationLogs:    opts.ApplicationLogs,
+		smtpConfigured:     opts.SMTPConfigured,
+		securityDB:         opts.SecurityDB,
+		securityKeyring:    opts.SecurityKeyring,
+		reauthLimiter:      newReauthLimiter(),
 	}
 }
 
@@ -213,7 +295,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /login", s.handleLoginForm)
 	mux.HandleFunc("POST /login", s.handleLogin)
+	mux.HandleFunc("GET /login/2fa", s.handleTOTPChallengeForm)
+	mux.HandleFunc("POST /login/2fa", s.handleTOTPChallenge)
+	mux.HandleFunc("GET /account/2fa", s.handleTwoFactorPage)
+	mux.HandleFunc("POST /account/2fa/setup", s.handleTwoFactorSetup)
+	mux.HandleFunc("POST /account/2fa/activate", s.handleTwoFactorActivate)
+	mux.HandleFunc("POST /account/2fa/disable", s.handleTwoFactorDisable)
+	mux.HandleFunc("POST /account/2fa/recovery-codes", s.handleTwoFactorRecoveryCodes)
 	mux.HandleFunc("POST /logout", s.handleLogout)
+	mux.HandleFunc("POST /tools-settings/reauthenticate", s.handleServerReauthenticate)
 	mux.HandleFunc("POST /sites", s.handleCreateSite)
 	mux.HandleFunc("POST /databases", s.handleCreateDatabase)
 	mux.HandleFunc("POST /certificates", s.handleIssueCertificate)
@@ -225,6 +315,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /settings/mail", s.handleUpdateMailSettings)
 	mux.HandleFunc("POST /settings/mail/reconfigure", s.handleReconfigureMail)
 	mux.HandleFunc("POST /settings/mail/restart", s.handleRestartMail)
+	mux.HandleFunc("POST /tools-settings/inventory/refresh", s.handleRefreshServerInventory)
+	mux.HandleFunc("POST /tools-settings/services/action", s.handleManagedServiceAction)
+	s.registerPhase26CoreRoutes(mux)
+	s.registerPhase26OperationsRoutes(mux)
+	s.registerServerSecurityRoutes(mux)
+	s.registerServerBackupRoutes(mux)
+	s.registerPhase26DMailRoutes(mux)
+	RegisterDatabaseAdminRoutes(mux, s, s.databaseAdmin)
 	mux.HandleFunc("POST /dns", s.handleConfigureDNS)
 	mux.HandleFunc("POST /reconcile", s.handleReconcileSystem)
 	mux.HandleFunc("POST /quotas", s.handleUpsertQuota)
@@ -247,9 +345,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /subscriptions/bulk-subscriber", s.handleBulkSubscriptionSubscriber)
 	mux.HandleFunc("POST /sites/{id}/hosting", s.handleSiteHosting)
 	mux.HandleFunc("POST /sites/{id}/php", s.handleSitePHP)
+	mux.HandleFunc("POST /sites/{id}/php-settings", s.handleSitePHPSettings)
 	mux.HandleFunc("POST /sites/{id}/tls-auto-renew", s.handleTLSAutoRenew)
 	mux.HandleFunc("POST /sites/{id}/dns-records", s.handleUpsertDNSRecord)
 	mux.HandleFunc("POST /sites/{id}/dns-records/{recordID}/delete", s.handleDeleteDNSRecord)
+	s.registerDNSTemplateRoutes(mux)
 	mux.HandleFunc("POST /subscriptions/{id}/policy", s.handleSubscriptionPolicy)
 	mux.HandleFunc("POST /sites/{id}/policy", s.handleSitePolicy)
 	mux.HandleFunc("POST /subscriptions/{id}/sftp", s.handleSFTPIdentity)
@@ -258,6 +358,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /subscriptions/{id}/mailboxes", s.handleMailbox)
 	mux.HandleFunc("POST /subscriptions/{id}/mail-aliases", s.handleMailAlias)
 	mux.HandleFunc("POST /subscriptions/{id}/applications", s.handleApplication)
+	mux.HandleFunc("POST /subscriptions/{id}/applications/{applicationID}/action", s.handleApplicationAction)
+	mux.HandleFunc("POST /application-presets", s.handleApplicationPreset)
+	mux.HandleFunc("POST /subscriptions/{id}/protected-directories", s.handleProtectedDirectory)
+	mux.HandleFunc("POST /subscriptions/{id}/ftp", s.handleFTPAccount)
+	mux.HandleFunc("POST /subscriptions/{id}/valkey", s.handleValkey)
+	mux.HandleFunc("POST /subscriptions/{id}/scheduled-tasks/{taskID}/run", s.handleRunScheduledTask)
+	mux.HandleFunc("POST /sites/{id}/git", s.handleGitRepository)
+	mux.HandleFunc("POST /sites/{id}/git/deploy", s.handleGitDeploy)
+	mux.HandleFunc("POST /sites/{id}/git/webhook", s.handleGitWebhookRotate)
+	mux.HandleFunc("POST /git/hooks/{siteID}/{token}", s.handleGitWebhook)
+	mux.HandleFunc("POST /sites/{id}/staging", s.handleStagingOperation)
+	mux.HandleFunc("GET /sites/{id}/logs/data", s.handleSiteLogData)
 	mux.HandleFunc("POST /subscriptions/{id}/services/{kind}/{resourceID}/delete", s.handleDeleteSubscriptionService)
 	s.registerFileManagerRoutes(mux)
 	mux.HandleFunc("POST /plans/{id}/clone", s.handleClonePlan)
@@ -279,6 +391,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /dashboard", s.handleWorkspace("dashboard"))
 	mux.HandleFunc("GET /sites", s.handleWorkspace("sites"))
 	mux.HandleFunc("GET /sites/{id}", s.handleWorkspace("site-detail"))
+	mux.HandleFunc("GET /sites/{id}/access", s.handleSiteTool("access"))
+	mux.HandleFunc("GET /sites/{id}/web-server", s.handleSiteTool("web-server"))
+	mux.HandleFunc("GET /sites/{id}/logs", s.handleSiteTool("logs"))
+	mux.HandleFunc("GET /sites/{id}/scheduled-tasks", s.handleSiteTool("scheduled-tasks"))
+	mux.HandleFunc("GET /sites/{id}/statistics", s.handleSiteTool("statistics"))
+	mux.HandleFunc("GET /sites/{id}/git", s.handleSiteTool("git"))
+	mux.HandleFunc("GET /sites/{id}/applications", s.handleSiteTool("applications"))
+	mux.HandleFunc("GET /sites/{id}/containers", s.handleSiteTool("containers"))
+	mux.HandleFunc("GET /sites/{id}/containers/{containerID}", s.handleContainerDetail)
+	mux.HandleFunc("GET /sites/{id}/containers/{containerID}/logs", s.handleContainerLogs)
+	mux.HandleFunc("GET /sites/{id}/staging", s.handleSiteTool("staging"))
+	mux.HandleFunc("GET /sites/{id}/redis", s.handleSiteTool("redis"))
 	mux.HandleFunc("GET /databases", s.handleWorkspace("databases"))
 	mux.HandleFunc("GET /backups", s.handleWorkspace("backups"))
 	mux.HandleFunc("GET /dns", s.handleWorkspace("dns"))
@@ -290,6 +414,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /subscriptions", s.handleWorkspace("subscriptions"))
 	mux.HandleFunc("GET /subscriptions/new", s.handleWorkspace("subscription-new"))
 	mux.HandleFunc("GET /subscriptions/{id}", s.handleWorkspace("subscription-detail"))
+	mux.HandleFunc("GET /subscriptions/{id}/access", s.handleSubscriptionTool("access"))
+	mux.HandleFunc("GET /subscriptions/{id}/cache", s.handleSubscriptionTool("cache"))
 	mux.HandleFunc("GET /service-plans", s.handleWorkspace("service-plans"))
 	mux.HandleFunc("GET /service-plans/new", s.handleWorkspace("plan-new"))
 	mux.HandleFunc("GET /service-plans/addons/new", s.handleWorkspace("addon-new"))
@@ -298,12 +424,28 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /service-plans/resellers/{id}", s.handleWorkspace("reseller-plan-detail"))
 	mux.HandleFunc("GET /service-plans/{id}", s.handleWorkspace("plan-detail"))
 	mux.HandleFunc("GET /tools-settings", s.handleWorkspace("tools-settings"))
+	mux.HandleFunc("GET /tools-settings/dns", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/server", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/php", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/security", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/backups", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/services", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/logs", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/mail", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/databases", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/applications", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/application-catalog", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/operations", s.handleServerAdminWorkspace)
+	mux.HandleFunc("GET /tools-settings/inventory", s.handleServerInventory)
+	mux.HandleFunc("GET /tools-settings/status", s.handleServerInventory)
 	mux.HandleFunc("GET /resellers", s.handleWorkspace("resellers"))
 	mux.HandleFunc("GET /resellers/{id}", s.handleWorkspace("reseller-detail"))
 	mux.HandleFunc("GET /reseller-plans", s.handleWorkspace("reseller-plans"))
 	mux.HandleFunc("GET /my-resources", s.handleWorkspace("my-resources"))
-	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}", s.handleSupportWorkspace)
-	mux.HandleFunc("GET /support/customers/{customerID}/subscriptions/{id}", s.handleSupportWorkspace)
+	mux.HandleFunc("GET /tools-utilities", s.handleWorkspace("tools-utilities"))
+	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}", s.handleSupportObject("sites", ""))
+	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}/{tool}", s.handleSupportObject("sites", "tool"))
+	mux.HandleFunc("GET /support/customers/{customerID}/subscriptions/{id}", s.handleSupportObject("subscriptions", ""))
 	mux.HandleFunc("GET /support/customers/{customerID}/{page}", s.handleSupportWorkspace)
 	mux.HandleFunc("GET /", s.handleRoot)
 	return securityHeaders(sameOriginPostGuard(limitPostBody(csrfGuard(mux), s.files)))
@@ -320,58 +462,17 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	// Line 1 must stay exactly "ok": external probes grep it line-based.
 	fmt.Fprintln(w, "ok")
+	fmt.Fprintf(w, "version=%s\n", version.String())
 }
 
 func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 	renderPage(w, r, web.LoginPage())
 }
 
-func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid login form", http.StatusBadRequest)
-		return
-	}
-
-	email := strings.ToLower(strings.TrimSpace(r.Form.Get("email")))
-	password := r.Form.Get("password")
-	user, err := s.users.FindUserByEmail(r.Context(), email)
-	if err != nil {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
-		return
-	}
-	if !user.Role.Valid() {
-		http.Error(w, "Invalid account role", http.StatusInternalServerError)
-		return
-	}
-
-	ok, err := auth.VerifyPassword(password, user.PasswordHash)
-	if err != nil || !ok {
-		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
-		return
-	}
-
-	token, expiresAt, err := s.sessions.Create(r.Context(), user.ID)
-	if err != nil {
-		http.Error(w, "Could not create session", http.StatusInternalServerError)
-		return
-	}
-
-	http.SetCookie(w, &http.Cookie{
-		Name:     SessionCookieName,
-		Value:    token,
-		Path:     "/",
-		Expires:  expiresAt,
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
-	target := "/dashboard"
-	if r.Form.Get("legacy") == "1" {
-		target = "/?legacy=1"
-	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
-}
+// handleLogin lives in login_security.go together with the throttle, TOTP
+// challenge, and enrollment flow.
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
@@ -448,6 +549,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			}
 		}
 		view.SelectedSubscription = parseQueryInt64(r, "subscription_id")
+		view.ContainerID = parseQueryInt64(r, "container_id")
 		view.SelectedMailDomain = parseQueryInt64(r, "domain_id")
 		view.PlanType = strings.TrimSpace(r.URL.Query().Get("type"))
 		if user.Role != auth.RoleAdmin && view.PlanType == "reseller" {
@@ -459,6 +561,12 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		view.ProviderFilter = strings.TrimSpace(r.URL.Query().Get("provider"))
 		view.CloneFrom = parseQueryInt64(r, "clone_from")
 		view.Tab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tab")))
+		if route == "tools-settings" {
+			view.SettingsFocus = strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/tools-settings"), "/")
+			if view.SettingsFocus == "application-catalog" {
+				view.SettingsFocus = "applications"
+			}
+		}
 		if view.Tab == "" {
 			view.Tab = "overview"
 		}
@@ -471,14 +579,155 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		if route == "tools-settings" && user.Role == auth.RoleAdmin && s.mail != nil {
 			view.MailSettings, err = s.mail.MailSettings(r.Context(), user)
 			if err != nil {
-				view.MailSettingsError = err.Error()
+				view.MailSettingsError = "Mail settings could not be loaded."
+			}
+		}
+		if route == "tools-settings" && view.SettingsFocus == "dns" && user.Role == auth.RoleAdmin && s.dnsTemplates != nil {
+			view.DNSSettings, err = s.dnsTemplates.View(r.Context(), parseQueryInt64(r, "run"))
+			if err != nil {
+				view.DNSSettingsError = "DNS settings could not be loaded."
+			}
+		}
+		if route == "site-detail" && view.Tab == "dns" && s.dnsTemplates != nil {
+			if runID := parseQueryInt64(r, "dns_run"); runID > 0 {
+				dnsView, loadErr := s.dnsTemplates.View(r.Context(), runID)
+				if loadErr == nil {
+					view.DNSPreview = dnsView.Preview
+				}
 			}
 		}
 		if !workspaceDetailVisible(route, view.DetailID, data) {
 			http.NotFound(w, r)
 			return
 		}
+		if route == "site-detail" && view.ContainerID > 0 {
+			visible := false
+			for _, application := range data.SubscriptionServices.Applications {
+				if application.ID == view.ContainerID && application.SiteID == view.DetailID && application.Runtime == "oci" {
+					visible = true
+					break
+				}
+			}
+			if !visible {
+				http.NotFound(w, r)
+				return
+			}
+		}
 		renderPage(w, r, web.RoutedDashboardPage(routeTitle(route), user, data, s.dashboardActions(user), view))
+	}
+}
+
+func (s *Server) handleSiteTool(tab string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		clone := r.Clone(r.Context())
+		query := clone.URL.Query()
+		query.Set("tab", tab)
+		clone.URL.RawQuery = query.Encode()
+		s.handleWorkspace("site-detail")(w, clone)
+	}
+}
+
+func (s *Server) handleContainerDetail(w http.ResponseWriter, r *http.Request) {
+	containerID, err := strconv.ParseInt(r.PathValue("containerID"), 10, 64)
+	if err != nil || containerID <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	clone := r.Clone(r.Context())
+	query := clone.URL.Query()
+	query.Set("tab", "containers")
+	query.Set("container_id", strconv.FormatInt(containerID, 10))
+	clone.URL.RawQuery = query.Encode()
+	s.handleWorkspace("site-detail")(w, clone)
+}
+
+func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.currentUser(w, r)
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if s.applicationLogs == nil {
+		http.Error(w, "Application logs are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	siteID, siteErr := parsePositivePathID(r, "id")
+	applicationID, applicationErr := parsePositivePathID(r, "containerID")
+	if siteErr != nil || applicationErr != nil {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := s.loadDashboard(r.Context(), user)
+	if err != nil {
+		http.Error(w, "Could not load application access", http.StatusInternalServerError)
+		return
+	}
+	var site dashboard.Site
+	siteVisible := false
+	for _, candidate := range data.Sites {
+		if candidate.ID == siteID {
+			site = candidate
+			siteVisible = true
+			break
+		}
+	}
+	applicationVisible := false
+	for _, candidate := range data.SubscriptionServices.Applications {
+		if candidate.ID == applicationID && candidate.SiteID == siteID && candidate.SubscriptionID == site.SubscriptionID && candidate.Runtime == "oci" {
+			applicationVisible = true
+			break
+		}
+	}
+	if !siteVisible || !applicationVisible || site.Username == "" {
+		http.NotFound(w, r)
+		return
+	}
+	result, err := s.applicationLogs.ReadApplicationLog(r.Context(), types.ApplicationLogReq{
+		ApplicationID: applicationID, SubscriptionID: site.SubscriptionID, Username: site.Username,
+		Lines: parseBoundedQueryInt(r, "lines", 200, 1, 1000),
+		Bytes: parseBoundedQueryInt(r, "bytes", 256*1024, 1, 1024*1024),
+	})
+	if err != nil {
+		http.Error(w, "Could not read application logs", http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeSPAJSON(w, http.StatusOK, result)
+}
+
+func parseBoundedQueryInt(r *http.Request, name string, fallback, minimum, maximum int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(r.URL.Query().Get(name)))
+	if err != nil || value < minimum || value > maximum {
+		return fallback
+	}
+	return value
+}
+
+func (s *Server) handleSubscriptionTool(tab string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		clone := r.Clone(r.Context())
+		query := clone.URL.Query()
+		query.Set("tab", tab)
+		clone.URL.RawQuery = query.Encode()
+		s.handleWorkspace("subscription-detail")(w, clone)
+	}
+}
+
+func (s *Server) handleSupportObject(page, toolParam string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		clone := r.Clone(r.Context())
+		clone.SetPathValue("page", page)
+		if toolParam != "" {
+			tool := strings.ToLower(strings.TrimSpace(r.PathValue(toolParam)))
+			if page != "sites" || !validWorkspaceTab("site-detail", tool) {
+				http.NotFound(w, r)
+				return
+			}
+			query := clone.URL.Query()
+			query.Set("tab", tool)
+			clone.URL.RawQuery = query.Encode()
+		}
+		s.handleSupportWorkspace(w, clone)
 	}
 }
 
@@ -551,10 +800,10 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 
 func validWorkspaceTab(route, tab string) bool {
 	if route == "subscription-detail" {
-		return map[string]bool{"overview": true, "resources": true, "access": true, "mail": true, "tasks": true, "applications": true, "backups": true, "activity": true}[tab]
+		return map[string]bool{"overview": true, "resources": true, "access": true, "cache": true, "mail": true, "tasks": true, "applications": true, "backups": true, "activity": true}[tab]
 	}
 	if route == "site-detail" {
-		return map[string]bool{"overview": true, "hosting": true, "php": true, "mail": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
+		return map[string]bool{"overview": true, "access": true, "hosting": true, "web-server": true, "php": true, "logs": true, "scheduled-tasks": true, "statistics": true, "git": true, "applications": true, "containers": true, "staging": true, "redis": true, "mail": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
 	}
 	return map[string]bool{"overview": true, "hosting": true, "php": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
 }
@@ -703,9 +952,71 @@ func filterDashboardForCustomer(data dashboard.Data, customerID int64) dashboard
 		}
 	}
 	applications := make([]dashboard.Application, 0)
+	applicationIDs := make(map[int64]bool)
 	for _, item := range data.SubscriptionServices.Applications {
 		if subscriptionIDs[item.SubscriptionID] {
 			applications = append(applications, item)
+			applicationIDs[item.ID] = true
+		}
+	}
+	applicationGenerations := make([]types.ApplicationGeneration, 0)
+	for _, item := range data.SubscriptionServices.ApplicationGenerations {
+		if applicationIDs[item.ApplicationID] {
+			applicationGenerations = append(applicationGenerations, item)
+		}
+	}
+	ftp := make([]types.FTPAccount, 0)
+	for _, item := range data.SubscriptionServices.FTP {
+		if subscriptionIDs[item.SubscriptionID] && (item.SiteID == 0 || siteIDs[item.SiteID]) {
+			ftp = append(ftp, item)
+		}
+	}
+	gitRepositories := make([]types.GitRepository, 0)
+	gitRepositoryIDs := make(map[int64]bool)
+	for _, item := range data.SubscriptionServices.Git {
+		if siteIDs[item.SiteID] {
+			gitRepositories = append(gitRepositories, item)
+			gitRepositoryIDs[item.ID] = true
+		}
+	}
+	gitDeployments := make([]types.GitDeployment, 0)
+	for _, item := range data.SubscriptionServices.GitDeployments {
+		if gitRepositoryIDs[item.RepositoryID] {
+			gitDeployments = append(gitDeployments, item)
+		}
+	}
+	protectedDirectories := make([]types.ProtectedDirectory, 0)
+	for _, item := range data.SubscriptionServices.ProtectedDirectories {
+		if siteIDs[item.SiteID] {
+			protectedDirectories = append(protectedDirectories, item)
+		}
+	}
+	valkey := make([]types.ValkeyInstance, 0)
+	for _, item := range data.SubscriptionServices.Valkey {
+		if subscriptionIDs[item.SubscriptionID] {
+			valkey = append(valkey, item)
+		}
+	}
+	staging := make([]types.StagingOperation, 0)
+	for _, item := range data.SubscriptionServices.Staging {
+		if siteIDs[item.SourceSiteID] && siteIDs[item.TargetSiteID] {
+			staging = append(staging, item)
+		}
+	}
+	taskIDs := make(map[int64]bool)
+	for _, item := range tasks {
+		taskIDs[item.ID] = true
+	}
+	taskRuns := make([]types.ScheduledTaskRun, 0)
+	for _, item := range data.SubscriptionServices.TaskRuns {
+		if taskIDs[item.TaskID] {
+			taskRuns = append(taskRuns, item)
+		}
+	}
+	siteUsage := make([]dashboard.SiteUsage, 0)
+	for _, item := range data.SubscriptionServices.SiteUsage {
+		if siteIDs[item.SiteID] {
+			siteUsage = append(siteUsage, item)
 		}
 	}
 	sitePolicies := make([]dashboard.SitePolicy, 0)
@@ -729,7 +1040,11 @@ func filterDashboardForCustomer(data dashboard.Data, customerID int64) dashboard
 	data.SubscriptionServices = dashboard.SubscriptionServicesData{
 		Accounts: accounts, SFTP: sftp, Tasks: tasks, MailDomains: mailDomains,
 		Mailboxes: mailboxes, MailAliases: mailAliases, WebmailHosts: webmailHosts,
-		Applications: applications, SitePolicies: sitePolicies,
+		Applications: applications, ApplicationGenerations: applicationGenerations,
+		ApplicationPresets:   data.SubscriptionServices.ApplicationPresets,
+		ProtectedDirectories: protectedDirectories, SitePolicies: sitePolicies,
+		FTP: ftp, Git: gitRepositories, GitDeployments: gitDeployments, Valkey: valkey, Staging: staging,
+		TaskRuns: taskRuns, SiteUsage: siteUsage,
 	}
 	return data
 }
@@ -750,13 +1065,13 @@ func workspaceRouteAllowed(role auth.Role, route string) bool {
 		return clientRoutes[route]
 	}
 	if role == auth.RoleReseller {
-		return map[string]bool{"dashboard": true, "sites": true, "site-detail": true, "site-files": true, "site-file-edit": true, "databases": true, "backups": true, "dns": true, "certificates": true, "mail": true, "activity": true, "customers": true, "customer-detail": true, "subscriptions": true, "subscription-detail": true, "subscription-new": true, "service-plans": true, "plan-detail": true, "plan-new": true, "addon-detail": true, "addon-new": true, "my-resources": true}[route]
+		return map[string]bool{"dashboard": true, "sites": true, "site-detail": true, "site-files": true, "site-file-edit": true, "databases": true, "backups": true, "dns": true, "certificates": true, "mail": true, "activity": true, "customers": true, "customer-detail": true, "subscriptions": true, "subscription-detail": true, "subscription-new": true, "service-plans": true, "plan-detail": true, "plan-new": true, "addon-detail": true, "addon-new": true, "my-resources": true, "tools-utilities": true}[route]
 	}
 	return false
 }
 
 func routeTitle(route string) string {
-	return map[string]string{"dashboard": "Home", "sites": "Domains", "site-detail": "Domain", "site-files": "File Manager", "site-file-edit": "Edit File", "databases": "Databases", "backups": "Backups", "dns": "DNS", "certificates": "SSL/TLS Certificates", "mail": "Mail", "activity": "Activity", "customers": "Customers", "customer-detail": "Customer", "subscriptions": "Subscriptions", "subscription-detail": "Subscription", "subscription-new": "Add Subscription", "service-plans": "Service Plans", "plan-detail": "Service Plan", "plan-new": "Add a Plan", "addon-detail": "Add-on Plan", "addon-new": "Add an Add-on", "reseller-plan-new": "Add Reseller Plan", "reseller-plan-detail": "Reseller Plan", "tools-settings": "Tools & Settings", "resellers": "Resellers", "reseller-detail": "Reseller", "reseller-plans": "Reseller Plans", "my-resources": "My Resources"}[route]
+	return map[string]string{"dashboard": "Home", "sites": "Domains", "site-detail": "Domain", "site-files": "File Manager", "site-file-edit": "Edit File", "databases": "Databases", "backups": "Backups", "dns": "DNS", "certificates": "SSL/TLS Certificates", "mail": "Mail", "activity": "Activity", "customers": "Customers", "customer-detail": "Customer", "subscriptions": "Subscriptions", "subscription-detail": "Subscription", "subscription-new": "Add Subscription", "service-plans": "Service Plans", "plan-detail": "Service Plan", "plan-new": "Add a Plan", "addon-detail": "Add-on Plan", "addon-new": "Add an Add-on", "reseller-plan-new": "Add Reseller Plan", "reseller-plan-detail": "Reseller Plan", "tools-settings": "Tools & Settings", "tools-utilities": "Tools & Utilities", "resellers": "Resellers", "reseller-detail": "Reseller", "reseller-plans": "Reseller Plans", "my-resources": "My Resources"}[route]
 }
 
 func parseQueryInt64(r *http.Request, name string) int64 {
@@ -1105,7 +1420,7 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 	s.recordAudit(r.Context(), user, customerID, req.SubscriptionID, "database.queued", "database", databaseID, map[string]any{"name": req.DBName})
 	if req.SiteID > 0 {
-		http.Redirect(w, r, "/sites/"+strconv.FormatInt(req.SiteID, 10)+"?tab=databases&notice=database-queued", http.StatusSeeOther)
+		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(req.SiteID, 10)+"?tab=databases&notice=database-queued"), http.StatusSeeOther)
 		return
 	}
 	redirectAfterPost(w, r, "/", "/databases?notice=database-queued")
@@ -1154,7 +1469,7 @@ func (s *Server) handleIssueCertificate(w http.ResponseWriter, r *http.Request) 
 	}
 	s.recordAudit(r.Context(), user, customerID, 0, "certificate.queued", "site", certificateID, map[string]any{"domain": domain, "issuer": issuer})
 	if siteID := parseFormInt64Default(r, "site_id", 0); siteID > 0 {
-		http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=ssl&notice=certificate-queued", http.StatusSeeOther)
+		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=ssl&notice=certificate-queued"), http.StatusSeeOther)
 		return
 	}
 	redirectAfterPost(w, r, "/", "/certificates?notice=certificate-queued")
@@ -1218,7 +1533,7 @@ func (s *Server) handleInstallCustomCertificate(w http.ResponseWriter, r *http.R
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "certificate.custom_queued", "site", siteID, map[string]any{"job_id": jobID})
-	http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=ssl&notice=certificate-queued", http.StatusSeeOther)
+	http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=ssl&notice=certificate-queued"), http.StatusSeeOther)
 }
 
 func readCertificateUpload(r *http.Request, name string, required bool) ([]byte, error) {
@@ -1320,7 +1635,7 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	s.recordAudit(r.Context(), user, customerID, req.SubscriptionID, "backup.queued", "backup", backupID, map[string]any{"domain": req.Domain})
 	if siteID := parseFormInt64Default(r, "site_id", 0); siteID > 0 {
-		http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=backups&notice=backup-queued", http.StatusSeeOther)
+		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=backups&notice=backup-queued"), http.StatusSeeOther)
 		return
 	}
 	redirectAfterPost(w, r, "/?notice=backup-queued", "/backups?notice=backup-queued")
@@ -1368,7 +1683,7 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	s.recordAudit(r.Context(), user, customerID, 0, "restore.queued", "restore", restoreID, map[string]any{"backup_id": backupID})
 	if siteID := parseFormInt64Default(r, "site_id", 0); siteID > 0 {
-		http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=backups&notice=restore-queued", http.StatusSeeOther)
+		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=backups&notice=restore-queued"), http.StatusSeeOther)
 		return
 	}
 	redirectAfterPost(w, r, "/?notice=restore-queued", "/backups?notice=restore-queued")
@@ -1449,7 +1764,7 @@ func (s *Server) handleConfigureDNS(w http.ResponseWriter, r *http.Request) {
 	}
 	s.recordAudit(r.Context(), user, customerID, 0, "dns.queued", "dns_zone", zoneID, map[string]any{"domain": domain, "address": address})
 	if siteID := parseFormInt64Default(r, "site_id", 0); siteID > 0 {
-		http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=dns&notice=dns-queued", http.StatusSeeOther)
+		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=dns&notice=dns-queued"), http.StatusSeeOther)
 		return
 	}
 	redirectAfterPost(w, r, "/?notice=dns-queued", "/dns?notice=dns-queued")
@@ -1951,6 +2266,43 @@ func (s *Server) handleSitePHP(w http.ResponseWriter, r *http.Request) {
 	s.handleSiteSettings(w, r, "php")
 }
 
+func (s *Server) handleSitePHPSettings(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.currentUser(w, r)
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	if s.domains == nil {
+		http.Error(w, "Domain settings are not configured", http.StatusServiceUnavailable)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid PHP settings", http.StatusBadRequest)
+		return
+	}
+	siteID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || siteID <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	patch, err := typedSitePolicyPatch(r)
+	if err != nil {
+		http.Error(w, "Invalid PHP settings", http.StatusBadRequest)
+		return
+	}
+	req := types.UpdateSitePHPSettingsReq{
+		SiteID: siteID, DesiredStatus: strings.TrimSpace(r.Form.Get("desired_status")),
+		DesiredPHPVersion:    strings.TrimSpace(r.Form.Get("desired_php_version")),
+		DesiredHTTPSRedirect: parseFormBool(r, "desired_https_redirect"), PolicyPatch: patch,
+	}
+	if err = s.domains.UpdateSitePHPSettings(r.Context(), user, req); err != nil {
+		writeQuotaError(w, r, "Could not update PHP settings", err)
+		return
+	}
+	s.recordAudit(r.Context(), user, 0, 0, "site.php_settings_changed", "site", siteID, map[string]any{"php_version": req.DesiredPHPVersion})
+	http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=php&notice=site-settings-saved"), http.StatusSeeOther)
+}
+
 func (s *Server) handleTLSAutoRenew(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
@@ -1976,7 +2328,7 @@ func (s *Server) handleTLSAutoRenew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "certificate.auto_renew_changed", "site", siteID, map[string]any{"enabled": enabled})
-	http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=ssl&notice=site-settings-saved", http.StatusSeeOther)
+	http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=ssl&notice=site-settings-saved"), http.StatusSeeOther)
 }
 
 func (s *Server) handleSiteSettings(w http.ResponseWriter, r *http.Request, tab string) {
@@ -2004,7 +2356,7 @@ func (s *Server) handleSiteSettings(w http.ResponseWriter, r *http.Request, tab 
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "site.settings_changed", "site", siteID, map[string]any{"tab": tab, "status": req.DesiredStatus, "php_version": req.DesiredPHPVersion, "https_redirect": req.DesiredHTTPSRedirect})
-	http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab="+tab+"&notice=site-settings-saved", http.StatusSeeOther)
+	http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab="+tab+"&notice=site-settings-saved"), http.StatusSeeOther)
 }
 
 func (s *Server) handleUpsertDNSRecord(w http.ResponseWriter, r *http.Request) {
@@ -2026,13 +2378,18 @@ func (s *Server) handleUpsertDNSRecord(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	record := types.DNSRecord{ID: parseFormInt64Default(r, "record_id", 0), Host: strings.TrimSpace(r.Form.Get("host")), Type: strings.TrimSpace(r.Form.Get("record_type")), Value: strings.TrimSpace(r.Form.Get("value")), Priority: parseFormIntDefault(r, "priority", 0), TTL: parseFormIntDefault(r, "ttl", 3600)}
+	record := types.DNSRecord{
+		ID: parseFormInt64Default(r, "record_id", 0), Host: strings.TrimSpace(r.Form.Get("host")),
+		Type: strings.TrimSpace(r.Form.Get("record_type")), Value: strings.TrimSpace(r.Form.Get("value")),
+		Priority: parseFormIntDefault(r, "priority", 0), Weight: parseFormIntDefault(r, "weight", 0),
+		Port: parseFormIntDefault(r, "port", 0), TTL: parseFormIntDefault(r, "ttl", 3600),
+	}
 	if err = s.domains.UpsertDNSRecord(r.Context(), user, siteID, record); err != nil {
 		writeQuotaError(w, r, "Could not save DNS record", err)
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "dns.record_saved", "site", siteID, map[string]any{"type": record.Type, "host": record.Host})
-	http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=dns&notice=dns-record-saved", http.StatusSeeOther)
+	http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=dns&notice=dns-record-saved"), http.StatusSeeOther)
 }
 
 func (s *Server) handleDeleteDNSRecord(w http.ResponseWriter, r *http.Request) {
@@ -2060,7 +2417,7 @@ func (s *Server) handleDeleteDNSRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "dns.record_deleted", "site", siteID, map[string]any{"record_id": recordID})
-	http.Redirect(w, r, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=dns&notice=dns-record-deleted", http.StatusSeeOther)
+	http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=dns&notice=dns-record-deleted"), http.StatusSeeOther)
 }
 
 func (s *Server) handleUpdateOversellSettings(w http.ResponseWriter, r *http.Request) {
@@ -2081,15 +2438,25 @@ func (s *Server) handleUpdateOversellSettings(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Invalid oversell settings form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	valkeyCapacity, err := parseFormInt(r, "valkey_capacity_mb")
+	if err != nil {
+		http.Error(w, "Invalid oversell settings form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	settings := controlquota.Settings{
 		OversellPolicy:       strings.TrimSpace(r.Form.Get("oversell_policy")),
 		ServerDiskCapacityMB: capacity,
+		ValkeyCapacityMB:     valkeyCapacity,
 	}
 	if err := s.quotas.UpdateSettings(r.Context(), user, settings); err != nil {
 		http.Error(w, "Could not update oversell settings: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	s.recordAudit(r.Context(), user, 0, 0, "settings.oversell_changed", "settings", 1, map[string]any{"policy": settings.OversellPolicy, "capacity_mb": settings.ServerDiskCapacityMB})
+	s.recordAudit(r.Context(), user, 0, 0, "settings.oversell_changed", "settings", 1, map[string]any{
+		"policy":             settings.OversellPolicy,
+		"capacity_mb":        settings.ServerDiskCapacityMB,
+		"valkey_capacity_mb": settings.ValkeyCapacityMB,
+	})
 	redirectAfterPost(w, r, "/?notice=settings-saved", "/tools-settings?notice=settings-saved")
 }
 
@@ -2192,6 +2559,56 @@ func (s *Server) handleUpsertResellerPlan(w http.ResponseWriter, r *http.Request
 			return
 		}
 	}
+	p.HostingPolicy = controlpolicy.DefaultFromEntitlements(types.SubscriptionEntitlements{
+		DiskMB: p.DiskMB, MaxSites: p.MaxSites, MaxDatabases: p.MaxDatabases,
+		BandwidthMB: p.BandwidthMB, MaxMailboxes: p.MaxMailboxes,
+		MaxBackups: p.MaxBackups, BackupStorageMB: p.BackupStorageMB,
+		MaxSubdomains: p.MaxSubdomains, MaxDomainAliases: p.MaxDomainAliases,
+		MaxFTPAccounts: p.MaxFTPAccounts, HostingEnabled: true,
+		AllowSSH: p.AllowSSH, AllowDNS: p.AllowDNS, AllowTLS: p.AllowTLS,
+		AllowBackups: p.AllowBackups, AllowPHPSettings: p.AllowPHPSettings,
+	})
+	for name, target := range map[string]*int{
+		"cpu_percent":          &p.HostingPolicy.Resources.CPUPercent,
+		"memory_limit_mb":      &p.HostingPolicy.Resources.MemoryMB,
+		"io_read_mbps":         &p.HostingPolicy.Resources.IOReadMBPS,
+		"io_write_mbps":        &p.HostingPolicy.Resources.IOWriteMBPS,
+		"max_tasks":            &p.HostingPolicy.Resources.MaxTasks,
+		"max_database_users":   &p.HostingPolicy.Resources.MaxDatabaseUsers,
+		"max_mail_aliases":     &p.HostingPolicy.Resources.MaxMailAliases,
+		"max_scheduled_tasks":  &p.HostingPolicy.Resources.MaxScheduledTasks,
+		"max_applications":     &p.HostingPolicy.Resources.MaxApplications,
+		"container_storage_mb": &p.HostingPolicy.Resources.ContainerStorageMB,
+		"valkey_memory_mb":     &p.HostingPolicy.Resources.ValkeyMemoryMB,
+	} {
+		*target, err = parsePlanLimitDefault(r, name, 0)
+		if err != nil {
+			http.Error(w, "Invalid reseller plan: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	p.HostingPolicy.Permissions.SFTP = parseFormBool(r, "allow_sftp")
+	p.HostingPolicy.Permissions.FTPS = parseFormBool(r, "allow_ftps")
+	p.HostingPolicy.Permissions.Logs = parseFormBool(r, "allow_logs")
+	p.HostingPolicy.Permissions.Git = parseFormBool(r, "allow_git")
+	p.HostingPolicy.Permissions.Staging = parseFormBool(r, "allow_staging")
+	p.HostingPolicy.Permissions.Valkey = parseFormBool(r, "allow_valkey")
+	p.HostingPolicy.Permissions.ScheduledTasks = parseFormBool(r, "allow_scheduled_tasks")
+	p.HostingPolicy.Permissions.Applications = parseFormBool(r, "allow_applications")
+	p.HostingPolicy.Permissions.CustomOCIImages = parseFormBool(r, "allow_custom_oci_images")
+	p.HostingPolicy.Permissions.ApplicationEgress = parseFormBool(r, "allow_application_egress")
+	p.HostingPolicy.Access.FTPSEnabled = p.HostingPolicy.Permissions.FTPS
+	p.HostingPolicy.Valkey.Enabled = p.HostingPolicy.Permissions.Valkey
+	p.HostingPolicy.Valkey.MemoryMB = p.HostingPolicy.Resources.ValkeyMemoryMB
+	p.HostingPolicy.Applications.CatalogEnabled = p.HostingPolicy.Permissions.Applications
+	p.HostingPolicy.Applications.EgressEnabled = p.HostingPolicy.Permissions.ApplicationEgress
+	p.HostingPolicy.Applications.AllowedRuntimes = normalizeFormList(r.Form["allowed_runtimes"])
+	p.HostingPolicy.Applications.AllowedRegistries = normalizeFormList(strings.Split(r.Form.Get("allowed_registries"), ","))
+	p.HostingPolicy.PHP.AllowedVersions = normalizeFormList(r.Form["php_versions"])
+	if len(p.HostingPolicy.PHP.AllowedVersions) > 0 {
+		p.HostingPolicy.PHP.DefaultVersion = p.HostingPolicy.PHP.AllowedVersions[0]
+	}
+	applyBroadProviderRuntimeCeilings(&p.HostingPolicy)
 	saved, err := s.quotas.UpsertResellerPlan(r.Context(), user, p)
 	if err != nil {
 		http.Error(w, "Could not save reseller plan: "+err.Error(), 400)
@@ -2199,6 +2616,23 @@ func (s *Server) handleUpsertResellerPlan(w http.ResponseWriter, r *http.Request
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "reseller_plan.saved", "reseller_plan", saved.ID, nil)
 	http.Redirect(w, r, "/service-plans/resellers/"+strconv.FormatInt(saved.ID, 10)+"?notice=reseller-plan-saved", 303)
+}
+
+func applyBroadProviderRuntimeCeilings(policy *types.HostingPolicy) {
+	policy.Web.StaticCache = true
+	policy.Web.FastCGIMicrocache = true
+	policy.Web.Compression = true
+	policy.Web.SecurityHeaderPreset = "off"
+	policy.PHP.DisplayErrors = true
+	policy.PHP.LogErrors = true
+	policy.PHP.AllowURLFOpen = true
+	policy.PHP.ExecEnabled = true
+	policy.PHP.OPcacheEnabled = true
+	policy.Mail.Enabled = policy.Resources.MaxMailboxes != 0
+	policy.Mail.DKIM = true
+	policy.Mail.Webmail = true
+	policy.DNS.Enabled = policy.Permissions.DNS
+	policy.DNS.DNSSEC = true
 }
 
 func (s *Server) handleTransferCustomer(w http.ResponseWriter, r *http.Request) {
@@ -2350,6 +2784,7 @@ func parsedPlanEntitlements(plan controlquota.Plan) types.SubscriptionEntitlemen
 		AllowBackups: plan.AllowBackups, AllowPHPSettings: plan.AllowPHPSettings,
 		OverusePolicy: plan.OverusePolicy, DiskWarningPercent: plan.DiskWarningPercent,
 		TrafficWarningPercent: plan.TrafficWarningPercent, ServicePresets: plan.Presets,
+		HostingPolicy: plan.HostingPolicy,
 	}
 }
 
@@ -2359,6 +2794,9 @@ func parsedAddonEntitlements(plan controlquota.Plan) types.SubscriptionEntitleme
 	entitlements.DefaultPHPVersion = ""
 	entitlements.ValidityDays = 0
 	entitlements.ServicePresets.Hosting.DefaultPHPVersion = ""
+	entitlements.HostingPolicy.Permissions.Hosting = false
+	entitlements.HostingPolicy.PHP.DefaultVersion = ""
+	entitlements.HostingPolicy.Web.PreferredDomain = ""
 	return entitlements
 }
 
@@ -2418,7 +2856,7 @@ func (s *Server) currentUser(w http.ResponseWriter, r *http.Request) (auth.Sessi
 
 func sameOriginPostGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost && !isSameOriginPost(r) {
+		if r.Method == http.MethodPost && !isGitWebhookRequest(r) && !isSameOriginPost(r) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -2459,7 +2897,32 @@ func securityHeaders(next http.Handler) http.Handler {
 
 func csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path == "/login" {
+		if r.Method != http.MethodPost || r.URL.Path == "/login" || isGitWebhookRequest(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		// The 2FA challenge is authenticated by its own cookie, so it is
+		// matched on path FIRST: a browser can still be holding a stale
+		// session cookie (its row revoked by an enrolment or a password
+		// reset elsewhere), and deriving the token from that cookie would
+		// reject every valid challenge submission and lock the user out.
+		if r.URL.Path == "/login/2fa" {
+			challenge, challengeErr := r.Cookie(loginChallengeCookieName)
+			if challengeErr != nil || challenge.Value == "" {
+				// No challenge to validate; the handler redirects to /login.
+				next.ServeHTTP(w, r)
+				return
+			}
+			expected := challengeCSRFToken(challenge.Value)
+			provided := strings.TrimSpace(r.Header.Get("X-Nakpanel-CSRF"))
+			if provided == "" {
+				_ = r.ParseForm()
+				provided = strings.TrimSpace(r.Form.Get("csrf_token"))
+			}
+			if subtle.ConstantTimeCompare([]byte(expected), []byte(provided)) != 1 {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -2483,6 +2946,10 @@ func csrfGuard(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isGitWebhookRequest(r *http.Request) bool {
+	return r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/git/hooks/")
 }
 
 func csrfToken(r *http.Request) string {
@@ -2563,6 +3030,12 @@ func dashboardNotice(code string) string {
 		return "DNS zone configuration queued."
 	case "reconcile-queued":
 		return "Reconciliation queued. Generated configs will be refreshed from intent."
+	case "staging-queued":
+		return "Staging operation queued. A rollback point will be created before the target changes."
+	case "git-deploy-queued":
+		return "Git deployment queued. The previous revision remains available as a rollback point."
+	case "service-saved":
+		return "Hosting service settings saved and reconciliation queued."
 	case "quota-saved":
 		return "Account quota saved."
 	case "plan-saved":
@@ -2654,6 +3127,8 @@ func writeSPAError(w http.ResponseWriter, status int, message string) {
 
 func writeSPAJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Cache-Control", "private, no-store")
+	w.Header().Set("Pragma", "no-cache")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
 }
@@ -2752,7 +3227,7 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		DNS:          types.DNSPreset{Mode: formStringDefault(r, "dns_mode", "primary"), DefaultTTL: parseFormIntDefault(r, "dns_default_ttl", 3600)},
 		Performance:  types.PerformancePreset{MaxConnections: parseFormIntDefault(r, "performance_max_connections", 0), StaticFileCache: parseFormBool(r, "performance_static_cache")},
 		Logs:         types.LogsPreset{RotationEnabled: formBoolDefault(r, "logs_rotation_enabled", true), RetentionDays: parseFormIntDefault(r, "logs_retention_days", 14), StatisticsEnabled: parseFormBool(r, "logs_statistics_enabled")},
-		Applications: types.ApplicationsPreset{CatalogEnabled: parseFormBool(r, "applications_catalog_enabled"), Allowed: normalizeFormList(r.Form["applications_allowed"])},
+		Applications: types.ApplicationsPreset{CatalogEnabled: parseFormBool(r, "applications_catalog_enabled"), Allowed: applicationCatalogSlugsFromForm(r)},
 	}
 	dnsMode := plan.Presets.DNS.Mode
 	switch dnsMode {
@@ -2762,12 +3237,13 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		dnsMode = "external"
 	}
 	plan.HostingPolicy = types.HostingPolicy{
-		SchemaVersion: 1,
+		SchemaVersion: 2,
 		Resources: types.HostingResourcePolicy{
 			DiskMB: plan.DiskMB, TrafficMB: plan.BandwidthMB, MaxSites: plan.MaxSites,
 			MaxDatabases: plan.MaxDatabases, MaxMailboxes: plan.MaxMailboxes,
 			MaxSFTPIdentities: plan.MaxFTPAccounts, MaxBackups: plan.MaxBackups,
-			BackupStorageMB: plan.BackupStorageMB,
+			BackupStorageMB: plan.BackupStorageMB, MaxFTPAccounts: plan.MaxFTPAccounts,
+			ValkeyMemoryMB: parseFormIntDefault(r, "valkey_memory_mb", 0),
 		},
 		Permissions: types.HostingPermissionPolicy{
 			Hosting: plan.HostingEnabled, SSH: plan.AllowSSH, SFTP: parseFormBool(r, "allow_sftp"),
@@ -2775,14 +3251,49 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 			Mail: parseFormBool(r, "allow_mail"), Databases: plan.MaxDatabases != 0, Backups: plan.AllowBackups,
 			PHPSettings: plan.AllowPHPSettings, CGI: parseFormBool(r, "allow_cgi"), Applications: parseFormBool(r, "allow_applications"),
 			CustomOCIImages: parseFormBool(r, "allow_custom_oci_images"), ApplicationEgress: parseFormBool(r, "allow_application_egress"),
+			FTPS: parseFormBool(r, "allow_ftps"), Logs: formBoolDefault(r, "allow_logs", true),
+			Git: parseFormBool(r, "allow_git"), Staging: parseFormBool(r, "allow_staging"),
+			Valkey: parseFormBool(r, "allow_valkey"),
 		},
-		Web:          types.HostingWebPolicy{PreferredDomain: plan.Presets.Hosting.PreferredDomain, MaxConnections: plan.Presets.Performance.MaxConnections, StaticCache: plan.Presets.Performance.StaticFileCache, FastCGIMicrocache: parseFormBool(r, "fastcgi_microcache")},
-		PHP:          types.HostingPHPPolicy{DefaultVersion: plan.DefaultPHPVersion, AllowedVersions: normalizeFormList(strings.Split(plan.PHPAllowlist, ",")), FPMMaxChildren: plan.PHPFPMMaxChildren, FPMMaxRequests: plan.Presets.PHP.FPMMaxRequests, MemoryLimitMB: plan.PHPMemoryMB, MaxExecutionSeconds: plan.Presets.PHP.MaxExecutionSeconds, MaxInputSeconds: plan.Presets.PHP.MaxInputSeconds, PostMaxMB: plan.Presets.PHP.PostMaxMB, UploadMaxMB: plan.Presets.PHP.UploadMaxMB, DisplayErrors: plan.Presets.PHP.DisplayErrors, LogErrors: plan.Presets.PHP.LogErrors, AllowURLFOpen: plan.Presets.PHP.AllowURLFOpen, ExecEnabled: parseFormBool(r, "php_exec_enabled")},
-		Mail:         types.HostingMailPolicy{Enabled: parseFormBool(r, "allow_mail"), DKIM: plan.Presets.Mail.DKIM, DMARCPolicy: plan.Presets.Mail.DMARCPolicy, SpamFilter: plan.Presets.Mail.SpamFilter, Webmail: plan.Presets.Mail.WebmailEnabled, Autoresponders: parseFormBool(r, "mail_autoresponders"), CatchAll: parseFormBool(r, "mail_catch_all")},
-		DNS:          types.HostingDNSPolicy{Enabled: plan.AllowDNS, Mode: dnsMode, DefaultTTL: plan.Presets.DNS.DefaultTTL, DNSSEC: parseFormBool(r, "dnssec")},
-		Access:       types.HostingAccessPolicy{ShellMode: formStringDefault(r, "shell_mode", "disabled"), NspawnImage: strings.TrimSpace(r.Form.Get("nspawn_image")), SFTPOnly: true, SSHIdleTimeoutMins: parseFormIntDefault(r, "ssh_idle_timeout_minutes", 30)},
+		Web: types.HostingWebPolicy{
+			PreferredDomain: plan.Presets.Hosting.PreferredDomain, MaxConnections: plan.Presets.Performance.MaxConnections,
+			StaticCache: plan.Presets.Performance.StaticFileCache, FastCGIMicrocache: parseFormBool(r, "fastcgi_microcache"),
+			IndexFiles:         formStringDefault(r, "web_index_files", "index.php index.html"),
+			RequestBodyLimitMB: parseFormIntDefault(r, "web_request_body_mb", plan.Presets.PHP.PostMaxMB),
+			Compression:        formBoolDefault(r, "web_compression", true), CacheTTLSeconds: parseFormIntDefault(r, "web_cache_ttl_seconds", 300),
+			ConnectTimeoutSecs:   parseFormIntDefault(r, "web_connect_timeout_seconds", 5),
+			ReadTimeoutSecs:      parseFormIntDefault(r, "web_read_timeout_seconds", 60),
+			SecurityHeaderPreset: formStringDefault(r, "web_security_headers", "balanced"),
+		},
+		PHP: types.HostingPHPPolicy{
+			DefaultVersion: plan.DefaultPHPVersion, AllowedVersions: normalizeFormList(strings.Split(plan.PHPAllowlist, ",")),
+			FPMMaxChildren: plan.PHPFPMMaxChildren, FPMMaxRequests: plan.Presets.PHP.FPMMaxRequests,
+			MemoryLimitMB: plan.PHPMemoryMB, MaxExecutionSeconds: plan.Presets.PHP.MaxExecutionSeconds,
+			MaxInputSeconds: plan.Presets.PHP.MaxInputSeconds, PostMaxMB: plan.Presets.PHP.PostMaxMB,
+			UploadMaxMB: plan.Presets.PHP.UploadMaxMB, DisplayErrors: plan.Presets.PHP.DisplayErrors,
+			LogErrors: plan.Presets.PHP.LogErrors, AllowURLFOpen: plan.Presets.PHP.AllowURLFOpen,
+			ExecEnabled: parseFormBool(r, "php_exec_enabled"), FPMMode: formStringDefault(r, "php_fpm_mode", "ondemand"),
+			FPMIdleTimeoutSecs:   parseFormIntDefault(r, "php_fpm_idle_timeout_seconds", 10),
+			RequestTerminateSecs: parseFormIntDefault(r, "php_request_terminate_seconds", plan.Presets.PHP.MaxExecutionSeconds+5),
+			OPcacheEnabled:       formBoolDefault(r, "php_opcache_enabled", true),
+			OPcacheMemoryMB:      parseFormIntDefault(r, "php_opcache_memory_mb", 128),
+		},
+		Mail: types.HostingMailPolicy{Enabled: parseFormBool(r, "allow_mail"), DKIM: plan.Presets.Mail.DKIM, DMARCPolicy: plan.Presets.Mail.DMARCPolicy, SpamFilter: plan.Presets.Mail.SpamFilter, Webmail: plan.Presets.Mail.WebmailEnabled, Autoresponders: parseFormBool(r, "mail_autoresponders"), CatchAll: parseFormBool(r, "mail_catch_all")},
+		DNS:  types.HostingDNSPolicy{Enabled: plan.AllowDNS, Mode: dnsMode, DefaultTTL: plan.Presets.DNS.DefaultTTL, DNSSEC: parseFormBool(r, "dnssec")},
+		Access: types.HostingAccessPolicy{
+			ShellMode: formStringDefault(r, "shell_mode", "disabled"), NspawnImage: strings.TrimSpace(r.Form.Get("nspawn_image")),
+			SFTPOnly: true, SSHIdleTimeoutMins: parseFormIntDefault(r, "ssh_idle_timeout_minutes", 30),
+			FTPSEnabled: parseFormBool(r, "allow_ftps"), FTPSPassiveStart: 49152, FTPSPassiveEnd: 49252,
+		},
 		Backups:      types.HostingBackupPolicy{Enabled: plan.AllowBackups, RetentionDays: plan.BackupRetentionDays, Schedule: strings.TrimSpace(r.Form.Get("backup_schedule"))},
 		Applications: types.HostingApplicationPolicy{CatalogEnabled: plan.Presets.Applications.CatalogEnabled, AllowedCatalogSlugs: plan.Presets.Applications.Allowed, AllowedRegistries: normalizeFormList(strings.Split(r.Form.Get("allowed_registries"), ",")), AllowedRuntimes: normalizeFormList(r.Form["allowed_runtimes"]), Rootless: true, EgressEnabled: parseFormBool(r, "allow_application_egress")},
+		Valkey: types.HostingValkeyPolicy{
+			Enabled: parseFormBool(r, "allow_valkey"), MemoryMB: parseFormIntDefault(r, "valkey_memory_mb", 0),
+			MaxClients:         parseFormIntDefault(r, "valkey_max_clients", 64),
+			IdleTimeoutSeconds: parseFormIntDefault(r, "valkey_idle_timeout_seconds", 300),
+			EvictionPolicy:     "allkeys-lru", CPUPercent: parseFormIntDefault(r, "valkey_cpu_percent", 25),
+			ProcessLimit: parseFormIntDefault(r, "valkey_process_limit", 64),
+		},
 	}
 	for name, target := range map[string]*int{
 		"cpu_percent": &plan.HostingPolicy.Resources.CPUPercent, "memory_limit_mb": &plan.HostingPolicy.Resources.MemoryMB,
@@ -2800,6 +3311,13 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		*target = value
 	}
 	return plan, nil
+}
+
+func applicationCatalogSlugsFromForm(r *http.Request) []string {
+	if raw := strings.TrimSpace(r.Form.Get("allowed_catalog_slugs")); raw != "" {
+		return normalizeFormList(strings.Split(raw, ","))
+	}
+	return normalizeFormList(r.Form["applications_allowed"])
 }
 
 func parsePlanLimitDefault(r *http.Request, name string, fallback int) (int, error) {
@@ -3039,4 +3557,23 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func supportRedirectPath(r *http.Request, user auth.SessionUser, target string) string {
+	if user.Role != auth.RoleAdmin {
+		return target
+	}
+	customerID := parseFormInt64Default(r, "support_customer_id", 0)
+	if customerID <= 0 {
+		return target
+	}
+	parsed, err := url.Parse(target)
+	if err != nil || !strings.HasPrefix(parsed.Path, "/") {
+		return target
+	}
+	if !strings.HasPrefix(parsed.Path, "/sites/") && !strings.HasPrefix(parsed.Path, "/subscriptions/") {
+		return target
+	}
+	parsed.Path = "/support/customers/" + strconv.FormatInt(customerID, 10) + parsed.Path
+	return parsed.String()
 }

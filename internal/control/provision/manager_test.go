@@ -27,12 +27,22 @@ type fakeDomainSettingsStore struct {
 	req    types.UpdateSiteSettingsReq
 }
 
+var _ controlquota.DomainSettingsStore = (*fakeDomainSettingsStore)(nil)
+
 func (s *fakeDomainSettingsStore) SiteDomain(context.Context, int64) (string, error) {
 	return s.domain, nil
 }
 
+func (s *fakeDomainSettingsStore) SiteRuntimeIdentity(context.Context, int64) (string, string, error) {
+	return "npdemo", s.domain, nil
+}
+
 func (s *fakeDomainSettingsStore) UpdateSiteSettings(_ context.Context, req types.UpdateSiteSettingsReq) error {
 	s.req = req
+	return nil
+}
+func (s *fakeDomainSettingsStore) UpdateSitePHPSettings(_ context.Context, req types.UpdateSitePHPSettingsReq) error {
+	s.req = types.UpdateSiteSettingsReq{SiteID: req.SiteID, Section: "php", DesiredStatus: req.DesiredStatus, DesiredPHPVersion: req.DesiredPHPVersion, DesiredHTTPSRedirect: req.DesiredHTTPSRedirect}
 	return nil
 }
 
@@ -388,6 +398,31 @@ func TestManagerEnforcesDomainSettingCapabilities(t *testing.T) {
 		t.Fatalf("hosting status update error = %v", err)
 	}
 	if store.req.DesiredStatus != "suspended" {
+		t.Fatalf("stored request = %#v", store.req)
+	}
+}
+
+func TestManagerValidatesCombinedPHPSettingsBeforeStore(t *testing.T) {
+	store := &fakeDomainSettingsStore{domain: "owned.test"}
+	manager := NewManager(nil,
+		WithQuotaStore(store),
+		WithAccessPolicy(capabilityAccessPolicy{fakeAccessPolicy: fakeAccessPolicy{allow: true}, php: true}),
+		WithRuntimeCapabilities(fakeRuntimeCapabilities{result: types.RuntimeCapabilities{PHPVersions: []string{"8.3"}}}),
+	)
+	client := auth.SessionUser{ID: 2, Role: auth.RoleClient}
+	err := manager.UpdateSitePHPSettings(context.Background(), client, types.UpdateSitePHPSettingsReq{
+		SiteID: 7, DesiredStatus: "active", DesiredPHPVersion: "8.2",
+	})
+	if err == nil || store.req.SiteID != 0 {
+		t.Fatalf("uninstalled PHP reached store: err=%v req=%#v", err, store.req)
+	}
+	err = manager.UpdateSitePHPSettings(context.Background(), client, types.UpdateSitePHPSettingsReq{
+		SiteID: 7, DesiredStatus: "active", DesiredPHPVersion: "8.3",
+	})
+	if err != nil {
+		t.Fatalf("installed PHP rejected: %v", err)
+	}
+	if store.req.SiteID != 7 || store.req.DesiredPHPVersion != "8.3" {
 		t.Fatalf("stored request = %#v", store.req)
 	}
 }

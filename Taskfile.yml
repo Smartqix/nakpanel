@@ -6,6 +6,11 @@ vars:
   TAILWIND_BIN: "{{.BIN_DIR}}/tailwindcss"
   DB_DSN:
     sh: echo "${NAKPANEL_DATABASE_URL:-postgres://postgres@localhost:5432/nakpanel?sslmode=disable}"
+  VERSION:
+    sh: cat VERSION 2>/dev/null || echo dev
+  COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
+  LDFLAGS: "-X github.com/nakroteck/nakpanel/internal/version.Version={{.VERSION}} -X github.com/nakroteck/nakpanel/internal/version.Commit={{.COMMIT}}"
 
 tasks:
   generate:
@@ -45,15 +50,26 @@ tasks:
           arm64|aarch64) arch="arm64" ;;
           *) echo "unsupported architecture for Tailwind standalone: ${arch}" >&2; exit 1 ;;
         esac
-        curl -fsSL -o "{{.TAILWIND_BIN}}" "https://github.com/tailwindlabs/tailwindcss/releases/download/{{.TAILWIND_VERSION}}/tailwindcss-${os}-${arch}"
-      - chmod +x {{.TAILWIND_BIN}}
+        if curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 -o "{{.TAILWIND_BIN}}" "https://github.com/tailwindlabs/tailwindcss/releases/download/{{.TAILWIND_VERSION}}/tailwindcss-${os}-${arch}"; then
+          chmod +x "{{.TAILWIND_BIN}}"
+        elif test -s internal/control/web/static/app.css; then
+          echo "warning: Tailwind download unavailable; using committed embedded CSS" >&2
+        else
+          exit 1
+        fi
 
   tailwind:build:
     desc: Build embedded CSS with Tailwind standalone.
     deps:
       - tailwind:download
     cmds:
-      - BROWSERSLIST_IGNORE_OLD_DATA=1 {{.TAILWIND_BIN}} -i internal/control/web/assets/input.css -o internal/control/web/static/app.css --minify --content 'internal/control/web/*.templ'
+      - |
+        if test -x "{{.TAILWIND_BIN}}"; then
+          BROWSERSLIST_IGNORE_OLD_DATA=1 "{{.TAILWIND_BIN}}" -i internal/control/web/assets/input.css -o internal/control/web/static/app.css --minify --content 'internal/control/web/**/*.{templ,js}'
+        elif ! test -s internal/control/web/static/app.css; then
+          echo "Tailwind compiler and committed embedded CSS are both unavailable" >&2
+          exit 1
+        fi
 
   build:
     desc: Build panel, agent, and operator CLI binaries.
@@ -61,9 +77,9 @@ tasks:
       - generate
     cmds:
       - mkdir -p {{.BIN_DIR}}
-      - go build -o {{.BIN_DIR}}/panel ./cmd/panel
-      - go build -o {{.BIN_DIR}}/agent ./cmd/agent
-      - go build -o {{.BIN_DIR}}/panelctl ./cmd/panelctl
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BIN_DIR}}/panel ./cmd/panel
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BIN_DIR}}/agent ./cmd/agent
+      - go build -ldflags "{{.LDFLAGS}}" -o {{.BIN_DIR}}/panelctl ./cmd/panelctl
 
   test:
     desc: Run Go tests.

@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nakroteck/nakpanel/internal/control/auth"
 )
 
 const APIVersion = "v1"
@@ -31,7 +33,7 @@ type HandlerOptions struct {
 }
 
 type SessionCreator interface {
-	Create(context.Context, int64) (string, time.Time, error)
+	Create(context.Context, int64, auth.SessionMeta) (string, time.Time, error)
 }
 
 type Handler struct {

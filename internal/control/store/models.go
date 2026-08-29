@@ -97,23 +97,66 @@ type ApiKey struct {
 	UpdatedAt          time.Time
 }
 
+type ApplicationGeneration struct {
+	ID              int64
+	ApplicationID   int64
+	DesiredRevision int64
+	ImageRef        string
+	EndpointPort    int32
+	UnitName        string
+	ContainerName   string
+	Status          string
+	HealthMessage   string
+	StartedAt       sql.NullTime
+	HealthyAt       sql.NullTime
+	FinishedAt      sql.NullTime
+	CreatedAt       time.Time
+}
+
 type ApplicationInstance struct {
-	ID                int64
-	SubscriptionID    int64
-	SiteID            sql.NullInt64
-	Name              string
-	Runtime           string
-	CatalogSlug       string
-	ImageRef          string
-	DesiredState      string
-	AppliedState      string
-	Environment       json.RawMessage
-	Healthcheck       json.RawMessage
-	ConvergenceStatus string
-	LastError         string
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	DeleteRequested   bool
+	ID                   int64
+	SubscriptionID       int64
+	SiteID               sql.NullInt64
+	Name                 string
+	Runtime              string
+	CatalogSlug          string
+	ImageRef             string
+	DesiredState         string
+	AppliedState         string
+	Environment          json.RawMessage
+	Healthcheck          json.RawMessage
+	ConvergenceStatus    string
+	LastError            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+	DeleteRequested      bool
+	DesiredRevision      int64
+	AppliedRevision      int64
+	Kind                 string
+	CatalogRevision      int64
+	Manifest             json.RawMessage
+	RouteMode            string
+	RoutePrefix          string
+	ContainerPort        int32
+	EndpointPort         int32
+	HealthKind           string
+	HealthPath           string
+	HealthTimeoutSeconds int32
+	ActiveGeneration     int64
+	ObservedState        string
+	ObservedMessage      string
+	ObservedAt           sql.NullTime
+	LastReconciledAt     sql.NullTime
+}
+
+type ApplicationManifestRevision struct {
+	ID              int64
+	PresetID        int64
+	Revision        int64
+	Manifest        json.RawMessage
+	ImageRef        string
+	CreatedByUserID sql.NullInt64
+	CreatedAt       time.Time
 }
 
 type ApplicationPort struct {
@@ -125,12 +168,35 @@ type ApplicationPort struct {
 	RouteHost     string
 }
 
+type ApplicationPreset struct {
+	ID               int64
+	ResellerID       sql.NullInt64
+	Slug             string
+	Name             string
+	Runtime          string
+	ImageRef         string
+	Active           bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	ManifestRevision int64
+	Manifest         json.RawMessage
+}
+
+type ApplicationSecretBinding struct {
+	ApplicationID int64
+	Name          string
+	SecretID      int64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type ApplicationVolume struct {
 	ID            int64
 	ApplicationID int64
 	Name          string
 	ContainerPath string
 	SizeMb        int32
+	ReadOnly      bool
 }
 
 type AuditEvent struct {
@@ -238,29 +304,186 @@ type Database struct {
 }
 
 type DnsRecord struct {
-	ID         int64
-	ZoneID     int64
-	Host       string
-	RecordType string
-	Value      string
-	Priority   sql.NullInt32
-	Ttl        int32
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	ID                int64
+	ZoneID            int64
+	Host              string
+	RecordType        string
+	Value             string
+	Priority          sql.NullInt32
+	Ttl               int32
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	Weight            sql.NullInt32
+	Port              sql.NullInt32
+	Origin            string
+	TemplateRecordKey sql.NullString
+	TemplateRevision  sql.NullInt64
+	OwnerSiteID       sql.NullInt64
+	LocallyModified   bool
+}
+
+type DnsTemplateRecord struct {
+	ID            int64
+	RevisionID    int64
+	StableKey     string
+	Scope         string
+	HostTemplate  string
+	RecordType    string
+	ValueTemplate string
+	Priority      sql.NullInt32
+	Weight        sql.NullInt32
+	Port          sql.NullInt32
+	Ttl           int32
+	CreatedAt     time.Time
+}
+
+type DnsTemplateRevision struct {
+	ID                 int64
+	Revision           int64
+	PrimaryNameserver  string
+	ResponsibleMailbox string
+	SerialFormat       string
+	DefaultTtl         int32
+	RefreshSeconds     int32
+	RetrySeconds       int32
+	ExpireSeconds      int32
+	MinimumTtl         int32
+	ZoneStatus         string
+	SubdomainPolicy    string
+	TransferCidrs      []pqtype.CIDR
+	CreatedBy          sql.NullInt64
+	CreatedAt          time.Time
+}
+
+type DnsTemplateState struct {
+	Singleton          bool
+	ActiveRevisionID   int64
+	DefaultRevisionID  int64
+	OptimisticRevision int64
+	UpdatedAt          time.Time
+}
+
+type DnsTemplateSyncItem struct {
+	ID                   int64
+	RunID                int64
+	ZoneID               int64
+	OwnerSiteID          sql.NullInt64
+	ExpectedZoneRevision int64
+	DesiredRevision      sql.NullInt64
+	Outcome              string
+	AddedCount           int32
+	UpdatedCount         int32
+	RemovedCount         int32
+	OverrideCount        int32
+	ConflictCount        int32
+	Detail               string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type DnsTemplateSyncRun struct {
+	ID                            int64
+	TemplateRevision              int64
+	Scope                         string
+	TargetZoneID                  sql.NullInt64
+	Status                        string
+	PreviewToken                  string
+	ExpectedTemplateStateRevision int64
+	Confirmation                  string
+	ActorUserID                   sql.NullInt64
+	TotalZones                    int32
+	ChangedZones                  int32
+	FailedZones                   int32
+	LastError                     string
+	CreatedAt                     time.Time
+	AppliedAt                     sql.NullTime
+	CompletedAt                   sql.NullTime
 }
 
 type DnsZone struct {
+	ID                int64
+	OwnerUserID       int64
+	SiteID            int64
+	Domain            string
+	Address           string
+	Serial            int64
+	Status            string
+	ZonePath          string
+	LastError         string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	Ipv6Address       string
+	Mode              string
+	UpstreamPrimaries []string
+	ParentZoneID      sql.NullInt64
+	TemplateRevision  int64
+	TemplateStatus    string
+	DesiredRevision   int64
+	AppliedRevision   int64
+	SoaOverride       pqtype.NullRawMessage
+	TransferCidrs     []pqtype.CIDR
+}
+
+type FtpAccount struct {
+	ID                int64
+	SubscriptionID    int64
+	SiteID            sql.NullInt64
+	Name              string
+	PasswordHash      string
+	Enabled           bool
+	ConvergenceStatus string
+	LastError         string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
+type GitDeployment struct {
+	ID               int64
+	RepositoryID     int64
+	Revision         string
+	Status           string
+	Output           string
+	RollbackRevision string
+	CreatedAt        time.Time
+	FinishedAt       sql.NullTime
+}
+
+type GitRepository struct {
+	ID                  int64
+	SiteID              int64
+	Mode                string
+	RemoteUrl           string
+	Branch              string
+	DeployTarget        string
+	Automatic           bool
+	DeployKeyCiphertext []byte
+	KnownHostKey        string
+	DeployPublicKey     string
+	WebhookSecretHash   string
+	ConvergenceStatus   string
+	LastRevision        string
+	LastError           string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+}
+
+type LoginAttempt struct {
 	ID          int64
-	OwnerUserID int64
-	SiteID      int64
-	Domain      string
-	Address     string
-	Serial      int64
-	Status      string
-	ZonePath    string
-	LastError   string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	Email       string
+	IpAddress   string
+	Stage       string
+	Succeeded   bool
+	AttemptedAt time.Time
+}
+
+type LoginChallenge struct {
+	TokenHash string
+	UserID    int64
+	ExpiresAt time.Time
+	Attempts  int32
+	IpAddress string
+	UserAgent string
+	CreatedAt time.Time
 }
 
 type MailAlias struct {
@@ -286,6 +509,7 @@ type MailDomain struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	DeleteRequested   bool
+	EffectiveEnabled  bool
 }
 
 type MailSetting struct {
@@ -342,6 +566,11 @@ type NotificationDelivery struct {
 	UpdatedAt      time.Time
 }
 
+type Phase25EntitlementSnapshotBackup struct {
+	SubscriptionID int64
+	HostingPolicy  json.RawMessage
+}
+
 type Plan struct {
 	ID                    int64
 	Name                  string
@@ -393,6 +622,18 @@ type PlanServicePreset struct {
 	Logs          json.RawMessage
 	Applications  json.RawMessage
 	UpdatedAt     time.Time
+}
+
+type ProtectedDirectory struct {
+	ID           int64
+	SiteID       int64
+	RelativePath string
+	Realm        string
+	Username     string
+	PasswordHash string
+	Enabled      bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type ReconciliationRun struct {
@@ -468,38 +709,166 @@ type RestoreRun struct {
 }
 
 type ScheduledTask struct {
-	ID                int64
-	SubscriptionID    int64
-	SiteID            sql.NullInt64
-	Name              string
-	Schedule          string
-	Command           string
-	WorkingDirectory  string
-	TimeoutSeconds    int32
-	Enabled           bool
-	ConvergenceStatus string
-	LastError         string
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	ID                        int64
+	SubscriptionID            int64
+	SiteID                    sql.NullInt64
+	Name                      string
+	Schedule                  string
+	Command                   string
+	WorkingDirectory          string
+	TimeoutSeconds            int32
+	Enabled                   bool
+	ConvergenceStatus         string
+	LastError                 string
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+	Kind                      string
+	Url                       string
+	ScriptPath                string
+	Timezone                  string
+	Phase23LegacySiteBackfill bool
+	Phase23LegacyEnabled      sql.NullBool
 }
 
 type ScheduledTaskRun struct {
-	ID         int64
-	TaskID     int64
-	Status     string
-	ExitCode   sql.NullInt32
-	Output     string
-	StartedAt  sql.NullTime
-	FinishedAt sql.NullTime
-	CreatedAt  time.Time
+	ID           int64
+	TaskID       int64
+	Status       string
+	ExitCode     sql.NullInt32
+	Output       string
+	StartedAt    sql.NullTime
+	FinishedAt   sql.NullTime
+	CreatedAt    time.Time
+	ScheduledFor sql.NullTime
+}
+
+type SecuritySetting struct {
+	ID               bool
+	RequireTotpAdmin bool
+	AlertEmail       string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
+type ServerBackup struct {
+	ID             int64
+	DestinationID  sql.NullInt64
+	OperationID    string
+	Status         string
+	ArchiveName    string
+	RemotePath     string
+	LocalPath      string
+	SizeBytes      int64
+	ChecksumSha256 string
+	KeyFingerprint string
+	Manifest       json.RawMessage
+	VerifiedAt     sql.NullTime
+	VerifyDetail   pqtype.NullRawMessage
+	Scheduled      bool
+	StartedAt      sql.NullTime
+	CompletedAt    sql.NullTime
+	LastError      string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type ServerBackupDestination struct {
+	ID                   int64
+	Name                 string
+	Kind                 string
+	Enabled              bool
+	Settings             json.RawMessage
+	CredentialSecretName string
+	ScheduleCron         string
+	RetentionCount       int32
+	RetentionDays        int32
+	IncludeMailData      bool
+	NotifyEmail          string
+	LastStartedAt        sql.NullTime
+	LastSucceededAt      sql.NullTime
+	LastError            string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type ServerInventory struct {
+	ID           int64
+	Kind         string
+	ResourceKey  string
+	HealthStatus string
+	Payload      json.RawMessage
+	LastError    string
+	CheckedAt    time.Time
+	ExpiresAt    time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type ServerOperation struct {
+	ID                   int64
+	OperationID          string
+	Category             string
+	Action               string
+	TargetType           string
+	TargetKey            string
+	Request              json.RawMessage
+	Result               json.RawMessage
+	Status               string
+	DesiredRevision      sql.NullInt64
+	IdempotencyKey       sql.NullString
+	ConfirmationDeadline sql.NullTime
+	ConfirmedAt          sql.NullTime
+	LastError            string
+	ActorUserID          int64
+	StartedAt            sql.NullTime
+	CompletedAt          sql.NullTime
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type ServerSetting struct {
+	Category           string
+	Desired            json.RawMessage
+	Applied            json.RawMessage
+	DesiredRevision    int64
+	AppliedRevision    int64
+	ConvergenceStatus  string
+	LastGoodConfigHash []byte
+	LastError          string
+	UpdatedByUserID    sql.NullInt64
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+}
+
+type ServiceSecret struct {
+	ID              int64
+	SecretID        string
+	Scope           string
+	Name            string
+	Algorithm       string
+	KeyVersion      int32
+	WrappedKeyNonce []byte
+	WrappedDataKey  []byte
+	ValueNonce      []byte
+	Ciphertext      []byte
+	Metadata        json.RawMessage
+	UpdatedByUserID sql.NullInt64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 type Session struct {
-	TokenHash string
-	UserID    int64
-	ExpiresAt time.Time
-	CreatedAt time.Time
-	ID        int64
+	TokenHash       string
+	UserID          int64
+	ExpiresAt       time.Time
+	CreatedAt       time.Time
+	ID              int64
+	AuthenticatedAt time.Time
+	LastSeenAt      time.Time
+	RevokedAt       sql.NullTime
+	RevokedReason   string
+	IpAddress       string
+	UserAgent       string
 }
 
 type Setting struct {
@@ -508,6 +877,7 @@ type Setting struct {
 	ServerDiskCapacityMb int32
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	ValkeyCapacityMb     int32
 }
 
 type SftpAccessIdentity struct {
@@ -523,32 +893,35 @@ type SftpAccessIdentity struct {
 }
 
 type Site struct {
-	ID                   int64
-	OwnerUserID          int64
-	Username             string
-	Domain               string
-	PhpVersion           string
-	Status               string
-	LastError            string
-	CreatedAt            time.Time
-	UpdatedAt            time.Time
-	TlsStatus            string
-	TlsIssuer            string
-	TlsCertPath          string
-	TlsKeyPath           string
-	TlsExpiresAt         sql.NullTime
-	TlsLastError         string
-	SubscriptionID       int64
-	CustomerID           int64
-	DesiredStatus        string
-	DesiredPhpVersion    string
-	HttpsRedirect        bool
-	DesiredHttpsRedirect bool
-	SettingsStatus       string
-	SettingsError        string
-	TlsAutoRenew         bool
-	SystemAccountID      int64
-	DocumentRoot         string
+	ID                           int64
+	OwnerUserID                  int64
+	Username                     string
+	Domain                       string
+	PhpVersion                   string
+	Status                       string
+	LastError                    string
+	CreatedAt                    time.Time
+	UpdatedAt                    time.Time
+	TlsStatus                    string
+	TlsIssuer                    string
+	TlsCertPath                  string
+	TlsKeyPath                   string
+	TlsExpiresAt                 sql.NullTime
+	TlsLastError                 string
+	SubscriptionID               int64
+	CustomerID                   int64
+	DesiredStatus                string
+	DesiredPhpVersion            string
+	HttpsRedirect                bool
+	DesiredHttpsRedirect         bool
+	SettingsStatus               string
+	SettingsError                string
+	TlsAutoRenew                 bool
+	SystemAccountID              int64
+	DocumentRoot                 string
+	ParentSiteID                 sql.NullInt64
+	DnsZoneMode                  string
+	DnsTemplateAdoptionCompleted bool
 }
 
 type SitePolicyOverride struct {
@@ -560,6 +933,20 @@ type SitePolicyOverride struct {
 	UpdatedAt     time.Time
 }
 
+type SiteRuntimeGeneration struct {
+	ID          int64
+	SiteID      int64
+	Generation  int32
+	PhpVersion  string
+	Policy      json.RawMessage
+	NginxSha256 string
+	PhpSha256   string
+	Status      string
+	LastError   string
+	ActivatedAt sql.NullTime
+	CreatedAt   time.Time
+}
+
 type SiteTrafficCursor struct {
 	SiteID       int64
 	DeviceID     int64
@@ -568,6 +955,34 @@ type SiteTrafficCursor struct {
 	PeriodStart  time.Time
 	TrafficBytes int64
 	UpdatedAt    time.Time
+}
+
+type SiteUsageCurrent struct {
+	SiteID            int64
+	PeriodStart       time.Time
+	DocumentRootBytes int64
+	TrafficBytes      int64
+	RequestCount      int64
+	ErrorCount        int64
+	PhpState          string
+	CollectedAt       sql.NullTime
+	LastError         string
+}
+
+type StagingOperation struct {
+	ID                    int64
+	SourceSiteID          int64
+	TargetSiteID          int64
+	Direction             string
+	IncludeDatabase       bool
+	BackupID              sql.NullInt64
+	Status                string
+	SnapshotPath          string
+	DatabaseSnapshotPaths []string
+	CopiedBytes           int64
+	LastError             string
+	CreatedAt             time.Time
+	FinishedAt            sql.NullTime
 }
 
 type StalwartAccount struct {
@@ -674,6 +1089,8 @@ type SubscriptionSystemAccount struct {
 	CleanupAfter      sql.NullTime
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+	DesiredRevision   int64
+	AppliedRevision   int64
 }
 
 type SubscriptionUsageCurrent struct {
@@ -709,6 +1126,42 @@ type User struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	LoginDisabled bool
+}
+
+type UserRecoveryCode struct {
+	ID        int64
+	UserID    int64
+	CodeHash  string
+	UsedAt    sql.NullTime
+	CreatedAt time.Time
+}
+
+type UserTotp struct {
+	UserID         int64
+	SecretEnvelope json.RawMessage
+	ConfirmedAt    sql.NullTime
+	LastUsedStep   int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type ValkeyInstance struct {
+	ID                 int64
+	SubscriptionID     int64
+	DesiredState       string
+	AppliedState       string
+	MemoryMb           int32
+	MaxClients         int32
+	IdleTimeoutSeconds int32
+	CpuPercent         int32
+	ProcessLimit       int32
+	AclHash            string
+	FlushRequested     bool
+	SocketPath         string
+	ConvergenceStatus  string
+	LastError          string
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }
 
 type WebmailHost struct {

@@ -1,6 +1,9 @@
 package auth
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 var ErrUserNotFound = errors.New("user not found")
 
@@ -29,7 +32,9 @@ type User struct {
 }
 
 type SessionUser struct {
-	ID    int64
-	Email string
-	Role  Role
+	ID              int64
+	Email           string
+	Role            Role
+	AuthenticatedAt time.Time
+	LastSeenAt      time.Time
 }

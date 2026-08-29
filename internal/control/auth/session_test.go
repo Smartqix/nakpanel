@@ -14,7 +14,7 @@ type memorySessionStore struct {
 	deleted   bool
 }
 
-func (s *memorySessionStore) CreateSession(ctx context.Context, tokenHash string, userID int64, expiresAt time.Time) error {
+func (s *memorySessionStore) CreateSession(ctx context.Context, tokenHash string, userID int64, expiresAt time.Time, meta SessionMeta) error {
 	s.tokenHash = tokenHash
 	s.userID = userID
 	s.expiresAt = expiresAt
@@ -49,7 +49,7 @@ func TestSessionManagerCreatesOpaqueTokenAndAuthenticates(t *testing.T) {
 		Now:        func() time.Time { return now },
 	})
 
-	token, expiresAt, err := manager.Create(context.Background(), 42)
+	token, expiresAt, err := manager.Create(context.Background(), 42, SessionMeta{})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestSessionManagerRejectsExpiredSessions(t *testing.T) {
 		Now:        func() time.Time { return now },
 	})
 
-	token, _, err := manager.Create(context.Background(), 42)
+	token, _, err := manager.Create(context.Background(), 42, SessionMeta{})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}
@@ -105,7 +105,7 @@ func TestSessionManagerDeleteRemovesSession(t *testing.T) {
 		Now:        func() time.Time { return now },
 	})
 
-	token, _, err := manager.Create(context.Background(), 42)
+	token, _, err := manager.Create(context.Background(), 42, SessionMeta{})
 	if err != nil {
 		t.Fatalf("Create returned error: %v", err)
 	}

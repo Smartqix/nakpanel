@@ -28,6 +28,17 @@ func TestPhaseVerifiersUseSingleDefaultVM(t *testing.T) {
 		"phase16-verify.sh",
 		"phase17-verify.sh",
 		"phase19-verify.sh",
+		"phase20-verify.sh",
+		"phase21-verify.sh",
+		"phase22-verify.sh",
+		"phase23-verify.sh",
+		"phase24-verify.sh",
+		"phase25-verify.sh",
+		"phase26-verify.sh",
+		"phase27-verify.sh",
+		"phase28-verify.sh",
+		"phase29-verify.sh",
+		"security-verify.sh",
 	}
 	for _, path := range scripts {
 		t.Run(path, func(t *testing.T) {
@@ -72,7 +83,9 @@ func TestDeploymentVerifierResetsOneCanonicalVM(t *testing.T) {
 		"require_nakpanel_vm_name \"${NAKPANEL_MULTIPASS_VM}\"",
 		"destroy_vm \"${NAKPANEL_MULTIPASS_VM}\"",
 		"ensure_vm 2 3G 16G",
-		"phase19-verify.sh",
+		"security-verify.sh",
+		"phase28-verify.sh",
+		"phase29-verify.sh",
 		"nakpanel-lab",
 	} {
 		if !strings.Contains(script, want) {
@@ -100,9 +113,41 @@ func TestCommonHelperListsLegacyPhaseVMs(t *testing.T) {
 		"nakpanel-phase12",
 		"nakpanel-phase16",
 		"nakpanel-phase17",
+		"nakpanel-phase25",
+		"nakpanel-phase26",
+		"nakpanel-phase27",
+		"nakpanel-phase28",
+		"nakpanel-phase29",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("%s is missing %q", path, want)
+		}
+	}
+}
+
+// TestVerifiersDoNotMaskExitStatusInTraps guards against a bash 3.2 pitfall:
+// an `EXIT` trap that runs a successful command (e.g. `rm -rf tmpdir`) resets
+// $? to 0, silently masking a fatal error that aborted the script. Every
+// tmpdir cleanup trap must preserve and re-exit the original status, or the
+// phase would "pass" after aborting partway (which happened to phase 28).
+func TestVerifiersDoNotMaskExitStatusInTraps(t *testing.T) {
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, "-verify.sh") {
+			continue
+		}
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("ReadFile(%q): %v", name, err)
+		}
+		script := string(data)
+		if strings.Contains(script, `trap 'rm -rf "${tmpdir}"' EXIT`) {
+			t.Errorf("%s uses a status-masking EXIT trap; it must capture and re-exit $? "+
+				"(trap 'status=$?; rm -rf \"${tmpdir}\"; exit \"${status}\"' EXIT)", name)
 		}
 	}
 }

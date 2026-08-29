@@ -7,23 +7,45 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
-var databaseIdentifierRE = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
+var (
+	databaseIdentifierRE  = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
+	phpVersionDirectoryRE = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
+)
 
 type SubscriptionTeardownOptions struct {
-	HomeRoot string
-	Paths    SitePathConfig
-	Runner   CommandRunner
+	HomeRoot          string
+	Paths             SitePathConfig
+	SystemdUnitDir    string
+	TaskStateDir      string
+	SSHConfigDir      string
+	AuthorizedKeysDir string
+	ValkeyConfigRoot  string
+	ValkeyRuntimeRoot string
+	GitRoot           string
+	StagingRoot       string
+	PodmanBinary      string
+	Runner            CommandRunner
 }
 type SubscriptionTeardownProvisioner struct {
-	homeRoot string
-	paths    SitePathConfig
-	runner   CommandRunner
+	homeRoot          string
+	paths             SitePathConfig
+	systemdUnitDir    string
+	taskStateDir      string
+	sshConfigDir      string
+	authorizedKeysDir string
+	valkeyConfigRoot  string
+	valkeyRuntimeRoot string
+	gitRoot           string
+	stagingRoot       string
+	podmanBinary      string
+	runner            CommandRunner
 }
 
 func NewSubscriptionTeardownProvisioner(opts SubscriptionTeardownOptions) *SubscriptionTeardownProvisioner {
@@ -37,7 +59,46 @@ func NewSubscriptionTeardownProvisioner(opts SubscriptionTeardownOptions) *Subsc
 	}
 	paths := opts.Paths
 	paths.HomeRoot = root
-	return &SubscriptionTeardownProvisioner{homeRoot: root, paths: paths, runner: runner}
+	systemdUnitDir := strings.TrimSpace(opts.SystemdUnitDir)
+	if systemdUnitDir == "" {
+		systemdUnitDir = strings.TrimSpace(paths.SystemdUnitDir)
+	}
+	systemdUnitDir = defaultPath(systemdUnitDir, "/etc/systemd/system")
+	paths.SystemdUnitDir = systemdUnitDir
+	taskStateDir := defaultPath(opts.TaskStateDir, "/var/lib/nakpanel/tasks")
+	sshConfigDir := opts.SSHConfigDir
+	authorizedKeysDir := opts.AuthorizedKeysDir
+	if sshConfigDir == "" {
+		sshConfigDir = "/etc/ssh/sshd_config.d"
+	}
+	if authorizedKeysDir == "" {
+		authorizedKeysDir = "/etc/nakpanel/ssh/authorized_keys"
+	}
+	if root != "/home" {
+		if opts.SSHConfigDir == "" {
+			sshConfigDir = filepath.Join(filepath.Dir(root), "ssh", "sshd_config.d")
+		}
+		if opts.AuthorizedKeysDir == "" {
+			authorizedKeysDir = filepath.Join(filepath.Dir(root), "ssh", "authorized_keys")
+		}
+	}
+	return &SubscriptionTeardownProvisioner{
+		homeRoot: root, paths: paths, systemdUnitDir: systemdUnitDir,
+		taskStateDir: taskStateDir,
+		sshConfigDir: filepath.Clean(sshConfigDir), authorizedKeysDir: filepath.Clean(authorizedKeysDir),
+		valkeyConfigRoot:  defaultPath(opts.ValkeyConfigRoot, "/etc/nakpanel/valkey"),
+		valkeyRuntimeRoot: defaultPath(opts.ValkeyRuntimeRoot, "/run/nakpanel/valkey"),
+		gitRoot:           defaultPath(opts.GitRoot, "/var/lib/nakpanel/git"),
+		stagingRoot:       defaultPath(opts.StagingRoot, "/var/lib/nakpanel/staging"),
+		podmanBinary:      defaultPath(opts.PodmanBinary, "/usr/bin/podman"), runner: runner,
+	}
+}
+
+func defaultPath(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		value = fallback
+	}
+	return filepath.Clean(value)
 }
 
 func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Context, req types.TeardownSubscriptionReq) (types.TeardownSubscriptionResult, error) {
@@ -49,14 +110,30 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 	if home != filepath.Join(p.homeRoot, req.Username) || filepath.Dir(home) != p.homeRoot {
 		return result, errors.New("account home is not the direct validated home-root child")
 	}
-	for _, domain := range req.Domains {
+	if len(req.SiteIDs) != 0 && len(req.SiteIDs) != len(req.Domains) {
+		return result, errors.New("site identities and domains must have matching lengths")
+	}
+	for index, domain := range req.Domains {
 		if site.ValidateDomain(site.NormalizeDomain(domain)) != nil || domain != site.NormalizeDomain(domain) {
 			return result, fmt.Errorf("invalid teardown domain %q", domain)
+		}
+		if len(req.SiteIDs) != 0 && req.SiteIDs[index] <= 0 {
+			return result, fmt.Errorf("invalid teardown site identity %d", req.SiteIDs[index])
 		}
 	}
 	for _, name := range req.DatabaseNames {
 		if !databaseIdentifierRE.MatchString(name) {
 			return result, fmt.Errorf("invalid database identifier %q", name)
+		}
+	}
+	for _, id := range append(append([]int64{}, req.TaskIDs...), req.StagingOperationIDs...) {
+		if id <= 0 {
+			return result, fmt.Errorf("invalid teardown object identity %d", id)
+		}
+	}
+	for _, application := range req.Applications {
+		if application.ID <= 0 || !applicationNameRE.MatchString(application.Name) {
+			return result, errors.New("invalid teardown application identity")
 		}
 	}
 	info, err := os.Lstat(home)
@@ -68,8 +145,29 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return result, err
 	}
-	for _, domain := range req.Domains {
-		for _, php := range []string{"8.2", "8.3"} {
+	needsDaemonReload := false
+	_, userLookupErr := p.runner.Run(ctx, "id", "-u", req.Username)
+	userExists := userLookupErr == nil
+	for _, application := range req.Applications {
+		if !userExists {
+			continue
+		}
+		stableContainer := applicationContainerName(application.ID)
+		for _, container := range []string{
+			stableContainer,
+			stableContainer + "-candidate",
+			stableContainer + "-previous",
+			fmt.Sprintf("nakpanel-%d-%s", application.ID, application.Name),
+		} {
+			output, runErr := p.runner.Run(ctx, "runuser", "-u", req.Username, "--", p.podmanBinary, "rm", "--force", "--ignore", container)
+			if runErr != nil {
+				return result, fmt.Errorf("remove application %s: %w: %s", application.Name, runErr, strings.TrimSpace(string(output)))
+			}
+		}
+		result.Removed = append(result.Removed, "application:"+application.Name)
+	}
+	for index, domain := range req.Domains {
+		for _, php := range p.teardownPHPVersions() {
 			plan, planErr := NewSitePlan(types.CreateSiteReq{SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain, PHPVersion: php, SharedAccount: true}, p.paths)
 			if planErr != nil {
 				return result, planErr
@@ -80,7 +178,37 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 				}
 			}
 		}
+		if len(req.SiteIDs) != 0 {
+			plan, planErr := NewSitePlan(types.CreateSiteReq{SiteID: req.SiteIDs[index], SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain, PHPVersion: "8.3", SharedAccount: true}, p.paths)
+			if planErr != nil {
+				return result, planErr
+			}
+			if _, statErr := os.Stat(plan.PHPServiceUnit); statErr == nil {
+				if _, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", plan.PHPServiceName); stopErr != nil {
+					return result, fmt.Errorf("stop dedicated PHP service %s: %w", plan.PHPServiceName, stopErr)
+				}
+			} else if !errors.Is(statErr, os.ErrNotExist) {
+				return result, statErr
+			}
+			for _, path := range []string{plan.PHPFPMConfig, plan.PHPFPMConfig + ".suspended", plan.PHPServiceUnit} {
+				if err = os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return result, fmt.Errorf("remove dedicated PHP configuration: %w", err)
+				}
+			}
+			if err = os.RemoveAll(filepath.Dir(plan.NginxProtectedConfig)); err != nil {
+				return result, fmt.Errorf("remove protected-directory configuration: %w", err)
+			}
+			if err = os.RemoveAll(filepath.Join(p.gitRoot, fmt.Sprintf("site-%d", req.SiteIDs[index]))); err != nil {
+				return result, fmt.Errorf("remove site Git repository: %w", err)
+			}
+			needsDaemonReload = true
+		}
 		result.Removed = append(result.Removed, "domain:"+domain)
+	}
+	if needsDaemonReload {
+		if output, reloadErr := p.runner.Run(ctx, "systemctl", "daemon-reload"); reloadErr != nil {
+			return result, fmt.Errorf("reload systemd after site teardown: %w: %s", reloadErr, strings.TrimSpace(string(output)))
+		}
 	}
 	for _, name := range req.DatabaseNames {
 		statement := "DROP DATABASE IF EXISTS `" + name + "`"
@@ -90,13 +218,97 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 		}
 		result.Removed = append(result.Removed, "database:"+name)
 	}
+	for _, taskID := range req.TaskIDs {
+		unit := fmt.Sprintf("nakpanel-task-%d.timer", taskID)
+		timerPath := filepath.Join(p.systemdUnitDir, unit)
+		if _, statErr := os.Stat(timerPath); statErr == nil {
+			if _, runErr := p.runner.Run(ctx, "systemctl", "disable", "--now", unit); runErr != nil {
+				return result, fmt.Errorf("stop scheduled task %d: %w", taskID, runErr)
+			}
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			return result, statErr
+		}
+		for _, suffix := range []string{".service", ".timer"} {
+			if err = os.Remove(filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-task-%d%s", taskID, suffix))); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return result, fmt.Errorf("remove scheduled task unit: %w", err)
+			}
+		}
+	}
+	if err = os.Remove(filepath.Join(p.taskStateDir, fmt.Sprintf("subscription-%d.json", req.SubscriptionID))); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return result, fmt.Errorf("remove scheduled task state: %w", err)
+	}
+	if req.ValkeyPresent {
+		valkeyUnit := fmt.Sprintf("nakpanel-valkey@%d.service", req.SubscriptionID)
+		valkeyUnitPath := filepath.Join(p.systemdUnitDir, valkeyUnit)
+		if _, statErr := os.Stat(valkeyUnitPath); statErr == nil {
+			if output, runErr := p.runner.Run(ctx, "systemctl", "disable", "--now", valkeyUnit); runErr != nil {
+				return result, fmt.Errorf("stop Valkey service: %w: %s", runErr, strings.TrimSpace(string(output)))
+			}
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			return result, statErr
+		}
+		if output, runErr := p.runner.Run(ctx, p.podmanBinary, "rm", "--force", "--ignore", fmt.Sprintf("nakpanel-valkey-sub-%d", req.SubscriptionID)); runErr != nil {
+			return result, fmt.Errorf("remove Valkey container: %w: %s", runErr, strings.TrimSpace(string(output)))
+		}
+		for _, path := range []string{
+			filepath.Join(p.systemdUnitDir, valkeyUnit),
+			filepath.Join(p.valkeyConfigRoot, fmt.Sprintf("sub-%d", req.SubscriptionID)),
+			filepath.Join(p.valkeyRuntimeRoot, fmt.Sprintf("sub-%d", req.SubscriptionID)),
+		} {
+			if err = os.RemoveAll(path); err != nil {
+				return result, fmt.Errorf("remove Valkey state: %w", err)
+			}
+		}
+	}
+	for _, operationID := range req.StagingOperationIDs {
+		for _, pattern := range []string{
+			filepath.Join(p.stagingRoot, fmt.Sprintf("operation-%d-*", operationID)),
+			filepath.Join(p.stagingRoot, fmt.Sprintf("site-*-operation-%d-*", operationID)),
+		} {
+			matches, globErr := filepath.Glob(pattern)
+			if globErr != nil {
+				return result, globErr
+			}
+			for _, path := range matches {
+				if err = os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return result, fmt.Errorf("remove staging rollback point: %w", err)
+				}
+			}
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(p.sshConfigDir, "90-nakpanel-"+req.Username+".conf"),
+		filepath.Join(p.authorizedKeysDir, req.Username),
+	} {
+		if err = os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return result, fmt.Errorf("remove SFTP access state: %w", err)
+		}
+	}
+	needsDaemonReload = true
+	if needsDaemonReload {
+		if output, reloadErr := p.runner.Run(ctx, "systemctl", "daemon-reload"); reloadErr != nil {
+			return result, fmt.Errorf("reload systemd after subscription cleanup: %w: %s", reloadErr, strings.TrimSpace(string(output)))
+		}
+		if output, reloadErr := p.runner.Run(ctx, "systemctl", "reload", "ssh"); reloadErr != nil {
+			return result, fmt.Errorf("reload SSH after subscription cleanup: %w: %s", reloadErr, strings.TrimSpace(string(output)))
+		}
+	}
 	if homeExists {
 		if err = os.RemoveAll(home); err != nil {
 			return result, fmt.Errorf("remove account home: %w", err)
 		}
 	}
 	result.Removed = append(result.Removed, "home:"+home)
-	if _, idErr := p.runner.Run(ctx, "id", "-u", req.Username); idErr == nil {
+	if userExists {
+		if req.ValkeyPresent {
+			aclParent := filepath.Dir(p.valkeyRuntimeRoot)
+			if output, aclErr := p.runner.Run(ctx, "setfacl", "-x", "u:"+req.Username, aclParent); aclErr != nil {
+				acl, inspectErr := p.runner.Run(ctx, "getfacl", "-cp", aclParent)
+				if inspectErr != nil || !aclConfirmsUserAbsent(acl, req.Username) {
+					return result, fmt.Errorf("remove subscription cache traversal ACL: %w: %s", aclErr, strings.TrimSpace(string(output)))
+				}
+			}
+		}
 		output, userErr := p.runner.Run(ctx, "userdel", "--", req.Username)
 		if userErr != nil {
 			return result, fmt.Errorf("delete system account: %w: %s", userErr, strings.TrimSpace(string(output)))
@@ -104,4 +316,49 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 	}
 	result.Removed = append(result.Removed, "user:"+req.Username)
 	return result, nil
+}
+
+func (p *SubscriptionTeardownProvisioner) teardownPHPVersions() []string {
+	versions := []string{"8.2", "8.3"}
+	if p.homeRoot == "/home" {
+		if entries, err := os.ReadDir("/etc/php"); err == nil {
+			for _, entry := range entries {
+				if entry.IsDir() {
+					versions = append(versions, entry.Name())
+				}
+			}
+		}
+	}
+	return normalizedPHPVersionDirectories(versions)
+}
+
+func normalizedPHPVersionDirectories(versions []string) []string {
+	unique := make(map[string]struct{}, len(versions))
+	for _, version := range versions {
+		version = strings.TrimSpace(version)
+		if phpVersionDirectoryRE.MatchString(version) {
+			unique[version] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(unique))
+	for version := range unique {
+		result = append(result, version)
+	}
+	sort.Strings(result)
+	return result
+}
+
+func aclConfirmsUserAbsent(output []byte, username string) bool {
+	prefix := "user:" + username + ":"
+	hasOwnerEntry := false
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, prefix) {
+			return false
+		}
+		if strings.HasPrefix(line, "user::") {
+			hasOwnerEntry = true
+		}
+	}
+	return hasOwnerEntry
 }

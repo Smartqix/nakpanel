@@ -46,12 +46,14 @@ type DatabaseRestorer interface {
 
 type BackupProvisionerOptions struct {
 	OutputDir      string
+	HomeRoot       string
 	DatabaseDumper DatabaseDumper
 	Now            func() time.Time
 }
 
 type BackupProvisioner struct {
 	outputDir string
+	homeRoot  string
 	dumper    DatabaseDumper
 	now       func() time.Time
 }
@@ -128,15 +130,19 @@ func NewBackupProvisioner(opts BackupProvisionerOptions) *BackupProvisioner {
 	if outputDir == "" {
 		outputDir = "/var/lib/nakpanel/backups"
 	}
+	homeRoot := opts.HomeRoot
+	if homeRoot == "" {
+		homeRoot = "/home"
+	}
 	now := opts.Now
 	if now == nil {
 		now = time.Now
 	}
-	return &BackupProvisioner{outputDir: outputDir, dumper: opts.DatabaseDumper, now: now}
+	return &BackupProvisioner{outputDir: outputDir, homeRoot: homeRoot, dumper: opts.DatabaseDumper, now: now}
 }
 
 func (p *BackupProvisioner) CreateBackup(ctx context.Context, req types.CreateBackupReq) (types.CreateBackupResult, error) {
-	normalized, err := normalizeBackupRequest(req, p.outputDir)
+	normalized, err := normalizeBackupRequest(req, p.outputDir, p.homeRoot)
 	if err != nil {
 		return types.CreateBackupResult{}, err
 	}
@@ -299,25 +305,31 @@ func (r CommandDatabaseRestorer) RestoreDatabase(ctx context.Context, name strin
 type RestoreProvisionerOptions struct {
 	DatabaseRestorer DatabaseRestorer
 	OwnershipManager OwnershipManager
+	HomeRoot         string
 	Now              func() time.Time
 }
 
 type RestoreProvisioner struct {
 	restorer  DatabaseRestorer
 	ownership OwnershipManager
+	homeRoot  string
 	now       func() time.Time
 }
 
 func NewRestoreProvisioner(opts RestoreProvisionerOptions) *RestoreProvisioner {
+	homeRoot := opts.HomeRoot
+	if homeRoot == "" {
+		homeRoot = "/home"
+	}
 	now := opts.Now
 	if now == nil {
 		now = time.Now
 	}
-	return &RestoreProvisioner{restorer: opts.DatabaseRestorer, ownership: opts.OwnershipManager, now: now}
+	return &RestoreProvisioner{restorer: opts.DatabaseRestorer, ownership: opts.OwnershipManager, homeRoot: homeRoot, now: now}
 }
 
 func (p *RestoreProvisioner) RestoreBackup(ctx context.Context, req types.RestoreBackupReq) (types.RestoreBackupResult, error) {
-	normalized, err := normalizeRestoreRequest(req)
+	normalized, err := normalizeRestoreRequest(req, p.homeRoot)
 	if err != nil {
 		return types.RestoreBackupResult{}, err
 	}
@@ -381,17 +393,17 @@ func (p *RestoreProvisioner) RestoreBackup(ctx context.Context, req types.Restor
 	}, nil
 }
 
-func normalizeRestoreRequest(req types.RestoreBackupReq) (types.RestoreBackupReq, error) {
+func normalizeRestoreRequest(req types.RestoreBackupReq, homeRoot string) (types.RestoreBackupReq, error) {
 	req.Domain = site.NormalizeDomain(req.Domain)
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
 	if req.Docroot == "" && req.Username != "" {
-		req.Docroot = filepath.Join("/home", req.Username, "public_html")
+		req.Docroot = filepath.Join(homeRoot, req.Username, "public_html")
 	}
 	if err := site.ValidateDomain(req.Domain); err != nil {
 		return types.RestoreBackupReq{}, err
 	}
-	if !phase6UsernameRE.MatchString(req.Username) {
-		return types.RestoreBackupReq{}, fmt.Errorf("username must match %s", phase6UsernameRE.String())
+	if err := site.ValidateUsername(req.Username); err != nil {
+		return types.RestoreBackupReq{}, err
 	}
 	if strings.TrimSpace(req.ArchivePath) == "" {
 		return types.RestoreBackupReq{}, errors.New("archive path is required")
@@ -403,6 +415,13 @@ func normalizeRestoreRequest(req types.RestoreBackupReq) (types.RestoreBackupReq
 	docroot, err := filepath.Abs(req.Docroot)
 	if err != nil {
 		return types.RestoreBackupReq{}, fmt.Errorf("resolve docroot: %w", err)
+	}
+	// The restore publishes by renaming the target docroot aside and moving
+	// the extracted tree into its place. A client-supplied docroot must never
+	// escape the tenant home, or a restore could overwrite /etc, another
+	// tenant's tree, etc.
+	if !site.PathWithinDir(filepath.Join(homeRoot, req.Username), docroot) {
+		return types.RestoreBackupReq{}, fmt.Errorf("restore docroot %q is outside the tenant home", docroot)
 	}
 	req.ArchivePath = archivePath
 	req.Docroot = docroot
@@ -529,26 +548,40 @@ func writeTarFile(writer *tar.Writer, name string, data []byte, mode os.FileMode
 	return nil
 }
 
-func normalizeBackupRequest(req types.CreateBackupReq, defaultOutputDir string) (types.CreateBackupReq, error) {
+func normalizeBackupRequest(req types.CreateBackupReq, defaultOutputDir, homeRoot string) (types.CreateBackupReq, error) {
 	req.Domain = site.NormalizeDomain(req.Domain)
 	req.Username = strings.ToLower(strings.TrimSpace(req.Username))
 	if req.OutputDir == "" {
 		req.OutputDir = defaultOutputDir
 	}
 	if req.Docroot == "" && req.Username != "" {
-		req.Docroot = filepath.Join("/home", req.Username, "public_html")
+		req.Docroot = filepath.Join(homeRoot, req.Username, "public_html")
 	}
 	if err := site.ValidateDomain(req.Domain); err != nil {
 		return types.CreateBackupReq{}, err
 	}
-	if !phase6UsernameRE.MatchString(req.Username) {
-		return types.CreateBackupReq{}, fmt.Errorf("username must match %s", phase6UsernameRE.String())
+	if err := site.ValidateUsername(req.Username); err != nil {
+		return types.CreateBackupReq{}, err
 	}
 	cleanDocroot, err := filepath.Abs(req.Docroot)
 	if err != nil {
 		return types.CreateBackupReq{}, fmt.Errorf("resolve docroot: %w", err)
 	}
+	// Only the tenant's own tree may be archived, and only into the backup
+	// root — otherwise a caller could archive /etc and read it back through
+	// the transfer/download path.
+	if !site.PathWithinDir(filepath.Join(homeRoot, req.Username), cleanDocroot) {
+		return types.CreateBackupReq{}, fmt.Errorf("backup docroot %q is outside the tenant home", cleanDocroot)
+	}
+	cleanOutputDir, err := filepath.Abs(req.OutputDir)
+	if err != nil {
+		return types.CreateBackupReq{}, fmt.Errorf("resolve output dir: %w", err)
+	}
+	if !site.PathWithinDir(defaultOutputDir, cleanOutputDir) {
+		return types.CreateBackupReq{}, fmt.Errorf("backup output dir %q is outside the backup root", cleanOutputDir)
+	}
 	req.Docroot = cleanDocroot
+	req.OutputDir = cleanOutputDir
 	for i, database := range req.Databases {
 		normalized := strings.ToLower(strings.TrimSpace(database))
 		if !phase6DBIdentifierRE.MatchString(normalized) {
@@ -762,10 +795,26 @@ func (p *DNSProvisioner) DNSZoneDrift(req types.ConfigureDNSZoneReq) (bool, erro
 	}
 	zonePath := filepath.Join(normalized.ZoneDir, "db."+normalized.Domain)
 	includePath := filepath.Join(p.includeDir, normalized.Domain+".conf")
+	if normalized.Mode == "disabled" {
+		for _, path := range []string{zonePath, includePath} {
+			if _, statErr := os.Lstat(path); statErr == nil {
+				return true, nil
+			} else if !os.IsNotExist(statErr) {
+				return false, statErr
+			}
+		}
+		return false, nil
+	}
 	checks := []struct {
 		path string
 		want []byte
-	}{{zonePath, []byte(RenderDNSZone(normalized))}, {includePath, []byte(RenderDNSZoneInclude(normalized.Domain, zonePath))}}
+	}{{includePath, []byte(RenderDNSZoneIncludeRequest(normalized, zonePath))}}
+	if normalized.Mode == "primary" {
+		checks = append(checks, struct {
+			path string
+			want []byte
+		}{zonePath, []byte(RenderDNSZone(normalized))})
+	}
 	for _, check := range checks {
 		got, readErr := os.ReadFile(check.path)
 		if os.IsNotExist(readErr) {
@@ -846,17 +895,35 @@ func (p *DNSProvisioner) ConfigureDNSZone(ctx context.Context, req types.Configu
 			_ = p.reloader.ReloadService(context.Background(), "named.service")
 		}
 	}()
-	if err := writeFileAtomic(zonePath, []byte(RenderDNSZone(normalized)), 0o644); err != nil {
-		return types.ConfigureDNSZoneResult{}, fmt.Errorf("write dns zone: %w", err)
-	}
-	if err := writeFileAtomic(includePath, []byte(RenderDNSZoneInclude(normalized.Domain, zonePath)), 0o644); err != nil {
-		return types.ConfigureDNSZoneResult{}, fmt.Errorf("write dns include: %w", err)
+	switch normalized.Mode {
+	case "disabled":
+		for _, path := range []string{zonePath, includePath} {
+			if removeErr := os.Remove(path); removeErr != nil && !os.IsNotExist(removeErr) {
+				return types.ConfigureDNSZoneResult{}, fmt.Errorf("disable DNS zone: %w", removeErr)
+			}
+		}
+	case "secondary":
+		if removeErr := os.Remove(zonePath); removeErr != nil && !os.IsNotExist(removeErr) {
+			return types.ConfigureDNSZoneResult{}, fmt.Errorf("remove primary DNS zone file: %w", removeErr)
+		}
+		if err := writeFileAtomic(includePath, []byte(RenderDNSZoneIncludeRequest(normalized, zonePath)), 0o644); err != nil {
+			return types.ConfigureDNSZoneResult{}, fmt.Errorf("write secondary DNS include: %w", err)
+		}
+	default:
+		if err := writeFileAtomic(zonePath, []byte(RenderDNSZone(normalized)), 0o644); err != nil {
+			return types.ConfigureDNSZoneResult{}, fmt.Errorf("write dns zone: %w", err)
+		}
+		if err := writeFileAtomic(includePath, []byte(RenderDNSZoneIncludeRequest(normalized, zonePath)), 0o644); err != nil {
+			return types.ConfigureDNSZoneResult{}, fmt.Errorf("write dns include: %w", err)
+		}
 	}
 	if err := p.writeAggregateDNSIncludes(); err != nil {
 		return types.ConfigureDNSZoneResult{}, err
 	}
-	if err := p.validateDNSZone(ctx, normalized.Domain, zonePath); err != nil {
-		return types.ConfigureDNSZoneResult{}, err
+	if normalized.Mode == "primary" {
+		if err := p.validateDNSZone(ctx, normalized.Domain, zonePath); err != nil {
+			return types.ConfigureDNSZoneResult{}, err
+		}
 	}
 	if err := p.validateDNSConfig(ctx); err != nil {
 		return types.ConfigureDNSZoneResult{}, err
@@ -867,26 +934,29 @@ func (p *DNSProvisioner) ConfigureDNSZone(ctx context.Context, req types.Configu
 			return types.ConfigureDNSZoneResult{}, err
 		}
 	}
-	return types.ConfigureDNSZoneResult{Domain: normalized.Domain, ZonePath: zonePath, IncludePath: includePath, Serial: normalized.Serial}, nil
+	if normalized.Mode == "disabled" {
+		zonePath, includePath = "", ""
+	}
+	return types.ConfigureDNSZoneResult{
+		Domain: normalized.Domain, ZonePath: zonePath, IncludePath: includePath,
+		Serial: normalized.Serial, DesiredRevision: normalized.DesiredRevision, Mode: normalized.Mode,
+	}, nil
 }
 
 func RenderDNSZone(req types.ConfigureDNSZoneReq) string {
 	header := fmt.Sprintf(`$ORIGIN %[1]s.
-$TTL 300
-@ IN SOA ns1.%[1]s. hostmaster.%[1]s. (
-    %[3]d
-    3600
-    900
-    604800
-    300
+$TTL %[4]d
+@ IN SOA %[2]s. %[3]s. (
+    %[5]d
+    %[6]d
+    %[7]d
+    %[8]d
+    %[9]d
 )
-@ IN NS ns1.%[1]s.
-ns1 IN A %[2]s
-webmail IN A %[2]s
-`, req.Domain, req.Address, req.Serial)
-	if len(req.Records) == 0 {
-		return header + fmt.Sprintf("@ IN A %s\nwww IN A %s\n", req.Address, req.Address)
-	}
+`, req.Domain, strings.TrimSuffix(req.SOA.PrimaryNameserver, "."),
+		strings.TrimSuffix(req.SOA.ResponsibleMailbox, "."), req.SOA.DefaultTTL,
+		req.Serial, req.SOA.RefreshSeconds, req.SOA.RetrySeconds,
+		req.SOA.ExpireSeconds, req.SOA.MinimumTTL)
 	var builder strings.Builder
 	builder.WriteString(header)
 	for _, record := range req.Records {
@@ -896,16 +966,19 @@ webmail IN A %[2]s
 		}
 		value := strings.TrimSpace(record.Value)
 		switch record.Type {
-		case "CNAME", "MX":
+		case "CNAME", "MX", "NS", "SRV":
 			if !strings.HasSuffix(value, ".") {
 				value += "."
 			}
 		case "TXT":
 			value = renderTXTValue(value)
 		}
-		if record.Type == "MX" {
+		switch record.Type {
+		case "MX":
 			fmt.Fprintf(&builder, "%s %d IN MX %d %s\n", host, record.TTL, record.Priority, value)
-		} else {
+		case "SRV":
+			fmt.Fprintf(&builder, "%s %d IN SRV %d %d %d %s\n", host, record.TTL, record.Priority, record.Weight, record.Port, value)
+		default:
 			fmt.Fprintf(&builder, "%s %d IN %s %s\n", host, record.TTL, record.Type, value)
 		}
 	}
@@ -933,11 +1006,32 @@ func renderTXTValue(value string) string {
 }
 
 func RenderDNSZoneInclude(domain string, zonePath string) string {
-	return fmt.Sprintf(`zone "%[1]s" {
-    type master;
-    file "%[2]s";
-};
-`, domain, zonePath)
+	return RenderDNSZoneIncludeRequest(types.ConfigureDNSZoneReq{Domain: domain, Mode: "primary"}, zonePath)
+}
+
+func RenderDNSZoneIncludeRequest(req types.ConfigureDNSZoneReq, zonePath string) string {
+	var builder strings.Builder
+	fmt.Fprintf(&builder, "zone %q {\n", req.Domain)
+	if req.Mode == "secondary" {
+		builder.WriteString("    type slave;\n    masters {\n")
+		for _, primary := range req.UpstreamPrimaries {
+			fmt.Fprintf(&builder, "        %s;\n", primary)
+		}
+		builder.WriteString("    };\n")
+	} else {
+		fmt.Fprintf(&builder, "    type master;\n    file %q;\n", zonePath)
+		if len(req.TransferCIDRs) == 0 {
+			builder.WriteString("    allow-transfer { none; };\n")
+		} else {
+			builder.WriteString("    allow-transfer {\n")
+			for _, cidr := range req.TransferCIDRs {
+				fmt.Fprintf(&builder, "        %s;\n", cidr)
+			}
+			builder.WriteString("    };\n")
+		}
+	}
+	builder.WriteString("};\n")
+	return builder.String()
 }
 
 func RenderDNSAggregateInclude(paths []string) string {
@@ -987,6 +1081,11 @@ func (p *DNSProvisioner) validateDNSConfig(ctx context.Context) error {
 func normalizeDNSZoneRequest(req types.ConfigureDNSZoneReq, defaultZoneDir string) (types.ConfigureDNSZoneReq, error) {
 	req.Domain = site.NormalizeDomain(req.Domain)
 	req.Address = strings.TrimSpace(req.Address)
+	req.IPv6Address = strings.TrimSpace(req.IPv6Address)
+	req.Mode = strings.ToLower(strings.TrimSpace(req.Mode))
+	if req.Mode == "" {
+		req.Mode = "primary"
+	}
 	if req.ZoneDir == "" {
 		req.ZoneDir = defaultZoneDir
 	}
@@ -996,28 +1095,202 @@ func normalizeDNSZoneRequest(req types.ConfigureDNSZoneReq, defaultZoneDir strin
 	if err := site.ValidateDomain(req.Domain); err != nil {
 		return types.ConfigureDNSZoneReq{}, err
 	}
-	if net.ParseIP(req.Address) == nil {
+	if req.Mode != "primary" && req.Mode != "secondary" && req.Mode != "disabled" {
+		return types.ConfigureDNSZoneReq{}, fmt.Errorf("invalid DNS zone mode %q", req.Mode)
+	}
+	if req.Mode == "primary" {
+		if ip := net.ParseIP(req.Address); ip == nil || ip.To4() == nil {
+			return types.ConfigureDNSZoneReq{}, fmt.Errorf("invalid dns address %q", req.Address)
+		}
+	}
+	if req.IPv6Address != "" {
+		if ip := net.ParseIP(req.IPv6Address); ip == nil || ip.To4() != nil {
+			return types.ConfigureDNSZoneReq{}, fmt.Errorf("invalid DNS IPv6 address %q", req.IPv6Address)
+		}
+	}
+	if req.Mode == "secondary" && len(req.UpstreamPrimaries) == 0 {
+		return types.ConfigureDNSZoneReq{}, errors.New("secondary DNS zones require an upstream primary")
+	}
+	for _, primary := range req.UpstreamPrimaries {
+		if net.ParseIP(strings.TrimSpace(primary)) == nil {
+			return types.ConfigureDNSZoneReq{}, fmt.Errorf("invalid upstream primary %q", primary)
+		}
+	}
+	for _, value := range req.TransferCIDRs {
+		if _, _, err := net.ParseCIDR(strings.TrimSpace(value)); err != nil {
+			return types.ConfigureDNSZoneReq{}, fmt.Errorf("invalid transfer CIDR %q", value)
+		}
+	}
+	if req.SOA.PrimaryNameserver == "" {
+		req.SOA = types.DNSSOASettings{
+			PrimaryNameserver:  "ns1." + req.Domain,
+			ResponsibleMailbox: "hostmaster." + req.Domain,
+			SerialFormat:       "unix", DefaultTTL: 3600, RefreshSeconds: 3600,
+			RetrySeconds: 900, ExpireSeconds: 604800, MinimumTTL: 300,
+		}
+	}
+	for name, value := range map[string]string{
+		"primary nameserver":  req.SOA.PrimaryNameserver,
+		"responsible mailbox": req.SOA.ResponsibleMailbox,
+	} {
+		value = strings.TrimSuffix(strings.TrimSpace(value), ".")
+		if err := site.ValidateDomain(value); err != nil {
+			return types.ConfigureDNSZoneReq{}, fmt.Errorf("invalid SOA %s: %w", name, err)
+		}
+	}
+	if req.SOA.DefaultTTL < 60 || req.SOA.DefaultTTL > 86400 ||
+		req.SOA.RefreshSeconds < 300 || req.SOA.RefreshSeconds > 86400 ||
+		req.SOA.RetrySeconds < 60 || req.SOA.RetrySeconds > 86400 ||
+		req.SOA.ExpireSeconds < 86400 || req.SOA.ExpireSeconds > 2419200 ||
+		req.SOA.MinimumTTL < 60 || req.SOA.MinimumTTL > 86400 {
+		return types.ConfigureDNSZoneReq{}, errors.New("invalid SOA timing values")
+	}
+	if req.Mode != "primary" && len(req.Records) > 0 {
+		return types.ConfigureDNSZoneReq{}, errors.New("non-primary DNS zones cannot carry authoritative records")
+	}
+	if req.Mode == "disabled" {
+		req.Records = nil
+	}
+	if req.Mode == "primary" && net.ParseIP(req.Address) == nil {
 		return types.ConfigureDNSZoneReq{}, fmt.Errorf("invalid dns address %q", req.Address)
 	}
-	for _, record := range req.Records {
-		if record.TTL < 60 || record.TTL > 86400 {
-			return types.ConfigureDNSZoneReq{}, errors.New("DNS record TTL is invalid")
+	for i := range req.Records {
+		if err := validateDNSRecordAtAgent(req.Records[i]); err != nil {
+			return types.ConfigureDNSZoneReq{}, err
 		}
-		switch record.Type {
-		case "A":
-			if ip := net.ParseIP(record.Value); ip == nil || ip.To4() == nil {
-				return types.ConfigureDNSZoneReq{}, errors.New("invalid A record")
-			}
-		case "AAAA":
-			if ip := net.ParseIP(record.Value); ip == nil || ip.To4() != nil {
-				return types.ConfigureDNSZoneReq{}, errors.New("invalid AAAA record")
-			}
-		case "CNAME", "MX", "TXT":
-		default:
-			return types.ConfigureDNSZoneReq{}, fmt.Errorf("unsupported DNS record type %q", record.Type)
+	}
+	recordsByHost := make(map[string]map[string]struct{})
+	recordCountByHost := make(map[string]int)
+	for _, record := range req.Records {
+		host := strings.ToLower(strings.TrimSpace(record.Host))
+		if host == "" {
+			host = "@"
+		}
+		recordType := strings.ToUpper(strings.TrimSpace(record.Type))
+		if recordType == "CNAME" && host == "@" {
+			return types.ConfigureDNSZoneReq{}, errors.New("a CNAME record cannot be created at the zone apex")
+		}
+		if recordsByHost[host] == nil {
+			recordsByHost[host] = map[string]struct{}{}
+		}
+		recordsByHost[host][recordType] = struct{}{}
+		recordCountByHost[host]++
+	}
+	for host, recordTypes := range recordsByHost {
+		if _, hasCNAME := recordTypes["CNAME"]; hasCNAME &&
+			(len(recordTypes) > 1 || recordCountByHost[host] > 1) {
+			return types.ConfigureDNSZoneReq{}, fmt.Errorf("CNAME record at %q cannot coexist with another record", host)
 		}
 	}
 	return req, nil
+}
+
+var (
+	// dnsHostRE permits an apex ("@") or a relative owner name. Underscore is
+	// allowed because DKIM/DMARC owners are "_dmarc" / "nak1._domainkey". No
+	// whitespace or control characters, so a Host can never inject an extra
+	// zone line.
+	dnsHostRE   = regexp.MustCompile(`^(@|[A-Za-z0-9_](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?)$`)
+	dnsTargetRE = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.?$`)
+)
+
+// validateDNSRecordAtAgent re-validates every record field at the agent
+// boundary instead of trusting the control plane. named-checkzone catches
+// syntax but not intent, so a syntactically valid injected record (e.g. an
+// extra NS/A from a newline in Host) would otherwise be served. This mirrors
+// the control-plane normalizeDNSRecord.
+func validateDNSRecordAtAgent(record types.DNSRecord) error {
+	if record.TTL < 60 || record.TTL > 86400 {
+		return errors.New("DNS record TTL is invalid")
+	}
+	host := strings.TrimSpace(record.Host)
+	if host == "" {
+		host = "@"
+	}
+	if len(host) > 253 || strings.ContainsAny(host, "\n\r\x00 \t") || !dnsHostRE.MatchString(host) {
+		return fmt.Errorf("invalid DNS record host %q", record.Host)
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return errors.New("DNS record host contains an invalid label")
+		}
+	}
+	value := strings.TrimSpace(record.Value)
+	if strings.ContainsAny(value, "\n\r\x00") {
+		return errors.New("DNS record value contains control characters")
+	}
+	switch record.Type {
+	case "A":
+		if ip := net.ParseIP(value); ip == nil || ip.To4() == nil {
+			return errors.New("invalid A record")
+		}
+	case "AAAA":
+		if ip := net.ParseIP(value); ip == nil || ip.To4() != nil {
+			return errors.New("invalid AAAA record")
+		}
+	case "CNAME":
+		if host == "@" {
+			return errors.New("a CNAME record cannot be created at the zone apex")
+		}
+		if len(value) > 253 || !dnsTargetRE.MatchString(value) {
+			return errors.New("CNAME requires a valid target host")
+		}
+	case "MX":
+		if record.Priority < 0 || record.Priority > 65535 {
+			return errors.New("MX priority is invalid")
+		}
+		if len(value) > 253 || !dnsTargetRE.MatchString(value) {
+			return errors.New("MX requires a valid target host")
+		}
+	case "NS":
+		if len(value) > 253 || !dnsTargetRE.MatchString(value) {
+			return errors.New("NS requires a valid target host")
+		}
+	case "SRV":
+		if record.Priority < 0 || record.Priority > 65535 ||
+			record.Weight < 0 || record.Weight > 65535 ||
+			record.Port < 1 || record.Port > 65535 {
+			return errors.New("SRV priority, weight, or port is invalid")
+		}
+		labels := strings.Split(strings.ToLower(host), ".")
+		if len(labels) < 2 || len(labels[0]) <= 1 || len(labels[1]) <= 1 ||
+			!strings.HasPrefix(labels[0], "_") || !strings.HasPrefix(labels[1], "_") {
+			return errors.New("SRV host must use the _service._protocol form")
+		}
+		if len(value) > 253 || !dnsTargetRE.MatchString(value) {
+			return errors.New("SRV requires a valid target host")
+		}
+	case "CAA":
+		match := regexp.MustCompile(`^([0-9]{1,3})\s+(issue|issuewild|iodef)\s+"[^"\r\n]+"$`).FindStringSubmatch(value)
+		if len(match) != 4 {
+			return errors.New("invalid CAA record")
+		}
+		flags, _ := strconv.Atoi(match[1])
+		if flags > 255 {
+			return errors.New("CAA flags are invalid")
+		}
+	case "DS":
+		match := regexp.MustCompile(`^([0-9]{1,5})\s+([0-9]{1,3})\s+([124])\s+([A-Fa-f0-9]+)$`).FindStringSubmatch(value)
+		if len(match) != 5 {
+			return errors.New("invalid DS record")
+		}
+		keyTag, _ := strconv.Atoi(match[1])
+		algorithm, _ := strconv.Atoi(match[2])
+		if keyTag > 65535 || algorithm < 1 || algorithm > 255 {
+			return errors.New("DS key tag or algorithm is invalid")
+		}
+		digestType, _ := strconv.Atoi(match[3])
+		if len(match[4]) != map[int]int{1: 40, 2: 64, 4: 96}[digestType] {
+			return errors.New("invalid DS digest length")
+		}
+	case "TXT":
+		if len(value) == 0 || len(value) > 4096 {
+			return errors.New("TXT value length is invalid")
+		}
+	default:
+		return fmt.Errorf("unsupported DNS record type %q", record.Type)
+	}
+	return nil
 }
 
 type ReconciliationProvisioner struct {
@@ -1094,7 +1367,7 @@ func (p *ReconciliationProvisioner) ReconcileSystem(ctx context.Context, req typ
 			if desiredPHP == "" {
 				desiredPHP = siteReq.PHPVersion
 			}
-			runtimeReq := types.ApplySiteRuntimeReq{Username: siteReq.Username, Domain: siteReq.Domain, SharedAccount: siteReq.SharedAccount, CurrentPHPVersion: siteReq.PHPVersion, DesiredPHPVersion: desiredPHP, State: siteReq.State, HTTPSRedirect: siteReq.HTTPSRedirect, TLSCertPath: siteReq.TLSCertPath, TLSKeyPath: siteReq.TLSKeyPath, Limits: siteReq.Limits}
+			runtimeReq := types.ApplySiteRuntimeReq{SiteID: siteReq.SiteID, Username: siteReq.Username, Domain: siteReq.Domain, SharedAccount: siteReq.SharedAccount, CurrentPHPVersion: siteReq.PHPVersion, DesiredPHPVersion: desiredPHP, State: siteReq.State, HTTPSRedirect: siteReq.HTTPSRedirect, TLSCertPath: siteReq.TLSCertPath, TLSKeyPath: siteReq.TLSKeyPath, Limits: siteReq.Limits}
 			var drift bool
 			drift, itemErr = p.runtime.SiteRuntimeDrift(ctx, runtimeReq)
 			if itemErr == nil && drift {
@@ -1125,7 +1398,11 @@ func (p *ReconciliationProvisioner) ReconcileSystem(ctx context.Context, req typ
 		result.Resources = append(result.Resources, item)
 		if siteReq.EnableDNS && p.dns != nil {
 			dnsItem := types.ReconcileResourceResult{ResourceType: "dns_zone", ResourceID: siteReq.DNSZoneID, CustomerID: siteReq.CustomerID, SubscriptionID: siteReq.SubscriptionID, Name: siteReq.Domain, Outcome: "unchanged"}
-			dnsReq := types.ConfigureDNSZoneReq{Domain: siteReq.Domain, Address: siteReq.Address, Serial: siteReq.DNSSerial, Records: siteReq.DNSRecords}
+			dnsReq := types.ConfigureDNSZoneReq{ZoneID: siteReq.DNSZoneID, Domain: siteReq.Domain, Address: siteReq.Address, Serial: siteReq.DNSSerial, Records: siteReq.DNSRecords}
+			if siteReq.DNSZone != nil {
+				dnsReq = *siteReq.DNSZone
+			}
+			dnsItem.Name = dnsReq.Domain
 			drift := true
 			if p.dnsDrift != nil {
 				drift, itemErr = p.dnsDrift.DNSZoneDrift(dnsReq)

@@ -107,10 +107,10 @@ wait_for_value "SELECT COUNT(*) FROM notifications WHERE kind='certificate_expir
 
 VM_IP="$(vm_ip)"
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 curl -sk --fail -c "${tmpdir}/cookies" -L -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' "https://${VM_IP}:7443/login" >/dev/null
 site_id="$(db_value "SELECT id FROM sites WHERE domain='phase15-account.test'")"
-curl -sk --fail -b "${tmpdir}/cookies" "https://${VM_IP}:7443/sites/${site_id}?tab=ssl" | grep -Fq 'Upload custom certificate'
+curl -sk --fail -b "${tmpdir}/cookies" "https://${VM_IP}:7443/sites/${site_id}?tab=ssl" | grep -Fq 'Install custom certificate'
 
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail

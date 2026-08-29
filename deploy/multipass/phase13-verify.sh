@@ -13,7 +13,7 @@ fi
 
 VM_IP="$(vm_ip)"
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1" needle="$2"
@@ -65,7 +65,9 @@ curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin.html"
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/subscriptions" > "${tmpdir}/subscriptions.html"
-for marker in 'Add subscription' 'Change Plan' 'Change Subscriber' 'Service Plans' 'data-np-subscription-filter' 'data-np-subscription-row' 'data-np-subscription-check' 'Resources'; do
+# Phase 29 note: the subscriptions list column was renamed Resources -> Usage
+# in the workspace source; the gate follows the rendered intent.
+for marker in 'Add subscription' 'Change Plan' 'Change Subscriber' 'Service Plans' 'data-np-subscription-filter' 'data-np-subscription-row' 'data-np-subscription-check' 'Usage'; do
   assert_contains "${tmpdir}/subscriptions.html" "${marker}"
 done
 
@@ -82,7 +84,8 @@ post_as admin phase13-provider-permissions reseller-plans -d "reseller_plan_id=$
   -d 'max_subscriptions=2' -d 'disk_mb=200' -d 'max_sites=4' -d 'max_databases=4' -d 'bandwidth_mb=-1' \
   -d 'max_mailboxes=0' -d 'max_backups=4' -d 'backup_storage_mb=200' -d 'max_subdomains=0' \
   -d 'max_domain_aliases=0' -d 'max_ftp_accounts=0' -d 'allow_custom_plans=true' -d 'allow_dns=true' \
-  -d 'allow_tls=true' -d 'allow_backups=true' -d 'allow_php_settings=true' -d 'is_active=true'
+  -d 'allow_tls=true' -d 'allow_backups=true' -d 'allow_php_settings=true' -d 'allow_logs=true' \
+  -d 'php_versions=8.3' -d 'php_versions=8.2' -d 'is_active=true'
 
 # Restore ownership if a previous interrupted run stopped after subscriber transfer.
 if [[ "$(db_value "SELECT customer_id FROM subscriptions WHERE id=${subscription_id}")" != "${original_customer_id}" ]]; then

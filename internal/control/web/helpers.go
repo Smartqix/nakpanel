@@ -2,6 +2,7 @@ package web
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/url"
@@ -31,6 +32,7 @@ type WorkspaceView struct {
 	Route                string
 	Title                string
 	DetailID             int64
+	ContainerID          int64
 	SelectedSubscription int64
 	SelectedMailDomain   int64
 	CSRFToken            string
@@ -47,6 +49,24 @@ type WorkspaceView struct {
 	FileEditor           *FileEditorView
 	MailSettings         types.MailSettingsView
 	MailSettingsError    string
+	DNSSettings          types.DNSTemplateView
+	DNSSettingsError     string
+	DNSPreview           *types.DNSSyncRun
+	SettingsFocus        string
+}
+
+// TwoFactorView drives the account 2FA enrollment/status page.
+type TwoFactorView struct {
+	CSRFToken      string
+	Enrolled       bool
+	Pending        bool
+	Secret         string
+	OTPAuthURI     string
+	QRDataURI      string
+	RecoveryCodes  []string
+	RecoveryUnused int
+	RecentAuth     bool
+	Error          string
 }
 
 type FileManagerView struct {
@@ -105,6 +125,41 @@ func dnsZoneForSite(items []dashboard.DNSZone, siteID int64) (dashboard.DNSZone,
 	return dashboard.DNSZone{}, false
 }
 
+func dnsZoneForSiteWorkspace(zones []dashboard.DNSZone, records []types.DNSRecord, site dashboard.Site) (dashboard.DNSZone, bool) {
+	siteID := site.ID
+	if site.DNSZoneMode == "parent" && site.ParentSiteID > 0 {
+		for _, zone := range zones {
+			if zone.SiteID == site.ParentSiteID && zone.Mode != "disabled" {
+				return zone, true
+			}
+		}
+	}
+	for _, record := range records {
+		if record.OwnerSiteID != siteID {
+			continue
+		}
+		for _, zone := range zones {
+			if zone.ID == record.ZoneID && zone.SiteID != siteID && zone.Mode != "disabled" {
+				return zone, true
+			}
+		}
+	}
+	if zone, ok := dnsZoneForSite(zones, siteID); ok {
+		return zone, true
+	}
+	for _, record := range records {
+		if record.OwnerSiteID != siteID {
+			continue
+		}
+		for _, zone := range zones {
+			if zone.ID == record.ZoneID && zone.Mode != "disabled" {
+				return zone, true
+			}
+		}
+	}
+	return dashboard.DNSZone{}, false
+}
+
 func dnsRecordsForZone(items []types.DNSRecord, zoneID int64) []types.DNSRecord {
 	result := make([]types.DNSRecord, 0)
 	for _, item := range items {
@@ -113,6 +168,108 @@ func dnsRecordsForZone(items []types.DNSRecord, zoneID int64) []types.DNSRecord 
 		}
 	}
 	return result
+}
+
+func dnsRecordsForSiteZone(items []types.DNSRecord, zone dashboard.DNSZone, siteID int64) []types.DNSRecord {
+	result := make([]types.DNSRecord, 0)
+	for _, item := range items {
+		if item.ZoneID != zone.ID {
+			continue
+		}
+		if zone.SiteID == siteID || item.OwnerSiteID == 0 || item.OwnerSiteID == siteID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func dnsZoneRelationship(zone dashboard.DNSZone, siteID int64) string {
+	if zone.SiteID != siteID {
+		return "Parent zone"
+	}
+	if zone.ParentZoneID > 0 {
+		return "Separate subdomain zone"
+	}
+	return "Authoritative zone"
+}
+
+func dnsRecordOrigin(record types.DNSRecord) string {
+	if record.Origin == "template" && record.LocallyModified {
+		return "local override"
+	}
+	if record.Origin == "" {
+		return "custom"
+	}
+	return record.Origin
+}
+
+func dnsRecordValue(record types.DNSRecord) string {
+	switch record.Type {
+	case "MX":
+		return fmt.Sprintf("%d %s", record.Priority, record.Value)
+	case "SRV":
+		return fmt.Sprintf("%d %d %d %s", record.Priority, record.Weight, record.Port, record.Value)
+	default:
+		return record.Value
+	}
+}
+
+func dnsDisplayHost(record types.DNSRecord, zone dashboard.DNSZone, siteDomain string) string {
+	if zone.Domain == siteDomain {
+		return record.Host
+	}
+	label := strings.TrimSuffix(siteDomain, "."+zone.Domain)
+	if record.Host == label {
+		return "@"
+	}
+	if strings.HasSuffix(record.Host, "."+label) {
+		return strings.TrimSuffix(record.Host, "."+label)
+	}
+	return record.Host
+}
+
+func dnsRecordEditable(record types.DNSRecord) bool {
+	return record.Origin != "system"
+}
+
+func dnsSettingsDefaultTab(view WorkspaceView) string {
+	if view.DNSSettings.Preview != nil {
+		return "sync"
+	}
+	return "records"
+}
+
+func dnsSyncCount(run *types.DNSSyncRun, field string) int {
+	if run == nil {
+		return 0
+	}
+	total := 0
+	for _, item := range run.Items {
+		switch field {
+		case "added":
+			total += item.AddedCount
+		case "updated":
+			total += item.UpdatedCount
+		case "removed":
+			total += item.RemovedCount
+		case "preserved":
+			total += item.OverrideCount
+		case "conflicts":
+			total += item.ConflictCount
+		}
+	}
+	return total
+}
+
+func dnsRecordCountLabel(count int) string {
+	if count == 1 {
+		return "1 record"
+	}
+	return fmt.Sprintf("%d records", count)
+}
+
+func joinLines(values []string) string {
+	return strings.Join(values, "\n")
 }
 
 func subscriptionForSite(items []types.SubscriptionSummary, site dashboard.Site) (types.SubscriptionSummary, bool) {
@@ -126,6 +283,72 @@ func domainTabActive(current, candidate string) string {
 	return ""
 }
 
+func domainMoreActive(current string) string {
+	switch current {
+	case "files", "access", "databases", "backups", "logs", "scheduled-tasks", "statistics", "git", "applications", "containers", "staging", "redis":
+		return "is-active"
+	default:
+		return ""
+	}
+}
+
+func domainHostingActive(current string) string {
+	if current == "hosting" || current == "web-server" {
+		return "is-active"
+	}
+	return ""
+}
+
+func domainToolLabel(current string) string {
+	switch current {
+	case "files":
+		return "File Manager"
+	case "access":
+		return "Access"
+	case "databases":
+		return "Databases"
+	case "backups":
+		return "Backups"
+	case "logs":
+		return "Logs"
+	case "scheduled-tasks":
+		return "Scheduled Tasks"
+	case "statistics":
+		return "Statistics"
+	case "git":
+		return "Git"
+	case "applications":
+		return "Applications"
+	case "containers":
+		return "Containers"
+	case "staging":
+		return "Staging"
+	case "redis":
+		return "Cache"
+	default:
+		return "More"
+	}
+}
+
+func domainCurrentLabel(current string) string {
+	switch current {
+	case "overview":
+		return "Overview"
+	case "hosting", "web-server":
+		return "Hosting"
+	case "php":
+		return "PHP"
+	case "mail":
+		return "Mail"
+	case "dns":
+		return "DNS"
+	case "ssl":
+		return "SSL/TLS"
+	default:
+		return domainToolLabel(current)
+	}
+}
+
 func phpVersions(allowlist string) []string {
 	var result []string
 	for _, item := range strings.Split(allowlist, ",") {
@@ -134,8 +357,19 @@ func phpVersions(allowlist string) []string {
 			result = append(result, item)
 		}
 	}
-	if len(result) == 0 {
-		return []string{"8.3", "8.2"}
+	return result
+}
+
+func phpVersionsFromCapabilities(capabilities types.RuntimeCapabilities, allowlist string) []string {
+	allowed := make(map[string]bool)
+	for _, version := range phpVersions(allowlist) {
+		allowed[version] = true
+	}
+	var result []string
+	for _, version := range capabilities.PHPVersions {
+		if allowed[version] {
+			result = append(result, version)
+		}
 	}
 	return result
 }
@@ -166,6 +400,8 @@ func routeTitle(route string) string {
 		return "Service Plans"
 	case "tools-settings":
 		return "Tools & Settings"
+	case "tools-utilities":
+		return "Tools & Utilities"
 	case "resellers", "reseller-detail":
 		return "Resellers"
 	case "reseller-plans":
@@ -182,6 +418,13 @@ func routeActive(route string, candidates ...string) string {
 		if route == candidate {
 			return "is-active"
 		}
+	}
+	return ""
+}
+
+func settingsFocusClass(view WorkspaceView) string {
+	if view.SettingsFocus != "" {
+		return "is-focused"
 	}
 	return ""
 }
@@ -412,7 +655,7 @@ func addonAsPlan(addon types.AddonPlan) controlquota.Plan {
 		AllowTLS: e.AllowTLS, AllowBackups: e.AllowBackups, AllowPHPSettings: e.AllowPHPSettings,
 		Presets: e.ServicePresets, IsActive: addon.IsActive, Revision: addon.Revision,
 		OverusePolicy: types.PlanOveruseBlock, DiskWarningPercent: 80, TrafficWarningPercent: 80,
-		ValidityDays: -1, DefaultPHPVersion: e.DefaultPHPVersion}
+		ValidityDays: -1, DefaultPHPVersion: e.DefaultPHPVersion, HostingPolicy: e.HostingPolicy}
 }
 
 func containsCSV(value, wanted string) bool {
@@ -499,24 +742,10 @@ func planEditorSaveHint(plan controlquota.Plan, addon bool) string {
 }
 
 func planPHPVersions(plan controlquota.Plan, capabilities types.RuntimeCapabilities) []string {
-	seen := make(map[string]bool)
-	var out []string
-	for _, version := range capabilities.PHPVersions {
-		if version = strings.TrimSpace(version); version != "" && !seen[version] {
-			seen[version] = true
-			out = append(out, version)
-		}
+	if plan.PHPAllowlist == "" && plan.ID == 0 {
+		return append([]string(nil), capabilities.PHPVersions...)
 	}
-	for _, version := range strings.Split(plan.PHPAllowlist, ",") {
-		if version = strings.TrimSpace(version); version != "" && !seen[version] {
-			seen[version] = true
-			out = append(out, version)
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return phpVersionsFromCapabilities(capabilities, plan.PHPAllowlist)
 }
 
 func stringInSlice(items []string, wanted string) bool {
@@ -528,19 +757,16 @@ func stringInSlice(items []string, wanted string) bool {
 	return false
 }
 
-func subscriptionPHPVersions(items []types.SubscriptionSummary) []string {
+func subscriptionPHPVersions(items []types.SubscriptionSummary, capabilities types.RuntimeCapabilities) []string {
 	seen := make(map[string]bool)
 	var out []string
 	for _, item := range items {
-		for _, version := range strings.Split(item.PHPAllowlist, ",") {
+		for _, version := range phpVersionsFromCapabilities(capabilities, item.PHPAllowlist) {
 			if version = strings.TrimSpace(version); version != "" && !seen[version] {
 				seen[version] = true
 				out = append(out, version)
 			}
 		}
-	}
-	if len(out) == 0 {
-		out = append(out, "8.3")
 	}
 	return out
 }
@@ -787,6 +1013,11 @@ func accountForSubscription(items []types.SubscriptionSystemAccount, subscriptio
 	return types.SubscriptionSystemAccount{}, false
 }
 
+func subscriptionValkeyUnavailable(items []types.SubscriptionSystemAccount, subscriptionID int64) bool {
+	account, found := accountForSubscription(items, subscriptionID)
+	return !found || !account.EffectivePolicy.Permissions.Valkey || !account.EffectivePolicy.Valkey.Enabled
+}
+
 func sftpForSubscription(items []dashboard.SFTPIdentity, subscriptionID int64) []dashboard.SFTPIdentity {
 	var out []dashboard.SFTPIdentity
 	for _, item := range items {
@@ -805,6 +1036,135 @@ func tasksForSubscription(items []dashboard.ScheduledTask, subscriptionID int64)
 		}
 	}
 	return out
+}
+
+func tasksForSite(items []dashboard.ScheduledTask, siteID int64) []dashboard.ScheduledTask {
+	var out []dashboard.ScheduledTask
+	for _, item := range items {
+		if item.SiteID == siteID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func taskRunsForTask(items []types.ScheduledTaskRun, taskID int64) []types.ScheduledTaskRun {
+	var out []types.ScheduledTaskRun
+	for _, item := range items {
+		if item.TaskID == taskID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func ftpForSubscription(items []types.FTPAccount, subscriptionID int64) []types.FTPAccount {
+	var out []types.FTPAccount
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func ftpForSite(items []types.FTPAccount, siteID int64) []types.FTPAccount {
+	var out []types.FTPAccount
+	for _, item := range items {
+		if item.SiteID == siteID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func gitForSite(items []types.GitRepository, siteID int64) (types.GitRepository, bool) {
+	for _, item := range items {
+		if item.SiteID == siteID {
+			return item, true
+		}
+	}
+	return types.GitRepository{}, false
+}
+
+func protectedDirectoriesForSite(items []types.ProtectedDirectory, siteID int64) []types.ProtectedDirectory {
+	var out []types.ProtectedDirectory
+	for _, item := range items {
+		if item.SiteID == siteID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func gitDeploymentsForRepository(items []types.GitDeployment, repositoryID int64) []types.GitDeployment {
+	var out []types.GitDeployment
+	for _, item := range items {
+		if item.RepositoryID == repositoryID {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
+func valkeyForSubscription(items []types.ValkeyInstance, subscriptionID int64) (types.ValkeyInstance, bool) {
+	for _, item := range items {
+		if item.SubscriptionID == subscriptionID {
+			return item, true
+		}
+	}
+	return types.ValkeyInstance{}, false
+}
+
+func usageForSite(items []dashboard.SiteUsage, siteID int64) (dashboard.SiteUsage, bool) {
+	for _, item := range items {
+		if item.SiteID == siteID {
+			return item, true
+		}
+	}
+	return dashboard.SiteUsage{}, false
+}
+
+func domainDNSState(data dashboard.Phase6Data, siteID int64) string {
+	if zone, ok := dnsZoneForSite(data.DNSZones, siteID); ok {
+		return displayFallback(zone.Status, "configured")
+	}
+	return "Not configured"
+}
+
+func stagingTargets(items []dashboard.Site, site dashboard.Site) []dashboard.Site {
+	result := make([]dashboard.Site, 0)
+	for _, item := range items {
+		if item.ID != site.ID && item.SubscriptionID == site.SubscriptionID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func stagingForSite(items []types.StagingOperation, siteID int64) []types.StagingOperation {
+	result := make([]types.StagingOperation, 0)
+	for _, item := range items {
+		if item.SourceSiteID == siteID || item.TargetSiteID == siteID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func applicationPresetsForPolicy(items []types.ApplicationPreset, policy types.HostingPolicy) []types.ApplicationPreset {
+	result := make([]types.ApplicationPreset, 0)
+	for _, preset := range items {
+		if preset.Active && stringInSlice(policy.Applications.AllowedCatalogSlugs, preset.Slug) &&
+			stringInSlice(policy.Applications.AllowedRuntimes, preset.Runtime) {
+			result = append(result, preset)
+		}
+	}
+	return result
+}
+
+func applicationDeploymentAvailable(items []types.ApplicationPreset, policy types.HostingPolicy) bool {
+	return policy.Permissions.CustomOCIImages || len(applicationPresetsForPolicy(items, policy)) > 0
 }
 
 func mailForSubscription(items []dashboard.MailDomain, subscriptionID int64) []dashboard.MailDomain {
@@ -1102,6 +1462,34 @@ func formatTLSState(site dashboard.Site) string {
 	return site.TLSStatus
 }
 
+func displayFallback(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func tlsWorkspaceClass(site dashboard.Site) string {
+	if strings.EqualFold(site.TLSStatus, "active") {
+		return "is-secured"
+	}
+	return "is-unsecured"
+}
+
+func tlsWorkspaceTitle(site dashboard.Site) string {
+	if strings.EqualFold(site.TLSStatus, "active") {
+		return "This domain is secured"
+	}
+	return "This domain is not fully secured"
+}
+
+func tlsWorkspaceCopy(site dashboard.Site) string {
+	if strings.EqualFold(site.TLSStatus, "active") {
+		return "A certificate is installed. Keep renewal and HTTPS redirect aligned with the hosting policy."
+	}
+	return "Issue an ACME certificate or upload a trusted certificate before enabling HTTPS redirect."
+}
+
 func formatTime(value time.Time) string {
 	if value.IsZero() {
 		return ""
@@ -1161,6 +1549,93 @@ func policyForSite(items []dashboard.SitePolicy, siteID int64) (types.HostingPol
 		}
 	}
 	return types.HostingPolicy{}, false
+}
+
+func sitePolicyView(items []dashboard.SitePolicy, siteID int64) (dashboard.SitePolicy, bool) {
+	for _, item := range items {
+		if item.SiteID == siteID {
+			return item, true
+		}
+	}
+	return dashboard.SitePolicy{}, false
+}
+
+func sitePolicyScopeCustomized(item dashboard.SitePolicy, scope string) bool {
+	var patch map[string]json.RawMessage
+	if json.Unmarshal(item.SiteOverride, &patch) != nil {
+		return false
+	}
+	value, ok := patch[scope]
+	return ok && len(value) > 0 && string(value) != "null"
+}
+
+func policyInheritanceLabel(customized bool) string {
+	if customized {
+		return "Customized"
+	}
+	return "Inherited"
+}
+
+func inheritanceBadgeClass(customized bool) string {
+	if customized {
+		return "np-inheritance-badge is-custom"
+	}
+	return "np-inheritance-badge"
+}
+
+func siteServiceTab(tab string) bool {
+	switch tab {
+	case "access", "web-server", "php", "logs", "scheduled-tasks", "statistics", "git", "applications", "containers", "staging", "redis", "mail":
+		return true
+	default:
+		return false
+	}
+}
+
+func applicationForID(items []dashboard.Application, id int64) (dashboard.Application, bool) {
+	for _, item := range items {
+		if item.ID == id {
+			return item, true
+		}
+	}
+	return dashboard.Application{}, false
+}
+
+func applicationsForSite(items []dashboard.Application, siteID int64) []dashboard.Application {
+	var result []dashboard.Application
+	for _, item := range items {
+		if item.SiteID == siteID && item.Runtime == "oci" {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func containerPresetsForPolicy(items []types.ApplicationPreset, policy types.HostingPolicy) []types.ApplicationPreset {
+	var result []types.ApplicationPreset
+	for _, item := range applicationPresetsForPolicy(items, policy) {
+		if item.Runtime == "oci" {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func applicationGenerationsFor(items []types.ApplicationGeneration, applicationID int64) []types.ApplicationGeneration {
+	var result []types.ApplicationGeneration
+	for _, item := range items {
+		if item.ApplicationID == applicationID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func shortImageReference(value string) string {
+	if marker := strings.LastIndex(value, "@sha256:"); marker >= 0 && len(value) >= marker+20 {
+		return value[:marker] + "@" + value[marker+8:marker+20]
+	}
+	return value
 }
 
 func statusPillClass(state string) string {
@@ -1370,6 +1845,21 @@ func formatQuotaCompactCount(used int, allowed int, hasQuota bool) string {
 	return fmt.Sprintf("%d/%d", used, allowed)
 }
 
+func databaseLimitReached(subscription types.SubscriptionSummary) bool {
+	return subscription.MaxDatabases >= 0 && subscription.DatabasesUsed >= subscription.MaxDatabases
+}
+
+func databaseEngineLabel(engine string) string {
+	switch strings.ToLower(strings.TrimSpace(engine)) {
+	case "mariadb", "mysql":
+		return "MariaDB"
+	case "":
+		return "Database"
+	default:
+		return engine
+	}
+}
+
 func formatQuotaCompactStorage(summary controlquota.Summary) string {
 	used := formatGBFromMB(bytesToRoundedMB(summary.Usage.BackupStorageBytes))
 	if !summary.HasQuota {
@@ -1555,6 +2045,17 @@ func formatPlanLimitFormValue(value int) string {
 	return fmt.Sprintf("%d", value)
 }
 
+func defaultValkeyInstance() types.ValkeyInstance {
+	return types.ValkeyInstance{
+		DesiredState:       "enabled",
+		MemoryMB:           64,
+		MaxClients:         64,
+		IdleTimeoutSeconds: 300,
+		CPUPercent:         25,
+		ProcessLimit:       64,
+	}
+}
+
 func formatPlanPriceCents(value sql.NullInt64) string {
 	if !value.Valid {
 		return ""
@@ -1676,8 +2177,11 @@ func settingsSSHAccess(plans []controlquota.Plan) string {
 	return "disabled by default"
 }
 
-func settingsPlannedStatus() string {
-	return "Privileged agent op pending"
+func settingsCapacitySummary(value int) string {
+	if value <= 0 {
+		return "Not configured"
+	}
+	return formatCapacityGB(value) + " configured"
 }
 
 func formatCommittedDisk(value int) string {

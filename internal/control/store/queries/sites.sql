@@ -7,6 +7,8 @@ INSERT INTO sites (
     username,
     domain,
     document_root,
+    parent_site_id,
+    dns_zone_mode,
     php_version,
     status,
     last_error
@@ -18,11 +20,28 @@ INSERT INTO sites (
     account.username,
     sqlc.arg(domain),
     account.home_path || '/domains/' || sqlc.arg(domain) || '/public_html',
+    parent.id,
+    CASE
+        WHEN parent.id IS NULL THEN 'separate'
+        ELSE template_revision.subdomain_policy
+    END,
     sqlc.arg(php_version),
     'pending',
     ''
 FROM subscriptions s
 JOIN subscription_system_accounts account ON account.subscription_id = s.id
+JOIN dns_template_state template_state ON template_state.singleton
+JOIN dns_template_revisions template_revision
+  ON template_revision.id=template_state.active_revision_id
+LEFT JOIN LATERAL (
+    SELECT candidate.id
+    FROM sites candidate
+    WHERE candidate.subscription_id=s.id
+      AND candidate.domain<>sqlc.arg(domain)
+      AND sqlc.arg(domain) LIKE '%.' || candidate.domain
+    ORDER BY length(candidate.domain) DESC,candidate.id
+    LIMIT 1
+) parent ON true
 WHERE s.id = sqlc.arg(subscription_id)
   AND s.status = 'active'
 ON CONFLICT (domain) DO UPDATE
@@ -33,6 +52,7 @@ SET
     system_account_id = EXCLUDED.system_account_id,
     username = EXCLUDED.username,
     document_root = EXCLUDED.document_root,
+    parent_site_id = EXCLUDED.parent_site_id,
     php_version = EXCLUDED.php_version,
     status = 'pending',
     last_error = '',
@@ -51,7 +71,7 @@ FROM sites
 WHERE domain = $1;
 
 -- name: ListSites :many
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew, system_account_id, document_root
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew, system_account_id, document_root, parent_site_id, dns_zone_mode
 FROM sites
 ORDER BY id;
 

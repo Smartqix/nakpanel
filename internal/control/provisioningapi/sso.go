@@ -4,8 +4,11 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
+
+	"github.com/nakroteck/nakpanel/internal/control/auth"
 )
 
 const sessionCookieName = "nakpanel_session"
@@ -49,7 +52,8 @@ func handleSSOExchange(db *sql.DB, sessions SessionCreator, w http.ResponseWrite
 	}
 	defer tx.Rollback()
 	var tokenID, userID int64
-	err = tx.QueryRowContext(r.Context(), `SELECT token.id,token.user_id
+	var role string
+	err = tx.QueryRowContext(r.Context(), `SELECT token.id,token.user_id,u.role
 FROM customer_login_tokens token
 JOIN billing_accounts b ON b.id=token.billing_account_id
 JOIN subscriptions sub ON sub.id=b.subscription_id
@@ -57,13 +61,19 @@ JOIN users u ON u.id=token.user_id
 WHERE token.token_hash=$1 AND token.used_at IS NULL AND token.expires_at>now()
   AND sub.status IN ('active','suspended') AND b.provisioning_state NOT IN ('terminating','terminated')
   AND u.login_disabled=false
-FOR UPDATE OF token`, digest[:]).Scan(&tokenID, &userID)
+FOR UPDATE OF token`, digest[:]).Scan(&tokenID, &userID, &role)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.NotFound(w, r)
 		return
 	}
 	if err != nil {
 		http.Error(w, "Could not create session", 500)
+		return
+	}
+	// The billing-panel token is a delegated factor for customers only; it
+	// must never mint admin or reseller sessions (they carry TOTP policy).
+	if role != "client" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	if _, err = tx.ExecContext(r.Context(), `UPDATE customer_login_tokens SET used_at=now() WHERE id=$1 AND used_at IS NULL`, tokenID); err != nil {
@@ -74,7 +84,11 @@ FOR UPDATE OF token`, digest[:]).Scan(&tokenID, &userID)
 		http.Error(w, "Could not create session", 500)
 		return
 	}
-	token, expiresAt, err := sessions.Create(r.Context(), userID)
+	ip, _, splitErr := net.SplitHostPort(r.RemoteAddr)
+	if splitErr != nil {
+		ip = strings.TrimSpace(r.RemoteAddr)
+	}
+	token, expiresAt, err := sessions.Create(r.Context(), userID, auth.SessionMeta{IPAddress: ip, UserAgent: r.UserAgent()})
 	if err != nil {
 		http.Error(w, "Could not create session", 500)
 		return

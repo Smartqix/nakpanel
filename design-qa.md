@@ -78,3 +78,34 @@ final result: passed
 - Browser console errors and warnings: none.
 
 final result: passed
+
+## ERP Restyle Design QA (2026-08-29)
+
+### Visual Truth
+The workspace now follows a Plesk-calibrated ERP scale. Single theme in `:root`
+(cobalt `#2563eb` primary; the purple theme is retired). All grayscale, border,
+and surface colors resolve through `--np-*` tokens; status tints remain literal.
+
+- Type: 13px/1.45 base, 22px/500 page titles, 15px/600 h2, 14px/600 panel
+  titles, 12px/500 quiet table headers, 11px tracked kickers and pills.
+  Font weights are capped at 600 (regular 400 / medium 500 / semibold 600);
+  the system font stack is unchanged and intentional.
+- Density: 256px graphite rail, 34px nav rows, 52px topbar, 24px content
+  padding, 44px panel titles, 52px object rows, 8px/10px table cells, 32px
+  controls (buttons, inputs, selects), 30px icon buttons, 18px icons at
+  stroke-width 1.5.
+- Geometry: one corner radius token `--np-radius: 4px` (pills stay 999px);
+  spacing snapped to a 2px sub-grid below 16px and a 4px grid above
+  (`--np-space-1` … `--np-space-10`), 16px rhythm between stacked panels.
+
+### Comparison History
+- Restyle pass: verified live against the lab VM (nakpanel-lab) at the
+  documented viewports (2048x993 desktop, 390x844 mobile) — login, Home,
+  Websites & Domains, domain workspace, Subscriptions, Tools & Settings,
+  mail workspace, and the frozen `/?legacy=1` shell all render on the new
+  scale. Captures: `artifacts/restyle-*.png`.
+- Test contract: the three pinned minified CSS assertions in
+  `internal/control/http/server_test.go` were updated in lockstep
+  (`--np-ink:#1f2733`, table td 13px, page-head p 13px). All verifier-grepped
+  class names and the `content:attr(data-label)` responsive-table pattern are
+  unchanged.

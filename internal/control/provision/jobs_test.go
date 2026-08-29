@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -48,10 +50,13 @@ func (c *fakeAgentCertificateClient) IssueCert(ctx context.Context, req types.Is
 }
 
 type recordingDatabaseStatusStore struct {
-	activeID    int64
-	failedID    int64
-	failedError string
-	scrubJobID  int64
+	activeID      int64
+	failedID      int64
+	failedError   string
+	scrubJobID    int64
+	migrateJobID  int64
+	credentialRef string
+	migratedValue string
 }
 
 func (s *recordingDatabaseStatusStore) MarkDatabaseActive(ctx context.Context, id int64) error {
@@ -68,6 +73,25 @@ func (s *recordingDatabaseStatusStore) MarkDatabaseFailed(ctx context.Context, i
 func (s *recordingDatabaseStatusStore) ScrubDatabaseJobPassword(ctx context.Context, jobID int64) error {
 	s.scrubJobID = jobID
 	return nil
+}
+
+func (s *recordingDatabaseStatusStore) MigrateDatabaseJobCredential(ctx context.Context, jobID, databaseID int64, plaintext []byte) (string, error) {
+	s.migrateJobID = jobID
+	s.credentialRef = "provision-" + fmt.Sprint(databaseID)
+	s.migratedValue = string(plaintext)
+	return s.credentialRef, nil
+}
+
+type recordingDatabaseCredentialStore struct {
+	values map[string][]byte
+}
+
+func (s *recordingDatabaseCredentialStore) GetSecret(ctx context.Context, scope, name string) ([]byte, serveradmin.SecretReference, error) {
+	value, ok := s.values[scope+"/"+name]
+	if !ok {
+		return nil, serveradmin.SecretReference{}, errors.New("secret not found")
+	}
+	return append([]byte(nil), value...), serveradmin.SecretReference{Scope: scope, Name: name}, nil
 }
 
 type recordingTLSStatusStore struct {
@@ -139,6 +163,7 @@ func TestCreateSiteWorkerCallsAgent(t *testing.T) {
 		t.Fatalf("Work returned error: %v", err)
 	}
 	want := types.CreateSiteReq{
+		SiteID:     7,
 		Username:   "npdemo",
 		Domain:     "example.test",
 		PHPVersion: "8.3",
@@ -230,12 +255,92 @@ func TestCreateDatabaseWorkerCallsAgent(t *testing.T) {
 	}
 }
 
+func TestCreateDatabaseWorkerResolvesEncryptedCredentialWithoutPlaintextArgs(t *testing.T) {
+	const password = "generated-password-never-in-river"
+	client := &fakeAgentDatabaseClient{resp: types.Response{ID: "job-1", OK: true}}
+	status := &recordingDatabaseStatusStore{}
+	secrets := &recordingDatabaseCredentialStore{
+		values: map[string][]byte{"database/provision-11": []byte(password)},
+	}
+	worker := NewCreateDatabaseWorker(client, status, secrets)
+	job := &river.Job[CreateDatabaseArgs]{
+		JobRow: &rivertype.JobRow{ID: 42},
+		Args: CreateDatabaseArgs{
+			DatabaseID:    11,
+			Engine:        types.EngineMariaDB,
+			DBName:        "np_demo",
+			DBUser:        "np_demo_user",
+			CredentialRef: "provision-11",
+		},
+	}
+
+	encoded, err := json.Marshal(job.Args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), password) || strings.Contains(string(encoded), `"password"`) {
+		t.Fatalf("River args expose plaintext credential: %s", encoded)
+	}
+	if err := worker.Work(context.Background(), job); err != nil {
+		t.Fatalf("Work returned error: %v", err)
+	}
+	if client.req.Password != password {
+		t.Fatalf("agent password = %q, want resolved secret", client.req.Password)
+	}
+	if status.activeID != 11 {
+		t.Fatalf("activeID = %d, want 11", status.activeID)
+	}
+}
+
+func TestCreateDatabaseWorkerMigratesLegacyPasswordBeforeRetry(t *testing.T) {
+	const password = "legacy-password-to-encrypt"
+	client := &fakeAgentDatabaseClient{err: errors.New("temporary agent failure")}
+	status := &recordingDatabaseStatusStore{}
+	secrets := &recordingDatabaseCredentialStore{}
+	worker := NewCreateDatabaseWorker(client, status, secrets)
+	job := &river.Job[CreateDatabaseArgs]{
+		JobRow: &rivertype.JobRow{ID: 77},
+		Args: CreateDatabaseArgs{
+			DatabaseID: 19,
+			Engine:     types.EngineMariaDB,
+			DBName:     "np_legacy",
+			DBUser:     "np_legacy_user",
+			Password:   password,
+		},
+	}
+
+	if err := worker.Work(context.Background(), job); err == nil {
+		t.Fatal("Work returned nil error")
+	}
+	if status.migrateJobID != 77 || status.credentialRef != "provision-19" {
+		t.Fatalf("migration = job %d ref %q", status.migrateJobID, status.credentialRef)
+	}
+	if job.Args.Password != "" || job.Args.CredentialRef != "provision-19" {
+		t.Fatalf("job args were not scrubbed for retry: %+v", job.Args)
+	}
+	encoded, err := json.Marshal(job.Args)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), password) || strings.Contains(string(encoded), `"password"`) {
+		t.Fatalf("retry args expose plaintext credential: %s", encoded)
+	}
+	if status.migratedValue != password {
+		t.Fatalf("encrypted-store input = %q, want legacy password", status.migratedValue)
+	}
+	if client.req.Password != password {
+		t.Fatalf("agent password = %q, want migrated secret", client.req.Password)
+	}
+}
+
 func TestCreateDatabaseWorkerReturnsNonOKResponses(t *testing.T) {
 	worker := NewCreateDatabaseWorker(&fakeAgentDatabaseClient{
 		resp: types.Response{ID: "job-1", OK: false, Error: "validation error: bad database"},
 	}, nil)
 
-	err := worker.Work(context.Background(), &river.Job[CreateDatabaseArgs]{Args: CreateDatabaseArgs{DatabaseID: 11}})
+	err := worker.Work(context.Background(), &river.Job[CreateDatabaseArgs]{
+		Args: CreateDatabaseArgs{DatabaseID: 11, Password: "legacy-test-password"},
+	})
 	if err == nil {
 		t.Fatal("Work returned nil error")
 	}

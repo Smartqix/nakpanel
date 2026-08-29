@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 )
@@ -122,7 +123,9 @@ type PlanBulkStatusStore interface {
 
 type DomainSettingsStore interface {
 	SiteDomain(ctx context.Context, siteID int64) (string, error)
+	SiteRuntimeIdentity(ctx context.Context, siteID int64) (string, string, error)
 	UpdateSiteSettings(ctx context.Context, req types.UpdateSiteSettingsReq) error
+	UpdateSitePHPSettings(ctx context.Context, req types.UpdateSitePHPSettingsReq) error
 	SetTLSAutoRenew(ctx context.Context, siteID int64, enabled bool) error
 }
 
@@ -195,11 +198,41 @@ func SiteLimitsForSubscription(ctx context.Context, store Store, subscriptionID 
 	if limits.PHPMemoryMB == 0 {
 		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: php memory is 0 MB", ErrExceeded)
 	}
-	return types.SiteResourceLimits{
+	resourceLimits := types.SiteResourceLimits{
 		DiskQuotaMB:       positiveLimit(limits.SiteDiskQuotaMB),
 		PHPFPMMaxChildren: positiveLimit(limits.PHPFPMMaxChildren),
 		PHPMemoryMB:       positiveLimit(limits.PHPMemoryMB),
-	}, limits, nil
+	}
+	if reader, ok := store.(interface {
+		EffectiveSubscriptionPolicy(context.Context, int64) (types.HostingPolicy, error)
+	}); ok {
+		policy, err := reader.EffectiveSubscriptionPolicy(ctx, subscriptionID)
+		if err != nil {
+			return types.SiteResourceLimits{}, Limits{}, err
+		}
+		resourceLimits = SiteResourceLimitsFromPolicy(policy)
+	}
+	return resourceLimits, limits, nil
+}
+
+func SiteResourceLimitsFromPolicy(p types.HostingPolicy) types.SiteResourceLimits {
+	return types.SiteResourceLimits{
+		DiskQuotaMB: p.Resources.DiskMB, PHPFPMMaxChildren: p.PHP.FPMMaxChildren,
+		PHPMemoryMB: p.PHP.MemoryLimitMB, PHPFPMMaxRequests: p.PHP.FPMMaxRequests,
+		PHPMaxExecutionSeconds: p.PHP.MaxExecutionSeconds, PHPMaxInputSeconds: p.PHP.MaxInputSeconds,
+		PHPPostMaxMB: p.PHP.PostMaxMB, PHPUploadMaxMB: p.PHP.UploadMaxMB,
+		PHPDisplayErrors: p.PHP.DisplayErrors, PHPLogErrors: p.PHP.LogErrors,
+		PHPAllowURLFOpen: p.PHP.AllowURLFOpen, PHPExecEnabled: p.PHP.ExecEnabled,
+		RequestRatePerSecond: p.Web.RequestRatePerSecond, RequestBurst: p.Web.RequestBurst,
+		MaxConnections: p.Web.MaxConnections, StaticCache: p.Web.StaticCache,
+		FastCGIMicrocache: p.Web.FastCGIMicrocache, RequestBodyLimitMB: p.Web.RequestBodyLimitMB,
+		Compression: p.Web.Compression, CacheTTLSeconds: p.Web.CacheTTLSeconds,
+		ConnectTimeoutSeconds: p.Web.ConnectTimeoutSecs, ReadTimeoutSeconds: p.Web.ReadTimeoutSecs,
+		SecurityHeaderPreset: p.Web.SecurityHeaderPreset, IndexFiles: p.Web.IndexFiles,
+		PHPFPMMode: p.PHP.FPMMode, PHPFPMIdleTimeoutSecs: p.PHP.FPMIdleTimeoutSecs,
+		PHPRequestTerminateSecs: p.PHP.RequestTerminateSecs, PHPOPcacheEnabled: p.PHP.OPcacheEnabled,
+		PHPOPcacheMemoryMB: p.PHP.OPcacheMemoryMB,
+	}
 }
 
 func CheckDatabase(ctx context.Context, store Store, userID int64) error {
@@ -363,8 +396,13 @@ func ValidateLimits(limits Limits) error {
 }
 
 type SQLStore struct {
-	db    *sql.DB
-	river *river.Client[*sql.Tx]
+	db      *sql.DB
+	river   *river.Client[*sql.Tx]
+	secrets *serveradmin.Store
+}
+
+func (s *SQLStore) SetServiceSecretStore(secrets *serveradmin.Store) {
+	s.secrets = secrets
 }
 
 func NewSQLStore(db *sql.DB, clients ...*river.Client[*sql.Tx]) *SQLStore {

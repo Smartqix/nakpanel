@@ -79,17 +79,90 @@ type MailProvisioner interface {
 	MailStatus(context.Context) (types.MailServerStatus, error)
 }
 
+type MailQueueReader interface {
+	QueryMailQueue(context.Context, types.MailQueueQueryReq) (types.MailQueueQueryResult, error)
+	InspectQueuedMail(context.Context, types.InspectQueuedMailReq) (types.MailQueueMessage, error)
+}
+
 type ApplicationProvisioner interface {
 	EnsureApplication(context.Context, types.EnsureApplicationReq) error
+}
+
+type ApplicationRuntimeProvisioner interface {
+	DeployApplicationGeneration(context.Context, types.EnsureApplicationReq) (types.DeployApplicationGenerationResult, error)
+	ApplicationStatus(context.Context, types.ApplicationControlReq) (types.ApplicationObservedState, error)
+	ControlApplication(context.Context, types.ApplicationControlReq) (types.ApplicationObservedState, error)
+	ReadApplicationLog(context.Context, types.ApplicationLogReq) (types.ApplicationLogResult, error)
 }
 
 type SubscriptionTeardownProvisioner interface {
 	TeardownSubscription(context.Context, types.TeardownSubscriptionReq) (types.TeardownSubscriptionResult, error)
 }
 
+type HostingToolkitProvisioner interface {
+	EnsureFTPS(context.Context, types.EnsureFTPSReq) (types.EnsureFTPSResult, error)
+	FTPSStatus(context.Context) (types.FTPSStatus, error)
+	ReadSiteLog(context.Context, types.SiteLogRequest) (types.SiteLogResult, error)
+	RunScheduledTask(context.Context, types.RunScheduledTaskReq) (types.RunScheduledTaskResult, error)
+	EnsureValkey(context.Context, types.EnsureValkeyReq) (types.EnsureValkeyResult, error)
+	ValkeyStatus(context.Context, int64) (types.ValkeyStatus, error)
+	EnsureGitRepository(context.Context, types.EnsureGitRepositoryReq) (types.EnsureGitRepositoryResult, error)
+	EnsureProtectedDirectories(context.Context, types.EnsureProtectedDirectoriesReq) (types.EnsureProtectedDirectoriesResult, error)
+	RunStagingOperation(context.Context, types.RunStagingOperationReq) (types.RunStagingOperationResult, error)
+}
+
 type UsageCollector interface {
 	CollectUsage(ctx context.Context, req types.CollectUsageReq) (types.CollectUsageResult, error)
 	RuntimeCapabilities(ctx context.Context) (types.RuntimeCapabilities, error)
+}
+
+type ServerAdminInspector interface {
+	InspectServer(context.Context) (types.ServerInventory, error)
+	InspectManagedServices(context.Context, types.InspectManagedServicesReq) ([]types.ManagedService, error)
+	InspectTime(context.Context) (types.TimeState, error)
+	InspectPHP(context.Context) ([]types.PHPHandlerState, error)
+}
+
+type ManagedServiceController interface {
+	ControlManagedService(context.Context, types.ControlManagedServiceReq) (types.ControlManagedServiceResult, error)
+}
+
+type ServerJournalReader interface {
+	ReadJournal(context.Context, types.ReadJournalReq) (types.ReadJournalResult, error)
+}
+
+type ServerUpdateManager interface {
+	InspectUpdates(context.Context) (types.UpdateState, error)
+	ApplyUpdates(context.Context, types.ApplyUpdatesReq) (types.UpdateState, error)
+}
+
+type ServerSecurityManager interface {
+	InspectServerSecurity(context.Context) (types.ServerSecurityPolicy, error)
+	StageServerSecurity(context.Context, types.StageServerSecurityReq) (types.StagedSecurityResult, error)
+	ConfirmServerSecurity(context.Context, string) (types.StagedSecurityResult, error)
+	RevertServerSecurity(context.Context, string) (types.StagedSecurityResult, error)
+}
+
+type HostPowerController interface {
+	ControlHostPower(context.Context, types.HostPowerReq) (types.HostPowerResult, error)
+}
+
+type Fail2BanManager interface {
+	ApplyFail2BanPolicy(context.Context, types.ApplyFail2BanPolicyReq) (types.ApplyFail2BanPolicyResult, error)
+	ListSecurityBans(context.Context) (types.SecurityBansResult, error)
+	UnbanSecurityAddress(context.Context, types.UnbanSecurityAddressReq) (types.UnbanSecurityAddressResult, error)
+}
+
+type ServerBackupManager interface {
+	CreateServerBackup(context.Context, types.CreateServerBackupReq) (types.CreateServerBackupResult, error)
+	VerifyServerBackup(context.Context, types.VerifyServerBackupReq) (types.VerifyServerBackupResult, error)
+	PruneServerBackups(context.Context, types.PruneServerBackupsReq) (types.PruneServerBackupsResult, error)
+	TestBackupDestination(context.Context, types.TestBackupDestinationReq) (types.TestBackupDestinationResult, error)
+}
+
+type DatabaseAdministrator interface {
+	InspectDatabaseAdmin(context.Context, types.InspectDatabaseAdminReq) (types.DatabaseAdminSnapshot, error)
+	ManageDatabaseAdmin(context.Context, types.ManageDatabaseAdminReq) (types.ManageDatabaseAdminResult, error)
 }
 
 type FileManager interface {
@@ -127,6 +200,16 @@ type Options struct {
 	Mail                      MailProvisioner
 	Applications              ApplicationProvisioner
 	SubscriptionTeardown      SubscriptionTeardownProvisioner
+	ServerAdmin               ServerAdminInspector
+	ServiceController         ManagedServiceController
+	Journal                   ServerJournalReader
+	Updates                   ServerUpdateManager
+	Security                  ServerSecurityManager
+	HostPower                 HostPowerController
+	DatabaseAdmin             DatabaseAdministrator
+	HostingToolkit            HostingToolkitProvisioner
+	ServerBackups             ServerBackupManager
+	Fail2Ban                  Fail2BanManager
 }
 
 type Dispatcher struct {
@@ -147,8 +230,19 @@ type Dispatcher struct {
 	fileManager               FileManager
 	subscriptionAccounts      SubscriptionAccountProvisioner
 	mail                      MailProvisioner
+	mailQueue                 MailQueueReader
 	applications              ApplicationProvisioner
 	subscriptionTeardown      SubscriptionTeardownProvisioner
+	serverAdmin               ServerAdminInspector
+	serviceController         ManagedServiceController
+	journal                   ServerJournalReader
+	updates                   ServerUpdateManager
+	security                  ServerSecurityManager
+	hostPower                 HostPowerController
+	databaseAdmin             DatabaseAdministrator
+	hostingToolkit            HostingToolkitProvisioner
+	serverBackups             ServerBackupManager
+	fail2ban                  Fail2BanManager
 	allowed                   map[string]struct{}
 
 	mu            sync.Mutex
@@ -173,7 +267,7 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 	}
 
 	customCertProvisioner, _ := opts.CertificateProvisioner.(CustomCertificateProvisioner)
-	return &Dispatcher{
+	dispatcher := &Dispatcher{
 		reloader:                  reloader,
 		siteProvisioner:           opts.SiteProvisioner,
 		databaseProvisioner:       opts.DatabaseProvisioner,
@@ -193,9 +287,23 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 		mail:                      opts.Mail,
 		applications:              opts.Applications,
 		subscriptionTeardown:      opts.SubscriptionTeardown,
+		hostingToolkit:            opts.HostingToolkit,
+		serverAdmin:               opts.ServerAdmin,
+		serviceController:         opts.ServiceController,
+		journal:                   opts.Journal,
+		updates:                   opts.Updates,
+		security:                  opts.Security,
+		hostPower:                 opts.HostPower,
+		databaseAdmin:             opts.DatabaseAdmin,
+		serverBackups:             opts.ServerBackups,
+		fail2ban:                  opts.Fail2Ban,
 		allowed:                   allowed,
 		responses:                 make(map[string]*responseEntry),
 	}
+	if reader, ok := opts.Mail.(MailQueueReader); ok {
+		dispatcher.mailQueue = reader
+	}
+	return dispatcher
 }
 
 func (d *Dispatcher) Dispatch(ctx context.Context, req types.Request) types.Response {
@@ -260,9 +368,285 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, result)
+	case types.OpInspectServer:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.serverAdmin == nil {
+			return errorResponse(req.ID, "server inspection is not configured")
+		}
+		result, err := d.serverAdmin.InspectServer(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpInspectManagedServices:
+		var payload types.InspectManagedServicesReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.serverAdmin == nil {
+			return errorResponse(req.ID, "service inspection is not configured")
+		}
+		result, err := d.serverAdmin.InspectManagedServices(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpInspectTime:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.serverAdmin == nil {
+			return errorResponse(req.ID, "time inspection is not configured")
+		}
+		result, err := d.serverAdmin.InspectTime(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpInspectPHP:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.serverAdmin == nil {
+			return errorResponse(req.ID, "PHP inspection is not configured")
+		}
+		result, err := d.serverAdmin.InspectPHP(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpControlManagedService:
+		var payload types.ControlManagedServiceReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.serviceController == nil {
+			return errorResponse(req.ID, "service control is not configured")
+		}
+		result, err := d.serviceController.ControlManagedService(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpReadJournal:
+		var payload types.ReadJournalReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.journal == nil {
+			return errorResponse(req.ID, "journal access is not configured")
+		}
+		result, err := d.journal.ReadJournal(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpInspectUpdates:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.updates == nil {
+			return errorResponse(req.ID, "update inspection is not configured")
+		}
+		result, err := d.updates.InspectUpdates(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpApplyUpdates:
+		var payload types.ApplyUpdatesReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.updates == nil {
+			return errorResponse(req.ID, "update management is not configured")
+		}
+		result, err := d.updates.ApplyUpdates(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpApplyFail2BanPolicy:
+		var payload types.ApplyFail2BanPolicyReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.fail2ban == nil {
+			return errorResponse(req.ID, "fail2ban management is not configured")
+		}
+		result, err := d.fail2ban.ApplyFail2BanPolicy(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpListSecurityBans:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.fail2ban == nil {
+			return errorResponse(req.ID, "fail2ban management is not configured")
+		}
+		result, err := d.fail2ban.ListSecurityBans(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpUnbanSecurityAddress:
+		var payload types.UnbanSecurityAddressReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.fail2ban == nil {
+			return errorResponse(req.ID, "fail2ban management is not configured")
+		}
+		result, err := d.fail2ban.UnbanSecurityAddress(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpCreateServerBackup:
+		var payload types.CreateServerBackupReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.serverBackups == nil {
+			return errorResponse(req.ID, "server backups are not configured")
+		}
+		result, err := d.serverBackups.CreateServerBackup(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpVerifyServerBackup:
+		var payload types.VerifyServerBackupReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.serverBackups == nil {
+			return errorResponse(req.ID, "server backups are not configured")
+		}
+		result, err := d.serverBackups.VerifyServerBackup(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpPruneServerBackups:
+		var payload types.PruneServerBackupsReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.serverBackups == nil {
+			return errorResponse(req.ID, "server backups are not configured")
+		}
+		result, err := d.serverBackups.PruneServerBackups(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpTestBackupDestination:
+		var payload types.TestBackupDestinationReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.serverBackups == nil {
+			return errorResponse(req.ID, "server backups are not configured")
+		}
+		result, err := d.serverBackups.TestBackupDestination(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpInspectServerSecurity:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.security == nil {
+			return errorResponse(req.ID, "server security inspection is not configured")
+		}
+		result, err := d.security.InspectServerSecurity(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpStageServerSecurity:
+		var payload types.StageServerSecurityReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.security == nil {
+			return errorResponse(req.ID, "server security staging is not configured")
+		}
+		result, err := d.security.StageServerSecurity(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpConfirmServerSecurity, types.OpRevertServerSecurity:
+		var payload types.SecurityOperationReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.security == nil {
+			return errorResponse(req.ID, "server security staging is not configured")
+		}
+		var result types.StagedSecurityResult
+		var err error
+		if req.Op == types.OpConfirmServerSecurity {
+			result, err = d.security.ConfirmServerSecurity(ctx, payload.OperationID)
+		} else {
+			result, err = d.security.RevertServerSecurity(ctx, payload.OperationID)
+		}
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpControlHostPower:
+		var payload types.HostPowerReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostPower == nil {
+			return errorResponse(req.ID, "host power control is not configured")
+		}
+		result, err := d.hostPower.ControlHostPower(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpInspectDatabaseAdmin:
+		var payload types.InspectDatabaseAdminReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.databaseAdmin == nil {
+			return errorResponse(req.ID, "database administration is not configured")
+		}
+		result, err := d.databaseAdmin.InspectDatabaseAdmin(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpManageDatabaseAdmin:
+		var payload types.ManageDatabaseAdminReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.databaseAdmin == nil {
+			return errorResponse(req.ID, "database administration is not configured")
+		}
+		result, err := d.databaseAdmin.ManageDatabaseAdmin(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
 	case types.OpListFiles:
 		var payload types.FileListReq
 		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
 		if d.fileManager == nil {
@@ -278,6 +662,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 		if err := decodeStrict(req.Data, &payload); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
 		if d.fileManager == nil {
 			return errorResponse(req.ID, "file manager is not configured")
 		}
@@ -289,6 +676,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 	case types.OpReadFile:
 		var payload types.FileReadReq
 		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
 		if d.fileManager == nil {
@@ -304,6 +694,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 		if err := decodeStrict(req.Data, &payload); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
 		if d.fileManager == nil {
 			return errorResponse(req.ID, "file manager is not configured")
 		}
@@ -317,6 +710,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 		if err := decodeStrict(req.Data, &payload); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
 		if d.fileManager == nil {
 			return errorResponse(req.ID, "file manager is not configured")
 		}
@@ -328,6 +724,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 	case types.OpCopyFiles, types.OpMoveFiles, types.OpDeleteFiles:
 		var payload types.FileBatchReq
 		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
 		if d.fileManager == nil {
@@ -352,6 +751,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 		if err := decodeStrict(req.Data, &payload); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
 		if d.fileManager == nil {
 			return errorResponse(req.ID, "file manager is not configured")
 		}
@@ -363,6 +765,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 	case types.OpExtractArchive:
 		var payload types.FileExtractReq
 		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
 		if d.fileManager == nil {
@@ -378,6 +783,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 		if err := decodeStrict(req.Data, &payload); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
 		if d.fileManager == nil {
 			return errorResponse(req.ID, "file manager is not configured")
 		}
@@ -391,6 +799,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 		if err := decodeStrict(req.Data, &payload); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
 		if d.fileManager == nil {
 			return errorResponse(req.ID, "file manager is not configured")
 		}
@@ -402,6 +813,9 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 	case types.OpExportFileTransfer:
 		var payload types.FileTransferExportReq
 		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if err := validateFileSiteRef(payload.SiteID, payload.Username, payload.Domain); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
 		if d.fileManager == nil {
@@ -516,6 +930,32 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, result)
+	case types.OpQueryMailQueue:
+		var payload types.MailQueueQueryReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.mailQueue == nil {
+			return errorResponse(req.ID, "mail queue inspection is not configured")
+		}
+		result, err := d.mailQueue.QueryMailQueue(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpInspectQueuedMail:
+		var payload types.InspectQueuedMailReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.mailQueue == nil {
+			return errorResponse(req.ID, "mail queue inspection is not configured")
+		}
+		result, err := d.mailQueue.InspectQueuedMail(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
 	case types.OpGetMailStatus:
 		if err := validateNoFields(req.Data); err != nil {
 			return validationResponse(req.ID, err.Error())
@@ -540,6 +980,62 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, map[string]any{"applied": true})
+	case types.OpDeployApplicationGeneration:
+		var payload types.EnsureApplicationReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		runtime, ok := d.applications.(ApplicationRuntimeProvisioner)
+		if !ok {
+			return errorResponse(req.ID, "application provisioner is not configured")
+		}
+		result, err := runtime.DeployApplicationGeneration(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpGetApplicationStatus:
+		var payload types.ApplicationControlReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		runtime, ok := d.applications.(ApplicationRuntimeProvisioner)
+		if !ok {
+			return errorResponse(req.ID, "application provisioner is not configured")
+		}
+		result, err := runtime.ApplicationStatus(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpControlApplication:
+		var payload types.ApplicationControlReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		runtime, ok := d.applications.(ApplicationRuntimeProvisioner)
+		if !ok {
+			return errorResponse(req.ID, "application provisioner is not configured")
+		}
+		result, err := runtime.ControlApplication(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpReadApplicationLog:
+		var payload types.ApplicationLogReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		runtime, ok := d.applications.(ApplicationRuntimeProvisioner)
+		if !ok {
+			return errorResponse(req.ID, "application provisioner is not configured")
+		}
+		result, err := runtime.ReadApplicationLog(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
 	case types.OpCreateSite:
 		var payload types.CreateSiteReq
 		if err := decodeStrict(req.Data, &payload); err != nil {
@@ -692,6 +1188,122 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, map[string]any{"domain": payload.Domain, "state": payload.State, "php_version": payload.DesiredPHPVersion})
+	case types.OpEnsureFTPS:
+		var payload types.EnsureFTPSReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostingToolkit == nil {
+			return errorResponse(req.ID, "hosting toolkit is not configured")
+		}
+		result, err := d.hostingToolkit.EnsureFTPS(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpFTPSStatus:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostingToolkit == nil {
+			return errorResponse(req.ID, "hosting toolkit is not configured")
+		}
+		result, err := d.hostingToolkit.FTPSStatus(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpReadSiteLog:
+		var payload types.SiteLogRequest
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostingToolkit == nil {
+			return errorResponse(req.ID, "hosting toolkit is not configured")
+		}
+		result, err := d.hostingToolkit.ReadSiteLog(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpRunScheduledTask:
+		var payload types.RunScheduledTaskReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostingToolkit == nil {
+			return errorResponse(req.ID, "hosting toolkit is not configured")
+		}
+		result, err := d.hostingToolkit.RunScheduledTask(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpEnsureValkey:
+		var payload types.EnsureValkeyReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostingToolkit == nil {
+			return errorResponse(req.ID, "hosting toolkit is not configured")
+		}
+		result, err := d.hostingToolkit.EnsureValkey(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpValkeyStatus:
+		var payload types.ValkeyStatusReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostingToolkit == nil {
+			return errorResponse(req.ID, "hosting toolkit is not configured")
+		}
+		result, err := d.hostingToolkit.ValkeyStatus(ctx, payload.SubscriptionID)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpEnsureGitRepository:
+		var payload types.EnsureGitRepositoryReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostingToolkit == nil {
+			return errorResponse(req.ID, "Git provisioner is not configured")
+		}
+		result, err := d.hostingToolkit.EnsureGitRepository(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpEnsureProtectedDirectories:
+		var payload types.EnsureProtectedDirectoriesReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostingToolkit == nil {
+			return errorResponse(req.ID, "protected-directory provisioner is not configured")
+		}
+		result, err := d.hostingToolkit.EnsureProtectedDirectories(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpRunStagingOperation:
+		var payload types.RunStagingOperationReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.hostingToolkit == nil {
+			return errorResponse(req.ID, "staging provisioner is not configured")
+		}
+		result, err := d.hostingToolkit.RunStagingOperation(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
 	default:
 		return validationResponse(req.ID, fmt.Sprintf("unknown op %q", req.Op))
 	}
@@ -708,6 +1320,13 @@ func validateNoFields(raw json.RawMessage) error {
 	}
 	for name := range fields {
 		return fmt.Errorf("unexpected field %q", name)
+	}
+	return nil
+}
+
+func validateFileSiteRef(siteID int64, username, domain string) error {
+	if siteID <= 0 || strings.TrimSpace(username) == "" || strings.TrimSpace(domain) == "" {
+		return fmt.Errorf("validated site_id, username, and domain are required")
 	}
 	return nil
 }

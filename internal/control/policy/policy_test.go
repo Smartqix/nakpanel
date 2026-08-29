@@ -83,12 +83,36 @@ func TestValidateWithinProviderCeiling(t *testing.T) {
 	if err := ValidateWithin(child, ceiling); err == nil {
 		t.Fatal("undelegated SSH permission accepted")
 	}
+	child = testPolicy()
+	ceiling.Permissions.Applications = true
+	child.Permissions.Applications = true
+	child.Permissions.ApplicationEgress = true
+	if err := ValidateWithin(child, ceiling); err == nil {
+		t.Fatal("undelegated application egress accepted")
+	}
+	child = testPolicy()
+	ceiling.PHP.AllowedVersions = []string{"8.3"}
+	if err := ValidateWithin(child, ceiling); err == nil {
+		t.Fatal("undelegated PHP version accepted")
+	}
+	child.PHP.AllowedVersions = []string{"8.3"}
+	child.PHP.DefaultVersion = "8.3"
+	ceiling.Web.RequestBodyLimitMB = 64
+	child.Web.RequestBodyLimitMB = 128
+	if err := ValidateWithin(child, ceiling); err == nil {
+		t.Fatal("oversized request body accepted")
+	}
 }
 
 func TestValidateSiteWithinRuntimeCeilings(t *testing.T) {
 	parent := testPolicy()
 	parent.Web.MaxConnections = 50
+	parent.Web.RequestBodyLimitMB = 64
+	parent.Web.SecurityHeaderPreset = "strict"
+	parent.Web.AllowedCIDRs = []string{"203.0.113.0/24"}
 	parent.PHP.ExecEnabled = false
+	parent.PHP.MaxExecutionSeconds = 60
+	parent.PHP.AllowURLFOpen = false
 	child := parent
 	child.Web.MaxConnections = 25
 	if err := ValidateSiteWithin(child, parent); err != nil {
@@ -102,5 +126,20 @@ func TestValidateSiteWithinRuntimeCeilings(t *testing.T) {
 	child.PHP.ExecEnabled = true
 	if err := ValidateSiteWithin(child, parent); err == nil {
 		t.Fatal("domain enabled PHP execution denied by subscription")
+	}
+	for name, mutate := range map[string]func(*types.HostingPolicy){
+		"unbounded PHP execution": func(policy *types.HostingPolicy) { policy.PHP.MaxExecutionSeconds = 0 },
+		"oversized request body":  func(policy *types.HostingPolicy) { policy.Web.RequestBodyLimitMB = 128 },
+		"weaker security headers": func(policy *types.HostingPolicy) { policy.Web.SecurityHeaderPreset = "off" },
+		"removed access restriction": func(policy *types.HostingPolicy) {
+			policy.Web.AllowedCIDRs = nil
+		},
+		"URL fopen": func(policy *types.HostingPolicy) { policy.PHP.AllowURLFOpen = true },
+	} {
+		child = parent
+		mutate(&child)
+		if err := ValidateSiteWithin(child, parent); err == nil {
+			t.Fatalf("%s was accepted", name)
+		}
 	}
 }

@@ -24,6 +24,9 @@ func (s *fakeMailServiceStore) SetSubscriptionPolicy(context.Context, int64, int
 func (s *fakeMailServiceStore) SetSitePolicy(context.Context, int64, int64, json.RawMessage) error {
 	return nil
 }
+func (s *fakeMailServiceStore) ResetSitePolicy(context.Context, int64, int64, string) error {
+	return nil
+}
 func (s *fakeMailServiceStore) UpsertSFTPIdentity(context.Context, int64, int64, types.SFTPIdentityInput) (int64, error) {
 	return 1, nil
 }
@@ -55,7 +58,35 @@ func (s *fakeMailServiceStore) DeleteMailAlias(context.Context, int64, int64) er
 func (s *fakeMailServiceStore) UpsertApplication(context.Context, int64, int64, types.ApplicationInput) (int64, error) {
 	return 1, nil
 }
+func (s *fakeMailServiceStore) UpsertApplicationPreset(context.Context, int64, string, types.ApplicationPresetInput) (int64, error) {
+	return 1, nil
+}
 func (s *fakeMailServiceStore) DeleteApplication(context.Context, int64, int64) error { return nil }
+func (s *fakeMailServiceStore) UpsertProtectedDirectory(context.Context, int64, int64, types.ProtectedDirectoryInput, string) (int64, error) {
+	return 1, nil
+}
+func (s *fakeMailServiceStore) DeleteProtectedDirectory(context.Context, int64, int64) error {
+	return nil
+}
+func (s *fakeMailServiceStore) UpsertFTPAccount(context.Context, int64, int64, types.FTPAccountInput, string) (int64, error) {
+	return 1, nil
+}
+func (s *fakeMailServiceStore) DeleteFTPAccount(context.Context, int64, int64) error { return nil }
+func (s *fakeMailServiceStore) UpsertGitRepository(context.Context, int64, int64, int64, types.GitRepositoryInput) (int64, error) {
+	return 1, nil
+}
+func (s *fakeMailServiceStore) UpsertValkey(context.Context, int64, int64, types.ValkeyInput, string) error {
+	return nil
+}
+func (s *fakeMailServiceStore) ScheduledTaskRunRequest(context.Context, int64, int64) (types.RunScheduledTaskReq, error) {
+	return types.RunScheduledTaskReq{}, nil
+}
+func (s *fakeMailServiceStore) CreateScheduledTaskRun(context.Context, int64) (int64, error) {
+	return 1, nil
+}
+func (s *fakeMailServiceStore) FinishScheduledTaskRun(context.Context, int64, types.RunScheduledTaskResult) error {
+	return nil
+}
 
 func TestManagerBlocksMailboxAccessForForeignSubscription(t *testing.T) {
 	store := &fakeMailServiceStore{}

@@ -10,6 +10,12 @@ import (
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 )
 
+func expectMutableSubscription(mock sqlmock.Sqlmock, subscriptionID int64) {
+	mock.ExpectExec(`SELECT pg_advisory_xact_lock`).WithArgs(subscriptionID).WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT provisioning_state`).WithArgs(subscriptionID).
+		WillReturnError(sql.ErrNoRows)
+}
+
 func TestSiteIntentGuardRejectsCrossSubscriptionConflict(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -21,6 +27,7 @@ func TestSiteIntentGuardRejectsCrossSubscriptionConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expectMutableSubscription(mock, 7)
 	mock.ExpectQuery(`SELECT e.max_sites`).WithArgs(int64(7)).WillReturnRows(
 		sqlmock.NewRows([]string{"max_sites", "max_databases", "max_backups", "backup_storage_mb", "overuse_policy", "hosting_enabled", "allow_backups"}).AddRow(2, 2, 2, 128, "block", true, true),
 	)
@@ -49,6 +56,7 @@ func TestSiteIntentGuardRechecksQuotaUnderSubscriptionLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expectMutableSubscription(mock, 7)
 	mock.ExpectQuery(`SELECT e.max_sites`).WithArgs(int64(7)).WillReturnRows(
 		sqlmock.NewRows([]string{"max_sites", "max_databases", "max_backups", "backup_storage_mb", "overuse_policy", "hosting_enabled", "allow_backups"}).AddRow(1, 2, 2, 128, "block", true, true),
 	)
@@ -76,6 +84,7 @@ func TestBackupIntentGuardAllowsOneReplacementAtLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expectMutableSubscription(mock, 7)
 	mock.ExpectQuery(`SELECT e.max_sites`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"max_sites", "max_databases", "max_backups", "backup_storage_mb", "overuse_policy", "hosting_enabled", "allow_backups"}).AddRow(2, 2, 2, 128, "block", true, true))
 	mock.ExpectQuery(`SELECT COUNT\(b.id\)`).WithArgs(int64(7), "owned.test").WillReturnRows(sqlmock.NewRows([]string{"used", "active_jobs"}).AddRow(2, 0))
 	mock.ExpectQuery(`SELECT COALESCE\(SUM\(size_bytes\)`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"used"}).AddRow(int64(1024)))
@@ -100,6 +109,7 @@ func TestBackupIntentGuardBlocksReplacementWhileRetryIsActive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	expectMutableSubscription(mock, 7)
 	mock.ExpectQuery(`SELECT e.max_sites`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"max_sites", "max_databases", "max_backups", "backup_storage_mb", "overuse_policy", "hosting_enabled", "allow_backups"}).AddRow(2, 2, 2, 128, "block", true, true))
 	mock.ExpectQuery(`SELECT COUNT\(b.id\)`).WithArgs(int64(7), "owned.test").WillReturnRows(sqlmock.NewRows([]string{"used", "active_jobs"}).AddRow(2, 1))
 	mock.ExpectRollback()

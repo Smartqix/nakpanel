@@ -70,6 +70,12 @@ func TestParsedPlanEntitlementsKeepsCompleteCustomSnapshot(t *testing.T) {
 		AllowDNS: true, AllowTLS: true, AllowBackups: true, AllowPHPSettings: true,
 		OverusePolicy: types.PlanOveruseNotify, DiskWarningPercent: 75, TrafficWarningPercent: 85,
 		Presets: types.PlanServicePresets{SchemaVersion: 1, DNS: types.DNSPreset{Mode: "primary", DefaultTTL: 7200}},
+		HostingPolicy: types.HostingPolicy{
+			SchemaVersion: 2,
+			Resources:     types.HostingResourcePolicy{MaxScheduledTasks: 7, MaxApplications: 2, ValkeyMemoryMB: 128},
+			Permissions:   types.HostingPermissionPolicy{ScheduledTasks: true, Applications: true, Valkey: true},
+			Valkey:        types.HostingValkeyPolicy{Enabled: true, MemoryMB: 128, MaxClients: 32, EvictionPolicy: "allkeys-lru"},
+		},
 	}
 	got := parsedPlanEntitlements(plan)
 	if !got.HostingEnabled || got.DefaultPHPVersion != "8.3" || !got.AllowTLS || !got.AllowBackups {
@@ -80,6 +86,10 @@ func TestParsedPlanEntitlementsKeepsCompleteCustomSnapshot(t *testing.T) {
 	}
 	if got.OverusePolicy != types.PlanOveruseNotify || got.ServicePresets.DNS.DefaultTTL != 7200 {
 		t.Fatalf("custom policy/presets = %#v", got)
+	}
+	if got.HostingPolicy.Resources.MaxScheduledTasks != 7 || !got.HostingPolicy.Permissions.Applications ||
+		!got.HostingPolicy.Valkey.Enabled {
+		t.Fatalf("custom typed hosting policy = %#v", got.HostingPolicy)
 	}
 }
 

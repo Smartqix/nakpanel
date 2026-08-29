@@ -169,6 +169,11 @@ func (s *SQLStore) SetSubscriptionStatuses(ctx context.Context, subscriptionIDs 
 		if subscriptionID <= 0 {
 			return errors.New("subscription id is required")
 		}
+	}
+	for _, subscriptionID := range uniqueSortedIDs(subscriptionIDs) {
+		if err = LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+			return err
+		}
 		var resellerID int64
 		var suspensionReason string
 		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(c.reseller_id,0),s.suspension_reason FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, subscriptionID).Scan(&resellerID, &suspensionReason); err != nil {
@@ -222,6 +227,38 @@ updated_at=now() WHERE id=$1`, subscriptionID, status)
 	return tx.Commit()
 }
 
+func ensureSubscriptionNotTerminatingTx(ctx context.Context, tx *sql.Tx, subscriptionID int64) error {
+	return LockSubscriptionMutationTx(ctx, tx, subscriptionID)
+}
+
+// LockSubscriptionMutationTx serializes tenant intent mutations with account
+// purge. Resource-table triggers use the same advisory key so an operation
+// either commits before teardown's cancellation pass or is rejected after the
+// billing account enters its terminal state.
+func LockSubscriptionMutationTx(ctx context.Context, tx *sql.Tx, subscriptionID int64) error {
+	if subscriptionID <= 0 {
+		return errors.New("subscription id is required")
+	}
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('nakpanel:subscription:' || $1::bigint::text,0))`, subscriptionID); err != nil {
+		return err
+	}
+	var state string
+	err := tx.QueryRowContext(ctx, `SELECT provisioning_state
+FROM billing_accounts
+WHERE subscription_id=$1
+FOR SHARE`, subscriptionID).Scan(&state)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if state == "terminating" || state == "terminated" {
+		return errors.New("billing account teardown has started")
+	}
+	return nil
+}
+
 func (s *SQLStore) CreateSubscription(ctx context.Context, req types.CreateSubscriptionReq) (types.SubscriptionSummary, error) {
 	if s == nil || s.db == nil {
 		return types.SubscriptionSummary{}, errors.New("quota database is not configured")
@@ -232,6 +269,11 @@ func (s *SQLStore) CreateSubscription(ctx context.Context, req types.CreateSubsc
 	requestedUsername := strings.ToLower(strings.TrimSpace(req.SystemUsername))
 	if requestedUsername != "" && !regexp.MustCompile(`^[a-z][a-z0-9]{2,31}$`).MatchString(requestedUsername) {
 		return types.SubscriptionSummary{}, errors.New("system username must start with a letter and contain 3-32 lowercase letters or digits")
+	}
+	// New subscription identities are server-assigned. Legacy callers may
+	// still submit this field, but it must never select or adopt a host user.
+	if req.ID == 0 {
+		requestedUsername = ""
 	}
 	syncMode := strings.TrimSpace(req.SyncMode)
 	if syncMode == "" {
@@ -274,6 +316,9 @@ func (s *SQLStore) CreateSubscription(ctx context.Context, req types.CreateSubsc
 	var currentSyncMode string
 	var currentPlanRevision int
 	if req.ID > 0 {
+		if err := LockSubscriptionMutationTx(ctx, tx, req.ID); err != nil {
+			return types.SubscriptionSummary{}, err
+		}
 		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(plan_id,0),sync_mode,plan_revision FROM subscriptions WHERE id=$1 FOR UPDATE`, req.ID).Scan(&currentPlanID, &currentSyncMode, &currentPlanRevision); err != nil {
 			return types.SubscriptionSummary{}, err
 		}
@@ -399,7 +444,7 @@ WHERE id = $1
 		if status != "active" {
 			desiredState = "suspended"
 		}
-		if _, err = tx.ExecContext(ctx, `UPDATE subscription_system_accounts SET desired_state=$2,convergence_status='pending',last_error='',updated_at=now() WHERE subscription_id=$1`, subscriptionID, desiredState); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE subscription_system_accounts SET desired_state=$2,updated_at=now() WHERE subscription_id=$1`, subscriptionID, desiredState); err != nil {
 			return types.SubscriptionSummary{}, err
 		}
 	}
@@ -428,11 +473,8 @@ WHERE sa.subscription_id=$1 AND a.id=sa.addon_plan_id AND COALESCE(a.reseller_id
 		return types.SubscriptionSummary{}, err
 	}
 	if s.river != nil {
-		if _, err = s.river.InsertTx(ctx, tx, ConvergeSubscriptionArgs{SubscriptionID: subscriptionID}, nil); err != nil {
+		if _, err = EnqueueSubscriptionConvergenceTx(ctx, tx, s.river, subscriptionID); err != nil {
 			return types.SubscriptionSummary{}, fmt.Errorf("enqueue subscription convergence: %w", err)
-		}
-		if err = wakeSubscriptionConvergenceTx(ctx, tx, subscriptionID); err != nil {
-			return types.SubscriptionSummary{}, fmt.Errorf("wake subscription convergence: %w", err)
 		}
 	}
 	if req.ID > 0 {
@@ -460,7 +502,7 @@ func availableSystemUsernameTx(ctx context.Context, tx *sql.Tx, subscriptionID i
 	for attempt := 0; attempt < 100; attempt++ {
 		candidate := fmt.Sprintf("nps%d", subscriptionID)
 		if attempt > 0 {
-			candidate = fmt.Sprintf("np%d%s", subscriptionID, strconv.FormatInt(int64(attempt), 36))
+			candidate = fmt.Sprintf("nps%d%s", subscriptionID, strconv.FormatInt(int64(attempt), 36))
 		}
 		if len(candidate) > 32 {
 			candidate = candidate[:32]

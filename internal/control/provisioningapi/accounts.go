@@ -352,7 +352,7 @@ func (s *AccountService) Create(ctx context.Context, keyID int64, req createAcco
 		php = "8.3"
 	}
 	var siteID int64
-	if err = tx.QueryRowContext(ctx, `INSERT INTO sites(owner_user_id,customer_id,subscription_id,system_account_id,username,domain,document_root,php_version,desired_php_version,status,last_error) VALUES($1,$2,$3,$4,$5,$6,'/home/'||$5||'/domains/'||$6||'/public_html',$7,$7,'pending','') RETURNING id`, userID, customerID, subscriptionID, accountID, username, req.Domain, php).Scan(&siteID); err != nil {
+	if err = tx.QueryRowContext(ctx, `INSERT INTO sites(owner_user_id,customer_id,subscription_id,system_account_id,username,domain,document_root,parent_site_id,dns_zone_mode,php_version,desired_php_version,status,last_error) VALUES($1,$2,$3,$4,$5,$6,'/home/'||$5||'/domains/'||$6||'/public_html',NULL,'separate',$7,$7,'pending','') RETURNING id`, userID, customerID, subscriptionID, accountID, username, req.Domain, php).Scan(&siteID); err != nil {
 		return accountView{}, false, &accountError{409, "domain_conflict", "primary domain is already in use", nil}
 	}
 	publicID, err := randomID("acc_", 24)
@@ -370,7 +370,7 @@ func (s *AccountService) Create(ctx context.Context, keyID int64, req createAcco
 		if _, err = s.River.InsertTx(ctx, tx, provision.CreateSiteArgs{SiteID: siteID, Username: username, Domain: req.Domain, PHPVersion: php, SharedAccount: true, Limits: limits}, nil); err != nil {
 			return accountView{}, false, err
 		}
-		if _, err = s.River.InsertTx(ctx, tx, controlquota.ConvergeSubscriptionArgs{SubscriptionID: subscriptionID}, nil); err != nil {
+		if _, err = controlquota.EnqueueSubscriptionConvergenceTx(ctx, tx, s.River, subscriptionID); err != nil {
 			return accountView{}, false, err
 		}
 		if _, err = s.River.InsertTx(ctx, tx, FinalizeAccountArgs{BillingAccountID: 0, PublicID: publicID}, nil); err != nil {
@@ -473,9 +473,18 @@ func (s *AccountService) SetLifecycle(ctx context.Context, ref string, suspend b
 				return accountView{}, err
 			}
 		} else {
-			_, err := s.DB.ExecContext(ctx, `UPDATE subscriptions SET status=$2,updated_at=now() WHERE id=$1`, subscriptionID, target)
+			result, err := s.DB.ExecContext(ctx, `UPDATE subscriptions subscription SET status=$2,updated_at=now()
+WHERE subscription.id=$1
+  AND NOT EXISTS (
+    SELECT 1 FROM billing_accounts billing
+    WHERE billing.subscription_id=subscription.id
+      AND billing.provisioning_state IN ('terminating','terminated')
+  )`, subscriptionID, target)
 			if err != nil {
 				return accountView{}, err
+			}
+			if affected, _ := result.RowsAffected(); affected == 0 {
+				return accountView{}, &accountError{409, "invalid_account_state", "account teardown has started", nil}
 			}
 		}
 	}
@@ -494,17 +503,25 @@ func (s *AccountService) Cancel(ctx context.Context, ref string, purge bool) (ac
 		return s.Get(ctx, ref)
 	}
 	if purge {
-		if state != "terminating" {
-			_, err := s.DB.ExecContext(ctx, `UPDATE billing_accounts SET provisioning_state='terminating',purge_requested_at=now(),updated_at=now() WHERE id=$1`, id)
-			if err != nil {
+		tx, err := s.DB.BeginTx(ctx, nil)
+		if err != nil {
+			return accountView{}, err
+		}
+		defer tx.Rollback()
+		state, err = markAccountTerminatingTx(ctx, tx, id, subscriptionID)
+		if err != nil {
+			return accountView{}, err
+		}
+		if state == "terminated" {
+			return s.Get(ctx, ref)
+		}
+		if s.River != nil {
+			if _, err = s.River.InsertTx(ctx, tx, TeardownAccountArgs{BillingAccountID: id}, nil); err != nil {
 				return accountView{}, err
 			}
-			if s.River != nil {
-				_, err = s.River.Insert(ctx, TeardownAccountArgs{BillingAccountID: id}, &river.InsertOpts{Queue: "heavy", MaxAttempts: 10})
-				if err != nil {
-					return accountView{}, err
-				}
-			}
+		}
+		if err = tx.Commit(); err != nil {
+			return accountView{}, err
 		}
 		return s.Get(ctx, ref)
 	}
@@ -521,6 +538,32 @@ func (s *AccountService) Cancel(ctx context.Context, ref string, purge bool) (ac
 	return s.Get(ctx, ref)
 }
 
+func markAccountTerminatingTx(ctx context.Context, tx *sql.Tx, billingAccountID, subscriptionID int64) (string, error) {
+	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('nakpanel:subscription:' || $1::bigint::text,0))`, subscriptionID); err != nil {
+		return "", err
+	}
+	var state string
+	if err := tx.QueryRowContext(ctx, `SELECT b.provisioning_state
+FROM billing_accounts b
+JOIN subscriptions subscription ON subscription.id=b.subscription_id
+WHERE b.id=$1 AND subscription.id=$2
+FOR UPDATE OF b,subscription`, billingAccountID, subscriptionID).Scan(&state); err != nil {
+		return "", err
+	}
+	if state == "terminated" {
+		return state, nil
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE subscriptions SET status='cancelled',updated_at=now() WHERE id=$1`, subscriptionID); err != nil {
+		return "", err
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE billing_accounts
+SET provisioning_state='terminating',purge_requested_at=COALESCE(purge_requested_at,now()),updated_at=now()
+WHERE id=$1`, billingAccountID); err != nil {
+		return "", err
+	}
+	return "terminating", nil
+}
+
 func (s *AccountService) ChangePlan(ctx context.Context, ref string, req changePlanRequest) (accountView, error) {
 	view, err := s.Get(ctx, ref)
 	if err != nil {
@@ -534,9 +577,25 @@ func (s *AccountService) ChangePlan(ctx context.Context, ref string, req changeP
 		return view, err
 	}
 	defer tx.Rollback()
-	var subscriptionID, providerID int64
-	if err = tx.QueryRowContext(ctx, `SELECT subscription_id,COALESCE(provider_reseller_id,0) FROM billing_accounts WHERE public_id=$1 OR external_ref=$1 FOR UPDATE`, ref).Scan(&subscriptionID, &providerID); err != nil {
+	var lockedSubscriptionID int64
+	if err = tx.QueryRowContext(ctx, `SELECT subscription_id
+FROM billing_accounts WHERE public_id=$1 OR external_ref=$1`, ref).Scan(&lockedSubscriptionID); err != nil {
 		return view, err
+	}
+	if err = controlquota.LockSubscriptionMutationTx(ctx, tx, lockedSubscriptionID); err != nil {
+		return view, &accountError{409, "invalid_account_state", err.Error(), nil}
+	}
+	var subscriptionID, providerID int64
+	var provisioningState string
+	if err = tx.QueryRowContext(ctx, `SELECT subscription_id,COALESCE(provider_reseller_id,0),provisioning_state
+FROM billing_accounts WHERE public_id=$1 OR external_ref=$1 FOR UPDATE`, ref).Scan(&subscriptionID, &providerID, &provisioningState); err != nil {
+		return view, err
+	}
+	if provisioningState == "terminating" || provisioningState == "terminated" {
+		return view, &accountError{409, "invalid_account_state", "account teardown has started", nil}
+	}
+	if subscriptionID != lockedSubscriptionID {
+		return view, errors.New("billing account subscription changed while locking")
 	}
 	plan, err := selectPlanTx(ctx, tx, providerID, req.PlanID, req.Plan, true)
 	if err != nil {
@@ -592,7 +651,7 @@ func (s *AccountService) ChangePlan(ctx context.Context, ref string, req changeP
 		return view, err
 	}
 	if s.River != nil {
-		if _, err = s.River.InsertTx(ctx, tx, controlquota.ConvergeSubscriptionArgs{SubscriptionID: subscriptionID}, nil); err != nil {
+		if _, err = controlquota.EnqueueSubscriptionConvergenceTx(ctx, tx, s.River, subscriptionID); err != nil {
 			return view, err
 		}
 	}

@@ -3,10 +3,12 @@ package ops
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -23,6 +25,42 @@ func (m *recordingUserManager) EnsureUser(ctx context.Context, username string) 
 
 type recordingReloader struct {
 	services []string
+}
+
+type recordingOwnershipManager struct {
+	paths []string
+}
+
+func (m *recordingOwnershipManager) ChownRecursive(_ context.Context, path, _ string) error {
+	m.paths = append(m.paths, path)
+	return nil
+}
+
+type linuxUserTestRunner struct {
+	home     string
+	username string
+	uid      int
+	exists   bool
+	calls    []string
+}
+
+func (r *linuxUserTestRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	switch name {
+	case "getent":
+		if !r.exists {
+			return nil, errors.New("not found")
+		}
+		return []byte(r.username + ":x:" + fmt.Sprint(r.uid) + ":" + fmt.Sprint(r.uid) + "::" + filepath.Join(r.home, r.username) + ":/usr/sbin/nologin\n"), nil
+	case "useradd":
+		r.exists = true
+		return nil, nil
+	case "userdel":
+		r.exists = false
+		return nil, nil
+	default:
+		return nil, nil
+	}
 }
 
 type failingServiceReloader struct {
@@ -56,7 +94,7 @@ func TestValidateCreateSiteRequestRejectsUnsafeInputs(t *testing.T) {
 		},
 		{
 			name: "unsupported php",
-			req:  types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "9.9"},
+			req:  types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "9.9;reboot"},
 		},
 		{
 			name: "client supplied docroot",
@@ -70,6 +108,142 @@ func TestValidateCreateSiteRequestRejectsUnsafeInputs(t *testing.T) {
 				t.Fatal("ValidateCreateSiteRequest returned nil error")
 			}
 		})
+	}
+}
+
+func TestLinuxUserManagerRefusesUnmarkedExistingAccount(t *testing.T) {
+	home := t.TempDir()
+	runner := &linuxUserTestRunner{home: home, username: "nps42", uid: 4242, exists: true}
+	manager := NewLinuxUserManager(LinuxUserManagerOptions{
+		HomeRoot: home, MarkerDir: filepath.Join(t.TempDir(), "markers"), Runner: runner,
+	})
+	err := manager.EnsureUser(context.Background(), runner.username)
+	if err == nil || !strings.Contains(err.Error(), "ownership marker is missing") {
+		t.Fatalf("unmarked existing account error = %v", err)
+	}
+}
+
+func TestLinuxUserManagerMarksNewAccountAndAllowsReuse(t *testing.T) {
+	home := t.TempDir()
+	markers := filepath.Join(t.TempDir(), "markers")
+	runner := &linuxUserTestRunner{home: home, username: "nps43", uid: 4343}
+	manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: markers, Runner: runner})
+	if err := manager.EnsureUser(context.Background(), runner.username); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.EnsureUser(context.Background(), runner.username); err != nil {
+		t.Fatalf("marked account was not reusable: %v", err)
+	}
+	info, err := os.Stat(filepath.Join(markers, runner.username))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("marker mode = %o, want 600", info.Mode().Perm())
+	}
+}
+
+func TestLinuxUserManagerSerializesConcurrentCreation(t *testing.T) {
+	home := t.TempDir()
+	markers := filepath.Join(t.TempDir(), "markers")
+	runner := &linuxUserTestRunner{home: home, username: "nps45", uid: 4545}
+	manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: markers, Runner: runner})
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 2)
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errs <- manager.EnsureUser(context.Background(), runner.username)
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent EnsureUser returned %v", err)
+		}
+	}
+	var userAdds int
+	for _, call := range runner.calls {
+		if strings.HasPrefix(call, "useradd ") {
+			userAdds++
+		}
+	}
+	if userAdds != 1 {
+		t.Fatalf("useradd calls = %d, want 1: %#v", userAdds, runner.calls)
+	}
+}
+
+func TestLinuxUserManagerRecoversOwnedStaleMarker(t *testing.T) {
+	home := t.TempDir()
+	markers := filepath.Join(t.TempDir(), "markers")
+	if err := os.MkdirAll(markers, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(markers, "nps46")
+	if err := os.WriteFile(marker, []byte("old\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runner := &linuxUserTestRunner{home: home, username: "nps46", uid: 4646}
+	manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: markers, Runner: runner})
+	if err := manager.EnsureUser(context.Background(), runner.username); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := strings.TrimSpace(string(contents)), "4646:"+filepath.Join(home, "nps46"); got != want {
+		t.Fatalf("marker = %q, want %q", got, want)
+	}
+}
+
+func TestLinuxUserManagerLegacyAdoptionIsExplicit(t *testing.T) {
+	home := t.TempDir()
+	runner := &linuxUserTestRunner{home: home, username: "legacyuser", uid: 4444, exists: true}
+	manager := NewLinuxUserManager(LinuxUserManagerOptions{
+		HomeRoot: home, MarkerDir: filepath.Join(t.TempDir(), "markers"), Runner: runner,
+	})
+	if err := manager.AdoptLegacyUser(context.Background(), runner.username); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.EnsureUser(context.Background(), runner.username); err != nil {
+		t.Fatalf("explicitly adopted legacy account was rejected: %v", err)
+	}
+}
+
+func TestCreateSiteUsesTenantPrivateContentModes(t *testing.T) {
+	root := t.TempDir()
+	paths := SitePathConfig{
+		HomeRoot: filepath.Join(root, "home"), NginxAvailableDir: filepath.Join(root, "available"),
+		NginxEnabledDir: filepath.Join(root, "enabled"), NginxConfDir: filepath.Join(root, "conf"),
+		NginxLogDir: filepath.Join(root, "logs"), NginxCacheDir: filepath.Join(root, "cache"),
+		NginxProtectedDir: filepath.Join(root, "protected"), PHPFPMPoolDir: filepath.Join(root, "php"),
+		PHPFPMLogDir: filepath.Join(root, "php-logs"), PHPRunDir: filepath.Join(root, "run"),
+		PHPTmpDir: filepath.Join(root, "tmp"), NginxSnippet: "snippets/fastcgi-php.conf",
+		WWWGroup: "www-data", DefaultFileMode: 0o640,
+	}
+	provisioner := NewSiteProvisioner(SiteProvisionerOptions{
+		Paths: paths, UserManager: &recordingUserManager{}, Reloader: &recordingReloader{},
+	})
+	req := types.CreateSiteReq{Username: "nps44", Domain: "private.example.test", PHPVersion: "8.3"}
+	if err := provisioner.CreateSite(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := NewSitePlan(req, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]os.FileMode{plan.SiteHome: 0o700, plan.Docroot: 0o750} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Fatalf("%s mode = %o, want %o", path, got, want)
+		}
 	}
 }
 
@@ -116,6 +290,8 @@ func TestRenderSiteConfigsAreDeterministicAndDerivePaths(t *testing.T) {
 		"user = npdemo",
 		"group = npdemo",
 		"listen = /run/php/nakpanel-npdemo-example-test.sock",
+		"clear_env = yes",
+		"security.limit_extensions = .php",
 		"php_admin_value[open_basedir] = /home/npdemo/public_html:/tmp",
 	} {
 		if !strings.Contains(fpm, want) {
@@ -277,6 +453,36 @@ func TestApplySiteRuntimePreservesSharedAccountDocumentRoot(t *testing.T) {
 	}
 }
 
+func TestApplySiteRuntimeInitializesManagedIncludesForExistingSite(t *testing.T) {
+	root := t.TempDir()
+	paths := SitePathConfig{
+		HomeRoot: filepath.Join(root, "home"), NginxAvailableDir: filepath.Join(root, "available"),
+		NginxEnabledDir: filepath.Join(root, "enabled"), NginxLogDir: filepath.Join(root, "logs"),
+		PHPFPMPoolDir: filepath.Join(root, "php"), PHPFPMLogDir: filepath.Join(root, "php-logs"),
+		PHPRunDir: filepath.Join(root, "run"), NginxSnippet: "snippets/fastcgi-php.conf",
+		WWWGroup: "www-data", PHPTmpDir: filepath.Join(root, "tmp"), DefaultFileMode: 0o644,
+	}
+	p := NewSiteProvisioner(SiteProvisionerOptions{Paths: paths, Reloader: &recordingReloader{}})
+	req := types.ApplySiteRuntimeReq{
+		SiteID: 7, Username: "npdemo", Domain: "example.test",
+		CurrentPHPVersion: "8.3", DesiredPHPVersion: "8.3", State: "active",
+	}
+	if err := p.ApplySiteRuntime(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := NewSitePlan(types.CreateSiteReq{
+		SiteID: 7, Username: "npdemo", Domain: "example.test", PHPVersion: "8.3",
+	}, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{plan.NginxProtectedConfig, plan.NginxApplicationConfig} {
+		if content, err := os.ReadFile(path); err != nil || !strings.Contains(string(content), "Managed by Nakpanel") {
+			t.Fatalf("managed include %s = %q, %v", path, content, err)
+		}
+	}
+}
+
 func TestNewSitePlanUsesRequestedPHPVersionInDefaultPoolDir(t *testing.T) {
 	plan, err := NewSitePlan(types.CreateSiteReq{
 		Username:   "npdemo",
@@ -302,6 +508,26 @@ func TestNewSitePlanWithDefaultConfigUsesRequestedPHPVersionInPoolDir(t *testing
 	}
 	if got, want := plan.PHPFPMConfig, "/etc/php/8.2/fpm/pool.d/nakpanel-npdemo-example-test.conf"; got != want {
 		t.Fatalf("PHPFPMConfig = %q, want %q", got, want)
+	}
+}
+
+func TestNewSitePlanIsolatesDedicatedPathsForCustomHomeRoot(t *testing.T) {
+	root := t.TempDir()
+	plan, err := NewSitePlan(types.CreateSiteReq{
+		SiteID: 17, SubscriptionID: 4, Username: "npdemo",
+		Domain: "example.test", PHPVersion: "8.3", SharedAccount: true,
+	}, SitePathConfig{HomeRoot: filepath.Join(root, "home")})
+	if err != nil {
+		t.Fatalf("NewSitePlan returned error: %v", err)
+	}
+	for label, path := range map[string]string{
+		"config": plan.PHPFPMConfig,
+		"socket": plan.PHPFPMSocket,
+		"unit":   plan.PHPServiceUnit,
+	} {
+		if !strings.HasPrefix(path, root+string(filepath.Separator)) {
+			t.Fatalf("dedicated PHP %s escaped custom root: %q", label, path)
+		}
 	}
 }
 
@@ -364,7 +590,7 @@ func TestSiteProvisionerCreatesExpectedStateAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat site home: %v", err)
 	}
-	if got, want := homeInfo.Mode().Perm(), os.FileMode(0o755); got != want {
+	if got, want := homeInfo.Mode().Perm(), os.FileMode(0o700); got != want {
 		t.Fatalf("site home mode = %o, want %o", got, want)
 	}
 
@@ -422,14 +648,21 @@ func TestSiteProvisionerMakesSharedAccountPathTraversableByNginx(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, "domains"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	p := NewSiteProvisioner(SiteProvisionerOptions{Paths: paths, UserManager: &recordingUserManager{}, Reloader: &recordingReloader{}})
+	ownership := &recordingOwnershipManager{}
+	p := NewSiteProvisioner(SiteProvisionerOptions{
+		Paths: paths, UserManager: &recordingUserManager{}, OwnershipManager: ownership, Reloader: &recordingReloader{},
+	})
 	if err := p.CreateSite(context.Background(), types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.3", SharedAccount: true}); err != nil {
 		t.Fatal(err)
 	}
+	documentRoot := filepath.Join(home, "domains", "example.test", "public_html")
+	if !slices.Equal(ownership.paths, []string{documentRoot}) {
+		t.Fatalf("ownership paths = %v, want only %q", ownership.paths, documentRoot)
+	}
 	for path, want := range map[string]os.FileMode{
-		filepath.Join(home, "domains"):                                0o711,
-		filepath.Join(home, "domains", "example.test"):                0o711,
-		filepath.Join(home, "domains", "example.test", "public_html"): 0o755,
+		filepath.Join(home, "domains"):                 0o711,
+		filepath.Join(home, "domains", "example.test"): 0o711,
+		documentRoot: 0o750,
 	} {
 		info, err := os.Stat(path)
 		if err != nil {
@@ -437,6 +670,36 @@ func TestSiteProvisionerMakesSharedAccountPathTraversableByNginx(t *testing.T) {
 		}
 		if got := info.Mode().Perm(); got != want {
 			t.Fatalf("%s mode = %o, want %o", path, got, want)
+		}
+	}
+}
+
+func TestSubordinateIDRangeReadyRequiresFullAllocation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "subuid")
+	content := strings.Join([]string{
+		"other:100000:65536",
+		"short:200000:4096",
+		"malformed:not-a-number:65536",
+		"ready:300000:65536",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		username string
+		want     bool
+	}{
+		{username: "ready", want: true},
+		{username: "short", want: false},
+		{username: "malformed", want: false},
+		{username: "missing", want: false},
+	} {
+		got, err := subordinateIDRangeReady(path, test.username, 65536)
+		if err != nil {
+			t.Fatalf("subordinateIDRangeReady(%q): %v", test.username, err)
+		}
+		if got != test.want {
+			t.Fatalf("subordinateIDRangeReady(%q) = %v, want %v", test.username, got, test.want)
 		}
 	}
 }

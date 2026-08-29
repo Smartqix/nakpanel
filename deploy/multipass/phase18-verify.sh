@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'status=$?; echo "phase18 verifier failed at line ${LINENO}: ${BASH_COMMAND}" >&2; exit "${status}"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
@@ -88,7 +89,7 @@ fail() { echo "phase18: $*" >&2; exit 1; }
 VM_IP="$(vm_ip)"
 DOMAIN="phase15-account.test"
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 # Reset any mail state a previous run left behind so the flow below always
 # starts from "mail never enabled" intent.
@@ -225,7 +226,7 @@ done
 curl -sk -o /dev/null -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
   -d "domain=${DOMAIN}" "https://${VM_IP}:7443/webmail"
 wait_for_value "SELECT status FROM webmail_hosts WHERE hostname='webmail.${DOMAIN}'" 'active'
-vm "sudo cat /etc/roundcube/config.inc.php" | grep -Fq "tls://127.0.0.1:143"
+vm "sudo grep -Fq 'tls://127.0.0.1:143' /etc/roundcube/config.inc.php"
 curl -s -c "${tmpdir}/rc.cookies" -H "Host: webmail.${DOMAIN}" "http://${VM_IP}/?_task=login" -o "${tmpdir}/rc-login.html"
 grep -Fq 'name="_token"' "${tmpdir}/rc-login.html"
 rc_token="$(grep -o 'name="_token" value="[^"]*"' "${tmpdir}/rc-login.html" | head -1 | sed 's/.*value="//;s/"$//')"
@@ -249,7 +250,7 @@ if vm "curl -sS --url smtp://127.0.0.1:587 --ssl-reqd -k --mail-from alice@${DOM
 fi
 
 # --- Deliverability: smarthost routing, rate limit, spike alert ------------
-cli mail relay set --host 127.0.0.1 --port 2525 | grep -Fq 'relays through'
+cli mail relay set --host "${DOMAIN}" --port 2525 | grep -Fq 'relays through'
 cli mail settings --rate-limit 2/1h --alert-threshold 1 | grep -Fq 'updated'
 # The running process has the new settings once (a) the rendered intent
 # sidecar contains them and (b) stalwart was (re)started after that render.
@@ -265,7 +266,13 @@ for _ in $(seq 1 90); do
 done
 stalwart_current || fail "stalwart did not restart with the smarthost and rate-limit config"
 sleep 2
-vm "rm -f /tmp/smtpsink.log && cd /tmp/nakpanel-src && (nohup go run ./deploy/multipass/smtpsink -addr 127.0.0.1:2525 -out /tmp/smtpsink.log >/tmp/smtpsink.out 2>&1 &) && sleep 3"
+# Stalwart 0.11.8 uses its bundled trust roots for relay TLS rather than the
+# Ubuntu trust store extended by Phase 17. Prove Nakpanel rendered strict
+# verification, then relax only the live verifier copy for the private test
+# CA. The authoritative intent remains strict and is restored below.
+vm "sudo grep -Fq 'tls.allow-invalid-certs = false' /etc/stalwart/config.toml.nakpanel-intent"
+vm "sudo sed -i 's/tls.allow-invalid-certs = false/tls.allow-invalid-certs = true/' /etc/stalwart/config.toml && sudo systemctl restart stalwart-mail.service"
+vm "sudo rm -f /tmp/phase18-smtpsink.crt /tmp/phase18-smtpsink.key && sudo sh -c 'cat /tmp/nakpanel-phase17-certs/site.crt /tmp/nakpanel-phase17-certs/intermediate.crt > /tmp/phase18-smtpsink.crt' && sudo install -m 0600 -o ubuntu -g ubuntu /tmp/nakpanel-phase17-certs/site.key /tmp/phase18-smtpsink.key && sudo chown ubuntu:ubuntu /tmp/phase18-smtpsink.crt && rm -f /tmp/smtpsink.log && cd /tmp/nakpanel-src && (nohup go run ./deploy/multipass/smtpsink -addr 127.0.0.1:2525 -out /tmp/smtpsink.log -cert /tmp/phase18-smtpsink.crt -key /tmp/phase18-smtpsink.key >/tmp/smtpsink.out 2>&1 &) && sleep 3"
 vm "printf 'From: alice@${DOMAIN}\r\nTo: ext@external-example.test\r\nSubject: relay\r\n\r\nvia smarthost\r\n' > /tmp/phase18-ext.txt"
 for i in 1 2 3; do
   vm "curl -sS --url smtp://127.0.0.1:587 --ssl-reqd -k --mail-from alice@${DOMAIN} --mail-rcpt ext${i}@external-example.test -u 'alice@${DOMAIN}:${ALICE_PW}' -T /tmp/phase18-ext.txt"
@@ -280,6 +287,7 @@ done
 # The throttled remainder shows up as a spike alert after the queue sweep.
 mp_exec "${VM_NAME}" -- sudo systemctl restart nakpanel.service
 wait_for_value "SELECT COUNT(*)>0 FROM notifications WHERE kind='mail_outbound_spike' AND resolved_at IS NULL AND dedupe_key='mail-spike:${DOMAIN}'" 't'
+vm "sudo install -m 0600 /etc/stalwart/config.toml.nakpanel-intent /etc/stalwart/config.toml && sudo systemctl restart stalwart-mail.service && sudo grep -Fq 'tls.allow-invalid-certs = false' /etc/stalwart/config.toml"
 
 # Operator docs cover the PTR/rDNS step the panel cannot automate.
 grep -Fq 'PTR / reverse DNS' "${ROOT_DIR}/docs/MAIL.md"

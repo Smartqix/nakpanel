@@ -26,6 +26,16 @@ NAKPANEL_LEGACY_PHASE_VMS=(
   nakpanel-phase17
   nakpanel-phase18
   nakpanel-phase19
+  nakpanel-phase20
+  nakpanel-phase21
+  nakpanel-phase22
+  nakpanel-phase23
+  nakpanel-phase24
+  nakpanel-phase25
+  nakpanel-phase26
+  nakpanel-phase27
+  nakpanel-phase28
+  nakpanel-phase29
 )
 
 require_multipass() {
@@ -33,6 +43,44 @@ require_multipass() {
     echo "multipass is required" >&2
     exit 1
   fi
+}
+
+# Multipass 1.16 on macOS can leave its client process spinning after a short
+# remote command has already exited. Buffer output until the client exits so
+# downstream grep cannot close the pipe early, and retry only watchdog hangs.
+multipass_exec_short() {
+  local budget="${NAKPANEL_MULTIPASS_SHORT_TIMEOUT:-30}"
+  local attempt pid waited output_dir exit_status
+  for attempt in 1 2 3; do
+    output_dir="$(mktemp -d "${TMPDIR:-/tmp}/nakpanel-mp.XXXXXX")"
+    multipass exec "$@" >"${output_dir}/stdout" 2>"${output_dir}/stderr" &
+    pid=$!
+    waited=0
+    while kill -0 "${pid}" 2>/dev/null && [[ "${waited}" -lt "${budget}" ]]; do
+      sleep 1
+      waited=$((waited + 1))
+    done
+    if kill -0 "${pid}" 2>/dev/null; then
+      kill -9 "${pid}" 2>/dev/null || true
+      wait "${pid}" 2>/dev/null || true
+      cat "${output_dir}/stdout" || true
+      cat "${output_dir}/stderr" >&2 || true
+      rm -rf "${output_dir}"
+      echo "multipass exec watchdog fired (attempt ${attempt}): $*" >&2
+      continue
+    fi
+    if wait "${pid}"; then
+      exit_status=0
+    else
+      exit_status=$?
+    fi
+    cat "${output_dir}/stdout" || true
+    cat "${output_dir}/stderr" >&2 || true
+    rm -rf "${output_dir}"
+    return "${exit_status}"
+  done
+  echo "multipass exec kept hanging: $*" >&2
+  return 124
 }
 
 require_nakpanel_vm_name() {
@@ -48,7 +96,7 @@ wait_for_cloud_init() {
   local name="${1:-${NAKPANEL_MULTIPASS_VM}}"
   local cloud_init_done=0
   for _ in $(seq 1 90); do
-    if multipass exec "${name}" -- cloud-init status 2>/dev/null | grep -q 'status: done'; then
+    if multipass_exec_short "${name}" -- cloud-init status 2>/dev/null | grep -q 'status: done'; then
       cloud_init_done=1
       break
     fi
@@ -56,7 +104,7 @@ wait_for_cloud_init() {
   done
 
   if [[ "${cloud_init_done}" != "1" ]]; then
-    multipass exec "${name}" -- cloud-init status --long || true
+    multipass_exec_short "${name}" -- cloud-init status --long || true
     echo "cloud-init did not finish in time" >&2
     exit 1
   fi
@@ -76,8 +124,42 @@ ensure_vm() {
 sync_repo() {
   local root_dir="$1"
   local remote_src="${2:-${NAKPANEL_REMOTE_SRC}}"
-  multipass exec "${NAKPANEL_MULTIPASS_VM}" -- sudo rm -rf "${remote_src}"
+  if [[ ! "${remote_src}" =~ ^/tmp/nakpanel-[A-Za-z0-9._-]+$ ]]; then
+    echo "refusing unsafe Multipass sync destination: ${remote_src}" >&2
+    echo "NAKPANEL_REMOTE_SRC must be a direct child of /tmp named nakpanel-*" >&2
+    return 1
+  fi
+  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- sudo rm -rf "${remote_src}"
   multipass transfer -r "${root_dir}" "${NAKPANEL_MULTIPASS_VM}:${remote_src}"
+  wait_for_repo_sync "${remote_src}"
+}
+
+# Multipass 1.16 on macOS can return from a recursive transfer while the daemon
+# is still materializing the final files. Require the build inputs to exist and
+# the remote file count to be stable before a verifier enters the source tree.
+wait_for_repo_sync() {
+  local remote_src="$1"
+  local previous_count="" stable_checks=0 file_count=""
+  for _ in $(seq 1 60); do
+    file_count="$(multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- bash -c \
+      'test -f "$1/go.mod" && test -f "$1/sqlc.yaml" && test -f "$1/cmd/panel/main.go" && test -f "$1/internal/control/http/server.go" && test -f "$1/migrations/migrations_test.go" && find "$1" -type f | wc -l' \
+      _ "${remote_src}" 2>/dev/null || true)"
+    file_count="${file_count//[[:space:]]/}"
+    if [[ "${file_count}" =~ ^[0-9]+$ && "${file_count}" -gt 0 ]]; then
+      if [[ "${file_count}" == "${previous_count}" ]]; then
+        stable_checks=$((stable_checks + 1))
+      else
+        stable_checks=0
+      fi
+      if [[ "${stable_checks}" -ge 2 ]]; then
+        return 0
+      fi
+      previous_count="${file_count}"
+    fi
+    sleep 1
+  done
+  echo "Multipass repository sync did not stabilize at ${remote_src}" >&2
+  return 1
 }
 
 vm_ip() {

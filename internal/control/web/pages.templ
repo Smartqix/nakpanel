@@ -1,6 +1,8 @@
 package web
 
 import (
+	"strconv"
+
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
@@ -36,6 +38,121 @@ templ LoginPage() {
 	</html>
 }
 
+templ TOTPChallengePage(csrfToken, errorMessage string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>nakpanel verification</title>
+			<link rel="stylesheet" href="/assets/app.css"/>
+		</head>
+		<body class="np-app np-auth antialiased">
+			<main class="np-login">
+				<section class="np-login-panel" aria-labelledby="totp-title">
+					<div class="np-brand">
+						<span class="np-brand-mark" aria-hidden="true">n</span>
+						<span>nakpanel</span>
+					</div>
+					<h1 id="totp-title">Two-factor verification</h1>
+					<p>Enter the 6-digit code from your authenticator app.</p>
+					if errorMessage != "" {
+						<p class="np-notice">{ errorMessage }</p>
+					}
+					<form class="np-form np-login-form" method="post" action="/login/2fa">
+						<input type="hidden" name="csrf_token" value={ csrfToken }/>
+						<label>Authenticator code <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="6" autofocus/></label>
+						<button type="submit">Verify</button>
+					</form>
+					<details>
+						<summary>Use a recovery code instead</summary>
+						<form class="np-form np-login-form" method="post" action="/login/2fa">
+							<input type="hidden" name="csrf_token" value={ csrfToken }/>
+							<label>Recovery code <input type="text" name="recovery_code" autocomplete="off" placeholder="XXXXX-XXXXX"/></label>
+							<button type="submit">Use recovery code</button>
+						</form>
+					</details>
+					<p><a href="/login">Back to login</a></p>
+				</section>
+			</main>
+		</body>
+	</html>
+}
+
+templ TwoFactorPage(user auth.SessionUser, view TwoFactorView) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>nakpanel two-factor authentication</title>
+			<link rel="stylesheet" href="/assets/app.css"/>
+		</head>
+		<body class="np-app np-auth antialiased">
+			<main class="np-login">
+				<section class="np-login-panel" aria-labelledby="twofactor-title">
+					<div class="np-brand">
+						<span class="np-brand-mark" aria-hidden="true">n</span>
+						<span>nakpanel</span>
+					</div>
+					<h1 id="twofactor-title">Two-factor authentication</h1>
+					<p>Signed in as { user.Email }.</p>
+					if view.Error != "" {
+						<p class="np-notice">{ view.Error }</p>
+					}
+					if !view.RecentAuth {
+						<p class="np-notice">Changing two-factor settings requires recent authentication. Re-enter your password under <a href="/tools-settings">Tools &amp; Settings</a> first.</p>
+					}
+					if len(view.RecoveryCodes) > 0 {
+						<h2>Recovery codes</h2>
+						<p><strong>Store these now.</strong> Each code works once; they are shown only this time.</p>
+						<pre>
+							for _, code := range view.RecoveryCodes {
+								{ code }
+								{ "\n" }
+							}
+						</pre>
+					}
+					if view.Pending && view.Secret != "" {
+						<h2>Finish enrollment</h2>
+						if view.QRDataURI != "" {
+							<img src={ view.QRDataURI } alt="TOTP enrollment QR code" width="220" height="220"/>
+						}
+						<p>Or enter the secret manually:</p>
+						<pre>{ view.Secret }</pre>
+						<form class="np-form np-login-form" method="post" action="/account/2fa/activate">
+							<input type="hidden" name="csrf_token" value={ view.CSRFToken }/>
+							<label>Code from your app <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" autofocus/></label>
+							<button type="submit">Activate two-factor authentication</button>
+						</form>
+					} else if view.Enrolled {
+						<p class="np-pill np-pill-ok">Two-factor authentication is active</p>
+						<p>{ strconv.Itoa(view.RecoveryUnused) } unused recovery codes remain.</p>
+						<form class="np-form np-login-form" method="post" action="/account/2fa/recovery-codes">
+							<input type="hidden" name="csrf_token" value={ view.CSRFToken }/>
+							<label>Current code <input type="text" name="code" inputmode="numeric" maxlength="6"/></label>
+							<button type="submit">Regenerate recovery codes</button>
+						</form>
+						<form class="np-form np-login-form" method="post" action="/account/2fa/disable">
+							<input type="hidden" name="csrf_token" value={ view.CSRFToken }/>
+							<label>Current code <input type="text" name="code" inputmode="numeric" maxlength="6"/></label>
+							<label>Or a recovery code <input type="text" name="recovery_code" placeholder="XXXXX-XXXXX"/></label>
+							<button type="submit" class="np-danger-button">Disable two-factor authentication</button>
+						</form>
+					} else {
+						<p>Protect this account with an authenticator app (TOTP).</p>
+						<form class="np-form np-login-form" method="post" action="/account/2fa/setup">
+							<input type="hidden" name="csrf_token" value={ view.CSRFToken }/>
+							<button type="submit">Start enrollment</button>
+						</form>
+					}
+					<p><a href="/dashboard">Back to dashboard</a></p>
+				</section>
+			</main>
+		</body>
+	</html>
+}
+
 templ DashboardPage(title string, user auth.SessionUser, data dashboard.Data, actions DashboardActions) {
 	<!DOCTYPE html>
 	<html lang="en">
@@ -64,11 +181,26 @@ templ DashboardPage(title string, user auth.SessionUser, data dashboard.Data, ac
 				if user.Role == auth.RoleAdmin && actions.CanCreateSite {
 					@createSiteModal(data.Quotas, data.Subscriptions)
 				}
+				@confirmationDialog()
 			</main>
 			<script defer src="/assets/app.js"></script>
 		</body>
 		</html>
 	}
+
+templ confirmationDialog() {
+		<dialog class="np-dialog np-confirmation-dialog" id="np-confirmation-dialog" data-np-dialog aria-labelledby="np-confirmation-title" aria-describedby="np-confirmation-copy">
+		<div class="np-dialog-head">
+			<span class="np-kicker">Confirm action</span>
+				<h2 id="np-confirmation-title">Review this operation</h2>
+				<p id="np-confirmation-copy" data-np-confirmation-copy>This action may interrupt an active service.</p>
+		</div>
+		<div class="np-dialog-actions np-confirmation-actions">
+			<button type="button" class="np-secondary-button" data-np-confirmation-cancel>Cancel</button>
+			<button type="button" class="np-danger-button" data-np-confirmation-accept>Continue</button>
+		</div>
+	</dialog>
+}
 
 templ AdminerPage(token types.AdminerSSO) {
 	<!DOCTYPE html>
@@ -679,6 +811,7 @@ templ planSection(quotas []controlquota.Summary, customers []types.Customer, sub
 				<form class="np-form np-action-form" method="post" action="/settings/oversell">
 					<label>Oversell <select name="oversell_policy"><option value="warn">warn</option><option value="cap">cap</option></select></label>
 					<label>Capacity MB <input type="number" min="0" name="server_disk_capacity_mb" value={ formatSettingsCapacity(settings.ServerDiskCapacityMB) } required/></label>
+					<label>Valkey capacity MB <input type="number" min="0" name="valkey_capacity_mb" value={ formatSettingsCapacity(settings.ValkeyCapacityMB) } required/></label>
 					<button type="submit">Save settings</button>
 				</form>
 				if len(customers) > 0 {
@@ -742,128 +875,275 @@ templ planSection(quotas []controlquota.Summary, customers []types.Customer, sub
 }
 
 templ settingsSection(data dashboard.Data, actions DashboardActions, view WorkspaceView) {
-	<section class="np-settings-page" aria-labelledby="settings-title">
+	<section class={ "np-settings-page " + settingsFocusClass(view) } aria-labelledby="settings-title">
 		<div class="np-page-head">
 			<div>
 				<h2 id="settings-title">Tools &amp; Settings</h2>
-				<p>Server-wide controls grouped like a hosting panel: live settings where NakPanel has backing data, read-only status where root agent operations are still pending.</p>
+				<p>Manage the panel, hosting policies, and connected services from one server administration workspace.</p>
 			</div>
 			<span class="np-pill np-pill-run">admin only</span>
 		</div>
-		<div class="np-settings-grid">
-			<article class="np-settings-card np-mail-settings-card">
-				<div class="np-settings-card-head">
-					<div><span class="np-kicker">Mail</span><h3>Mail Server</h3></div>
+		if view.SettingsFocus != "" {
+			@settingsFocusPanel(data,view)
+		}
+		<section class="np-settings-health" aria-labelledby="settings-health-title" data-np-settings-health>
+			<div class="np-settings-health-head">
+				<div><span class="np-kicker">Current state</span><h3 id="settings-health-title">Server administration health</h3></div>
+				<span class="np-settings-source">Only collected data is reported as live</span>
+			</div>
+			<div class="np-settings-health-grid">
+				<div>
+					if data.QuotaLoadError != "" {
+						<span class="np-health-indicator is-unknown" aria-hidden="true"></span>
+						<p><strong>Capacity policy</strong><span>Capacity state could not be loaded</span></p>
+						<span class="np-pill np-pill-susp">unknown</span>
+					} else {
+						<span class="np-health-indicator is-live" aria-hidden="true"></span>
+						<p><strong>Capacity policy</strong><span>{ settingsCapacitySummary(data.Settings.ServerDiskCapacityMB) }</span></p>
+						<span class="np-pill np-pill-ok">live</span>
+					}
+				</div>
+				<div>
+					if data.PlanLoadError != "" {
+						<span class="np-health-indicator is-unknown" aria-hidden="true"></span>
+						<p><strong>Service plans</strong><span>Plan state could not be loaded</span></p>
+						<span class="np-pill np-pill-susp">unknown</span>
+					} else {
+						<span class="np-health-indicator is-live" aria-hidden="true"></span>
+						<p><strong>Service plans</strong><span>{ formatPlanLimit(len(data.Plans)) } configured</span></p>
+						<span class="np-pill np-pill-ok">live</span>
+					}
+				</div>
+				<div>
+					<span class="np-health-indicator is-checking" aria-hidden="true" data-np-mail-health-indicator></span>
+					<p><strong>Mail service</strong><span data-np-mail-health-copy>Checking the agent</span></p>
 					<span class="np-pill np-pill-pend" data-np-mail-state>checking</span>
 				</div>
-				if view.MailSettingsError != "" {
-					<p class="np-inline-error" role="alert">{ view.MailSettingsError }</p>
-				} else {
-					<dl class="np-settings-facts" data-np-mail-status>
-						<div><dt>Stalwart</dt><dd data-np-mail-version>Checking status...</dd></div>
-						<div><dt>Listeners</dt><dd data-np-mail-listeners>-</dd></div>
-						<div><dt>Queue</dt><dd data-np-mail-queue>-</dd></div>
-						<div><dt>Relay</dt><dd>{ mailRelayStatus(view.MailSettings) }</dd></div>
-					</dl>
-					<p class="np-inline-error" data-np-mail-status-error hidden></p>
-					<button type="button" class="np-link-button" data-np-dialog-open="mail-settings-dialog">Mail settings</button>
-				}
-			</article>
-			<article class="np-settings-card">
-				<div class="np-settings-card-head">
-					<div>
-						<span class="np-kicker">General Settings</span>
-						<h3>General Server</h3>
-					</div>
-					<span class="np-pill np-pill-ok">live</span>
+				<div data-np-settings-inventory>
+					<span class="np-health-indicator is-unknown" aria-hidden="true"></span>
+					<p><strong>Host inventory</strong><span data-np-server-inventory-copy>Waiting for inventory</span></p>
+					<span class="np-pill np-pill-susp" data-np-server-inventory-state>unknown</span>
 				</div>
-				<dl class="np-settings-facts">
-					<div><dt>Hostname</dt><dd>ns1.nakroteck.com</dd></div>
-					<div><dt>Panel URL</dt><dd>panel.host:7443</dd></div>
-					<div><dt>Agent</dt><dd>connected</dd></div>
-					<div><dt>Timezone/NTP summary</dt><dd>{ settingsPlannedStatus() }</dd></div>
-				</dl>
-			</article>
-			<article class="np-settings-card">
-				<div class="np-settings-card-head">
-					<div>
-						<span class="np-kicker">Web Hosting</span>
-						<h3>Global PHP Settings</h3>
-					</div>
-					<span class="np-pill np-pill-pend">plan driven</span>
-				</div>
-				<dl class="np-settings-facts">
-					<div><dt>Default PHP version</dt><dd>{ settingsDefaultPHPVersion(data.Plans) }</dd></div>
-					<div><dt>Allowed versions</dt><dd>{ settingsPHPAllowlist(data.Plans) }</dd></div>
-					<div><dt>FPM limits</dt><dd>{ settingsPHPFPM(data.Plans) }</dd></div>
-					<div><dt>Extension status</dt><dd>{ settingsPlannedStatus() }</dd></div>
-				</dl>
-			</article>
-			<article class="np-settings-card">
-				<div class="np-settings-card-head">
-					<div>
-						<span class="np-kicker">Applications &amp; Databases</span>
-						<h3>Database Server Settings</h3>
-					</div>
-					<span class="np-pill np-pill-ok">MariaDB</span>
-				</div>
-				<dl class="np-settings-facts">
-					<div><dt>Default engine</dt><dd>MariaDB</dd></div>
-					<div><dt>Provisioned databases</dt><dd>{ formatPlanLimit(len(data.Databases)) }</dd></div>
-					<div><dt>External servers</dt><dd>{ settingsPlannedStatus() }</dd></div>
-				</dl>
-				if actions.CanUsePhase6 {
-					<a class="np-link-button" href="/db">Adminer SSO</a>
-				} else {
-					<span class="np-settings-disabled">Adminer SSO unavailable</span>
-				}
-			</article>
-			<article class="np-settings-card">
-				<div class="np-settings-card-head">
-					<div>
-						<span class="np-kicker">Tools &amp; Resources</span>
-						<h3>Backup Settings</h3>
-					</div>
-					<span class="np-pill np-pill-pend">policy</span>
-				</div>
-				<dl class="np-settings-facts">
-					<div><dt>Retention defaults</dt><dd>{ settingsBackupRetention(data.Plans) }</dd></div>
-					<div><dt>Backup limits</dt><dd>{ settingsBackupLimits(data.Plans) }</dd></div>
-					<div><dt>Recent backups</dt><dd>{ formatPlanLimit(len(data.Phase6.Backups)) }</dd></div>
-					<div><dt>Backup path</dt><dd>/var/lib/nakpanel/backups</dd></div>
-				</dl>
-			</article>
-			<article class="np-settings-card">
-				<div class="np-settings-card-head">
-					<div>
-						<span class="np-kicker">Security</span>
-						<h3>Firewall Settings</h3>
-					</div>
-					<span class="np-pill np-pill-pend">nftables preview</span>
-				</div>
-				<dl class="np-settings-facts">
-					<div><dt>Default inbound policy</dt><dd>deny unless generated rule allows</dd></div>
-					<div><dt>Panel service</dt><dd>TCP 7443</dd></div>
-					<div><dt>Web services</dt><dd>TCP 80, 443</dd></div>
-					<div><dt>Rule apply</dt><dd>{ settingsPlannedStatus() }</dd></div>
-				</dl>
-			</article>
-			<article class="np-settings-card">
-				<div class="np-settings-card-head">
-					<div>
-						<span class="np-kicker">Tools &amp; Resources</span>
-						<h3>SSH Terminal</h3>
-					</div>
-					<span class="np-pill np-pill-susp">gated</span>
-				</div>
-				<dl class="np-settings-facts">
-					<div><dt>Root terminal</dt><dd>Root terminal disabled</dd></div>
-					<div><dt>Plan SSH</dt><dd>{ settingsSSHAccess(data.Plans) }</dd></div>
-					<div><dt>Site-user shell</dt><dd>{ settingsPlannedStatus() }</dd></div>
-					<div><dt>Audit trail</dt><dd>{ settingsPlannedStatus() }</dd></div>
-				</dl>
-			</article>
+			</div>
+		</section>
+		<div class="np-settings-toolbar">
+			<label class="np-settings-search">
+				@icon("search")
+				<span class="np-sr-only">Search tools and settings</span>
+				<input type="search" placeholder="Search tools and settings" autocomplete="off" data-np-settings-search/>
+			</label>
+				<span class="np-settings-result-count" aria-live="polite" data-np-settings-result-count>27 tools</span>
 		</div>
+		<div class="np-settings-categories">
+			<section class="np-settings-category" aria-labelledby="settings-general-title" data-np-settings-category>
+				<header><span class="np-settings-category-icon">@icon("settings")</span><div><h3 id="settings-general-title">General Settings</h3><p>Host identity, time, and shared capacity.</p></div></header>
+				<div class="np-settings-tool-list">
+					<a class="np-settings-tool is-actionable" href="/tools-settings/server" data-np-settings-tool data-np-settings-inventory data-np-settings-keywords="hostname public url agent inventory">
+						<span class="np-settings-tool-icon">@icon("globe")</span>
+						<span class="np-settings-tool-copy"><strong>General Server</strong><span data-np-server-hostname>Loading host identity...</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-susp">inventory</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/tools-settings/server" data-np-settings-tool data-np-settings-keywords="time timezone ntp clock date">
+						<span class="np-settings-tool-icon">@icon("activity")</span>
+						<span class="np-settings-tool-copy"><strong>Date &amp; Time</strong><span data-np-server-time>Loading timezone and NTP state...</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-susp">inventory</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="#settings-capacity-title" data-np-settings-tool data-np-settings-keywords="capacity overselling quota disk resources">
+						<span class="np-settings-tool-icon">@icon("activity")</span>
+						<span class="np-settings-tool-copy"><strong>Capacity &amp; Overselling</strong><span>{ settingsCapacitySummary(data.Settings.ServerDiskCapacityMB) }; policy is { data.Settings.OversellPolicy }.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">live</span>@icon("chevron-right")</span>
+					</a>
+				</div>
+			</section>
+			<section class="np-settings-category" aria-labelledby="settings-web-title" data-np-settings-category>
+				<header><span class="np-settings-category-icon">@icon("globe")</span><div><h3 id="settings-web-title">Web &amp; PHP</h3><p>PHP-FPM policy and web service configuration.</p></div></header>
+				<div class="np-settings-tool-list">
+					<a class="np-settings-tool is-actionable" href="/tools-settings/php" data-np-settings-tool data-np-settings-keywords="php fpm versions ini extensions limits Default PHP version">
+						<span class="np-settings-tool-icon">@icon("file-code")</span>
+						<span class="np-settings-tool-copy"><strong>PHP Runtime Inventory</strong><span>Default plan policy { settingsDefaultPHPVersion(data.Plans) }; allowed { settingsPHPAllowlist(data.Plans) }; { settingsPHPFPM(data.Plans) }.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-run">plan policy</span><small data-np-server-php-count>Host handlers loading</small>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/tools-settings/services" data-np-settings-tool data-np-settings-keywords="nginx web server hosting vhost">
+						<span class="np-settings-tool-icon">@icon("layers")</span>
+						<span class="np-settings-tool-copy"><strong>Web Server</strong><span>Inspect nginx and other managed hosting services.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-susp">inventory</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/tools-settings/dns" data-np-settings-tool data-np-settings-keywords="dns bind zones records template nameserver soa transfer">
+						<span class="np-settings-tool-icon">@icon("network")</span>
+						<span class="np-settings-tool-copy"><strong>DNS Settings</strong><span>{ formatPlanLimit(len(data.Phase6.DNSZones)) } managed zones with a versioned global template.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">template active</span>@icon("chevron-right")</span>
+					</a>
+				</div>
+			</section>
+			<section class="np-settings-category" aria-labelledby="settings-security-title" data-np-settings-category>
+				<header><span class="np-settings-category-icon">@icon("shield")</span><div><h3 id="settings-security-title">Security</h3><p>Network, access, and certificate policy.</p></div></header>
+				<div class="np-settings-tool-list">
+					<a class="np-settings-tool is-actionable" href="/tools-settings/security" data-np-settings-tool data-np-settings-keywords="firewall nftables ports rules network">
+						<span class="np-settings-tool-icon">@icon("shield")</span>
+						<span class="np-settings-tool-copy"><strong>Firewall</strong><span>Inspect staged nftables policy and protected panel access.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-susp">inventory</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/tools-settings/security" data-np-settings-tool data-np-settings-keywords="ssh terminal shell access sftp keys">
+						<span class="np-settings-tool-icon">@icon("file-code")</span>
+						<span class="np-settings-tool-copy"><strong>SSH Access Policy</strong><span>Browser shell is unavailable; subscription SSH is { settingsSSHAccess(data.Plans) }.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-run">plan policy</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/certificates" data-np-settings-tool data-np-settings-keywords="tls ssl certificates acme renew security">
+						<span class="np-settings-tool-icon">@icon("shield-check")</span>
+						<span class="np-settings-tool-copy"><strong>SSL/TLS Certificates</strong><span>Manage per-domain certificates, renewal, and HTTPS redirects.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">available</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/tools-settings/backups" data-np-settings-tool data-np-settings-keywords="backup restore disaster recovery archive sftp s3 offsite retention">
+						<span class="np-settings-tool-icon">@icon("layers")</span>
+						<span class="np-settings-tool-copy"><strong>Server Backups</strong><span>Encrypted whole-server archives with local, SFTP, and S3 destinations.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-run">scheduled</span>@icon("chevron-right")</span>
+					</a>
+				</div>
+			</section>
+			<section class="np-settings-category" aria-labelledby="settings-tools-title" data-np-settings-category>
+				<header><span class="np-settings-category-icon">@icon("archive")</span><div><h3 id="settings-tools-title">Tools &amp; Resources</h3><p>Backups, scheduled work, and reconciliation.</p></div></header>
+				<div class="np-settings-tool-list">
+					<a class="np-settings-tool is-actionable" href="/backups" data-np-settings-tool data-np-settings-keywords="backup retention restore archives storage">
+						<span class="np-settings-tool-icon">@icon("archive")</span>
+						<span class="np-settings-tool-copy"><strong>Backup Settings</strong><span>{ settingsBackupRetention(data.Plans) }; { settingsBackupLimits(data.Plans) }; { formatPlanLimit(len(data.Phase6.Backups)) } tracked.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-run">plan policy</span>@icon("chevron-right")</span>
+					</a>
+					<div class="np-settings-tool" data-np-settings-tool data-np-settings-keywords="cron scheduled tasks timers jobs">
+						<span class="np-settings-tool-icon">@icon("activity")</span>
+						<div class="np-settings-tool-copy"><strong>Scheduled Tasks</strong><span>{ formatPlanLimit(len(data.SubscriptionServices.Tasks)) } subscription tasks are visible.</span></div>
+						<div class="np-settings-tool-meta"><span class="np-pill np-pill-ok">inventory</span><small>Managed per subscription</small></div>
+					</div>
+					<a class="np-settings-tool is-actionable" href="/activity" data-np-settings-tool data-np-settings-keywords="reconciliation maintenance repair drift audit">
+						<span class="np-settings-tool-icon">@icon("activity")</span>
+						<span class="np-settings-tool-copy"><strong>Reconciliation</strong><span>{ formatPlanLimit(len(data.Phase6.Reconciliations)) } recorded system reconciliation runs.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">inventory</span>@icon("chevron-right")</span>
+					</a>
+				</div>
+			</section>
+			<section class="np-settings-category" aria-labelledby="settings-server-title" data-np-settings-category>
+				<header><span class="np-settings-category-icon">@icon("activity")</span><div><h3 id="settings-server-title">Server Management</h3><p>Services, updates, diagnostics, and host operations.</p></div></header>
+				<div class="np-settings-tool-list">
+					<a class="np-settings-tool is-actionable" href="/tools-settings/services" data-np-settings-tool data-np-settings-keywords="services systemd start stop restart reload">
+						<span class="np-settings-tool-icon">@icon("settings")</span>
+						<span class="np-settings-tool-copy"><strong>Service Management</strong><span data-np-server-service-count>Loading managed services...</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-susp">inventory</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/tools-settings/updates" data-np-settings-tool data-np-settings-keywords="updates packages apt security patches">
+						<span class="np-settings-tool-icon">@icon("download")</span>
+						<span class="np-settings-tool-copy"><strong>System Updates</strong><span>Review update inventory and managed update operations.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-susp">inventory</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/tools-settings/logs" data-np-settings-tool data-np-settings-keywords="diagnostics logs activity audit jobs">
+						<span class="np-settings-tool-icon">@icon("activity")</span>
+						<span class="np-settings-tool-copy"><strong>Diagnostics &amp; Activity</strong><span>{ formatPlanLimit(len(data.Jobs)) } provisioning and maintenance jobs are visible.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">live</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/tools-settings/operations" data-np-settings-tool data-np-settings-keywords="reboot shutdown power operations reauthentication">
+						<span class="np-settings-tool-icon">@icon("settings")</span>
+						<span class="np-settings-tool-copy"><strong>Host Operations</strong><span>Guarded reboot and shutdown with recent authentication and typed confirmation.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-pend">guarded</span>@icon("chevron-right")</span>
+					</a>
+				</div>
+			</section>
+			<section class="np-settings-category" aria-labelledby="settings-mail-title" data-np-settings-category>
+				<header><span class="np-settings-category-icon">@icon("mail")</span><div><h3 id="settings-mail-title">Mail</h3><p>Stalwart delivery, relay, queue, and tenant mail.</p></div></header>
+				<div class="np-settings-tool-list">
+					<div class="np-settings-tool np-mail-settings-tool" data-np-settings-tool data-np-settings-keywords="mail stalwart smtp relay queue imap">
+						<span class="np-settings-tool-icon">@icon("mail")</span>
+						<div class="np-settings-tool-copy">
+							<strong>Mail Server</strong>
+							if view.MailSettingsError != "" {
+								<span class="np-inline-error" role="alert">{ view.MailSettingsError }</span>
+							} else {
+								<span data-np-mail-status><span data-np-mail-version>Checking status...</span>; listeners <span data-np-mail-listeners>-</span>; queue <span data-np-mail-queue>-</span>; relay { mailRelayStatus(view.MailSettings) }.</span>
+								<span class="np-inline-error" data-np-mail-status-error hidden></span>
+							}
+						</div>
+						<div class="np-settings-tool-meta">
+							if view.MailSettingsError == "" {
+								<button type="button" class="np-link-button" data-np-dialog-open="mail-settings-dialog">Settings</button>
+							} else {
+								<span class="np-pill np-pill-fail">unavailable</span>
+							}
+						</div>
+					</div>
+					<a class="np-settings-tool is-actionable" href="/mail" data-np-settings-tool data-np-settings-keywords="mail domains mailboxes aliases autoresponders webmail">
+						<span class="np-settings-tool-icon">@icon("mail")</span>
+						<span class="np-settings-tool-copy"><strong>Tenant Mail</strong><span>{ formatPlanLimit(len(data.SubscriptionServices.Mailboxes)) } mailboxes and { formatPlanLimit(len(data.SubscriptionServices.MailAliases)) } aliases.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">available</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/tools-settings/mail" data-np-settings-tool data-np-settings-keywords="stalwart queue deferred retry delivery logs smtp">
+						<span class="np-settings-tool-icon">@icon("activity")</span>
+						<span class="np-settings-tool-copy"><strong>Mail Queue &amp; Logs</strong><span>Inspect bounded queue metadata and allowlisted Stalwart journal entries.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">read only</span>@icon("chevron-right")</span>
+					</a>
+				</div>
+			</section>
+			<section class="np-settings-category" aria-labelledby="settings-apps-title" data-np-settings-category>
+				<header><span class="np-settings-category-icon">@icon("database")</span><div><h3 id="settings-apps-title">Applications &amp; Databases</h3><p>Database inventory, applications, and container services.</p></div></header>
+				<div class="np-settings-tool-list">
+					if actions.CanUsePhase6 {
+						<a class="np-settings-tool is-actionable" href="/tools-settings/databases" data-np-settings-tool data-np-settings-keywords="database mariadb adminer mysql users health integrity roles passwords">
+							<span class="np-settings-tool-icon">@icon("database")</span>
+							<span class="np-settings-tool-copy"><strong>Database Server Settings</strong><span>MariaDB health and { formatPlanLimit(len(data.Databases)) } tracked databases.</span></span>
+							<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">available</span>@icon("chevron-right")</span>
+						</a>
+					} else {
+						<div class="np-settings-tool" data-np-settings-tool data-np-settings-keywords="database mariadb adminer mysql users">
+							<span class="np-settings-tool-icon">@icon("database")</span>
+							<div class="np-settings-tool-copy"><strong>Database Server Settings</strong><span>{ formatPlanLimit(len(data.Databases)) } provisioned databases; server administration is unavailable.</span></div>
+							<div class="np-settings-tool-meta"><span class="np-pill np-pill-susp">unavailable</span><small>Adminer disabled</small></div>
+						</div>
+					}
+					<a class="np-settings-tool is-actionable" href="/tools-settings/application-catalog" data-np-settings-tool data-np-settings-keywords="applications catalog containers podman oci images">
+						<span class="np-settings-tool-icon">@icon("package-open")</span>
+						<span class="np-settings-tool-copy"><strong>Applications</strong><span>{ formatPlanLimit(len(data.SubscriptionServices.Applications)) } subscription applications are visible.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">inventory</span>@icon("chevron-right")</span>
+					</a>
+					<div class="np-settings-tool" data-np-settings-tool data-np-settings-keywords="podman container runtime images registry quadlet">
+						<span class="np-settings-tool-icon">@icon("layers")</span>
+						<div class="np-settings-tool-copy"><strong>Container Runtime</strong><span>Podman version, storage, and registry policy are not collected.</span></div>
+						<div class="np-settings-tool-meta"><span class="np-pill np-pill-susp">unknown</span><small>No host data</small></div>
+					</div>
+				</div>
+			</section>
+			<section class="np-settings-category" aria-labelledby="settings-monitoring-title" data-np-settings-category>
+				<header><span class="np-settings-category-icon">@icon("activity")</span><div><h3 id="settings-monitoring-title">Monitoring &amp; Logs</h3><p>Resource health, background work, and audit records.</p></div></header>
+				<div class="np-settings-tool-list">
+					<a class="np-settings-tool is-actionable" href="/tools-settings/server" data-np-settings-tool data-np-settings-keywords="monitoring cpu memory disk inode load resources">
+						<span class="np-settings-tool-icon">@icon("activity")</span>
+						<span class="np-settings-tool-copy"><strong>Resource Monitoring</strong><span>Inspect current CPU and memory inventory with collection freshness.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-susp">inventory</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/activity" data-np-settings-tool data-np-settings-keywords="background jobs river queues provisioning maintenance">
+						<span class="np-settings-tool-icon">@icon("layers")</span>
+						<span class="np-settings-tool-copy"><strong>Background Jobs</strong><span>{ formatPlanLimit(len(data.Jobs)) } jobs are available in Activity.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">live</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/activity" data-np-settings-tool data-np-settings-keywords="audit log security events history">
+						<span class="np-settings-tool-icon">@icon("shield-check")</span>
+						<span class="np-settings-tool-copy"><strong>Audit Log</strong><span>Review panel actions, resource changes, and convergence events.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">available</span>@icon("chevron-right")</span>
+					</a>
+				</div>
+			</section>
+			<section class="np-settings-category" aria-labelledby="settings-panel-title" data-np-settings-category>
+				<header><span class="np-settings-category-icon">@icon("settings")</span><div><h3 id="settings-panel-title">Panel Administration</h3><p>Plans, provider policy, and Nakpanel configuration.</p></div></header>
+				<div class="np-settings-tool-list">
+					<a class="np-settings-tool is-actionable" href="/service-plans" data-np-settings-tool data-np-settings-keywords="service plans packages php limits policy">
+						<span class="np-settings-tool-icon">@icon("layers")</span>
+						<span class="np-settings-tool-copy"><strong>Service Plans</strong><span>{ formatPlanLimit(len(data.Plans)) } plan revisions define subscription defaults and limits.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">live</span>@icon("chevron-right")</span>
+					</a>
+					<a class="np-settings-tool is-actionable" href="/resellers" data-np-settings-tool data-np-settings-keywords="providers resellers allocations delegation">
+						<span class="np-settings-tool-icon">@icon("users")</span>
+						<span class="np-settings-tool-copy"><strong>Providers &amp; Resellers</strong><span>{ formatPlanLimit(len(data.Resellers)) } reseller providers are configured.</span></span>
+						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">live</span>@icon("chevron-right")</span>
+					</a>
+				</div>
+			</section>
+		</div>
+		<p class="np-settings-empty" data-np-settings-empty hidden>No tools or settings match your search.</p>
 		if view.MailSettingsError == "" {
 			@mailSettingsDialog(view)
 		}
@@ -876,8 +1156,9 @@ templ settingsSection(data dashboard.Data, actions DashboardActions, view Worksp
 					@capacityCard(data.Settings, data.CommittedDiskMB, data.Quotas, actions, view.CSRFToken)
 					<form class="np-form np-action-form np-settings-form" method="post" action="/settings/oversell">
 						@csrfTokenInput(view.CSRFToken)
-						<label>Oversell <select name="oversell_policy"><option value="warn">warn</option><option value="cap">cap</option></select></label>
+						<label>Oversell <select name="oversell_policy"><option value="warn" selected?={ data.Settings.OversellPolicy == "warn" }>warn</option><option value="cap" selected?={ data.Settings.OversellPolicy == "cap" }>cap</option></select></label>
 						<label>Capacity MB <input type="number" min="0" name="server_disk_capacity_mb" value={ formatSettingsCapacity(data.Settings.ServerDiskCapacityMB) } required/></label>
+						<label>Valkey capacity MB <input type="number" min="0" name="valkey_capacity_mb" value={ formatSettingsCapacity(data.Settings.ValkeyCapacityMB) } required/></label>
 						<button type="submit">Save settings</button>
 					</form>
 				</div>
@@ -892,10 +1173,509 @@ templ settingsSection(data dashboard.Data, actions DashboardActions, view Worksp
 	</section>
 }
 
+templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
+	<section class="np-settings-focus" data-np-settings-inventory aria-labelledby="settings-focus-title">
+		<a class="np-back-link" href="/tools-settings">@icon("corner-up-left") All tools and settings</a>
+		switch view.SettingsFocus {
+			case "server":
+					<div class="np-settings-focus-head"><div><span class="np-kicker">Server Management</span><h3 id="settings-focus-title">Server Information</h3><p>Latest host, time, resource, and component inventory collected by the agent.</p></div><span class="np-pill np-pill-susp" data-np-server-inventory-state>unknown</span></div>
+				<dl class="np-settings-facts">
+					<div><dt>Hostname</dt><dd data-np-focus-hostname>Unknown</dd></div>
+					<div><dt>Operating system</dt><dd data-np-focus-os>Unknown</dd></div>
+					<div><dt>Kernel</dt><dd data-np-focus-kernel>Unknown</dd></div>
+					<div><dt>Timezone / NTP</dt><dd data-np-focus-time>Unknown</dd></div>
+					<div><dt>CPU</dt><dd data-np-focus-cpu>Unknown</dd></div>
+					<div><dt>Memory</dt><dd data-np-focus-memory>Unknown</dd></div>
+				</dl>
+			case "php":
+					<div class="np-settings-focus-head"><div><span class="np-kicker">Web &amp; PHP</span><h3 id="settings-focus-title">PHP Runtime Inventory</h3><p>Supported PHP-FPM versions, service state, host CLI module counts, and FPM configuration validation. Runtime mutation stays hidden until validated apply and rollback are available.</p></div><span class="np-pill np-pill-susp" data-np-server-inventory-state>unknown</span></div>
+				<div class="np-settings-runtime-list" data-np-focus-php><p class="np-empty">Loading PHP-FPM inventory...</p></div>
+			case "services":
+				<div class="np-settings-focus-head">
+					<div><span class="np-kicker">Server Management</span><h3 id="settings-focus-title">Managed Services</h3><p>Monitor the allowlisted services that power the panel and hosting stack. Changes are validated and serialized through the system operation queue.</p></div>
+					<div class="np-service-head-actions">
+						<span class="np-pill np-pill-susp" data-np-server-inventory-state>checking</span>
+						<button type="button" class="np-secondary-button np-service-refresh" data-np-service-refresh>
+							@icon("activity")
+							<span data-np-service-refresh-label>Refresh</span>
+						</button>
+					</div>
+				</div>
+				<div class="np-service-overview" aria-label="Service inventory summary">
+					<div><span>Running</span><strong data-np-service-running>—</strong><small>active services</small></div>
+					<div><span>Stopped</span><strong data-np-service-stopped>—</strong><small>available but inactive</small></div>
+					<div><span>Unavailable</span><strong data-np-service-unavailable>—</strong><small>not installed on this host</small></div>
+					<div><span>Last checked</span><strong class="np-service-checked" data-np-service-checked>—</strong><small data-np-service-host>Waiting for inventory</small></div>
+				</div>
+				<div class="np-service-authorization">
+					<div class="np-service-authorization-copy">
+						<span class="np-settings-category-icon">@icon("shield-check")</span>
+						<div><strong>Protected service controls</strong><p>Restart and stop actions require a recent administrator password confirmation.</p></div>
+					</div>
+					<details class="np-service-auth-details">
+						<summary>Authorize actions</summary>
+						<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+							<label><span>Administrator password</span><input type="password" name="password" autocomplete="current-password" required/></label>
+							<button type="submit" class="np-secondary-button">Authorize for 10 minutes</button>
+							<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>
+						</form>
+					</details>
+				</div>
+				<p class="np-notice" data-np-service-operation role="status" aria-live="polite" hidden></p>
+				<div class="np-settings-service-groups" data-np-focus-services aria-live="polite"><p class="np-empty">Loading managed services...</p></div>
+			case "updates":
+				<div class="np-settings-focus-head">
+					<div><span class="np-kicker">Server Management</span><h3 id="settings-focus-title">System Updates</h3><p>Review signed repository inventory, simulate package changes, and schedule guarded installations.</p></div>
+					<div class="np-update-head-actions">
+						<span class="np-pill np-pill-susp" data-np-update-state>checking</span>
+						<button type="button" class="np-secondary-button np-update-refresh" data-np-update-refresh>
+							@icon("activity")
+							<span data-np-update-refresh-label>Refresh inventory</span>
+						</button>
+					</div>
+				</div>
+				<div class="np-service-overview np-update-overview" aria-label="Update inventory summary">
+					<div><span>Security</span><strong data-np-update-security>—</strong><small>security updates</small></div>
+					<div><span>Other</span><strong data-np-update-standard>—</strong><small>standard updates</small></div>
+					<div><span>Restart posture</span><strong class="np-update-summary-word" data-np-update-reboot>—</strong><small>after installation</small></div>
+					<div><span>Repository data</span><strong class="np-update-summary-word" data-np-update-freshness>—</strong><small data-np-update-checked>Waiting for inventory</small></div>
+				</div>
+				<div class="np-service-authorization np-update-authorization">
+					<div class="np-service-authorization-copy">
+						<span class="np-settings-category-icon">@icon("shield-check")</span>
+						<div><strong>Protected update controls</strong><p>Installation requires a recent administrator password confirmation and typed approval.</p></div>
+					</div>
+					<details class="np-service-auth-details">
+						<summary>Authorize installation</summary>
+						<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+							<label><span>Administrator password</span><input type="password" name="password" autocomplete="current-password" required/></label>
+							<button type="submit" class="np-secondary-button">Authorize for 10 minutes</button>
+							<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>
+						</form>
+					</details>
+				</div>
+				<p class="np-notice" data-np-update-operation role="status" aria-live="polite" hidden></p>
+				<section class="np-update-inventory" aria-labelledby="update-inventory-title">
+					<header class="np-update-inventory-head">
+						<div><h4 id="update-inventory-title">Available packages</h4><p data-np-update-summary>Loading update inventory...</p></div>
+						<button type="button" class="np-secondary-button" data-np-update-dry-run>@icon("activity") Simulate changes</button>
+					</header>
+					<div class="np-update-toolbar">
+						<label class="np-update-search">
+							@icon("search")
+							<span class="np-sr-only">Search packages</span>
+							<input type="search" placeholder="Search packages" autocomplete="off" data-np-update-search/>
+						</label>
+						<label class="np-update-filter-label">
+							<span>Class</span>
+							<select data-np-update-filter>
+								<option value="all">All updates</option>
+								<option value="security">Security</option>
+								<option value="standard">Standard</option>
+								<option value="held">Held</option>
+							</select>
+						</label>
+						<label class="np-check np-update-select-visible"><input type="checkbox" data-np-update-select-all/> Select shown</label>
+						<span class="np-update-visible-count" data-np-update-visible-count aria-live="polite">Loading packages</span>
+					</div>
+					<div class="np-table-wrap np-settings-update-table">
+						<table class="np-table np-update-table">
+							<thead><tr><th><span class="np-sr-only">Select</span></th><th>Package</th><th>Current</th><th>Candidate</th><th>Class</th></tr></thead>
+							<tbody data-np-update-packages><tr><td colspan="5">Loading update inventory...</td></tr></tbody>
+						</table>
+					</div>
+					<p class="np-update-empty" data-np-update-empty hidden>No packages match this filter.</p>
+				</section>
+				<form id="np-update-install-form" class="np-update-install-panel" method="post" action="/tools-settings/operations/updates" data-np-update-install-form>
+					<div class="np-update-install-copy">
+						<span class="np-settings-category-icon">@icon("download")</span>
+						<div><strong>Install selected updates</strong><p><span data-np-update-selected-count>0 packages selected</span>. Installations run through the serialized system operation queue.</p></div>
+					</div>
+					<label class="np-check np-update-security-only"><input type="checkbox" name="security_only" value="true"/> Install all security updates</label>
+					<label class="np-update-confirmation"><span>Typed confirmation</span><input name="confirmation" autocomplete="off" placeholder="INSTALL UPDATES" required/></label>
+					<button type="submit" class="np-danger-button" data-np-update-install disabled data-np-confirm="Install the selected updates? Package services may restart.">Install updates</button>
+				</form>
+			case "security":
+				<div class="np-settings-focus-head"><div><span class="np-kicker">Security</span><h3 id="settings-focus-title">Security Policy</h3><p>Managed nftables firewall (staged with timed auto-rollback), operational Fail2ban with panel-login protection, and login alerting.</p></div><span class="np-pill np-pill-susp" data-np-security-state>checking</span></div>
+				<p class="np-notice" data-np-security-smtp-warning hidden>SMTP delivery is not configured (NAKPANEL_SMTP_HOST / NAKPANEL_SMTP_FROM), so login and backup alerts stay in the panel only.</p>
+				<dl class="np-settings-facts">
+					<div><dt>Managed firewall</dt><dd data-np-security-firewall>Unknown</dd></div>
+					<div><dt>Inbound policy</dt><dd data-np-security-inbound>Unknown</dd></div>
+					<div><dt>Fail2ban</dt><dd data-np-security-fail2ban>Unknown</dd></div>
+					<div><dt>SSH</dt><dd data-np-security-ssh>Unknown</dd></div>
+					<div><dt>TLS profile</dt><dd data-np-security-tls>Unknown</dd></div>
+				</dl>
+				<div class="np-settings-guardrail"><strong>Staged firewall changes</strong><p>Firewall mutations validate only <code>table inet nakpanel</code>, preserve unrelated tables (ufw included), and auto-revert unless confirmed before the rollback deadline. Fail2ban applies directly with in-place rollback on reload failure.</p></div>
+				<h4>Active bans</h4>
+				<div class="np-table-wrap">
+					<table class="np-table">
+						<thead><tr><th>Jail</th><th>Banned addresses</th><th>Actions</th></tr></thead>
+						<tbody data-np-security-bans><tr><td colspan="3">Loading jail status...</td></tr></tbody>
+					</table>
+				</div>
+				<div class="np-settings-actions">
+					<button type="button" class="np-secondary-button" data-np-security-fail2ban-defaults data-np-confirm="Apply the default Fail2ban policy (sshd + panel-login jails, 5 retries, 1h ban)?">Apply default Fail2ban policy</button>
+				</div>
+				<h4>Staged firewall operation</h4>
+				<p class="np-empty" data-np-security-op-copy>No staged firewall change is pending.</p>
+				<form class="np-form" data-np-security-op-form hidden>
+					<label>Operation ID <input type="text" name="operation_id" readonly/></label>
+					<div class="np-settings-actions">
+						<button type="button" class="np-secondary-button" data-np-security-op-confirm>Confirm</button>
+						<button type="button" class="np-danger-button" data-np-security-op-revert>Revert now</button>
+					</div>
+				</form>
+				<p class="np-notice" data-np-security-action-state hidden></p>
+			case "backups":
+				<div class="np-settings-focus-head"><div><span class="np-kicker">Security</span><h3 id="settings-focus-title">Server Backups &amp; Disaster Recovery</h3><p>Whole-server archives (panel database, configuration, tenant data, mail, DNS, certificates) encrypted with AES-256-GCM and shipped to local, SFTP, or S3-compatible destinations on a schedule.</p></div><span class="np-pill np-pill-susp" data-np-backup-state>checking</span></div>
+				<p class="np-notice" data-np-backup-smtp-warning hidden>SMTP delivery is not configured (NAKPANEL_SMTP_HOST / NAKPANEL_SMTP_FROM), so backup failure alerts will stay in the panel only.</p>
+				<dl class="np-settings-facts">
+					<div><dt>Archive key</dt><dd data-np-backup-key>Unknown</dd></div>
+					<div><dt>Destinations</dt><dd data-np-backup-destination-count>Unknown</dd></div>
+					<div><dt>Latest backup</dt><dd data-np-backup-latest>Unknown</dd></div>
+				</dl>
+				<div class="np-settings-guardrail"><strong>Key custody</strong><p>The archive key is shown exactly once when generated. Store it offline: a destroyed server can only be rebuilt from an archive together with this key (<code>panelctl restore-server</code>).</p></div>
+				<div class="np-settings-actions">
+					<button type="button" class="np-secondary-button" data-np-backup-key-init data-np-confirm="Generate the backup archive key now? It is displayed exactly once.">Generate archive key</button>
+				</div>
+				<pre class="np-notice" data-np-backup-key-output hidden></pre>
+				<h4>Destinations</h4>
+				<div class="np-table-wrap">
+					<table class="np-table">
+						<thead><tr><th>Name</th><th>Kind</th><th>Schedule</th><th>Retention</th><th>Last success</th><th>Actions</th></tr></thead>
+						<tbody data-np-backup-destinations><tr><td colspan="6">Loading destinations...</td></tr></tbody>
+					</table>
+				</div>
+				<p class="np-empty">Add or edit destinations with <code>panelctl backup-server destination add</code>; credentials are sealed in the encrypted service-secret store.</p>
+				<h4>Recent archives</h4>
+				<div class="np-table-wrap">
+					<table class="np-table">
+						<thead><tr><th>ID</th><th>Destination</th><th>Status</th><th>Archive</th><th>Size</th><th>Verified</th></tr></thead>
+						<tbody data-np-backup-rows><tr><td colspan="6">Loading server backups...</td></tr></tbody>
+					</table>
+				</div>
+				<p class="np-notice" data-np-backup-error hidden></p>
+			case "logs":
+				<div class="np-settings-focus-head"><div><span class="np-kicker">Monitoring &amp; Logs</span><h3 id="settings-focus-title">Diagnostics &amp; Activity</h3><p>Journal reads are source-allowlisted, capped at 1,000 entries, and limited to a 30-day window.</p></div><span class="np-pill np-pill-ok">bounded</span></div>
+				<form class="np-settings-log-toolbar" data-np-journal-filter>
+					<label>Source<select name="source">
+						<option value="panel">Panel</option>
+						<option value="agent">Agent</option>
+						<option value="web">Web and PHP</option>
+						<option value="dns">DNS</option>
+						<option value="mail">Mail</option>
+						<option value="database">Databases</option>
+						<option value="system">System services</option>
+					</select></label>
+					<label>Window<select name="hours"><option value="1">Last hour</option><option value="6">Last 6 hours</option><option value="24">Last 24 hours</option><option value="168">Last 7 days</option></select></label>
+					<label>Entries<select name="limit"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option><option value="500">500</option></select></label>
+					<button type="submit" class="np-secondary-button">Refresh</button>
+				</form>
+				<p class="np-notice" data-np-journal-state hidden></p>
+				<div class="np-table-wrap np-settings-log-table">
+					<table class="np-table">
+						<thead><tr><th>Time</th><th>Source</th><th>Priority</th><th>Message</th></tr></thead>
+						<tbody data-np-journal-entries><tr><td colspan="4">Loading bounded journal entries...</td></tr></tbody>
+					</table>
+				</div>
+				<a class="np-settings-tool is-actionable" href="/activity"><span class="np-settings-tool-icon">@icon("activity")</span><span class="np-settings-tool-copy"><strong>Open Activity</strong><span>Review River jobs, convergence failures, and audit outcomes.</span></span><span class="np-settings-tool-meta">@icon("chevron-right")</span></a>
+			case "dns":
+				@dnsSettingsFocus(view)
+			case "mail":
+				<div class="np-settings-focus-head"><div><span class="np-kicker">Mail</span><h3 id="settings-focus-title">Mail Queue &amp; Logs</h3><p>Metadata-only Stalwart queue inspection and bounded mail journal reads. Message bodies and arbitrary queries are never exposed.</p></div><span class="np-pill np-pill-ok">read only</span></div>
+				<form class="np-settings-log-toolbar" data-np-mail-queue-filter>
+					<label>State<select name="state"><option value="">All</option><option value="queued">Queued</option><option value="deferred">Deferred</option></select></label>
+					<label>Older than<select name="older_than_minutes"><option value="">Any age</option><option value="15">15 minutes</option><option value="60">1 hour</option><option value="1440">1 day</option></select></label>
+					<label>Limit<select name="limit"><option value="25">25</option><option value="50" selected>50</option><option value="100">100</option><option value="200">200</option></select></label>
+					<button type="submit" class="np-secondary-button">Refresh queue</button>
+				</form>
+				<p class="np-notice" data-np-mail-queue-state hidden></p>
+				<div class="np-table-wrap">
+					<table class="np-table">
+						<thead><tr><th>ID</th><th>Sender</th><th>State</th><th>Recipients</th><th>Created</th><th>Size</th></tr></thead>
+						<tbody data-np-mail-queue-rows><tr><td colspan="6">Loading queue metadata...</td></tr></tbody>
+					</table>
+				</div>
+				<div class="np-settings-focus-head np-settings-subhead"><div><h3>Mail logs</h3><p>The source is fixed to the Stalwart journal and capped at 500 entries.</p></div></div>
+				<form class="np-settings-log-toolbar" data-np-mail-log-filter>
+					<label>Window<select name="since_minutes"><option value="60">Last hour</option><option value="360">Last 6 hours</option><option value="1440">Last day</option><option value="10080">Last 7 days</option></select></label>
+					<label>Entries<select name="limit"><option value="50">50</option><option value="100" selected>100</option><option value="200">200</option><option value="500">500</option></select></label>
+					<button type="submit" class="np-secondary-button">Refresh logs</button>
+				</form>
+				<div class="np-table-wrap">
+					<table class="np-table">
+						<thead><tr><th>Time</th><th>Priority</th><th>Message</th></tr></thead>
+						<tbody data-np-mail-log-rows><tr><td colspan="3">Loading bounded mail logs...</td></tr></tbody>
+					</table>
+				</div>
+			case "databases":
+				<div class="np-settings-focus-head"><div><span class="np-kicker">Applications &amp; Databases</span><h3 id="settings-focus-title">MariaDB Administration</h3><p>Live health and tracked database checks. Names and principals come only from Nakpanel records.</p></div><span class="np-pill np-pill-susp" data-np-database-state>checking</span></div>
+					<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+						<label><span>Confirm administrator password before rotating credentials or changing roles</span><input type="password" name="password" autocomplete="current-password" required/></label>
+						<button type="submit" class="np-secondary-button">Reauthenticate</button>
+						<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>
+					</form>
+					<p class="np-notice" data-np-database-operation role="status" aria-live="polite" hidden></p>
+				<div class="np-settings-update-summary" data-np-database-summary>Loading MariaDB health...</div>
+				<div class="np-table-wrap">
+					<table class="np-table">
+						<thead><tr><th>Database</th><th>Principal</th><th>Tracked state</th><th>Live state</th><th>Actions</th></tr></thead>
+						<tbody data-np-database-rows><tr><td colspan="5">Loading tracked databases...</td></tr></tbody>
+					</table>
+				</div>
+			case "applications":
+				<div class="np-settings-focus-head"><div><span class="np-kicker">Applications &amp; Containers</span><h3 id="settings-focus-title">Provider Application Catalog</h3><p>Provider-curated, digest-pinned OCI recipes. Managed WordPress, Node.js, and Python recipes remain unavailable until their adapters are installed.</p></div><span class="np-pill np-pill-ok">OCI only</span></div>
+				<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Recipe</th><th>Runtime</th><th>Image</th><th>Status</th></tr></thead><tbody>
+					for _, preset := range data.SubscriptionServices.ApplicationPresets {
+						<tr><td data-label="Recipe"><strong>{ preset.Name }</strong><small>{ preset.Slug }</small></td><td data-label="Runtime">{ preset.Runtime }</td><td data-label="Image"><code>{ shortImageReference(preset.ImageRef) }</code></td><td data-label="Status">
+							if preset.Active {
+								@statusPill("active")
+							} else {
+								@statusPill("inactive")
+							}
+						</td></tr>
+					}
+				</tbody></table></div>
+				<form class="np-form np-action-form" method="post" action="/application-presets">@csrfInput(view)
+					<div class="np-form-grid"><label>Name<input name="name" required/></label><label>Slug<input name="slug" pattern="[a-z][a-z0-9-]{1,47}" required/></label><input type="hidden" name="runtime" value="oci"/><label class="np-wide-field">Digest-pinned OCI image<input name="image_ref" placeholder="docker.io/vendor/image@sha256:..." required/></label><label>Container port<input type="number" name="container_port" min="1" max="65535" value="8080" required/></label><label>Health check<select name="health_kind"><option value="http">HTTP</option><option value="tcp">TCP</option></select></label><label>Health path<input name="health_path" value="/healthz"/></label><label>Readiness timeout<input type="number" name="health_timeout_seconds" min="1" max="300" value="30"/></label><label class="np-wide-field">Provider-declared volume slots<textarea name="volumes" rows="4" spellcheck="false" placeholder={ "[{\"name\":\"data\",\"target\":\"/data\",\"size_mb\":1024,\"read_only\":false}]" }></textarea></label><label class="np-check"><input type="checkbox" name="active" value="true" checked/>Available to new deployments</label></div>
+					<p class="np-form-help">Mutable tags are rejected. Service plans grant recipes by slug; volume targets and sizes are versioned with the recipe, and the agent independently revalidates the manifest.</p><button type="submit">Save catalog recipe</button>
+				</form>
+				<div class="np-settings-focus-head"><div><h3>Observed catalog usage</h3><p>Aggregated instance state. Image digests, environment values, and mounted secrets are omitted.</p></div><span class="np-pill np-pill-susp" data-np-application-state>checking</span></div>
+				<div class="np-table-wrap">
+					<table class="np-table">
+						<thead><tr><th>Catalog</th><th>Runtime</th><th>Instances</th><th>Running</th><th>Stopped</th><th>Failed / Pending</th><th>Last change</th></tr></thead>
+						<tbody data-np-application-rows><tr><td colspan="7">Loading application catalog inventory...</td></tr></tbody>
+					</table>
+				</div>
+			case "operations":
+				<div class="np-settings-focus-head"><div><span class="np-kicker">Server Management</span><h3 id="settings-focus-title">Host Operations</h3><p>Disruptive operations run on the single-worker system queue and require recent authentication plus typed confirmation.</p></div><span class="np-pill np-pill-pend">guarded</span></div>
+					<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+						<label><span>Confirm administrator password for host operations</span><input type="password" name="password" autocomplete="current-password" required/></label>
+						<button type="submit" class="np-secondary-button">Reauthenticate</button>
+						<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>
+					</form>
+					<p class="np-notice" data-np-power-operation role="status" aria-live="polite" hidden></p>
+				<div class="np-settings-guardrail"><strong>Out-of-band access required</strong><p>Shutdown is available only when another management path can power the host on again. Both actions are audit logged before execution.</p></div>
+				<div class="np-settings-operation-actions">
+					<button type="button" class="np-danger-button" data-np-power-action="reboot">Reboot host</button>
+					<button type="button" class="np-danger-button" data-np-power-action="shutdown">Shut down host</button>
+				</div>
+					<dialog class="np-dialog" id="host-power-dialog" data-np-dialog aria-labelledby="host-power-title" aria-describedby="host-power-copy">
+					<form method="post" action="/tools-settings/operations/power" class="np-dialog-form" data-np-power-form>
+							<div class="np-dialog-head"><span class="np-kicker">Guarded host operation</span><h2 id="host-power-title" data-np-power-title>Confirm host operation</h2><p id="host-power-copy" data-np-power-copy>Reauthenticate first, then type the required confirmation.</p></div>
+						<input type="hidden" name="action"/>
+						<label>Typed confirmation<input name="confirmation" autocomplete="off" required data-np-power-confirmation/></label>
+						<label class="np-check" data-np-power-oob><input type="checkbox" name="out_of_band_acknowledged" value="true"/> I have an out-of-band path to power this host on again.</label>
+						<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Queue operation</button></div>
+					</form>
+				</dialog>
+		}
+	</section>
+}
+
+templ dnsSettingsFocus(view WorkspaceView) {
+	<div class="np-settings-focus-head">
+		<div><span class="np-kicker">Web &amp; PHP</span><h3 id="settings-focus-title">DNS Settings</h3><p>Versioned defaults for new authoritative zones, safe synchronization, SOA policy, and transfer restrictions.</p></div>
+		if view.DNSSettings.Template.ID > 0 {
+			<span class="np-pill np-pill-ok">revision { formatJobID(view.DNSSettings.Template.Revision) }</span>
+		} else {
+			<span class="np-pill np-pill-susp">unknown</span>
+		}
+	</div>
+	if view.DNSSettingsError != "" {
+		<p class="np-gate is-blocked">{ view.DNSSettingsError }</p>
+	} else if template := view.DNSSettings.Template; template.ID > 0 {
+		<div class="np-dns-settings-workspace" data-np-dns-settings-workspace data-default-tab={ dnsSettingsDefaultTab(view) }>
+			<nav class="np-settings-tabs np-dns-settings-tabs" role="tablist" aria-label="DNS settings sections">
+				<a id="dns-tab-records" href="#dns-record-template" role="tab" data-np-dns-settings-tab="records" aria-controls="dns-record-template">@icon("layers")<span>Records</span></a>
+				<a id="dns-tab-policy" href="#dns-policy" role="tab" data-np-dns-settings-tab="policy" aria-controls="dns-policy">@icon("settings")<span>DNS policy</span></a>
+				<a id="dns-tab-sync" href="#dns-sync" role="tab" data-np-dns-settings-tab="sync" aria-controls="dns-sync">@icon("activity")<span>Sync zones</span></a>
+				<a id="dns-tab-history" href="#dns-sync-history" role="tab" data-np-dns-settings-tab="history" aria-controls="dns-sync-history">@icon("activity")<span>History</span></a>
+			</nav>
+			<section class="np-dns-template-section" id="dns-record-template" role="tabpanel" aria-labelledby="dns-tab-records" data-np-dns-settings-panel="records" data-np-dns-workspace>
+				<header class="np-dns-template-head"><div><h4>Zone Records Template</h4><p>New zones receive this revision. Existing zones change only after a preview and confirmed synchronization.</p></div></header>
+				<div class="np-dns-commandbar">
+					<button type="button" data-np-dialog-open="dns-template-record-dialog">@icon("plus")<span>Add record</span></button>
+					<label class="np-dns-command-search">@icon("search")<input type="search" placeholder="Search host, value, or key" aria-label="Search template records" data-np-dns-search/></label>
+					<select aria-label="Template record type" data-np-dns-type><option value="">All types</option><option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option><option>TXT</option><option>NS</option><option>SRV</option><option>CAA</option><option>DS</option></select>
+					<span class="np-dns-result-count" data-np-dns-result-count role="status" aria-live="polite">{ dnsRecordCountLabel(len(template.Records)) }</span>
+					<details class="np-dns-action-menu">
+						<summary class="np-icon-button" title="More DNS template actions">@icon("ellipsis")<span class="np-sr-only">More actions</span></summary>
+						<div>
+							<a href="#dns-sync" data-np-dns-settings-jump="sync">@icon("activity")<span>Preview synchronization</span></a>
+							<button type="button" data-np-dialog-open="dns-authorization-dialog">@icon("shield-check")<span>Authorize protected changes</span></button>
+							<button type="button" class="is-danger" data-np-dialog-open="dns-template-reset-dialog">@icon("corner-up-left")<span>Reset defaults</span></button>
+						</div>
+					</details>
+				</div>
+				<div class="np-table-wrap">
+					<table class="np-table np-dns-template-table">
+						<thead><tr><th>Host</th><th>Type</th><th>Value</th><th>Scope</th><th>TTL</th><th>Key</th><th><span class="np-sr-only">Actions</span></th></tr></thead>
+						<tbody>
+							for _, record := range template.Records {
+								<tr data-np-dns-row data-type={ record.Type } data-search={ record.HostTemplate+" "+record.ValueTemplate+" "+record.StableKey+" "+record.Scope }><td data-label="Host"><code>{ record.HostTemplate }</code></td><td data-label="Type">{ record.Type }</td><td data-label="Value"><code>{ record.ValueTemplate }</code></td><td data-label="Scope">{ record.Scope }</td><td data-label="TTL">{ formatPlanLimit(record.TTL) }</td><td data-label="Key"><code>{ record.StableKey }</code></td><td data-label="Action"><div class="np-row-actions"><button type="button" class="np-icon-button" title="Edit template record" data-np-dialog-open={ "dns-template-edit-"+formatJobID(record.ID) }>@icon("settings")</button><form method="post" action={ templ.SafeURL("/tools-settings/dns/template/records/"+formatJobID(record.ID)+"/delete") }>@csrfInput(view)<input type="hidden" name="expected_revision" value={ formatJobID(template.OptimisticRevision) }/><button type="submit" class="np-icon-button" title="Remove from the next template revision" data-np-confirm="Remove this record from the next template revision?">@icon("x")</button></form></div></td></tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				<p class="np-dns-filter-empty" data-np-dns-filter-empty role="status" aria-live="polite" hidden>No template records match this search.</p>
+				for _, record := range template.Records {
+					@dnsTemplateEditDialog(view,template,record)
+				}
+			</section>
+			<section class="np-dns-template-section" id="dns-policy" role="tabpanel" aria-labelledby="dns-tab-policy" data-np-dns-settings-panel="policy">
+				<header class="np-dns-template-head"><div><h4>SOA Template &amp; Transfer Restrictions</h4><p>Typed authority, timing, topology, and AXFR defaults. Raw BIND configuration is never accepted.</p></div><button type="button" class="np-secondary-button" data-np-dialog-open="dns-authorization-dialog">@icon("shield-check")<span>Authorize</span></button></header>
+				<dl class="np-dns-policy-summary">
+					<div><dt>Primary nameserver</dt><dd>{ template.SOA.PrimaryNameserver }</dd></div>
+					<div><dt>Default TTL</dt><dd>{ formatPlanLimit(template.SOA.DefaultTTL) } seconds</dd></div>
+					<div><dt>New zones</dt><dd>{ template.ZoneStatus }</dd></div>
+					<div><dt>Subdomains</dt><dd>{ template.SubdomainPolicy }</dd></div>
+					<div><dt>AXFR allowlist</dt><dd>{ formatPlanLimit(len(template.TransferCIDRs)) } CIDRs</dd></div>
+				</dl>
+				<form class="np-form np-dns-settings-form np-dns-policy-form" method="post" action="/tools-settings/dns/template/settings">
+					@csrfInput(view)
+					<input type="hidden" name="expected_revision" value={ formatJobID(template.OptimisticRevision) }/>
+					<details class="np-dns-advanced-group" open>
+						<summary><span><strong>Authority and zone defaults</strong><small>Nameserver identity, serial strategy, default TTL, and subdomain placement.</small></span>@icon("chevron-right")</summary>
+						<div class="np-dns-settings-fields">
+							<label>Primary nameserver<input name="primary_nameserver" value={ template.SOA.PrimaryNameserver } required/></label>
+							<label>Responsible mailbox<input name="responsible_mailbox" value={ template.SOA.ResponsibleMailbox } required/></label>
+							<label>Serial format<select name="serial_format"><option value="unix" selected?={ template.SOA.SerialFormat=="unix" }>Unix monotonic</option><option value="date-counter" selected?={ template.SOA.SerialFormat=="date-counter" }>Date and counter</option></select></label>
+							<label>Default TTL<input type="number" name="default_ttl" min="60" max="86400" value={ formatPlanLimit(template.SOA.DefaultTTL) } required/></label>
+							<label>New-zone state<select name="zone_status"><option value="active" selected?={ template.ZoneStatus=="active" }>Active</option><option value="disabled" selected?={ template.ZoneStatus=="disabled" }>Disabled</option></select></label>
+							<label>Subdomain policy<select name="subdomain_policy"><option value="parent" selected?={ template.SubdomainPolicy=="parent" }>Use parent zone</option><option value="separate" selected?={ template.SubdomainPolicy=="separate" }>Separate authoritative zone</option></select></label>
+						</div>
+					</details>
+					<details class="np-dns-advanced-group" id="dns-transfer-policy">
+						<summary><span><strong>Advanced timing and transfers</strong><small>SOA refresh behavior and the networks allowed to transfer zones.</small></span>@icon("chevron-right")</summary>
+						<div class="np-dns-settings-fields">
+							<label>Refresh<input type="number" name="refresh_seconds" min="300" max="86400" value={ formatPlanLimit(template.SOA.RefreshSeconds) } required/></label>
+							<label>Retry<input type="number" name="retry_seconds" min="60" max="86400" value={ formatPlanLimit(template.SOA.RetrySeconds) } required/></label>
+							<label>Expire<input type="number" name="expire_seconds" min="86400" max="2419200" value={ formatPlanLimit(template.SOA.ExpireSeconds) } required/></label>
+							<label>Negative cache TTL<input type="number" name="minimum_ttl" min="60" max="86400" value={ formatPlanLimit(template.SOA.MinimumTTL) } required/></label>
+							<label class="np-dns-wide">Transfer CIDRs<textarea name="transfer_cidrs" rows="3" placeholder="192.0.2.0/24">{ joinLines(template.TransferCIDRs) }</textarea><small>Empty denies AXFR. One IPv4 or IPv6 CIDR per line.</small></label>
+						</div>
+					</details>
+					<div class="np-dns-policy-actions"><span>@icon("shield-check") Protected changes require recent authorization.</span><button type="submit">Create settings revision</button></div>
+				</form>
+			</section>
+			<section class="np-dns-template-section" id="dns-sync" role="tabpanel" aria-labelledby="dns-tab-sync" data-np-dns-settings-panel="sync">
+				<header class="np-dns-template-head"><div><h4>Synchronize DNS Zones</h4><p>Preview first. Both scopes preserve local overrides and system-managed mail records.</p></div></header>
+				<form class="np-domain-commandbar np-dns-sync-toolbar" method="post" action="/tools-settings/dns/sync/preview">
+					@csrfInput(view)
+					<label>Scope<select name="scope"><option value="unmodified">Unmodified zones only</option><option value="all">All zones, preserve overrides</option></select></label>
+					<button type="submit">@icon("search")<span>Preview synchronization</span></button>
+				</form>
+				if preview := view.DNSSettings.Preview; preview != nil {
+					<div class="np-dns-preview">
+						<div class="np-settings-focus-head np-settings-subhead"><div><h4>Preview #{ formatJobID(preview.ID) }</h4><p>{ formatPlanLimit(preview.ChangedZones) } of { formatPlanLimit(preview.TotalZones) } zones have changes to review.</p></div>@statusPill(preview.Status)</div>
+						<dl class="np-dns-impact-summary" aria-label="Synchronization impact">
+							<div class="is-add"><dt>Add</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"added")) }</dd></div>
+							<div class="is-update"><dt>Update</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"updated")) }</dd></div>
+							<div class="is-remove"><dt>Remove</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"removed")) }</dd></div>
+							<div class="is-preserve"><dt>Preserve</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"preserved")) }</dd></div>
+							<div class="is-conflict"><dt>Conflict</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"conflicts")) }</dd></div>
+						</dl>
+						<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Zone</th><th>Outcome</th><th>Changes</th></tr></thead><tbody>
+							for _, item := range preview.Items {
+								<tr><td data-label="Zone">{ item.Domain }</td><td data-label="Outcome">@statusPill(item.Outcome)</td><td data-label="Changes">{ displayFallback(item.Detail,"No changes") }</td></tr>
+							}
+						</tbody></table></div>
+						if preview.Status=="preview" {
+							<form class="np-dns-apply-panel" method="post" action={ templ.SafeURL("/tools-settings/dns/sync/"+formatJobID(preview.ID)+"/apply") }>
+								@csrfInput(view)<input type="hidden" name="preview_token" value={ preview.PreviewToken }/>
+								<span class="np-dns-apply-copy"><strong>Apply exactly this preview</strong><small>A newer DNS change will make it stale.</small></span>
+								<label>Typed confirmation<input name="confirmation" placeholder="APPLY DNS TEMPLATE" required autocomplete="off"/></label>
+								<button type="submit">Apply preview</button>
+							</form>
+						}
+					</div>
+				} else {
+					<div class="np-dns-sync-empty">@icon("activity")<div><strong>No preview open</strong><p>Choose a scope to calculate zone-by-zone impact before anything is applied.</p></div></div>
+				}
+			</section>
+			<section class="np-dns-template-section" id="dns-sync-history" role="tabpanel" aria-labelledby="dns-tab-history" data-np-dns-settings-panel="history">
+				<header class="np-dns-template-head"><div><h4>Synchronization History</h4><p>Recent previews and applied runs, with focused retry for partial or failed outcomes.</p></div></header>
+				if len(view.DNSSettings.RecentRuns)==0 {
+					<p class="np-empty">No DNS synchronization runs yet.</p>
+				} else {
+					<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Run</th><th>Revision</th><th>Scope</th><th>Zones</th><th>Status</th><th>Created</th></tr></thead><tbody>
+						for _, run := range view.DNSSettings.RecentRuns {
+							<tr>
+								<td data-label="Run"><a href={ templ.SafeURL("/tools-settings/dns?run="+formatJobID(run.ID)+"#dns-sync") }>#{ formatJobID(run.ID) }</a></td>
+								<td data-label="Revision">{ formatJobID(run.TemplateRevision) }</td>
+								<td data-label="Scope">{ run.Scope }</td>
+								<td data-label="Zones">{ formatPlanLimit(run.TotalZones) }</td>
+								<td data-label="Status">@statusPill(run.Status)</td>
+								<td data-label="Created"><div class="np-row-actions"><span>{ formatTime(run.CreatedAt) }</span>
+									if run.Status=="partial" || run.Status=="failed" || run.Status=="stale" {
+										<form method="post" action={ templ.SafeURL("/tools-settings/dns/sync/"+formatJobID(run.ID)+"/retry") }>@csrfInput(view)<button type="submit" class="np-icon-button" title="Create a fresh synchronization preview">@icon("activity")</button></form>
+									}
+								</div></td>
+							</tr>
+						}
+					</tbody></table></div>
+				}
+			</section>
+		</div>
+		<dialog class="np-dialog" id="dns-template-record-dialog" data-np-dialog aria-labelledby="dns-template-record-title">
+			<form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form>
+			<div class="np-dialog-head"><span class="np-kicker">DNS template</span><h2 id="dns-template-record-title">Add template record</h2><p>Use only supported placeholders and typed DNS fields.</p></div>
+			<form class="np-form np-dialog-form" method="post" action="/tools-settings/dns/template/records" data-np-dns-record-form>
+				@csrfInput(view)<input type="hidden" name="expected_revision" value={ formatJobID(template.OptimisticRevision) }/>
+				<label>Host template<input name="host_template" value="@" required/></label>
+				<label>Type<select name="record_type"><option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option><option>TXT</option><option>NS</option><option>SRV</option><option>CAA</option><option>DS</option></select></label>
+				<label>Value template<input name="value_template" value="<ip.web>" required/></label>
+				<label>Scope<select name="scope"><option value="all">All zones</option><option value="root">Root zones</option><option value="subdomain">Subdomain zones</option></select></label>
+				<label data-np-dns-field="priority">Priority<input type="number" name="priority" min="0" max="65535" value="0"/></label>
+				<label data-np-dns-field="weight">Weight<input type="number" name="weight" min="0" max="65535" value="0"/></label>
+				<label data-np-dns-field="port">Port<input type="number" name="port" min="0" max="65535" value="0"/></label>
+				<label>TTL<input type="number" name="ttl" min="60" max="86400" value="3600" required/></label>
+				<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create revision</button></div>
+			</form>
+		</dialog>
+		<dialog class="np-dialog np-dns-authorization-dialog" id="dns-authorization-dialog" data-np-dialog aria-labelledby="dns-authorization-title">
+			<form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form>
+			<div class="np-dialog-head"><span class="np-kicker">Protected DNS controls</span><h2 id="dns-authorization-title">Authorize DNS changes</h2><p>Global synchronization, reset, SOA, and transfer-policy changes require a recent administrator password confirmation.</p></div>
+			<form class="np-settings-reauth np-dialog-form" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form><label><span>Administrator password</span><input type="password" name="password" autocomplete="current-password" required/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Authorize for 10 minutes</button></div><p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p></form>
+		</dialog>
+		<dialog class="np-dialog" id="dns-template-reset-dialog" data-np-dialog aria-labelledby="dns-template-reset-title">
+			<form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form>
+			<div class="np-dialog-head"><span class="np-kicker">Protected action</span><h2 id="dns-template-reset-title">Reset global DNS defaults</h2><p>This creates a new default revision. Existing zones are unchanged until synchronized.</p></div>
+			<form class="np-form np-dialog-form" method="post" action="/tools-settings/dns/template/reset">
+				@csrfInput(view)<input type="hidden" name="expected_revision" value={ formatJobID(template.OptimisticRevision) }/>
+				<label>Typed confirmation<input name="confirmation" placeholder="RESET DNS TEMPLATE" required autocomplete="off"/></label>
+				<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Reset template</button></div>
+			</form>
+		</dialog>
+	}
+}
+
+templ dnsTemplateEditDialog(view WorkspaceView, template types.DNSTemplateRevision, record types.DNSTemplateRecord) {
+	<dialog class="np-dialog" id={ "dns-template-edit-"+formatJobID(record.ID) } data-np-dialog aria-labelledby={ "dns-template-edit-title-"+formatJobID(record.ID) }>
+		<form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form>
+		<div class="np-dialog-head"><span class="np-kicker">DNS template</span><h2 id={ "dns-template-edit-title-"+formatJobID(record.ID) }>Edit template record</h2><p>The stable key remains <code>{ record.StableKey }</code>.</p></div>
+		<form class="np-form np-dialog-form" method="post" action="/tools-settings/dns/template/records" data-np-dns-record-form>
+			@csrfInput(view)<input type="hidden" name="record_id" value={ formatJobID(record.ID) }/><input type="hidden" name="stable_key" value={ record.StableKey }/><input type="hidden" name="expected_revision" value={ formatJobID(template.OptimisticRevision) }/>
+			<label>Host template<input name="host_template" value={ record.HostTemplate } required/></label>
+			<label>Type<select name="record_type"><option selected?={ record.Type=="A" }>A</option><option selected?={ record.Type=="AAAA" }>AAAA</option><option selected?={ record.Type=="CNAME" }>CNAME</option><option selected?={ record.Type=="MX" }>MX</option><option selected?={ record.Type=="TXT" }>TXT</option><option selected?={ record.Type=="NS" }>NS</option><option selected?={ record.Type=="SRV" }>SRV</option><option selected?={ record.Type=="CAA" }>CAA</option><option selected?={ record.Type=="DS" }>DS</option></select></label>
+			<label>Value template<input name="value_template" value={ record.ValueTemplate } required/></label>
+			<label>Scope<select name="scope"><option value="all" selected?={ record.Scope=="all" }>All zones</option><option value="root" selected?={ record.Scope=="root" }>Root zones</option><option value="subdomain" selected?={ record.Scope=="subdomain" }>Subdomain zones</option></select></label>
+			<label data-np-dns-field="priority">Priority<input type="number" name="priority" min="0" max="65535" value={ formatPlanLimit(record.Priority) }/></label><label data-np-dns-field="weight">Weight<input type="number" name="weight" min="0" max="65535" value={ formatPlanLimit(record.Weight) }/></label><label data-np-dns-field="port">Port<input type="number" name="port" min="0" max="65535" value={ formatPlanLimit(record.Port) }/></label><label>TTL<input type="number" name="ttl" min="60" max="86400" value={ formatPlanLimit(record.TTL) } required/></label>
+			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create revision</button></div>
+		</form>
+	</dialog>
+}
+
 templ mailSettingsDialog(view WorkspaceView) {
-	<dialog class="np-dialog np-mail-settings-dialog" id="mail-settings-dialog" data-np-dialog>
+		<dialog class="np-dialog np-mail-settings-dialog" id="mail-settings-dialog" data-np-dialog aria-labelledby="mail-settings-title" aria-describedby="mail-settings-copy">
 		<form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form>
-		<div class="np-dialog-head"><span class="np-kicker">Server management</span><h2>Mail server settings</h2><p>Configure Stalwart identity, outbound relay, queue alerts, and service convergence.</p></div>
+			<div class="np-dialog-head"><span class="np-kicker">Server management</span><h2 id="mail-settings-title">Mail server settings</h2><p id="mail-settings-copy">Configure Stalwart identity, outbound relay, queue alerts, and service convergence.</p></div>
+		<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+				<label><span>Confirm administrator password before relay or service changes</span><input type="password" name="password" autocomplete="current-password" required/></label>
+				<button type="submit" class="np-secondary-button">Reauthenticate</button>
+				<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>
+			</form>
 		<form class="np-form np-dialog-form" method="post" action="/settings/mail">
 			@csrfInput(view)
 			<label>Mail hostname<input name="mail_hostname" value={ view.MailSettings.MailHostname } placeholder="mail.example.com" required/></label>
@@ -939,7 +1719,7 @@ templ capacityCard(settings controlquota.Settings, committedDiskMB int, quotas [
 	<section class="np-capacity-card" aria-label="Server capacity">
 		<div class="np-capacity-copy">
 			<strong>Server capacity</strong>
-			<span>ns1.nakroteck.com &middot; <code>server_disk_capacity_mb = { formatSettingsCapacity(settings.ServerDiskCapacityMB) }</code> ({ formatCapacityGB(settings.ServerDiskCapacityMB) })</span>
+			<span>Panel allocation limit &middot; <code>server_disk_capacity_mb = { formatSettingsCapacity(settings.ServerDiskCapacityMB) }</code> ({ formatCapacityGB(settings.ServerDiskCapacityMB) })</span>
 		</div>
 		<div class="np-capacity-row">
 			<span>Committed to plans (at max)</span>
@@ -960,6 +1740,7 @@ templ capacityCard(settings controlquota.Settings, committedDiskMB int, quotas [
 			<form class="np-oversell-form" method="post" action="/settings/oversell" aria-label="Oversell policy">
 				@csrfTokenInput(csrfToken)
 				<input type="hidden" name="server_disk_capacity_mb" value={ formatSettingsCapacity(settings.ServerDiskCapacityMB) }/>
+				<input type="hidden" name="valkey_capacity_mb" value={ formatSettingsCapacity(settings.ValkeyCapacityMB) }/>
 				<button type="submit" name="oversell_policy" value="warn" class={ "np-segment " + oversellActiveClass(settings.OversellPolicy, "warn") }>warn</button>
 				<button type="submit" name="oversell_policy" value="cap" class={ "np-segment " + oversellActiveClass(settings.OversellPolicy, "cap") }>cap</button>
 			</form>

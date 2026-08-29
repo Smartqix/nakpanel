@@ -167,8 +167,9 @@ func (s *Store) exists(ctx context.Context, query string, args ...any) (bool, er
 func (s *Store) ListSitesForUser(ctx context.Context, userID int64) ([]dashboard.Site, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.username, r.domain, r.php_version, r.status, r.last_error,
 	       r.tls_status, r.tls_issuer, r.tls_expires_at, r.tls_last_error, r.tls_cert_path, r.tls_key_path,
-	       COALESCE(r.subscription_id, 0), COALESCE(r.customer_id, 0), r.desired_status, r.desired_php_version,
-	       r.https_redirect, r.desired_https_redirect, r.settings_status, r.settings_error, r.tls_auto_renew, r.document_root
+		       COALESCE(r.subscription_id, 0), COALESCE(r.customer_id, 0), r.desired_status, r.desired_php_version,
+		       r.https_redirect, r.desired_https_redirect, r.settings_status, r.settings_error, r.tls_auto_renew, r.document_root,
+		       COALESCE(r.parent_site_id,0), r.dns_zone_mode
 FROM sites r JOIN customers c ON c.id = r.customer_id
 WHERE c.login_user_id = $1 OR c.reseller_id=(SELECT id FROM reseller_accounts WHERE login_user_id=$1) ORDER BY r.domain`, userID)
 	if err != nil {
@@ -182,7 +183,8 @@ WHERE c.login_user_id = $1 OR c.reseller_id=(SELECT id FROM reseller_accounts WH
 		if err := rows.Scan(&item.ID, &item.Username, &item.Domain, &item.PHPVersion, &item.Status, &item.LastError,
 			&item.TLSStatus, &item.TLSIssuer, &expires, &item.TLSLastError, &item.TLSCertPath, &item.TLSKeyPath,
 			&item.SubscriptionID, &item.CustomerID, &item.DesiredStatus, &item.DesiredPHPVersion,
-			&item.HTTPSRedirect, &item.DesiredHTTPSRedirect, &item.SettingsStatus, &item.SettingsError, &item.TLSAutoRenew, &item.DocumentRoot); err != nil {
+			&item.HTTPSRedirect, &item.DesiredHTTPSRedirect, &item.SettingsStatus, &item.SettingsError, &item.TLSAutoRenew,
+			&item.DocumentRoot, &item.ParentSiteID, &item.DNSZoneMode); err != nil {
 			return nil, err
 		}
 		item.TLSExpiresAt = dashboard.NullableTime{Time: expires.Time, Valid: expires.Valid}
@@ -229,15 +231,37 @@ FROM backups b JOIN customers c ON c.id = b.customer_id WHERE c.login_user_id = 
 	if err := rows.Close(); err != nil {
 		return data, err
 	}
-	rows, err = s.db.QueryContext(ctx, `SELECT z.id,z.domain,z.address,z.serial,z.status,z.zone_path,z.last_error,z.created_at,z.site_id
-FROM dns_zones z JOIN sites r ON r.id=z.site_id JOIN customers c ON c.id=r.customer_id WHERE c.login_user_id=$1 OR c.reseller_id=(SELECT id FROM reseller_accounts WHERE login_user_id=$1) ORDER BY z.created_at DESC LIMIT 50`, userID)
+	rows, err = s.db.QueryContext(ctx, `SELECT z.id,z.domain,z.address,z.ipv6_address,z.serial,z.status,z.zone_path,
+z.last_error,z.created_at,z.site_id,COALESCE(z.parent_zone_id,0),z.mode,
+array_to_string(z.upstream_primaries,E'\n'),
+array_to_string(COALESCE(z.transfer_cidrs,revision.transfer_cidrs),E'\n'),
+COALESCE(z.template_revision,0),z.template_status,z.desired_revision,z.applied_revision,
+COALESCE(z.soa_override->>'primary_nameserver',replace(revision.primary_nameserver,'<domain>',z.domain)),
+COALESCE(z.soa_override->>'responsible_mailbox',replace(revision.responsible_mailbox,'<domain>',z.domain)),
+COALESCE(z.soa_override->>'serial_format',revision.serial_format),
+COALESCE((z.soa_override->>'default_ttl')::int,revision.default_ttl),
+COALESCE((z.soa_override->>'refresh_seconds')::int,revision.refresh_seconds),
+COALESCE((z.soa_override->>'retry_seconds')::int,revision.retry_seconds),
+COALESCE((z.soa_override->>'expire_seconds')::int,revision.expire_seconds),
+COALESCE((z.soa_override->>'minimum_ttl')::int,revision.minimum_ttl)
+	FROM dns_zones z
+	JOIN sites r ON r.id=z.site_id JOIN customers c ON c.id=r.customer_id
+	JOIN dns_template_revisions revision ON revision.revision=z.template_revision
+WHERE c.login_user_id=$1 OR c.reseller_id=(SELECT id FROM reseller_accounts WHERE login_user_id=$1)
+ORDER BY z.created_at DESC LIMIT 100`, userID)
 	if err != nil {
 		return data, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var z dashboard.DNSZone
-		if err := rows.Scan(&z.ID, &z.Domain, &z.Address, &z.Serial, &z.Status, &z.ZonePath, &z.LastError, &z.CreatedAt, &z.SiteID); err != nil {
+		if err := rows.Scan(&z.ID, &z.Domain, &z.Address, &z.IPv6Address, &z.Serial,
+			&z.Status, &z.ZonePath, &z.LastError, &z.CreatedAt, &z.SiteID, &z.ParentZoneID,
+			&z.Mode, &z.UpstreamPrimaries, &z.TransferCIDRs, &z.TemplateRevision,
+			&z.TemplateStatus, &z.DesiredRevision, &z.AppliedRevision,
+			&z.SOA.PrimaryNameserver, &z.SOA.ResponsibleMailbox, &z.SOA.SerialFormat,
+			&z.SOA.DefaultTTL, &z.SOA.RefreshSeconds, &z.SOA.RetrySeconds,
+			&z.SOA.ExpireSeconds, &z.SOA.MinimumTTL); err != nil {
 			return data, err
 		}
 		data.DNSZones = append(data.DNSZones, z)
@@ -248,7 +272,9 @@ FROM dns_zones z JOIN sites r ON r.id=z.site_id JOIN customers c ON c.id=r.custo
 	if err := rows.Close(); err != nil {
 		return data, err
 	}
-	recordRows, err := s.db.QueryContext(ctx, `SELECT dr.id,dr.zone_id,dr.host,dr.record_type,dr.value,COALESCE(dr.priority,0),dr.ttl
+	recordRows, err := s.db.QueryContext(ctx, `SELECT dr.id,dr.zone_id,COALESCE(dr.owner_site_id,0),dr.host,
+dr.record_type,dr.value,COALESCE(dr.priority,0),COALESCE(dr.weight,0),COALESCE(dr.port,0),dr.ttl,
+dr.origin,COALESCE(dr.template_record_key,''),COALESCE(dr.template_revision,0),dr.locally_modified
 FROM dns_records dr JOIN dns_zones z ON z.id=dr.zone_id JOIN sites r ON r.id=z.site_id JOIN customers c ON c.id=r.customer_id
 WHERE c.login_user_id=$1 OR c.reseller_id=(SELECT id FROM reseller_accounts WHERE login_user_id=$1)
 ORDER BY dr.zone_id,dr.host,dr.record_type,dr.id`, userID)
@@ -258,7 +284,10 @@ ORDER BY dr.zone_id,dr.host,dr.record_type,dr.id`, userID)
 	defer recordRows.Close()
 	for recordRows.Next() {
 		var record types.DNSRecord
-		if err := recordRows.Scan(&record.ID, &record.ZoneID, &record.Host, &record.Type, &record.Value, &record.Priority, &record.TTL); err != nil {
+		if err := recordRows.Scan(&record.ID, &record.ZoneID, &record.OwnerSiteID, &record.Host,
+			&record.Type, &record.Value, &record.Priority, &record.Weight, &record.Port,
+			&record.TTL, &record.Origin, &record.TemplateRecordKey, &record.TemplateRevision,
+			&record.LocallyModified); err != nil {
 			return data, err
 		}
 		data.DNSRecords = append(data.DNSRecords, record)

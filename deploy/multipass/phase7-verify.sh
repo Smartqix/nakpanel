@@ -18,7 +18,7 @@ if [[ -z "${VM_IP}" ]]; then
 fi
 
 tmpdir="$(mktemp -d)"
-trap 'rm -rf "${tmpdir}"' EXIT
+trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 
 assert_contains() {
   local file="$1"
@@ -70,7 +70,7 @@ multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
 docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase5-ui.test'" | xargs)"
 username="$(sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase5-ui.test'" | xargs)"
-sudo install -o "${username}" -g "${username}" -m 0644 /dev/stdin "${docroot}/index.php" <<'PHP'
+sudo install -o "${username}" -g www-data -m 0640 /dev/stdin "${docroot}/index.php" <<'PHP'
 phase7 restored file
 PHP
 sudo mariadb np_phase5 <<'SQL'
@@ -110,11 +110,11 @@ multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
 docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase5-ui.test'" | xargs)"
 username="$(sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase5-ui.test'" | xargs)"
-sudo install -o "${username}" -g "${username}" -m 0644 /dev/stdin "${docroot}/index.php" <<'PHP'
+sudo install -o "${username}" -g www-data -m 0640 /dev/stdin "${docroot}/index.php" <<'PHP'
 phase7 mutated file
 PHP
 sudo mariadb np_phase5 -e "UPDATE phase7_restore_probe SET value = 'mutated' WHERE id = 1;"
-grep -Fxq 'phase7 mutated file' "${docroot}/index.php"
+sudo grep -Fxq 'phase7 mutated file' "${docroot}/index.php"
 sudo mariadb -NBe "SELECT value FROM np_phase5.phase7_restore_probe WHERE id = 1" | grep -qx 'mutated'
 REMOTE
 
@@ -139,7 +139,7 @@ multipass exec "${VM_NAME}" -- bash -se "${VM_IP}" <<'REMOTE'
 set -euo pipefail
 vm_ip="$1"
 docroot="$(sudo -u postgres psql -d nakpanel -tAc "SELECT document_root FROM sites WHERE domain='phase5-ui.test'" | xargs)"
-grep -Fxq 'phase7 restored file' "${docroot}/index.php"
+sudo grep -Fxq 'phase7 restored file' "${docroot}/index.php"
 sudo mariadb -NBe "SELECT value FROM np_phase5.phase7_restore_probe WHERE id = 1" | grep -qx 'restored'
 
 zone_path="/etc/bind/nakpanel/zones/db.phase5-ui.test"
