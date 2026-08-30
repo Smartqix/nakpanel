@@ -162,7 +162,7 @@ test "${composer_version_after}" = "${composer_version_before}"
 test "$(stat -c '%U:%G:%a' /usr/local/bin/composer)" = root:root:755
 test "$(stat -c '%U:%G:%a' /usr/local/lib/nakpanel/composer.phar)" = root:root:555
 timeout 1m wp --info | grep -Fq 'WP-CLI version: 2.12.0'
-timeout 1m wp --version | grep -Fq 'WP-CLI 2.12.0'
+timeout 1m wp --version --allow-root | grep -Fq 'WP-CLI 2.12.0'
 command -v freshclam >/dev/null
 command -v clamscan >/dev/null
 find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) | grep -q .

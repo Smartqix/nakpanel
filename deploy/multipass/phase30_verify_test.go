@@ -30,7 +30,7 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 		"runtime_inventory": {
 			"8.3", "8.4", "8.5", `"php${version}-fpm"`,
 			"PHPVersions", "validation_errors", "required_extensions", "opcache",
-			"Composer version 2.8.11", "composer self-update", "WP-CLI 2.12.0", "freshclam", "clamscan",
+			"Composer version 2.8.11", "composer self-update", "wp --version --allow-root", "WP-CLI 2.12.0", "freshclam", "clamscan",
 		},
 		"classic_wordpress": {
 			"phase30-classic.test", "service-plans", "customers", "subscriptions", "databases",
