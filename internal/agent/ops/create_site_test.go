@@ -247,6 +247,49 @@ func TestCreateSiteUsesTenantPrivateContentModes(t *testing.T) {
 	}
 }
 
+func TestCreateSiteKeepsRuntimeArtifactsTenantPrivate(t *testing.T) {
+	root := t.TempDir()
+	paths := SitePathConfig{
+		HomeRoot: filepath.Join(root, "home"), NginxAvailableDir: filepath.Join(root, "available"),
+		NginxEnabledDir: filepath.Join(root, "enabled"), NginxConfDir: filepath.Join(root, "conf"),
+		NginxLogDir: filepath.Join(root, "logs"), NginxCacheDir: filepath.Join(root, "cache"),
+		NginxProtectedDir: filepath.Join(root, "protected"), PHPFPMPoolDir: filepath.Join(root, "php"),
+		PHPFPMLogDir: filepath.Join(root, "php-logs"), PHPRunDir: filepath.Join(root, "run"),
+		PHPTmpDir: filepath.Join(root, "tmp"), NginxSnippet: "snippets/fastcgi-php.conf",
+		WWWGroup: "www-data", DefaultFileMode: 0o644,
+	}
+	req := types.CreateSiteReq{SiteID: 44, Username: "nps44", Domain: "private.example.test", PHPVersion: "8.3"}
+	plan, err := NewSitePlan(req, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{plan.NginxAccessLog, plan.NginxErrorLog, plan.PHPFPMErrorLog} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("existing\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	provisioner := NewSiteProvisioner(SiteProvisionerOptions{
+		Paths: paths, UserManager: &recordingUserManager{}, Reloader: &recordingReloader{},
+	})
+	if err := provisioner.CreateSite(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		plan.NginxConfig, plan.PHPFPMConfig, plan.NginxAccessLog, plan.NginxErrorLog, plan.PHPFPMErrorLog,
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Fatalf("%s mode = %o, want 600", path, got)
+		}
+	}
+}
+
 func TestRenderSiteConfigsAreDeterministicAndDerivePaths(t *testing.T) {
 	req := types.CreateSiteReq{
 		Username:   "npdemo",

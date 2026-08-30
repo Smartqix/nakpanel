@@ -92,6 +92,8 @@ type SitePlan struct {
 	Limits                 types.SiteResourceLimits
 }
 
+const sitePrivateRuntimeFileMode os.FileMode = 0o600
+
 type SiteProvisionerOptions struct {
 	Paths            SitePathConfig
 	UserManager      SystemUserManager
@@ -493,6 +495,12 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 	if err := ensureSiteAuxiliaryIncludes(desired); err != nil {
 		return err
 	}
+	if err := ensurePrivateSiteRuntimeArtifacts(current); err != nil {
+		return err
+	}
+	if err := ensurePrivateSiteRuntimeArtifacts(desired); err != nil {
+		return err
+	}
 
 	paths := []string{current.NginxConfig, desired.NginxEnabled, desired.NginxPolicyConfig, current.PHPFPMConfig, current.PHPFPMConfig + ".suspended", desired.PHPFPMConfig, desired.PHPFPMConfig + ".suspended"}
 	if current.PHPServiceUnit != "" {
@@ -517,7 +525,7 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 		_ = p.reloader.ReloadService(context.Background(), "nginx")
 	}()
 	if zones := RenderNginxPolicyZones(desired); zones != "" {
-		if err = writeFileAtomic(desired.NginxPolicyConfig, []byte(zones), desired.FileMode); err != nil {
+		if err = writeFileAtomic(desired.NginxPolicyConfig, []byte(zones), sitePrivateRuntimeFileMode); err != nil {
 			return err
 		}
 	} else if err = os.Remove(desired.NginxPolicyConfig); err != nil && !os.IsNotExist(err) {
@@ -525,13 +533,13 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 	}
 
 	if state == "suspended" {
-		if err = writeFileAtomic(desired.NginxConfig, []byte(RenderSuspendedNginxVHost(desired)), desired.FileMode); err != nil {
+		if err = writeFileAtomic(desired.NginxConfig, []byte(RenderSuspendedNginxVHost(desired)), sitePrivateRuntimeFileMode); err != nil {
 			return err
 		}
 		if err = p.reloader.ReloadService(ctx, "nginx"); err != nil {
 			return err
 		}
-		if err = writeFileAtomic(desired.PHPFPMConfig+".suspended", []byte(RenderPHPFPMPool(desired)), desired.FileMode); err != nil {
+		if err = writeFileAtomic(desired.PHPFPMConfig+".suspended", []byte(RenderPHPFPMPool(desired)), sitePrivateRuntimeFileMode); err != nil {
 			return err
 		}
 		_ = os.Remove(desired.PHPFPMConfig)
@@ -540,7 +548,7 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 			_ = os.Remove(current.PHPFPMConfig + ".suspended")
 		}
 	} else {
-		if err = writeFileAtomic(desired.PHPFPMConfig, []byte(RenderPHPFPMPool(desired)), desired.FileMode); err != nil {
+		if err = writeFileAtomic(desired.PHPFPMConfig, []byte(RenderPHPFPMPool(desired)), sitePrivateRuntimeFileMode); err != nil {
 			return err
 		}
 		if desired.PHPServiceUnit != "" {
@@ -549,7 +557,7 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 			}
 		}
 		_ = os.Remove(desired.PHPFPMConfig + ".suspended")
-		if err = writeFileAtomic(desired.NginxConfig, []byte(RenderNginxRuntimeVHost(desired, req.TLSCertPath, req.TLSKeyPath, req.HTTPSRedirect)), desired.FileMode); err != nil {
+		if err = writeFileAtomic(desired.NginxConfig, []byte(RenderNginxRuntimeVHost(desired, req.TLSCertPath, req.TLSKeyPath, req.HTTPSRedirect)), sitePrivateRuntimeFileMode); err != nil {
 			return err
 		}
 		if err = ensureSymlink(desired.NginxConfig, desired.NginxEnabled); err != nil {
@@ -728,9 +736,12 @@ func (p *SiteProvisioner) SetHostingState(ctx context.Context, req types.SetHost
 	if p.reloader == nil {
 		return errors.New("service reloader is not configured")
 	}
+	if err := ensurePrivateSiteRuntimeArtifacts(plan); err != nil {
+		return err
+	}
 	suspendedPool := plan.PHPFPMConfig + ".suspended"
 	if state == "suspended" {
-		if err := writeFileAtomic(plan.NginxConfig, []byte(RenderSuspendedNginxVHost(plan)), plan.FileMode); err != nil {
+		if err := writeFileAtomic(plan.NginxConfig, []byte(RenderSuspendedNginxVHost(plan)), sitePrivateRuntimeFileMode); err != nil {
 			return fmt.Errorf("write suspended nginx config: %w", err)
 		}
 		webmailEnabled := filepath.Join(paths.NginxEnabledDir, "webmail."+plan.Domain+".conf")
@@ -790,7 +801,7 @@ func (p *SiteProvisioner) SetHostingState(ctx context.Context, req types.SetHost
 		} else {
 			return err
 		}
-		if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxVHost(plan)), plan.FileMode); err != nil {
+		if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxVHost(plan)), sitePrivateRuntimeFileMode); err != nil {
 			return fmt.Errorf("restore nginx config: %w", err)
 		}
 		if plan.PHPServiceUnit != "" {
@@ -1024,6 +1035,9 @@ func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteRe
 	if err := ensureSiteAuxiliaryIncludes(plan); err != nil {
 		return err
 	}
+	if err := ensurePrivateSiteRuntimeArtifacts(plan); err != nil {
+		return err
+	}
 	siteModes := map[string]os.FileMode{plan.Docroot: 0o750}
 	if !req.SharedAccount {
 		siteModes[plan.SiteHome] = 0o700
@@ -1074,11 +1088,11 @@ func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteRe
 			return fmt.Errorf("write placeholder index: %w", err)
 		}
 	}
-	if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxVHost(plan)), plan.FileMode); err != nil {
+	if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxVHost(plan)), sitePrivateRuntimeFileMode); err != nil {
 		return fmt.Errorf("write nginx site config: %w", err)
 	}
 	if zones := RenderNginxPolicyZones(plan); zones != "" {
-		if err := writeFileAtomic(plan.NginxPolicyConfig, []byte(zones), plan.FileMode); err != nil {
+		if err := writeFileAtomic(plan.NginxPolicyConfig, []byte(zones), sitePrivateRuntimeFileMode); err != nil {
 			return fmt.Errorf("write nginx policy zones: %w", err)
 		}
 	} else if err := os.Remove(plan.NginxPolicyConfig); err != nil && !os.IsNotExist(err) {
@@ -1087,7 +1101,7 @@ func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteRe
 	if err := ensureSymlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
 		return fmt.Errorf("enable nginx site: %w", err)
 	}
-	if err := writeFileAtomic(plan.PHPFPMConfig, []byte(RenderPHPFPMPool(plan)), plan.FileMode); err != nil {
+	if err := writeFileAtomic(plan.PHPFPMConfig, []byte(RenderPHPFPMPool(plan)), sitePrivateRuntimeFileMode); err != nil {
 		return fmt.Errorf("write php-fpm pool config: %w", err)
 	}
 	if plan.PHPServiceUnit != "" {
@@ -1165,6 +1179,35 @@ func ensureSiteAuxiliaryIncludes(plan SitePlan) error {
 		}
 		if err := writeFileAtomic(file.path, []byte(file.content), 0o600); err != nil {
 			return fmt.Errorf("initialize %s include: %w", file.label, err)
+		}
+	}
+	return nil
+}
+
+func ensurePrivateSiteRuntimeArtifacts(plan SitePlan) error {
+	for _, path := range []string{plan.NginxAccessLog, plan.NginxErrorLog, plan.PHPFPMErrorLog} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return fmt.Errorf("create private site log directory %q: %w", filepath.Dir(path), err)
+		}
+		file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, sitePrivateRuntimeFileMode)
+		if err != nil {
+			return fmt.Errorf("initialize private site log %q: %w", path, err)
+		}
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("close private site log %q: %w", path, err)
+		}
+		if err := os.Chmod(path, sitePrivateRuntimeFileMode); err != nil {
+			return fmt.Errorf("secure site log %q: %w", path, err)
+		}
+	}
+	for _, path := range []string{
+		plan.NginxConfig,
+		plan.NginxPolicyConfig,
+		plan.PHPFPMConfig,
+		plan.PHPFPMConfig + ".suspended",
+	} {
+		if err := os.Chmod(path, sitePrivateRuntimeFileMode); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("secure site runtime file %q: %w", path, err)
 		}
 	}
 	return nil
