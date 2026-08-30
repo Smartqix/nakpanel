@@ -298,6 +298,30 @@ func (c *Client) ReadApplicationLog(ctx context.Context, req types.ApplicationLo
 	return result, err
 }
 
+func (c *Client) DeployPHPRelease(ctx context.Context, req types.DeployPHPReleaseReq) (types.DeployPHPReleaseResult, error) {
+	var result types.DeployPHPReleaseResult
+	err := c.doResult(ctx, types.OpDeployPHPRelease, req, &result)
+	return result, err
+}
+
+func (c *Client) RollbackPHPRelease(ctx context.Context, req types.RollbackPHPReleaseReq) (types.RollbackPHPReleaseResult, error) {
+	var result types.RollbackPHPReleaseResult
+	err := c.doResult(ctx, types.OpRollbackPHPRelease, req, &result)
+	return result, err
+}
+
+func (c *Client) ReconcilePHPApplication(ctx context.Context, req types.ReconcilePHPApplicationReq) (types.ReconcilePHPApplicationResult, error) {
+	var result types.ReconcilePHPApplicationResult
+	err := c.doResult(ctx, types.OpReconcilePHPApplication, req, &result)
+	return result, err
+}
+
+func (c *Client) ReconcilePHPWorkers(ctx context.Context, req types.ReconcilePHPWorkersReq) (types.ReconcilePHPWorkersResult, error) {
+	var result types.ReconcilePHPWorkersResult
+	err := c.doResult(ctx, types.OpReconcilePHPWorkers, req, &result)
+	return result, err
+}
+
 func (c *Client) doTyped(ctx context.Context, op string, payload any) (types.Response, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {

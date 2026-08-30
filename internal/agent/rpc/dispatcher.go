@@ -95,6 +95,13 @@ type ApplicationRuntimeProvisioner interface {
 	ReadApplicationLog(context.Context, types.ApplicationLogReq) (types.ApplicationLogResult, error)
 }
 
+type PHPApplicationProvisioner interface {
+	DeployPHPRelease(context.Context, types.DeployPHPReleaseReq) (types.DeployPHPReleaseResult, error)
+	RollbackPHPRelease(context.Context, types.RollbackPHPReleaseReq) (types.RollbackPHPReleaseResult, error)
+	ReconcilePHPApplication(context.Context, types.ReconcilePHPApplicationReq) (types.ReconcilePHPApplicationResult, error)
+	ReconcilePHPWorkers(context.Context, types.ReconcilePHPWorkersReq) (types.ReconcilePHPWorkersResult, error)
+}
+
 type SubscriptionTeardownProvisioner interface {
 	TeardownSubscription(context.Context, types.TeardownSubscriptionReq) (types.TeardownSubscriptionResult, error)
 }
@@ -199,6 +206,7 @@ type Options struct {
 	SubscriptionAccounts      SubscriptionAccountProvisioner
 	Mail                      MailProvisioner
 	Applications              ApplicationProvisioner
+	PHPApplications           PHPApplicationProvisioner
 	SubscriptionTeardown      SubscriptionTeardownProvisioner
 	ServerAdmin               ServerAdminInspector
 	ServiceController         ManagedServiceController
@@ -232,6 +240,7 @@ type Dispatcher struct {
 	mail                      MailProvisioner
 	mailQueue                 MailQueueReader
 	applications              ApplicationProvisioner
+	phpApplications           PHPApplicationProvisioner
 	subscriptionTeardown      SubscriptionTeardownProvisioner
 	serverAdmin               ServerAdminInspector
 	serviceController         ManagedServiceController
@@ -286,6 +295,7 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 		subscriptionAccounts:      opts.SubscriptionAccounts,
 		mail:                      opts.Mail,
 		applications:              opts.Applications,
+		phpApplications:           opts.PHPApplications,
 		subscriptionTeardown:      opts.SubscriptionTeardown,
 		hostingToolkit:            opts.HostingToolkit,
 		serverAdmin:               opts.ServerAdmin,
@@ -1032,6 +1042,58 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, "application provisioner is not configured")
 		}
 		result, err := runtime.ReadApplicationLog(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpDeployPHPRelease:
+		var payload types.DeployPHPReleaseReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.phpApplications == nil {
+			return errorResponse(req.ID, "PHP application provisioner is not configured")
+		}
+		result, err := d.phpApplications.DeployPHPRelease(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpRollbackPHPRelease:
+		var payload types.RollbackPHPReleaseReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.phpApplications == nil {
+			return errorResponse(req.ID, "PHP application provisioner is not configured")
+		}
+		result, err := d.phpApplications.RollbackPHPRelease(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpReconcilePHPApplication:
+		var payload types.ReconcilePHPApplicationReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.phpApplications == nil {
+			return errorResponse(req.ID, "PHP application provisioner is not configured")
+		}
+		result, err := d.phpApplications.ReconcilePHPApplication(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpReconcilePHPWorkers:
+		var payload types.ReconcilePHPWorkersReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.phpApplications == nil {
+			return errorResponse(req.ID, "PHP application provisioner is not configured")
+		}
+		result, err := d.phpApplications.ReconcilePHPWorkers(ctx, payload)
 		if err != nil {
 			return errorResponse(req.ID, err.Error())
 		}

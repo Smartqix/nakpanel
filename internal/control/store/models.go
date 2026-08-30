@@ -571,6 +571,86 @@ type Phase25EntitlementSnapshotBackup struct {
 	HostingPolicy  json.RawMessage
 }
 
+type PhpApplication struct {
+	ID                   int64
+	SubscriptionID       int64
+	SiteID               int64
+	HostingMode          string
+	PhpVersion           string
+	RepositoryID         sql.NullInt64
+	RepositoryRef        string
+	FrameworkProfile     string
+	PublicPath           string
+	HealthPath           string
+	SharedPaths          json.RawMessage
+	ComposerInstall      bool
+	ComposerAllowScripts bool
+	ComposerAllowPlugins bool
+	DesiredState         string
+	ObservedState        string
+	ActiveDeploymentID   sql.NullInt64
+	PreviousDeploymentID sql.NullInt64
+	DesiredRevision      int64
+	AppliedRevision      int64
+	ConvergenceStatus    string
+	ObservedMessage      string
+	LastError            string
+	LastReconciledAt     sql.NullTime
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
+}
+
+type PhpDeployment struct {
+	ID                   int64
+	SubscriptionID       int64
+	ApplicationID        int64
+	RequestedByUserID    sql.NullInt64
+	RequestedRevision    string
+	ResolvedRevision     string
+	ReleaseNumber        int64
+	PreviousDeploymentID sql.NullInt64
+	Status               string
+	ComposerAudit        json.RawMessage
+	HealthMessage        string
+	LastError            string
+	StartedAt            sql.NullTime
+	ActivatedAt          sql.NullTime
+	FinishedAt           sql.NullTime
+	CreatedAt            time.Time
+}
+
+type PhpEnvironmentBinding struct {
+	ID              int64
+	SubscriptionID  int64
+	ApplicationID   int64
+	Name            string
+	PlainValue      sql.NullString
+	SecretID        sql.NullInt64
+	SecretScope     sql.NullString
+	DesiredRevision int64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type PhpWorker struct {
+	ID                int64
+	SubscriptionID    int64
+	ApplicationID     int64
+	Name              string
+	Script            string
+	Arguments         json.RawMessage
+	Processes         int32
+	DesiredState      string
+	ObservedState     string
+	DesiredRevision   int64
+	AppliedRevision   int64
+	ConvergenceStatus string
+	LastError         string
+	LastReconciledAt  sql.NullTime
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 type Plan struct {
 	ID                    int64
 	Name                  string

@@ -69,11 +69,13 @@ type SiteRuntimeSpec struct {
 type SiteLogSource string
 
 const (
-	SiteLogNginxAccess SiteLogSource = "nginx_access"
-	SiteLogNginxError  SiteLogSource = "nginx_error"
-	SiteLogPHPFPM      SiteLogSource = "php_fpm"
-	SiteLogApplication SiteLogSource = "application"
-	SiteLogTask        SiteLogSource = "task"
+	SiteLogNginxAccess   SiteLogSource = "nginx_access"
+	SiteLogNginxError    SiteLogSource = "nginx_error"
+	SiteLogPHPFPM        SiteLogSource = "php_fpm"
+	SiteLogApplication   SiteLogSource = "application"
+	SiteLogTask          SiteLogSource = "task"
+	SiteLogPHPDeployment SiteLogSource = "php_deployment"
+	SiteLogPHPWorker     SiteLogSource = "php_worker"
 )
 
 type SiteLogRequest struct {

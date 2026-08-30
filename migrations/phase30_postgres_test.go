@@ -30,6 +30,9 @@ WHERE application.subscription_id=site.subscription_id
   AND application.desired_state=site.desired_status
   AND application.observed_state='classic'
   AND application.repository_id IS NULL
+  AND application.framework_profile='plain'
+  AND application.health_path='/'
+  AND application.shared_paths='[]'::jsonb
   AND NOT application.composer_install
   AND NOT application.composer_allow_scripts
   AND NOT application.composer_allow_plugins
@@ -63,11 +66,16 @@ WHERE application.subscription_id=site.subscription_id
 	}
 	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version) VALUES(2,303,'8.4')`)
 	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,repository_id) VALUES(1,303,'8.4',11)`)
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,framework_profile) VALUES(1,303,'8.4','wordpress')`)
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,health_path) VALUES(1,303,'8.4','relative')`)
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,shared_paths) VALUES(1,303,'8.4','["../escape"]')`)
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,shared_paths) VALUES(1,303,'8.4','[1]')`)
 	if _, err := db.Exec(`INSERT INTO php_applications(subscription_id,site_id,php_version,applied_revision) VALUES(1,303,'8.4',1)`); err != nil {
 		t.Fatalf("insert canonical post-migration Classic application: %v", err)
 	}
 
 	expectPhase30ConstraintError(t, db, fmt.Sprintf(`INSERT INTO php_deployments(subscription_id,application_id,requested_revision,release_number) VALUES(2,%d,'main',1)`, app1))
+	expectPhase30ConstraintError(t, db, fmt.Sprintf(`INSERT INTO php_deployments(subscription_id,application_id,requested_revision,resolved_revision,release_number) VALUES(1,%d,'main','%s',99)`, app1, strings.Repeat("a", 41)))
 	expectPhase30ConstraintError(t, db, fmt.Sprintf(`INSERT INTO php_environment_bindings(subscription_id,application_id,name,plain_value) VALUES(2,%d,'APP_ENV','production')`, app1))
 	expectPhase30ConstraintError(t, db, fmt.Sprintf(`INSERT INTO php_workers(subscription_id,application_id,name,script) VALUES(2,%d,'queue','artisan')`, app1))
 
@@ -105,6 +113,10 @@ WHERE application.subscription_id=site.subscription_id
 		"Composer setting": {
 			fmt.Sprintf(`UPDATE php_applications SET composer_install=true WHERE id=%d`, app1),
 			fmt.Sprintf(`UPDATE php_applications SET composer_install=false WHERE id=%d`, app1),
+		},
+		"framework profile": {
+			fmt.Sprintf(`UPDATE php_applications SET framework_profile='laravel' WHERE id=%d`, app1),
+			fmt.Sprintf(`UPDATE php_applications SET framework_profile='plain' WHERE id=%d`, app1),
 		},
 		"revision": {
 			fmt.Sprintf(`UPDATE php_applications SET desired_revision=2 WHERE id=%d`, app1),

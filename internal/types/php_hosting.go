@@ -15,6 +15,15 @@ const (
 // HostingMode remains an alias for compatibility with early Phase 30 callers.
 type HostingMode = PHPHostingMode
 
+type PHPFrameworkProfile string
+
+const (
+	PHPFrameworkPlain   PHPFrameworkProfile = "plain"
+	PHPFrameworkLaravel PHPFrameworkProfile = "laravel"
+	PHPFrameworkSymfony PHPFrameworkProfile = "symfony"
+	PHPFrameworkCustom  PHPFrameworkProfile = "custom"
+)
+
 type PHPSupportStatus string
 
 const (
@@ -57,22 +66,25 @@ type PHPWorkerSpec struct {
 }
 
 type PHPApplicationSpec struct {
-	ApplicationID    int64           `json:"application_id"`
-	SubscriptionID   int64           `json:"subscription_id"`
-	SiteID           int64           `json:"site_id"`
-	DesiredRevision  int64           `json:"desired_revision,omitempty"`
-	Username         string          `json:"username,omitempty"`
-	Domain           string          `json:"domain,omitempty"`
-	HostingMode      PHPHostingMode  `json:"hosting_mode"`
-	PHPVersion       string          `json:"php_version"`
-	RepositoryID     int64           `json:"repository_id,omitempty"`
-	RepositoryRef    string          `json:"repository_ref,omitempty"`
-	PublicPath       string          `json:"public_path,omitempty"`
-	DesiredState     string          `json:"desired_state,omitempty"`
-	ReleaseRetention int             `json:"release_retention,omitempty"`
-	Composer         PHPComposerSpec `json:"composer"`
-	Workers          []PHPWorkerSpec `json:"workers,omitempty"`
-	Policy           HostingPolicy   `json:"policy,omitempty"`
+	ApplicationID    int64               `json:"application_id"`
+	SubscriptionID   int64               `json:"subscription_id"`
+	SiteID           int64               `json:"site_id"`
+	DesiredRevision  int64               `json:"desired_revision,omitempty"`
+	Username         string              `json:"username,omitempty"`
+	Domain           string              `json:"domain,omitempty"`
+	HostingMode      PHPHostingMode      `json:"hosting_mode"`
+	PHPVersion       string              `json:"php_version"`
+	RepositoryID     int64               `json:"repository_id,omitempty"`
+	RepositoryRef    string              `json:"repository_ref,omitempty"`
+	FrameworkProfile PHPFrameworkProfile `json:"framework_profile,omitempty"`
+	PublicPath       string              `json:"public_path,omitempty"`
+	HealthPath       string              `json:"health_path,omitempty"`
+	SharedPaths      []string            `json:"shared_paths,omitempty"`
+	DesiredState     string              `json:"desired_state,omitempty"`
+	ReleaseRetention int                 `json:"release_retention,omitempty"`
+	Composer         PHPComposerSpec     `json:"composer"`
+	Workers          []PHPWorkerSpec     `json:"workers,omitempty"`
+	Policy           HostingPolicy       `json:"policy,omitempty"`
 }
 
 type PHPDeployment struct {
@@ -161,6 +173,13 @@ type RollbackPHPApplicationResult struct {
 	Changed            bool   `json:"changed"`
 }
 
+// Release names are the stable Phase 30 vocabulary. Application names remain
+// aliases so early control-plane callers continue to compile during rollout.
+type DeployPHPReleaseReq = DeployPHPApplicationReq
+type DeployPHPReleaseResult = DeployPHPApplicationResult
+type RollbackPHPReleaseReq = RollbackPHPApplicationReq
+type RollbackPHPReleaseResult = RollbackPHPApplicationResult
+
 type ReconcilePHPApplicationReq struct {
 	Application        PHPApplicationSpec      `json:"application"`
 	ActiveDeployment   *PHPDeployment          `json:"active_deployment,omitempty"`
@@ -213,3 +232,6 @@ type ReconcilePHPWorkersArgs struct {
 	ApplicationID   int64 `json:"application_id" river:"unique"`
 	DesiredRevision int64 `json:"desired_revision" river:"unique"`
 }
+
+type DeployPHPReleaseArgs = DeployPHPApplicationArgs
+type RollbackPHPReleaseArgs = RollbackPHPApplicationArgs

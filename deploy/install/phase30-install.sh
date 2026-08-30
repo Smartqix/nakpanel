@@ -22,7 +22,7 @@ export DEBIAN_FRONTEND=noninteractive
 readonly -a PHP_VERSIONS=(8.3 8.4 8.5)
 
 apt-get update
-apt-get install -y ca-certificates curl gnupg software-properties-common
+apt-get install -y acl ca-certificates clamav curl gnupg software-properties-common
 add-apt-repository --yes ppa:ondrej/php
 
 # Ubuntu 24.04 writes PPA sources in deb822 format. Refuse a source that does

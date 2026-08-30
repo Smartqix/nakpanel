@@ -65,6 +65,7 @@ func main() {
 		FTPSTLSCertPath:   os.Getenv("NAKPANEL_FTPS_TLS_CERT"),
 		FTPSTLSKeyPath:    os.Getenv("NAKPANEL_FTPS_TLS_KEY"),
 	})
+	phpApplications := ops.NewPHPApplicationProvisioner(ops.PHPApplicationProvisionerOptions{})
 	serverAdminInspector := ops.NewServerAdminInspector(ops.ServerAdminInspectorOptions{})
 	managedOperations := ops.NewManagedOperations(ops.ManagedOperationsOptions{Services: serverAdminInspector})
 	securityController := ops.NewServerSecurityController(ops.ServerSecurityControllerOptions{})
@@ -116,6 +117,7 @@ func main() {
 			SubscriptionAccounts:    accountProvisioner,
 			Mail:                    mailProvisioner,
 			Applications:            podmanProvisioner,
+			PHPApplications:         phpApplications,
 			SubscriptionTeardown:    teardownProvisioner,
 			HostingToolkit:          hostingToolkit,
 			ServerAdmin:             serverAdminInspector,

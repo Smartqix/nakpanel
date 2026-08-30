@@ -72,6 +72,10 @@ const (
 	OpEnsureGitRepository         = "ensure_git_repository"
 	OpEnsureProtectedDirectories  = "ensure_protected_directories"
 	OpRunStagingOperation         = "run_staging_operation"
+	OpDeployPHPRelease            = "deploy_php_release"
+	OpRollbackPHPRelease          = "rollback_php_release"
+	OpReconcilePHPApplication     = "reconcile_php_application"
+	OpReconcilePHPWorkers         = "reconcile_php_workers"
 )
 
 type TeardownSubscriptionReq struct {

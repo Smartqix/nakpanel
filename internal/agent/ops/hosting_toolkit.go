@@ -1244,6 +1244,10 @@ func (p *HostingToolkitProvisioner) siteLogPath(req types.SiteLogRequest) (strin
 		path = filepath.Join("/var/log/nakpanel/applications", "site-"+strconv.FormatInt(req.SiteID, 10)+".log")
 	case types.SiteLogTask:
 		path = filepath.Join("/var/log/nakpanel/tasks", "site-"+strconv.FormatInt(req.SiteID, 10)+".log")
+	case types.SiteLogPHPDeployment:
+		path = filepath.Join("/var/log/nakpanel/php-deployments", "site-"+strconv.FormatInt(req.SiteID, 10)+".log")
+	case types.SiteLogPHPWorker:
+		path = filepath.Join("/var/log/nakpanel/php-workers", "site-"+strconv.FormatInt(req.SiteID, 10)+".log")
 	default:
 		return "", errors.New("unsupported site log source")
 	}

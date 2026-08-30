@@ -16,8 +16,19 @@ CREATE TABLE php_applications (
     repository_id BIGINT,
     repository_ref TEXT NOT NULL DEFAULT 'main'
         CHECK (repository_ref <> '' AND repository_ref !~ '[\r\n]'),
+    framework_profile TEXT NOT NULL DEFAULT 'plain'
+        CHECK (framework_profile IN ('plain','laravel','symfony','custom')),
     public_path TEXT NOT NULL DEFAULT ''
         CHECK (public_path !~ '^/' AND public_path !~ '(^|/)\.\.(/|$)' AND public_path !~ '[\r\n]'),
+    health_path TEXT NOT NULL DEFAULT '/'
+        CHECK (health_path ~ '^/' AND health_path !~ '(^|/)\.\.(/|$)' AND health_path !~ '[\r\n]'),
+    shared_paths JSONB NOT NULL DEFAULT '[]'::jsonb
+        CHECK (jsonb_typeof(shared_paths)='array'
+               AND jsonb_array_length(shared_paths) <= 16
+               AND NOT jsonb_path_exists(shared_paths, '$[*] ? (@.type() != "string")')
+               AND shared_paths::TEXT !~ '"/'
+               AND shared_paths::TEXT !~ '"([^"/]*/)*\.\.(/|"|\\)'
+               AND shared_paths::TEXT !~ '[\r\n]'),
     composer_install BOOLEAN NOT NULL DEFAULT false,
     composer_allow_scripts BOOLEAN NOT NULL DEFAULT false,
     composer_allow_plugins BOOLEAN NOT NULL DEFAULT false,
@@ -53,7 +64,7 @@ CREATE TABLE php_deployments (
     requested_by_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL,
     requested_revision TEXT NOT NULL CHECK (requested_revision <> '' AND requested_revision !~ '[\r\n]'),
     resolved_revision TEXT NOT NULL DEFAULT ''
-        CHECK (resolved_revision = '' OR resolved_revision ~ '^[a-f0-9]{40,64}$'),
+        CHECK (resolved_revision = '' OR resolved_revision ~ '^[a-f0-9]{40}([a-f0-9]{24})?$'),
     release_number BIGINT NOT NULL CHECK (release_number > 0),
     previous_deployment_id BIGINT,
     status TEXT NOT NULL DEFAULT 'pending'
@@ -220,7 +231,10 @@ BEGIN
            OR application.php_version <> site.php_version
            OR application.repository_id IS NOT NULL
            OR application.repository_ref <> 'main'
+           OR application.framework_profile <> 'plain'
            OR application.public_path <> ''
+           OR application.health_path <> '/'
+           OR application.shared_paths <> '[]'::jsonb
            OR application.composer_install
            OR application.composer_allow_scripts
            OR application.composer_allow_plugins

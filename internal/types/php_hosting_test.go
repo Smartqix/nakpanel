@@ -78,7 +78,8 @@ func TestPhase30PHPHostingPublicContractsRoundTrip(t *testing.T) {
 	spec := PHPApplicationSpec{
 		ApplicationID: 12, SubscriptionID: 4, SiteID: 7,
 		HostingMode: PHPHostingModeManaged, PHPVersion: "8.4",
-		RepositoryID: 15, RepositoryRef: "main", PublicPath: "public",
+		RepositoryID: 15, RepositoryRef: "main", FrameworkProfile: PHPFrameworkLaravel,
+		PublicPath: "public", HealthPath: "/up", SharedPaths: []string{"storage", "bootstrap/cache"},
 		Composer: PHPComposerSpec{Install: true, AllowScripts: false},
 		Workers:  []PHPWorkerSpec{{WorkerID: 18, Name: "queue", Script: "artisan", Arguments: []string{"queue:work"}, Processes: 2}},
 	}
@@ -98,9 +99,16 @@ func TestPhase30PHPHostingPublicContractsRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.Application.HostingMode != PHPHostingModeManaged || decoded.Application.Workers[0].Processes != 2 || decoded.Environment[0].Value != "production" {
+	if decoded.Application.HostingMode != PHPHostingModeManaged || decoded.Application.FrameworkProfile != PHPFrameworkLaravel ||
+		decoded.Application.HealthPath != "/up" || len(decoded.Application.SharedPaths) != 2 ||
+		decoded.Application.Workers[0].Processes != 2 || decoded.Environment[0].Value != "production" {
 		t.Fatalf("decoded deploy request = %#v", decoded)
 	}
+
+	var _ DeployPHPReleaseReq = request
+	var _ DeployPHPReleaseResult = DeployPHPApplicationResult{}
+	var _ RollbackPHPReleaseReq = RollbackPHPApplicationReq{}
+	var _ RollbackPHPReleaseResult = RollbackPHPApplicationResult{}
 
 	capabilities := RuntimeCapabilities{
 		PHPVersions:       []string{"8.4"},

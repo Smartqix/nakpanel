@@ -11,6 +11,10 @@ func TestPhase6OpsAreEnumerated(t *testing.T) {
 		OpConfigureWebmail,
 		OpConfigureDNSZone,
 		OpReconcileSystem,
+		OpDeployPHPRelease,
+		OpRollbackPHPRelease,
+		OpReconcilePHPApplication,
+		OpReconcilePHPWorkers,
 	} {
 		if op == "" {
 			t.Fatalf("phase6 op is empty")
