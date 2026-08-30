@@ -505,6 +505,9 @@ mkdir -p "${work}/public"
 cat >"${work}/composer.json" <<'JSON'
 {"name":"nakpanel/phase30-app","description":"Phase 30 managed PHP verifier","type":"project","require":{}}
 JSON
+COMPOSER_HOME="${work}/.composer" composer update --no-install --no-interaction --no-ansi --no-progress --no-scripts --no-plugins
+rm -rf "${work}/.composer"
+test -s "${work}/composer.lock"
 cat >"${work}/public/index.php" <<'PHP'
 <?php
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
