@@ -222,10 +222,65 @@ func TestManagedPHPFPMUnitPreservesSharedRuntimeDirectory(t *testing.T) {
 }
 
 type scriptedPHPAppRunner struct {
-	calls     []string
-	fail      string
-	failAfter int
-	failHits  int
+	calls          []string
+	fail           string
+	failAfter      int
+	failHits       int
+	candidateUnits map[string]phpCandidateUnitState
+}
+
+type loadedCandidateRunner struct {
+	calls           []string
+	unitName        string
+	active          bool
+	loaded          bool
+	generation      string
+	failCleanupStop bool
+}
+
+func (r *loadedCandidateRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	call := strings.Join(append([]string{name}, args...), " ")
+	r.calls = append(r.calls, call)
+	if strings.Contains(call, "rev-parse --verify") {
+		return []byte(strings.Repeat("a", 40) + "\n"), nil
+	}
+	if name != "systemctl" || len(args) == 0 {
+		return nil, nil
+	}
+	switch args[0] {
+	case "show":
+		loadState, activeState := "not-found", "inactive"
+		if r.loaded {
+			loadState = "loaded"
+		}
+		if r.active {
+			activeState = "active"
+		}
+		return []byte("LoadState=" + loadState + "\nActiveState=" + activeState + "\n"), nil
+	case "stop":
+		if len(args) > 1 && args[1] == r.unitName {
+			if r.failCleanupStop {
+				return []byte("candidate stop failed"), errors.New("candidate stop failed")
+			}
+			r.active = false
+		}
+	case "disable":
+		if len(args) > 2 && args[1] == "--now" && args[2] == r.unitName {
+			if r.failCleanupStop {
+				return []byte("candidate stop failed"), errors.New("candidate stop failed")
+			}
+			r.active = false
+		}
+	case "start":
+		if len(args) > 1 && args[1] == r.unitName && !r.active {
+			r.active, r.loaded, r.generation = true, true, "new"
+		}
+	case "restart":
+		if len(args) > 1 && args[1] == r.unitName {
+			r.active, r.loaded, r.generation = true, true, "new"
+		}
+	}
+	return nil, nil
 }
 
 func (r *scriptedPHPAppRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -239,6 +294,30 @@ func (r *scriptedPHPAppRunner) Run(_ context.Context, name string, args ...strin
 	}
 	if strings.Contains(call, "rev-parse --verify") {
 		return []byte(strings.Repeat("a", 40) + "\n"), nil
+	}
+	if name == "systemctl" && len(args) > 0 {
+		if r.candidateUnits == nil {
+			r.candidateUnits = make(map[string]phpCandidateUnitState)
+		}
+		switch args[0] {
+		case "show":
+			unitName := args[len(args)-1]
+			state, ok := r.candidateUnits[unitName]
+			if !ok {
+				state = phpCandidateUnitState{LoadState: "not-found", ActiveState: "inactive"}
+			}
+			return []byte("LoadState=" + state.LoadState + "\nActiveState=" + state.ActiveState + "\n"), nil
+		case "stop":
+			if len(args) > 1 {
+				state := r.candidateUnits[args[1]]
+				state.LoadState, state.ActiveState = "loaded", "inactive"
+				r.candidateUnits[args[1]] = state
+			}
+		case "restart":
+			if len(args) > 1 && strings.Contains(args[1], "candidate@") {
+				r.candidateUnits[args[1]] = phpCandidateUnitState{LoadState: "loaded", ActiveState: "active"}
+			}
+		}
 	}
 	return nil, nil
 }
@@ -535,6 +614,9 @@ func TestDeployPHPReleaseResetsAndFencesStaleCandidateGeneration(t *testing.T) {
 		return nil
 	})
 	unitName := "nakpanel-php-fpm-candidate@7-22.service"
+	runner.candidateUnits = map[string]phpCandidateUnitState{
+		unitName: {LoadState: "loaded", ActiveState: "active"},
+	}
 	unitPath := filepath.Join(provisioner.systemdUnitDir, unitName)
 	nginxPath := filepath.Join(provisioner.nginxCandidateDir, "90-nakpanel-php-candidate-7-22.conf")
 	statePath := filepath.Join(provisioner.stateRoot, "app-9", "candidate-22")
@@ -552,10 +634,63 @@ func TestDeployPHPReleaseResetsAndFencesStaleCandidateGeneration(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(runner.calls, "\n")
-	stopAt := strings.Index(joined, "systemctl disable --now "+unitName)
-	startAt := strings.Index(joined, "systemctl start "+unitName)
+	stopAt := strings.Index(joined, "systemctl stop "+unitName)
+	startAt := strings.Index(joined, "systemctl restart "+unitName)
 	if stopAt < 0 || startAt < 0 || stopAt > startAt || !markerObserved {
 		t.Fatalf("stale candidate was not reset/fenced before startup:\n%s", joined)
+	}
+}
+
+func TestDeployPHPReleaseStopsLoadedCandidateWithoutUnitFileBeforeProbing(t *testing.T) {
+	unitName := "nakpanel-php-fpm-candidate@7-22.service"
+	runner := &loadedCandidateRunner{unitName: unitName, active: true, loaded: true, generation: "stale"}
+	probeCalls := 0
+	provisioner, spec := newPHPApplicationTestProvisioner(t, runner, func(context.Context, string, string) error {
+		probeCalls++
+		if runner.generation != "new" {
+			return errors.New("stale candidate process answered the readiness probe")
+		}
+		return nil
+	})
+	if _, err := os.Stat(filepath.Join(provisioner.systemdUnitDir, unitName)); !os.IsNotExist(err) {
+		t.Fatalf("test requires loaded candidate with no unit file: %v", err)
+	}
+	if _, err := provisioner.DeployPHPRelease(context.Background(), types.DeployPHPReleaseReq{Application: spec, Deployment: types.PHPDeployment{
+		ID: 22, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID, RequestedRevision: "main",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(runner.calls, "\n")
+	stopAt := strings.Index(joined, "systemctl stop "+unitName)
+	restartAt := strings.Index(joined, "systemctl restart "+unitName)
+	if stopAt < 0 || restartAt < 0 || stopAt > restartAt || probeCalls != 6 {
+		t.Fatalf("loaded no-file candidate was not replaced before probing (probes=%d):\n%s", probeCalls, joined)
+	}
+}
+
+func TestDeployPHPReleaseSurfacesCandidateCleanupStopFailureAndKeepsUnit(t *testing.T) {
+	unitName := "nakpanel-php-fpm-candidate@7-22.service"
+	runner := &loadedCandidateRunner{unitName: unitName}
+	provisioner, spec := newPHPApplicationTestProvisioner(t, runner, nil)
+	probeCalls := 0
+	provisioner.probe = func(context.Context, string, string) error {
+		probeCalls++
+		if probeCalls == 3 {
+			runner.failCleanupStop = true
+		}
+		return nil
+	}
+	_, err := provisioner.DeployPHPRelease(context.Background(), types.DeployPHPReleaseReq{Application: spec, Deployment: types.PHPDeployment{
+		ID: 22, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID, RequestedRevision: "main",
+	}})
+	if err == nil || !strings.Contains(err.Error(), "candidate stop failed") {
+		t.Fatalf("candidate cleanup stop failure was hidden: %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(provisioner.systemdUnitDir, unitName)); statErr != nil {
+		t.Fatalf("candidate unit was removed after its process failed to stop: %v", statErr)
+	}
+	if !runner.active {
+		t.Fatal("test did not retain the modeled process after the stop failure")
 	}
 }
 

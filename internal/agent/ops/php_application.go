@@ -643,6 +643,9 @@ func (p *PHPApplicationProvisioner) DeployPHPRelease(ctx context.Context, req ty
 	if err != nil {
 		return result, err
 	}
+	if err := p.resetCandidateArtifacts(ctx, spec, req.Deployment.ID, req.Environment); err != nil {
+		return result, err
+	}
 	if existing, markerErr := p.readMarker(spec.ApplicationID); markerErr == nil &&
 		existing.ActiveDeploymentID == req.Deployment.ID && existing.ResolvedRevision == resolved && existing.DesiredRevision == spec.DesiredRevision {
 		return types.DeployPHPReleaseResult{
@@ -650,10 +653,6 @@ func (p *PHPApplicationProvisioner) DeployPHPRelease(ctx context.Context, req ty
 			PreviousDeploymentID: existing.PreviousDeploymentID, HealthMessage: "already active", Changed: false,
 		}, nil
 	}
-	if err := p.resetCandidateArtifacts(ctx, spec, req.Deployment.ID, req.Environment); err != nil {
-		return result, err
-	}
-
 	_ = os.RemoveAll(paths.candidateRelease)
 	if err := os.MkdirAll(paths.releaseRoot, 0o710); err != nil {
 		return result, err
@@ -669,8 +668,14 @@ func (p *PHPApplicationProvisioner) DeployPHPRelease(ctx context.Context, req ty
 		}
 	}()
 	defer func() {
-		_ = os.RemoveAll(paths.candidateRelease)
-		p.removeCandidateArtifacts(spec, req.Deployment.ID)
+		cleanupErr := p.resetCandidateArtifacts(context.Background(), spec, req.Deployment.ID, req.Environment)
+		if cleanupErr != nil {
+			err = errors.Join(err, fmt.Errorf("clean PHP release candidate: %w", cleanupErr))
+			return
+		}
+		if removeErr := os.RemoveAll(paths.candidateRelease); removeErr != nil {
+			err = errors.Join(err, fmt.Errorf("remove PHP release candidate: %w", removeErr))
+		}
 	}()
 	if err := p.exporter.Export(ctx, p.runner, spec.Username, paths.repository, resolved, paths.candidateRelease); err != nil {
 		return result, redactPHPError(err, req.Environment)
@@ -1230,6 +1235,61 @@ func (p *PHPApplicationProvisioner) readCandidateMarker(applicationID, deploymen
 	return marker, nil
 }
 
+type phpCandidateUnitState struct {
+	LoadState   string
+	ActiveState string
+}
+
+func (s phpCandidateUnitState) inactive() bool {
+	return s.ActiveState == "inactive" || s.ActiveState == "failed"
+}
+
+func (p *PHPApplicationProvisioner) candidateUnitState(ctx context.Context, unitName string, environment []types.PHPEnvironmentPayload) (phpCandidateUnitState, error) {
+	output, err := p.runner.Run(ctx, "systemctl", "show", "--property=LoadState", "--property=ActiveState", "--no-pager", unitName)
+	if err != nil {
+		return phpCandidateUnitState{}, redactPHPError(fmt.Errorf("inspect PHP release candidate: %w: %s", err, strings.TrimSpace(string(output))), environment)
+	}
+	state := phpCandidateUnitState{}
+	for _, line := range strings.Split(string(output), "\n") {
+		key, value, found := strings.Cut(strings.TrimSpace(line), "=")
+		if !found {
+			continue
+		}
+		switch key {
+		case "LoadState":
+			state.LoadState = value
+		case "ActiveState":
+			state.ActiveState = value
+		}
+	}
+	if state.LoadState == "" || state.ActiveState == "" {
+		return phpCandidateUnitState{}, errors.New("systemd returned an incomplete PHP candidate state")
+	}
+	return state, nil
+}
+
+func (p *PHPApplicationProvisioner) stopCandidateUnit(ctx context.Context, unitName string, environment []types.PHPEnvironmentPayload) (bool, error) {
+	state, err := p.candidateUnitState(ctx, unitName, environment)
+	if err != nil {
+		return false, err
+	}
+	if state.LoadState == "not-found" && state.inactive() {
+		return false, nil
+	}
+	output, err := p.runner.Run(ctx, "systemctl", "stop", unitName)
+	if err != nil {
+		return false, redactPHPError(fmt.Errorf("stop stale PHP release candidate: %w: %s", err, strings.TrimSpace(string(output))), environment)
+	}
+	state, err = p.candidateUnitState(ctx, unitName, environment)
+	if err != nil {
+		return false, err
+	}
+	if !state.inactive() {
+		return false, fmt.Errorf("PHP release candidate remained %s after stop", state.ActiveState)
+	}
+	return true, nil
+}
+
 func (p *PHPApplicationProvisioner) resetCandidateArtifacts(ctx context.Context, spec types.PHPApplicationSpec, deploymentID int64, environment []types.PHPEnvironmentPayload) error {
 	siteConfigMutationMu.Lock()
 	defer siteConfigMutationMu.Unlock()
@@ -1246,11 +1306,9 @@ func (p *PHPApplicationProvisioner) resetCandidateArtifacts(ctx context.Context,
 	if nginxErr != nil && !os.IsNotExist(nginxErr) {
 		return nginxErr
 	}
-	if unitExists {
-		output, err := p.runner.Run(ctx, "systemctl", "disable", "--now", unitName)
-		if err != nil {
-			return redactPHPError(fmt.Errorf("stop stale PHP release candidate: %w: %s", err, strings.TrimSpace(string(output))), environment)
-		}
+	unitLoaded, err := p.stopCandidateUnit(ctx, unitName, environment)
+	if err != nil {
+		return err
 	}
 	for _, path := range []string{unitPath, nginxPath, filepath.Join(p.phpRunDir, fmt.Sprintf("candidate-%d-%d.sock", spec.SiteID, deploymentID))} {
 		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
@@ -1260,7 +1318,7 @@ func (p *PHPApplicationProvisioner) resetCandidateArtifacts(ctx context.Context,
 	if err := os.RemoveAll(filepath.Dir(p.candidateMarkerPath(spec.ApplicationID, deploymentID))); err != nil {
 		return err
 	}
-	if unitExists {
+	if unitExists || unitLoaded {
 		if output, err := p.runner.Run(ctx, "systemctl", "daemon-reload"); err != nil {
 			return redactPHPError(fmt.Errorf("reload units after stale PHP candidate cleanup: %w: %s", err, strings.TrimSpace(string(output))), environment)
 		}
@@ -1315,7 +1373,7 @@ func (p *PHPApplicationProvisioner) startCandidate(ctx context.Context, spec typ
 	commands := [][]string{
 		{"php-fpm" + spec.PHPVersion, "-t", "-y", fpmConfig},
 		{"systemctl", "daemon-reload"},
-		{"systemctl", "start", unitName},
+		{"systemctl", "restart", unitName},
 		{"nginx", "-t"},
 		{"systemctl", "reload", "nginx"},
 	}
@@ -1325,6 +1383,13 @@ func (p *PHPApplicationProvisioner) startCandidate(ctx context.Context, spec typ
 			return redactPHPError(fmt.Errorf("start PHP release candidate: %w: %s", err, strings.TrimSpace(string(output))), environment)
 		}
 	}
+	state, err := p.candidateUnitState(ctx, unitName, environment)
+	if err != nil {
+		return err
+	}
+	if state.LoadState != "loaded" || state.ActiveState != "active" {
+		return fmt.Errorf("new PHP release candidate did not become active (load=%s active=%s)", state.LoadState, state.ActiveState)
+	}
 	if err := p.probeThree(ctx, fmt.Sprintf("http://127.0.0.1:%d%s", port, spec.HealthPath), spec.Domain); err != nil {
 		return fmt.Errorf("PHP release candidate failed readiness: %w", err)
 	}
@@ -1333,19 +1398,6 @@ func (p *PHPApplicationProvisioner) startCandidate(ctx context.Context, spec typ
 		return errors.New("PHP release candidate generation marker changed during readiness checks")
 	}
 	return nil
-}
-
-func (p *PHPApplicationProvisioner) removeCandidateArtifacts(spec types.PHPApplicationSpec, deploymentID int64) {
-	siteConfigMutationMu.Lock()
-	defer siteConfigMutationMu.Unlock()
-	unitName := fmt.Sprintf("nakpanel-php-fpm-candidate@%d-%d.service", spec.SiteID, deploymentID)
-	_, _ = p.runner.Run(context.Background(), "systemctl", "disable", "--now", unitName)
-	_ = os.Remove(filepath.Join(p.systemdUnitDir, unitName))
-	_ = os.Remove(filepath.Join(p.nginxCandidateDir, fmt.Sprintf("90-nakpanel-php-candidate-%d-%d.conf", spec.SiteID, deploymentID)))
-	_ = os.RemoveAll(filepath.Join(p.stateRoot, "app-"+strconv.FormatInt(spec.ApplicationID, 10), "candidate-"+strconv.FormatInt(deploymentID, 10)))
-	_ = os.Remove(filepath.Join(p.phpRunDir, fmt.Sprintf("candidate-%d-%d.sock", spec.SiteID, deploymentID)))
-	_, _ = p.runner.Run(context.Background(), "systemctl", "daemon-reload")
-	_, _ = p.runner.Run(context.Background(), "systemctl", "reload", "nginx")
 }
 
 func (p *PHPApplicationProvisioner) stopPHPCandidates(ctx context.Context, spec types.PHPApplicationSpec, environment []types.PHPEnvironmentPayload) error {
