@@ -1021,7 +1021,7 @@ func (p *PHPApplicationProvisioner) prepareCandidateOwnership(ctx context.Contex
 func (p *PHPApplicationProvisioner) scanReleaseForMalware(ctx context.Context, spec types.PHPApplicationSpec, release string, environment []types.PHPEnvironmentPayload) error {
 	args := []string{"--quiet", "--wait", "--collect", "--pipe", "--uid=" + spec.Username, "--gid=" + spec.Username,
 		"--property=NoNewPrivileges=yes", "--property=PrivateTmp=yes", "--property=ProtectSystem=strict",
-		"--property=ProtectHome=read-only", "--property=MemoryMax=512M", "--property=TasksMax=32", "--property=RuntimeMaxSec=300",
+		"--property=ProtectHome=read-only", "--property=MemoryMax=1G", "--property=MemorySwapMax=0", "--property=TasksMax=32", "--property=RuntimeMaxSec=300",
 		p.malwareScanner, "--recursive", "--infected", "--no-summary", "--", release}
 	output, err := p.runner.Run(ctx, "systemd-run", args...)
 	if err != nil {

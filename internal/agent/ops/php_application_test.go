@@ -479,6 +479,12 @@ func TestDeployPHPReleaseHealthGatesActivationAndRedactsSecrets(t *testing.T) {
 	if scans := strings.Count(joinedCalls, "/usr/bin/clamscan"); scans != 2 {
 		t.Fatalf("release must be malware-scanned before and after dependency installation, scans=%d:\n%s", scans, joinedCalls)
 	}
+	if scans := strings.Count(joinedCalls, "MemoryMax=1G"); scans != 2 {
+		t.Fatalf("release malware scans must have the Ubuntu-tested 1 GiB memory bound, scans=%d:\n%s", scans, joinedCalls)
+	}
+	if scans := strings.Count(joinedCalls, "MemorySwapMax=0"); scans != 2 {
+		t.Fatalf("release malware scans must not spill secrets or release data to swap, scans=%d:\n%s", scans, joinedCalls)
+	}
 	if !strings.Contains(joinedCalls, "nakpanel-php-worker@18.service") || !strings.Contains(joinedCalls, "nakpanel-php-worker@18-2.service") {
 		t.Fatalf("worker process units were not reconciled:\n%s", joinedCalls)
 	}
