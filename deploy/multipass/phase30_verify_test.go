@@ -125,6 +125,30 @@ func TestPhase30VerifierMakesCustomCertificateInputOperatorReadable(t *testing.T
 	}
 }
 
+func TestPhase30VerifierRuntimeGateAvoidsEarlyExitPipelines(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	for _, want := range []string{
+		`php_modules="$("php${version}" -m)"`,
+		`wp_version="$(timeout 1m wp --version --allow-root)"`,
+		`clamav_signature="$(find /var/lib/clamav`,
+		`clamav_version="$(timeout 1m clamscan --version)"`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("runtime gate is missing captured-output contract %q", want)
+		}
+	}
+	for _, forbidden := range []string{
+		`"php${version}" -m | grep`,
+		`wp --version --allow-root | grep`,
+		`| grep -q .`,
+		`clamscan --version | grep`,
+	} {
+		if strings.Contains(script, forbidden) {
+			t.Errorf("runtime gate retains pipefail-sensitive assertion %q", forbidden)
+		}
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{

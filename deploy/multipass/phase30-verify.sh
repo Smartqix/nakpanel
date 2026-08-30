@@ -137,9 +137,10 @@ PY
 multipass exec "${VM_NAME}" -- sudo bash -se <<'REMOTE'
 set -euo pipefail
 for version in 8.3 8.4 8.5; do
-  command -v "php${version}" >/dev/null
-  command -v "php-fpm${version}" >/dev/null
-  "php${version}" -m | grep -Fqi 'Zend OPcache'
+	command -v "php${version}" >/dev/null
+	command -v "php-fpm${version}" >/dev/null
+	php_modules="$("php${version}" -m)"
+	grep -Fqi 'Zend OPcache' <<<"${php_modules}"
   "php-fpm${version}" -t >/dev/null 2>&1
   systemctl is-enabled --quiet "php${version}-fpm"
 done
@@ -163,11 +164,14 @@ test "$(stat -c '%U:%G:%a' /usr/local/bin/composer)" = root:root:755
 test "$(stat -c '%U:%G:%a' /usr/local/lib/nakpanel/composer.phar)" = root:root:555
 wp_info="$(timeout 1m wp --info)"
 grep -Eq 'WP-CLI version:[[:space:]]+2\.12\.0' <<<"${wp_info}"
-timeout 1m wp --version --allow-root | grep -Fq 'WP-CLI 2.12.0'
+wp_version="$(timeout 1m wp --version --allow-root)"
+grep -Fq 'WP-CLI 2.12.0' <<<"${wp_version}"
 command -v freshclam >/dev/null
 command -v clamscan >/dev/null
-find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) | grep -q .
-timeout 1m clamscan --version | grep -Eq 'ClamAV .+/.+'
+clamav_signature="$(find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) -print -quit)"
+test -n "${clamav_signature}"
+clamav_version="$(timeout 1m clamscan --version)"
+grep -Eq 'ClamAV .+/.+' <<<"${clamav_version}"
 REMOTE
 
 echo "phase30: create panel-owned Classic and Managed PHP fixtures"
