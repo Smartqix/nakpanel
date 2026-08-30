@@ -11,7 +11,7 @@
   .np-php-app-heading p { color: var(--np-muted); font-size: 15px; line-height: 1.55; margin: 0; max-width: 780px; }
   .np-php-app-head-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
   .np-php-app-head-actions form { margin: 0; }
-  .np-php-app-head-actions button { align-items: center; display: inline-flex; gap: 7px; }
+  .np-php-app-head-actions button { align-items: center; display: inline-flex; gap: 7px; min-height: 44px; }
   .np-php-app-tabs { align-items: center; background: var(--np-surface); border: 1px solid var(--np-border); border-radius: 6px; display: flex; gap: 2px; min-height: 48px; overflow-x: auto; padding: 4px; scrollbar-width: thin; }
   .np-php-app-tabs a { align-items: center; border-radius: 4px; color: var(--np-muted); display: inline-flex; flex: 0 0 auto; font-size: 14px; font-weight: 600; justify-content: center; min-height: 40px; padding: 0 14px; }
   .np-php-app-tabs a:hover { background: var(--np-hover); color: var(--np-ink); }
@@ -4121,9 +4121,9 @@
   }
 
   .np-avatar {
-    width: 39px;
-    height: 39px;
-    min-width: 39px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
     padding: 0;
     border: 0;
     border-radius: 999px;
@@ -4816,13 +4816,13 @@
   .np-domain-more-menu strong { color: var(--np-faint); font-size: 10px; padding: 8px 8px 4px; text-transform: uppercase; }
   .np-domain-more-menu a { border: 0; border-radius: var(--np-radius); padding: 8px; }
   .np-domain-more-menu a:hover, .np-domain-more-menu a.is-active { background: #eef4fb; }
-  .np-domain-tools-trigger { align-items: center; background: var(--np-surface); border: 0; color: var(--np-ink-soft); display: none; gap: 8px; min-height: 32px; padding: 0 4px; text-align: left; width: 100%; }
+  .np-domain-tools-trigger { align-items: center; background: var(--np-surface); border: 0; color: var(--np-ink-soft); display: none; gap: 8px; min-height: 44px; padding: 0 4px; text-align: left; width: 100%; }
   .np-domain-tools-trigger .np-icon { color: var(--np-primary-dark); height: 18px; width: 18px; }
   .np-domain-tools-trigger strong { color: var(--np-faint); font-size: 12px; margin-left: auto; }
   .np-domain-tools-trigger .np-icon:last-child { color: var(--np-faint); height: 15px; width: 15px; }
   .np-domain-tools-dialog { max-width: 520px; }
   .np-domain-tools-drawer { display: grid; gap: 2px; padding: 12px; }
-  .np-domain-tools-drawer a { align-items: center; border-radius: var(--np-radius); color: var(--np-ink-soft); display: flex; font-size: 14px; font-weight: 500; min-height: 32px; padding: 0 12px; }
+  .np-domain-tools-drawer a { align-items: center; border-radius: var(--np-radius); color: var(--np-ink-soft); display: flex; font-size: 14px; font-weight: 500; min-height: 44px; padding: 0 12px; }
   .np-domain-tools-drawer a.is-active { background: var(--np-primary-soft); color: var(--np-primary-dark); }
   .np-domain-settings { overflow: hidden; }
   .np-domain-db-head { align-items: center; border-bottom: 1px solid var(--np-border-soft); display: flex; gap: 16px; justify-content: space-between; padding: 16px 16px; }

@@ -24,6 +24,15 @@ type refreshingPhase6StatusStore struct {
 	activeID  int64
 }
 
+type recordingSiteApplicationReconciler struct {
+	siteIDs []int64
+}
+
+func (r *recordingSiteApplicationReconciler) ReconcileSiteApplication(_ context.Context, siteID int64) error {
+	r.siteIDs = append(r.siteIDs, siteID)
+	return nil
+}
+
 func (s *refreshingPhase6StatusStore) RefreshReconcileIntent(_ context.Context, args ReconcileSystemArgs) (ReconcileSystemArgs, error) {
 	args.Sites = s.refreshed.Sites
 	args.Databases = s.refreshed.Databases
@@ -66,6 +75,8 @@ func TestReconcileWorkerRefreshesCurrentIntentBeforeAgentDispatch(t *testing.T) 
 	agent := &recordingReconcileAgent{}
 	store := &refreshingPhase6StatusStore{refreshed: ReconcileSystemArgs{Sites: []types.ReconcileSiteReq{{SiteID: 7, Domain: "current.test", State: "active"}}}}
 	worker := NewReconcileSystemWorker(agent, store)
+	applications := &recordingSiteApplicationReconciler{}
+	worker.SetApplicationReconciler(applications)
 	job := &river.Job[ReconcileSystemArgs]{Args: ReconcileSystemArgs{
 		RunID: 42,
 		Sites: []types.ReconcileSiteReq{{SiteID: 7, Domain: "stale.test", State: "suspended"}},
@@ -79,5 +90,8 @@ func TestReconcileWorkerRefreshesCurrentIntentBeforeAgentDispatch(t *testing.T) 
 	}
 	if store.activeID != 42 {
 		t.Fatalf("active reconciliation run = %d, want 42", store.activeID)
+	}
+	if len(applications.siteIDs) != 1 || applications.siteIDs[0] != 7 {
+		t.Fatalf("reconciled PHP application sites = %v, want [7]", applications.siteIDs)
 	}
 }

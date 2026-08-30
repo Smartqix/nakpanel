@@ -574,6 +574,21 @@ func TestNewSitePlanIsolatesDedicatedPathsForCustomHomeRoot(t *testing.T) {
 	}
 }
 
+func TestRenderPHPFPMUnitPreservesSharedRuntimeDirectory(t *testing.T) {
+	unit := RenderPHPFPMUnit(SitePlan{
+		SiteID:         7,
+		PHPVersion:     "8.4",
+		PHPFPMConfig:   "/etc/nakpanel/php-fpm/sites/7.conf",
+		PHPFPMSocket:   "/run/nakpanel-php/site-7.sock",
+		PHPFPMErrorLog: "/var/log/php-fpm/site-7.log",
+		Docroot:        "/home/client/domains/example.test/public_html",
+		PHPTmpDir:      "/home/client/tmp",
+	})
+	if !strings.Contains(unit, "RuntimeDirectory=nakpanel-php") || !strings.Contains(unit, "RuntimeDirectoryPreserve=yes") {
+		t.Fatalf("shared PHP runtime directory can be removed when one site stops:\n%s", unit)
+	}
+}
+
 func TestSiteProvisionerUsesRequestedPHPVersionInDefaultPoolDir(t *testing.T) {
 	provisioner := NewSiteProvisioner(SiteProvisionerOptions{})
 

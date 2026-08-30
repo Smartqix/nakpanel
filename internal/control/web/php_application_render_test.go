@@ -71,6 +71,24 @@ func TestPHPApplicationAssetsCarryResponsiveAndProgressiveHooks(t *testing.T) {
 	}
 }
 
+func TestPHPApplicationMobileControlsMeetMinimumTouchTarget(t *testing.T) {
+	css := string(appCSS)
+	assertDeclaration := func(selector, declaration string) {
+		t.Helper()
+		start := strings.Index(css, selector+"{")
+		if start < 0 {
+			t.Fatalf("compiled CSS missing %q", selector)
+		}
+		end := strings.Index(css[start:], "}")
+		if end < 0 || !strings.Contains(css[start:start+end], declaration) {
+			t.Fatalf("compiled CSS rule %q missing %q", selector, declaration)
+		}
+	}
+	assertDeclaration(".np-avatar", "height:44px")
+	assertDeclaration(".np-domain-tools-trigger", "min-height:44px")
+	assertDeclaration(".np-php-app-head-actions button", "min-height:44px")
+}
+
 func TestPhase30LogLinksAndSelectorUsePublicSourceEnums(t *testing.T) {
 	policy := types.HostingPolicy{Permissions: types.HostingPermissionPolicy{Logs: true}}
 	data := dashboard.Data{

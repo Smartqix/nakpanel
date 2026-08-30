@@ -15,6 +15,9 @@ REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
 DB_PASSWORD=""
 APP_SECRET=""
 WP_ADMIN_PASSWORD=""
+PHASE30_COMPLETE=0
+journal_capture_path=/tmp/nakpanel-phase30-journal.log
+journal_capture_unit=nakpanel-phase30-journal-capture.service
 
 fail(){ echo "phase30: $*" >&2; exit 1; }
 db(){ multipass_exec_short "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "$1" | tr -d '\r'; }
@@ -32,8 +35,11 @@ done
 tmpdir="$(mktemp -d)"
 cleanup_phase30(){
   local status=$?
+  if [[ "${PHASE30_COMPLETE}" != "1" && "${status}" -eq 0 ]]; then
+    status=1
+  fi
   multipass_exec_short "${VM_NAME}" -- sudo bash -c \
-    'rm -f /usr/local/lib/nakpanel/phase30-agentprobe /tmp/phase30-composer-self-update.out /tmp/phase30-quota.out; rm -rf /tmp/nakpanel-phase30-certs' \
+    'systemctl stop nakpanel-phase30-journal-capture.service 2>/dev/null || true; rm -f /usr/local/lib/nakpanel/phase30-agentprobe /tmp/nakpanel-phase30-journal.log /tmp/phase30-composer-self-update.out /tmp/phase30-quota.out; rm -rf /tmp/nakpanel-phase30-certs' \
     >/dev/null 2>&1 || true
   unset DB_PASSWORD APP_SECRET WP_ADMIN_PASSWORD
   rm -rf "${tmpdir}"
@@ -61,6 +67,19 @@ wait_for_site_http(){
   fail "${label}: HTTP ${status:-none}, want ${expected}"
 }
 
+wait_for_site_body(){
+  local label="$1" domain="$2" expected="$3" body=""
+  for _ in $(seq 1 120); do
+    body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "${domain}:80:${VM_IP}" "http://${domain}/" 2>/dev/null || true)"
+    if grep -Fq "${expected}" <<<"${body}"; then
+      printf '%s' "${body}"
+      return 0
+    fi
+    sleep 2
+  done
+  fail "${label}: expected response marker ${expected}"
+}
+
 post_as(){
   local label="$1" endpoint="$2"
   shift 2
@@ -80,6 +99,35 @@ trusted_curl(){
   local domain="$1" path="$2"
   multipass_exec_short "${VM_NAME}" -- curl --connect-timeout 5 --max-time 30 --cacert /usr/local/share/ca-certificates/nakpanel-phase30-root.crt \
     --fail --silent --show-error --resolve "${domain}:443:127.0.0.1" "https://${domain}${path}"
+}
+
+start_phase30_journal_capture(){
+  multipass_exec_short "${VM_NAME}" -- sudo bash -c '
+set -euo pipefail
+capture_path="$1"
+capture_unit="$2"
+systemctl stop "${capture_unit}" 2>/dev/null || true
+rm -f "${capture_path}"
+systemd-run --unit="${capture_unit%.service}" --service-type=exec --collect \
+  --property="StandardOutput=append:${capture_path}" \
+  --property="StandardError=append:${capture_path}" \
+  /usr/bin/journalctl -u nakpanel.service -u nakpanel-agent.service --no-pager \
+  --output=short-precise --since now --follow >/dev/null
+sleep 1
+systemctl is-active --quiet "${capture_unit}"
+' _ "${journal_capture_path}" "${journal_capture_unit}"
+}
+
+stop_phase30_journal_capture(){
+  multipass_exec_short "${VM_NAME}" -- sudo bash -c '
+set -euo pipefail
+capture_path="$1"
+capture_unit="$2"
+journalctl --sync
+sleep 1
+systemctl stop "${capture_unit}"
+cat "${capture_path}"
+' _ "${journal_capture_path}" "${journal_capture_unit}"
 }
 
 echo "phase30: install and prove the current worktree"
@@ -236,10 +284,9 @@ wait_for "tracked MariaDB provisioning" "SELECT status FROM databases WHERE id=$
 
 # Keep comparison needles in this host shell. Stdin carries values into the
 # supported guest operations, and River receives only operation/database IDs.
-journal_cursor="$(multipass_exec_short "${VM_NAME}" -- sudo journalctl \
-  -u nakpanel.service -u nakpanel-agent.service --no-pager -n 0 --show-cursor \
-  | sed -n 's/^-- cursor: //p' | tail -1)"
-[[ "${journal_cursor}" == s=* ]] || fail "could not capture the pre-secret panel/agent journal cursor"
+# Follow the journal live so rotation cannot evict the beginning of the secret
+# non-disclosure window before the verifier reaches its final boundary.
+start_phase30_journal_capture
 DB_PASSWORD="Aa9_$(openssl rand -hex 18)"
 APP_SECRET="$(openssl rand -hex 32)"
 WP_ADMIN_PASSWORD="Wp9!$(openssl rand -hex 18)"
@@ -551,34 +598,39 @@ test "${application_secret_status}" = 200
 post_as phase30-healthy-deploy "sites/${managed_site_id}/php-application/deployments" -d 'revision=main'
 wait_for "healthy managed deployment" "SELECT status FROM php_deployments WHERE application_id=${managed_application_id} ORDER BY id DESC LIMIT 1" "healthy"
 active_deployment_id="$(db "SELECT active_deployment_id FROM php_applications WHERE id=${managed_application_id}")"
-managed_body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/)"
+managed_body="$(wait_for_site_body "initial managed release" phase30-managed.test 'public=visible')"
 grep -Fxq 'public=visible' <<<"${managed_body}"
 grep -Fxq 'secret=present' <<<"${managed_body}"
 
 existing_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='queue'")"
 worker_id_form=()
 if [[ -n "${existing_worker_id}" ]]; then worker_id_form=(-d "worker_id=${existing_worker_id}"); fi
-post_as phase30-worker "sites/${managed_site_id}/php-application/workers" "${worker_id_form[@]}" \
+post_as phase30-worker "sites/${managed_site_id}/php-application/workers" \
+  ${worker_id_form[@]+"${worker_id_form[@]}"} \
   -d 'name=queue' -d 'script=worker.php' -d 'processes=1' -d 'desired_state=running'
 worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='queue'")"
 wait_for "bounded PHP worker" "SELECT observed_state||':'||convergence_status FROM php_workers WHERE id=${worker_id}" "running:in_sync"
+assert_unit_state(){
+  local label="$1" unit="$2" expected="$3" state=""
+  state="$(multipass_exec_short "${VM_NAME}" -- sudo systemctl show --property=ActiveState --value "${unit}" | tr -d '\r')"
+  [[ "${state}" == "${expected}" ]] || fail "${label}: ${unit} is ${state:-unknown}, want ${expected}"
+}
 assert_worker_active(){
   local label="$1" id="$2"
-  multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${id}.service" || fail "${label}: desired-running PHP worker is inactive"
+  assert_unit_state "${label}" "nakpanel-php-worker@${id}.service" active
 }
 assert_worker_active "desired-running worker before suspension" "${worker_id}"
 existing_stopped_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='maintenance'")"
 stopped_worker_id_form=()
 if [[ -n "${existing_stopped_worker_id}" ]]; then stopped_worker_id_form=(-d "worker_id=${existing_stopped_worker_id}"); fi
-post_as phase30-stopped-worker "sites/${managed_site_id}/php-application/workers" "${stopped_worker_id_form[@]}" \
+post_as phase30-stopped-worker "sites/${managed_site_id}/php-application/workers" \
+  ${stopped_worker_id_form[@]+"${stopped_worker_id_form[@]}"} \
   -d 'name=maintenance' -d 'script=worker.php' -d 'processes=1' -d 'desired_state=stopped'
 stopped_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='maintenance'")"
 wait_for "desired-stopped worker before suspension" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped:in_sync"
 assert_worker_inactive(){
   local label="$1" id="$2"
-  if multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${id}.service"; then
-    fail "${label}: desired-stopped PHP worker is active"
-  fi
+  assert_unit_state "${label}" "nakpanel-php-worker@${id}.service" inactive
 }
 assert_worker_inactive "desired-stopped worker before suspension" "${stopped_worker_id}"
 
@@ -604,7 +656,7 @@ REMOTE
 post_as phase30-unhealthy-deploy "sites/${managed_site_id}/php-application/deployments" -d 'revision=main'
 wait_for "unhealthy deployment rejection" "SELECT status FROM php_deployments WHERE application_id=${managed_application_id} ORDER BY id DESC LIMIT 1" "failed"
 [[ "$(db "SELECT active_deployment_id FROM php_applications WHERE id=${managed_application_id}")" == "${active_deployment_id}" ]] || fail "unhealthy deployment replaced the active release"
-managed_body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/)"
+managed_body="$(wait_for_site_body "managed release after failed candidate" phase30-managed.test 'public=visible')"
 grep -Fq 'public=visible' <<<"${managed_body}"
 
 echo "phase30: prove secret absence from durable/control-plane surfaces"
@@ -619,9 +671,9 @@ INITIAL_DATABASE_SURFACES="$(db "
     WHERE target_type='database';
   SELECT COALESCE(last_error,'')||COALESCE(health_message,'')||COALESCE(composer_audit::text,'')
     FROM php_deployments WHERE application_id=${managed_application_id};")"
-INITIAL_JOURNAL="$(multipass_exec_short "${VM_NAME}" -- sudo journalctl \
-  -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise \
-  --after-cursor "${journal_cursor}")"
+INITIAL_JOURNAL="$(multipass_exec_short "${VM_NAME}" -- sudo bash -c \
+  'journalctl --sync; sleep 1; cat "$1"' _ "${journal_capture_path}")"
+[[ -n "${INITIAL_JOURNAL}" ]] || fail "initial panel/agent journal capture is empty"
 INITIAL_SYSTEMD_METADATA="$(multipass_exec_short "${VM_NAME}" -- sudo systemctl show \
   "nakpanel-php-fpm@${managed_site_id}.service" \
   "nakpanel-php-worker@${worker_id}.service" \
@@ -665,8 +717,8 @@ post_as phase30-managed-suspend "sites/${managed_site_id}/hosting" -d 'desired_s
   -d 'desired_php_version=8.4' -d 'desired_https_redirect=false'
 wait_for "managed suspension" "SELECT desired_state||':'||observed_state FROM php_applications WHERE id=${managed_application_id}" "active:suspended"
 wait_for_site_http "managed unavailable response" phase30-managed.test 503
-multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-fpm@${managed_site_id}.service" && fail "managed FPM remained active while suspended"
-multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${worker_id}.service" && fail "managed worker remained active while suspended"
+assert_unit_state "managed FPM while suspended" "nakpanel-php-fpm@${managed_site_id}.service" inactive
+assert_unit_state "managed worker while suspended" "nakpanel-php-worker@${worker_id}.service" inactive
 wait_for "desired-stopped worker during suspension" "SELECT desired_state||':'||observed_state FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped"
 assert_worker_inactive "desired-stopped worker during suspension" "${stopped_worker_id}"
 
@@ -683,26 +735,15 @@ wait_for "desired-running worker after explicit reconciliation" "SELECT desired_
 assert_worker_active "desired-running worker after explicit reconciliation" "${worker_id}"
 wait_for "desired-stopped worker after explicit reconciliation" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped:in_sync"
 assert_worker_inactive "desired-stopped worker after explicit reconciliation" "${stopped_worker_id}"
-managed_body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/)"
+managed_body="$(wait_for_site_body "managed release after explicit reconciliation" phase30-managed.test 'public=visible')"
 grep -Fq 'public=visible' <<<"${managed_body}"
 
 # Stop both secret-consuming daemons before the reboot-boundary capture. Once
 # inactive, they cannot append a later pre-reboot entry outside this snapshot.
-PRE_REBOOT_JOURNAL="$(multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${journal_cursor}" <<'REMOTE'
-set -euo pipefail
-journal_cursor="$1"
-systemctl stop nakpanel.service nakpanel-agent.service
-for unit in nakpanel.service nakpanel-agent.service; do
-  if systemctl is-active --quiet "${unit}"; then
-    echo "${unit} remained active before the journal boundary capture" >&2
-    exit 1
-  fi
-done
-journalctl --sync
-journalctl -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise \
-  --after-cursor "${journal_cursor}"
-REMOTE
-)"
+multipass_exec_short "${VM_NAME}" -- sudo systemctl stop nakpanel.service nakpanel-agent.service
+assert_unit_state "panel before the journal boundary capture" nakpanel.service inactive
+assert_unit_state "agent before the journal boundary capture" nakpanel-agent.service inactive
+PRE_REBOOT_JOURNAL="$(stop_phase30_journal_capture)"
 [[ -n "${PRE_REBOOT_JOURNAL}" ]] || fail "pre-reboot panel/agent journal capture is empty"
 
 multipass restart "${VM_NAME}"
@@ -710,7 +751,10 @@ wait_for_cloud_init "${VM_NAME}"
 VM_IP="$(vm_ip)"
 for _ in $(seq 1 120); do curl --connect-timeout 5 --max-time 30 -skf "https://${VM_IP}:7443/healthz" >/dev/null && break; sleep 2; done
 cli site reconcile phase30-classic.test >/dev/null
-cli reconcile --system >/dev/null
+system_reconcile_output="$(cli reconcile --system)"
+system_reconcile_id="$(sed -nE 's/.*run ([0-9]+).*/\1/p' <<<"${system_reconcile_output}")"
+[[ "${system_reconcile_id}" =~ ^[1-9][0-9]*$ ]] || fail "could not parse system reconciliation run ID"
+wait_for "post-reboot system reconciliation" "SELECT status FROM reconciliation_runs WHERE id=${system_reconcile_id}" "active"
 curl --connect-timeout 5 --max-time 30 -sk --fail -c "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" -o "${tmpdir}/admin-reboot.html"
@@ -723,7 +767,7 @@ assert_worker_inactive "post-reboot desired-stopped worker" "${stopped_worker_id
 [[ "$(db "SELECT active_deployment_id FROM php_applications WHERE id=${managed_application_id}")" == "${active_deployment_id}" ]] || fail "reboot changed the active managed release"
 classic_home_html="$(trusted_curl phase30-classic.test /)"
 grep -Fq 'Phase30WordPress' <<<"${classic_home_html}"
-managed_body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/)"
+managed_body="$(wait_for_site_body "post-reboot managed release" phase30-managed.test 'public=visible')"
 grep -Fq 'public=visible' <<<"${managed_body}"
 
 echo "phase30: verify PHP UI and product-boundary copy"
@@ -734,7 +778,7 @@ curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "
 curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/tools-settings/applications" -o "${tmpdir}/application-catalog.html"
 curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/service-plans/${plan_id}" -o "${tmpdir}/plan.html"
 for marker in 'PHP Application' 'Classic'; do grep -Fq "${marker}" "${tmpdir}/classic-app.html" || fail "Classic PHP UI is missing ${marker}"; done
-for marker in 'PHP Application' 'Managed' 'PHP workers'; do grep -Fq "${marker}" <<<"${MANAGED_APPLICATION_HTML}" || fail "Managed PHP UI is missing ${marker}"; done
+for marker in 'PHP Application' 'Managed' 'Workers'; do grep -Fq "${marker}" <<<"${MANAGED_APPLICATION_HTML}" || fail "Managed PHP UI is missing ${marker}"; done
 # Runtime inventory is provider-only and must expose detailed readiness.
 for marker in 'PHP Runtime Inventory' 'PHP 8.3' 'PHP 8.4' 'PHP 8.5' 'FPM validation' 'OPcache' 'Composer 2.8.11' 'WP-CLI 2.12.0'; do
   grep -Fq "${marker}" "${tmpdir}/php-runtime.html" || fail "runtime inventory is missing ${marker}"
@@ -791,4 +835,5 @@ final_secret_non_disclosure_sweep(){
 final_secret_non_disclosure_sweep
 
 [[ "$(db "SELECT php_version FROM sites WHERE id=${explicit83_site}")" == "8.3" ]] || fail "explicit PHP 8.3 site changed during Phase 30"
+PHASE30_COMPLETE=1
 echo "Phase 30 production PHP, WordPress 7.1, managed release, worker, isolation, and reboot verification passed on ${VM_NAME} (${VM_IP})."

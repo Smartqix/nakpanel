@@ -226,10 +226,38 @@ func TestPhase30VerifierUpsertsReusableWorkerFixtures(t *testing.T) {
 		`existing_stopped_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='maintenance'")"`,
 		`worker_id_form=(-d "worker_id=${existing_worker_id}")`,
 		`stopped_worker_id_form=(-d "worker_id=${existing_stopped_worker_id}")`,
+		`${worker_id_form[@]+"${worker_id_form[@]}"}`,
+		`${stopped_worker_id_form[@]+"${stopped_worker_id_form[@]}"}`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("repeatable worker fixture is missing %q", want)
 		}
+	}
+	for _, unsafe := range []string{
+		`php-application/workers" "${worker_id_form[@]}"`,
+		`php-application/workers" "${stopped_worker_id_form[@]}"`,
+	} {
+		if strings.Contains(script, unsafe) {
+			t.Errorf("repeatable worker fixture uses Bash 3 nounset-unsafe empty array expansion %q", unsafe)
+		}
+	}
+}
+
+func TestPhase30VerifierFailsClosedWhenItExitsBeforeCompletion(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	for _, want := range []string{
+		`PHASE30_COMPLETE=0`,
+		`if [[ "${PHASE30_COMPLETE}" != "1" && "${status}" -eq 0 ]]; then`,
+		`PHASE30_COMPLETE=1`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("Phase 30 verifier is missing fail-closed completion guard %q", want)
+		}
+	}
+	completionAt := strings.LastIndex(script, `PHASE30_COMPLETE=1`)
+	successAt := strings.LastIndex(script, `echo "Phase 30 production PHP`)
+	if completionAt < 0 || successAt < 0 || completionAt > successAt {
+		t.Fatalf("completion marker must be set immediately before the success message: completion=%d success=%d", completionAt, successAt)
 	}
 }
 
@@ -239,7 +267,7 @@ func TestPhase30VerifierWaitsForExplicitApplicationReconcileBeforeTraffic(t *tes
 	waitAt := strings.Index(script, `wait_for "explicit application reconciliation"`)
 	trafficAt := -1
 	if postAt >= 0 {
-		if offset := strings.Index(script[postAt:], `managed_body="$(curl`); offset >= 0 {
+		if offset := strings.Index(script[postAt:], `managed_body="$(wait_for_site_body`); offset >= 0 {
 			trafficAt = postAt + offset
 		}
 	}
@@ -271,7 +299,8 @@ func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 			"post-reboot desired-stopped worker", "assert_worker_inactive",
 		},
 		"complete_secret_log_window": {
-			"journal_cursor", "--show-cursor", "--after-cursor", `nakpanel-php-worker@${worker_id}.service`,
+			"journal_capture_path", "journal_capture_unit", "systemd-run", "sudo bash -c", "--since now --follow", "stop_phase30_journal_capture",
+			`nakpanel-php-worker@${worker_id}.service`,
 			`nakpanel-php-worker@${stopped_worker_id}.service`, "failed to capture PHP unit metadata",
 		},
 		"effective_disk_quota": {
@@ -292,12 +321,60 @@ func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 
 	for _, forbidden := range []string{
 		"journalctl -u nakpanel.service -u nakpanel-agent.service --no-pager -n 2000",
+		"--after-cursor",
+		"journal_cursor=",
+		`sudo bash -s -- "${journal_capture_path}"`,
 		`systemctl show "nakpanel-php-fpm@${site_id}.service" "nakpanel-php-worker@*.service"`,
 		`systemctl.out" 2>/dev/null || true`,
 	} {
 		if strings.Contains(script, forbidden) {
 			t.Errorf("verifier retains review-round bypass %q", forbidden)
 		}
+	}
+}
+
+func TestPhase30VerifierRequiresObservedInactiveSystemdState(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	for _, want := range []string{
+		"assert_unit_state(){",
+		`systemctl show --property=ActiveState --value "${unit}"`,
+		`assert_unit_state "${label}" "nakpanel-php-worker@${id}.service" inactive`,
+		`assert_unit_state "managed FPM while suspended" "nakpanel-php-fpm@${managed_site_id}.service" inactive`,
+		`assert_unit_state "managed worker while suspended" "nakpanel-php-worker@${worker_id}.service" inactive`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("Phase 30 verifier is missing explicit unit-state contract %q", want)
+		}
+	}
+	for _, unsafe := range []string{
+		`multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-fpm@${managed_site_id}.service" &&`,
+		`multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${worker_id}.service" &&`,
+	} {
+		if strings.Contains(script, unsafe) {
+			t.Errorf("Multipass timeout can still be mistaken for inactive state in %q", unsafe)
+		}
+	}
+}
+
+func TestPhase30VerifierOrdersPostRebootSystemAndApplicationReconciliation(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	systemAt := strings.Index(script, `system_reconcile_output="$(cli reconcile --system)"`)
+	waitAt := strings.Index(script, `wait_for "post-reboot system reconciliation"`)
+	applicationAt := strings.Index(script, `post_as phase30-reboot-reconcile`)
+	if systemAt < 0 || waitAt < 0 || applicationAt < 0 || !(systemAt < waitAt && waitAt < applicationAt) {
+		t.Fatalf("post-reboot reconciliation must await the base system pass before applying the managed PHP overlay")
+	}
+}
+
+func TestPhase30VerifierRetriesManagedHTTPUntilTheReleaseMarkerIsServed(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	if !strings.Contains(script, "wait_for_site_body(){") ||
+		!strings.Contains(script, `--resolve "${domain}:80:${VM_IP}"`) ||
+		!strings.Contains(script, `grep -Fq "${expected}" <<<"${body}"`) {
+		t.Fatal("managed PHP verification must retry a bounded request until the expected release marker is served")
+	}
+	if got := strings.Count(script, `managed_body="$(wait_for_site_body`); got != 4 {
+		t.Fatalf("managed release retry assertions = %d, want 4", got)
 	}
 }
 

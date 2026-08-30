@@ -348,9 +348,12 @@ func (w *ConfigureDNSZoneWorker) markDNSFailed(ctx context.Context, id, desiredR
 
 type ReconcileSystemWorker struct {
 	river.WorkerDefaults[ReconcileSystemArgs]
-	agent    AgentReconciliationClient
-	store    Phase6StatusStore
-	reporter AutomatedReporter
+	agent                 AgentReconciliationClient
+	store                 Phase6StatusStore
+	reporter              AutomatedReporter
+	applicationReconciler interface {
+		ReconcileSiteApplication(context.Context, int64) error
+	}
 }
 
 func NewReconcileSystemWorker(agent AgentReconciliationClient, store Phase6StatusStore, reporters ...AutomatedReporter) *ReconcileSystemWorker {
@@ -359,6 +362,12 @@ func NewReconcileSystemWorker(agent AgentReconciliationClient, store Phase6Statu
 		w.reporter = reporters[0]
 	}
 	return w
+}
+
+func (w *ReconcileSystemWorker) SetApplicationReconciler(reconciler interface {
+	ReconcileSiteApplication(context.Context, int64) error
+}) {
+	w.applicationReconciler = reconciler
 }
 
 func (w *ReconcileSystemWorker) Work(ctx context.Context, job *river.Job[ReconcileSystemArgs]) error {
@@ -384,6 +393,14 @@ func (w *ReconcileSystemWorker) Work(ctx context.Context, job *river.Job[Reconci
 	if result.Failed > 0 {
 		err := fmt.Errorf("reconciliation reported %d failed resources", result.Failed)
 		return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, &result, err))
+	}
+	if w.applicationReconciler != nil {
+		for _, site := range args.Sites {
+			if err := w.applicationReconciler.ReconcileSiteApplication(ctx, site.SiteID); err != nil {
+				err = fmt.Errorf("reconcile site %d PHP application: %w", site.SiteID, err)
+				return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, &result, err))
+			}
+		}
 	}
 	if w.store != nil {
 		if err := w.store.MarkReconcileActive(ctx, args.RunID, result); err != nil {

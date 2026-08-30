@@ -951,6 +951,7 @@ ProtectHome=read-only
 ReadWritePaths=%s %s %s %s
 RuntimeDirectory=nakpanel-php
 RuntimeDirectoryMode=0755
+RuntimeDirectoryPreserve=yes
 MemoryMax=%dM
 TasksMax=128
 
