@@ -228,7 +228,7 @@ func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 			`nakpanel-php-worker@${stopped_worker_id}.service`, "failed to capture PHP unit metadata",
 		},
 		"effective_disk_quota": {
-			"expected_hard_kib=$((512 * 1024))", "repquota -up /", "hard_kib", "effective hard block quota",
+			"expected_hard_kib=$((2048 * 1024))", "repquota -up /", "hard_kib", "effective hard block quota",
 		},
 		"composer_policy": {
 			"composer_wrapper_hash_before", "composer_phar_hash_before", "composer_version_before",

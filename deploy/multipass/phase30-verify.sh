@@ -437,7 +437,7 @@ username="$1"; second_username="$2"; site_id="$3"; classic_document_root="$4"
 quota_status="$(quotaon -p / || true)"
 grep -q 'user quota .* is on' <<<"${quota_status}"
 quota -u "${username}" >/tmp/phase30-quota.out
-expected_hard_kib=$((512 * 1024))
+expected_hard_kib=$((2048 * 1024))
 hard_kib="$(repquota -up / | awk -v user="${username}" '$1==user {print $5; found=1} END{if (!found) exit 1}')"
 [[ "${hard_kib}" =~ ^[0-9]+$ ]] || { echo 'effective hard block quota is not numeric' >&2; exit 1; }
 test "${hard_kib}" -gt 0 || { echo 'effective hard block quota is unlimited' >&2; exit 1; }
