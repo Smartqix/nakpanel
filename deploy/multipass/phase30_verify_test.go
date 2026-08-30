@@ -49,10 +49,10 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 			"desired_status=active", "reboot", "/php-application/reconcile",
 		},
 		"secret_hygiene": {
-			"phase30-db-secret", "phase30-app-secret", "chmod 0600", "unset DB_PASSWORD APP_SECRET",
-			"river_job", "audit_events", "deployment output", "journalctl", "systemctl show",
-			"grep -Fq -f", "assert_secret_absent", "Accept: application/json",
-			"database-rotation.json", "application-secret.json", "phase30-wp-admin-secret",
+			"DB_PASSWORD", "APP_SECRET", "WP_ADMIN_PASSWORD", "unset DB_PASSWORD APP_SECRET WP_ADMIN_PASSWORD",
+			"river_job", "audit_events", "deployment data", "journalctl", "systemctl show",
+			"assert_secret_absent_in_memory", "Accept: application/json", "password@-", "secret_value@-",
+			"DATABASE_ROTATION_RESPONSE", "APPLICATION_SECRET_RESPONSE", "PRE_REBOOT_JOURNAL", "FINAL_JOURNAL",
 			"system_database_mutation",
 		},
 		"ui_contract": {
@@ -73,13 +73,13 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 	}
 }
 
-func TestPhase30VerifierUsesBoundedWaitsAndSafeSecretFiles(t *testing.T) {
+func TestPhase30VerifierUsesBoundedWaitsAndMemoryOnlySecrets(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	for _, want := range []string{
 		"for _ in $(seq 1 120)",
 		"mktemp -d",
 		`trap cleanup_phase30 EXIT`,
-		"rm -f \"${DB_SECRET_FILE}\" \"${APP_SECRET_FILE}\"",
+		"unset DB_PASSWORD APP_SECRET WP_ADMIN_PASSWORD",
 		"rm -f /usr/local/lib/nakpanel/phase30-agentprobe",
 		"rm -rf /tmp/nakpanel-phase30-certs",
 		"require_nakpanel_vm_name",
@@ -166,10 +166,9 @@ func TestPhase30VerifierBoundsEveryCurlAndExternalInstaller(t *testing.T) {
 func TestPhase30VerifierRunsFinalSecretSweepAfterRebootReconciliation(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	for _, want := range []string{
-		`SECRET_DIR="/var/lib/nakpanel/phase30-verifier"`,
-		"journal-pre-reboot.out", "systemctl stop nakpanel.service nakpanel-agent.service",
-		"journal-post-reboot.out", "journal-final.out", "database-surfaces-final.out",
-		"systemd-final.out", "tenant-config-final.out", "final_secret_non_disclosure_sweep",
+		"PRE_REBOOT_JOURNAL", "systemctl stop nakpanel.service nakpanel-agent.service",
+		"POST_REBOOT_JOURNAL", "FINAL_JOURNAL", "FINAL_DATABASE_SURFACES",
+		"FINAL_SYSTEMD_METADATA", "FINAL_TENANT_CONFIG", "final_secret_non_disclosure_sweep",
 		`nakpanel-php-worker@${worker_id}.service`, `nakpanel-php-worker@${stopped_worker_id}.service`,
 	} {
 		if !strings.Contains(script, want) {
@@ -180,6 +179,50 @@ func TestPhase30VerifierRunsFinalSecretSweepAfterRebootReconciliation(t *testing
 	finalSweep := strings.LastIndex(script, "final_secret_non_disclosure_sweep")
 	if postReboot < 0 || finalSweep < 0 || finalSweep <= postReboot {
 		t.Fatalf("final secret sweep must run after post-reboot reconciliation assertions")
+	}
+}
+
+func TestPhase30VerifierKeepsSecretNeedlesOnlyInHostMemory(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	for _, want := range []string{
+		"DB_PASSWORD=", "APP_SECRET=", "WP_ADMIN_PASSWORD=", "assert_secret_absent_in_memory",
+		`--data-urlencode "password@-"`, `--data-urlencode "secret_value@-"`,
+		`printf '%s' "${DB_PASSWORD}" |`, `printf '%s' "${APP_SECRET}" |`,
+		`printf '%s' "${WP_ADMIN_PASSWORD}" |`, "unset DB_PASSWORD APP_SECRET WP_ADMIN_PASSWORD",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("verifier is missing in-memory secret contract %q", want)
+		}
+	}
+	for _, forbidden := range []string{
+		"DB_SECRET_FILE", "APP_SECRET_FILE", "WP_ADMIN_SECRET_FILE",
+		"/var/lib/nakpanel/phase30-verifier", "/tmp/phase30-db-secret",
+		"/tmp/phase30-app-secret", "/tmp/phase30-wp-admin-secret", "multipass transfer",
+	} {
+		if strings.Contains(script, forbidden) {
+			t.Errorf("verifier persists or names a secret file via %q", forbidden)
+		}
+	}
+	secretMarkers := []string{"DB_PASSWORD", "APP_SECRET", "WP_ADMIN_PASSWORD"}
+	for lineNumber, line := range strings.Split(script, "\n") {
+		containsSecret := false
+		for _, marker := range secretMarkers {
+			containsSecret = containsSecret || strings.Contains(line, marker)
+		}
+		if !containsSecret {
+			continue
+		}
+		for _, persistentRoot := range []string{
+			"/var/lib", "/tmp", "/etc", "/home", "${ROOT_DIR}", "${REMOTE_SRC}",
+			"docs/", ".superpowers/", "README.md", "IMPLEMENTATION_PLAN.md",
+		} {
+			if strings.Contains(line, persistentRoot) {
+				t.Errorf("line %d places verifier secret material under persistent/repo path %q: %s", lineNumber+1, persistentRoot, strings.TrimSpace(line))
+			}
+		}
+		if strings.Contains(line, ">") {
+			t.Errorf("line %d redirects verifier secret material to a file: %s", lineNumber+1, strings.TrimSpace(line))
+		}
 	}
 }
 

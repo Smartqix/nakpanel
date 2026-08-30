@@ -12,10 +12,9 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
-SECRET_DIR="/var/lib/nakpanel/phase30-verifier"
-DB_SECRET_FILE="${SECRET_DIR}/phase30-db-secret"
-APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
-WP_ADMIN_SECRET_FILE="${SECRET_DIR}/phase30-wp-admin-secret"
+DB_PASSWORD=""
+APP_SECRET=""
+WP_ADMIN_PASSWORD=""
 
 fail(){ echo "phase30: $*" >&2; exit 1; }
 db(){ multipass_exec_short "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "$1" | tr -d '\r'; }
@@ -33,11 +32,10 @@ done
 tmpdir="$(mktemp -d)"
 cleanup_phase30(){
   local status=$?
-  multipass_exec_short "${VM_NAME}" -- sudo rm -f "${DB_SECRET_FILE}" "${APP_SECRET_FILE}" "${WP_ADMIN_SECRET_FILE}" "${SECRET_DIR}/database.cnf" "${SECRET_DIR}/request.out" >/dev/null 2>&1 || true
-  multipass_exec_short "${VM_NAME}" -- sudo rm -rf "${SECRET_DIR}" >/dev/null 2>&1 || true
   multipass_exec_short "${VM_NAME}" -- sudo bash -c \
     'rm -f /usr/local/lib/nakpanel/phase30-agentprobe /tmp/phase30-composer-self-update.out /tmp/phase30-quota.out; rm -rf /tmp/nakpanel-phase30-certs' \
     >/dev/null 2>&1 || true
+  unset DB_PASSWORD APP_SECRET WP_ADMIN_PASSWORD
   rm -rf "${tmpdir}"
   exit "${status}"
 }
@@ -231,41 +229,24 @@ if [[ -z "${database_id}" ]]; then
 fi
 wait_for "tracked MariaDB provisioning" "SELECT status FROM databases WHERE id=${database_id}" "active"
 
-# Generate credentials only in root-owned guest memory/files. The password
-# rotation endpoint stages an encrypted secret reference and River receives
-# only operation/database identities.
+# Keep comparison needles in this host shell. Stdin carries values into the
+# supported guest operations, and River receives only operation/database IDs.
 journal_cursor="$(multipass_exec_short "${VM_NAME}" -- sudo journalctl \
   -u nakpanel.service -u nakpanel-agent.service --no-pager -n 0 --show-cursor \
   | sed -n 's/^-- cursor: //p' | tail -1)"
 [[ "${journal_cursor}" == s=* ]] || fail "could not capture the pre-secret panel/agent journal cursor"
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${database_id}" <<'REMOTE'
-set -euo pipefail
-database_id="$1"
-SECRET_DIR=/var/lib/nakpanel/phase30-verifier
-DB_SECRET_FILE="${SECRET_DIR}/phase30-db-secret"
-APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
-WP_ADMIN_SECRET_FILE="${SECRET_DIR}/phase30-wp-admin-secret"
-install -d -m 0700 -o root -g root "${SECRET_DIR}"
 DB_PASSWORD="Aa9!$(openssl rand -hex 18)"
 APP_SECRET="$(openssl rand -hex 32)"
 WP_ADMIN_PASSWORD="Wp9!$(openssl rand -hex 18)"
-printf '%s' "${DB_PASSWORD}" >"${DB_SECRET_FILE}"
-printf '%s' "${APP_SECRET}" >"${APP_SECRET_FILE}"
-printf '%s' "${WP_ADMIN_PASSWORD}" >"${WP_ADMIN_SECRET_FILE}"
-chmod 0600 "${DB_SECRET_FILE}" "${APP_SECRET_FILE}" "${WP_ADMIN_SECRET_FILE}"
-unset DB_PASSWORD APP_SECRET WP_ADMIN_PASSWORD
-curl --connect-timeout 5 --max-time 30 -sk --fail -c "${SECRET_DIR}/admin.cookies" -L \
-  -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
-  https://127.0.0.1:7443/login -o /dev/null
-session="$(awk '$6=="nakpanel_session"{v=$7} END{print v}' "${SECRET_DIR}/admin.cookies")"
-csrf="$(printf 'nakpanel-csrf-v1:%s' "${session}" | sha256sum | awk '{print $1}')"
-status="$(curl --connect-timeout 5 --max-time 30 -sk -o "${SECRET_DIR}/database-rotation.json" -w '%{http_code}' \
-  -b "${SECRET_DIR}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
+database_rotation_result="$(printf '%s' "${DB_PASSWORD}" | \
+  curl --connect-timeout 5 --max-time 30 -sk -w $'\n%{http_code}' \
+  -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
   -H 'Accept: application/json' \
-  --data-urlencode "password@${DB_SECRET_FILE}" \
-  "https://127.0.0.1:7443/tools-settings/databases/${database_id}/password")"
-test "${status}" = 202
-REMOTE
+  --data-urlencode "password@-" \
+  "https://${VM_IP}:7443/tools-settings/databases/${database_id}/password")"
+database_rotation_status="${database_rotation_result##*$'\n'}"
+DATABASE_ROTATION_RESPONSE="${database_rotation_result%$'\n'*}"
+test "${database_rotation_status}" = 202
 wait_for "database password rotation" "SELECT status FROM server_operations WHERE target_type='database' AND target_key='${database_id}' AND action='rotate_password' ORDER BY id DESC LIMIT 1" "succeeded"
 
 echo "phase30: install WordPress 7.1 through Classic hosting"
@@ -313,28 +294,26 @@ REMOTE
 
 db_name="$(db "SELECT db_name FROM databases WHERE id=${database_id}")"
 db_user="$(db "SELECT db_user FROM databases WHERE id=${database_id}")"
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" "${db_name}" "${db_user}" <<'REMOTE'
+multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" <<'REMOTE'
 set -euo pipefail
-username="$1"; db_name="$2"; db_user="$3"
+username="$1"
 docroot="/home/${username}/domains/phase30-classic.test/public_html"
-DB_SECRET_FILE=/var/lib/nakpanel/phase30-verifier/phase30-db-secret
-WP_ADMIN_SECRET_FILE=/var/lib/nakpanel/phase30-verifier/phase30-wp-admin-secret
-DB_CNF=/var/lib/nakpanel/phase30-verifier/database.cnf
 sudo -u "${username}" find "${docroot}" -mindepth 1 -delete
 timeout 10m sudo -u "${username}" wp core download --version=7.1 --locale=en_US --path="${docroot}"
-{
-  printf '[client]\nuser=%s\npassword=' "${db_user}"
-  cat "${DB_SECRET_FILE}"
-  printf '\ndatabase=%s\nhost=localhost\n' "${db_name}"
-} >"${DB_CNF}"
-chmod 0600 "${DB_CNF}"
-cat "${DB_SECRET_FILE}" | timeout 5m sudo -u "${username}" wp config create --path="${docroot}" \
+REMOTE
+printf '%s' "${DB_PASSWORD}" | multipass exec "${VM_NAME}" -- sudo -u "${username}" timeout 5m \
+  wp config create --path="/home/${username}/domains/phase30-classic.test/public_html" \
   --dbname="${db_name}" --dbuser="${db_user}" --dbhost=localhost --prompt=dbpass --skip-check
-chmod 0600 "${docroot}/wp-config.php"
-chown "${username}:${username}" "${docroot}/wp-config.php"
-cat "${WP_ADMIN_SECRET_FILE}" | timeout 5m sudo -u "${username}" wp core install --path="${docroot}" \
+printf '%s' "${WP_ADMIN_PASSWORD}" | multipass exec "${VM_NAME}" -- sudo -u "${username}" timeout 5m \
+  wp core install --path="/home/${username}/domains/phase30-classic.test/public_html" \
   --url=https://phase30-classic.test --title='Phase 30 WordPress' --admin_user=phase30admin \
   --prompt=admin_password --admin_email=phase30-wp@nakpanel.test --skip-email
+multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" <<'REMOTE'
+set -euo pipefail
+username="$1"
+docroot="/home/${username}/domains/phase30-classic.test/public_html"
+chmod 0600 "${docroot}/wp-config.php"
+chown "${username}:${username}" "${docroot}/wp-config.php"
 timeout 5m sudo -u "${username}" wp core version --path="${docroot}" | grep -Fxq '7.1'
 timeout 5m sudo -u "${username}" wp core verify-checksums --path="${docroot}" --version=7.1
 timeout 5m sudo -u "${username}" wp rewrite structure '/%postname%/' --hard --path="${docroot}"
@@ -462,8 +441,6 @@ nonempty_artifacts=(
 existing_artifacts=(
   "/var/log/nginx/${slug}.error.log"
   "/var/log/php-fpm/${slug}.error.log"
-  "/var/lib/nakpanel/phase30-verifier/phase30-db-secret"
-  "/var/lib/nakpanel/phase30-verifier/phase30-wp-admin-secret"
   "/etc/nakpanel/secret-keys.json"
 )
 require_first_subscription_artifact(){
@@ -542,22 +519,17 @@ managed_application_id="$(db "SELECT id FROM php_applications WHERE site_id=${ma
 post_as phase30-public-env "sites/${managed_site_id}/php-application/environment" \
   -d 'name=PHASE30_PUBLIC' -d 'value=visible' -d 'secret=false'
 
-# File-backed form input keeps the encrypted write-only secret out of argv,
-# River arguments, HTML, JSON, audit metadata, and command output.
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${managed_site_id}" <<'REMOTE'
-set -euo pipefail
-site_id="$1"
-SECRET_DIR=/var/lib/nakpanel/phase30-verifier
-APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
-session="$(awk '$6=="nakpanel_session"{v=$7} END{print v}' "${SECRET_DIR}/admin.cookies")"
-csrf="$(printf 'nakpanel-csrf-v1:%s' "${session}" | sha256sum | awk '{print $1}')"
-status="$(curl --connect-timeout 5 --max-time 30 -sk -o "${SECRET_DIR}/application-secret.json" -w '%{http_code}' \
-  -b "${SECRET_DIR}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
+# Stdin-backed form input keeps the encrypted write-only secret out of argv,
+# guest storage, River arguments, HTML, JSON, audit metadata, and output.
+application_secret_result="$(printf '%s' "${APP_SECRET}" | \
+  curl --connect-timeout 5 --max-time 30 -sk -w $'\n%{http_code}' \
+  -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
   -H 'Accept: application/json' \
-  -d 'name=PHASE30_SECRET' -d 'secret=true' --data-urlencode "secret_value@${APP_SECRET_FILE}" \
-  "https://127.0.0.1:7443/sites/${site_id}/php-application/environment")"
-test "${status}" = 200
-REMOTE
+  -d 'name=PHASE30_SECRET' -d 'secret=true' --data-urlencode "secret_value@-" \
+  "https://${VM_IP}:7443/sites/${managed_site_id}/php-application/environment")"
+application_secret_status="${application_secret_result##*$'\n'}"
+APPLICATION_SECRET_RESPONSE="${application_secret_result%$'\n'*}"
+test "${application_secret_status}" = 200
 
 post_as phase30-healthy-deploy "sites/${managed_site_id}/php-application/deployments" -d 'revision=main'
 wait_for "healthy managed deployment" "SELECT status FROM php_deployments WHERE application_id=${managed_application_id} ORDER BY id DESC LIMIT 1" "healthy"
@@ -612,64 +584,33 @@ wait_for "unhealthy deployment rejection" "SELECT status FROM php_deployments WH
 curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
 
 echo "phase30: prove secret absence from durable/control-plane surfaces"
-curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${managed_site_id}/applications" -o "${tmpdir}/managed.html"
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${managed_application_id}" "${managed_site_id}" "${worker_id}" "${stopped_worker_id}" "${second_username}" "${journal_cursor}" <<'REMOTE'
-set -euo pipefail
-application_id="$1"; site_id="$2"; worker_id="$3"; stopped_worker_id="$4"; second_username="$5"; journal_cursor="$6"
-SECRET_DIR=/var/lib/nakpanel/phase30-verifier
-APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
-DB_SECRET_FILE="${SECRET_DIR}/phase30-db-secret"
-WP_ADMIN_SECRET_FILE="${SECRET_DIR}/phase30-wp-admin-secret"
-assert_secret_absent(){
-  local label="$1" path="$2" secret_file="$3"
-  if grep -Fq -f "${secret_file}" "${path}"; then
-    echo "secret leaked into ${label}" >&2
-    exit 1
-  fi
-}
-sudo -u postgres psql -Atqd nakpanel -c \
-  "SELECT args::text FROM river_job
-     WHERE kind LIKE '%php%' OR kind IN ('create_database','system_database_mutation');
-   SELECT metadata::text FROM audit_events
-     WHERE action LIKE 'php.%' OR action LIKE 'database.%';
-   SELECT request::text||result::text||last_error FROM server_operations
-     WHERE target_type='database';
-   SELECT COALESCE(last_error,'')||COALESCE(health_message,'')||COALESCE(composer_audit::text,'')
-     FROM php_deployments WHERE application_id=${application_id};" \
-  >"${SECRET_DIR}/database-surfaces.out"
-# deployment output is represented by bounded deployment health/error/audit data.
-journalctl -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise \
-  --after-cursor "${journal_cursor}" >"${SECRET_DIR}/journal.out"
-fpm_unit="nakpanel-php-fpm@${site_id}.service"
-running_worker_unit="nakpanel-php-worker@${worker_id}.service"
-stopped_worker_unit="nakpanel-php-worker@${stopped_worker_id}.service"
-if ! systemctl show "${fpm_unit}" "${running_worker_unit}" "${stopped_worker_unit}" >"${SECRET_DIR}/systemd.out"; then
-  echo 'failed to capture PHP unit metadata' >&2
-  exit 1
-fi
-test -s "${SECRET_DIR}/systemd.out" || { echo 'failed to capture PHP unit metadata' >&2; exit 1; }
-for unit in "${fpm_unit}" "${running_worker_unit}" "${stopped_worker_unit}"; do
-  grep -Fxq "Id=${unit}" "${SECRET_DIR}/systemd.out" || {
-    echo "failed to capture PHP unit metadata for ${unit}" >&2
-    exit 1
-  }
+MANAGED_APPLICATION_HTML="$(curl --connect-timeout 5 --max-time 30 -sk --fail \
+  -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${managed_site_id}/applications")"
+INITIAL_DATABASE_SURFACES="$(db "
+  SELECT args::text FROM river_job
+    WHERE kind LIKE '%php%' OR kind IN ('create_database','system_database_mutation');
+  SELECT metadata::text FROM audit_events
+    WHERE action LIKE 'php.%' OR action LIKE 'database.%';
+  SELECT request::text||result::text||last_error FROM server_operations
+    WHERE target_type='database';
+  SELECT COALESCE(last_error,'')||COALESCE(health_message,'')||COALESCE(composer_audit::text,'')
+    FROM php_deployments WHERE application_id=${managed_application_id};")"
+INITIAL_JOURNAL="$(multipass_exec_short "${VM_NAME}" -- sudo journalctl \
+  -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise \
+  --after-cursor "${journal_cursor}")"
+INITIAL_SYSTEMD_METADATA="$(multipass_exec_short "${VM_NAME}" -- sudo systemctl show \
+  "nakpanel-php-fpm@${managed_site_id}.service" \
+  "nakpanel-php-worker@${worker_id}.service" \
+  "nakpanel-php-worker@${stopped_worker_id}.service")"
+for unit in "nakpanel-php-fpm@${managed_site_id}.service" "nakpanel-php-worker@${worker_id}.service" "nakpanel-php-worker@${stopped_worker_id}.service"; do
+  [[ "${INITIAL_SYSTEMD_METADATA}" == *"Id=${unit}"* ]] || fail "failed to capture PHP unit metadata for ${unit}"
 done
-find /etc/nginx /etc/nakpanel/php-fpm -type f -maxdepth 5 -print0 2>/dev/null \
-  | xargs -0r grep -h '' >"${SECRET_DIR}/tenant-config.out"
-assert_secret_absent 'River arguments, audit metadata, and deployment output' "${SECRET_DIR}/database-surfaces.out" "${APP_SECRET_FILE}"
-assert_secret_absent 'logs' "${SECRET_DIR}/journal.out" "${APP_SECRET_FILE}"
-assert_secret_absent 'systemd metadata' "${SECRET_DIR}/systemd.out" "${APP_SECRET_FILE}"
-assert_secret_absent 'nginx/PHP configuration' "${SECRET_DIR}/tenant-config.out" "${APP_SECRET_FILE}"
-assert_secret_absent 'application JSON' "${SECRET_DIR}/application-secret.json" "${APP_SECRET_FILE}"
-assert_secret_absent 'database rotation JSON' "${SECRET_DIR}/database-rotation.json" "${DB_SECRET_FILE}"
-assert_secret_absent 'River arguments and audit metadata (database)' "${SECRET_DIR}/database-surfaces.out" "${DB_SECRET_FILE}"
-assert_secret_absent 'logs (WordPress administrator)' "${SECRET_DIR}/journal.out" "${WP_ADMIN_SECRET_FILE}"
-assert_secret_absent 'systemd metadata (WordPress administrator)' "${SECRET_DIR}/systemd.out" "${WP_ADMIN_SECRET_FILE}"
-assert_secret_absent 'nginx/PHP configuration (WordPress administrator)' "${SECRET_DIR}/tenant-config.out" "${WP_ADMIN_SECRET_FILE}"
-assert_secret_absent 'durable control-plane data (WordPress administrator)' "${SECRET_DIR}/database-surfaces.out" "${WP_ADMIN_SECRET_FILE}"
-curl --connect-timeout 5 --max-time 30 -sk --fail -b "${SECRET_DIR}/admin.cookies" \
-  "https://127.0.0.1:7443/sites/${site_id}/applications" >"${SECRET_DIR}/application.html"
-assert_secret_absent 'application HTML' "${SECRET_DIR}/application.html" "${APP_SECRET_FILE}"
+INITIAL_TENANT_CONFIG="$(multipass_exec_short "${VM_NAME}" -- sudo bash -c \
+  "find /etc/nginx /etc/nakpanel/php-fpm -type f -maxdepth 5 -print0 2>/dev/null | xargs -0r grep -h ''")"
+
+multipass exec "${VM_NAME}" -- sudo bash -se -- "${managed_application_id}" "${second_username}" <<'REMOTE'
+set -euo pipefail
+application_id="$1"; second_username="$2"
 environment_path="$(find "/var/lib/nakpanel/php-applications/app-${application_id}/environments" -type f | head -1)"
 test -n "${environment_path}"
 test "$(stat -c '%U:%G:%a' "${environment_path}")" = root:root:600
@@ -680,10 +621,19 @@ for path in "${environment_path}" "/var/lib/nakpanel/php-applications/app-${appl
   fi
 done
 REMOTE
-for secret_name in PHASE30_SECRET phase30-app-secret phase30-db-secret; do
-  if grep -Fq "${secret_name}" "${tmpdir}/managed.html" && [[ "${secret_name}" != PHASE30_SECRET ]]; then
-    fail "secret material appeared in PHP application HTML"
-  fi
+assert_secret_absent_in_memory(){
+  local label="$1" haystack="$2" needle="$3"
+  [[ -n "${needle}" ]] || fail "${label}: secret comparison needle is empty"
+  [[ "${haystack}" != *"${needle}"* ]] || fail "secret leaked into ${label}"
+}
+for secret_value in "${APP_SECRET}" "${DB_PASSWORD}" "${WP_ADMIN_PASSWORD}"; do
+  assert_secret_absent_in_memory 'River/audit/deployment data' "${INITIAL_DATABASE_SURFACES}" "${secret_value}"
+  assert_secret_absent_in_memory 'panel/agent journal' "${INITIAL_JOURNAL}" "${secret_value}"
+  assert_secret_absent_in_memory 'exact systemd metadata' "${INITIAL_SYSTEMD_METADATA}" "${secret_value}"
+  assert_secret_absent_in_memory 'nginx/PHP configuration' "${INITIAL_TENANT_CONFIG}" "${secret_value}"
+  assert_secret_absent_in_memory 'application HTML' "${MANAGED_APPLICATION_HTML}" "${secret_value}"
+  assert_secret_absent_in_memory 'application JSON' "${APPLICATION_SECRET_RESPONSE}" "${secret_value}"
+  assert_secret_absent_in_memory 'database rotation JSON' "${DATABASE_ROTATION_RESPONSE}" "${secret_value}"
 done
 
 echo "phase30: suspend, reactivate, reboot, and reconcile"
@@ -712,9 +662,9 @@ curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.tes
 
 # Stop both secret-consuming daemons before the reboot-boundary capture. Once
 # inactive, they cannot append a later pre-reboot entry outside this snapshot.
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${SECRET_DIR}" "${journal_cursor}" <<'REMOTE'
+PRE_REBOOT_JOURNAL="$(multipass exec "${VM_NAME}" -- sudo bash -se -- "${journal_cursor}" <<'REMOTE'
 set -euo pipefail
-secret_dir="$1"; journal_cursor="$2"
+journal_cursor="$1"
 systemctl stop nakpanel.service nakpanel-agent.service
 for unit in nakpanel.service nakpanel-agent.service; do
   if systemctl is-active --quiet "${unit}"; then
@@ -724,12 +674,10 @@ for unit in nakpanel.service nakpanel-agent.service; do
 done
 journalctl --sync
 journalctl -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise \
-  --after-cursor "${journal_cursor}" >"${secret_dir}/journal-pre-reboot.out"
-test -s "${secret_dir}/journal-pre-reboot.out" || {
-  echo 'pre-reboot panel/agent journal capture is empty' >&2
-  exit 1
-}
+  --after-cursor "${journal_cursor}"
 REMOTE
+)"
+[[ -n "${PRE_REBOOT_JOURNAL}" ]] || fail "pre-reboot panel/agent journal capture is empty"
 
 multipass restart "${VM_NAME}"
 wait_for_cloud_init "${VM_NAME}"
@@ -752,12 +700,13 @@ curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.tes
 
 echo "phase30: verify PHP UI and product-boundary copy"
 curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${classic_site_id}/applications" -o "${tmpdir}/classic-app.html"
-curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${managed_site_id}/applications" -o "${tmpdir}/managed-app.html"
+MANAGED_APPLICATION_HTML="$(curl --connect-timeout 5 --max-time 30 -sk --fail \
+  -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${managed_site_id}/applications")"
 curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/tools-settings/php" -o "${tmpdir}/php-runtime.html"
 curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/tools-settings/applications" -o "${tmpdir}/application-catalog.html"
 curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/service-plans/${plan_id}" -o "${tmpdir}/plan.html"
 for marker in 'PHP Application' 'Classic'; do grep -Fq "${marker}" "${tmpdir}/classic-app.html" || fail "Classic PHP UI is missing ${marker}"; done
-for marker in 'PHP Application' 'Managed' 'PHP workers'; do grep -Fq "${marker}" "${tmpdir}/managed-app.html" || fail "Managed PHP UI is missing ${marker}"; done
+for marker in 'PHP Application' 'Managed' 'PHP workers'; do grep -Fq "${marker}" <<<"${MANAGED_APPLICATION_HTML}" || fail "Managed PHP UI is missing ${marker}"; done
 # Runtime inventory is provider-only and must expose detailed readiness.
 for marker in 'PHP Runtime Inventory' 'PHP 8.3' 'PHP 8.4' 'PHP 8.5' 'FPM validation' 'OPcache' 'Composer 2.8.11' 'WP-CLI 2.12.0'; do
   grep -Fq "${marker}" "${tmpdir}/php-runtime.html" || fail "runtime inventory is missing ${marker}"
@@ -767,7 +716,7 @@ for marker in 'Provider Application Catalog' 'OCI only' 'WordPress Toolkit, Node
   grep -Fq "${marker}" "${tmpdir}/application-catalog.html" || fail "application catalog boundary is missing ${marker}"
 done
 for stale_promise in 'Deploy WordPress' 'WordPress Toolkit' 'Node.js application' 'Python application'; do
-  if grep -Fq "${stale_promise}" "${tmpdir}/managed-app.html"; then
+  if grep -Fq "${stale_promise}" <<<"${MANAGED_APPLICATION_HTML}"; then
     fail "PHP application UI advertises stale runtime promise: ${stale_promise}"
   fi
   if [[ "${stale_promise}" != 'WordPress Toolkit' ]] && grep -Fq "${stale_promise}" "${tmpdir}/application-catalog.html"; then
@@ -776,78 +725,40 @@ for stale_promise in 'Deploy WordPress' 'WordPress Toolkit' 'Node.js application
 done
 
 final_secret_non_disclosure_sweep(){
-  multipass exec "${VM_NAME}" -- sudo bash -se -- \
-    "${managed_application_id}" "${managed_site_id}" "${worker_id}" "${stopped_worker_id}" "${SECRET_DIR}" <<'REMOTE'
-set -euo pipefail
-application_id="$1"; site_id="$2"; worker_id="$3"; stopped_worker_id="$4"; secret_dir="$5"
-app_secret_file="${secret_dir}/phase30-app-secret"
-db_secret_file="${secret_dir}/phase30-db-secret"
-wp_admin_secret_file="${secret_dir}/phase30-wp-admin-secret"
-for secret_file in "${app_secret_file}" "${db_secret_file}" "${wp_admin_secret_file}"; do
-  test -s "${secret_file}" || { echo "final secret evidence is unavailable: ${secret_file}" >&2; exit 1; }
-done
+  FINAL_APPLICATION_HTML="$(curl --connect-timeout 5 --max-time 30 -sk --fail \
+    -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${managed_site_id}/applications")"
+  FINAL_DATABASE_SURFACES="$(db "
+    SELECT args::text FROM river_job
+      WHERE kind LIKE '%php%' OR kind IN ('create_database','system_database_mutation');
+    SELECT metadata::text FROM audit_events
+      WHERE action LIKE 'php.%' OR action LIKE 'database.%';
+    SELECT request::text||result::text||last_error FROM server_operations
+      WHERE target_type='database';
+    SELECT COALESCE(last_error,'')||COALESCE(health_message,'')||COALESCE(composer_audit::text,'')
+      FROM php_deployments WHERE application_id=${managed_application_id};")"
+  FINAL_SYSTEMD_METADATA="$(multipass_exec_short "${VM_NAME}" -- sudo systemctl show \
+    "nakpanel-php-fpm@${managed_site_id}.service" \
+    "nakpanel-php-worker@${worker_id}.service" \
+    "nakpanel-php-worker@${stopped_worker_id}.service")"
+  for unit in "nakpanel-php-fpm@${managed_site_id}.service" "nakpanel-php-worker@${worker_id}.service" "nakpanel-php-worker@${stopped_worker_id}.service"; do
+    [[ "${FINAL_SYSTEMD_METADATA}" == *"Id=${unit}"* ]] || fail "failed to capture final PHP unit metadata for ${unit}"
+  done
+  FINAL_TENANT_CONFIG="$(multipass_exec_short "${VM_NAME}" -- sudo bash -c \
+    "find /etc/nginx /etc/nakpanel/php-fpm -type f -maxdepth 5 -print0 2>/dev/null | xargs -0r grep -h ''")"
+  POST_REBOOT_JOURNAL="$(multipass_exec_short "${VM_NAME}" -- sudo bash -c \
+    'journalctl --sync; journalctl -b 0 -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise')"
+  FINAL_JOURNAL="${PRE_REBOOT_JOURNAL}"$'\n'"${POST_REBOOT_JOURNAL}"
+  [[ -n "${FINAL_JOURNAL}" ]] || fail "final panel/agent journal capture is empty"
 
-# Refresh the authenticated application response before capturing the final
-# journal checkpoint so even the last UI read is inside the inspected window.
-curl --connect-timeout 5 --max-time 30 -sk --fail -c "${secret_dir}/admin.cookies" -L \
-  -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
-  https://127.0.0.1:7443/login -o /dev/null
-curl --connect-timeout 5 --max-time 30 -sk --fail -b "${secret_dir}/admin.cookies" \
-  "https://127.0.0.1:7443/sites/${site_id}/applications" >"${secret_dir}/application-final.html"
-
-sudo -u postgres psql -Atqd nakpanel -c \
-  "SELECT args::text FROM river_job
-     WHERE kind LIKE '%php%' OR kind IN ('create_database','system_database_mutation');
-   SELECT metadata::text FROM audit_events
-     WHERE action LIKE 'php.%' OR action LIKE 'database.%';
-   SELECT request::text||result::text||last_error FROM server_operations
-     WHERE target_type='database';
-   SELECT COALESCE(last_error,'')||COALESCE(health_message,'')||COALESCE(composer_audit::text,'')
-     FROM php_deployments WHERE application_id=${application_id};" \
-  >"${secret_dir}/database-surfaces-final.out"
-
-fpm_unit="nakpanel-php-fpm@${site_id}.service"
-running_worker_unit="nakpanel-php-worker@${worker_id}.service"
-stopped_worker_unit="nakpanel-php-worker@${stopped_worker_id}.service"
-if ! systemctl show "${fpm_unit}" "${running_worker_unit}" "${stopped_worker_unit}" >"${secret_dir}/systemd-final.out"; then
-  echo 'failed to capture final PHP unit metadata' >&2
-  exit 1
-fi
-for unit in "${fpm_unit}" "${running_worker_unit}" "${stopped_worker_unit}"; do
-  grep -Fxq "Id=${unit}" "${secret_dir}/systemd-final.out" || {
-    echo "failed to capture final PHP unit metadata for ${unit}" >&2
-    exit 1
-  }
-done
-find /etc/nginx /etc/nakpanel/php-fpm -type f -maxdepth 5 -print0 2>/dev/null \
-  | xargs -0r grep -h '' >"${secret_dir}/tenant-config-final.out"
-
-# The pre-reboot file ends after both secret-consuming services stop. The
-# current-boot file starts at boot and is captured only after final reconcile.
-journalctl --sync
-journalctl -b 0 -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise \
-  >"${secret_dir}/journal-post-reboot.out"
-cat "${secret_dir}/journal-pre-reboot.out" "${secret_dir}/journal-post-reboot.out" \
-  >"${secret_dir}/journal-final.out"
-test -s "${secret_dir}/journal-final.out" || { echo 'final panel/agent journal capture is empty' >&2; exit 1; }
-
-assert_final_secret_absent(){
-  local surface="$1" path="$2" secret_file="$3"
-  if grep -Fq -f "${secret_file}" "${path}"; then
-    echo "secret leaked into final ${surface}" >&2
-    exit 1
-  fi
-}
-for secret_file in "${app_secret_file}" "${db_secret_file}" "${wp_admin_secret_file}"; do
-  assert_final_secret_absent 'journal window' "${secret_dir}/journal-final.out" "${secret_file}"
-  assert_final_secret_absent 'durable database/deployment surfaces' "${secret_dir}/database-surfaces-final.out" "${secret_file}"
-  assert_final_secret_absent 'exact systemd metadata' "${secret_dir}/systemd-final.out" "${secret_file}"
-  assert_final_secret_absent 'nginx/PHP configuration' "${secret_dir}/tenant-config-final.out" "${secret_file}"
-  assert_final_secret_absent 'application HTML' "${secret_dir}/application-final.html" "${secret_file}"
-  assert_final_secret_absent 'application JSON' "${secret_dir}/application-secret.json" "${secret_file}"
-  assert_final_secret_absent 'database rotation JSON' "${secret_dir}/database-rotation.json" "${secret_file}"
-done
-REMOTE
+  for secret_value in "${APP_SECRET}" "${DB_PASSWORD}" "${WP_ADMIN_PASSWORD}"; do
+    assert_secret_absent_in_memory 'final journal window' "${FINAL_JOURNAL}" "${secret_value}"
+    assert_secret_absent_in_memory 'final durable database/deployment surfaces' "${FINAL_DATABASE_SURFACES}" "${secret_value}"
+    assert_secret_absent_in_memory 'final exact systemd metadata' "${FINAL_SYSTEMD_METADATA}" "${secret_value}"
+    assert_secret_absent_in_memory 'final nginx/PHP configuration' "${FINAL_TENANT_CONFIG}" "${secret_value}"
+    assert_secret_absent_in_memory 'final application HTML' "${FINAL_APPLICATION_HTML}" "${secret_value}"
+    assert_secret_absent_in_memory 'application JSON' "${APPLICATION_SECRET_RESPONSE}" "${secret_value}"
+    assert_secret_absent_in_memory 'database rotation JSON' "${DATABASE_ROTATION_RESPONSE}" "${secret_value}"
+  done
 }
 final_secret_non_disclosure_sweep
 
