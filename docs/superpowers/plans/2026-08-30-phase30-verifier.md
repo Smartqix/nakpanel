@@ -77,5 +77,5 @@
 - Produces: final evidence, expected runtime/prerequisites, commits, and concerns for the controller’s fresh Multipass run.
 
 - [x] **Step 1: Run `go test ./... -count=1`, `go vet ./...`, `task build`, `git diff --check`, and `bash -n deploy/**/*.sh`.**
-- [ ] **Step 2: Write the report** with red/green evidence and explicitly state that full Multipass was deferred to the controller.
-- [ ] **Step 3: Commit all changes and verify `git status --short` is empty.**
+- [x] **Step 2: Write the report** with red/green evidence and explicitly state that full Multipass was deferred to the controller.
+- [x] **Step 3: Commit all changes and verify `git status --short` is empty.**
