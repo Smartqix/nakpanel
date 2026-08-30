@@ -187,6 +187,19 @@ func TestPhase30VerifierAssertsHostedDocumentOwnershipModel(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierSchedulesWordPressCronIdempotently(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	for _, fragment := range []string{
+		`cron_hooks="$(timeout 5m sudo -u "${username}" wp cron event list --fields=hook --path="${docroot}")"`,
+		`if ! grep -Fxq 'phase30_event' <<<"${cron_hooks}"; then`,
+		`wp cron event schedule phase30_event '+1 hour' --repeat=hourly`,
+	} {
+		if !strings.Contains(script, fragment) {
+			t.Fatalf("verifier must make WordPress cron scheduling repeatable; missing %q", fragment)
+		}
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{

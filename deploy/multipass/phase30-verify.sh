@@ -350,8 +350,11 @@ printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY
 chown "${username}:${username}" "${docroot}/phase30-media.png"
 attachment_id="$(timeout 5m sudo -u "${username}" wp media import "${docroot}/phase30-media.png" --title='Phase30 Media' --porcelain --path="${docroot}")"
 test "${attachment_id}" -gt 0
-timeout 5m sudo -u "${username}" wp cron event schedule phase30_event '+1 hour' --repeat=hourly --path="${docroot}"
 cron_hooks="$(timeout 5m sudo -u "${username}" wp cron event list --fields=hook --path="${docroot}")"
+if ! grep -Fxq 'phase30_event' <<<"${cron_hooks}"; then
+  timeout 5m sudo -u "${username}" wp cron event schedule phase30_event '+1 hour' --repeat=hourly --path="${docroot}"
+  cron_hooks="$(timeout 5m sudo -u "${username}" wp cron event list --fields=hook --path="${docroot}")"
+fi
 grep -Fxq 'phase30_event' <<<"${cron_hooks}"
 timeout 5m sudo -u "${username}" wp eval '$r=wp_remote_get("https://api.wordpress.org/core/version-check/1.7/", ["timeout"=>20]); if (is_wp_error($r) || wp_remote_retrieve_response_code($r)!==200) { exit(1); }' --path="${docroot}"
 timeout 5m sudo -u "${username}" wp option update phase30_restore_canary before --path="${docroot}" >/dev/null
