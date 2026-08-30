@@ -454,7 +454,7 @@ func ValidateWithin(child, ceiling types.HostingPolicy) error {
 // subscription runtime ceilings or enabling execution features denied above it.
 func ValidateSiteWithin(sitePolicy, subscriptionPolicy types.HostingPolicy) error {
 	if err := ValidateWithin(sitePolicy, subscriptionPolicy); err != nil {
-		return err
+		return errors.New(strings.ReplaceAll(err.Error(), "provider", "subscription"))
 	}
 	limits := []struct {
 		name           string

@@ -2120,6 +2120,86 @@
     form.querySelector("[data-np-policy-patch]").value = JSON.stringify(patch);
   }
 
+  function clearSitePolicyError(form) {
+    var error = form.querySelector("[data-np-form-error]");
+    if (error) error.remove();
+	each("[data-np-field-error]", form, function (fieldError) { fieldError.remove(); });
+    each('[aria-invalid="true"]', form, function (field) {
+      field.removeAttribute("aria-invalid");
+      if (field.dataset.npErrorDescribedby !== undefined) {
+        if (field.dataset.npErrorDescribedby) field.setAttribute("aria-describedby", field.dataset.npErrorDescribedby);
+        else field.removeAttribute("aria-describedby");
+        delete field.dataset.npErrorDescribedby;
+      }
+    });
+  }
+
+  function showSitePolicyError(form, payload) {
+    clearSitePolicyError(form);
+    var error = document.createElement("p");
+    error.className = "np-gate is-blocked np-form-error-summary";
+    error.id = "np-site-policy-error";
+    error.setAttribute("role", "alert");
+    error.setAttribute("tabindex", "-1");
+    error.setAttribute("data-np-form-error", "");
+    error.textContent = payload.error || "Nakpanel could not save these settings. Review the form and try again.";
+    var firstSection = form.querySelector(".np-settings-section");
+    form.insertBefore(error, firstSection || form.firstChild);
+    var field = payload.field && form.elements[payload.field];
+    if (field && typeof field.setAttribute !== "function" && field.length) {
+      field = Array.prototype.find.call(field, function (candidate) { return candidate.type !== "hidden"; }) || field[0];
+    }
+    if (field) {
+      var fieldError = document.createElement("small");
+      fieldError.className = "np-field-error";
+      fieldError.id = "np-site-policy-field-error";
+      fieldError.setAttribute("data-np-field-error", "");
+      fieldError.textContent = payload.error || "Review this value.";
+      var label = field.closest("label");
+      if (label) label.appendChild(fieldError);
+      field.dataset.npErrorDescribedby = field.getAttribute("aria-describedby") || "";
+      field.setAttribute("aria-describedby", [field.dataset.npErrorDescribedby, error.id, label && fieldError.id].filter(Boolean).join(" "));
+      field.setAttribute("aria-invalid", "true");
+      field.focus();
+      field.scrollIntoView({block: "center", behavior: "smooth"});
+    } else {
+      error.focus();
+      error.scrollIntoView({block: "center", behavior: "smooth"});
+    }
+    form.dataset.npDirty = "true";
+  }
+
+  function submitSitePolicyForm(form, submitter) {
+    clearSitePolicyError(form);
+    var body = new URLSearchParams(new window.FormData(form));
+    if (submitter && submitter.name) body.append(submitter.name, submitter.value);
+    var action = submitter && submitter.hasAttribute("formaction") ? submitter.formAction : form.action;
+    if (submitter) submitter.disabled = true;
+    form.setAttribute("aria-busy", "true");
+    fetch(action, {
+      method: "POST", body: body, credentials: "same-origin",
+      headers: {"Accept": "application/json", "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken()}
+    }).then(function (response) {
+      if (response.ok) {
+        if (response.redirected) window.location.assign(response.url);
+        else window.location.reload();
+        return null;
+      }
+      return response.json().catch(function () {
+        return {error: "Nakpanel could not save these settings. Review the form and try again."};
+      }).then(function (payload) {
+        showSitePolicyError(form, payload);
+      });
+    }).catch(function () {
+      showSitePolicyError(form, {error: "The panel could not be reached. Check your connection and try again."});
+    }).then(function () {
+      form.removeAttribute("aria-busy");
+      if (submitter) submitter.disabled = false;
+      var dirtySubmit = form.querySelector("[data-np-dirty-submit]");
+      if (dirtySubmit) dirtySubmit.disabled = false;
+    });
+  }
+
   function initSiteLogs() {
     var allowedSiteLogSources = ["nginx_access", "nginx_error", "php_fpm", "php_deployment", "php_worker", "application", "task"];
     each("[data-np-site-logs]", document, function (workspace) {
@@ -2453,6 +2533,11 @@
 	var sitePolicyForm = event.target.closest("[data-np-site-policy-builder]");
 	if (sitePolicyForm) buildSitePolicyPatch(sitePolicyForm);
     prepareForms();
+	if (sitePolicyForm && window.fetch) {
+	  event.preventDefault();
+	  submitSitePolicyForm(sitePolicyForm, event.submitter);
+	  return;
+	}
 	var planEditorForm = event.target.closest("[data-np-plan-editor]");
 	var planForm = event.target.closest('[data-np-plan-editor][action="/plans"]');
 	if (planForm) {
@@ -2535,6 +2620,12 @@
   });
 
   prepareForms();
+  each("[data-np-error-back]", document, function (button) {
+    button.addEventListener("click", function () {
+      if (window.history.length > 1) window.history.back();
+      else window.location.assign("/dashboard");
+    });
+  });
   each("dialog[data-np-dialog]", document, function (dialog) {
     dialog.addEventListener("close", function () {
       if (dialog.id === "np-confirmation-dialog" && confirmationResolver) {

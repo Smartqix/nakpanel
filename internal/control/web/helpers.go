@@ -2365,6 +2365,20 @@ func formatPlanLimitFormValue(value int) string {
 	return fmt.Sprintf("%d", value)
 }
 
+func siteResourceLimitMinimum(ceiling int) string {
+	if ceiling < 0 {
+		return "-1"
+	}
+	return "0"
+}
+
+func siteResourceLimitMaximum(ceiling int) string {
+	if ceiling < 0 {
+		return ""
+	}
+	return strconv.Itoa(ceiling)
+}
+
 func defaultValkeyInstance() types.ValkeyInstance {
 	return types.ValkeyInstance{
 		DesiredState:       "enabled",

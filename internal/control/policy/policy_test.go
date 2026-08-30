@@ -2,6 +2,7 @@ package policy
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -236,5 +237,20 @@ func TestValidateSiteWithinRuntimeCeilings(t *testing.T) {
 		if err := ValidateSiteWithin(child, parent); err == nil {
 			t.Fatalf("%s was accepted", name)
 		}
+	}
+}
+
+func TestValidateSiteWithinNamesSubscriptionCeiling(t *testing.T) {
+	parent := testPolicy()
+	parent.PHP.MemoryLimitMB = 128
+	child := parent
+	child.PHP.MemoryLimitMB = 256
+
+	err := ValidateSiteWithin(child, parent)
+	if err == nil {
+		t.Fatal("oversized site PHP memory was accepted")
+	}
+	if !strings.Contains(err.Error(), "subscription ceiling") || strings.Contains(err.Error(), "provider ceiling") {
+		t.Fatalf("site ceiling error = %q, want subscription-specific language", err)
 	}
 }

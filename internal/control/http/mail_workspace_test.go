@@ -23,15 +23,20 @@ type fakeMailDomainServices struct {
 	subscriptionID int64
 	appCalled      bool
 	err            error
+	resetSiteID    int64
+	resetScope     string
+	setSiteCalled  bool
 }
 
 func (*fakeMailDomainServices) SetSubscriptionPolicy(context.Context, auth.SessionUser, int64, json.RawMessage) error {
 	return nil
 }
-func (*fakeMailDomainServices) SetSitePolicy(context.Context, auth.SessionUser, int64, json.RawMessage) error {
+func (s *fakeMailDomainServices) SetSitePolicy(context.Context, auth.SessionUser, int64, json.RawMessage) error {
+	s.setSiteCalled = true
 	return nil
 }
-func (*fakeMailDomainServices) ResetSitePolicy(context.Context, auth.SessionUser, int64, string) error {
+func (s *fakeMailDomainServices) ResetSitePolicy(_ context.Context, _ auth.SessionUser, siteID int64, scope string) error {
+	s.resetSiteID, s.resetScope = siteID, scope
 	return nil
 }
 func (*fakeMailDomainServices) UpsertSFTPIdentity(context.Context, auth.SessionUser, int64, types.SFTPIdentityInput) (int64, error) {

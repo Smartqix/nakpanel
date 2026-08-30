@@ -475,7 +475,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /support/customers/{customerID}/subscriptions/{id}", s.handleSupportObject("subscriptions", ""))
 	mux.HandleFunc("GET /support/customers/{customerID}/{page}", s.handleSupportWorkspace)
 	mux.HandleFunc("GET /", s.handleRoot)
-	return securityHeaders(sameOriginPostGuard(limitPostBody(csrfGuard(mux), s.files)))
+	return securityHeaders(userFacingErrors(sameOriginPostGuard(limitPostBody(csrfGuard(mux), s.files))))
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {

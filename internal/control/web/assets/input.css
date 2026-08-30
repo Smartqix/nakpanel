@@ -2,9 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The error shell is rendered by the HTTP package rather than a templ file,
+   so these selectors live outside Tailwind layers and cannot be purged. */
+.np-error-stage { align-items: center; display: flex; justify-content: center; min-height: 100vh; padding: 32px 20px; }
+.np-error-card { background: var(--np-surface); border: 1px solid var(--np-border); border-radius: 8px; box-shadow: 0 18px 50px rgba(15,23,42,.12); display: grid; gap: 14px; max-width: 620px; padding: 32px; width: 100%; }
+.np-error-card .np-brand { margin-bottom: 10px; }
+.np-error-code { color: var(--np-fail); font-size: 12px; font-weight: 750; text-transform: uppercase; }
+.np-error-card h1 { color: var(--np-ink); font-size: 26px; font-weight: 700; line-height: 1.25; margin: 0; }
+.np-error-card > p { color: var(--np-muted); font-size: 15px; line-height: 1.65; margin: 0; overflow-wrap: anywhere; }
+.np-error-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.np-error-actions > * { justify-content: center; min-height: 44px; }
+.np-primary-link { align-items: center; background: var(--np-primary); border-radius: 6px; color: #fff; display: inline-flex; font-size: 14px; font-weight: 650; padding: 0 16px; }
+.np-primary-link:hover { background: var(--np-primary-dark); color: #fff; }
+
 /* Phase 30 PHP application workspace. These components deliberately use the
    established 14-16px reading scale even inside dense operational views. */
 @layer components {
+  .np-form-error-summary { align-items: flex-start; display: flex; font-size: 14px; line-height: 1.55; margin: 0 0 4px; scroll-margin-top: 100px; }
+  .np-field-error { color: var(--np-fail); display: block; font-size: 12px; font-weight: 600; line-height: 1.45; margin-top: 5px; }
+  .np-permission-row .np-field-error { flex-basis: 100%; }
+  .np-settings-form [aria-invalid="true"] { border-color: var(--np-fail); box-shadow: 0 0 0 3px rgba(199,58,47,.12); }
   .np-php-app { display: grid; gap: 16px; min-width: 0; }
   .np-php-app-heading { align-items: center; margin: 0; }
   .np-php-app-heading h2 { font-size: 22px; font-weight: 650; margin: 2px 0 5px; }

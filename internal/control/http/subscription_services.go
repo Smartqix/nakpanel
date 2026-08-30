@@ -43,16 +43,6 @@ func (s *Server) handleSubscriptionPolicy(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Invalid subscription policy", http.StatusBadRequest)
 		return
 	}
-	resetScope := strings.ToLower(strings.TrimSpace(r.Form.Get("reset_scope")))
-	if resetScope != "" {
-		if err := services.ResetSitePolicy(r.Context(), user, id, resetScope); err != nil {
-			writeQuotaError(w, r, "Could not reset domain policy", err)
-			return
-		}
-		s.recordAudit(r.Context(), user, 0, 0, "site.policy_reset", "site", id, map[string]any{"scope": resetScope})
-		redirectSitePolicy(w, r, user, id)
-		return
-	}
 	patch := json.RawMessage(strings.TrimSpace(r.Form.Get("policy_patch")))
 	if len(patch) == 0 || (string(patch) == "{}" && hasTypedSitePolicyFields(r)) {
 		patch, err = typedSitePolicyPatch(r)
@@ -179,6 +169,16 @@ func (s *Server) handleSitePolicy(w http.ResponseWriter, r *http.Request) {
 	id, err := parsePositivePathID(r, "id")
 	if err != nil || r.ParseForm() != nil {
 		http.Error(w, "Invalid domain policy", http.StatusBadRequest)
+		return
+	}
+	resetScope := strings.ToLower(strings.TrimSpace(r.Form.Get("reset_scope")))
+	if resetScope != "" {
+		if err := services.ResetSitePolicy(r.Context(), user, id, resetScope); err != nil {
+			writeQuotaError(w, r, "Could not reset domain policy", err)
+			return
+		}
+		s.recordAudit(r.Context(), user, 0, 0, "site.policy_reset", "site", id, map[string]any{"scope": resetScope})
+		redirectSitePolicy(w, r, user, id)
 		return
 	}
 	patch := json.RawMessage(strings.TrimSpace(r.Form.Get("policy_patch")))

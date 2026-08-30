@@ -132,6 +132,7 @@ type fakeDomainManager struct {
 	autoRenew bool
 	called    bool
 	phpReq    types.UpdateSitePHPSettingsReq
+	err       error
 }
 
 func (m *fakeDomainManager) UpdateSiteSettings(context.Context, auth.SessionUser, types.UpdateSiteSettingsReq) error {
@@ -139,7 +140,7 @@ func (m *fakeDomainManager) UpdateSiteSettings(context.Context, auth.SessionUser
 }
 func (m *fakeDomainManager) UpdateSitePHPSettings(_ context.Context, _ auth.SessionUser, req types.UpdateSitePHPSettingsReq) error {
 	m.phpReq = req
-	return nil
+	return m.err
 }
 func (m *fakeDomainManager) SetTLSAutoRenew(_ context.Context, _ auth.SessionUser, siteID int64, enabled bool) error {
 	m.siteID, m.autoRenew, m.called = siteID, enabled, true
@@ -581,7 +582,7 @@ func TestEmbeddedAssetsDoNotExposeDirectoryListing(t *testing.T) {
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("GET /assets/ status = %d, want 404; body:\n%s", rec.Code, rec.Body.String())
 	}
-	if strings.Contains(rec.Body.String(), "app.css") || strings.Contains(rec.Body.String(), "app.js") {
+	if strings.Contains(rec.Body.String(), `<a href="app.css">`) || strings.Contains(rec.Body.String(), `<a href="app.js">`) {
 		t.Fatalf("GET /assets/ exposed asset listing:\n%s", rec.Body.String())
 	}
 }
@@ -2583,6 +2584,63 @@ func TestCombinedPHPSettingsWorkspaceAndPost(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther || domains.phpReq.SiteID != 7 || domains.phpReq.DesiredPHPVersion != "8.3" || !strings.Contains(string(domains.phpReq.PolicyPatch), `"php"`) {
 		t.Fatalf("combined PHP POST status=%d req=%#v patch=%s", rec.Code, domains.phpReq, domains.phpReq.PolicyPatch)
+	}
+}
+
+func TestCombinedPHPSettingsReturnsFieldAwareEnhancedError(t *testing.T) {
+	domains := &fakeDomainManager{err: errors.New("site policy exceeds subscription: php_memory_limit_mb exceeds or removes the subscription ceiling")}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DomainManager: domains})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	form := url.Values{
+		"desired_status": {"active"}, "desired_php_version": {"8.4"},
+		"site_fpm_mode": {"ondemand"}, "site_php_memory": {"256"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-settings", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Nakpanel-SPA", "true")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400", rec.Code)
+	}
+	var payload struct {
+		OK    bool   `json:"ok"`
+		Error string `json:"error"`
+		Field string `json:"field"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode PHP settings error: %v\n%s", err, rec.Body.String())
+	}
+	if payload.OK || payload.Field != "site_php_memory" || payload.Error != "PHP memory cannot be higher than the subscription limit shown on this page." {
+		t.Fatalf("PHP settings error payload = %#v", payload)
+	}
+}
+
+func TestSitePolicyResetIgnoresUnsavedFieldsAndResetsRequestedScope(t *testing.T) {
+	domains := &fakeMailDomainServices{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DomainManager: domains})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	form := url.Values{
+		"reset_scope":       {"php"},
+		"site_fpm_mode":     {"ondemand"},
+		"site_fpm_children": {"999"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/policy", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("reset status = %d, want 303; body=%s", rec.Code, rec.Body.String())
+	}
+	if domains.resetSiteID != 7 || domains.resetScope != "php" || domains.setSiteCalled {
+		t.Fatalf("reset dispatch = site %d scope %q set-called=%t", domains.resetSiteID, domains.resetScope, domains.setSiteCalled)
 	}
 }
 

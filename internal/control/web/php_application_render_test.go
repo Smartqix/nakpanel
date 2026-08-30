@@ -89,6 +89,68 @@ func TestPHPApplicationMobileControlsMeetMinimumTouchTarget(t *testing.T) {
 	assertDeclaration(".np-php-app-head-actions button", "min-height:44px")
 }
 
+func TestErrorPageStylesKeepCopyReadableOnAuthenticationBackground(t *testing.T) {
+	css := string(appCSS)
+	for _, want := range []string{
+		`.np-error-stage{align-items:center`,
+		`.np-error-card{background:var(--np-surface)`,
+		`.np-error-card h1{color:var(--np-ink)`,
+	} {
+		if !strings.Contains(css, want) {
+			t.Fatalf("embedded error-page CSS missing %q", want)
+		}
+	}
+}
+
+func TestPHPSettingsExposeSubscriptionLimitsAndInlineErrorHooks(t *testing.T) {
+	policy := types.HostingPolicy{
+		PHP: types.HostingPHPPolicy{
+			AllowedVersions: []string{"8.4"}, FPMMode: "ondemand", FPMMaxChildren: 3,
+			MemoryLimitMB: 128, OPcacheMemoryMB: 64,
+		},
+	}
+	data := dashboard.Data{
+		Sites:         []dashboard.Site{{ID: 7, Domain: "owned.test", Status: "active", DesiredStatus: "active", DesiredPHPVersion: "8.4", SubscriptionID: 20, CustomerID: 88}},
+		Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, Status: "active", AllowPHPSettings: true, PHPAllowlist: "8.4"}},
+		Capabilities:  types.RuntimeCapabilities{PHPVersions: []string{"8.4"}},
+		SubscriptionServices: dashboard.SubscriptionServicesData{SitePolicies: []dashboard.SitePolicy{{
+			SiteID: 7, SubscriptionID: 20, InheritedPolicy: policy, EffectivePolicy: policy,
+		}}},
+	}
+	body := renderPhase30Page(t, data, WorkspaceView{Route: "site-detail", DetailID: 7, Tab: "php", CSRFToken: "csrf"})
+	fieldNameAt := strings.Index(body, `name="site_php_memory"`)
+	if fieldNameAt < 0 {
+		t.Fatal("PHP memory field is missing")
+	}
+	fieldAt := strings.LastIndex(body[:fieldNameAt], "<input")
+	if fieldAt < 0 {
+		t.Fatal("PHP memory input does not start")
+	}
+	fieldEnd := strings.Index(body[fieldAt:], ">")
+	if fieldEnd < 0 {
+		t.Fatal("PHP memory field does not terminate")
+	}
+	field := body[fieldAt : fieldAt+fieldEnd]
+	for _, want := range []string{`min="0"`, `max="128"`, `aria-describedby="site-php-memory-help"`} {
+		if !strings.Contains(field, want) {
+			t.Fatalf("PHP memory field %q missing %q", field, want)
+		}
+	}
+	if !strings.Contains(body, "Subscription ceiling") || strings.Contains(body, "Provider ceiling") {
+		t.Fatalf("PHP settings summary does not describe the subscription ceiling:\n%s", body)
+	}
+	for _, want := range []string{`max="3" name="site_fpm_children"`, `max="64" name="site_php_opcache_memory"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("PHP settings do not expose subscription ceiling %q:\n%s", want, body)
+		}
+	}
+	for _, want := range []string{"submitSitePolicyForm", "data-np-form-error", "data-np-field-error", "aria-invalid", "X-Nakpanel-SPA", `submitter.hasAttribute("formaction")`, `var body = new URLSearchParams(new window.FormData(form));`} {
+		if !strings.Contains(string(appJS), want) {
+			t.Fatalf("settings JavaScript missing inline error hook %q", want)
+		}
+	}
+}
+
 func TestPhase30LogLinksAndSelectorUsePublicSourceEnums(t *testing.T) {
 	policy := types.HostingPolicy{Permissions: types.HostingPermissionPolicy{Logs: true}}
 	data := dashboard.Data{
