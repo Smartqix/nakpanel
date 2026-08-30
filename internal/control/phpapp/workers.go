@@ -549,7 +549,10 @@ func isTerminalPHPJobError(err error) bool {
 		return false
 	}
 	lower := strings.ToLower(err.Error())
-	for _, marker := range []string{"disabled", "inactive", "not allowed", "invalid", "required", "exceeds", "malware", "audit", "unsafe", "not found"} {
+	for _, marker := range []string{
+		"disabled", "inactive", "not allowed", "invalid", "required", "exceeds", "malware", "audit", "unsafe", "not found",
+		"failed readiness", "health probe returned",
+	} {
 		if strings.Contains(lower, marker) {
 			return true
 		}

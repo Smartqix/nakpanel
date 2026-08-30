@@ -75,6 +75,8 @@ func TestTerminalPHPPolicyFailuresCancelWithoutRetry(t *testing.T) {
 	for _, message := range []string{
 		"managed PHP deployments are disabled by policy",
 		"PHP application subscription is inactive",
+		"PHP release candidate failed readiness: HTTP health probe returned 500",
+		"live PHP health probe returned 502",
 	} {
 		err := terminalPHPJobError(errors.New(message))
 		var cancel *river.JobCancelError
