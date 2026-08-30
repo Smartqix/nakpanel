@@ -2615,7 +2615,7 @@ func TestCombinedPHPSettingsReturnsFieldAwareEnhancedError(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode PHP settings error: %v\n%s", err, rec.Body.String())
 	}
-	if payload.OK || payload.Field != "site_php_memory" || payload.Error != "PHP memory cannot be higher than the subscription limit shown on this page." {
+	if payload.OK || payload.Field != "site_php_memory" || payload.Error != "PHP memory cannot be higher than the limit allowed for this subscription." {
 		t.Fatalf("PHP settings error payload = %#v", payload)
 	}
 }

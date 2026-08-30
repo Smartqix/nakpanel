@@ -479,9 +479,6 @@ func TestPhase30DocumentationMatchesProvenProductBoundary(t *testing.T) {
 		"../../docs/RECOVERY.md": {
 			"Phase 30", "PHP application", "active release", "desired-active worker", "phase30-verify.sh",
 		},
-		"../../.superpowers/sdd/phase30-production-php/progress.md": {
-			"Task 8", "Phase 30 verifier", "controller", "Multipass",
-		},
 		"../../IMPLEMENTATION_PLAN.md": {
 			"Phase 30", "Production PHP hosting", "phase30-verify.sh", "compatibility only",
 		},

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"html/template"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -54,6 +55,10 @@ func (w *capturedErrorWriter) WriteHeader(status int) {
 	w.wroteHead = true
 	w.status = status
 	if status >= http.StatusBadRequest {
+		if status < http.StatusInternalServerError && isJSONContentType(w.Header().Get("Content-Type")) {
+			w.target.WriteHeader(status)
+			return
+		}
 		w.capturing = true
 		return
 	}
@@ -65,7 +70,15 @@ func (w *capturedErrorWriter) Write(body []byte) (int, error) {
 		w.WriteHeader(http.StatusOK)
 	}
 	if w.capturing {
-		return w.body.Write(body)
+		remaining := maxUserFacingErrorBytes + 1 - w.body.Len()
+		if remaining > 0 {
+			if remaining < len(body) {
+				_, _ = w.body.Write(body[:remaining])
+			} else {
+				_, _ = w.body.Write(body)
+			}
+		}
+		return len(body), nil
 	}
 	return w.target.Write(body)
 }
@@ -87,7 +100,21 @@ func (w *capturedErrorWriter) ReadFrom(reader io.Reader) (int64, error) {
 		w.WriteHeader(http.StatusOK)
 	}
 	if w.capturing {
-		return w.body.ReadFrom(io.LimitReader(reader, maxUserFacingErrorBytes+1))
+		var copied int64
+		buffer := make([]byte, 32<<10)
+		for {
+			read, err := reader.Read(buffer)
+			if read > 0 {
+				_, _ = w.Write(buffer[:read])
+				copied += int64(read)
+			}
+			if err == io.EOF {
+				return copied, nil
+			}
+			if err != nil {
+				return copied, err
+			}
+		}
 	}
 	return io.Copy(w.target, reader)
 }
@@ -102,6 +129,8 @@ func userFacingErrors(next http.Handler) http.Handler {
 				if captured.wroteHead && !captured.capturing {
 					panic(recovered)
 				}
+				log.Printf("nakpanel-http: recovered panic serving %s %s", r.Method, r.URL.EscapedPath())
+				clearUserFacingHeaders(captured.Header())
 				captured.status = http.StatusInternalServerError
 				captured.wroteHead = true
 				captured.capturing = true
@@ -118,18 +147,18 @@ func userFacingErrors(next http.Handler) http.Handler {
 }
 
 func (w *capturedErrorWriter) finish(r *http.Request) {
-	contentType := strings.ToLower(w.Header().Get("Content-Type"))
-	if strings.HasPrefix(contentType, "application/json") {
+	sourceJSON := isJSONContentType(w.Header().Get("Content-Type"))
+	if sourceJSON && w.status < http.StatusInternalServerError {
 		w.target.WriteHeader(w.status)
 		_, _ = w.target.Write(w.body.Bytes())
 		return
 	}
+	clearUserFacingHeaders(w.Header())
 	rawMessage := w.body.String()
 	field := userFacingErrorField(rawMessage)
 	title, message := userFacingErrorCopy(w.status, rawMessage)
-	w.Header().Del("Content-Length")
 	w.Header().Set("Cache-Control", "no-store")
-	if wantsJSONError(r) {
+	if sourceJSON || wantsJSONError(r) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.target.WriteHeader(w.status)
 		_ = json.NewEncoder(w.target).Encode(map[string]any{
@@ -144,6 +173,16 @@ func (w *capturedErrorWriter) finish(r *http.Request) {
 		"Status": w.status, "Title": title, "Message": message,
 		"ReturnPath": safeErrorReturnPath(r), "ReturnLabel": safeErrorReturnLabel(r),
 	})
+}
+
+func isJSONContentType(contentType string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "application/json")
+}
+
+func clearUserFacingHeaders(header http.Header) {
+	for _, name := range []string{"Content-Disposition", "Content-Encoding", "Content-Length", "Content-Type", "ETag", "Location", "Refresh"} {
+		header.Del(name)
+	}
 }
 
 func userFacingErrorField(message string) string {
@@ -178,7 +217,7 @@ func userFacingErrorField(message string) string {
 			return field.form
 		}
 	}
-	if strings.Contains(message, "PHP ") && strings.Contains(message, "not allowed by this subscription") {
+	if strings.Contains(message, "PHP ") && (strings.Contains(message, "not allowed by this subscription") || strings.Contains(message, "not installed on the server")) {
 		return "desired_php_version"
 	}
 	return ""
@@ -196,8 +235,14 @@ func userFacingErrorCopy(status int, raw string) (string, string) {
 	}
 	switch status {
 	case http.StatusBadRequest:
+		if strings.Contains(message, "PHP ") && strings.Contains(message, "not installed on the server") {
+			return "PHP runtime unavailable", "The selected PHP version is not available on this server. Choose one of the listed versions."
+		}
+		if strings.Contains(message, "PHP ") && strings.Contains(message, "not allowed by this subscription") {
+			return "PHP runtime unavailable", "The selected PHP version is not available for this subscription. Choose one of the listed versions."
+		}
 		if strings.Contains(message, "exceeds or removes the subscription ceiling") {
-			return "Check the form", userFacingFieldLabel(userFacingErrorField(message)) + " cannot be higher than the subscription limit shown on this page."
+			return "Check the form", userFacingFieldLabel(userFacingErrorField(message)) + " cannot be higher than the limit allowed for this subscription."
 		}
 		if strings.Contains(message, "not delegated by the subscription") {
 			return "Setting unavailable", userFacingFieldLabel(userFacingErrorField(message)) + " is not enabled for this subscription."

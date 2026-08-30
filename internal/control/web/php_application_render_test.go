@@ -102,11 +102,32 @@ func TestErrorPageStylesKeepCopyReadableOnAuthenticationBackground(t *testing.T)
 	}
 }
 
+func TestSiteBoundedSettingConstraintsMatchPolicySemantics(t *testing.T) {
+	tests := []struct {
+		ceiling int
+		min     string
+		max     string
+	}{
+		{ceiling: 0, min: "-1", max: ""},
+		{ceiling: 30, min: "1", max: "30"},
+		{ceiling: -1, min: "-1", max: "-1"},
+	}
+	for _, test := range tests {
+		if min := siteBoundedSettingMinimum(test.ceiling); min != test.min {
+			t.Errorf("minimum for ceiling %d = %q, want %q", test.ceiling, min, test.min)
+		}
+		if max := siteBoundedSettingMaximum(test.ceiling); max != test.max {
+			t.Errorf("maximum for ceiling %d = %q, want %q", test.ceiling, max, test.max)
+		}
+	}
+}
+
 func TestPHPSettingsExposeSubscriptionLimitsAndInlineErrorHooks(t *testing.T) {
 	policy := types.HostingPolicy{
 		PHP: types.HostingPHPPolicy{
 			AllowedVersions: []string{"8.4"}, FPMMode: "ondemand", FPMMaxChildren: 3,
-			MemoryLimitMB: 128, OPcacheMemoryMB: 64,
+			MemoryLimitMB: 128, MaxExecutionSeconds: 0, MaxInputSeconds: 30,
+			PostMaxMB: -1, OPcacheMemoryMB: 64,
 		},
 	}
 	data := dashboard.Data{
@@ -142,6 +163,15 @@ func TestPHPSettingsExposeSubscriptionLimitsAndInlineErrorHooks(t *testing.T) {
 	for _, want := range []string{`max="3" name="site_fpm_children"`, `max="64" name="site_php_opcache_memory"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("PHP settings do not expose subscription ceiling %q:\n%s", want, body)
+		}
+	}
+	for _, want := range []string{
+		`min="-1" max="" name="site_php_execution"`,
+		`min="1" max="30" name="site_php_input"`,
+		`min="-1" max="-1" name="site_php_post"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("PHP operational setting does not match subscription semantics %q:\n%s", want, body)
 		}
 	}
 	for _, want := range []string{"submitSitePolicyForm", "data-np-form-error", "data-np-field-error", "aria-invalid", "X-Nakpanel-SPA", `submitter.hasAttribute("formaction")`, `var body = new URLSearchParams(new window.FormData(form));`} {

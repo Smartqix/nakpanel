@@ -3937,9 +3937,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var157 string
-					templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.FPMIdleTimeoutSecs))
+					templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.FPMIdleTimeoutSecs))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1174}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1175}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var157))
 					if templ_7745c5c3_Err != nil {
@@ -3950,9 +3950,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var158 string
-					templ_7745c5c3_Var158, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.FPMIdleTimeoutSecs))
+					templ_7745c5c3_Var158, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.FPMIdleTimeoutSecs))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1258}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1260}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var158))
 					if templ_7745c5c3_Err != nil {
@@ -3965,7 +3965,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 					var templ_7745c5c3_Var159 string
 					templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.FPMIdleTimeoutSecs))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1365}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1367}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var159))
 					if templ_7745c5c3_Err != nil {
@@ -3976,9 +3976,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var160 string
-					templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.RequestTerminateSecs))
+					templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.RequestTerminateSecs))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1516}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1519}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var160))
 					if templ_7745c5c3_Err != nil {
@@ -3989,9 +3989,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var161 string
-					templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.RequestTerminateSecs))
+					templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.RequestTerminateSecs))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1602}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1606}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var161))
 					if templ_7745c5c3_Err != nil {
@@ -4004,7 +4004,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 					var templ_7745c5c3_Var162 string
 					templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.RequestTerminateSecs))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1716}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 549, Col: 1720}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var162))
 					if templ_7745c5c3_Err != nil {
@@ -4089,9 +4089,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var168 string
-					templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.MaxExecutionSeconds))
+					templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.MaxExecutionSeconds))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 650}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 651}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var168))
 					if templ_7745c5c3_Err != nil {
@@ -4102,9 +4102,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var169 string
-					templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.MaxExecutionSeconds))
+					templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.MaxExecutionSeconds))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 735}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 737}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var169))
 					if templ_7745c5c3_Err != nil {
@@ -4117,7 +4117,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 					var templ_7745c5c3_Var170 string
 					templ_7745c5c3_Var170, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.MaxExecutionSeconds))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 848}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 850}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var170))
 					if templ_7745c5c3_Err != nil {
@@ -4128,9 +4128,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var171 string
-					templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.MaxInputSeconds))
+					templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.MaxInputSeconds))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 985}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 988}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var171))
 					if templ_7745c5c3_Err != nil {
@@ -4141,9 +4141,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var172 string
-					templ_7745c5c3_Var172, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.MaxInputSeconds))
+					templ_7745c5c3_Var172, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.MaxInputSeconds))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1066}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1070}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var172))
 					if templ_7745c5c3_Err != nil {
@@ -4156,7 +4156,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 					var templ_7745c5c3_Var173 string
 					templ_7745c5c3_Var173, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.MaxInputSeconds))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1171}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1175}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var173))
 					if templ_7745c5c3_Err != nil {
@@ -4167,9 +4167,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var174 string
-					templ_7745c5c3_Var174, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.PostMaxMB))
+					templ_7745c5c3_Var174, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.PostMaxMB))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1296}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1301}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var174))
 					if templ_7745c5c3_Err != nil {
@@ -4180,9 +4180,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var175 string
-					templ_7745c5c3_Var175, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.PostMaxMB))
+					templ_7745c5c3_Var175, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.PostMaxMB))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1371}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1377}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var175))
 					if templ_7745c5c3_Err != nil {
@@ -4195,7 +4195,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 					var templ_7745c5c3_Var176 string
 					templ_7745c5c3_Var176, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.PostMaxMB))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1469}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1475}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var176))
 					if templ_7745c5c3_Err != nil {
@@ -4206,9 +4206,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var177 string
-					templ_7745c5c3_Var177, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.UploadMaxMB))
+					templ_7745c5c3_Var177, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.UploadMaxMB))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1598}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1605}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var177))
 					if templ_7745c5c3_Err != nil {
@@ -4219,9 +4219,9 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var178 string
-					templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.JoinStringErrs(siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.UploadMaxMB))
+					templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.JoinStringErrs(siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.UploadMaxMB))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1675}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1683}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var178))
 					if templ_7745c5c3_Err != nil {
@@ -4234,7 +4234,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 					var templ_7745c5c3_Var179 string
 					templ_7745c5c3_Var179, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.UploadMaxMB))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1777}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 1785}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var179))
 					if templ_7745c5c3_Err != nil {

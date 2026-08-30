@@ -2379,6 +2379,20 @@ func siteResourceLimitMaximum(ceiling int) string {
 	return strconv.Itoa(ceiling)
 }
 
+func siteBoundedSettingMinimum(ceiling int) string {
+	if ceiling <= 0 {
+		return "-1"
+	}
+	return "1"
+}
+
+func siteBoundedSettingMaximum(ceiling int) string {
+	if ceiling == 0 {
+		return ""
+	}
+	return strconv.Itoa(ceiling)
+}
+
 func defaultValkeyInstance() types.ValkeyInstance {
 	return types.ValkeyInstance{
 		DesiredState:       "enabled",
