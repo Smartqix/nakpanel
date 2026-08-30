@@ -251,6 +251,9 @@ func TestPhase30VerifierWaitsForExplicitApplicationReconcileBeforeTraffic(t *tes
 			t.Errorf("explicit reconciliation wait is missing %q", want)
 		}
 	}
+	if !strings.Contains(script[waitAt:trafficAt], `"true"`) {
+		t.Fatal("PostgreSQL boolean text convergence wait must expect true")
+	}
 }
 
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
