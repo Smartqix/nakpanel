@@ -150,6 +150,41 @@ ORDER BY application.subscription_id,application.php_version`)
 		return err
 	}
 	defer tx.Rollback()
+	activeKeys := make(map[string]struct{}, len(targets)*3)
+	for _, target := range targets {
+		activeKeys[fmt.Sprintf("php:runtime:%d:%s", target.subscriptionID, target.version)] = struct{}{}
+		activeKeys[fmt.Sprintf("php:runtime-missing:%d:%s", target.subscriptionID, target.version)] = struct{}{}
+		activeKeys[fmt.Sprintf("php:end-of-support:%d:%s", target.subscriptionID, target.version)] = struct{}{}
+	}
+	warningRows, err := tx.QueryContext(ctx, `SELECT dedupe_key FROM notifications
+WHERE resolved_at IS NULL AND kind IN ('php_runtime_unsupported','php_runtime_missing','php_end_of_support')
+ORDER BY dedupe_key FOR UPDATE`)
+	if err != nil {
+		return err
+	}
+	var staleKeys []string
+	for warningRows.Next() {
+		var key string
+		if err := warningRows.Scan(&key); err != nil {
+			warningRows.Close()
+			return err
+		}
+		if _, active := activeKeys[key]; !active {
+			staleKeys = append(staleKeys, key)
+		}
+	}
+	if err := warningRows.Err(); err != nil {
+		warningRows.Close()
+		return err
+	}
+	if err := warningRows.Close(); err != nil {
+		return err
+	}
+	for _, key := range staleKeys {
+		if err := resolveNotificationTx(ctx, tx, key); err != nil {
+			return err
+		}
+	}
 	for _, target := range targets {
 		runtime, exists := byVersion[target.version]
 		legacyKey := fmt.Sprintf("php:runtime:%d:%s", target.subscriptionID, target.version)

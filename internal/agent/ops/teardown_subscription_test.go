@@ -18,7 +18,10 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := &teardownRunner{outputs: map[string][]byte{
-		"systemctl show --property=LoadState --value --no-pager nakpanel-php-fpm-candidate@17-42.service": []byte("loaded\n"),
+		"systemctl show --property=LoadState --property=ActiveState --no-pager nakpanel-php-fpm@17.service": []byte("LoadState=not-found\nActiveState=active\n"),
+		"systemctl show --property=LoadState --value --no-pager nakpanel-php-fpm-candidate@17-42.service":   []byte("loaded\n"),
+		"systemctl list-units --all --type=service --no-legend --plain --no-pager nakpanel-php-worker@51*.service": []byte(
+			"nakpanel-php-worker@51-3.service loaded active running managed worker\n"),
 	}}
 	stateRoot := t.TempDir()
 	systemdRoot := filepath.Join(stateRoot, "systemd")
@@ -26,7 +29,6 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, unit := range []string{
-		"nakpanel-php-fpm@17.service",
 		"nakpanel-php-fpm-candidate@17-41.service",
 		"nakpanel-php-worker@51.service",
 		"nakpanel-php-worker@51-2.service",
@@ -91,6 +93,9 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 		if _, statErr := os.Stat(filepath.Join(systemdRoot, unit)); !errors.Is(statErr, os.ErrNotExist) {
 			t.Fatalf("managed PHP unit %s remains: %v", unit, statErr)
 		}
+	}
+	if !runner.saw("systemctl", "disable", "--now", "nakpanel-php-worker@51-3.service") {
+		t.Fatalf("loaded PHP worker generation without a unit file was not stopped: %#v", runner.calls)
 	}
 	if !runner.saw("systemctl", "disable", "--now", "nakpanel-php-fpm-candidate@17-42.service") {
 		t.Fatalf("loaded PHP candidate without a unit file was not stopped: %#v", runner.calls)

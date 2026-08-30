@@ -1,8 +1,10 @@
 package quota
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"io"
 	"sort"
 	"strings"
 
@@ -50,13 +52,17 @@ ORDER BY secret.id`, siteID)
 		return nil, errors.New("PHP log secret redaction is unavailable")
 	}
 	values := make([]string, 0, len(references))
+	seen := make(map[string]struct{})
 	for _, reference := range references {
 		plaintext, _, err := s.phpLogSecrets.GetSecret(ctx, reference.scope, reference.name)
 		if err != nil {
 			return nil, err
 		}
-		if len(plaintext) > 0 {
-			values = append(values, string(plaintext))
+		for _, value := range phpLogSecretFragments(string(plaintext)) {
+			if _, exists := seen[value]; !exists {
+				seen[value] = struct{}{}
+				values = append(values, value)
+			}
 		}
 		clear(plaintext)
 	}
@@ -67,4 +73,31 @@ ORDER BY secret.id`, siteID)
 		}
 	}
 	return lines, nil
+}
+
+func phpLogSecretFragments(value string) []string {
+	reader := bufio.NewReader(strings.NewReader(value))
+	var fragments []string
+	for {
+		line, err := reader.ReadString('\n')
+		if line != "" {
+			line = strings.TrimRight(line, "\r\n")
+			line = strings.Map(func(r rune) rune {
+				if r == '\t' || r >= 0x20 {
+					return r
+				}
+				return '\uFFFD'
+			}, line)
+			if line != "" {
+				fragments = append(fragments, line)
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			break
+		}
+	}
+	return fragments
 }

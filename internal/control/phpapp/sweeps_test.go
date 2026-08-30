@@ -17,6 +17,13 @@ func TestPHPRuntimeSweepResolvesLegacyNotificationKey(t *testing.T) {
 	mock.ExpectQuery(`SELECT DISTINCT application.subscription_id`).
 		WillReturnRows(sqlmock.NewRows([]string{"subscription_id", "customer_id", "php_version"}).AddRow(3, 5, "8.4"))
 	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT dedupe_key FROM notifications`).WillReturnRows(sqlmock.NewRows([]string{"dedupe_key"}).
+		AddRow("php:runtime-missing:3:8.3").
+		AddRow("php:end-of-support:3:8.3"))
+	for _, key := range []string{"php:runtime-missing:3:8.3", "php:end-of-support:3:8.3"} {
+		mock.ExpectExec(`UPDATE notifications SET resolved_at=now\(\),updated_at=now\(\) WHERE dedupe_key=\$1`).
+			WithArgs(key).WillReturnResult(sqlmock.NewResult(0, 1))
+	}
 	mock.ExpectExec(`UPDATE notifications SET resolved_at=now\(\),updated_at=now\(\) WHERE dedupe_key=\$1`).
 		WithArgs("php:runtime:3:8.4").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec(`UPDATE notifications SET resolved_at=now\(\),updated_at=now\(\) WHERE dedupe_key=\$1`).

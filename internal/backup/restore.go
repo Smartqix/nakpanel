@@ -252,12 +252,7 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 		summary.ServicesStarted = append(summary.ServicesStarted, unit)
 	}
 	for _, unit := range enumerateInstanceUnits() {
-		start, err := shouldStartRestoredInstanceUnit(ctx, unit, runQuiet)
-		if err != nil {
-			opts.log("warning: inspect %s desired state failed: %v", unit, err)
-			continue
-		}
-		if !start {
+		if !shouldStartRestoredInstanceUnit(unit) {
 			continue
 		}
 		if err := runQuiet(ctx, "systemctl", "start", unit); err != nil {
@@ -753,18 +748,11 @@ func instanceUnitPatterns() []string {
 	}
 }
 
-type restoreCommandRunner func(context.Context, string, ...string) error
-
-func shouldStartRestoredInstanceUnit(ctx context.Context, unit string, run restoreCommandRunner) (bool, error) {
-	if strings.HasPrefix(unit, "nakpanel-php-fpm@") || strings.HasPrefix(unit, "nakpanel-php-app-") {
-		// The application reconciliation sweep restores only active application
-		// runtimes after the control plane has recovered its desired state.
-		return false, nil
+func shouldStartRestoredInstanceUnit(unit string) bool {
+	if strings.HasPrefix(unit, "nakpanel-php-fpm@") || strings.HasPrefix(unit, "nakpanel-php-worker@") || strings.HasPrefix(unit, "nakpanel-php-app-") {
+		// The application reconciliation sweep restores only desired-active PHP
+		// runtimes and workers after the control plane has recovered its intent.
+		return false
 	}
-	if strings.HasPrefix(unit, "nakpanel-php-worker@") {
-		// Reconciliation disables desired-stopped workers. Preserve that durable
-		// systemd state instead of starting every restored worker unit file.
-		return run(ctx, "systemctl", "is-enabled", unit) == nil, nil
-	}
-	return true, nil
+	return true
 }

@@ -220,12 +220,14 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 			if planErr != nil {
 				return result, planErr
 			}
-			if _, statErr := os.Stat(plan.PHPServiceUnit); statErr == nil {
-				if _, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", plan.PHPServiceName); stopErr != nil {
-					return result, fmt.Errorf("stop dedicated PHP service %s: %w", plan.PHPServiceName, stopErr)
+			loaded, inspectErr := p.systemdUnitLoaded(ctx, plan.PHPServiceName)
+			if inspectErr != nil {
+				return result, fmt.Errorf("inspect dedicated PHP service %s: %w", plan.PHPServiceName, inspectErr)
+			}
+			if loaded {
+				if output, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", plan.PHPServiceName); stopErr != nil {
+					return result, fmt.Errorf("stop dedicated PHP service %s: %w: %s", plan.PHPServiceName, stopErr, strings.TrimSpace(string(output)))
 				}
-			} else if !errors.Is(statErr, os.ErrNotExist) {
-				return result, statErr
 			}
 			for _, path := range []string{plan.PHPFPMConfig, plan.PHPFPMConfig + ".suspended", plan.PHPServiceUnit} {
 				if err = os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -271,6 +273,7 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 		result.Removed = append(result.Removed, "domain:"+domain)
 	}
 	for _, workerID := range req.PHPWorkerIDs {
+		unitPaths := make(map[string]string)
 		patterns := []string{
 			filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-php-worker@%d.service", workerID)),
 			filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-php-worker@%d-*.service", workerID)),
@@ -281,15 +284,44 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 				return result, globErr
 			}
 			for _, unitPath := range units {
-				unitName := filepath.Base(unitPath)
-				if _, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", unitName); stopErr != nil {
-					return result, fmt.Errorf("stop managed PHP worker %s: %w", unitName, stopErr)
-				}
+				unitPaths[filepath.Base(unitPath)] = unitPath
+			}
+		}
+		pattern := fmt.Sprintf("nakpanel-php-worker@%d*.service", workerID)
+		output, listErr := p.runner.Run(ctx, "systemctl", "list-units", "--all", "--type=service", "--no-legend", "--plain", "--no-pager", pattern)
+		if listErr != nil {
+			return result, fmt.Errorf("list loaded PHP worker generations for %d: %w: %s", workerID, listErr, strings.TrimSpace(string(output)))
+		}
+		unitNames := make(map[string]struct{}, len(unitPaths))
+		for unitName := range unitPaths {
+			unitNames[unitName] = struct{}{}
+		}
+		for _, line := range strings.Split(string(output), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) == 0 {
+				continue
+			}
+			match := phpWorkerUnitFileRE.FindStringSubmatch(fields[0])
+			if len(match) == 0 || match[1] != strconv.FormatInt(workerID, 10) {
+				continue
+			}
+			unitNames[fields[0]] = struct{}{}
+		}
+		sortedUnits := make([]string, 0, len(unitNames))
+		for unitName := range unitNames {
+			sortedUnits = append(sortedUnits, unitName)
+		}
+		sort.Strings(sortedUnits)
+		for _, unitName := range sortedUnits {
+			if output, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", unitName); stopErr != nil {
+				return result, fmt.Errorf("stop managed PHP worker %s: %w: %s", unitName, stopErr, strings.TrimSpace(string(output)))
+			}
+			if unitPath := unitPaths[unitName]; unitPath != "" {
 				if err = os.Remove(unitPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 					return result, err
 				}
-				needsDaemonReload = true
 			}
+			needsDaemonReload = true
 		}
 	}
 	for _, applicationID := range req.PHPApplicationIDs {
@@ -412,6 +444,33 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 	}
 	result.Removed = append(result.Removed, "user:"+req.Username)
 	return result, nil
+}
+
+func (p *SubscriptionTeardownProvisioner) systemdUnitLoaded(ctx context.Context, unit string) (bool, error) {
+	output, err := p.runner.Run(ctx, "systemctl", "show", "--property=LoadState", "--property=ActiveState", "--no-pager", unit)
+	if err != nil {
+		return false, fmt.Errorf("systemctl show: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	var loadState, activeState string
+	for _, line := range strings.Split(string(output), "\n") {
+		key, value, found := strings.Cut(strings.TrimSpace(line), "=")
+		if !found {
+			continue
+		}
+		switch key {
+		case "LoadState":
+			loadState = value
+		case "ActiveState":
+			activeState = value
+		}
+	}
+	if loadState == "" || activeState == "" {
+		return false, errors.New("systemd returned incomplete unit state")
+	}
+	if loadState == "not-found" && (activeState == "inactive" || activeState == "failed") {
+		return false, nil
+	}
+	return true, nil
 }
 
 func (p *SubscriptionTeardownProvisioner) teardownPHPVersions() []string {

@@ -29,10 +29,15 @@ import (
 var externalRefPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`)
 
 type AccountService struct {
-	DB        *sql.DB
-	River     *river.Client[*sql.Tx]
-	PublicURL string
-	Quota     *controlquota.SQLStore
+	DB           *sql.DB
+	River        *river.Client[*sql.Tx]
+	PublicURL    string
+	Quota        *controlquota.SQLStore
+	Capabilities accountRuntimeCapabilityReader
+}
+
+type accountRuntimeCapabilityReader interface {
+	RuntimeCapabilities(context.Context) (types.RuntimeCapabilities, error)
 }
 
 type createAccountRequest struct {
@@ -269,6 +274,10 @@ func (s *AccountService) Create(ctx context.Context, keyID int64, req createAcco
 	if err != nil {
 		return accountView{}, false, err
 	}
+	php, err := s.readyPHPVersion(ctx, plan)
+	if err != nil {
+		return accountView{}, false, err
+	}
 	var customerID, userID int64
 	var customerProvider sql.NullInt64
 	var customerStatus string
@@ -344,10 +353,6 @@ func (s *AccountService) Create(ctx context.Context, keyID int64, req createAcco
 	if err = tx.QueryRowContext(ctx, `INSERT INTO subscription_system_accounts(subscription_id,username,home_path,desired_state,applied_state,convergence_status,migration_status) VALUES($1,$2,'/home/'||$2,'active','pending','pending','pending') RETURNING id`, subscriptionID, username).Scan(&accountID); err != nil {
 		return accountView{}, false, &accountError{409, "username_conflict", "system username is already in use", nil}
 	}
-	php := controlquota.PreferredNewSitePHPVersion(plan.PHPAllowlist, plan.DefaultPHP)
-	if php == "" {
-		php = "8.3"
-	}
 	var siteID int64
 	if err = tx.QueryRowContext(ctx, `INSERT INTO sites(owner_user_id,customer_id,subscription_id,system_account_id,username,domain,document_root,parent_site_id,dns_zone_mode,php_version,desired_php_version,status,last_error) VALUES($1,$2,$3,$4,$5,$6,'/home/'||$5||'/domains/'||$6||'/public_html',NULL,'separate',$7,$7,'pending','') RETURNING id`, userID, customerID, subscriptionID, accountID, username, req.Domain, php).Scan(&siteID); err != nil {
 		return accountView{}, false, &accountError{409, "domain_conflict", "primary domain is already in use", nil}
@@ -379,6 +384,51 @@ func (s *AccountService) Create(ctx context.Context, keyID int64, req createAcco
 	}
 	view, err := s.Get(ctx, publicID)
 	return view, true, err
+}
+
+func (s *AccountService) readyPHPVersion(ctx context.Context, plan selectedPlan) (string, error) {
+	if s == nil || s.Capabilities == nil {
+		return "", &accountError{503, "runtime_capabilities_unavailable", "server runtime capabilities are unavailable", nil}
+	}
+	capabilities, err := s.Capabilities.RuntimeCapabilities(ctx)
+	if err != nil {
+		return "", &accountError{503, "runtime_capabilities_unavailable", "server runtime capabilities are unavailable", nil}
+	}
+	ready := make(map[string]bool)
+	if len(capabilities.PHPRuntimes) > 0 {
+		for _, runtime := range capabilities.PHPRuntimes {
+			version := strings.TrimSpace(runtime.Version)
+			if version != "" && runtime.Ready {
+				ready[version] = true
+			}
+		}
+	} else {
+		for _, version := range capabilities.PHPVersions {
+			if version = strings.TrimSpace(version); version != "" {
+				ready[version] = true
+			}
+		}
+	}
+	var permitted []string
+	for _, version := range strings.Split(plan.PHPAllowlist, ",") {
+		if version = strings.TrimSpace(version); version != "" && ready[version] {
+			permitted = append(permitted, version)
+		}
+	}
+	for _, preferred := range []string{"8.4", strings.TrimSpace(plan.DefaultPHP)} {
+		if preferred == "" {
+			continue
+		}
+		for _, version := range permitted {
+			if version == preferred {
+				return version, nil
+			}
+		}
+	}
+	if len(permitted) > 0 {
+		return permitted[0], nil
+	}
+	return "", &accountError{409, "runtime_unavailable", "the plan has no ready permitted PHP runtime", nil}
 }
 
 type selectedPlan struct {

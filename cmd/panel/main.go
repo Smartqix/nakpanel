@@ -144,7 +144,7 @@ func main() {
 		SecurityDB:                 db,
 		SecurityKeyring:            securityKeyring,
 	}).Handler()
-	accountService := &provisioningapi.AccountService{DB: db, River: riverClient, PublicURL: cfg.PublicURL, Quota: quotaStore}
+	accountService := &provisioningapi.AccountService{DB: db, River: riverClient, PublicURL: cfg.PublicURL, Quota: quotaStore, Capabilities: agentCapabilities}
 	apiHandler := provisioningapi.NewHandler(provisioningapi.HandlerOptions{
 		DB: db, PanelVersion: version.String(), PublicURL: cfg.PublicURL, Sessions: sessionManager, Accounts: accountService,
 	})
