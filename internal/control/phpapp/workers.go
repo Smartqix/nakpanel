@@ -18,6 +18,10 @@ const maxPersistedErrorBytes = 1000
 
 var phpApplicationWorkerLocks sync.Map
 
+// The panel lock coalesces local job kinds; the privileged agent provides the
+// cross-process application lock around host mutations. Database advisory locks
+// stay transaction-scoped so Phase 30 teardown triggers can safely reacquire the
+// subscription lock on the same connection as each state write.
 func lockPHPApplicationWorker(applicationID int64) func() {
 	value, _ := phpApplicationWorkerLocks.LoadOrStore(applicationID, &sync.Mutex{})
 	lock := value.(*sync.Mutex)
@@ -190,34 +194,27 @@ func NewDeployPHPReleaseWorker(store *SQLStore, agent PHPApplicationAgent, capab
 func (w *DeployPHPReleaseWorker) Work(ctx context.Context, job *river.Job[DeployPHPReleaseArgs]) error {
 	unlock := lockPHPApplicationWorker(job.Args.ApplicationID)
 	defer unlock()
-	fence, missing, err := w.store.acquirePHPApplicationFence(ctx, job.Args.ApplicationID)
-	if missing {
-		return w.store.settleSupersededDeployment(ctx, job.Args.ApplicationID, job.Args.DeploymentID, job.Args.DesiredRevision)
-	}
-	if err != nil {
-		return w.fail(ctx, job.Args, nil, err)
-	}
-	defer fence.Release()
+	finalAttempt := finalPHPJobAttempt(job)
 	loaded, stale, err := w.store.loadForWorker(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities)
 	if stale {
 		return w.store.settleSupersededDeployment(ctx, job.Args.ApplicationID, job.Args.DeploymentID, job.Args.DesiredRevision)
 	}
 	if err != nil {
-		return w.fail(ctx, job.Args, nil, err)
+		return w.fail(ctx, job.Args, nil, err, finalAttempt)
 	}
 	defer clearEnvironment(loaded.environment)
 	if err = requireActive(loaded.record); err != nil {
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	if w.agent == nil {
-		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"))
+		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"), finalAttempt)
 	}
 	deployment, err := w.store.deployment(ctx, job.Args.DeploymentID)
 	if err != nil || deployment.ApplicationID != job.Args.ApplicationID {
 		if err == nil {
 			err = ErrNotFound
 		}
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	if deployment.Status == "healthy" && loaded.record.activeDeploymentID == deployment.ID && loaded.record.appliedRevision == job.Args.DesiredRevision {
 		return nil
@@ -232,10 +229,10 @@ func (w *DeployPHPReleaseWorker) Work(ctx context.Context, job *river.Job[Deploy
 	}
 	result, err := w.agent.DeployPHPRelease(ctx, types.DeployPHPReleaseReq{Application: loaded.record.spec, Deployment: deployment, Environment: loaded.environment})
 	if err != nil {
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	if result.DeploymentID != deployment.ID || !resolvedRevisionPattern.MatchString(result.ResolvedRevision) {
-		return w.fail(ctx, job.Args, loaded.environment, errors.New("agent returned an invalid PHP deployment result"))
+		return w.fail(ctx, job.Args, loaded.environment, errors.New("agent returned an invalid PHP deployment result"), finalAttempt)
 	}
 	if err = w.store.completeDeployment(ctx, job.Args, loaded, result); err != nil {
 		return err
@@ -243,11 +240,12 @@ func (w *DeployPHPReleaseWorker) Work(ctx context.Context, job *river.Job[Deploy
 	return nil
 }
 
-func (w *DeployPHPReleaseWorker) fail(ctx context.Context, args DeployPHPReleaseArgs, environment []types.PHPEnvironmentPayload, cause error) error {
+func (w *DeployPHPReleaseWorker) fail(ctx context.Context, args DeployPHPReleaseArgs, environment []types.PHPEnvironmentPayload, cause error, finalAttempt bool) error {
 	message := redactPHPFailure(cause, environment)
+	terminal := isTerminalPHPJobError(cause) || finalAttempt
 	if w.store != nil {
 		var err error
-		if isTerminalPHPJobError(cause) {
+		if terminal {
 			err = w.store.failDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message)
 		} else {
 			err = w.store.retryDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message)
@@ -255,6 +253,9 @@ func (w *DeployPHPReleaseWorker) fail(ctx context.Context, args DeployPHPRelease
 		if err != nil {
 			return errors.Join(cause, err)
 		}
+	}
+	if terminal {
+		return river.JobCancel(cause)
 	}
 	return terminalPHPJobError(cause)
 }
@@ -273,44 +274,37 @@ func NewRollbackPHPReleaseWorker(store *SQLStore, agent PHPApplicationAgent, cap
 func (w *RollbackPHPReleaseWorker) Work(ctx context.Context, job *river.Job[RollbackPHPReleaseArgs]) error {
 	unlock := lockPHPApplicationWorker(job.Args.ApplicationID)
 	defer unlock()
-	fence, missing, err := w.store.acquirePHPApplicationFence(ctx, job.Args.ApplicationID)
-	if missing {
-		return w.store.settleSupersededDeployment(ctx, job.Args.ApplicationID, job.Args.DeploymentID, job.Args.DesiredRevision)
-	}
-	if err != nil {
-		return w.fail(ctx, job.Args, nil, err)
-	}
-	defer fence.Release()
+	finalAttempt := finalPHPJobAttempt(job)
 	loaded, stale, err := w.store.loadForWorker(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities)
 	if stale {
 		return w.store.settleSupersededDeployment(ctx, job.Args.ApplicationID, job.Args.DeploymentID, job.Args.DesiredRevision)
 	}
 	if err != nil {
-		return w.fail(ctx, job.Args, nil, err)
+		return w.fail(ctx, job.Args, nil, err, finalAttempt)
 	}
 	defer clearEnvironment(loaded.environment)
 	if err = requireActive(loaded.record); err != nil {
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	intent, err := w.store.deployment(ctx, job.Args.DeploymentID)
 	if err != nil || intent.ApplicationID != job.Args.ApplicationID {
 		if err == nil {
 			err = ErrNotFound
 		}
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	target, err := w.store.deployment(ctx, job.Args.TargetDeploymentID)
 	if err != nil || target.ApplicationID != loaded.record.spec.ApplicationID {
 		if err == nil {
 			err = ErrNotFound
 		}
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	if err = validateRollbackTarget(loaded.record, target); err != nil {
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	if w.agent == nil {
-		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"))
+		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"), finalAttempt)
 	}
 	claimed, err := w.store.markRollbackRunning(ctx, job.Args, "preparing")
 	if err != nil {
@@ -321,19 +315,20 @@ func (w *RollbackPHPReleaseWorker) Work(ctx context.Context, job *river.Job[Roll
 	}
 	result, err := w.agent.RollbackPHPRelease(ctx, types.RollbackPHPReleaseReq{Application: loaded.record.spec, DeploymentID: intent.ID, TargetDeployment: target, Environment: loaded.environment})
 	if err != nil {
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	if result.ActiveDeploymentID != target.ID {
-		return w.fail(ctx, job.Args, loaded.environment, errors.New("agent returned an invalid PHP rollback result"))
+		return w.fail(ctx, job.Args, loaded.environment, errors.New("agent returned an invalid PHP rollback result"), finalAttempt)
 	}
 	return w.store.completeRollback(ctx, job.Args, loaded, target, result)
 }
 
-func (w *RollbackPHPReleaseWorker) fail(ctx context.Context, args RollbackPHPReleaseArgs, environment []types.PHPEnvironmentPayload, cause error) error {
+func (w *RollbackPHPReleaseWorker) fail(ctx context.Context, args RollbackPHPReleaseArgs, environment []types.PHPEnvironmentPayload, cause error, finalAttempt bool) error {
 	message := redactPHPFailure(cause, environment)
+	terminal := isTerminalPHPJobError(cause) || finalAttempt
 	if w.store != nil {
 		var err error
-		if isTerminalPHPJobError(cause) {
+		if terminal {
 			err = w.store.failDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message)
 		} else {
 			err = w.store.retryDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message)
@@ -341,6 +336,9 @@ func (w *RollbackPHPReleaseWorker) fail(ctx context.Context, args RollbackPHPRel
 		if err != nil {
 			return errors.Join(cause, err)
 		}
+	}
+	if terminal {
+		return river.JobCancel(cause)
 	}
 	return terminalPHPJobError(cause)
 }
@@ -359,49 +357,43 @@ func NewReconcilePHPApplicationWorker(store *SQLStore, agent PHPApplicationAgent
 func (w *ReconcilePHPApplicationWorker) Work(ctx context.Context, job *river.Job[ReconcilePHPApplicationArgs]) error {
 	unlock := lockPHPApplicationWorker(job.Args.ApplicationID)
 	defer unlock()
-	fence, missing, err := w.store.acquirePHPApplicationFence(ctx, job.Args.ApplicationID)
-	if missing {
-		return nil
-	}
-	if err != nil {
-		return w.fail(ctx, job.Args, nil, err)
-	}
-	defer fence.Release()
+	finalAttempt := finalPHPJobAttempt(job)
 	loaded, stale, err := w.store.loadForWorker(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities)
 	if stale {
 		return nil
 	}
 	if err != nil {
-		return w.fail(ctx, job.Args, nil, err)
+		return w.fail(ctx, job.Args, nil, err, finalAttempt)
 	}
 	defer clearEnvironment(loaded.environment)
 	if w.agent == nil {
-		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"))
+		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"), finalAttempt)
 	}
 	result, err := w.agent.ReconcilePHPApplication(ctx, types.ReconcilePHPApplicationReq{Application: loaded.record.spec, ActiveDeployment: loaded.active, PreviousDeployment: loaded.previous, Environment: loaded.environment})
 	if err != nil {
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	if result.ApplicationID != loaded.record.spec.ApplicationID {
-		return w.fail(ctx, job.Args, loaded.environment, errors.New("agent returned an invalid PHP reconciliation result"))
+		return w.fail(ctx, job.Args, loaded.environment, errors.New("agent returned an invalid PHP reconciliation result"), finalAttempt)
 	}
 	if loaded.record.spec.HostingMode == types.PHPHostingModeManaged && loaded.record.spec.DesiredState == "active" && loaded.active != nil {
 		workerResult, workerErr := w.agent.ReconcilePHPWorkers(ctx, types.ReconcilePHPWorkersReq{Application: loaded.record.spec, Workers: workersFromSpecs(loaded.record.spec), Environment: loaded.environment})
 		if workerErr != nil {
-			return w.fail(ctx, job.Args, loaded.environment, workerErr)
+			return w.fail(ctx, job.Args, loaded.environment, workerErr, finalAttempt)
 		}
 		if len(workerResult.Errors) > 0 {
-			return w.fail(ctx, job.Args, loaded.environment, errors.New(strings.Join(workerResult.Errors, "; ")))
+			return w.fail(ctx, job.Args, loaded.environment, errors.New(strings.Join(workerResult.Errors, "; ")), finalAttempt)
 		}
 	}
 	return w.store.completeReconcile(ctx, job.Args, loaded, result)
 }
 
-func (w *ReconcilePHPApplicationWorker) fail(ctx context.Context, args ReconcilePHPApplicationArgs, environment []types.PHPEnvironmentPayload, cause error) error {
+func (w *ReconcilePHPApplicationWorker) fail(ctx context.Context, args ReconcilePHPApplicationArgs, environment []types.PHPEnvironmentPayload, cause error, finalAttempt bool) error {
 	message := redactPHPFailure(cause, environment)
+	terminal := isTerminalPHPJobError(cause) || finalAttempt
 	if w.store != nil {
 		var err error
-		if isTerminalPHPJobError(cause) {
+		if terminal {
 			err = w.store.failReconcile(ctx, args.ApplicationID, args.DesiredRevision, message)
 		} else {
 			err = w.store.retryReconcile(ctx, args.ApplicationID, args.DesiredRevision, message)
@@ -409,6 +401,9 @@ func (w *ReconcilePHPApplicationWorker) fail(ctx context.Context, args Reconcile
 		if err != nil {
 			return errors.Join(cause, err)
 		}
+	}
+	if terminal {
+		return river.JobCancel(cause)
 	}
 	return terminalPHPJobError(cause)
 }
@@ -427,25 +422,18 @@ func NewReconcilePHPWorkersWorker(store *SQLStore, agent PHPApplicationAgent, ca
 func (w *ReconcilePHPWorkersWorker) Work(ctx context.Context, job *river.Job[ReconcilePHPWorkersArgs]) error {
 	unlock := lockPHPApplicationWorker(job.Args.ApplicationID)
 	defer unlock()
-	fence, missing, err := w.store.acquirePHPApplicationFence(ctx, job.Args.ApplicationID)
-	if missing {
-		return nil
-	}
-	if err != nil {
-		return w.fail(ctx, job.Args, nil, err)
-	}
-	defer fence.Release()
+	finalAttempt := finalPHPJobAttempt(job)
 	loaded, stale, err := w.store.loadForWorker(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities)
 	if stale {
 		return nil
 	}
 	if err != nil {
-		return w.fail(ctx, job.Args, nil, err)
+		return w.fail(ctx, job.Args, nil, err, finalAttempt)
 	}
 	defer clearEnvironment(loaded.environment)
 	workers, err := w.store.workers(ctx, loaded.record.spec.ApplicationID)
 	if err != nil {
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	runningAllowed := loaded.record.spec.HostingMode == types.PHPHostingModeManaged &&
 		loaded.record.spec.DesiredState == "active" && loaded.active != nil
@@ -453,14 +441,14 @@ func (w *ReconcilePHPWorkersWorker) Work(ctx context.Context, job *river.Job[Rec
 		return w.store.completeWorkers(ctx, loaded, job.Args.DesiredRevision, workers, false)
 	}
 	if w.agent == nil {
-		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"))
+		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"), finalAttempt)
 	}
 	result, err := w.agent.ReconcilePHPWorkers(ctx, types.ReconcilePHPWorkersReq{Application: loaded.record.spec, Workers: workers, Environment: loaded.environment})
 	if err != nil {
-		return w.fail(ctx, job.Args, loaded.environment, err)
+		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	if len(result.Errors) > 0 {
-		return w.fail(ctx, job.Args, loaded.environment, errors.New(strings.Join(result.Errors, "; ")))
+		return w.fail(ctx, job.Args, loaded.environment, errors.New(strings.Join(result.Errors, "; ")), finalAttempt)
 	}
 	return w.store.completeWorkers(ctx, loaded, job.Args.DesiredRevision, workers, runningAllowed)
 }
@@ -470,11 +458,12 @@ func shouldCallWorkerAgent(loaded loadedApplication) bool {
 		loaded.record.spec.DesiredState != "active" || loaded.active != nil
 }
 
-func (w *ReconcilePHPWorkersWorker) fail(ctx context.Context, args ReconcilePHPWorkersArgs, environment []types.PHPEnvironmentPayload, cause error) error {
+func (w *ReconcilePHPWorkersWorker) fail(ctx context.Context, args ReconcilePHPWorkersArgs, environment []types.PHPEnvironmentPayload, cause error, finalAttempt bool) error {
 	message := redactPHPFailure(cause, environment)
+	terminal := isTerminalPHPJobError(cause) || finalAttempt
 	if w.store != nil {
 		var err error
-		if isTerminalPHPJobError(cause) {
+		if terminal {
 			err = w.store.failWorkers(ctx, args.ApplicationID, args.DesiredRevision, message)
 		} else {
 			err = w.store.retryWorkers(ctx, args.ApplicationID, args.DesiredRevision, message)
@@ -482,6 +471,9 @@ func (w *ReconcilePHPWorkersWorker) fail(ctx context.Context, args ReconcilePHPW
 		if err != nil {
 			return errors.Join(cause, err)
 		}
+	}
+	if terminal {
+		return river.JobCancel(cause)
 	}
 	return terminalPHPJobError(cause)
 }
@@ -545,6 +537,10 @@ func terminalPHPJobError(err error) error {
 		return river.JobCancel(err)
 	}
 	return err
+}
+
+func finalPHPJobAttempt[T river.JobArgs](job *river.Job[T]) bool {
+	return job != nil && job.JobRow != nil && job.MaxAttempts > 0 && job.Attempt >= job.MaxAttempts
 }
 
 func isTerminalPHPJobError(err error) bool {

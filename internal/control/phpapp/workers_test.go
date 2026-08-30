@@ -11,6 +11,7 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 )
 
 func TestRedactedPHPFailureNeverPersistsEnvironmentValues(t *testing.T) {
@@ -114,7 +115,7 @@ FROM php_applications application JOIN sites site ON site.id=application.site_id
 	worker := &DeployPHPReleaseWorker{store: &SQLStore{db: db}}
 	got := worker.fail(context.Background(), DeployPHPReleaseArgs{
 		ApplicationID: 7, DeploymentID: 11, DesiredRevision: 13,
-	}, nil, transport)
+	}, nil, transport, false)
 	if !errors.Is(got, transport) {
 		t.Fatalf("retryable failure = %v, want original transport error", got)
 	}
@@ -124,6 +125,60 @@ FROM php_applications application JOIN sites site ON site.id=application.site_id
 	}
 	if err = mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestFinalRetryableDeploymentAttemptPersistsTerminalFailure(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT application.subscription_id,site.customer_id,application.desired_revision
+FROM php_applications application JOIN sites site ON site.id=application.site_id WHERE application.id=$1 FOR UPDATE OF application`)).
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"subscription_id", "customer_id", "desired_revision"}).AddRow(3, 5, 13))
+	mock.ExpectExec(`UPDATE php_deployments SET status='failed'`).
+		WithArgs(int64(11), int64(7), "dial agent socket: connection refused").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE php_applications SET convergence_status='failed'`).
+		WithArgs(int64(7), int64(13), "dial agent socket: connection refused").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`WITH recipient AS`).
+		WithArgs(int64(5), int64(3), "php_deployment_failed", "critical", "PHP deployment failed",
+			"dial agent socket: connection refused", deploymentFailureKey(7)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`INSERT INTO audit_events`).
+		WithArgs(int64(0), int64(5), int64(3), "php.convergence.failed", "php_application", int64(7), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	transport := errors.New("dial agent socket: connection refused")
+	worker := &DeployPHPReleaseWorker{store: &SQLStore{db: db}}
+	got := worker.fail(context.Background(), DeployPHPReleaseArgs{
+		ApplicationID: 7, DeploymentID: 11, DesiredRevision: 13,
+	}, nil, transport, true)
+	var cancel *river.JobCancelError
+	if !errors.As(got, &cancel) {
+		t.Fatalf("final transport failure = %T %v, want JobCancelError", got, got)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFinalPHPJobAttemptUsesRiverAttemptBudget(t *testing.T) {
+	job := &river.Job[DeployPHPReleaseArgs]{JobRow: &rivertype.JobRow{Attempt: 4, MaxAttempts: 5}}
+	if finalPHPJobAttempt(job) {
+		t.Fatal("penultimate River attempt was treated as final")
+	}
+	job.Attempt = job.MaxAttempts
+	if !finalPHPJobAttempt(job) {
+		t.Fatal("exhausted River attempt was not treated as final")
+	}
+	if finalPHPJobAttempt(&river.Job[DeployPHPReleaseArgs]{}) {
+		t.Fatal("synthetic job without attempt metadata was treated as final")
 	}
 }
 
