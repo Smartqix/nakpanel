@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -442,11 +443,14 @@ func newPHPApplicationTestProvisioner(t *testing.T, runner CommandRunner, probe 
 	if probe == nil {
 		probe = func(context.Context, string, string) error { return nil }
 	}
-	return NewPHPApplicationProvisioner(PHPApplicationProvisionerOptions{
+	provisioner := NewPHPApplicationProvisioner(PHPApplicationProvisionerOptions{
 		HomeRoot: home, GitRoot: gitRoot, StateRoot: state, SystemdUnitDir: unit,
 		PHPConfigDir: phpConfig, PHPRunDir: phpRun, NginxAvailableDir: nginx, NginxCandidateDir: candidate,
 		Runner: runner, Exporter: phpTestExporter{}, RuntimeReady: func(context.Context, string) error { return nil }, Probe: probe,
-	}), spec
+	})
+	provisioner.healthProbeWindow = 250 * time.Millisecond
+	provisioner.healthProbeDelay = time.Millisecond
+	return provisioner, spec
 }
 
 func TestDeployPHPReleaseHealthGatesActivationAndRedactsSecrets(t *testing.T) {
@@ -522,6 +526,36 @@ func TestDeployPHPReleaseHealthGatesActivationAndRedactsSecrets(t *testing.T) {
 	again, err := provisioner.DeployPHPRelease(context.Background(), request)
 	if err != nil || again.Changed || probes != 6 {
 		t.Fatalf("idempotent deploy=%+v err=%v probes=%d", again, err, probes)
+	}
+}
+
+func TestPHPReleaseProbeRequiresThreeConsecutiveSuccessesAfterTransientFailure(t *testing.T) {
+	calls := 0
+	provisioner := &PHPApplicationProvisioner{healthProbeWindow: time.Second, healthProbeDelay: time.Millisecond, probe: func(context.Context, string, string) error {
+		calls++
+		if calls <= 2 {
+			return errors.New("candidate socket is not ready")
+		}
+		return nil
+	}}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := provisioner.probeThree(ctx, "http://127.0.0.1:31001/healthz", "example.test"); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 5 {
+		t.Fatalf("probe calls = %d, want two transient failures followed by three successes", calls)
+	}
+}
+
+func TestPHPReleaseProbeHonorsContextCancellation(t *testing.T) {
+	provisioner := &PHPApplicationProvisioner{probe: func(context.Context, string, string) error {
+		return errors.New("candidate socket is not ready")
+	}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := provisioner.probeThree(ctx, "http://127.0.0.1:31001/healthz", "example.test"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("probeThree error = %v, want context cancellation", err)
 	}
 }
 
@@ -733,15 +767,12 @@ func TestDeployPHPReleaseRequiresThreeCandidateProbes(t *testing.T) {
 	probes := 0
 	provisioner, spec := newPHPApplicationTestProvisioner(t, runner, func(context.Context, string, string) error {
 		probes++
-		if probes == 3 {
-			return errors.New("unhealthy")
-		}
-		return nil
+		return errors.New("persistently unhealthy")
 	})
 	_, err := provisioner.DeployPHPRelease(context.Background(), types.DeployPHPReleaseReq{Application: spec, Deployment: types.PHPDeployment{
 		ID: 22, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID, RequestedRevision: "main",
 	}})
-	if err == nil || probes != 3 {
+	if err == nil || probes < 3 {
 		t.Fatalf("err=%v probes=%d", err, probes)
 	}
 	if _, err := os.Stat(provisioner.markerPath(spec.ApplicationID)); !os.IsNotExist(err) {
@@ -878,7 +909,7 @@ func TestFailedSecondGenerationRestoresPreviousEnvironmentReference(t *testing.T
 			probes := 0
 			provisioner, spec := newPHPApplicationTestProvisioner(t, runner, func(context.Context, string, string) error {
 				probes++
-				if stage.liveProbe && probes == 10 {
+				if stage.liveProbe && probes >= 10 {
 					return errors.New("second generation live probe failed")
 				}
 				return nil

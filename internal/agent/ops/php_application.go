@@ -66,6 +66,8 @@ type PHPApplicationProvisioner struct {
 	exporter          PHPReleaseExporter
 	runtimeReady      func(context.Context, string) error
 	probe             func(context.Context, string, string) error
+	healthProbeWindow time.Duration
+	healthProbeDelay  time.Duration
 	locks             sync.Map
 	portMu            sync.Mutex
 	reservedPorts     map[int]struct{}
@@ -1701,12 +1703,49 @@ func replaceManagedNginxRuntime(config []byte, documentRoot, socket string) ([]b
 }
 
 func (p *PHPApplicationProvisioner) probeThree(ctx context.Context, address, host string) error {
-	for attempt := 0; attempt < 3; attempt++ {
-		if err := p.probe(ctx, address, host); err != nil {
+	probeWindow := p.healthProbeWindow
+	if probeWindow <= 0 {
+		probeWindow = 15 * time.Second
+	}
+	probeInterval := p.healthProbeDelay
+	if probeInterval <= 0 {
+		probeInterval = 100 * time.Millisecond
+	}
+	deadline := time.Now().Add(probeWindow)
+	consecutive := 0
+	var lastErr error
+	for {
+		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if err := p.probe(ctx, address, host); err == nil {
+			consecutive++
+			if consecutive == 3 {
+				return nil
+			}
+		} else {
+			consecutive = 0
+			lastErr = err
+		}
+		if !time.Now().Before(deadline) {
+			if lastErr == nil {
+				lastErr = errors.New("health probe did not remain ready")
+			}
+			return lastErr
+		}
+		timer := time.NewTimer(probeInterval)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
-	return nil
 }
 
 func probePHPHTTP(ctx context.Context, address, host string) error {
