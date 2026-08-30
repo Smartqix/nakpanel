@@ -177,6 +177,16 @@ func TestPhase30VerifierAvoidsSplitArgumentsAndEarlyExitChecks(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierAssertsHostedDocumentOwnershipModel(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	if !strings.Contains(script, `test "$(stat -c '%U:%G' "${docroot}")" = "${username}:www-data"`) {
+		t.Fatal("Classic document root must remain account-owned with nginx group access")
+	}
+	if strings.Contains(script, `test "$(stat -c '%U:%G' "${docroot}")" = "${username}:${username}"`) {
+		t.Fatal("verifier must not reject the deliberate www-data group on hosted document roots")
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{

@@ -357,7 +357,7 @@ timeout 5m sudo -u "${username}" wp eval '$r=wp_remote_get("https://api.wordpres
 timeout 5m sudo -u "${username}" wp option update phase30_restore_canary before --path="${docroot}" >/dev/null
 printf 'before\n' >"${docroot}/phase30-restore.txt"
 chown "${username}:${username}" "${docroot}/phase30-restore.txt"
-test "$(stat -c '%U:%G' "${docroot}")" = "${username}:${username}"
+test "$(stat -c '%U:%G' "${docroot}")" = "${username}:www-data"
 REMOTE
 
 classic_home_html="$(trusted_curl phase30-classic.test /)"
