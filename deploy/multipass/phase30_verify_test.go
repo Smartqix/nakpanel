@@ -219,6 +219,20 @@ func TestPhase30VerifierRequestsEnhancedJSONForSecretMutation(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierUpsertsReusableWorkerFixtures(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	for _, want := range []string{
+		`existing_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='queue'")"`,
+		`existing_stopped_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='maintenance'")"`,
+		`worker_id_form=(-d "worker_id=${existing_worker_id}")`,
+		`stopped_worker_id_form=(-d "worker_id=${existing_stopped_worker_id}")`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("repeatable worker fixture is missing %q", want)
+		}
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{

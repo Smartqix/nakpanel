@@ -555,7 +555,10 @@ managed_body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "pha
 grep -Fxq 'public=visible' <<<"${managed_body}"
 grep -Fxq 'secret=present' <<<"${managed_body}"
 
-post_as phase30-worker "sites/${managed_site_id}/php-application/workers" \
+existing_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='queue'")"
+worker_id_form=()
+if [[ -n "${existing_worker_id}" ]]; then worker_id_form=(-d "worker_id=${existing_worker_id}"); fi
+post_as phase30-worker "sites/${managed_site_id}/php-application/workers" "${worker_id_form[@]}" \
   -d 'name=queue' -d 'script=worker.php' -d 'processes=1' -d 'desired_state=running'
 worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='queue'")"
 wait_for "bounded PHP worker" "SELECT observed_state||':'||convergence_status FROM php_workers WHERE id=${worker_id}" "running:in_sync"
@@ -564,7 +567,10 @@ assert_worker_active(){
   multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${id}.service" || fail "${label}: desired-running PHP worker is inactive"
 }
 assert_worker_active "desired-running worker before suspension" "${worker_id}"
-post_as phase30-stopped-worker "sites/${managed_site_id}/php-application/workers" \
+existing_stopped_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='maintenance'")"
+stopped_worker_id_form=()
+if [[ -n "${existing_stopped_worker_id}" ]]; then stopped_worker_id_form=(-d "worker_id=${existing_stopped_worker_id}"); fi
+post_as phase30-stopped-worker "sites/${managed_site_id}/php-application/workers" "${stopped_worker_id_form[@]}" \
   -d 'name=maintenance' -d 'script=worker.php' -d 'processes=1' -d 'desired_state=stopped'
 stopped_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='maintenance'")"
 wait_for "desired-stopped worker before suspension" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped:in_sync"
