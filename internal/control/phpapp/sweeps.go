@@ -20,7 +20,9 @@ FROM php_applications application
 JOIN sites site ON site.id=application.site_id
 JOIN subscriptions subscription ON subscription.id=application.subscription_id
 JOIN customers customer ON customer.id=subscription.customer_id
-WHERE application.convergence_status<>'in_sync' OR application.applied_revision<application.desired_revision
+WHERE (application.convergence_status<>'in_sync' OR application.applied_revision<application.desired_revision
+ OR (application.hosting_mode='managed' AND (application.last_reconciled_at IS NULL
+     OR application.last_reconciled_at<=now()-interval '5 minutes'))
  OR (application.observed_state='suspended' AND application.desired_state='active' AND site.desired_status='active'
      AND subscription.status='active' AND customer.status='active'
      AND (customer.reseller_id IS NULL OR EXISTS (
@@ -30,7 +32,13 @@ WHERE application.convergence_status<>'in_sync' OR application.applied_revision<
      OR subscription.status<>'active' OR customer.status<>'active' OR (customer.reseller_id IS NOT NULL AND NOT EXISTS (
          SELECT 1 FROM reseller_accounts reseller JOIN reseller_subscriptions allocation ON allocation.reseller_id=reseller.id
          WHERE reseller.id=customer.reseller_id AND reseller.status='active' AND allocation.status='active'))))
-ORDER BY application.updated_at,application.id LIMIT 100 FOR UPDATE OF application SKIP LOCKED`
+)
+AND NOT EXISTS (SELECT 1 FROM river_job job WHERE job.kind='reconcile_php_application'
+    AND job.state IN ('available','pending','retryable','running','scheduled')
+    AND job.args->>'application_id'=application.id::text
+    AND job.args->>'desired_revision'=application.desired_revision::text)
+ORDER BY COALESCE(application.last_reconciled_at,'epoch'::timestamptz),application.updated_at,application.id
+LIMIT 100 FOR UPDATE OF application SKIP LOCKED`
 
 const sweepWorkerCandidatesSQL = `SELECT application.id,application.desired_revision
 FROM php_applications application

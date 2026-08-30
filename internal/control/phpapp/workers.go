@@ -71,6 +71,13 @@ func (s *SQLStore) loadForWorker(ctx context.Context, applicationID, revision in
 	if err != nil {
 		return loaded, false, err
 	}
+	totalWorkerProcesses, err := configuredSubscriptionWorkerProcessesTx(ctx, tx, loaded.record.spec.SubscriptionID, 0)
+	if err != nil {
+		return loaded, false, err
+	}
+	if err = validateSubscriptionWorkerProcesses(loaded.record.spec.Policy, totalWorkerProcesses); err != nil {
+		return loaded, false, err
+	}
 	if requireActive(loaded.record) != nil {
 		loaded.record.spec.DesiredState = "suspended"
 	}
@@ -183,14 +190,25 @@ func NewDeployPHPReleaseWorker(store *SQLStore, agent PHPApplicationAgent, capab
 func (w *DeployPHPReleaseWorker) Work(ctx context.Context, job *river.Job[DeployPHPReleaseArgs]) error {
 	unlock := lockPHPApplicationWorker(job.Args.ApplicationID)
 	defer unlock()
+	fence, missing, err := w.store.acquirePHPApplicationFence(ctx, job.Args.ApplicationID)
+	if missing {
+		return w.store.settleSupersededDeployment(ctx, job.Args.ApplicationID, job.Args.DeploymentID, job.Args.DesiredRevision)
+	}
+	if err != nil {
+		return w.fail(ctx, job.Args, nil, err)
+	}
+	defer fence.Release()
 	loaded, stale, err := w.store.loadForWorker(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities)
 	if stale {
-		return nil
+		return w.store.settleSupersededDeployment(ctx, job.Args.ApplicationID, job.Args.DeploymentID, job.Args.DesiredRevision)
 	}
 	if err != nil {
 		return w.fail(ctx, job.Args, nil, err)
 	}
 	defer clearEnvironment(loaded.environment)
+	if err = requireActive(loaded.record); err != nil {
+		return w.fail(ctx, job.Args, loaded.environment, err)
+	}
 	if w.agent == nil {
 		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"))
 	}
@@ -228,7 +246,13 @@ func (w *DeployPHPReleaseWorker) Work(ctx context.Context, job *river.Job[Deploy
 func (w *DeployPHPReleaseWorker) fail(ctx context.Context, args DeployPHPReleaseArgs, environment []types.PHPEnvironmentPayload, cause error) error {
 	message := redactPHPFailure(cause, environment)
 	if w.store != nil {
-		if err := w.store.failDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message); err != nil {
+		var err error
+		if isTerminalPHPJobError(cause) {
+			err = w.store.failDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message)
+		} else {
+			err = w.store.retryDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message)
+		}
+		if err != nil {
 			return errors.Join(cause, err)
 		}
 	}
@@ -249,16 +273,30 @@ func NewRollbackPHPReleaseWorker(store *SQLStore, agent PHPApplicationAgent, cap
 func (w *RollbackPHPReleaseWorker) Work(ctx context.Context, job *river.Job[RollbackPHPReleaseArgs]) error {
 	unlock := lockPHPApplicationWorker(job.Args.ApplicationID)
 	defer unlock()
+	fence, missing, err := w.store.acquirePHPApplicationFence(ctx, job.Args.ApplicationID)
+	if missing {
+		return w.store.settleSupersededDeployment(ctx, job.Args.ApplicationID, job.Args.DeploymentID, job.Args.DesiredRevision)
+	}
+	if err != nil {
+		return w.fail(ctx, job.Args, nil, err)
+	}
+	defer fence.Release()
 	loaded, stale, err := w.store.loadForWorker(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities)
 	if stale {
-		return nil
+		return w.store.settleSupersededDeployment(ctx, job.Args.ApplicationID, job.Args.DeploymentID, job.Args.DesiredRevision)
 	}
 	if err != nil {
 		return w.fail(ctx, job.Args, nil, err)
 	}
 	defer clearEnvironment(loaded.environment)
+	if err = requireActive(loaded.record); err != nil {
+		return w.fail(ctx, job.Args, loaded.environment, err)
+	}
 	intent, err := w.store.deployment(ctx, job.Args.DeploymentID)
-	if err != nil {
+	if err != nil || intent.ApplicationID != job.Args.ApplicationID {
+		if err == nil {
+			err = ErrNotFound
+		}
 		return w.fail(ctx, job.Args, loaded.environment, err)
 	}
 	target, err := w.store.deployment(ctx, job.Args.TargetDeploymentID)
@@ -268,8 +306,18 @@ func (w *RollbackPHPReleaseWorker) Work(ctx context.Context, job *river.Job[Roll
 		}
 		return w.fail(ctx, job.Args, loaded.environment, err)
 	}
+	if err = validateRollbackTarget(loaded.record, target); err != nil {
+		return w.fail(ctx, job.Args, loaded.environment, err)
+	}
 	if w.agent == nil {
 		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"))
+	}
+	claimed, err := w.store.markRollbackRunning(ctx, job.Args, "preparing")
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		return nil
 	}
 	result, err := w.agent.RollbackPHPRelease(ctx, types.RollbackPHPReleaseReq{Application: loaded.record.spec, DeploymentID: intent.ID, TargetDeployment: target, Environment: loaded.environment})
 	if err != nil {
@@ -284,7 +332,13 @@ func (w *RollbackPHPReleaseWorker) Work(ctx context.Context, job *river.Job[Roll
 func (w *RollbackPHPReleaseWorker) fail(ctx context.Context, args RollbackPHPReleaseArgs, environment []types.PHPEnvironmentPayload, cause error) error {
 	message := redactPHPFailure(cause, environment)
 	if w.store != nil {
-		if err := w.store.failDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message); err != nil {
+		var err error
+		if isTerminalPHPJobError(cause) {
+			err = w.store.failDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message)
+		} else {
+			err = w.store.retryDeployment(ctx, args.ApplicationID, args.DeploymentID, args.DesiredRevision, message)
+		}
+		if err != nil {
 			return errors.Join(cause, err)
 		}
 	}
@@ -305,6 +359,14 @@ func NewReconcilePHPApplicationWorker(store *SQLStore, agent PHPApplicationAgent
 func (w *ReconcilePHPApplicationWorker) Work(ctx context.Context, job *river.Job[ReconcilePHPApplicationArgs]) error {
 	unlock := lockPHPApplicationWorker(job.Args.ApplicationID)
 	defer unlock()
+	fence, missing, err := w.store.acquirePHPApplicationFence(ctx, job.Args.ApplicationID)
+	if missing {
+		return nil
+	}
+	if err != nil {
+		return w.fail(ctx, job.Args, nil, err)
+	}
+	defer fence.Release()
 	loaded, stale, err := w.store.loadForWorker(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities)
 	if stale {
 		return nil
@@ -332,13 +394,19 @@ func (w *ReconcilePHPApplicationWorker) Work(ctx context.Context, job *river.Job
 			return w.fail(ctx, job.Args, loaded.environment, errors.New(strings.Join(workerResult.Errors, "; ")))
 		}
 	}
-	return w.store.completeReconcile(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, result.ObservedState, result.Message)
+	return w.store.completeReconcile(ctx, job.Args, loaded, result)
 }
 
 func (w *ReconcilePHPApplicationWorker) fail(ctx context.Context, args ReconcilePHPApplicationArgs, environment []types.PHPEnvironmentPayload, cause error) error {
 	message := redactPHPFailure(cause, environment)
 	if w.store != nil {
-		if err := w.store.failReconcile(ctx, args.ApplicationID, args.DesiredRevision, message); err != nil {
+		var err error
+		if isTerminalPHPJobError(cause) {
+			err = w.store.failReconcile(ctx, args.ApplicationID, args.DesiredRevision, message)
+		} else {
+			err = w.store.retryReconcile(ctx, args.ApplicationID, args.DesiredRevision, message)
+		}
+		if err != nil {
 			return errors.Join(cause, err)
 		}
 	}
@@ -359,6 +427,14 @@ func NewReconcilePHPWorkersWorker(store *SQLStore, agent PHPApplicationAgent, ca
 func (w *ReconcilePHPWorkersWorker) Work(ctx context.Context, job *river.Job[ReconcilePHPWorkersArgs]) error {
 	unlock := lockPHPApplicationWorker(job.Args.ApplicationID)
 	defer unlock()
+	fence, missing, err := w.store.acquirePHPApplicationFence(ctx, job.Args.ApplicationID)
+	if missing {
+		return nil
+	}
+	if err != nil {
+		return w.fail(ctx, job.Args, nil, err)
+	}
+	defer fence.Release()
 	loaded, stale, err := w.store.loadForWorker(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities)
 	if stale {
 		return nil
@@ -374,7 +450,7 @@ func (w *ReconcilePHPWorkersWorker) Work(ctx context.Context, job *river.Job[Rec
 	runningAllowed := loaded.record.spec.HostingMode == types.PHPHostingModeManaged &&
 		loaded.record.spec.DesiredState == "active" && loaded.active != nil
 	if !shouldCallWorkerAgent(loaded) {
-		return w.store.completeWorkers(ctx, loaded.record.spec.ApplicationID, job.Args.DesiredRevision, workers, false)
+		return w.store.completeWorkers(ctx, loaded, job.Args.DesiredRevision, workers, false)
 	}
 	if w.agent == nil {
 		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"))
@@ -386,7 +462,7 @@ func (w *ReconcilePHPWorkersWorker) Work(ctx context.Context, job *river.Job[Rec
 	if len(result.Errors) > 0 {
 		return w.fail(ctx, job.Args, loaded.environment, errors.New(strings.Join(result.Errors, "; ")))
 	}
-	return w.store.completeWorkers(ctx, loaded.record.spec.ApplicationID, job.Args.DesiredRevision, workers, runningAllowed)
+	return w.store.completeWorkers(ctx, loaded, job.Args.DesiredRevision, workers, runningAllowed)
 }
 
 func shouldCallWorkerAgent(loaded loadedApplication) bool {
@@ -397,7 +473,13 @@ func shouldCallWorkerAgent(loaded loadedApplication) bool {
 func (w *ReconcilePHPWorkersWorker) fail(ctx context.Context, args ReconcilePHPWorkersArgs, environment []types.PHPEnvironmentPayload, cause error) error {
 	message := redactPHPFailure(cause, environment)
 	if w.store != nil {
-		if err := w.store.failWorkers(ctx, args.ApplicationID, args.DesiredRevision, message); err != nil {
+		var err error
+		if isTerminalPHPJobError(cause) {
+			err = w.store.failWorkers(ctx, args.ApplicationID, args.DesiredRevision, message)
+		} else {
+			err = w.store.retryWorkers(ctx, args.ApplicationID, args.DesiredRevision, message)
+		}
+		if err != nil {
 			return errors.Join(cause, err)
 		}
 	}
@@ -459,13 +541,43 @@ func terminalPHPJobError(err error) error {
 	if err == nil {
 		return nil
 	}
-	lower := strings.ToLower(err.Error())
-	for _, marker := range []string{"disabled", "not allowed", "invalid", "required", "exceeds", "malware", "audit", "unsafe", "not found"} {
-		if strings.Contains(lower, marker) {
-			return river.JobCancel(err)
-		}
+	if isTerminalPHPJobError(err) {
+		return river.JobCancel(err)
 	}
 	return err
+}
+
+func isTerminalPHPJobError(err error) bool {
+	if err == nil {
+		return false
+	}
+	lower := strings.ToLower(err.Error())
+	for _, marker := range []string{"disabled", "inactive", "not allowed", "invalid", "required", "exceeds", "malware", "audit", "unsafe", "not found"} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func validateSubscriptionWorkerProcesses(policy types.HostingPolicy, processes int) error {
+	if processes < 0 {
+		return errors.New("PHP worker process count is invalid")
+	}
+	if processes > 0 && !policy.Permissions.PHPWorkers {
+		return fmt.Errorf("%w: PHP workers are disabled", controlquota.ErrExceeded)
+	}
+	if policy.Resources.MaxPHPWorkers >= 0 && processes > policy.Resources.MaxPHPWorkers {
+		return fmt.Errorf("%w: PHP worker processes %d / %d", controlquota.ErrExceeded, processes, policy.Resources.MaxPHPWorkers)
+	}
+	return nil
+}
+
+func reconcileCanApply(record applicationRecord, result types.ReconcilePHPApplicationResult) bool {
+	if record.spec.HostingMode != types.PHPHostingModeManaged || record.spec.DesiredState != "active" {
+		return true
+	}
+	return result.ObservedState == "healthy" && (record.activeDeploymentID > 0 || result.ActiveDeploymentID > 0)
 }
 
 func workerObservedState(desired string, runningAllowed bool) string {
@@ -486,6 +598,31 @@ AND application.desired_revision=$3 AND deployment.status IN ('pending','prepari
 	return affected == 1, err
 }
 
+func (s *SQLStore) markRollbackRunning(ctx context.Context, args RollbackPHPReleaseArgs, state string) (bool, error) {
+	result, err := s.db.ExecContext(ctx, `UPDATE php_deployments intent SET status=$5,
+started_at=COALESCE(intent.started_at,now()),last_error=''
+FROM php_applications application,php_deployments target
+WHERE intent.id=$1 AND intent.application_id=$2 AND target.id=$3 AND target.application_id=$2
+AND application.id=$2 AND application.desired_revision=$4
+AND intent.status IN ('pending','preparing','validating','activating')
+AND target.status IN ('healthy','retired') AND target.resolved_revision<>''
+AND COALESCE(application.active_deployment_id,0)<>target.id`, args.DeploymentID, args.ApplicationID,
+		args.TargetDeploymentID, args.DesiredRevision, state)
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	return affected == 1, err
+}
+
+func (s *SQLStore) settleSupersededDeployment(ctx context.Context, applicationID, deploymentID, revision int64) error {
+	_, err := s.db.ExecContext(ctx, `UPDATE php_deployments SET status='failed',
+last_error='superseded by a newer application revision',finished_at=COALESCE(finished_at,now())
+WHERE id=$1 AND application_id=$2 AND status IN ('pending','preparing','validating','activating')
+AND EXISTS (SELECT 1 FROM php_applications WHERE id=$2 AND desired_revision<>$3)`, deploymentID, applicationID, revision)
+	return err
+}
+
 func (s *SQLStore) completeDeployment(ctx context.Context, args DeployPHPReleaseArgs, loaded loadedApplication, result types.DeployPHPReleaseResult) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -497,7 +634,20 @@ func (s *SQLStore) completeDeployment(ctx context.Context, args DeployPHPRelease
 		return err
 	}
 	if currentRevision != args.DesiredRevision {
-		return tx.Commit()
+		if _, err = tx.ExecContext(ctx, `UPDATE php_deployments SET status='failed',
+last_error='superseded by a newer application revision',finished_at=COALESCE(finished_at,now())
+WHERE id=$1 AND application_id=$2 AND status IN ('pending','preparing','validating','activating')`, args.DeploymentID, args.ApplicationID); err != nil {
+			return err
+		}
+		if s.river != nil {
+			if err = s.enqueueTx(ctx, tx, ReconcilePHPApplicationArgs{ApplicationID: args.ApplicationID, DesiredRevision: currentRevision}); err != nil {
+				return err
+			}
+		}
+		if err = tx.Commit(); err != nil {
+			return err
+		}
+		return ErrRevisionConflict
 	}
 	if oldActive > 0 && oldActive != args.DeploymentID {
 		if _, err = tx.ExecContext(ctx, `UPDATE php_deployments SET status='retired',finished_at=COALESCE(finished_at,now()) WHERE id=$1 AND application_id=$2 AND status='healthy'`, oldActive, args.ApplicationID); err != nil {
@@ -537,7 +687,20 @@ func (s *SQLStore) completeRollback(ctx context.Context, args RollbackPHPRelease
 		return err
 	}
 	if revision != args.DesiredRevision {
-		return tx.Commit()
+		if _, err = tx.ExecContext(ctx, `UPDATE php_deployments SET status='failed',
+last_error='superseded by a newer application revision',finished_at=COALESCE(finished_at,now())
+WHERE id=$1 AND application_id=$2 AND status IN ('pending','preparing','validating','activating')`, args.DeploymentID, args.ApplicationID); err != nil {
+			return err
+		}
+		if s.river != nil {
+			if err = s.enqueueTx(ctx, tx, ReconcilePHPApplicationArgs{ApplicationID: args.ApplicationID, DesiredRevision: revision}); err != nil {
+				return err
+			}
+		}
+		if err = tx.Commit(); err != nil {
+			return err
+		}
+		return ErrRevisionConflict
 	}
 	if oldActive > 0 && oldActive != target.ID {
 		if _, err = tx.ExecContext(ctx, `UPDATE php_deployments SET status='retired' WHERE id=$1 AND application_id=$2 AND status='healthy'`, oldActive, args.ApplicationID); err != nil {
@@ -568,35 +731,93 @@ observed_message=$4,applied_revision=$5,convergence_status='in_sync',last_error=
 	return tx.Commit()
 }
 
-func (s *SQLStore) completeReconcile(ctx context.Context, applicationID, revision int64, observed, message string) error {
-	if observed == "" {
-		observed = "pending"
+func (s *SQLStore) completeReconcile(ctx context.Context, args ReconcilePHPApplicationArgs, loaded loadedApplication, result types.ReconcilePHPApplicationResult) error {
+	if result.ObservedState == "" {
+		result.ObservedState = "pending"
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	result, err := tx.ExecContext(ctx, `UPDATE php_applications SET observed_state=$3,observed_message=$4,
+	var currentRevision, activeDeploymentID int64
+	if err = tx.QueryRowContext(ctx, `SELECT desired_revision,COALESCE(active_deployment_id,0)
+FROM php_applications WHERE id=$1 FOR UPDATE`, args.ApplicationID).Scan(&currentRevision, &activeDeploymentID); err != nil {
+		return err
+	}
+	if currentRevision != args.DesiredRevision {
+		return tx.Commit()
+	}
+	recovered := false
+	if result.ActiveDeploymentID > 0 && activeDeploymentID == 0 {
+		if !resolvedRevisionPattern.MatchString(result.ResolvedRevision) {
+			return errors.New("observed PHP release marker has an invalid revision")
+		}
+		var deploymentApplicationID int64
+		if err = tx.QueryRowContext(ctx, `SELECT application_id FROM php_deployments WHERE id=$1 FOR UPDATE`, result.ActiveDeploymentID).Scan(&deploymentApplicationID); errors.Is(err, sql.ErrNoRows) {
+			return ErrRevisionConflict
+		} else if err != nil {
+			return err
+		}
+		if deploymentApplicationID != args.ApplicationID {
+			return ErrRevisionConflict
+		}
+		previousDeploymentID := int64(0)
+		if result.PreviousDeploymentID > 0 {
+			var exists bool
+			if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM php_deployments WHERE id=$1 AND application_id=$2)`, result.PreviousDeploymentID, args.ApplicationID).Scan(&exists); err != nil {
+				return err
+			}
+			if exists {
+				previousDeploymentID = result.PreviousDeploymentID
+			}
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE php_deployments SET status='healthy',resolved_revision=$3,
+health_message=$4,last_error='',activated_at=COALESCE(activated_at,now()),finished_at=COALESCE(finished_at,now())
+WHERE id=$1 AND application_id=$2`, result.ActiveDeploymentID, args.ApplicationID, result.ResolvedRevision, safeMessage(result.Message)); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE php_applications SET active_deployment_id=$2,
+previous_deployment_id=NULLIF($3,0) WHERE id=$1`, args.ApplicationID, result.ActiveDeploymentID, previousDeploymentID); err != nil {
+			return err
+		}
+		loaded.record.activeDeploymentID = result.ActiveDeploymentID
+		activeDeploymentID = result.ActiveDeploymentID
+		recovered = true
+		if err = auditTx(ctx, tx, 0, loaded.record.customerID, loaded.record.spec.SubscriptionID,
+			"php.deployment.observed_recovered", "php_deployment", result.ActiveDeploymentID,
+			map[string]any{"revision": args.DesiredRevision}); err != nil {
+			return err
+		}
+	} else if result.ActiveDeploymentID > 0 && activeDeploymentID != result.ActiveDeploymentID {
+		return ErrRevisionConflict
+	}
+	apply := reconcileCanApply(loaded.record, result) && !recovered
+	if apply {
+		_, err = tx.ExecContext(ctx, `UPDATE php_applications SET observed_state=$3,observed_message=$4,
 applied_revision=$2,convergence_status='in_sync',last_error='',last_reconciled_at=now(),updated_at=now()
-WHERE id=$1 AND desired_revision=$2`, applicationID, revision, observed, safeMessage(message))
+WHERE id=$1 AND desired_revision=$2`, args.ApplicationID, args.DesiredRevision, result.ObservedState, safeMessage(result.Message))
+	} else {
+		_, err = tx.ExecContext(ctx, `UPDATE php_applications SET observed_state=$3,observed_message=$4,
+convergence_status='pending',last_error='',last_reconciled_at=now(),updated_at=now()
+WHERE id=$1 AND desired_revision=$2`, args.ApplicationID, args.DesiredRevision, result.ObservedState, safeMessage(result.Message))
+	}
 	if err != nil {
 		return err
 	}
-	affected, _ := result.RowsAffected()
-	if affected == 0 {
-		return tx.Commit()
+	if apply {
+		if err = markWorkersAppliedTx(ctx, tx, args.ApplicationID, result.ObservedState == "healthy"); err != nil {
+			return err
+		}
 	}
-	if err = markWorkersAppliedTx(ctx, tx, applicationID, observed == "healthy"); err != nil {
-		return err
-	}
-	if err = resolveNotificationTx(ctx, tx, reconcileFailureKey(applicationID)); err != nil {
+	if err = resolveNotificationTx(ctx, tx, reconcileFailureKey(args.ApplicationID)); err != nil {
 		return err
 	}
 	return tx.Commit()
 }
 
-func (s *SQLStore) completeWorkers(ctx context.Context, applicationID, revision int64, workers []types.PHPWorker, runningAllowed bool) error {
+func (s *SQLStore) completeWorkers(ctx context.Context, loaded loadedApplication, revision int64, workers []types.PHPWorker, runningAllowed bool) error {
+	applicationID := loaded.record.spec.ApplicationID
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -615,8 +836,14 @@ convergence_status='in_sync',last_error='',last_reconciled_at=now(),updated_at=n
 			return err
 		}
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE php_applications SET applied_revision=$2,convergence_status='in_sync',last_error='',last_reconciled_at=now(),updated_at=now() WHERE id=$1 AND desired_revision=$2`, applicationID, revision); err != nil {
-		return err
+	if loaded.record.spec.HostingMode == types.PHPHostingModeManaged && loaded.record.spec.DesiredState == "active" && loaded.active == nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE php_applications SET convergence_status='pending',last_error='',last_reconciled_at=now(),updated_at=now() WHERE id=$1 AND desired_revision=$2`, applicationID, revision); err != nil {
+			return err
+		}
+	} else {
+		if _, err = tx.ExecContext(ctx, `UPDATE php_applications SET applied_revision=$2,convergence_status='in_sync',last_error='',last_reconciled_at=now(),updated_at=now() WHERE id=$1 AND desired_revision=$2`, applicationID, revision); err != nil {
+			return err
+		}
 	}
 	if err = resolveNotificationTx(ctx, tx, workerFailureKey(applicationID)); err != nil {
 		return err
@@ -638,6 +865,52 @@ func (s *SQLStore) failReconcile(ctx context.Context, applicationID, revision in
 }
 func (s *SQLStore) failWorkers(ctx context.Context, applicationID, revision int64, message string) error {
 	return s.recordFailure(ctx, applicationID, 0, revision, "php_reconciliation_failed", "PHP worker reconciliation failed", message, workerFailureKey(applicationID), false)
+}
+
+func (s *SQLStore) retryDeployment(ctx context.Context, applicationID, deploymentID, revision int64, message string) error {
+	return s.recordRetryableFailure(ctx, applicationID, deploymentID, revision, message, true, false)
+}
+
+func (s *SQLStore) retryReconcile(ctx context.Context, applicationID, revision int64, message string) error {
+	return s.recordRetryableFailure(ctx, applicationID, 0, revision, message, false, false)
+}
+
+func (s *SQLStore) retryWorkers(ctx context.Context, applicationID, revision int64, message string) error {
+	return s.recordRetryableFailure(ctx, applicationID, 0, revision, message, false, true)
+}
+
+func (s *SQLStore) recordRetryableFailure(ctx context.Context, applicationID, deploymentID, revision int64, message string, deployment, workers bool) error {
+	message = safeMessage(message)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var subscriptionID, customerID, current int64
+	if err = tx.QueryRowContext(ctx, `SELECT application.subscription_id,site.customer_id,application.desired_revision
+FROM php_applications application JOIN sites site ON site.id=application.site_id WHERE application.id=$1 FOR UPDATE OF application`, applicationID).Scan(&subscriptionID, &customerID, &current); err != nil {
+		return err
+	}
+	if current != revision {
+		return tx.Commit()
+	}
+	if deployment && deploymentID > 0 {
+		if _, err = tx.ExecContext(ctx, `UPDATE php_deployments SET status='pending',last_error=$3,
+started_at=NULL,finished_at=NULL WHERE id=$1 AND application_id=$2 AND status<>'healthy'`, deploymentID, applicationID, message); err != nil {
+			return err
+		}
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE php_applications SET convergence_status='pending',last_error=$3,
+last_reconciled_at=now(),updated_at=now() WHERE id=$1 AND desired_revision=$2`, applicationID, revision, message); err != nil {
+		return err
+	}
+	if workers {
+		if _, err = tx.ExecContext(ctx, `UPDATE php_workers SET convergence_status='pending',last_error=$2,
+last_reconciled_at=now(),updated_at=now() WHERE application_id=$1`, applicationID, message); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *SQLStore) recordFailure(ctx context.Context, applicationID, deploymentID, revision int64, kind, title, message, key string, deployment bool) error {

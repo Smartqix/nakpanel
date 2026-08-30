@@ -773,6 +773,32 @@ func TestActivatePHPReleaseRestoresAllFilesWhenNginxReloadFails(t *testing.T) {
 	}
 }
 
+func TestReconcilePHPApplicationReportsOrphanedObservedMarker(t *testing.T) {
+	provisioner, spec := newPHPApplicationTestProvisioner(t, &scriptedPHPAppRunner{}, nil)
+	paths, err := provisioner.pathsFor(spec, 22)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.MkdirAll(paths.release, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	marker := phpObservedMarker{
+		ApplicationID: spec.ApplicationID, SiteID: spec.SiteID, DesiredRevision: spec.DesiredRevision - 1,
+		ActiveDeploymentID: 22, PreviousDeploymentID: 21, ResolvedRevision: strings.Repeat("a", 40),
+		ReleasePath: paths.release, EnvironmentPath: provisioner.environmentPath(spec.ApplicationID, 22, spec.DesiredRevision-1),
+	}
+	if err = provisioner.writeMarker(marker); err != nil {
+		t.Fatal(err)
+	}
+	result, err := provisioner.ReconcilePHPApplication(context.Background(), types.ReconcilePHPApplicationReq{Application: spec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ObservedState != "healthy" || result.ActiveDeploymentID != 22 || result.PreviousDeploymentID != 21 || result.ResolvedRevision != marker.ResolvedRevision {
+		t.Fatalf("observed marker recovery = %+v", result)
+	}
+}
+
 type rollbackFailureRunner struct {
 	triggered bool
 }

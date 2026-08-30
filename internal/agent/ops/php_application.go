@@ -1883,6 +1883,34 @@ func (p *PHPApplicationProvisioner) ReconcilePHPApplication(ctx context.Context,
 		return types.ReconcilePHPApplicationResult{}, err
 	}
 	if req.ActiveDeployment == nil {
+		marker, markerErr := p.readMarker(spec.ApplicationID)
+		if markerErr == nil {
+			if marker.ApplicationID != spec.ApplicationID || marker.SiteID != spec.SiteID || marker.ActiveDeploymentID <= 0 ||
+				!phpResolvedRefRE.MatchString(marker.ResolvedRevision) {
+				return types.ReconcilePHPApplicationResult{}, errors.New("observed PHP release marker is invalid")
+			}
+			paths, pathErr := p.pathsFor(normalized, marker.ActiveDeploymentID)
+			if pathErr != nil {
+				return types.ReconcilePHPApplicationResult{}, pathErr
+			}
+			if filepath.Clean(marker.ReleasePath) != filepath.Clean(paths.release) {
+				return types.ReconcilePHPApplicationResult{}, errors.New("observed PHP release marker path is invalid")
+			}
+			if info, statErr := os.Stat(paths.release); statErr != nil || !info.IsDir() {
+				if statErr != nil {
+					return types.ReconcilePHPApplicationResult{}, fmt.Errorf("inspect observed PHP release: %w", statErr)
+				}
+				return types.ReconcilePHPApplicationResult{}, errors.New("observed PHP release is not a directory")
+			}
+			return types.ReconcilePHPApplicationResult{
+				ApplicationID: spec.ApplicationID, ActiveDeploymentID: marker.ActiveDeploymentID,
+				PreviousDeploymentID: marker.PreviousDeploymentID, ResolvedRevision: marker.ResolvedRevision,
+				ObservedState: "healthy", Message: "recovered active release from the observed-state marker",
+			}, nil
+		}
+		if !errors.Is(markerErr, os.ErrNotExist) {
+			return types.ReconcilePHPApplicationResult{}, fmt.Errorf("read observed PHP release marker: %w", markerErr)
+		}
 		return types.ReconcilePHPApplicationResult{ApplicationID: spec.ApplicationID, ObservedState: "pending", Message: "waiting for the first healthy managed release"}, nil
 	}
 	deployment := req.ActiveDeployment
@@ -1920,7 +1948,9 @@ func (p *PHPApplicationProvisioner) ReconcilePHPApplication(ctx context.Context,
 	if err := p.activateRelease(ctx, normalized, marker, environmentPath, req.Environment); err != nil {
 		return types.ReconcilePHPApplicationResult{}, err
 	}
-	return types.ReconcilePHPApplicationResult{ApplicationID: spec.ApplicationID, ActiveDeploymentID: deployment.ID, ObservedState: "healthy", Message: "managed PHP release converged", Changed: changed}, nil
+	return types.ReconcilePHPApplicationResult{ApplicationID: spec.ApplicationID, ActiveDeploymentID: deployment.ID,
+		PreviousDeploymentID: previousID, ResolvedRevision: deployment.ResolvedRevision,
+		ObservedState: "healthy", Message: "managed PHP release converged", Changed: changed}, nil
 }
 
 func (p *PHPApplicationProvisioner) revokeManagedWebAccess(ctx context.Context, spec types.PHPApplicationSpec, environment []types.PHPEnvironmentPayload) error {

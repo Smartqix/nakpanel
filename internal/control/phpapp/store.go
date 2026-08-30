@@ -27,8 +27,8 @@ type SecretStore interface {
 	GetSecret(context.Context, string, string) ([]byte, serveradmin.SecretReference, error)
 }
 
-const rollbackTargetSelect = `SELECT resolved_revision,release_number FROM php_deployments
-WHERE id=$1 AND application_id=$2 AND resolved_revision<>'' AND status IN ('healthy','retired') FOR UPDATE`
+const rollbackTargetSelect = deploymentSelect + ` WHERE deployment.id=$1 AND deployment.application_id=$2
+AND deployment.resolved_revision<>'' AND deployment.status IN ('healthy','retired') FOR UPDATE`
 
 type SQLStore struct {
 	db      *sql.DB
@@ -168,6 +168,20 @@ func (s *SQLStore) Workspace(ctx context.Context, siteID int64) (Workspace, erro
 }
 
 func (s *SQLStore) lockApplicationTx(ctx context.Context, tx *sql.Tx, siteID int64) (applicationRecord, error) {
+	var applicationID, subscriptionID int64
+	err := tx.QueryRowContext(ctx, `SELECT id,subscription_id FROM php_applications WHERE site_id=$1`, siteID).Scan(&applicationID, &subscriptionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return applicationRecord{}, ErrNotFound
+	}
+	if err != nil {
+		return applicationRecord{}, err
+	}
+	if err = controlquota.LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+		return applicationRecord{}, err
+	}
+	if err = lockPHPApplicationMutationTx(ctx, tx, applicationID); err != nil {
+		return applicationRecord{}, err
+	}
 	record, err := scanApplication(tx.QueryRowContext(ctx, applicationSelect+` WHERE site.id=$1 FOR UPDATE OF application,site,subscription,customer,account`, siteID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return record, ErrNotFound
@@ -175,12 +189,23 @@ func (s *SQLStore) lockApplicationTx(ctx context.Context, tx *sql.Tx, siteID int
 	if err != nil {
 		return record, err
 	}
+	if record.spec.ApplicationID != applicationID || record.spec.SubscriptionID != subscriptionID {
+		return record, ErrRevisionConflict
+	}
 	record.spec.Policy, err = controlquota.EffectiveSitePolicyTx(ctx, tx, siteID)
 	if err != nil {
 		return record, err
 	}
 	record.spec.Workers, err = loadWorkerSpecsTx(ctx, tx, record.spec.ApplicationID)
 	return record, err
+}
+
+func lockPHPApplicationMutationTx(ctx context.Context, tx *sql.Tx, applicationID int64) error {
+	if applicationID <= 0 {
+		return ErrNotFound
+	}
+	_, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('nakpanel:php-application:' || $1::bigint::text,0))`, applicationID)
+	return err
 }
 
 func requireActive(record applicationRecord) error {
@@ -196,6 +221,46 @@ func recheckRuntime(runtime types.PHPRuntimeCapability, version string) error {
 		return fmt.Errorf("%w: PHP %s is not ready", ErrRuntimeUnavailable, version)
 	}
 	return nil
+}
+
+func persistedApplicationConfiguration(record applicationRecord) ConfigureApplicationInput {
+	return ConfigureApplicationInput{
+		HostingMode: record.spec.HostingMode, PHPVersion: record.spec.PHPVersion,
+		RepositoryID: record.spec.RepositoryID, RepositoryRef: record.spec.RepositoryRef,
+		FrameworkProfile: record.spec.FrameworkProfile, PublicPath: record.spec.PublicPath,
+		HealthPath: record.spec.HealthPath, SharedPaths: append([]string(nil), record.spec.SharedPaths...),
+		ReleaseRetention: record.spec.ReleaseRetention, Composer: record.spec.Composer,
+	}
+}
+
+func validatePersistedManagedApplication(record applicationRecord, runtime types.PHPRuntimeCapability) error {
+	if record.spec.HostingMode != types.PHPHostingModeManaged {
+		return errors.New("managed PHP deployment is not configured")
+	}
+	if _, err := validateApplicationConfiguration(persistedApplicationConfiguration(record), record.spec.Policy, record.spec.HostingMode); err != nil {
+		return err
+	}
+	return recheckRuntime(runtime, record.spec.PHPVersion)
+}
+
+func validateRollbackTarget(record applicationRecord, target types.PHPDeployment) error {
+	if target.ApplicationID != record.spec.ApplicationID || target.ID <= 0 {
+		return ErrNotFound
+	}
+	if target.ID == record.activeDeploymentID {
+		return errors.New("rollback target is already active")
+	}
+	if target.ResolvedRevision == "" || (target.Status != "healthy" && target.Status != "retired") {
+		return errors.New("rollback target is not a retained healthy release")
+	}
+	return nil
+}
+
+func supersedeDeploymentIntentsTx(ctx context.Context, tx *sql.Tx, applicationID int64) error {
+	_, err := tx.ExecContext(ctx, `UPDATE php_deployments SET status='failed',
+last_error='superseded by a newer application revision',finished_at=COALESCE(finished_at,now())
+WHERE application_id=$1 AND status IN ('pending','preparing','validating','activating')`, applicationID)
+	return err
 }
 
 func (s *SQLStore) ConfigureApplication(ctx context.Context, actorID, siteID int64, input ConfigureApplicationInput, runtime types.PHPRuntimeCapability) (types.PHPApplicationSpec, error) {
@@ -229,6 +294,9 @@ func (s *SQLStore) ConfigureApplication(ctx context.Context, actorID, siteID int
 	}
 	shared, err := json.Marshal(input.SharedPaths)
 	if err != nil {
+		return types.PHPApplicationSpec{}, err
+	}
+	if err = supersedeDeploymentIntentsTx(ctx, tx, record.spec.ApplicationID); err != nil {
 		return types.PHPApplicationSpec{}, err
 	}
 	var revision int64
@@ -269,17 +337,7 @@ func (s *SQLStore) QueueDeployment(ctx context.Context, actorID, siteID int64, i
 	if err = requireActive(record); err != nil {
 		return types.PHPDeployment{}, err
 	}
-	if record.spec.HostingMode != types.PHPHostingModeManaged {
-		return types.PHPDeployment{}, errors.New("managed PHP deployment is not configured")
-	}
-	configured := ConfigureApplicationInput{HostingMode: record.spec.HostingMode, PHPVersion: record.spec.PHPVersion,
-		RepositoryID: record.spec.RepositoryID, RepositoryRef: record.spec.RepositoryRef, FrameworkProfile: record.spec.FrameworkProfile,
-		PublicPath: record.spec.PublicPath, HealthPath: record.spec.HealthPath, SharedPaths: append([]string(nil), record.spec.SharedPaths...),
-		ReleaseRetention: record.spec.ReleaseRetention, Composer: record.spec.Composer}
-	if _, err = validateApplicationConfiguration(configured, record.spec.Policy, record.spec.HostingMode); err != nil {
-		return types.PHPDeployment{}, err
-	}
-	if err = recheckRuntime(runtime, record.spec.PHPVersion); err != nil {
+	if err = validatePersistedManagedApplication(record, runtime); err != nil {
 		return types.PHPDeployment{}, err
 	}
 	input.RequestedRevision = strings.TrimSpace(input.RequestedRevision)
@@ -288,6 +346,9 @@ func (s *SQLStore) QueueDeployment(ctx context.Context, actorID, siteID int64, i
 	}
 	if !gitRefPattern.MatchString(input.RequestedRevision) || strings.Contains(input.RequestedRevision, "..") {
 		return types.PHPDeployment{}, errors.New("requested Git revision is invalid")
+	}
+	if err = supersedeDeploymentIntentsTx(ctx, tx, record.spec.ApplicationID); err != nil {
+		return types.PHPDeployment{}, err
 	}
 	var deploymentID, releaseNumber, revision int64
 	err = tx.QueryRowContext(ctx, `INSERT INTO php_deployments(subscription_id,application_id,requested_by_user_id,requested_revision,release_number,previous_deployment_id)
@@ -330,19 +391,20 @@ func (s *SQLStore) QueueRollback(ctx context.Context, actorID, siteID, targetID 
 	if err = requireActive(record); err != nil {
 		return types.PHPDeployment{}, err
 	}
-	if record.spec.HostingMode != types.PHPHostingModeManaged {
-		return types.PHPDeployment{}, errors.New("managed PHP deployment is not configured")
-	}
-	if err = recheckRuntime(runtime, record.spec.PHPVersion); err != nil {
+	if err = validatePersistedManagedApplication(record, runtime); err != nil {
 		return types.PHPDeployment{}, err
 	}
-	var targetRevision string
-	var targetRelease int64
-	err = tx.QueryRowContext(ctx, rollbackTargetSelect, targetID, record.spec.ApplicationID).Scan(&targetRevision, &targetRelease)
+	if targetID == record.activeDeploymentID {
+		return types.PHPDeployment{}, errors.New("rollback target is already active")
+	}
+	target, err := scanDeployment(tx.QueryRowContext(ctx, rollbackTargetSelect, targetID, record.spec.ApplicationID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return types.PHPDeployment{}, ErrNotFound
 	}
 	if err != nil {
+		return types.PHPDeployment{}, err
+	}
+	if err = validateRollbackTarget(record, target); err != nil {
 		return types.PHPDeployment{}, err
 	}
 	if record.spec.ReleaseRetention > 0 {
@@ -350,14 +412,17 @@ func (s *SQLStore) QueueRollback(ctx context.Context, actorID, siteID, targetID 
 		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(MAX(release_number),0) FROM php_deployments WHERE application_id=$1`, record.spec.ApplicationID).Scan(&latest); err != nil {
 			return types.PHPDeployment{}, err
 		}
-		if latest-targetRelease >= int64(record.spec.ReleaseRetention) && targetID != record.activeDeploymentID && targetID != record.previousDeploymentID {
+		if latest-target.ReleaseNumber >= int64(record.spec.ReleaseRetention) && targetID != record.previousDeploymentID {
 			return types.PHPDeployment{}, errors.New("rollback target is outside retained releases")
 		}
+	}
+	if err = supersedeDeploymentIntentsTx(ctx, tx, record.spec.ApplicationID); err != nil {
+		return types.PHPDeployment{}, err
 	}
 	var intentID, releaseNumber, revision int64
 	err = tx.QueryRowContext(ctx, `INSERT INTO php_deployments(subscription_id,application_id,requested_by_user_id,requested_revision,release_number,previous_deployment_id,status)
 SELECT $1,$2,NULLIF($3,0),$4,COALESCE(MAX(release_number),0)+1,NULLIF($5,0),'pending' FROM php_deployments WHERE application_id=$2
-RETURNING id,release_number`, record.spec.SubscriptionID, record.spec.ApplicationID, actorID, targetRevision, record.activeDeploymentID).Scan(&intentID, &releaseNumber)
+RETURNING id,release_number`, record.spec.SubscriptionID, record.spec.ApplicationID, actorID, target.ResolvedRevision, record.activeDeploymentID).Scan(&intentID, &releaseNumber)
 	if err != nil {
 		return types.PHPDeployment{}, err
 	}

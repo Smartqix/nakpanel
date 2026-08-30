@@ -30,3 +30,31 @@ func TestRequireExistingWorkerRejectsUnknownBrowserSuppliedID(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestConfiguredWorkerProcessesAreSubscriptionScoped(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectQuery(`SELECT COALESCE\(SUM\(processes\),0\)::int FROM php_workers WHERE subscription_id=\$1 AND id<>\$2`).
+		WithArgs(int64(4), int64(15)).
+		WillReturnRows(sqlmock.NewRows([]string{"processes"}).AddRow(3))
+	processes, err := configuredSubscriptionWorkerProcessesTx(context.Background(), tx, 4, 15)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if processes != 3 {
+		t.Fatalf("subscription worker processes = %d, want 3", processes)
+	}
+	mock.ExpectRollback()
+	_ = tx.Rollback()
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

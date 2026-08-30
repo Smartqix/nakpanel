@@ -3,6 +3,7 @@ package phpapp
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -70,17 +71,115 @@ func TestPHPApplicationWorkerLockSerializesJobKinds(t *testing.T) {
 }
 
 func TestTerminalPHPPolicyFailuresCancelWithoutRetry(t *testing.T) {
-	err := terminalPHPJobError(errors.New("managed PHP deployments are disabled by policy"))
-	var cancel *river.JobCancelError
-	if !errors.As(err, &cancel) {
-		t.Fatalf("terminal policy failure = %T, want JobCancelError", err)
+	for _, message := range []string{
+		"managed PHP deployments are disabled by policy",
+		"PHP application subscription is inactive",
+	} {
+		err := terminalPHPJobError(errors.New(message))
+		var cancel *river.JobCancelError
+		if !errors.As(err, &cancel) {
+			t.Fatalf("terminal policy failure %q = %T, want JobCancelError", message, err)
+		}
 	}
 	transport := errors.New("dial agent socket: connection refused")
 	if got := terminalPHPJobError(transport); !errors.Is(got, transport) {
 		t.Fatalf("transport error lost retryable identity: %v", got)
 	}
+	var cancel *river.JobCancelError
 	if errors.As(terminalPHPJobError(transport), &cancel) {
 		t.Fatal("transport error was made terminal")
+	}
+}
+
+func TestRetryableDeploymentFailureRemainsClaimable(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT application.subscription_id,site.customer_id,application.desired_revision
+FROM php_applications application JOIN sites site ON site.id=application.site_id WHERE application.id=$1 FOR UPDATE OF application`)).
+		WithArgs(int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"subscription_id", "customer_id", "desired_revision"}).AddRow(3, 5, 13))
+	mock.ExpectExec(`UPDATE php_deployments SET status='pending'`).
+		WithArgs(int64(11), int64(7), "dial agent socket: connection refused").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE php_applications SET convergence_status='pending'`).
+		WithArgs(int64(7), int64(13), "dial agent socket: connection refused").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+
+	transport := errors.New("dial agent socket: connection refused")
+	worker := &DeployPHPReleaseWorker{store: &SQLStore{db: db}}
+	got := worker.fail(context.Background(), DeployPHPReleaseArgs{
+		ApplicationID: 7, DeploymentID: 11, DesiredRevision: 13,
+	}, nil, transport)
+	if !errors.Is(got, transport) {
+		t.Fatalf("retryable failure = %v, want original transport error", got)
+	}
+	var cancel *river.JobCancelError
+	if errors.As(got, &cancel) {
+		t.Fatal("retryable transport failure was cancelled")
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSupersededDeploymentIntentIsTerminalized(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectExec(`UPDATE php_deployments SET status='failed'`).
+		WithArgs(int64(11), int64(7), int64(13)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	if err = (&SQLStore{db: db}).settleSupersededDeployment(context.Background(), 7, 11, 13); err != nil {
+		t.Fatal(err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRollbackIntentRequiresAtomicRevisionClaim(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectExec(`UPDATE php_deployments`).
+		WithArgs(int64(12), int64(7), int64(11), int64(14), "preparing").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	claimed, err := (&SQLStore{db: db}).markRollbackRunning(context.Background(), RollbackPHPReleaseArgs{
+		ApplicationID: 7, DeploymentID: 12, TargetDeploymentID: 11, DesiredRevision: 14,
+	}, "preparing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !claimed {
+		t.Fatal("eligible rollback intent was not claimed")
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestManagedReconcileWithoutHealthyReleaseRemainsPending(t *testing.T) {
+	record := applicationRecord{spec: types.PHPApplicationSpec{
+		HostingMode: types.PHPHostingModeManaged, DesiredState: "active",
+	}}
+	if reconcileCanApply(record, types.ReconcilePHPApplicationResult{ObservedState: "pending"}) {
+		t.Fatal("managed application without a healthy release was considered applied")
+	}
+	if !reconcileCanApply(record, types.ReconcilePHPApplicationResult{ActiveDeploymentID: 9, ObservedState: "healthy"}) {
+		t.Fatal("healthy managed release was not considered applied")
+	}
+	record.spec.HostingMode = types.PHPHostingModeClassic
+	if !reconcileCanApply(record, types.ReconcilePHPApplicationResult{ObservedState: "classic"}) {
+		t.Fatal("classic application reconciliation was not considered applied")
 	}
 }
 

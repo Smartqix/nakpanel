@@ -37,6 +37,13 @@ func requireExistingWorkerTx(ctx context.Context, tx *sql.Tx, applicationID, wor
 	return nil
 }
 
+func configuredSubscriptionWorkerProcessesTx(ctx context.Context, tx *sql.Tx, subscriptionID, excludeWorkerID int64) (int, error) {
+	var processes int
+	err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(processes),0)::int FROM php_workers WHERE subscription_id=$1 AND id<>$2`,
+		subscriptionID, excludeWorkerID).Scan(&processes)
+	return processes, err
+}
+
 func (s *SQLStore) UpsertEnvironment(ctx context.Context, actorID, siteID int64, input EnvironmentInput) (types.PHPEnvironmentVariable, error) {
 	input, err := validateEnvironment(input)
 	if err != nil {
@@ -162,8 +169,8 @@ func (s *SQLStore) UpsertWorker(ctx context.Context, actorID, siteID int64, inpu
 			return types.PHPWorker{}, err
 		}
 	}
-	var otherProcesses int
-	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(processes),0)::int FROM php_workers WHERE application_id=$1 AND id<>$2`, record.spec.ApplicationID, input.ID).Scan(&otherProcesses); err != nil {
+	otherProcesses, err := configuredSubscriptionWorkerProcessesTx(ctx, tx, record.spec.SubscriptionID, input.ID)
+	if err != nil {
 		return types.PHPWorker{}, err
 	}
 	input, err = validateWorker(input, record.spec.Policy, otherProcesses)
@@ -322,6 +329,9 @@ func requireManagedMutation(record applicationRecord) error {
 }
 
 func (s *SQLStore) advanceApplicationTx(ctx context.Context, tx *sql.Tx, applicationID int64, job river.JobArgs) (int64, error) {
+	if err := supersedeDeploymentIntentsTx(ctx, tx, applicationID); err != nil {
+		return 0, err
+	}
 	var revision int64
 	if err := tx.QueryRowContext(ctx, `UPDATE php_applications SET desired_revision=desired_revision+1,
 convergence_status='pending',last_error='',updated_at=now() WHERE id=$1 RETURNING desired_revision`, applicationID).Scan(&revision); err != nil {

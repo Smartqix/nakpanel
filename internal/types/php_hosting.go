@@ -188,11 +188,13 @@ type ReconcilePHPApplicationReq struct {
 }
 
 type ReconcilePHPApplicationResult struct {
-	ApplicationID      int64  `json:"application_id"`
-	ActiveDeploymentID int64  `json:"active_deployment_id,omitempty"`
-	ObservedState      string `json:"observed_state"`
-	Message            string `json:"message,omitempty"`
-	Changed            bool   `json:"changed"`
+	ApplicationID        int64  `json:"application_id"`
+	ActiveDeploymentID   int64  `json:"active_deployment_id,omitempty"`
+	PreviousDeploymentID int64  `json:"previous_deployment_id,omitempty"`
+	ResolvedRevision     string `json:"resolved_revision,omitempty"`
+	ObservedState        string `json:"observed_state"`
+	Message              string `json:"message,omitempty"`
+	Changed              bool   `json:"changed"`
 }
 
 type ReconcilePHPWorkersReq struct {
