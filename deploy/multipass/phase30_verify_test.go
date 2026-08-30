@@ -242,6 +242,7 @@ func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 		},
 		"desired_stopped_worker": {
 			"phase30-stopped-worker", "stopped_worker_id", "desired_state=stopped",
+			`"active:suspended"`,
 			"desired-stopped worker before suspension", "desired-stopped worker during suspension",
 			"desired-stopped worker after reactivation", "desired-stopped worker after explicit reconciliation",
 			"post-reboot desired-stopped worker", "assert_worker_inactive",

@@ -663,7 +663,7 @@ done
 echo "phase30: suspend, reactivate, reboot, and reconcile"
 post_as phase30-managed-suspend "sites/${managed_site_id}/hosting" -d 'desired_status=suspended' \
   -d 'desired_php_version=8.4' -d 'desired_https_redirect=false'
-wait_for "managed suspension" "SELECT desired_state||':'||observed_state FROM php_applications WHERE id=${managed_application_id}" "suspended:suspended"
+wait_for "managed suspension" "SELECT desired_state||':'||observed_state FROM php_applications WHERE id=${managed_application_id}" "active:suspended"
 wait_for_site_http "managed unavailable response" phase30-managed.test 503
 multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-fpm@${managed_site_id}.service" && fail "managed FPM remained active while suspended"
 multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${worker_id}.service" && fail "managed worker remained active while suspended"
