@@ -6,6 +6,7 @@ Implementation commits:
 
 - `c03d64c` (`fix: install Phase 30 PHP before legacy provisioning`) repairs direct Phase 3 verification.
 - `474a944` (`fix: install Phase 30 PHP in shared verifier bootstrap`) repairs the Phase 5 UI bootstrap used by the full chained deployment verifier.
+- `bcb2451` (`test: require one active legacy PHP installer call`) hardens the static contract against commented-out or duplicate installer calls.
 
 Both legacy bootstrap paths now run the canonical Ubuntu 24.04 Phase 30 installer before building or starting Nakpanel and before their first site-provisioning request. Their existing explicit PHP 8.3 fixtures remain in place.
 
@@ -25,11 +26,14 @@ The same HTTP 400 repeated on the fresh live deployment after `c03d64c`, proving
 - Round 1 GREEN: the Phase 3-only contract passed after `c03d64c` added the canonical installer to the direct verifier.
 - Round 2 RED: `go test ./deploy/multipass -run '^TestLegacyBootstrapsRunCanonicalPhase30InstallerBeforeBuildServicesAndProvisioning$' -count=1` passed its Phase 3 subtest and failed `Phase_5_shared_bootstrap` with `must run the canonical phase30-install.sh`.
 - Round 2 GREEN: the same focused contract passed after `474a944` added the canonical installer to Phase 5 UI.
-- Regression contract: the table-driven static test requires both direct Phase 3 and shared Phase 5 to invoke the exact canonical installer before `task build`, both Nakpanel service restarts, and each script's first site `POST`.
+- Round 3 review finding: the original `strings.Index` contract could count a commented-out command and did not reject duplicate active commands.
+- Round 3 RED: `TestSingleActiveCommandPositionRejectsCommentedAndDuplicateCommands` failed to compile with `undefined: singleActiveCommandPosition`, demonstrating the active-line scanner did not exist.
+- Round 3 GREEN: the helper and both-script ordering tests passed after adding a non-comment executable-line scanner. Comment-only and duplicate-active fixtures fail, while a comment plus exactly one active command returns the active command's later byte position.
+- Regression contract: the table-driven static test requires both direct Phase 3 and shared Phase 5 to contain the exact canonical installer command on a non-comment executable line exactly once, before `task build`, both Nakpanel service restarts, and each script's first site `POST`.
 
 ## Verification
 
-- Focused two-bootstrap ordering test: pass.
+- Focused active-command helper and two-bootstrap ordering tests: pass.
 - `go test ./... -count=1`: pass.
 - `go vet ./...`: pass.
 - `task build`: pass; templ, sqlc, Tailwind, panel, agent, and panelctl completed without tracked generator churn.
