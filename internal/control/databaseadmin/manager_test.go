@@ -189,7 +189,8 @@ FROM server_operations`)).
 	}
 	if string(store.secretParams.Plaintext) != replacement ||
 		store.secretParams.Scope != pendingSecretScope ||
-		!strings.HasPrefix(store.secretParams.Name, "rotation-op_") {
+		!strings.HasPrefix(store.secretParams.Name, "rotation_op_") ||
+		store.secretParams.Name != strings.ToLower(store.secretParams.Name) {
 		t.Fatalf("unexpected staged secret: %#v", store.secretParams)
 	}
 	if strings.Contains(string(store.operationParams.Request), replacement) {
@@ -253,7 +254,7 @@ func TestMutationWorkerPromotesCredentialAndScrubsPendingReference(t *testing.T)
 	request := mutationRequest{
 		Action:          types.DatabaseAdminRotatePassword,
 		Target:          types.DatabaseAdminTarget{DatabaseID: 42, Name: "np_demo", Principal: "np_demo_user"},
-		CredentialScope: pendingSecretScope, CredentialName: "rotation-" + operationID,
+		CredentialScope: pendingSecretScope, CredentialName: pendingCredentialName(operationID),
 	}
 	payload, _ := json.Marshal(request)
 	store := &fakeAdminStore{
@@ -292,7 +293,7 @@ func TestMutationWorkerPromotesCredentialAndScrubsPendingReference(t *testing.T)
 		t.Fatalf("canonical credential promotion = %#v", store.secretWrites)
 	}
 	if len(store.deletedSecrets) != 1 ||
-		store.deletedSecrets[0] != [2]string{pendingSecretScope, "rotation-" + operationID} {
+		store.deletedSecrets[0] != [2]string{pendingSecretScope, pendingCredentialName(operationID)} {
 		t.Fatalf("staged secret cleanup = %#v", store.deletedSecrets)
 	}
 	if len(store.updates) != 1 || store.updates[0].Status != serveradmin.OperationRunning {
@@ -313,7 +314,7 @@ func TestMutationWorkerScrubsPendingCredentialAndAuditsTerminalFailure(t *testin
 	request := mutationRequest{
 		Action:          types.DatabaseAdminRotatePassword,
 		Target:          types.DatabaseAdminTarget{DatabaseID: 42, Name: "np_demo", Principal: "np_demo_user"},
-		CredentialScope: pendingSecretScope, CredentialName: "rotation-" + operationID,
+		CredentialScope: pendingSecretScope, CredentialName: pendingCredentialName(operationID),
 	}
 	payload, _ := json.Marshal(request)
 	store := &fakeAdminStore{
@@ -348,7 +349,7 @@ func TestMutationWorkerScrubsPendingCredentialAndAuditsTerminalFailure(t *testin
 		t.Fatalf("terminal failure promoted a credential: %#v", store.secretWrites)
 	}
 	if len(store.deletedSecrets) != 1 ||
-		store.deletedSecrets[0] != [2]string{pendingSecretScope, "rotation-" + operationID} {
+		store.deletedSecrets[0] != [2]string{pendingSecretScope, pendingCredentialName(operationID)} {
 		t.Fatalf("terminal failure did not scrub staged credential: %#v", store.deletedSecrets)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

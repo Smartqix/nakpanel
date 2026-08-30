@@ -236,7 +236,7 @@ journal_cursor="$(multipass_exec_short "${VM_NAME}" -- sudo journalctl \
   -u nakpanel.service -u nakpanel-agent.service --no-pager -n 0 --show-cursor \
   | sed -n 's/^-- cursor: //p' | tail -1)"
 [[ "${journal_cursor}" == s=* ]] || fail "could not capture the pre-secret panel/agent journal cursor"
-DB_PASSWORD="Aa9!$(openssl rand -hex 18)"
+DB_PASSWORD="Aa9_$(openssl rand -hex 18)"
 APP_SECRET="$(openssl rand -hex 32)"
 WP_ADMIN_PASSWORD="Wp9!$(openssl rand -hex 18)"
 database_rotation_result="$(printf '%s' "${DB_PASSWORD}" | \

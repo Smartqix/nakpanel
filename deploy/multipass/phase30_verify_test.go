@@ -105,6 +105,16 @@ func TestPhase30VerifierAcceptsWPCLIInfoWhitespace(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierUsesAcceptedDatabaseRotationPassword(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	if !strings.Contains(script, `DB_PASSWORD="Aa9_$(openssl rand -hex 18)"`) {
+		t.Fatal("verifier database rotation password must use the URL-safe credential policy")
+	}
+	if strings.Contains(script, `DB_PASSWORD="Aa9!`) {
+		t.Fatal("verifier database rotation password must not use a rejected punctuation character")
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{

@@ -30,6 +30,10 @@ const (
 	canonicalSecretScope = "database"
 )
 
+func pendingCredentialName(operationID string) string {
+	return "rotation_" + strings.ToLower(operationID)
+}
+
 type Agent interface {
 	InspectDatabaseAdmin(context.Context, types.InspectDatabaseAdminReq) (types.DatabaseAdminSnapshot, error)
 	ManageDatabaseAdmin(context.Context, types.ManageDatabaseAdminReq) (types.ManageDatabaseAdminResult, error)
@@ -286,7 +290,7 @@ LIMIT 1`, strconv.FormatInt(request.Target.DatabaseID, 10)).Scan(&activeOperatio
 			return types.ManageDatabaseAdminResult{}, errors.New("replacement database password is required")
 		}
 		request.CredentialScope = pendingSecretScope
-		request.CredentialName = "rotation-" + operationID
+		request.CredentialName = pendingCredentialName(operationID)
 		if _, err := m.secrets.PutSecretTx(ctx, tx, serveradmin.PutSecretParams{
 			Scope: request.CredentialScope, Name: request.CredentialName,
 			Plaintext: plaintext[0], ActorUserID: actorUserID,
