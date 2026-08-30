@@ -444,3 +444,50 @@ All work over root SSH with the panel down (they talk to PostgreSQL
 directly). Failed logins are throttled durably (10 per email / 20 per IP in
 15 minutes) and logged to journald in the format the `nakpanel-login`
 fail2ban jail matches.
+
+## Production PHP Application Recovery (Phase 30)
+
+Phase 30 adds Classic PHP and native Managed PHP hosting on the subscription
+system account. PHP 8.3, 8.4, and 8.5 are accepted only when the agent reports
+the CLI, required extensions, OPcache, and a dedicated PHP-FPM validation as
+ready. Composer and WP-CLI are root-owned pinned tools; their self-update paths
+are disabled. A missing runtime or stale host artifact fails closed instead of
+silently selecting another binary.
+
+Classic sites keep mutable `public_html` ownership and use the existing site
+backup flow. A backup includes both the site files and every panel-tracked
+database assigned to that site. For a WordPress recovery, restore through the
+panel or the supported CLI and wait for the durable restore row:
+
+```bash
+sudo -u nakpanel panelctl backup list example.test
+sudo -u nakpanel panelctl restore <backup-id> --yes
+sudo -u nakpanel panelctl site reconcile example.test
+```
+
+Each Managed PHP application keeps Git source, environment intent, worker
+intent, and deployment history in PostgreSQL while immutable releases and
+root-only environment files live on the host. An unhealthy candidate does not
+replace the active release.
+After repairing Git, runtime, Composer, malware signatures, or policy, use the
+domain's **PHP Application** workspace to queue another deployment or request
+reconciliation. A server restore deliberately does not start PHP-FPM or worker
+units from archived systemd state; the startup sweep reconstructs only the
+active release and each desired-active worker from current control-plane
+intent.
+
+For diagnosis, keep values out of terminal output and inspect identities and
+states rather than environment contents:
+
+```bash
+sudo systemctl status 'nakpanel-php-fpm@<site-id>.service'
+sudo systemctl status 'nakpanel-php-worker@<worker-id>.service'
+sudo journalctl -u nakpanel -u nakpanel-agent --no-pager -n 200
+sudo -u nakpanel panelctl site reconcile example.test
+```
+
+The canonical live acceptance is `deploy/multipass/phase30-verify.sh`. It
+installs the current worktree on Ubuntu 24.04, proves WordPress 7.1
+compatibility and Managed PHP rollback/suspension/reboot behavior, and verifies
+cross-subscription access denial. This is compatibility coverage, not a
+WordPress Toolkit, and it does not add Node.js or Python application runtimes.

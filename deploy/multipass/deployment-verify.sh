@@ -25,6 +25,10 @@ NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/security-verify.sh"
 # Phase 29 runs last: its upgrade, reboot, and disaster-recovery legs mutate
 # the VM the earlier suites already validated.
 NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase29-verify.sh"
+# Phase 30 is the final gate. It installs the current worktree over the
+# synthetic Phase 29 upgrade version, then proves Classic WordPress and native
+# managed PHP on the same server without rebuilding the VM.
+NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase30-verify.sh"
 
 VM_IP="$(vm_ip)"
 if [[ -z "${VM_IP}" ]]; then

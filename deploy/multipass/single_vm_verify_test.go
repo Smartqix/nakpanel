@@ -38,6 +38,7 @@ func TestPhaseVerifiersUseSingleDefaultVM(t *testing.T) {
 		"phase27-verify.sh",
 		"phase28-verify.sh",
 		"phase29-verify.sh",
+		"phase30-verify.sh",
 		"security-verify.sh",
 	}
 	for _, path := range scripts {
@@ -86,11 +87,19 @@ func TestDeploymentVerifierResetsOneCanonicalVM(t *testing.T) {
 		"security-verify.sh",
 		"phase28-verify.sh",
 		"phase29-verify.sh",
+		"phase30-verify.sh",
 		"nakpanel-lab",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("%s is missing %q", path, want)
 		}
+	}
+	phase28 := strings.Index(script, "phase28-verify.sh")
+	security := strings.Index(script, "security-verify.sh")
+	phase29 := strings.Index(script, "phase29-verify.sh")
+	phase30 := strings.Index(script, "phase30-verify.sh")
+	if !(phase28 < security && security < phase29 && phase29 < phase30) {
+		t.Fatalf("deployment gates are out of order: phase28=%d security=%d phase29=%d phase30=%d", phase28, security, phase29, phase30)
 	}
 }
 
@@ -118,6 +127,7 @@ func TestCommonHelperListsLegacyPhaseVMs(t *testing.T) {
 		"nakpanel-phase27",
 		"nakpanel-phase28",
 		"nakpanel-phase29",
+		"nakpanel-phase30",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("%s is missing %q", path, want)

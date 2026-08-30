@@ -305,6 +305,22 @@ Webmail hostnames (Roundcube autologin), Adminer SSO at `/db`, backups (correctn
 reconciliation/drift detection ("regenerate all configs"), additional PHP versions, MySQL 8 + Postgres adapters,
 reseller quotas/cgroups. Each is a repeat of the Phase 3 pattern.
 
+### Phase 30 — Production PHP hosting (implemented; live gate pending)
+
+Production PHP hosting now includes readiness-gated PHP 8.3/8.4/8.5, Classic
+PHP, Git-backed Managed PHP releases, Composer policy, encrypted write-only
+environment values, bounded workers, rollback retention, lifecycle convergence,
+backup/restore coverage, and provider/client workspaces. WordPress support is
+compatibility only; this phase does not add a WordPress Toolkit, Node.js, or
+Python application runtime.
+
+- [x] Production code, migrations, installer, UI, and static verifier contracts
+  are implemented and pass repository verification.
+- [x] `deploy/multipass/phase30-verify.sh` is wired after the Phase 28,
+  security, and Phase 29 gates on the canonical single VM.
+- [ ] The controller must run the destructive fresh Ubuntu 24.04 Multipass
+  chain and record live acceptance after review.
+
 ---
 
 ## 7. How to run this with Codex / Claude Code

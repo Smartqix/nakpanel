@@ -38,15 +38,23 @@ management, and migration-sensitive control-plane behavior.
   reconciliation.
 - One disposable, socket-only Valkey cache per entitled subscription with
   memory/CPU/process ceilings and restricted ACL commands.
-- PHP runtime discovery from agent capabilities instead of browser-hardcoded
-  version choices.
+- Detailed, readiness-gated PHP 8.3, 8.4, and 8.5 inventory, with PHP 8.4 as
+  the default for new eligible sites and explicit older selections preserved.
+- Classic PHP hosting for mutable applications, plus native Managed PHP from a
+  hosted or remote Git repository with pinned Composer installs, immutable
+  health-gated releases, rollback retention, encrypted write-only environment
+  secrets, bounded workers, suspension, and reboot reconciliation.
+- WordPress 7.1 compatibility on Classic PHP, including trusted custom TLS,
+  WP-CLI 2.12.0, backups containing files and tracked MariaDB data, clean
+  permalinks, media, cron, sessions, and OPcache.
 - Adminer SSO for database access from the authenticated panel.
 - Single-VM Ubuntu 24.04 Multipass deployment verification.
 
-The Applications page does not currently advertise managed WordPress, Node.js,
-Python, or generic PHP runtimes as deployable. Those adapters are planned for
-later phases; normal domain PHP-FPM remains available independently. Advanced
-OCI workloads live under the domain's Containers workspace.
+WordPress support is compatibility only: Nakpanel is not a WordPress Toolkit
+and does not manage plugins, themes, cloning, or WordPress lifecycle through a
+dedicated product. Nakpanel does not offer Node.js or Python applications.
+Advanced OCI workloads remain separate under the domain's Containers
+workspace.
 
 ## Architecture
 
@@ -83,7 +91,8 @@ For full deployment verification:
 - Multipass
 - Ubuntu `24.04` VM image
 - Enough local disk and memory for PostgreSQL, nginx, PHP-FPM, MariaDB, bind9,
-  quota tooling, Podman, ProFTPD, Valkey, and Go builds
+  quota tooling, Podman, ProFTPD, Valkey, ClamAV signatures, PHP 8.3/8.4/8.5,
+  Composer 2, WP-CLI, and Go builds
 
 The realistic end-to-end target is Ubuntu 24.04. Some agent operations are
 Linux-specific and cannot be fully exercised on macOS.
@@ -141,9 +150,12 @@ deploy/multipass/deployment-verify.sh
 
 This creates a fresh `nakpanel-lab` Ubuntu 24.04 Multipass VM, removes old
 Nakpanel phase VMs, installs the service stack, runs migrations, builds the
-panel, agent, and CLI, installs systemd units, and runs the Phase 26 server
-operations checks, the complete Phase 25 hosting-toolkit chain, and the
-adversarial security suite.
+panel, agent, and CLI, installs systemd units, and retains the Phase 28 and
+adversarial security gates before Phase 29 reliability/disaster recovery.
+Phase 30 then installs the current worktree and is the final gate: it proves
+the detailed PHP runtime inventory, a real Classic WordPress 7.1 site, native
+Managed PHP release/worker behavior, cross-subscription isolation, and reboot
+recovery.
 
 The verifier intentionally refuses to delete Multipass VMs whose names do not
 start with `nakpanel-`. Non-Nakpanel VMs such as unrelated local test machines
@@ -244,7 +256,9 @@ Hosting-toolkit verification is split across
 `deploy/multipass/phase21-verify.sh` through
 `deploy/multipass/phase25-verify.sh`. Each script reuses `nakpanel-lab` and
 chains its prerequisite; `deployment-verify.sh` remains the canonical clean
-deployment gate.
+deployment gate. `deploy/multipass/phase30-verify.sh` is the final direct gate
+and chains Phase 29 unless `NAKPANEL_SKIP_PRIOR_PHASES=1` is set by the
+canonical single-VM runner.
 
 Destructive commands require an interactive confirmation or `--yes`. Custom
 site certificates can be queued without placing key material in River:
@@ -313,9 +327,10 @@ dumps, or generated junk outside the project’s expected generated files.
 ## Project Status
 
 Nakpanel currently covers the core control-plane, hosting provisioning, mail
-workspace, and external billing provisioning API, but it does not yet claim
-full cPanel/Plesk parity. Billing invoices, advanced reseller hierarchy, and
-full production hardening remain external or future work.
+workspace, external billing provisioning API, Classic PHP, and Managed PHP,
+but it does not yet claim full cPanel/Plesk parity. WordPress Toolkit features,
+Node.js/Python application runtimes, billing invoices, advanced reseller
+hierarchy, and full production hardening remain external or future work.
 
 ## License
 

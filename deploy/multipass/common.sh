@@ -36,6 +36,7 @@ NAKPANEL_LEGACY_PHASE_VMS=(
   nakpanel-phase27
   nakpanel-phase28
   nakpanel-phase29
+  nakpanel-phase30
 )
 
 require_multipass() {
