@@ -43,7 +43,7 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 		},
 		"managed_php": {
 			"phase30-managed.test", `git -C "${work}" init -q`, "composer.json", "composer.lock",
-			"composer update --no-install --no-interaction --no-ansi --no-progress --no-scripts --no-plugins", "/php-application",
+			`composer --working-dir="${work}" update --no-install --no-interaction --no-ansi --no-progress --no-scripts --no-plugins`, "/php-application",
 			"/php-application/environment", "secret_value", "/php-application/deployments",
 			"/php-application/workers", "php_deployments", "active_deployment_id",
 			"unhealthy", "php_workers", "systemctl", "desired_status=suspended",
