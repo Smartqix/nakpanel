@@ -363,9 +363,16 @@ func parseComposerAuditReport(data []byte) (composerAuditReport, error) {
 
 func evaluateComposerAudit(data []byte, executionErr error) (string, error) {
 	// Composer 2.8 emits no JSON when the lock contains no packages. An empty
-	// successful result is therefore clean; any empty non-zero result remains a
-	// hard failure below because there is no report explaining the exit status.
-	if len(bytes.TrimSpace(data)) == 0 && executionErr == nil {
+	// or explicit no-packages result is therefore clean; any non-zero result
+	// remains a hard failure below because there is no report explaining it.
+	trimmed := bytes.TrimSpace(data)
+	lastLine := trimmed
+	if index := bytes.LastIndexByte(trimmed, '\n'); index >= 0 {
+		lastLine = bytes.TrimSpace(trimmed[index+1:])
+	}
+	noPackages := bytes.Equal(lastLine, []byte("No packages - skipping audit.")) ||
+		bytes.Equal(lastLine, []byte("No locked packages - skipping audit."))
+	if executionErr == nil && (len(trimmed) == 0 || noPackages) {
 		return "clean", nil
 	}
 	report, err := parseComposerAuditReport(data)

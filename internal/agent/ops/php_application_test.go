@@ -164,6 +164,9 @@ func TestComposerAuditExecutionStatusFailsClosed(t *testing.T) {
 	}{
 		{name: "clean", output: `{"advisories":{},"abandoned":[]}`, ok: true},
 		{name: "clean empty lock output", output: ``, ok: true},
+		{name: "clean no packages notice", output: "Composer warning\nNo packages - skipping audit.", ok: true},
+		{name: "clean no locked packages notice", output: "No locked packages - skipping audit.", ok: true},
+		{name: "unexpected successful output", output: "No packages were scanned"},
 		{name: "empty output with audit failure", output: ``, err: composerAuditExitError(1)},
 		{name: "moderate advisory status", output: `{"advisories":{"pkg":[{"severity":"moderate"}]},"abandoned":[]}`, err: composerAuditExitError(1), ok: true},
 		{name: "abandoned status", output: `{"advisories":{},"abandoned":["old/pkg"]}`, err: composerAuditExitError(2), ok: true},
