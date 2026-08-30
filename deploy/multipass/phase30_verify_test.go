@@ -35,11 +35,11 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 		"classic_wordpress": {
 			"phase30-classic.test", "service-plans", "customers", "subscriptions", "databases",
 			"subscription_system_accounts", "panelctl --actor phase30", "ssl set-custom",
-			"/usr/local/share/ca-certificates/nakpanel-phase30-root.crt", "curl --cacert",
+			"/usr/local/share/ca-certificates/nakpanel-phase30-root.crt", "--cacert",
 			"wp core download --version=7.1", "wp core verify-checksums", "wp core install",
 			"wp rewrite structure", "wp plugin activate", "wp media import", "wp cron event schedule",
 			"session_start", "opcache_get_status", "backup create", "panelctl --actor phase30 restore",
-			"desired_php_version=8.5", `"php${version}-fpm"`, "quota -u", "repquota -u /", "Phase30 Isolated",
+			"desired_php_version=8.5", `"php${version}-fpm"`, "quota -u", "repquota -up /", "Phase30 Isolated",
 		},
 		"managed_php": {
 			"phase30-managed.test", `git -C "${work}" init -q`, "composer.json", "/php-application",
@@ -86,6 +86,73 @@ func TestPhase30VerifierUsesBoundedWaitsAndSafeSecretFiles(t *testing.T) {
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("verifier is missing safety contract %q", want)
+		}
+	}
+}
+
+func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	requireScriptContracts(t, script, map[string][]string{
+		"authoritative_isolation_artifacts": {
+			"classic_document_root", "require_first_subscription_artifact", "assert_cross_subscription_open_denied",
+			`test -e "${path}"`, `test -s "${path}"`, `head -c 1 "${path}"`, "Permission denied",
+		},
+		"desired_stopped_worker": {
+			"phase30-stopped-worker", "stopped_worker_id", "desired_state=stopped",
+			"desired-stopped worker before suspension", "desired-stopped worker during suspension",
+			"desired-stopped worker after reactivation", "desired-stopped worker after explicit reconciliation",
+			"post-reboot desired-stopped worker", "assert_worker_inactive",
+		},
+		"complete_secret_log_window": {
+			"journal_cursor", "--show-cursor", "--after-cursor", `nakpanel-php-worker@${worker_id}.service`,
+			`nakpanel-php-worker@${stopped_worker_id}.service`, "failed to capture PHP unit metadata",
+		},
+		"effective_disk_quota": {
+			"expected_hard_kib=$((512 * 1024))", "repquota -up /", "hard_kib", "effective hard block quota",
+		},
+		"composer_policy": {
+			"composer_wrapper_hash_before", "composer_phar_hash_before", "composer_version_before",
+			"composer self-update is disabled; use the nakpanel installer", "composer_self_update_status",
+			"composer_wrapper_hash_after", "composer_phar_hash_after", "composer_version_after",
+		},
+	})
+
+	existsAt := strings.Index(script, "require_first_subscription_artifact")
+	openAt := strings.LastIndex(script, "assert_cross_subscription_open_denied")
+	if existsAt < 0 || openAt < 0 || existsAt >= openAt {
+		t.Fatalf("first-subscription artifacts must be required before cross-subscription open probes")
+	}
+
+	for _, forbidden := range []string{
+		"journalctl -u nakpanel.service -u nakpanel-agent.service --no-pager -n 2000",
+		`systemctl show "nakpanel-php-fpm@${site_id}.service" "nakpanel-php-worker@*.service"`,
+		`systemctl.out" 2>/dev/null || true`,
+	} {
+		if strings.Contains(script, forbidden) {
+			t.Errorf("verifier retains review-round bypass %q", forbidden)
+		}
+	}
+}
+
+func TestPhase30VerifierBoundsEveryCurlAndExternalInstaller(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	logical := strings.ReplaceAll(script, "\\\n", " ")
+	for lineNumber, line := range strings.Split(logical, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if !strings.Contains(trimmed, "curl ") || strings.HasPrefix(trimmed, "for tool in ") || strings.Contains(trimmed, "trusted_curl ") {
+			continue
+		}
+		if !strings.Contains(trimmed, "--connect-timeout") || !strings.Contains(trimmed, "--max-time") {
+			t.Errorf("logical line %d contains an unbounded curl command: %s", lineNumber+1, trimmed)
+		}
+	}
+	for _, want := range []string{
+		"timeout 45m deploy/install/install.sh --yes --allow-downgrade --force",
+		`timeout 10m sudo -u "${username}" wp core download --version=7.1`,
+		`timeout 5m sudo -u "${username}" wp eval`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("verifier is missing outer command bound %q", want)
 		}
 	}
 }

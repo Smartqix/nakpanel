@@ -56,7 +56,7 @@ wait_for(){
 wait_for_site_http(){
   local label="$1" domain="$2" expected="$3" status=""
   for _ in $(seq 1 120); do
-    status="$(curl -sS -o /dev/null -w '%{http_code}' --resolve "${domain}:80:${VM_IP}" "http://${domain}/" || true)"
+    status="$(curl --connect-timeout 5 --max-time 30 -sS -o /dev/null -w '%{http_code}' --resolve "${domain}:80:${VM_IP}" "http://${domain}/" || true)"
     [[ "${status}" == "${expected}" ]] && return 0
     sleep 2
   done
@@ -67,7 +67,7 @@ post_as(){
   local label="$1" endpoint="$2"
   shift 2
   local status
-  status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
+  status="$(curl --connect-timeout 5 --max-time 30 -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -b "${tmpdir}/admin.cookies" -c "${tmpdir}/admin.cookies" \
     -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" "https://${VM_IP}:7443/${endpoint}")"
@@ -80,7 +80,7 @@ post_as(){
 
 trusted_curl(){
   local domain="$1" path="$2"
-  multipass_exec_short "${VM_NAME}" -- curl --cacert /usr/local/share/ca-certificates/nakpanel-phase30-root.crt \
+  multipass_exec_short "${VM_NAME}" -- curl --connect-timeout 5 --max-time 30 --cacert /usr/local/share/ca-certificates/nakpanel-phase30-root.crt \
     --fail --silent --show-error --resolve "${domain}:443:127.0.0.1" "https://${domain}${path}"
 }
 
@@ -93,8 +93,8 @@ cd "${src}"
 # Phase 29 deliberately installs a synthetic 29.0.2 version. The verifier now
 # installs the actual worktree; --allow-downgrade is required when VERSION is
 # lower than that synthetic drill version.
-deploy/install/install.sh --yes --allow-downgrade --force
-go build -o /usr/local/lib/nakpanel/phase30-agentprobe ./deploy/multipass/agentprobe
+timeout 45m deploy/install/install.sh --yes --allow-downgrade --force
+timeout 15m go build -o /usr/local/lib/nakpanel/phase30-agentprobe ./deploy/multipass/agentprobe
 chmod 0755 /usr/local/lib/nakpanel/phase30-agentprobe
 for artifact in panel agent panelctl; do
   installed="/usr/local/bin/${artifact}"
@@ -109,10 +109,10 @@ REMOTE
 VM_IP="$(vm_ip)"
 [[ -n "${VM_IP}" ]] || fail "could not determine ${VM_NAME} IPv4 address"
 for _ in $(seq 1 120); do
-  curl -skf "https://${VM_IP}:7443/healthz" >/dev/null && break
+  curl --connect-timeout 5 --max-time 30 -skf "https://${VM_IP}:7443/healthz" >/dev/null && break
   sleep 2
 done
-curl -skf "https://${VM_IP}:7443/healthz" >/dev/null || fail "current panel is not healthy"
+curl --connect-timeout 5 --max-time 30 -skf "https://${VM_IP}:7443/healthz" >/dev/null || fail "current panel is not healthy"
 
 # RuntimeCapabilities is the authoritative inventory; PHPVersions is its
 # ready-only list and must not contain a degraded runtime.
@@ -145,21 +145,34 @@ for version in 8.3 8.4 8.5; do
   "php-fpm${version}" -t >/dev/null 2>&1
   systemctl is-enabled --quiet "php${version}-fpm"
 done
-composer --version | grep -Fq 'Composer version 2.8.11'
-if composer self-update >/tmp/phase30-composer-self-update.out 2>&1; then
-  echo 'composer self-update was not blocked' >&2
-  exit 1
-fi
-wp --info | grep -Fq 'WP-CLI version: 2.12.0'
-wp --version | grep -Fq 'WP-CLI 2.12.0'
+composer_wrapper_hash_before="$(sha256sum /usr/local/bin/composer | awk '{print $1}')"
+composer_phar_hash_before="$(sha256sum /usr/local/lib/nakpanel/composer.phar | awk '{print $1}')"
+composer_version_before="$(timeout 1m composer --version)"
+grep -Fq 'Composer version 2.8.11' <<<"${composer_version_before}"
+set +e
+timeout 1m composer self-update >/tmp/phase30-composer-self-update.out 2>&1
+composer_self_update_status=$?
+set -e
+test "${composer_self_update_status}" = 64
+grep -Fxq 'composer self-update is disabled; use the nakpanel installer' /tmp/phase30-composer-self-update.out
+composer_wrapper_hash_after="$(sha256sum /usr/local/bin/composer | awk '{print $1}')"
+composer_phar_hash_after="$(sha256sum /usr/local/lib/nakpanel/composer.phar | awk '{print $1}')"
+composer_version_after="$(timeout 1m composer --version)"
+test "${composer_wrapper_hash_after}" = "${composer_wrapper_hash_before}"
+test "${composer_phar_hash_after}" = "${composer_phar_hash_before}"
+test "${composer_version_after}" = "${composer_version_before}"
+test "$(stat -c '%U:%G:%a' /usr/local/bin/composer)" = root:root:755
+test "$(stat -c '%U:%G:%a' /usr/local/lib/nakpanel/composer.phar)" = root:root:555
+timeout 1m wp --info | grep -Fq 'WP-CLI version: 2.12.0'
+timeout 1m wp --version | grep -Fq 'WP-CLI 2.12.0'
 command -v freshclam >/dev/null
 command -v clamscan >/dev/null
 find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) | grep -q .
-clamscan --version | grep -Eq 'ClamAV .+/.+'
+timeout 1m clamscan --version | grep -Eq 'ClamAV .+/.+'
 REMOTE
 
 echo "phase30: create panel-owned Classic and Managed PHP fixtures"
-curl -sk --fail -c "${tmpdir}/admin.cookies" -L \
+curl --connect-timeout 5 --max-time 30 -sk --fail -c "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" -o "${tmpdir}/admin.html"
 grep -q 'data-np-role="admin"' "${tmpdir}/admin.html" || fail "admin login failed"
@@ -221,6 +234,10 @@ wait_for "tracked MariaDB provisioning" "SELECT status FROM databases WHERE id=$
 # Generate credentials only in root-owned guest memory/files. The password
 # rotation endpoint stages an encrypted secret reference and River receives
 # only operation/database identities.
+journal_cursor="$(multipass_exec_short "${VM_NAME}" -- sudo journalctl \
+  -u nakpanel.service -u nakpanel-agent.service --no-pager -n 0 --show-cursor \
+  | sed -n 's/^-- cursor: //p' | tail -1)"
+[[ "${journal_cursor}" == s=* ]] || fail "could not capture the pre-secret panel/agent journal cursor"
 multipass exec "${VM_NAME}" -- sudo bash -se -- "${database_id}" <<'REMOTE'
 set -euo pipefail
 database_id="$1"
@@ -237,12 +254,12 @@ printf '%s' "${APP_SECRET}" >"${APP_SECRET_FILE}"
 printf '%s' "${WP_ADMIN_PASSWORD}" >"${WP_ADMIN_SECRET_FILE}"
 chmod 0600 "${DB_SECRET_FILE}" "${APP_SECRET_FILE}" "${WP_ADMIN_SECRET_FILE}"
 unset DB_PASSWORD APP_SECRET WP_ADMIN_PASSWORD
-curl -sk --fail -c "${SECRET_DIR}/admin.cookies" -L \
+curl --connect-timeout 5 --max-time 30 -sk --fail -c "${SECRET_DIR}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
   https://127.0.0.1:7443/login -o /dev/null
 session="$(awk '$6=="nakpanel_session"{v=$7} END{print v}' "${SECRET_DIR}/admin.cookies")"
 csrf="$(printf 'nakpanel-csrf-v1:%s' "${session}" | sha256sum | awk '{print $1}')"
-status="$(curl -sk -o "${SECRET_DIR}/database-rotation.json" -w '%{http_code}' \
+status="$(curl --connect-timeout 5 --max-time 30 -sk -o "${SECRET_DIR}/database-rotation.json" -w '%{http_code}' \
   -b "${SECRET_DIR}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
   -H 'Accept: application/json' \
   --data-urlencode "password@${DB_SECRET_FILE}" \
@@ -289,7 +306,7 @@ set -euo pipefail
 echo | openssl s_client -connect 127.0.0.1:443 -servername phase30-classic.test \
   -CAfile /usr/local/share/ca-certificates/nakpanel-phase30-root.crt -verify_return_error 2>/dev/null \
   | openssl x509 -noout -checkhost phase30-classic.test >/dev/null
-headers="$(curl --silent --show-error --head --resolve phase30-classic.test:80:127.0.0.1 http://phase30-classic.test/)"
+headers="$(curl --connect-timeout 5 --max-time 30 --silent --show-error --head --resolve phase30-classic.test:80:127.0.0.1 http://phase30-classic.test/)"
 grep -Eq '^HTTP/.* (301|308)' <<<"${headers}"
 grep -Eqi '^location: https://phase30-classic\.test/' <<<"${headers}"
 REMOTE
@@ -304,24 +321,24 @@ DB_SECRET_FILE=/run/nakpanel/phase30-verifier/phase30-db-secret
 WP_ADMIN_SECRET_FILE=/run/nakpanel/phase30-verifier/phase30-wp-admin-secret
 DB_CNF=/run/nakpanel/phase30-verifier/database.cnf
 sudo -u "${username}" find "${docroot}" -mindepth 1 -delete
-sudo -u "${username}" wp core download --version=7.1 --locale=en_US --path="${docroot}"
+timeout 10m sudo -u "${username}" wp core download --version=7.1 --locale=en_US --path="${docroot}"
 {
   printf '[client]\nuser=%s\npassword=' "${db_user}"
   cat "${DB_SECRET_FILE}"
   printf '\ndatabase=%s\nhost=localhost\n' "${db_name}"
 } >"${DB_CNF}"
 chmod 0600 "${DB_CNF}"
-cat "${DB_SECRET_FILE}" | sudo -u "${username}" wp config create --path="${docroot}" \
+cat "${DB_SECRET_FILE}" | timeout 5m sudo -u "${username}" wp config create --path="${docroot}" \
   --dbname="${db_name}" --dbuser="${db_user}" --dbhost=localhost --prompt=dbpass --skip-check
 chmod 0600 "${docroot}/wp-config.php"
 chown "${username}:${username}" "${docroot}/wp-config.php"
-cat "${WP_ADMIN_SECRET_FILE}" | sudo -u "${username}" wp core install --path="${docroot}" \
+cat "${WP_ADMIN_SECRET_FILE}" | timeout 5m sudo -u "${username}" wp core install --path="${docroot}" \
   --url=https://phase30-classic.test --title='Phase 30 WordPress' --admin_user=phase30admin \
   --prompt=admin_password --admin_email=phase30-wp@nakpanel.test --skip-email
-sudo -u "${username}" wp core version --path="${docroot}" | grep -Fxq '7.1'
-sudo -u "${username}" wp core verify-checksums --path="${docroot}" --version=7.1
-sudo -u "${username}" wp rewrite structure '/%postname%/' --hard --path="${docroot}"
-sudo -u "${username}" wp post create --path="${docroot}" --post_type=page --post_status=publish \
+timeout 5m sudo -u "${username}" wp core version --path="${docroot}" | grep -Fxq '7.1'
+timeout 5m sudo -u "${username}" wp core verify-checksums --path="${docroot}" --version=7.1
+timeout 5m sudo -u "${username}" wp rewrite structure '/%postname%/' --hard --path="${docroot}"
+timeout 5m sudo -u "${username}" wp post create --path="${docroot}" --post_type=page --post_status=publish \
   --post_title='Phase30 Clean Permalink' --post_name=phase30-clean >/dev/null
 install -d -m 0755 -o "${username}" -g "${username}" "${docroot}/wp-content/plugins/phase30-local"
 cat >"${docroot}/wp-content/plugins/phase30-local/phase30-local.php" <<'PHP'
@@ -342,16 +359,16 @@ add_action('template_redirect', static function (): void {
 });
 PHP
 chown -R "${username}:${username}" "${docroot}/wp-content/plugins/phase30-local"
-sudo -u "${username}" wp plugin activate phase30-local --path="${docroot}"
+timeout 5m sudo -u "${username}" wp plugin activate phase30-local --path="${docroot}"
 printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=' \
   | base64 -d >"${docroot}/phase30-media.png"
 chown "${username}:${username}" "${docroot}/phase30-media.png"
-attachment_id="$(sudo -u "${username}" wp media import "${docroot}/phase30-media.png" --title='Phase30 Media' --porcelain --path="${docroot}")"
+attachment_id="$(timeout 5m sudo -u "${username}" wp media import "${docroot}/phase30-media.png" --title='Phase30 Media' --porcelain --path="${docroot}")"
 test "${attachment_id}" -gt 0
-sudo -u "${username}" wp cron event schedule phase30_event '+1 hour' --repeat=hourly --path="${docroot}"
-sudo -u "${username}" wp cron event list --fields=hook --path="${docroot}" | grep -Fxq 'phase30_event'
-sudo -u "${username}" wp eval '$r=wp_remote_get("https://api.wordpress.org/core/version-check/1.7/", ["timeout"=>20]); if (is_wp_error($r) || wp_remote_retrieve_response_code($r)!==200) { exit(1); }' --path="${docroot}"
-sudo -u "${username}" wp option update phase30_restore_canary before --path="${docroot}" >/dev/null
+timeout 5m sudo -u "${username}" wp cron event schedule phase30_event '+1 hour' --repeat=hourly --path="${docroot}"
+timeout 5m sudo -u "${username}" wp cron event list --fields=hook --path="${docroot}" | grep -Fxq 'phase30_event'
+timeout 5m sudo -u "${username}" wp eval '$r=wp_remote_get("https://api.wordpress.org/core/version-check/1.7/", ["timeout"=>20]); if (is_wp_error($r) || wp_remote_retrieve_response_code($r)!==200) { exit(1); }' --path="${docroot}"
+timeout 5m sudo -u "${username}" wp option update phase30_restore_canary before --path="${docroot}" >/dev/null
 printf 'before\n' >"${docroot}/phase30-restore.txt"
 chown "${username}:${username}" "${docroot}/phase30-restore.txt"
 test "$(stat -c '%U:%G' "${docroot}")" = "${username}:${username}"
@@ -374,7 +391,7 @@ multipass exec "${VM_NAME}" -- sudo -u "${username}" bash -se <<'REMOTE'
 set -euo pipefail
 docroot=/home/"$(id -un)"/domains/phase30-classic.test/public_html
 printf 'after\n' >"${docroot}/phase30-restore.txt"
-wp option update phase30_restore_canary after --path="${docroot}" >/dev/null
+timeout 5m wp option update phase30_restore_canary after --path="${docroot}" >/dev/null
 REMOTE
 multipass_exec_short "${VM_NAME}" -- sudo -u nakpanel env NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' NAKPANEL_AGENT_SOCKET='/run/nakpanel/agent.sock' NAKPANEL_SECRET_KEY_FILE='/etc/nakpanel/secret-keys.json' panelctl --actor phase30 restore "${backup_id}" --yes >/dev/null
 wait_for "Classic restore" "SELECT status FROM restore_runs WHERE backup_id=${backup_id} ORDER BY id DESC LIMIT 1" "active"
@@ -382,7 +399,7 @@ multipass exec "${VM_NAME}" -- sudo -u "${username}" bash -se <<'REMOTE'
 set -euo pipefail
 docroot=/home/"$(id -un)"/domains/phase30-classic.test/public_html
 grep -Fxq before "${docroot}/phase30-restore.txt"
-test "$(wp option get phase30_restore_canary --path="${docroot}")" = before
+test "$(timeout 5m wp option get phase30_restore_canary --path="${docroot}")" = before
 REMOTE
 
 post_as phase30-classic-php85 "sites/${classic_site_id}/hosting" -d 'desired_status=active' \
@@ -394,7 +411,7 @@ set -euo pipefail
 site_id="$1"; username="$2"
 unit="nakpanel-php-fpm@${site_id}.service"
 systemctl is-active --quiet "${unit}"
-curl --cacert /usr/local/share/ca-certificates/nakpanel-phase30-root.crt --fail --silent \
+curl --connect-timeout 5 --max-time 30 --cacert /usr/local/share/ca-certificates/nakpanel-phase30-root.crt --fail --silent \
   --resolve phase30-classic.test:443:127.0.0.1 https://phase30-classic.test/ >/dev/null
 master="$(systemctl show -p MainPID --value "${unit}")"
 for _ in $(seq 1 30); do
@@ -420,28 +437,61 @@ fi
 second_subscription_id="$(db "SELECT id FROM subscriptions WHERE customer_id=${second_customer_id} AND name='Phase30 Isolated'")"
 wait_for "isolated account provisioning" "SELECT convergence_status FROM subscription_system_accounts WHERE subscription_id=${second_subscription_id}" "in_sync"
 second_username="$(db "SELECT username FROM subscription_system_accounts WHERE subscription_id=${second_subscription_id}")"
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" "${second_username}" "${classic_site_id}" <<'REMOTE'
+classic_document_root="$(db "SELECT document_root FROM sites WHERE id=${classic_site_id}")"
+[[ "${classic_document_root}" == "/home/${username}/"* ]] || fail "Classic document root is not owned by the first subscription"
+multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" "${second_username}" "${classic_site_id}" "${classic_document_root}" <<'REMOTE'
 set -euo pipefail
-username="$1"; second_username="$2"; site_id="$3"
+username="$1"; second_username="$2"; site_id="$3"; classic_document_root="$4"
 quotaon -p / | grep -q 'user quota .* is on'
 quota -u "${username}" >/tmp/phase30-quota.out
-repquota -u / | awk -v user="${username}" '$1==user {found=1} END{exit found?0:1}'
+expected_hard_kib=$((512 * 1024))
+hard_kib="$(repquota -up / | awk -v user="${username}" '$1==user {print $5; found=1} END{if (!found) exit 1}')"
+[[ "${hard_kib}" =~ ^[0-9]+$ ]] || { echo 'effective hard block quota is not numeric' >&2; exit 1; }
+test "${hard_kib}" -gt 0 || { echo 'effective hard block quota is unlimited' >&2; exit 1; }
+test "${hard_kib}" -eq "${expected_hard_kib}" || {
+  echo "effective hard block quota ${hard_kib} KiB does not match plan ${expected_hard_kib} KiB" >&2
+  exit 1
+}
 slug="${username}-phase30-classic-test"
-for path in \
-  "/home/${username}/domains/phase30-classic.test/public_html/wp-config.php" \
-  "/var/log/nginx/${slug}.access.log" \
-  "/var/log/nginx/${slug}.error.log" \
-  "/var/log/php-fpm/${slug}.error.log" \
-  "/etc/nakpanel/php-fpm/sites/${site_id}.conf" \
-  "/etc/nginx/sites-available/phase30-classic.test.conf" \
-  "/run/nakpanel/phase30-verifier/phase30-db-secret" \
+nonempty_artifacts=(
+  "${classic_document_root}/wp-config.php"
+  "/var/log/nginx/${slug}.access.log"
+  "/etc/nakpanel/php-fpm/sites/${site_id}.conf"
+  "/etc/nginx/sites-available/phase30-classic.test.conf"
+)
+existing_artifacts=(
+  "/var/log/nginx/${slug}.error.log"
+  "/var/log/php-fpm/${slug}.error.log"
+  "/run/nakpanel/phase30-verifier/phase30-db-secret"
+  "/run/nakpanel/phase30-verifier/phase30-wp-admin-secret"
   "/etc/nakpanel/secret-keys.json"
-do
-  if sudo -u "${second_username}" test -r "${path}"; then
-    echo "cross-subscription read succeeded: ${path}" >&2
+)
+require_first_subscription_artifact(){
+  local path="$1" require_content="$2"
+  test -e "${path}" || { echo "first-subscription artifact is missing: ${path}" >&2; exit 1; }
+  if [[ "${require_content}" == nonempty ]]; then
+    test -s "${path}" || { echo "first-subscription artifact is empty: ${path}" >&2; exit 1; }
+  fi
+}
+assert_cross_subscription_open_denied(){
+  local path="$1" error_file
+  error_file="$(mktemp)"
+  if LC_ALL=C sudo -u "${second_username}" head -c 1 "${path}" >/dev/null 2>"${error_file}"; then
+    rm -f "${error_file}"
+    echo "cross-subscription open succeeded: ${path}" >&2
     exit 1
   fi
-done
+  grep -Fq 'Permission denied' "${error_file}" || {
+    cat "${error_file}" >&2
+    rm -f "${error_file}"
+    echo "cross-subscription probe did not fail with Permission denied: ${path}" >&2
+    exit 1
+  }
+  rm -f "${error_file}"
+}
+for path in "${nonempty_artifacts[@]}"; do require_first_subscription_artifact "${path}" nonempty; done
+for path in "${existing_artifacts[@]}"; do require_first_subscription_artifact "${path}" exists; done
+for path in "${nonempty_artifacts[@]}" "${existing_artifacts[@]}"; do assert_cross_subscription_open_denied "${path}"; done
 REMOTE
 
 post_as phase30-managed-site sites -d "subscription_id=${subscription_id}" -d 'domain=phase30-managed.test'
@@ -501,7 +551,7 @@ SECRET_DIR=/run/nakpanel/phase30-verifier
 APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
 session="$(awk '$6=="nakpanel_session"{v=$7} END{print v}' "${SECRET_DIR}/admin.cookies")"
 csrf="$(printf 'nakpanel-csrf-v1:%s' "${session}" | sha256sum | awk '{print $1}')"
-status="$(curl -sk -o "${SECRET_DIR}/application-secret.json" -w '%{http_code}' \
+status="$(curl --connect-timeout 5 --max-time 30 -sk -o "${SECRET_DIR}/application-secret.json" -w '%{http_code}' \
   -b "${SECRET_DIR}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
   -H 'Accept: application/json' \
   -d 'name=PHASE30_SECRET' -d 'secret=true' --data-urlencode "secret_value@${APP_SECRET_FILE}" \
@@ -512,7 +562,7 @@ REMOTE
 post_as phase30-healthy-deploy "sites/${managed_site_id}/php-application/deployments" -d 'revision=main'
 wait_for "healthy managed deployment" "SELECT status FROM php_deployments WHERE application_id=${managed_application_id} ORDER BY id DESC LIMIT 1" "healthy"
 active_deployment_id="$(db "SELECT active_deployment_id FROM php_applications WHERE id=${managed_application_id}")"
-managed_body="$(curl -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/)"
+managed_body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/)"
 grep -Fxq 'public=visible' <<<"${managed_body}"
 grep -Fxq 'secret=present' <<<"${managed_body}"
 
@@ -520,7 +570,22 @@ post_as phase30-worker "sites/${managed_site_id}/php-application/workers" \
   -d 'name=queue' -d 'script=worker.php' -d 'processes=1' -d 'desired_state=running'
 worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='queue'")"
 wait_for "bounded PHP worker" "SELECT observed_state||':'||convergence_status FROM php_workers WHERE id=${worker_id}" "running:in_sync"
-multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${worker_id}.service" || fail "managed PHP worker is not active"
+assert_worker_active(){
+  local label="$1" id="$2"
+  multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${id}.service" || fail "${label}: desired-running PHP worker is inactive"
+}
+assert_worker_active "desired-running worker before suspension" "${worker_id}"
+post_as phase30-stopped-worker "sites/${managed_site_id}/php-application/workers" \
+  -d 'name=maintenance' -d 'script=worker.php' -d 'processes=1' -d 'desired_state=stopped'
+stopped_worker_id="$(db "SELECT id FROM php_workers WHERE application_id=${managed_application_id} AND name='maintenance'")"
+wait_for "desired-stopped worker before suspension" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped:in_sync"
+assert_worker_inactive(){
+  local label="$1" id="$2"
+  if multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${id}.service"; then
+    fail "${label}: desired-stopped PHP worker is active"
+  fi
+}
+assert_worker_inactive "desired-stopped worker before suspension" "${stopped_worker_id}"
 
 echo "phase30: reject an unhealthy release and retain the active release"
 multipass exec "${VM_NAME}" -- sudo -u "${username}" bash -se -- "${managed_site_id}" <<'REMOTE'
@@ -544,16 +609,17 @@ REMOTE
 post_as phase30-unhealthy-deploy "sites/${managed_site_id}/php-application/deployments" -d 'revision=main'
 wait_for "unhealthy deployment rejection" "SELECT status FROM php_deployments WHERE application_id=${managed_application_id} ORDER BY id DESC LIMIT 1" "failed"
 [[ "$(db "SELECT active_deployment_id FROM php_applications WHERE id=${managed_application_id}")" == "${active_deployment_id}" ]] || fail "unhealthy deployment replaced the active release"
-curl -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
+curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
 
 echo "phase30: prove secret absence from durable/control-plane surfaces"
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${managed_site_id}/applications" -o "${tmpdir}/managed.html"
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${managed_application_id}" "${managed_site_id}" "${second_username}" <<'REMOTE'
+curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${managed_site_id}/applications" -o "${tmpdir}/managed.html"
+multipass exec "${VM_NAME}" -- sudo bash -se -- "${managed_application_id}" "${managed_site_id}" "${worker_id}" "${stopped_worker_id}" "${second_username}" "${journal_cursor}" <<'REMOTE'
 set -euo pipefail
-application_id="$1"; site_id="$2"; second_username="$3"
+application_id="$1"; site_id="$2"; worker_id="$3"; stopped_worker_id="$4"; second_username="$5"; journal_cursor="$6"
 SECRET_DIR=/run/nakpanel/phase30-verifier
 APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
 DB_SECRET_FILE="${SECRET_DIR}/phase30-db-secret"
+WP_ADMIN_SECRET_FILE="${SECRET_DIR}/phase30-wp-admin-secret"
 assert_secret_absent(){
   local label="$1" path="$2" secret_file="$3"
   if grep -Fq -f "${secret_file}" "${path}"; then
@@ -572,8 +638,22 @@ sudo -u postgres psql -Atqd nakpanel -c \
      FROM php_deployments WHERE application_id=${application_id};" \
   >"${SECRET_DIR}/database-surfaces.out"
 # deployment output is represented by bounded deployment health/error/audit data.
-journalctl -u nakpanel.service -u nakpanel-agent.service --no-pager -n 2000 >"${SECRET_DIR}/journal.out"
-systemctl show "nakpanel-php-fpm@${site_id}.service" "nakpanel-php-worker@*.service" >"${SECRET_DIR}/systemd.out" 2>/dev/null || true
+journalctl -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise \
+  --after-cursor "${journal_cursor}" >"${SECRET_DIR}/journal.out"
+fpm_unit="nakpanel-php-fpm@${site_id}.service"
+running_worker_unit="nakpanel-php-worker@${worker_id}.service"
+stopped_worker_unit="nakpanel-php-worker@${stopped_worker_id}.service"
+if ! systemctl show "${fpm_unit}" "${running_worker_unit}" "${stopped_worker_unit}" >"${SECRET_DIR}/systemd.out"; then
+  echo 'failed to capture PHP unit metadata' >&2
+  exit 1
+fi
+test -s "${SECRET_DIR}/systemd.out" || { echo 'failed to capture PHP unit metadata' >&2; exit 1; }
+for unit in "${fpm_unit}" "${running_worker_unit}" "${stopped_worker_unit}"; do
+  grep -Fxq "Id=${unit}" "${SECRET_DIR}/systemd.out" || {
+    echo "failed to capture PHP unit metadata for ${unit}" >&2
+    exit 1
+  }
+done
 find /etc/nginx /etc/nakpanel/php-fpm -type f -maxdepth 5 -print0 2>/dev/null \
   | xargs -0r grep -h '' >"${SECRET_DIR}/tenant-config.out"
 assert_secret_absent 'River arguments, audit metadata, and deployment output' "${SECRET_DIR}/database-surfaces.out" "${APP_SECRET_FILE}"
@@ -583,7 +663,11 @@ assert_secret_absent 'nginx/PHP configuration' "${SECRET_DIR}/tenant-config.out"
 assert_secret_absent 'application JSON' "${SECRET_DIR}/application-secret.json" "${APP_SECRET_FILE}"
 assert_secret_absent 'database rotation JSON' "${SECRET_DIR}/database-rotation.json" "${DB_SECRET_FILE}"
 assert_secret_absent 'River arguments and audit metadata (database)' "${SECRET_DIR}/database-surfaces.out" "${DB_SECRET_FILE}"
-curl -sk --fail -b "${SECRET_DIR}/admin.cookies" \
+assert_secret_absent 'logs (WordPress administrator)' "${SECRET_DIR}/journal.out" "${WP_ADMIN_SECRET_FILE}"
+assert_secret_absent 'systemd metadata (WordPress administrator)' "${SECRET_DIR}/systemd.out" "${WP_ADMIN_SECRET_FILE}"
+assert_secret_absent 'nginx/PHP configuration (WordPress administrator)' "${SECRET_DIR}/tenant-config.out" "${WP_ADMIN_SECRET_FILE}"
+assert_secret_absent 'durable control-plane data (WordPress administrator)' "${SECRET_DIR}/database-surfaces.out" "${WP_ADMIN_SECRET_FILE}"
+curl --connect-timeout 5 --max-time 30 -sk --fail -b "${SECRET_DIR}/admin.cookies" \
   "https://127.0.0.1:7443/sites/${site_id}/applications" >"${SECRET_DIR}/application.html"
 assert_secret_absent 'application HTML' "${SECRET_DIR}/application.html" "${APP_SECRET_FILE}"
 environment_path="$(find "/var/lib/nakpanel/php-applications/app-${application_id}/environments" -type f | head -1)"
@@ -609,36 +693,48 @@ wait_for "managed suspension" "SELECT desired_state||':'||observed_state FROM ph
 wait_for_site_http "managed unavailable response" phase30-managed.test 503
 multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-fpm@${managed_site_id}.service" && fail "managed FPM remained active while suspended"
 multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-php-worker@${worker_id}.service" && fail "managed worker remained active while suspended"
+wait_for "desired-stopped worker during suspension" "SELECT desired_state||':'||observed_state FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped"
+assert_worker_inactive "desired-stopped worker during suspension" "${stopped_worker_id}"
 
 post_as phase30-managed-active "sites/${managed_site_id}/hosting" -d 'desired_status=active' \
   -d 'desired_php_version=8.4' -d 'desired_https_redirect=false'
-post_as phase30-managed-reconcile "sites/${managed_site_id}/php-application/reconcile"
 wait_for "managed reactivation" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_applications WHERE id=${managed_application_id}" "active:healthy:in_sync"
 wait_for "desired-active worker restoration" "SELECT desired_state||':'||observed_state FROM php_workers WHERE id=${worker_id}" "running:running"
-curl -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
+assert_worker_active "desired-running worker after reactivation" "${worker_id}"
+wait_for "desired-stopped worker after reactivation" "SELECT desired_state||':'||observed_state FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped"
+assert_worker_inactive "desired-stopped worker after reactivation" "${stopped_worker_id}"
+post_as phase30-managed-reconcile "sites/${managed_site_id}/php-application/reconcile"
+wait_for "desired-running worker after explicit reconciliation" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_workers WHERE id=${worker_id}" "running:running:in_sync"
+assert_worker_active "desired-running worker after explicit reconciliation" "${worker_id}"
+wait_for "desired-stopped worker after explicit reconciliation" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped:in_sync"
+assert_worker_inactive "desired-stopped worker after explicit reconciliation" "${stopped_worker_id}"
+curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
 
 multipass restart "${VM_NAME}"
 wait_for_cloud_init "${VM_NAME}"
 VM_IP="$(vm_ip)"
-for _ in $(seq 1 120); do curl -skf "https://${VM_IP}:7443/healthz" >/dev/null && break; sleep 2; done
+for _ in $(seq 1 120); do curl --connect-timeout 5 --max-time 30 -skf "https://${VM_IP}:7443/healthz" >/dev/null && break; sleep 2; done
 cli site reconcile phase30-classic.test >/dev/null
 cli reconcile --system >/dev/null
-curl -sk --fail -c "${tmpdir}/admin.cookies" -L \
+curl --connect-timeout 5 --max-time 30 -sk --fail -c "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" -o "${tmpdir}/admin-reboot.html"
 post_as phase30-reboot-reconcile "sites/${managed_site_id}/php-application/reconcile"
 wait_for "post-reboot managed application" "SELECT observed_state||':'||convergence_status FROM php_applications WHERE id=${managed_application_id}" "healthy:in_sync"
 wait_for "post-reboot desired-active worker" "SELECT observed_state||':'||convergence_status FROM php_workers WHERE id=${worker_id}" "running:in_sync"
+assert_worker_active "post-reboot desired-running worker" "${worker_id}"
+wait_for "post-reboot desired-stopped worker" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped:in_sync"
+assert_worker_inactive "post-reboot desired-stopped worker" "${stopped_worker_id}"
 [[ "$(db "SELECT active_deployment_id FROM php_applications WHERE id=${managed_application_id}")" == "${active_deployment_id}" ]] || fail "reboot changed the active managed release"
 trusted_curl phase30-classic.test / | grep -Fq 'Phase 30 WordPress'
-curl -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
+curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
 
 echo "phase30: verify PHP UI and product-boundary copy"
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${classic_site_id}/applications" -o "${tmpdir}/classic-app.html"
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${managed_site_id}/applications" -o "${tmpdir}/managed-app.html"
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/tools-settings/php" -o "${tmpdir}/php-runtime.html"
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/tools-settings/applications" -o "${tmpdir}/application-catalog.html"
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/service-plans/${plan_id}" -o "${tmpdir}/plan.html"
+curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${classic_site_id}/applications" -o "${tmpdir}/classic-app.html"
+curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${managed_site_id}/applications" -o "${tmpdir}/managed-app.html"
+curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/tools-settings/php" -o "${tmpdir}/php-runtime.html"
+curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/tools-settings/applications" -o "${tmpdir}/application-catalog.html"
+curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/service-plans/${plan_id}" -o "${tmpdir}/plan.html"
 for marker in 'PHP Application' 'Classic'; do grep -Fq "${marker}" "${tmpdir}/classic-app.html" || fail "Classic PHP UI is missing ${marker}"; done
 for marker in 'PHP Application' 'Managed' 'PHP workers'; do grep -Fq "${marker}" "${tmpdir}/managed-app.html" || fail "Managed PHP UI is missing ${marker}"; done
 # Runtime inventory is provider-only and must expose detailed readiness.
