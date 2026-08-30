@@ -53,6 +53,9 @@ func TestRenderPHPFPMPoolUsesResourceLimits(t *testing.T) {
 	if !strings.Contains(unit, "MemoryMax=256M") {
 		t.Fatalf("PHP-FPM unit is missing the derived memory cgroup ceiling:\n%s", unit)
 	}
+	if !strings.Contains(unit, "/var/lib/php/sessions") {
+		t.Fatalf("PHP-FPM unit must permit the distro session store:\n%s", unit)
+	}
 }
 
 func TestSiteProvisionerAppliesUserDiskQuota(t *testing.T) {

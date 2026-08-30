@@ -920,6 +920,8 @@ daemonize = no
 %[3]s`, pidPath, plan.PHPFPMErrorLog, pool)
 }
 
+const phpSessionDirectory = "/var/lib/php/sessions"
+
 func RenderPHPFPMUnit(plan SitePlan) string {
 	return fmt.Sprintf(`[Unit]
 Description=Nakpanel PHP-FPM for site %d
@@ -935,7 +937,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%s %s %s
+ReadWritePaths=%s %s %s %s
 RuntimeDirectory=nakpanel-php
 RuntimeDirectoryMode=0755
 MemoryMax=%dM
@@ -943,7 +945,7 @@ TasksMax=128
 
 [Install]
 WantedBy=multi-user.target
-`, plan.SiteID, plan.PHPVersion, plan.PHPFPMConfig, plan.PHPVersion, plan.PHPFPMConfig, plan.Docroot, filepath.Dir(plan.PHPFPMErrorLog), filepath.Dir(plan.PHPFPMSocket), phpFPMUnitMemoryMaxMB(plan))
+	`, plan.SiteID, plan.PHPVersion, plan.PHPFPMConfig, plan.PHPVersion, plan.PHPFPMConfig, plan.Docroot, filepath.Dir(plan.PHPFPMErrorLog), filepath.Dir(plan.PHPFPMSocket), phpSessionDirectory, phpFPMUnitMemoryMaxMB(plan))
 }
 
 func phpFPMUnitMemoryMaxMB(plan SitePlan) int {

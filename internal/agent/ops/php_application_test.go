@@ -219,6 +219,9 @@ func TestManagedPHPFPMUnitPreservesSharedRuntimeDirectory(t *testing.T) {
 		!strings.Contains(unit, "Slice=nakpanel-php-app-9.slice") {
 		t.Fatalf("shared PHP runtime directory can be removed when one site stops:\n%s", unit)
 	}
+	if !strings.Contains(unit, "/var/lib/php/sessions") {
+		t.Fatalf("managed PHP-FPM unit must permit the distro session store:\n%s", unit)
+	}
 }
 
 type scriptedPHPAppRunner struct {

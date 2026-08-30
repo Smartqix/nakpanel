@@ -1626,7 +1626,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=%s %s %s
+ReadWritePaths=%s %s %s %s
 RuntimeDirectory=nakpanel-php
 RuntimeDirectoryMode=0755
 RuntimeDirectoryPreserve=yes
@@ -1637,7 +1637,7 @@ TasksMax=%d
 [Install]
 WantedBy=multi-user.target
 `, description, slice, environmentFile, spec.PHPVersion, fpmConfig, spec.PHPVersion, fpmConfig,
-		filepath.Join(filepath.Dir(filepath.Dir(release)), "shared"), "/var/log/php-fpm", filepath.Dir(socket), memory,
+		filepath.Join(filepath.Dir(filepath.Dir(release)), "shared"), "/var/log/php-fpm", filepath.Dir(socket), phpSessionDirectory, memory,
 		effectivePHPCPUPercent(spec.Policy.Resources.CPUPercent), tasks)
 }
 
