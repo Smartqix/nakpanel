@@ -54,9 +54,86 @@ type WorkspaceView struct {
 	DNSSettingsError     string
 	DNSPreview           *types.DNSSyncRun
 	SettingsFocus        string
+	LogSource            string
 	ApplicationTab       string
 	PHPApplication       *controlphpapp.Workspace
 	PHPRuntimeInventory  *types.RuntimeCapabilities
+}
+
+type phpMutationGate struct {
+	CanConfigure   bool
+	CanDeploy      bool
+	CanEnvironment bool
+	CanWorkers     bool
+	CanReconcile   bool
+	Message        string
+	WorkerMessage  string
+}
+
+func phpApplicationMutationGate(workspace controlphpapp.Workspace, subscription types.SubscriptionSummary, data dashboard.Data) phpMutationGate {
+	state := phpMutationGate{}
+	if strings.ToLower(strings.TrimSpace(subscription.Status)) != "active" {
+		state.Message = "PHP application changes are unavailable while this subscription is not active."
+		return state
+	}
+	customerActive := false
+	for _, customer := range data.Customers {
+		if customer.ID == subscription.CustomerID {
+			customerActive = strings.ToLower(strings.TrimSpace(customer.Status)) == "active"
+			break
+		}
+	}
+	if !customerActive {
+		state.Message = "PHP application changes are unavailable while the customer account is not active."
+		return state
+	}
+	if subscription.ResellerID > 0 {
+		providerActive := false
+		for _, reseller := range data.Resellers {
+			if reseller.ID == subscription.ResellerID {
+				providerActive = strings.ToLower(strings.TrimSpace(reseller.Status)) == "active"
+				break
+			}
+		}
+		if !providerActive {
+			state.Message = "PHP application changes are unavailable while the owning provider is not active."
+			return state
+		}
+	}
+	if !workspace.Policy.Permissions.ManagedPHPDeployments || !workspace.Policy.Permissions.Git {
+		state.Message = "Managed PHP deployments are disabled by this subscription plan."
+		return state
+	}
+	if !workspace.Runtime.Ready {
+		state.Message = "The selected PHP runtime is not ready on this server."
+		return state
+	}
+	state.CanConfigure = true
+	if workspace.Application.HostingMode != types.PHPHostingModeManaged {
+		state.Message = "Deployment, environment, worker, and reconciliation actions require Managed Deployment."
+		return state
+	}
+	state.CanDeploy = true
+	state.CanEnvironment = true
+	state.CanReconcile = true
+	if !workspace.Policy.Permissions.PHPWorkers {
+		state.WorkerMessage = "PHP workers are disabled by this subscription plan."
+	} else if workspace.ActiveDeploymentID == 0 {
+		state.WorkerMessage = "Deploy the first healthy release before creating or changing workers."
+	} else {
+		state.CanWorkers = true
+	}
+	return state
+}
+
+func siteLogSource(value string) types.SiteLogSource {
+	source := types.SiteLogSource(strings.ToLower(strings.TrimSpace(value)))
+	switch source {
+	case types.SiteLogNginxAccess, types.SiteLogNginxError, types.SiteLogPHPFPM, types.SiteLogApplication, types.SiteLogTask, types.SiteLogPHPDeployment, types.SiteLogPHPWorker:
+		return source
+	default:
+		return types.SiteLogNginxAccess
+	}
 }
 
 func phpApplicationTab(value string) string {
@@ -164,16 +241,6 @@ func phpEnvironmentKind(item types.PHPEnvironmentVariable) string {
 		return "Write-only secret"
 	}
 	return "Plain value"
-}
-
-func phpManagedGate(workspace controlphpapp.Workspace) string {
-	if !workspace.Policy.Permissions.ManagedPHPDeployments {
-		return "Managed Deployment is disabled by this subscription plan."
-	}
-	if !workspace.Runtime.Ready {
-		return "The selected PHP runtime is not ready on this server."
-	}
-	return ""
 }
 
 func phpReleaseLimit(workspace controlphpapp.Workspace) string {

@@ -582,7 +582,7 @@ templ domainLogs(item dashboard.Site, data dashboard.Data, view WorkspaceView) {
 		<p class="np-gate">The subscription does not permit domain log access.</p>
 	} else {
 	<section class="np-panel" data-np-site-logs data-site-id={ formatJobID(item.ID) }>
-		<form class="np-form np-log-filter" data-np-site-log-filter><label>Source<select name="source"><option value="nginx_access">nginx access</option><option value="nginx_error">nginx error</option><option value="php_fpm">PHP-FPM</option><option value="application">Application</option><option value="task">Scheduled task</option></select></label><label>Search<input name="q" type="search"/></label><label>Severity<select name="severity"><option value="">All</option><option value="error">Error</option><option value="warn">Warning</option></select></label><button type="submit">Refresh</button></form>
+		<form class="np-form np-log-filter" data-np-site-log-filter><label>Source<select name="source"><option value="nginx_access" selected?={ siteLogSource(view.LogSource)==types.SiteLogNginxAccess }>nginx access</option><option value="nginx_error" selected?={ siteLogSource(view.LogSource)==types.SiteLogNginxError }>nginx error</option><option value="php_fpm" selected?={ siteLogSource(view.LogSource)==types.SiteLogPHPFPM }>PHP-FPM</option><option value="php_deployment" selected?={ siteLogSource(view.LogSource)==types.SiteLogPHPDeployment }>PHP deployment</option><option value="php_worker" selected?={ siteLogSource(view.LogSource)==types.SiteLogPHPWorker }>PHP worker</option><option value="application" selected?={ siteLogSource(view.LogSource)==types.SiteLogApplication }>Application</option><option value="task" selected?={ siteLogSource(view.LogSource)==types.SiteLogTask }>Scheduled task</option></select></label><label>Search<input name="q" type="search"/></label><label>Severity<select name="severity"><option value="">All</option><option value="error">Error</option><option value="warn">Warning</option></select></label><button type="submit">Refresh</button></form>
 		<pre class="np-log-output" data-np-site-log-output aria-live="polite">Select a source and refresh.</pre><div class="np-panel-actions"><button type="button" class="np-secondary-button" data-np-site-log-more hidden>Load newer lines</button><a class="np-secondary-link" data-np-site-log-download href={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/logs/data?source=nginx_access&download=1") }>Download source</a></div>
 	</section>
 	}
@@ -667,6 +667,7 @@ templ domainPHPApplication(item dashboard.Site, subscription types.SubscriptionS
 	} else {
 		{{ workspace := *view.PHPApplication }}
 		{{ activeTab := phpApplicationTab(view.ApplicationTab) }}
+		{{ mutationGate := phpApplicationMutationGate(workspace,subscription,data) }}
 		<section class="np-php-app" data-np-php-app data-np-php-mode={ string(workspace.Application.HostingMode) }>
 			<div class="np-section-heading np-php-app-heading"><div><span class="np-kicker">PHP Application</span><h2>{ phpHostingModeLabel(workspace.Application.HostingMode) }</h2><p>
 				if workspace.Application.HostingMode == types.PHPHostingModeManaged {
@@ -675,7 +676,9 @@ templ domainPHPApplication(item dashboard.Site, subscription types.SubscriptionS
 					Mutable public_html for uploaded PHP applications and self-updating WordPress sites.
 				}
 			</p></div><div class="np-php-app-head-actions">@statusPill(workspace.ConvergenceStatus)
-				<form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/reconcile") }>@csrfInput(view)<button type="submit" class="np-secondary-button" data-np-confirm="Reconcile PHP application state with the server?">@icon("activity")<span>Reconcile</span></button></form>
+				if mutationGate.CanReconcile {
+					<form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/reconcile") }>@csrfInput(view)<button type="submit" class="np-secondary-button" data-np-confirm="Reconcile PHP application state with the server?">@icon("activity")<span>Reconcile</span></button></form>
+				}
 			</div></div>
 			<nav class="np-php-app-tabs" aria-label="PHP application workspace" data-np-php-app-tabs>
 				@phpApplicationTabLink(item.ID,"overview","Overview",view)
@@ -687,21 +690,21 @@ templ domainPHPApplication(item dashboard.Site, subscription types.SubscriptionS
 				@phpApplicationTabLink(item.ID,"activity","Activity",view)
 			</nav>
 			if activeTab == "overview" {
-				@phpApplicationOverview(item,subscription,data,workspace,view)
+				@phpApplicationOverview(item,subscription,data,workspace,mutationGate,view)
 			} else if activeTab == "deployment" {
-				@phpApplicationDeployment(item,data,workspace,view)
+				@phpApplicationDeployment(item,data,workspace,mutationGate,view)
 			} else if activeTab == "environment" {
-				@phpApplicationEnvironment(item,workspace,view)
+				@phpApplicationEnvironment(item,workspace,mutationGate,view)
 			} else if activeTab == "workers" {
-				@phpApplicationWorkers(item,workspace,view)
+				@phpApplicationWorkers(item,workspace,mutationGate,view)
 			} else if activeTab == "releases" {
-				@phpApplicationReleases(item,workspace,view)
+				@phpApplicationReleases(item,workspace,mutationGate,view)
 			} else if activeTab == "logs" {
 				@phpApplicationLogs(item,workspace,view)
 			} else if activeTab == "activity" {
 				@phpApplicationActivity(item,workspace,view)
 			}
-			@phpApplicationDialogs(item,data,workspace,view)
+			@phpApplicationDialogs(item,data,workspace,mutationGate,view)
 		</section>
 	}
 }
@@ -722,7 +725,7 @@ templ phpRuntimeOptions(workspace controlphpapp.Workspace) {
 	}
 }
 
-templ phpApplicationOverview(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, workspace controlphpapp.Workspace, view WorkspaceView) {
+templ phpApplicationOverview(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, workspace controlphpapp.Workspace, mutationGate phpMutationGate, view WorkspaceView) {
 	<section class="np-panel np-php-app-summary">
 		<div class="np-panel-title"><div><h3>Runtime summary</h3><span class="np-muted">Desired, observed, and host capability state are reported separately.</span></div>@statusPill(workspace.ObservedState)</div>
 		<dl class="np-php-summary-band">
@@ -745,7 +748,7 @@ templ phpApplicationOverview(item dashboard.Site, subscription types.Subscriptio
 	if workspace.Application.HostingMode == types.PHPHostingModeClassic {
 		<section class="np-panel np-php-classic">
 			<div class="np-panel-title"><div><h3>Classic hosting diagnostics</h3><span class="np-muted">The subscription account owns writable application content.</span></div>
-				if workspace.Policy.Permissions.ManagedPHPDeployments && workspace.Runtime.Ready && gitRepositoryAvailable(data.SubscriptionServices.Git,item.ID) {
+				if mutationGate.CanConfigure && gitRepositoryAvailable(data.SubscriptionServices.Git,item.ID) {
 					<button type="button" data-np-dialog-open="php-managed-setup-dialog">Configure Managed Deployment</button>
 				}
 			</div>
@@ -753,22 +756,32 @@ templ phpApplicationOverview(item dashboard.Site, subscription types.Subscriptio
 			<dl class="np-facts np-php-diagnostics"><div><dt>Document root</dt><dd><code>{ item.DocumentRoot }</code></dd></div><div><dt>CLI</dt><dd><code>{ workspace.Runtime.CLIPath }</code></dd></div><div><dt>PHP-FPM</dt><dd><code>{ workspace.Runtime.FPMPath }</code></dd></div><div><dt>FPM configuration</dt><dd>{ yesNo(workspace.Runtime.FPMConfigValid) }</dd></div><div><dt>OPcache</dt><dd>{ yesNo(workspace.Runtime.OPcacheAvailable) }</dd></div><div><dt>Composer</dt><dd>{ phpToolStatus(workspace.Capabilities.ComposerAvailable,workspace.Capabilities.ComposerVersion) }</dd></div><div><dt>WP-CLI</dt><dd>{ phpToolStatus(workspace.Capabilities.WPCLIAvailable,workspace.Capabilities.WPCLIVersion) }</dd></div><div><dt>FPM children</dt><dd>{ formatPlanLimit(subscription.PHPFPMMaxChildren) }</dd></div><div><dt>Memory</dt><dd>{ formatPlanLimitMB(subscription.PHPMemoryMB) }</dd></div></dl>
 			@phpExtensionSummary(workspace.Runtime)
 			<div class="np-php-tool-links"><a href={ templ.SafeURL(fileBasePath(view,item.ID)) }>Files</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/access")) }>Access</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?tab=php")) }>PHP</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/git")) }>Git</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?tab=databases")) }>Databases</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?tab=backups")) }>Backups</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs")) }>Logs</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/scheduled-tasks")) }>Tasks</a></div>
-			if gate := phpManagedGate(workspace); gate != "" {
-				<p class="np-gate">{ gate }</p>
+			if mutationGate.Message != "" {
+				<p class="np-gate">{ mutationGate.Message }</p>
 			}
 		</section>
 	} else {
-		<section class="np-panel"><div class="np-panel-title"><div><h3>Managed application</h3><span class="np-muted">Git source, immutable releases, and bounded PHP-FPM execution.</span></div><button type="button" data-np-dialog-open="php-deploy-dialog">Deploy release</button></div>
+		<section class="np-panel"><div class="np-panel-title"><div><h3>Managed application</h3><span class="np-muted">Git source, immutable releases, and bounded PHP-FPM execution.</span></div><div class="np-row-actions">
+			if mutationGate.CanConfigure {
+				<button type="button" class="np-secondary-button" data-np-dialog-open="php-managed-setup-dialog">Application settings</button>
+			}
+			if mutationGate.CanDeploy {
+				<button type="button" data-np-dialog-open="php-deploy-dialog">Deploy release</button>
+			}
+		</div></div>
 			<dl class="np-facts"><div><dt>Profile</dt><dd>{ workspace.Application.FrameworkProfile }</dd></div><div><dt>Repository</dt><dd>{ phpRepositoryLabel(data.SubscriptionServices.Git,workspace.Application.RepositoryID) }</dd></div><div><dt>Reference</dt><dd><code>{ workspace.Application.RepositoryRef }</code></dd></div><div><dt>Public directory</dt><dd><code>{ workspace.Application.PublicPath }</code></dd></div><div><dt>Shared paths</dt><dd>{ phpSharedPaths(workspace.Application.SharedPaths) }</dd></div><div><dt>Health path</dt><dd><code>{ workspace.Application.HealthPath }</code></dd></div><div><dt>Release retention</dt><dd>{ formatPlanLimit(workspace.Application.ReleaseRetention) } (plan limit { phpReleaseLimit(workspace) })</dd></div><div><dt>Composer</dt><dd>{ phpComposerLabel(workspace.Application.Composer) }</dd></div></dl>
+			if mutationGate.Message != "" {
+				<p class="np-gate">{ mutationGate.Message }</p>
+			}
 		</section>
 	}
 }
 
-templ phpApplicationDeployment(item dashboard.Site, data dashboard.Data, workspace controlphpapp.Workspace, view WorkspaceView) {
+templ phpApplicationDeployment(item dashboard.Site, data dashboard.Data, workspace controlphpapp.Workspace, mutationGate phpMutationGate, view WorkspaceView) {
 	if workspace.Application.HostingMode != types.PHPHostingModeManaged {
 		<section class="np-panel np-php-empty"><h3>Managed Deployment is not configured</h3><p>Classic Hosting remains live. Connect the existing site Git repository and complete the guided setup to create the first immutable release.</p>
-			if gate := phpManagedGate(workspace); gate != "" {
-				<p class="np-gate">{ gate }</p>
+			if !mutationGate.CanConfigure {
+				<p class="np-gate">{ mutationGate.Message }</p>
 			} else if !gitRepositoryAvailable(data.SubscriptionServices.Git,item.ID) {
 				<p class="np-gate">Configure a Git repository for this domain first.</p>
 			} else {
@@ -776,8 +789,15 @@ templ phpApplicationDeployment(item dashboard.Site, data dashboard.Data, workspa
 			}
 		</section>
 	} else {
-		<section class="np-panel"><div class="np-panel-title"><div><h3>Deploy from Git</h3><span class="np-muted">The current release remains active unless the candidate passes Composer, FPM, nginx, and live health checks.</span></div><button type="button" data-np-dialog-open="php-deploy-dialog">Queue deployment</button></div>
+		<section class="np-panel"><div class="np-panel-title"><div><h3>Deploy from Git</h3><span class="np-muted">The current release remains active unless the candidate passes Composer, FPM, nginx, and live health checks.</span></div>
+			if mutationGate.CanDeploy {
+				<button type="button" data-np-dialog-open="php-deploy-dialog">Queue deployment</button>
+			}
+		</div>
 			<dl class="np-facts"><div><dt>Source</dt><dd>{ phpRepositoryLabel(data.SubscriptionServices.Git,workspace.Application.RepositoryID) }</dd></div><div><dt>Default ref</dt><dd><code>{ workspace.Application.RepositoryRef }</code></dd></div><div><dt>Health gate</dt><dd>3 successful HTTP 200–399 probes</dd></div><div><dt>Composer audit</dt><dd>High and critical findings block activation</dd></div></dl>
+			if !mutationGate.CanDeploy {
+				<p class="np-gate">{ mutationGate.Message }</p>
+			}
 			if deployment, ok := latestPHPDeployment(workspace.Deployments); ok {
 				@phpDeploymentDetail(deployment,workspace)
 			} else {
@@ -787,10 +807,14 @@ templ phpApplicationDeployment(item dashboard.Site, data dashboard.Data, workspa
 	}
 }
 
-templ phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Workspace, view WorkspaceView) {
-	<section class="np-panel"><div class="np-panel-title"><div><h3>Environment</h3><span class="np-muted">Plain values are visible. Secret values are encrypted and remain write-only.</span></div><button type="button" data-np-dialog-open="php-environment-dialog">Add variable</button></div>
-		if workspace.Application.HostingMode != types.PHPHostingModeManaged {
-			<p class="np-gate">Environment injection is available after Managed Deployment is configured.</p>
+templ phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Workspace, mutationGate phpMutationGate, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h3>Environment</h3><span class="np-muted">Plain values are visible. Secret values are encrypted and remain write-only.</span></div>
+		if mutationGate.CanEnvironment {
+			<button type="button" data-np-dialog-open="php-environment-dialog">Add variable</button>
+		}
+	</div>
+		if !mutationGate.CanEnvironment {
+			<p class="np-gate">{ mutationGate.Message }</p>
 		}
 		if workspace.Application.HostingMode == types.PHPHostingModeManaged && len(workspace.Environment) == 0 {
 			<p class="np-empty">No environment variables are configured.</p>
@@ -805,24 +829,30 @@ templ phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Wor
 						if item.SecretID == 0 {
 							<code>{ item.Value }</code>
 						}
-					</div><div class="np-row-actions"><button type="button" class="np-icon-button" data-np-dialog-open={ "php-environment-edit-"+item.Name } title={ "Edit "+item.Name }>@icon("pencil")</button><button type="button" class="np-icon-button" data-np-dialog-open={ "php-environment-delete-"+item.Name } title={ "Delete "+item.Name }>@icon("trash")</button></div></article>
+					</div>
+					if mutationGate.CanEnvironment {
+						<div class="np-row-actions"><button type="button" class="np-icon-button" data-np-dialog-open={ "php-environment-edit-"+item.Name } title={ "Edit "+item.Name }>@icon("pencil")</button><button type="button" class="np-icon-button" data-np-dialog-open={ "php-environment-delete-"+item.Name } title={ "Delete "+item.Name }>@icon("trash")</button></div>
+					}
+				</article>
 				}
 			</div>
 		}
 	</section>
 }
 
-templ phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspace, view WorkspaceView) {
-	<section class="np-panel"><div class="np-panel-title"><div><h3>PHP workers</h3><span class="np-muted">Workers execute the selected PHP binary and a validated site-relative script directly, without a shell.</span></div><button type="button" data-np-dialog-open="php-worker-dialog" disabled?={ workspace.Application.HostingMode != types.PHPHostingModeManaged || !workspace.Policy.Permissions.PHPWorkers || workspace.ActiveDeploymentID == 0 }>Add worker</button></div>
+templ phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspace, mutationGate phpMutationGate, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h3>PHP workers</h3><span class="np-muted">Workers execute the selected PHP binary and a validated site-relative script directly, without a shell.</span></div>
+		if mutationGate.CanWorkers {
+			<button type="button" data-np-dialog-open="php-worker-dialog">Add worker</button>
+		}
+	</div>
 		<div class="np-php-allocation"><span>Process allocation</span><strong>{ phpWorkerProcessCount(workspace.Workers) } / { phpWorkerLimit(workspace) }</strong></div>
-		if !workspace.Policy.Permissions.PHPWorkers {
-			<p class="np-gate">PHP workers are disabled by this subscription plan.</p>
-		}
-		if workspace.Policy.Permissions.PHPWorkers && workspace.Application.HostingMode != types.PHPHostingModeManaged {
-			<p class="np-gate">Workers require Managed Deployment.</p>
-		}
-		if workspace.Policy.Permissions.PHPWorkers && workspace.Application.HostingMode == types.PHPHostingModeManaged && workspace.ActiveDeploymentID == 0 {
-			<p class="np-gate">Deploy the first healthy release before creating workers.</p>
+		if !mutationGate.CanWorkers {
+			if mutationGate.Message != "" {
+				<p class="np-gate">{ mutationGate.Message }</p>
+			} else {
+				<p class="np-gate">{ mutationGate.WorkerMessage }</p>
+			}
 		}
 		if workspace.Policy.Permissions.PHPWorkers && workspace.Application.HostingMode == types.PHPHostingModeManaged && workspace.ActiveDeploymentID > 0 && len(workspace.Workers) == 0 {
 			<p class="np-empty">No background workers are configured.</p>
@@ -834,7 +864,9 @@ templ phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspa
 						if worker.LastError != "" {
 							<p class="np-error">{ worker.LastError }</p>
 						}
-						<div class="np-row-actions"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers/"+formatJobID(worker.ID)+"/state") }>@csrfInput(view)<input type="hidden" name="state" value={ phpWorkerOppositeState(worker.DesiredState) }/><button type="submit" class="np-secondary-button">{ phpWorkerStateAction(worker.DesiredState) }</button></form><button type="button" class="np-icon-button" data-np-dialog-open={ "php-worker-edit-"+formatJobID(worker.ID) } title={ "Edit "+worker.Name }>@icon("pencil")</button><button type="button" class="np-icon-button" data-np-dialog-open={ "php-worker-delete-"+formatJobID(worker.ID) } title={ "Delete "+worker.Name }>@icon("trash")</button></div>
+						if mutationGate.CanWorkers {
+							<div class="np-row-actions"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers/"+formatJobID(worker.ID)+"/state") }>@csrfInput(view)<input type="hidden" name="state" value={ phpWorkerOppositeState(worker.DesiredState) }/><button type="submit" class="np-secondary-button">{ phpWorkerStateAction(worker.DesiredState) }</button></form><button type="button" class="np-icon-button" data-np-dialog-open={ "php-worker-edit-"+formatJobID(worker.ID) } title={ "Edit "+worker.Name }>@icon("pencil")</button><button type="button" class="np-icon-button" data-np-dialog-open={ "php-worker-delete-"+formatJobID(worker.ID) } title={ "Delete "+worker.Name }>@icon("trash")</button></div>
+						}
 					</article>
 				}
 			</div>
@@ -842,7 +874,7 @@ templ phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspa
 	</section>
 }
 
-templ phpApplicationReleases(item dashboard.Site, workspace controlphpapp.Workspace, view WorkspaceView) {
+templ phpApplicationReleases(item dashboard.Site, workspace controlphpapp.Workspace, mutationGate phpMutationGate, view WorkspaceView) {
 	<section class="np-panel"><div class="np-panel-title"><div><h3>Release history</h3><span class="np-muted">Active and previous healthy releases are retained even when the plan limit is lower.</span></div><span class="np-pill np-pill-run">limit { phpReleaseLimit(workspace) }</span></div>
 		if workspace.Application.HostingMode != types.PHPHostingModeManaged {
 			<p class="np-gate">Release history begins after Managed Deployment is configured.</p>
@@ -853,16 +885,16 @@ templ phpApplicationReleases(item dashboard.Site, workspace controlphpapp.Worksp
 		if workspace.Application.HostingMode == types.PHPHostingModeManaged && len(workspace.Deployments) > 0 {
 			<div class="np-php-release-list">
 				for _, deployment := range workspace.Deployments {
-					@phpReleaseRow(item,deployment,workspace,view)
+					@phpReleaseRow(item,deployment,workspace,mutationGate,view)
 				}
 			</div>
 		}
 	</section>
 }
 
-templ phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspace controlphpapp.Workspace, view WorkspaceView) {
+templ phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspace controlphpapp.Workspace, mutationGate phpMutationGate, view WorkspaceView) {
 	<article><div class="np-php-release-identity"><span class="np-object-icon">#{ formatJobID(deployment.ID) }</span><div><strong>{ deployment.RequestedRevision }</strong><code>{ deployment.ResolvedRevision }</code><small>{ formatTime(deployment.CreatedAt) }</small></div></div><div><span class="np-kicker">{ phpDeploymentMarker(deployment,workspace.ActiveDeploymentID,workspace.PreviousDeploymentID) }</span>@statusPill(deployment.Status)</div><div class="np-php-release-actions">
-		if phpDeploymentRollbackEligible(deployment,workspace.ActiveDeploymentID) {
+		if mutationGate.CanDeploy && phpDeploymentRollbackEligible(deployment,workspace.ActiveDeploymentID) {
 			<button type="button" class="np-secondary-button" data-np-dialog-open={ "php-rollback-"+formatJobID(deployment.ID) }>Roll back</button>
 		}
 	</div></article>
@@ -870,7 +902,7 @@ templ phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspa
 
 templ phpApplicationLogs(item dashboard.Site, workspace controlphpapp.Workspace, view WorkspaceView) {
 	<section class="np-panel"><div class="np-panel-title"><div><h3>PHP application logs</h3><span class="np-muted">Deployment and worker sources use the bounded domain log browser.</span></div><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs")) }>Open log browser</a></div>
-		<div class="np-php-log-sources"><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs?source=php-deployment")) }><strong>Deployment output</strong><span>Sanitized Composer and activation output</span></a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs?source=php-worker")) }><strong>Worker logs</strong><span>Bounded stdout and service errors</span></a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs?source=php-fpm")) }><strong>PHP-FPM errors</strong><span>Dedicated domain process manager</span></a></div>
+		<div class="np-php-log-sources"><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs?source=php_deployment")) }><strong>Deployment output</strong><span>Sanitized Composer and activation output</span></a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs?source=php_worker")) }><strong>Worker logs</strong><span>Bounded stdout and service errors</span></a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs?source=php_fpm")) }><strong>PHP-FPM errors</strong><span>Dedicated domain process manager</span></a></div>
 		if deployment, ok := latestPHPDeployment(workspace.Deployments); ok {
 			@phpDeploymentDetail(deployment,workspace)
 		}
@@ -893,47 +925,67 @@ templ phpExtensionSummary(runtime types.PHPRuntimeCapability) {
 	<div class="np-php-extension-summary"><div><strong>Loaded extension baseline</strong><span>{ phpExtensionList(runtime.Extensions) }</span></div><div><strong>Missing required extensions</strong><span class={ phpMissingExtensionClass(runtime.MissingExtensions) }>{ phpMissingExtensionList(runtime.MissingExtensions) }</span></div></div>
 }
 
-templ phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace controlphpapp.Workspace, view WorkspaceView) {
-	<dialog class="np-dialog np-php-setup-dialog" id="php-managed-setup-dialog" data-np-dialog><div class="np-dialog-head"><div><span class="np-kicker">Managed Deployment</span><h2>Configure PHP application</h2><p>Classic Hosting stays live until the first managed release passes every health gate.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div>
-		<form class="np-form np-dialog-form np-php-setup" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application") } data-np-php-setup data-np-dirty-guard>@csrfInput(view)<input type="hidden" name="hosting_mode" value="managed"/>
-			<div class="np-php-setup-steps" aria-label="Managed setup steps"><span class="is-active">1 Source</span><span>2 Runtime</span><span>3 Environment</span><span>4 Review</span></div>
-			<label>Git repository<select name="repository_id" required>
-				for _, repository := range data.SubscriptionServices.Git {
-					if repository.SiteID == item.ID {
-						<option value={ formatJobID(repository.ID) } selected?={ repository.ID==workspace.Application.RepositoryID }>{ phpGitOption(repository) }</option>
+templ phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace controlphpapp.Workspace, mutationGate phpMutationGate, view WorkspaceView) {
+	if mutationGate.CanConfigure {
+		<dialog class="np-dialog np-php-setup-dialog" id="php-managed-setup-dialog" data-np-dialog><div class="np-dialog-head"><div><span class="np-kicker">Managed Deployment</span><h2>Configure PHP application</h2><p>Classic Hosting stays live until the first managed release passes every health gate.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div>
+			<form class="np-form np-dialog-form np-php-setup" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application") } data-np-php-setup data-np-dirty-guard>@csrfInput(view)<input type="hidden" name="hosting_mode" value="managed"/>
+				<ol class="np-php-setup-steps" aria-label="Managed setup steps"><li><a href="#php-managed-step-source" class="is-active" data-np-php-step-target="0" aria-controls="php-managed-step-source" aria-current="step">1 Source</a></li><li><a href="#php-managed-step-runtime" data-np-php-step-target="1" aria-controls="php-managed-step-runtime">2 Runtime</a></li><li><a href="#php-managed-step-environment" data-np-php-step-target="2" aria-controls="php-managed-step-environment">3 Environment</a></li><li><a href="#php-managed-step-review" data-np-php-step-target="3" aria-controls="php-managed-step-review">4 Review</a></li></ol>
+				<fieldset class="np-php-setup-panel" id="php-managed-step-source" data-np-php-step-panel="0" tabindex="-1"><legend>Source</legend><p>Choose the existing domain repository and the branch, tag, or commit to deploy.</p><label>Git repository<select name="repository_id" required>
+					for _, repository := range data.SubscriptionServices.Git {
+						if repository.SiteID == item.ID {
+							<option value={ formatJobID(repository.ID) } selected?={ repository.ID==workspace.Application.RepositoryID }>{ phpGitOption(repository) }</option>
+						}
 					}
-				}
-			</select></label>
-			<label>Repository reference<input name="repository_ref" value={ phpDefaultString(workspace.Application.RepositoryRef,"main") } required/></label>
-			<label>Framework profile<select name="framework_profile" data-np-php-profile><option value="plain">Plain PHP</option><option value="laravel">Laravel</option><option value="symfony">Symfony</option><option value="custom">Custom</option></select></label>
-			<label>PHP runtime<select name="php_version" required>@phpRuntimeOptions(workspace)</select></label>
-			<label>Public directory<input name="public_path" value={ workspace.Application.PublicPath } data-np-php-public placeholder="public"/></label><label>Health path<input name="health_path" value={ phpDefaultString(workspace.Application.HealthPath,"/") } data-np-php-health required/></label><label class="np-wide-field">Shared writable paths<textarea name="shared_paths" rows="3" data-np-php-shared placeholder="storage&#10;bootstrap/cache">{ phpSharedPathsTextarea(workspace.Application.SharedPaths) }</textarea></label>
-			<label>Healthy releases to retain<input type="number" name="release_retention" min="1" max="100" value={ phpRetentionValue(workspace.Application.ReleaseRetention) } required/></label>
-			<div class="np-permission-list"><label class="np-permission-row"><input type="checkbox" name="composer_install" value="true" checked?={ workspace.Policy.Permissions.Composer } disabled?={ !workspace.Policy.Permissions.Composer }/><span>Install Composer dependencies</span></label><label class="np-permission-row"><input type="checkbox" name="composer_allow_scripts" value="true" disabled?={ !workspace.Policy.Permissions.ComposerCodeExecution }/><span>Allow Composer scripts</span></label><label class="np-permission-row"><input type="checkbox" name="composer_allow_plugins" value="true" disabled?={ !workspace.Policy.Permissions.ComposerCodeExecution }/><span>Allow Composer plugins</span></label></div>
-			<div class="np-php-review"><strong>Security boundary</strong><p>Paths are site-relative, secrets remain write-only, and activation is atomic after three successful probes. Plan limits: { phpReleaseLimit(workspace) } releases and { phpWorkerLimit(workspace) } worker processes.</p></div>
-			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save and reconcile</button></div>
-		</form>
-	</dialog>
-	<dialog class="np-dialog" id="php-deploy-dialog" data-np-dialog><div class="np-dialog-head"><div><h2>Queue PHP deployment</h2><p>The active release stays online until the candidate is healthy.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/deployments") }>@csrfInput(view)<label>Git revision<input name="revision" value={ phpDefaultString(workspace.Application.RepositoryRef,"main") } required maxlength="128"/></label><p class="np-form-help">Use a branch, tag, or commit known to the configured repository. Composer lock and security checks run before activation.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Queue deployment</button></div></form></dialog>
-	<dialog class="np-dialog" id="php-environment-dialog" data-np-dialog><div class="np-dialog-head"><div><h2>Add environment variable</h2><p>Choose plain text or an encrypted write-only secret.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/environment") } data-np-php-environment-form>@csrfInput(view)<label>Name<input name="name" pattern="[A-Z_][A-Z0-9_]{0,127}" autocomplete="off" required/></label><label class="np-check"><input type="checkbox" name="secret" value="true" data-np-php-secret-toggle/>Encrypted secret</label><label data-np-php-plain-field>Value<textarea name="value" rows="3"></textarea></label><label data-np-php-secret-field hidden>Secret value<input type="password" name="secret_value" autocomplete="new-password"/></label><p class="np-form-help">Secret values are never rendered after submission and are not included in jobs, audits, logs, or responses.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save variable</button></div></form></dialog>
-	<dialog class="np-dialog" id="php-worker-dialog" data-np-dialog><div class="np-dialog-head"><div><h2>Add PHP worker</h2><p>The PHP binary executes a site-relative script directly. Shell strings are not accepted.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers") }>@csrfInput(view)<label>Name<input name="name" required maxlength="48"/></label><label>Site-relative PHP script<input name="script" placeholder="artisan" required/></label><label>Arguments, one per line<textarea name="arguments" rows="4" placeholder="queue:work&#10;--tries=3"></textarea></label><label>Processes<input type="number" name="processes" min="1" value="1" required/></label><input type="hidden" name="desired_state" value="running"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create worker</button></div></form></dialog>
-	for _, environment := range workspace.Environment {
-		<dialog class="np-dialog" id={ "php-environment-edit-"+environment.Name } data-np-dialog><div class="np-dialog-head"><div><h2>Edit { environment.Name }</h2><p>
+				</select></label><label>Repository reference<input name="repository_ref" value={ phpDefaultString(workspace.Application.RepositoryRef,"main") } required/></label><div class="np-php-step-actions"><button type="button" data-np-php-step-next>Next: Runtime</button></div></fieldset>
+				<fieldset class="np-php-setup-panel" id="php-managed-step-runtime" data-np-php-step-panel="1" tabindex="-1"><legend>Runtime and paths</legend><p>Profile defaults remain editable and are validated as site-relative paths by the server.</p><label>Framework profile<select name="framework_profile" data-np-php-profile><option value="plain" selected?={ workspace.Application.FrameworkProfile==types.PHPFrameworkPlain }>Plain PHP</option><option value="laravel" selected?={ workspace.Application.FrameworkProfile==types.PHPFrameworkLaravel }>Laravel</option><option value="symfony" selected?={ workspace.Application.FrameworkProfile==types.PHPFrameworkSymfony }>Symfony</option><option value="custom" selected?={ workspace.Application.FrameworkProfile==types.PHPFrameworkCustom }>Custom</option></select></label><label>PHP runtime<select name="php_version" required>@phpRuntimeOptions(workspace)</select></label><label>Public directory<input name="public_path" value={ workspace.Application.PublicPath } data-np-php-public placeholder="public"/></label><label>Health path<input name="health_path" value={ phpDefaultString(workspace.Application.HealthPath,"/") } data-np-php-health required/></label><label class="np-wide-field">Shared writable paths<textarea name="shared_paths" rows="3" data-np-php-shared placeholder="storage&#10;bootstrap/cache">{ phpSharedPathsTextarea(workspace.Application.SharedPaths) }</textarea></label><div class="np-php-step-actions"><button type="button" class="np-secondary-button" data-np-php-step-back>Back</button><button type="button" data-np-php-step-next>Next: Environment</button></div></fieldset>
+				<fieldset class="np-php-setup-panel" id="php-managed-step-environment" data-np-php-step-panel="2" tabindex="-1"><legend>Environment and Composer</legend><p>{ formatPlanLimit(len(workspace.Environment)) } environment bindings are configured. Secret values remain write-only and can be changed after setup.</p><label>Healthy releases to retain<input type="number" name="release_retention" min="1" max="100" value={ phpRetentionValue(workspace.Application.ReleaseRetention) } required/></label><div class="np-permission-list"><label class="np-permission-row"><input type="checkbox" name="composer_install" value="true" checked?={ workspace.Application.Composer.Install } disabled?={ !workspace.Policy.Permissions.Composer }/><span>Install Composer dependencies</span></label><label class="np-permission-row"><input type="checkbox" name="composer_allow_scripts" value="true" checked?={ workspace.Application.Composer.AllowScripts } disabled?={ !workspace.Policy.Permissions.ComposerCodeExecution }/><span>Allow Composer scripts</span></label><label class="np-permission-row"><input type="checkbox" name="composer_allow_plugins" value="true" checked?={ workspace.Application.Composer.AllowPlugins } disabled?={ !workspace.Policy.Permissions.ComposerCodeExecution }/><span>Allow Composer plugins</span></label></div>
+					if workspace.Application.Composer.Install && !workspace.Policy.Permissions.Composer {
+						<input type="hidden" name="composer_install" value="true"/>
+					}
+					if workspace.Application.Composer.AllowScripts && !workspace.Policy.Permissions.ComposerCodeExecution {
+						<input type="hidden" name="composer_allow_scripts" value="true"/>
+					}
+					if workspace.Application.Composer.AllowPlugins && !workspace.Policy.Permissions.ComposerCodeExecution {
+						<input type="hidden" name="composer_allow_plugins" value="true"/>
+					}
+				<div class="np-php-step-actions"><button type="button" class="np-secondary-button" data-np-php-step-back>Back</button><button type="button" data-np-php-step-next>Next: Review</button></div></fieldset>
+				<fieldset class="np-php-setup-panel" id="php-managed-step-review" data-np-php-step-panel="3" tabindex="-1"><legend>Review and save</legend><div class="np-php-review"><strong>Security boundary</strong><p>Paths are site-relative, secrets remain write-only, and activation is atomic after three successful probes. Plan limits: { phpReleaseLimit(workspace) } releases and { phpWorkerLimit(workspace) } worker processes.</p></div><dl class="np-facts"><div><dt>Repository</dt><dd>{ phpRepositoryLabel(data.SubscriptionServices.Git,workspace.Application.RepositoryID) }</dd></div><div><dt>PHP</dt><dd>{ workspace.Application.PHPVersion }</dd></div><div><dt>Profile</dt><dd>{ workspace.Application.FrameworkProfile }</dd></div><div><dt>Composer</dt><dd>{ phpComposerLabel(workspace.Application.Composer) }</dd></div></dl><div class="np-php-step-actions"><button type="button" class="np-secondary-button" data-np-php-step-back>Back</button><button type="submit">Save and reconcile</button></div></fieldset>
+				<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button></div>
+			</form>
+		</dialog>
+	}
+	if mutationGate.CanDeploy {
+		<dialog class="np-dialog" id="php-deploy-dialog" data-np-dialog><div class="np-dialog-head"><div><h2>Queue PHP deployment</h2><p>The active release stays online until the candidate is healthy.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/deployments") }>@csrfInput(view)<label>Git revision<input name="revision" value={ phpDefaultString(workspace.Application.RepositoryRef,"main") } required maxlength="128"/></label><p class="np-form-help">Use a branch, tag, or commit known to the configured repository. Composer lock and security checks run before activation.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Queue deployment</button></div></form></dialog>
+	}
+	if mutationGate.CanEnvironment {
+		<dialog class="np-dialog" id="php-environment-dialog" data-np-dialog><div class="np-dialog-head"><div><h2>Add environment variable</h2><p>Choose plain text or an encrypted write-only secret.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/environment") } data-np-php-environment-form>@csrfInput(view)<label>Name<input name="name" pattern="[A-Z_][A-Z0-9_]{0,127}" autocomplete="off" required/></label><label class="np-check"><input type="checkbox" name="secret" value="true" data-np-php-secret-toggle/>Encrypted secret</label><label data-np-php-plain-field>Value<textarea name="value" rows="3"></textarea></label><label data-np-php-secret-field hidden>Secret value<input type="password" name="secret_value" autocomplete="new-password"/></label><p class="np-form-help">Secret values are never rendered after submission and are not included in jobs, audits, logs, or responses.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save variable</button></div></form></dialog>
+	}
+	if mutationGate.CanWorkers {
+		<dialog class="np-dialog" id="php-worker-dialog" data-np-dialog><div class="np-dialog-head"><div><h2>Add PHP worker</h2><p>The PHP binary executes a site-relative script directly. Shell strings are not accepted.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers") }>@csrfInput(view)<label>Name<input name="name" required maxlength="48"/></label><label>Site-relative PHP script<input name="script" placeholder="artisan" required/></label><label>Arguments, one per line<textarea name="arguments" rows="4" placeholder="queue:work&#10;--tries=3"></textarea></label><label>Processes<input type="number" name="processes" min="1" value="1" required/></label><input type="hidden" name="desired_state" value="running"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create worker</button></div></form></dialog>
+	}
+	if mutationGate.CanEnvironment {
+		for _, environment := range workspace.Environment {
+			<dialog class="np-dialog" id={ "php-environment-edit-"+environment.Name } data-np-dialog><div class="np-dialog-head"><div><h2>Edit { environment.Name }</h2><p>
 			if environment.SecretID > 0 {
 				Enter a replacement value. The existing secret is never rendered.
 			} else {
 				Update the plain environment value or convert it to a write-only secret.
 			}
-		</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/environment") } data-np-php-environment-form>@csrfInput(view)<label>Name<input name="name" value={ environment.Name } readonly/></label><label class="np-check"><input type="checkbox" name="secret" value="true" checked?={ environment.SecretID > 0 } data-np-php-secret-toggle/>Encrypted secret</label><label data-np-php-plain-field hidden?={ environment.SecretID > 0 }>Value<textarea name="value" rows="3">{ environment.Value }</textarea></label><label data-np-php-secret-field hidden?={ environment.SecretID == 0 }>Replacement secret<input type="password" name="secret_value" autocomplete="new-password" required?={ environment.SecretID > 0 }/></label><p class="np-form-help">Saving a secret replaces its encrypted value; Nakpanel never displays the previous value.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save variable</button></div></form></dialog>
-		<dialog class="np-dialog" id={ "php-environment-delete-"+environment.Name } data-np-dialog><div class="np-dialog-head"><div><h2>Delete { environment.Name }?</h2><p>The next reconciliation removes this binding from PHP-FPM and worker services.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/environment/delete") }>@csrfInput(view)<input type="hidden" name="name" value={ environment.Name }/><input type="hidden" name="confirm" value="delete"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Delete variable</button></div></form></dialog>
+			</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/environment") } data-np-php-environment-form>@csrfInput(view)<label>Name<input name="name" value={ environment.Name } readonly/></label><label class="np-check"><input type="checkbox" name="secret" value="true" checked?={ environment.SecretID > 0 } data-np-php-secret-toggle/>Encrypted secret</label><label data-np-php-plain-field hidden?={ environment.SecretID > 0 }>Value<textarea name="value" rows="3">{ environment.Value }</textarea></label><label data-np-php-secret-field hidden?={ environment.SecretID == 0 }>Replacement secret<input type="password" name="secret_value" autocomplete="new-password" required?={ environment.SecretID > 0 }/></label><p class="np-form-help">Saving a secret replaces its encrypted value; Nakpanel never displays the previous value.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save variable</button></div></form></dialog>
+			<dialog class="np-dialog" id={ "php-environment-delete-"+environment.Name } data-np-dialog><div class="np-dialog-head"><div><h2>Delete { environment.Name }?</h2><p>The next reconciliation removes this binding from PHP-FPM and worker services.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/environment/delete") }>@csrfInput(view)<input type="hidden" name="name" value={ environment.Name }/><input type="hidden" name="confirm" value="delete"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Delete variable</button></div></form></dialog>
+		}
 	}
-	for _, worker := range workspace.Workers {
-		<dialog class="np-dialog" id={ "php-worker-edit-"+formatJobID(worker.ID) } data-np-dialog><div class="np-dialog-head"><div><h2>Edit { worker.Name }</h2><p>The PHP binary continues to execute this site-relative script directly without a shell.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers") }>@csrfInput(view)<input type="hidden" name="worker_id" value={ formatJobID(worker.ID) }/><label>Name<input name="name" value={ worker.Name } required maxlength="48"/></label><label>Site-relative PHP script<input name="script" value={ worker.Script } required/></label><label>Arguments, one per line<textarea name="arguments" rows="4">{ phpWorkerArgumentsTextarea(worker.Arguments) }</textarea></label><label>Processes<input type="number" name="processes" min="1" value={ formatPlanLimit(worker.Processes) } required/></label><input type="hidden" name="desired_state" value={ worker.DesiredState }/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save worker</button></div></form></dialog>
-		<dialog class="np-dialog" id={ "php-worker-delete-"+formatJobID(worker.ID) } data-np-dialog><div class="np-dialog-head"><div><h2>Delete { worker.Name }?</h2><p>The worker service will be removed during reconciliation.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers/"+formatJobID(worker.ID)+"/delete") }>@csrfInput(view)<input type="hidden" name="confirm" value="delete"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Delete worker</button></div></form></dialog>
+	if mutationGate.CanWorkers {
+		for _, worker := range workspace.Workers {
+			<dialog class="np-dialog" id={ "php-worker-edit-"+formatJobID(worker.ID) } data-np-dialog><div class="np-dialog-head"><div><h2>Edit { worker.Name }</h2><p>The PHP binary continues to execute this site-relative script directly without a shell.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers") }>@csrfInput(view)<input type="hidden" name="worker_id" value={ formatJobID(worker.ID) }/><label>Name<input name="name" value={ worker.Name } required maxlength="48"/></label><label>Site-relative PHP script<input name="script" value={ worker.Script } required/></label><label>Arguments, one per line<textarea name="arguments" rows="4">{ phpWorkerArgumentsTextarea(worker.Arguments) }</textarea></label><label>Processes<input type="number" name="processes" min="1" value={ formatPlanLimit(worker.Processes) } required/></label><input type="hidden" name="desired_state" value={ worker.DesiredState }/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save worker</button></div></form></dialog>
+			<dialog class="np-dialog" id={ "php-worker-delete-"+formatJobID(worker.ID) } data-np-dialog><div class="np-dialog-head"><div><h2>Delete { worker.Name }?</h2><p>The worker service will be removed during reconciliation.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers/"+formatJobID(worker.ID)+"/delete") }>@csrfInput(view)<input type="hidden" name="confirm" value="delete"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Delete worker</button></div></form></dialog>
+		}
 	}
-	for _, deployment := range workspace.Deployments {
-		if phpDeploymentRollbackEligible(deployment,workspace.ActiveDeploymentID) {
-			<dialog class="np-dialog" id={ "php-rollback-"+formatJobID(deployment.ID) } data-np-dialog><div class="np-dialog-head"><div><h2>Roll back to release #{ formatJobID(deployment.ID) }?</h2><p>The target is health checked before production switches. The current release is restored automatically on failure.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/deployments/"+formatJobID(deployment.ID)+"/rollback") }>@csrfInput(view)<input type="hidden" name="confirm" value="rollback"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Roll back</button></div></form></dialog>
+	if mutationGate.CanDeploy {
+		for _, deployment := range workspace.Deployments {
+			if phpDeploymentRollbackEligible(deployment,workspace.ActiveDeploymentID) {
+				<dialog class="np-dialog" id={ "php-rollback-"+formatJobID(deployment.ID) } data-np-dialog><div class="np-dialog-head"><div><h2>Roll back to release #{ formatJobID(deployment.ID) }?</h2><p>The target is health checked before production switches. The current release is restored automatically on failure.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/deployments/"+formatJobID(deployment.ID)+"/rollback") }>@csrfInput(view)<input type="hidden" name="confirm" value="rollback"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Roll back</button></div></form></dialog>
+			}
 		}
 	}
 }

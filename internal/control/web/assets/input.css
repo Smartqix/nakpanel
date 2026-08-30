@@ -79,10 +79,18 @@
   .np-php-log-sources span { color: var(--np-muted); font-size: 13px; line-height: 1.45; }
   .np-php-setup-dialog { max-width: 780px; }
   .np-php-setup { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .np-php-setup-steps, .np-php-review, .np-php-setup > .np-permission-list, .np-php-setup > .np-dialog-actions { grid-column: 1 / -1; }
-  .np-php-setup-steps { display: grid; gap: 4px; grid-template-columns: repeat(4,minmax(0,1fr)); }
-  .np-php-setup-steps span { background: var(--np-surface-2); border-bottom: 2px solid var(--np-border); color: var(--np-muted); font-size: 13px; font-weight: 650; padding: 10px; text-align: center; }
-  .np-php-setup-steps span.is-active { border-color: var(--np-primary); color: var(--np-primary-dark); }
+  .np-php-setup-steps, .np-php-review, .np-php-setup > .np-permission-list, .np-php-setup > .np-dialog-actions, .np-php-setup-panel { grid-column: 1 / -1; }
+  .np-php-setup-steps { display: grid; gap: 4px; grid-template-columns: repeat(4,minmax(0,1fr)); list-style: none; margin: 0; padding: 0; }
+  .np-php-setup-steps a { align-items: center; background: var(--np-surface-2); border-bottom: 2px solid var(--np-border); color: var(--np-muted); display: flex; font-size: 13px; font-weight: 650; justify-content: center; min-height: 42px; padding: 8px 10px; text-align: center; }
+  .np-php-setup-steps a.is-active { border-color: var(--np-primary); color: var(--np-primary-dark); }
+  .np-php-setup-panel { border: 1px solid var(--np-border-soft); border-radius: 6px; display: grid; gap: 14px; grid-template-columns: repeat(2,minmax(0,1fr)); margin: 0; min-width: 0; padding: 16px; }
+  .np-php-setup-panel[hidden] { display: none; }
+  .np-php-setup-panel legend { color: var(--np-ink); font-size: 17px; font-weight: 650; padding: 0 6px; }
+  .np-php-setup-panel > p, .np-php-setup-panel > .np-permission-list, .np-php-setup-panel > .np-php-review, .np-php-setup-panel > .np-facts, .np-php-step-actions { grid-column: 1 / -1; }
+  .np-php-setup-panel > p { color: var(--np-muted); font-size: 14px; line-height: 1.5; margin: 0; }
+  .np-php-step-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .np-php-setup:not(.is-enhanced) [data-np-php-step-next],
+  .np-php-setup:not(.is-enhanced) [data-np-php-step-back] { display: none; }
   .np-php-review { background: var(--np-primary-soft); border-left: 3px solid var(--np-primary); border-radius: 4px; padding: 12px 14px; }
   .np-php-review strong { font-size: 14px; }
   .np-php-review p { color: var(--np-muted); font-size: 14px; line-height: 1.5; margin: 4px 0 0; }
@@ -129,6 +137,9 @@
     .np-php-setup { grid-template-columns: 1fr; }
     .np-php-setup > * { grid-column: 1; }
     .np-php-setup-steps { overflow-x: auto; grid-template-columns: repeat(4,minmax(110px,1fr)); }
+    .np-php-setup-panel { grid-template-columns: 1fr; }
+    .np-php-setup-panel > * { grid-column: 1; }
+    .np-php-step-actions, .np-php-step-actions button { width: 100%; }
     .np-php-runtime header { align-items: flex-start; gap: 12px; }
   }
 }

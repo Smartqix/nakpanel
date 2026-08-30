@@ -234,10 +234,30 @@ func TestPHPRuntimeToolsAreProviderOnlyAndScoped(t *testing.T) {
 	}
 }
 
+func TestSiteLogWorkspaceSelectsAllowlistedPhase30SourceFromQuery(t *testing.T) {
+	data := phpApplicationDashboard(7)
+	data.Subscriptions = []types.SubscriptionSummary{{ID: 20, CustomerID: 88, SubscriptionName: "Production", Status: "active"}}
+	data.Customers = []types.Customer{{ID: 88, Status: "active"}}
+	data.SubscriptionServices.SitePolicies = []dashboard.SitePolicy{{SiteID: 7, SubscriptionID: 20, EffectivePolicy: types.HostingPolicy{Permissions: types.HostingPermissionPolicy{Logs: true}}}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{data: data}})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	for _, source := range []string{"php_deployment", "php_worker", "php_fpm"} {
+		req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/7/logs?source="+source, nil)
+		addAuthenticatedCookie(req, cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `value="`+source+`" selected`) {
+			t.Fatalf("log source %s = %d body=%s", source, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func TestPHPApplicationWorkspaceRendersManagedTabsWithoutSecretOrLegacyOCI(t *testing.T) {
 	const secret = "distinctive-render-secret-621"
 	data := phpApplicationDashboard(7)
 	data.Subscriptions = []types.SubscriptionSummary{{ID: 20, CustomerID: 88, SubscriptionName: "Production", PlanName: "Business", Status: "active"}}
+	data.Customers = []types.Customer{{ID: 88, Status: "active"}}
 	data.SubscriptionServices.Git = []types.GitRepository{{ID: 12, SiteID: 7, Mode: "remote", Branch: "main", RemoteURL: "ssh://git.example/app.git"}}
 	workspace := controlphpapp.Workspace{
 		Application: types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, SubscriptionID: 20, HostingMode: types.PHPHostingModeManaged,
@@ -251,7 +271,7 @@ func TestPHPApplicationWorkspaceRendersManagedTabsWithoutSecretOrLegacyOCI(t *te
 			{ID: 41, ApplicationID: 31, RequestedRevision: "main", ResolvedRevision: "abc123", Status: "healthy", CreatedAt: time.Now()},
 			{ID: 40, ApplicationID: 31, RequestedRevision: "v1", ResolvedRevision: "def456", Status: "healthy", CreatedAt: time.Now().Add(-time.Hour)},
 		},
-		Policy: types.HostingPolicy{SchemaVersion: 3, Permissions: types.HostingPermissionPolicy{Composer: true, ManagedPHPDeployments: true, PHPWorkers: true},
+		Policy: types.HostingPolicy{SchemaVersion: 3, Permissions: types.HostingPermissionPolicy{Git: true, Composer: true, ManagedPHPDeployments: true, PHPWorkers: true},
 			Resources: types.HostingResourcePolicy{MaxPHPWorkers: 4, MaxPHPReleases: 5}},
 		Runtime: types.PHPRuntimeCapability{Version: "8.4", Ready: true, SupportStatus: types.PHPSupportActive, CLIAvailable: true, FPMAvailable: true,
 			FPMConfigValid: true, OPcacheAvailable: true, CLIPath: "/usr/bin/php8.4", FPMPath: "/usr/sbin/php-fpm8.4", Extensions: []string{"curl", "mysqli"}},
@@ -285,6 +305,7 @@ func TestPHPApplicationWorkspaceRendersClassicDiagnosticsAndEntitlementGate(t *t
 	data.Sites[0].PHPVersion = "8.4"
 	data.Sites[0].DocumentRoot = "/home/np7/domains/owned.test/public_html"
 	data.Subscriptions = []types.SubscriptionSummary{{ID: 20, CustomerID: 88, SubscriptionName: "Classic", PlanName: "Starter", Status: "active"}}
+	data.Customers = []types.Customer{{ID: 88, Status: "active"}}
 	workspace := controlphpapp.Workspace{
 		Application: types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, SubscriptionID: 20, HostingMode: types.PHPHostingModeClassic, PHPVersion: "8.4"},
 		Policy:      types.HostingPolicy{SchemaVersion: 3, Permissions: types.HostingPermissionPolicy{Composer: true}},

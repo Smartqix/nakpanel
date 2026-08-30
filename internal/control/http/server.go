@@ -589,6 +589,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		view.CloneFrom = parseQueryInt64(r, "clone_from")
 		view.Tab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tab")))
 		view.ApplicationTab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab")))
+		view.LogSource = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source")))
 		if route == "tools-settings" {
 			view.SettingsFocus = strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/tools-settings"), "/")
 			if view.SettingsFocus == "application-catalog" {
@@ -832,7 +833,7 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 	if !validWorkspaceTab(page, tab) {
 		tab = "overview"
 	}
-	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, ApplicationTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab"))), CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
+	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, ApplicationTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab"))), LogSource: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source"))), CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
 	if page == "site-detail" && tab == "applications" {
 		if !s.loadPHPApplicationWorkspace(w, r, user, detailID, &view) {
 			return

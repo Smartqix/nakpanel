@@ -74,7 +74,9 @@
       var publicPath = form.querySelector("[data-np-php-public]");
       var healthPath = form.querySelector("[data-np-php-health]");
       var sharedPaths = form.querySelector("[data-np-php-shared]");
-      var steps = Array.prototype.slice.call(form.querySelectorAll(".np-php-setup-steps span"));
+      var stepLinks = Array.prototype.slice.call(form.querySelectorAll("[data-np-php-step-target]"));
+      var stepPanels = Array.prototype.slice.call(form.querySelectorAll("[data-np-php-step-panel]"));
+      var currentStep = 0;
       var defaults = {
         plain: {publicPath: "", healthPath: "/", sharedPaths: ""},
         laravel: {publicPath: "public", healthPath: "/up", sharedPaths: "storage\nbootstrap/cache"},
@@ -92,14 +94,46 @@
         if (isKnownValue(sharedPaths, "sharedPaths")) sharedPaths.value = selected.sharedPaths;
       }
       if (profile) profile.addEventListener("change", applyProfile);
-      form.addEventListener("focusin", function (event) {
-        if (!steps.length) return;
-        var index = 0;
-        if (event.target.closest("[data-np-php-profile], [data-np-php-public], [data-np-php-health], [data-np-php-shared]")) index = 1;
-        if (event.target.closest(".np-permission-list")) index = 2;
-        if (event.target.closest(".np-php-review, .np-dialog-actions")) index = 3;
-        steps.forEach(function (step, stepIndex) { step.classList.toggle("is-active", stepIndex === index); });
+      if (!stepPanels.length) return;
+
+      function stepIsValid(index) {
+        var panel = stepPanels[index];
+        if (!panel) return false;
+        var controls = Array.prototype.slice.call(panel.querySelectorAll("input, select, textarea"));
+        var invalid = controls.find(function (control) { return !control.disabled && !control.checkValidity(); });
+        if (!invalid) return true;
+        invalid.reportValidity();
+        invalid.focus();
+        return false;
+      }
+
+      function showStep(index, focusPanel) {
+        currentStep = Math.max(0, Math.min(index, stepPanels.length - 1));
+        stepPanels.forEach(function (panel, panelIndex) { panel.hidden = panelIndex !== currentStep; });
+        stepLinks.forEach(function (link, linkIndex) {
+          link.classList.toggle("is-active", linkIndex === currentStep);
+          if (linkIndex === currentStep) link.setAttribute("aria-current", "step");
+          else link.removeAttribute("aria-current");
+        });
+        if (focusPanel) stepPanels[currentStep].focus();
+      }
+
+      form.classList.add("is-enhanced");
+      each("[data-np-php-step-next]", form, function (button) {
+        button.addEventListener("click", function () {
+          if (stepIsValid(currentStep)) showStep(currentStep + 1, true);
+        });
       });
+      each("[data-np-php-step-back]", form, function (button) {
+        button.addEventListener("click", function () { showStep(currentStep - 1, true); });
+      });
+      stepLinks.forEach(function (link, index) {
+        link.addEventListener("click", function (event) {
+          event.preventDefault();
+          if (index <= currentStep || stepIsValid(currentStep)) showStep(index, true);
+        });
+      });
+      showStep(0, false);
     });
 
     each(".np-php-app form[method='post']", document, function (form) {
@@ -2047,8 +2081,12 @@
   }
 
   function initSiteLogs() {
+    var allowedSiteLogSources = ["nginx_access", "nginx_error", "php_fpm", "php_deployment", "php_worker", "application", "task"];
     each("[data-np-site-logs]", document, function (workspace) {
       var form = workspace.querySelector("[data-np-site-log-filter]");
+      var sourceSelect = form && form.elements.source;
+      var requestedLogSource = new URLSearchParams(window.location.search).get("source");
+      if (sourceSelect && allowedSiteLogSources.indexOf(requestedLogSource) !== -1) sourceSelect.value = requestedLogSource;
       var output = workspace.querySelector("[data-np-site-log-output]");
       var more = workspace.querySelector("[data-np-site-log-more]");
       var download = workspace.querySelector("[data-np-site-log-download]");
