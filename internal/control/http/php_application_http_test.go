@@ -108,6 +108,32 @@ func TestPHPApplicationWorkspaceLoadsAfterScopedSiteVisibility(t *testing.T) {
 	}
 }
 
+func TestPHPApplicationWorkspaceUsesAuthoritativeLifecycleForClientDashboardShape(t *testing.T) {
+	data := phpApplicationDashboard(7)
+	data.Subscriptions = []types.SubscriptionSummary{{ID: 20, CustomerID: 88, SubscriptionName: "Production", Status: "active"}}
+	if len(data.Customers) != 0 {
+		t.Fatal("client dashboard fixture unexpectedly contains provider customer inventory")
+	}
+	workspace := controlphpapp.Workspace{
+		Application:        types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, SubscriptionID: 20, HostingMode: types.PHPHostingModeManaged, PHPVersion: "8.4", RepositoryID: 12, RepositoryRef: "main", HealthPath: "/", ReleaseRetention: 4, DesiredState: "active"},
+		Policy:             types.HostingPolicy{Permissions: types.HostingPermissionPolicy{Hosting: true, Git: true, ManagedPHPDeployments: true, PHPWorkers: true}, PHP: types.HostingPHPPolicy{AllowedVersions: []string{"8.4"}}},
+		Runtime:            types.PHPRuntimeCapability{Version: "8.4", Ready: true},
+		Capabilities:       types.RuntimeCapabilities{PHPRuntimes: []types.PHPRuntimeCapability{{Version: "8.4", Ready: true}}},
+		Lifecycle:          controlphpapp.LifecycleState{SubscriptionStatus: "active", CustomerStatus: "active", SiteStatus: "active", ProviderActive: true},
+		ActiveDeploymentID: 41,
+	}
+	data.SubscriptionServices.Git = []types.GitRepository{{ID: 12, SiteID: 7, Branch: "main"}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{DashboardReader: &fakeDashboardReader{data: data}, PHPApplications: &fakePHPApplicationService{workspace: workspace}})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/7/applications?app_tab=environment", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `id="php-managed-setup-dialog"`) || !strings.Contains(rec.Body.String(), "Add variable") {
+		t.Fatalf("active client PHP workspace = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestPHPApplicationWorkspaceSupportsAllHostingRoles(t *testing.T) {
 	const secret = "role-scoped-secret-must-not-render"
 	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleReseller, auth.RoleClient} {
@@ -263,7 +289,7 @@ func TestPHPApplicationWorkspaceRendersManagedTabsWithoutSecretOrLegacyOCI(t *te
 		Application: types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, SubscriptionID: 20, HostingMode: types.PHPHostingModeManaged,
 			PHPVersion: "8.4", RepositoryID: 12, RepositoryRef: "main", FrameworkProfile: types.PHPFrameworkLaravel,
 			PublicPath: "public", HealthPath: "/up", SharedPaths: []string{"storage", "bootstrap/cache"}, ReleaseRetention: 4,
-			Composer: types.PHPComposerSpec{Install: true}},
+			Composer: types.PHPComposerSpec{Install: true}, DesiredState: "active"},
 		Environment: []types.PHPEnvironmentVariable{{Name: "APP_ENV", Value: "production"}, {Name: "APP_KEY", Value: secret, SecretID: 9}},
 		Workers: []types.PHPWorker{{ID: 51, ApplicationID: 31, Name: "queue", Script: "artisan", Arguments: []string{"queue:work", "--tries=3"},
 			Processes: 2, DesiredState: "running", ObservedState: "running", ConvergenceStatus: "in_sync"}},
@@ -271,10 +297,12 @@ func TestPHPApplicationWorkspaceRendersManagedTabsWithoutSecretOrLegacyOCI(t *te
 			{ID: 41, ApplicationID: 31, RequestedRevision: "main", ResolvedRevision: "abc123", Status: "healthy", CreatedAt: time.Now()},
 			{ID: 40, ApplicationID: 31, RequestedRevision: "v1", ResolvedRevision: "def456", Status: "healthy", CreatedAt: time.Now().Add(-time.Hour)},
 		},
-		Policy: types.HostingPolicy{SchemaVersion: 3, Permissions: types.HostingPermissionPolicy{Git: true, Composer: true, ManagedPHPDeployments: true, PHPWorkers: true},
-			Resources: types.HostingResourcePolicy{MaxPHPWorkers: 4, MaxPHPReleases: 5}},
+		Policy: types.HostingPolicy{SchemaVersion: 3, Permissions: types.HostingPermissionPolicy{Hosting: true, Git: true, Composer: true, ManagedPHPDeployments: true, PHPWorkers: true},
+			Resources: types.HostingResourcePolicy{MaxPHPWorkers: 4, MaxPHPReleases: 5}, PHP: types.HostingPHPPolicy{AllowedVersions: []string{"8.4"}}},
 		Runtime: types.PHPRuntimeCapability{Version: "8.4", Ready: true, SupportStatus: types.PHPSupportActive, CLIAvailable: true, FPMAvailable: true,
 			FPMConfigValid: true, OPcacheAvailable: true, CLIPath: "/usr/bin/php8.4", FPMPath: "/usr/sbin/php-fpm8.4", Extensions: []string{"curl", "mysqli"}},
+		Capabilities:  types.RuntimeCapabilities{PHPRuntimes: []types.PHPRuntimeCapability{{Version: "8.4", Ready: true}}},
+		Lifecycle:     controlphpapp.LifecycleState{SubscriptionStatus: "active", CustomerStatus: "active", SiteStatus: "active", ProviderActive: true},
 		ObservedState: "healthy", ConvergenceStatus: "in_sync", ActiveDeploymentID: 41, PreviousDeploymentID: 40,
 	}
 	service := &fakePHPApplicationService{workspace: workspace}

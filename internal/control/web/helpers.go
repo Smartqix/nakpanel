@@ -70,47 +70,40 @@ type phpMutationGate struct {
 	WorkerMessage  string
 }
 
-func phpApplicationMutationGate(workspace controlphpapp.Workspace, subscription types.SubscriptionSummary, data dashboard.Data) phpMutationGate {
+func phpApplicationMutationGate(workspace controlphpapp.Workspace) phpMutationGate {
 	state := phpMutationGate{}
-	if strings.ToLower(strings.TrimSpace(subscription.Status)) != "active" {
+	if strings.ToLower(strings.TrimSpace(workspace.Lifecycle.SubscriptionStatus)) != "active" {
 		state.Message = "PHP application changes are unavailable while this subscription is not active."
 		return state
 	}
-	customerActive := false
-	for _, customer := range data.Customers {
-		if customer.ID == subscription.CustomerID {
-			customerActive = strings.ToLower(strings.TrimSpace(customer.Status)) == "active"
-			break
-		}
-	}
-	if !customerActive {
+	if strings.ToLower(strings.TrimSpace(workspace.Lifecycle.CustomerStatus)) != "active" {
 		state.Message = "PHP application changes are unavailable while the customer account is not active."
 		return state
 	}
-	if subscription.ResellerID > 0 {
-		providerActive := false
-		for _, reseller := range data.Resellers {
-			if reseller.ID == subscription.ResellerID {
-				providerActive = strings.ToLower(strings.TrimSpace(reseller.Status)) == "active"
-				break
-			}
-		}
-		if !providerActive {
-			state.Message = "PHP application changes are unavailable while the owning provider is not active."
-			return state
-		}
+	if !workspace.Lifecycle.ProviderActive {
+		state.Message = "PHP application changes are unavailable while the owning provider is not active."
+		return state
+	}
+	if strings.ToLower(strings.TrimSpace(workspace.Lifecycle.SiteStatus)) != "active" ||
+		strings.ToLower(strings.TrimSpace(workspace.Application.DesiredState)) != "active" {
+		state.Message = "PHP application changes are unavailable while this website is suspended."
+		return state
 	}
 	if !workspace.Policy.Permissions.ManagedPHPDeployments || !workspace.Policy.Permissions.Git {
 		state.Message = "Managed PHP deployments are disabled by this subscription plan."
 		return state
 	}
-	if !workspace.Runtime.Ready {
-		state.Message = "The selected PHP runtime is not ready on this server."
+	if !phpApplicationHasReadyRuntime(workspace) {
+		state.Message = "No plan-allowed PHP runtime is ready on this server."
 		return state
 	}
 	state.CanConfigure = true
 	if workspace.Application.HostingMode != types.PHPHostingModeManaged {
 		state.Message = "Deployment, environment, worker, and reconciliation actions require Managed Deployment."
+		return state
+	}
+	if !workspace.Runtime.Ready {
+		state.Message = "The selected PHP runtime is unavailable. Open Application settings and choose a ready runtime."
 		return state
 	}
 	state.CanDeploy = true
@@ -124,6 +117,21 @@ func phpApplicationMutationGate(workspace controlphpapp.Workspace, subscription 
 		state.CanWorkers = true
 	}
 	return state
+}
+
+func phpApplicationHasReadyRuntime(workspace controlphpapp.Workspace) bool {
+	allowed := make(map[string]struct{}, len(workspace.Policy.PHP.AllowedVersions))
+	for _, version := range workspace.Policy.PHP.AllowedVersions {
+		allowed[strings.TrimSpace(version)] = struct{}{}
+	}
+	for _, runtime := range workspace.Capabilities.PHPRuntimes {
+		if runtime.Ready {
+			if _, ok := allowed[runtime.Version]; ok {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func siteLogSource(value string) types.SiteLogSource {

@@ -64,7 +64,7 @@ func TestPHPApplicationAssetsCarryResponsiveAndProgressiveHooks(t *testing.T) {
 	if !strings.Contains(css, ".np-php-setup:not(.is-enhanced) [data-np-php-step-next]") {
 		t.Fatal("compiled PHP workspace CSS does not preserve the non-JavaScript setup submit fallback")
 	}
-	for _, want := range []string{"initializePHPApplicationWorkspace", "data-np-php-secret-toggle", "data-np-php-profile", "X-Nakpanel-SPA", "allowedSiteLogSources", "requestedLogSource", "data-np-php-step-panel", "reportValidity"} {
+	for _, want := range []string{"initializePHPApplicationWorkspace", "data-np-php-secret-toggle", "data-np-php-profile", "X-Nakpanel-SPA", "allowedSiteLogSources", "requestedLogSource", "data-np-php-step-panel", "reportValidity", "syncPHPReview", "data-np-php-review-repository", "data-np-php-review-retention"} {
 		if !strings.Contains(javascript, want) {
 			t.Fatalf("PHP workspace JavaScript missing %q", want)
 		}
@@ -103,53 +103,87 @@ func TestPhase30LogLinksAndSelectorUsePublicSourceEnums(t *testing.T) {
 
 func TestPHPApplicationMutationGateIncludesInheritedLifecycleAndFirstRelease(t *testing.T) {
 	workspace := phase30ManagedWorkspace()
-	subscription := types.SubscriptionSummary{ID: 20, CustomerID: 88, ResellerID: 91, Status: "active"}
-	data := dashboard.Data{Customers: []types.Customer{{ID: 88, Status: "active"}}, Resellers: []types.Reseller{{ID: 91, Status: "active"}}}
 
-	gate := phpApplicationMutationGate(workspace, subscription, data)
+	gate := phpApplicationMutationGate(workspace)
 	if !gate.CanConfigure || !gate.CanDeploy || !gate.CanEnvironment || !gate.CanReconcile || gate.CanWorkers {
 		t.Fatalf("pre-release active gate = %#v", gate)
 	}
 	workspace.ActiveDeploymentID = 41
-	gate = phpApplicationMutationGate(workspace, subscription, data)
+	gate = phpApplicationMutationGate(workspace)
 	if !gate.CanWorkers || gate.Message != "" {
 		t.Fatalf("healthy active gate = %#v", gate)
 	}
 
 	checks := []struct {
 		name   string
-		mutate func(*controlphpapp.Workspace, *types.SubscriptionSummary, *dashboard.Data)
+		mutate func(*controlphpapp.Workspace)
 	}{
-		{"classic", func(w *controlphpapp.Workspace, _ *types.SubscriptionSummary, _ *dashboard.Data) {
+		{"classic", func(w *controlphpapp.Workspace) {
 			w.Application.HostingMode = types.PHPHostingModeClassic
 		}},
-		{"subscription suspended", func(_ *controlphpapp.Workspace, s *types.SubscriptionSummary, _ *dashboard.Data) {
-			s.Status = "suspended"
+		{"subscription suspended", func(w *controlphpapp.Workspace) {
+			w.Lifecycle.SubscriptionStatus = "suspended"
 		}},
-		{"customer suspended", func(_ *controlphpapp.Workspace, _ *types.SubscriptionSummary, d *dashboard.Data) {
-			d.Customers[0].Status = "suspended"
+		{"customer suspended", func(w *controlphpapp.Workspace) {
+			w.Lifecycle.CustomerStatus = "suspended"
 		}},
-		{"provider suspended", func(_ *controlphpapp.Workspace, _ *types.SubscriptionSummary, d *dashboard.Data) {
-			d.Resellers[0].Status = "suspended"
+		{"provider suspended", func(w *controlphpapp.Workspace) {
+			w.Lifecycle.ProviderActive = false
 		}},
-		{"runtime unavailable", func(w *controlphpapp.Workspace, _ *types.SubscriptionSummary, _ *dashboard.Data) {
-			w.Runtime.Ready = false
+		{"site suspended", func(w *controlphpapp.Workspace) {
+			w.Lifecycle.SiteStatus = "suspended"
 		}},
-		{"managed permission disabled", func(w *controlphpapp.Workspace, _ *types.SubscriptionSummary, _ *dashboard.Data) {
+		{"managed permission disabled", func(w *controlphpapp.Workspace) {
 			w.Policy.Permissions.ManagedPHPDeployments = false
 		}},
 	}
 	for _, check := range checks {
 		t.Run(check.name, func(t *testing.T) {
-			candidate, candidateSubscription, candidateData := workspace, subscription, data
-			candidateData.Customers = append([]types.Customer(nil), data.Customers...)
-			candidateData.Resellers = append([]types.Reseller(nil), data.Resellers...)
-			check.mutate(&candidate, &candidateSubscription, &candidateData)
-			got := phpApplicationMutationGate(candidate, candidateSubscription, candidateData)
+			candidate := workspace
+			check.mutate(&candidate)
+			got := phpApplicationMutationGate(candidate)
 			if got.CanDeploy || got.CanEnvironment || got.CanWorkers || got.CanReconcile || got.Message == "" {
 				t.Fatalf("blocked gate = %#v", got)
 			}
 		})
+	}
+
+	t.Run("unavailable selected runtime is recoverable", func(t *testing.T) {
+		candidate := workspace
+		candidate.Runtime.Ready = false
+		candidate.Policy.PHP.AllowedVersions = []string{"8.4", "8.5"}
+		candidate.Capabilities.PHPRuntimes = []types.PHPRuntimeCapability{{Version: "8.4", Ready: false}, {Version: "8.5", Ready: true}}
+		got := phpApplicationMutationGate(candidate)
+		if !got.CanConfigure || got.CanDeploy || got.CanEnvironment || got.CanWorkers || got.CanReconcile || got.Message == "" {
+			t.Fatalf("recoverable runtime gate = %#v", got)
+		}
+	})
+	t.Run("no ready allowed runtime is blocked", func(t *testing.T) {
+		candidate := workspace
+		candidate.Runtime.Ready = false
+		candidate.Capabilities.PHPRuntimes = []types.PHPRuntimeCapability{{Version: "8.4", Ready: false}}
+		got := phpApplicationMutationGate(candidate)
+		if got.CanConfigure || got.CanDeploy || got.CanEnvironment || got.CanWorkers || got.CanReconcile || got.Message == "" {
+			t.Fatalf("unrecoverable runtime gate = %#v", got)
+		}
+	})
+}
+
+func TestUnavailableSelectedRuntimeRendersRecoveryOnly(t *testing.T) {
+	workspace := phase30ManagedWorkspace()
+	workspace.Runtime.Ready = false
+	workspace.Policy.PHP.AllowedVersions = []string{"8.4", "8.5"}
+	workspace.Capabilities.PHPRuntimes = []types.PHPRuntimeCapability{{Version: "8.4", Ready: false}, {Version: "8.5", Ready: true}}
+	body := renderPhase30Page(t, phase30ApplicationData(), WorkspaceView{Route: "site-detail", DetailID: 7, Tab: "applications", PHPApplication: &workspace, CSRFToken: "csrf"})
+	for _, want := range []string{"Application settings", `id="php-managed-setup-dialog"`, `value="8.5"`, "choose a ready runtime"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("runtime recovery workspace missing %q:\n%s", want, body)
+		}
+	}
+	for _, forbidden := range []string{`id="php-deploy-dialog"`, `id="php-environment-dialog"`, `id="php-worker-dialog"`, `php-application/reconcile`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("runtime recovery workspace exposed incompatible mutation %q:\n%s", forbidden, body)
+		}
 	}
 }
 
@@ -165,6 +199,8 @@ func TestManagedSetupIsLosslessAccessibleAndClassicActionsAreReadOnly(t *testing
 		`name="release_retention" min="1" max="100" value="4"`, `name="composer_install" value="true" checked`,
 		`name="composer_allow_scripts" value="true" checked`, `name="composer_allow_plugins" value="true"`,
 		`aria-controls="php-managed-step-source"`, `data-np-php-step-panel="0"`, `data-np-php-step-next`, `data-np-php-step-back`,
+		`data-np-php-review-repository`, `data-np-php-review-php`, `data-np-php-review-profile`, `data-np-php-review-composer`,
+		`data-np-php-review-public`, `data-np-php-review-health`, `data-np-php-review-shared`, `data-np-php-review-retention`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("managed settings missing persisted/accessibility field %q:\n%s", want, body)
@@ -172,6 +208,19 @@ func TestManagedSetupIsLosslessAccessibleAndClassicActionsAreReadOnly(t *testing
 	}
 	if strings.Contains(body, `name="composer_allow_plugins" value="true" checked`) || strings.Contains(body, `data-np-php-step-panel="0" hidden`) {
 		t.Fatalf("managed settings reset stored values or hid the non-JS fallback:\n%s", body)
+	}
+
+	workspace.Application.Composer = types.PHPComposerSpec{Install: true, AllowScripts: true, AllowPlugins: true}
+	workspace.Policy.Permissions.Composer = false
+	workspace.Policy.Permissions.ComposerCodeExecution = false
+	body = renderPhase30Page(t, data, WorkspaceView{Route: "site-detail", DetailID: 7, Tab: "applications", PHPApplication: &workspace, CSRFToken: "csrf"})
+	for _, forbidden := range []string{`name="composer_install" value="true" disabled`, `name="composer_allow_scripts" value="true" disabled`, `type="hidden" name="composer_install"`, `type="hidden" name="composer_allow_scripts"`, `type="hidden" name="composer_allow_plugins"`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("revoked Composer state cannot be cleared because of %q:\n%s", forbidden, body)
+		}
+	}
+	if !strings.Contains(body, "This saved Composer setting is no longer allowed") {
+		t.Fatalf("revoked Composer state lacks an operator-visible recovery message:\n%s", body)
 	}
 
 	workspace.Application.HostingMode = types.PHPHostingModeClassic
@@ -182,15 +231,30 @@ func TestManagedSetupIsLosslessAccessibleAndClassicActionsAreReadOnly(t *testing
 			t.Fatalf("classic workspace exposed incompatible mutation %q:\n%s", forbidden, body)
 		}
 	}
+
+	workspace = phase30ManagedWorkspace()
+	workspace.ActiveDeploymentID = 41
+	workspace.Lifecycle.SiteStatus = "suspended"
+	body = renderPhase30Page(t, data, WorkspaceView{Route: "site-detail", DetailID: 7, Tab: "applications", ApplicationTab: "environment", PHPApplication: &workspace, CSRFToken: "csrf"})
+	for _, forbidden := range []string{`data-np-dialog-open="php-environment-dialog"`, `id="php-environment-dialog"`, `php-application/reconcile`} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("suspended site exposed incompatible mutation %q:\n%s", forbidden, body)
+		}
+	}
+	if !strings.Contains(body, "website is suspended") {
+		t.Fatalf("suspended site lacks its authoritative lifecycle explanation:\n%s", body)
+	}
 }
 
 func phase30ManagedWorkspace() controlphpapp.Workspace {
 	return controlphpapp.Workspace{
 		Application: types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, SubscriptionID: 20, HostingMode: types.PHPHostingModeManaged,
 			PHPVersion: "8.4", RepositoryID: 12, RepositoryRef: "main", FrameworkProfile: types.PHPFrameworkLaravel,
-			PublicPath: "public", HealthPath: "/up", SharedPaths: []string{"storage", "bootstrap/cache"}, ReleaseRetention: 4},
-		Policy:  types.HostingPolicy{SchemaVersion: 3, Permissions: types.HostingPermissionPolicy{Git: true, Composer: true, ComposerCodeExecution: true, ManagedPHPDeployments: true, PHPWorkers: true}, Resources: types.HostingResourcePolicy{MaxPHPWorkers: 4, MaxPHPReleases: 5}},
-		Runtime: types.PHPRuntimeCapability{Version: "8.4", Ready: true},
+			PublicPath: "public", HealthPath: "/up", SharedPaths: []string{"storage", "bootstrap/cache"}, ReleaseRetention: 4, DesiredState: "active"},
+		Policy:       types.HostingPolicy{SchemaVersion: 3, Permissions: types.HostingPermissionPolicy{Hosting: true, Git: true, Composer: true, ComposerCodeExecution: true, ManagedPHPDeployments: true, PHPWorkers: true}, Resources: types.HostingResourcePolicy{MaxPHPWorkers: 4, MaxPHPReleases: 5}, PHP: types.HostingPHPPolicy{AllowedVersions: []string{"8.4"}}},
+		Runtime:      types.PHPRuntimeCapability{Version: "8.4", Ready: true},
+		Capabilities: types.RuntimeCapabilities{PHPRuntimes: []types.PHPRuntimeCapability{{Version: "8.4", Ready: true}}},
+		Lifecycle:    controlphpapp.LifecycleState{SubscriptionStatus: "active", CustomerStatus: "active", SiteStatus: "active", ProviderActive: true},
 	}
 }
 

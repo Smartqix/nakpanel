@@ -107,8 +107,47 @@
         return false;
       }
 
+      function selectedText(control) {
+        if (!control || control.selectedIndex < 0) return "Not selected";
+        return control.options[control.selectedIndex].text.trim();
+      }
+
+      var reviewTargets = {
+        repository: form.querySelector("[data-np-php-review-repository]"),
+        ref: form.querySelector("[data-np-php-review-ref]"),
+        php: form.querySelector("[data-np-php-review-php]"),
+        profile: form.querySelector("[data-np-php-review-profile]"),
+        composer: form.querySelector("[data-np-php-review-composer]"),
+        publicPath: form.querySelector("[data-np-php-review-public]"),
+        health: form.querySelector("[data-np-php-review-health]"),
+        shared: form.querySelector("[data-np-php-review-shared]"),
+        retention: form.querySelector("[data-np-php-review-retention]")
+      };
+
+      function reviewValue(hook, text) {
+        var target = reviewTargets[hook];
+        if (target) target.textContent = text || "None";
+      }
+
+      function syncPHPReview() {
+        var composer = [];
+        if (form.elements.composer_install && form.elements.composer_install.checked) composer.push("install");
+        if (form.elements.composer_allow_scripts && form.elements.composer_allow_scripts.checked) composer.push("scripts");
+        if (form.elements.composer_allow_plugins && form.elements.composer_allow_plugins.checked) composer.push("plugins");
+        reviewValue("repository", selectedText(form.elements.repository_id));
+        reviewValue("ref", form.elements.repository_ref.value.trim());
+        reviewValue("php", selectedText(form.elements.php_version));
+        reviewValue("profile", selectedText(form.elements.framework_profile));
+        reviewValue("composer", composer.length ? composer.join(", ") : "disabled");
+        reviewValue("publicPath", form.elements.public_path.value.trim() || "Document root");
+        reviewValue("health", form.elements.health_path.value.trim() || "/");
+        reviewValue("shared", form.elements.shared_paths.value.split(/\r?\n/).map(function (item) { return item.trim(); }).filter(Boolean).join(", ") || "None");
+        reviewValue("retention", form.elements.release_retention.value.trim());
+      }
+
       function showStep(index, focusPanel) {
         currentStep = Math.max(0, Math.min(index, stepPanels.length - 1));
+        if (currentStep === stepPanels.length - 1) syncPHPReview();
         stepPanels.forEach(function (panel, panelIndex) { panel.hidden = panelIndex !== currentStep; });
         stepLinks.forEach(function (link, linkIndex) {
           link.classList.toggle("is-active", linkIndex === currentStep);

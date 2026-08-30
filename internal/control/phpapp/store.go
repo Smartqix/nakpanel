@@ -74,6 +74,15 @@ type applicationRecord struct {
 	providerActive       bool
 }
 
+func lifecycleState(record applicationRecord) LifecycleState {
+	return LifecycleState{
+		SubscriptionStatus: record.subscriptionStatus,
+		CustomerStatus:     record.customerStatus,
+		SiteStatus:         record.siteStatus,
+		ProviderActive:     record.providerActive,
+	}
+}
+
 func scanApplication(row interface{ Scan(...any) error }) (applicationRecord, error) {
 	var record applicationRecord
 	var shared []byte
@@ -147,7 +156,8 @@ func (s *SQLStore) Workspace(ctx context.Context, siteID int64) (Workspace, erro
 		ConvergenceStatus: record.convergenceStatus, ObservedMessage: record.observedMessage,
 		LastError: record.lastError, AppliedRevision: record.appliedRevision,
 		ActiveDeploymentID: record.activeDeploymentID, PreviousDeploymentID: record.previousDeploymentID,
-		LoadedAt: time.Now().UTC(),
+		Lifecycle: lifecycleState(record),
+		LoadedAt:  time.Now().UTC(),
 	}
 	workspace.Deployments, err = loadDeploymentsTx(ctx, tx, record.spec.ApplicationID, 100)
 	if err != nil {

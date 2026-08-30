@@ -27,6 +27,17 @@ type SiteIdentity struct {
 	PHPVersion     string
 }
 
+// LifecycleState is the authoritative effective hosting lifecycle loaded with
+// the PHP application. UI callers must not infer these values from provider
+// dashboard inventories because customer rows are intentionally absent from a
+// normal client workspace.
+type LifecycleState struct {
+	SubscriptionStatus string
+	CustomerStatus     string
+	SiteStatus         string
+	ProviderActive     bool
+}
+
 type Workspace struct {
 	Application          types.PHPApplicationSpec
 	Deployments          []types.PHPDeployment
@@ -42,6 +53,7 @@ type Workspace struct {
 	AppliedRevision      int64
 	ActiveDeploymentID   int64
 	PreviousDeploymentID int64
+	Lifecycle            LifecycleState
 	LoadedAt             time.Time
 }
 
