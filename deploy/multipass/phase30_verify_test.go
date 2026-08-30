@@ -115,6 +115,16 @@ func TestPhase30VerifierUsesAcceptedDatabaseRotationPassword(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierMakesCustomCertificateInputOperatorReadable(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	if !strings.Contains(script, `install -d -m 0750 -o root -g nakpanel "${certs}"`) {
+		t.Fatal("custom certificate fixture must be traversable only by root and the nakpanel operator")
+	}
+	if strings.Contains(script, `install -d -m 0700 "${certs}"`) {
+		t.Fatal("root-only custom certificate fixture cannot be consumed by panelctl as nakpanel")
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{

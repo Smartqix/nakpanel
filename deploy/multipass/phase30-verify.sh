@@ -257,7 +257,7 @@ site_id="$1"; username="$2"
 domain=phase30-classic.test
 certs=/tmp/nakpanel-phase30-certs
 rm -rf "${certs}"
-install -d -m 0700 "${certs}"
+install -d -m 0750 -o root -g nakpanel "${certs}"
 cd "${certs}"
 openssl ecparam -genkey -name prime256v1 -out root.key
 openssl req -x509 -new -key root.key -sha256 -days 30 -subj '/CN=Nakpanel Phase30 Root' -out root.crt \
