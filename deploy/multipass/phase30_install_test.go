@@ -14,27 +14,41 @@ func TestPhase30InstallerHasValidShellSyntax(t *testing.T) {
 	}
 }
 
-func TestPhase3RunsCanonicalPhase30InstallerBeforeServicesAndProvisioning(t *testing.T) {
-	data, err := os.ReadFile("phase3-verify.sh")
-	if err != nil {
-		t.Fatal(err)
+func TestLegacyBootstrapsRunCanonicalPhase30InstallerBeforeBuildServicesAndProvisioning(t *testing.T) {
+	tests := []struct {
+		name            string
+		path            string
+		provisionMarker string
+	}{
+		{name: "Phase 3 direct verifier", path: "phase3-verify.sh", provisionMarker: `create_status="$(curl`},
+		{name: "Phase 5 shared bootstrap", path: "phase5-ui-verify.sh", provisionMarker: `site_status="$(curl`},
 	}
-	script := string(data)
-	installer := strings.Index(script, `sudo bash "${REMOTE_SRC}/deploy/install/phase30-install.sh"`)
-	agentStart := strings.Index(script, "sudo systemctl restart nakpanel-agent.service")
-	panelStart := strings.Index(script, "sudo systemctl restart nakpanel.service")
-	provision := strings.Index(script, `create_status="$(curl`)
-	if installer < 0 {
-		t.Fatal("Phase 3 must run the canonical phase30-install.sh")
-	}
-	for label, index := range map[string]int{
-		"agent startup":     agentStart,
-		"panel startup":     panelStart,
-		"site provisioning": provision,
-	} {
-		if index < 0 || installer >= index {
-			t.Fatalf("Phase 3 must run phase30-install.sh before %s", label)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := os.ReadFile(tt.path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			script := string(data)
+			installer := strings.Index(script, `sudo bash "${REMOTE_SRC}/deploy/install/phase30-install.sh"`)
+			if installer < 0 {
+				t.Fatalf("%s must run the canonical phase30-install.sh", tt.name)
+			}
+			for _, boundary := range []struct {
+				label  string
+				marker string
+			}{
+				{label: "build", marker: "task build"},
+				{label: "agent startup", marker: "sudo systemctl restart nakpanel-agent.service"},
+				{label: "panel startup", marker: "sudo systemctl restart nakpanel.service"},
+				{label: "site provisioning", marker: tt.provisionMarker},
+			} {
+				index := strings.Index(script, boundary.marker)
+				if index < 0 || installer >= index {
+					t.Fatalf("%s must run phase30-install.sh before %s", tt.name, boundary.label)
+				}
+			}
+		})
 	}
 }
 

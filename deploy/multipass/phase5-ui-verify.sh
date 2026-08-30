@@ -17,6 +17,7 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get update
 sudo apt-get install -y acl ca-certificates curl postgresql postgresql-contrib nginx php8.3-fpm mariadb-server build-essential python3
+sudo bash "${REMOTE_SRC}/deploy/install/phase30-install.sh"
 
 arch="$(uname -m)"
 case "${arch}" in
