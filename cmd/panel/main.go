@@ -21,6 +21,7 @@ import (
 	controlfiles "github.com/nakroteck/nakpanel/internal/control/filemanager"
 	panelhttp "github.com/nakroteck/nakpanel/internal/control/http"
 	controlmaintenance "github.com/nakroteck/nakpanel/internal/control/maintenance"
+	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
 	"github.com/nakroteck/nakpanel/internal/control/provisioningapi"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
@@ -207,6 +208,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, nil, nil, nil, fmt.Errorf("load server secret keyring: %w", err)
 	}
 	serverAdminStore := serveradmin.NewStore(db, keyring)
+	phpApplicationStore := controlphpapp.NewSQLStore(db, nil, serverAdminStore)
 	serverAdminManager := serveradmin.NewManager(serverAdminStore, nil, agent)
 	databaseAdminManager := databaseadmin.NewManager(db, agent, serverAdminStore, nil)
 	dnsTemplateManager := dnstemplate.NewManager(db, nil)
@@ -256,6 +258,12 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	river.AddWorker(workers, migrationWorker)
 	river.AddWorker(workers, cleanupSweepWorker)
 	river.AddWorker(workers, controlquota.NewCleanupLegacyHomesWorker(db, agent))
+	river.AddWorker(workers, controlphpapp.NewDeployPHPReleaseWorker(phpApplicationStore, agent, agent))
+	river.AddWorker(workers, controlphpapp.NewRollbackPHPReleaseWorker(phpApplicationStore, agent, agent))
+	river.AddWorker(workers, controlphpapp.NewReconcilePHPApplicationWorker(phpApplicationStore, agent, agent))
+	river.AddWorker(workers, controlphpapp.NewReconcilePHPWorkersWorker(phpApplicationStore, agent, agent))
+	river.AddWorker(workers, controlphpapp.NewSweepPHPApplicationsWorker(phpApplicationStore))
+	river.AddWorker(workers, controlphpapp.NewSweepPHPRuntimesWorker(phpApplicationStore, agent))
 	usageWorker := controlquota.NewCollectUsageWorker(db, agent)
 	river.AddWorker(workers, usageWorker)
 	river.AddWorker(workers, controlquota.NewDeliverNotificationsWorker(db, controlquota.SMTPConfig{
@@ -290,6 +298,12 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
 		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(river.PeriodicInterval(5*time.Minute), func() (river.JobArgs, *river.InsertOpts) {
+				return controlphpapp.SweepPHPApplicationsArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(24*time.Hour), func() (river.JobArgs, *river.InsertOpts) {
+				return controlphpapp.SweepPHPRuntimesArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) {
 				return provisioningapi.SweepWebhookArgs{}, nil
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
@@ -351,6 +365,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, nil, nil, nil, err
 	}
 	usageWorker.SetRiverClient(client)
+	phpApplicationStore.SetRiverClient(client)
 	syncPlanWorker.SetRiverClient(client)
 	syncAddonWorker.SetRiverClient(client)
 	scheduledTaskSweepWorker.SetRiverClient(client)

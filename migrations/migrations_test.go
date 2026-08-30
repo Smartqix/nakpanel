@@ -281,6 +281,8 @@ func TestPhase30ProductionPHPMigrationIsConstrainedAndClassicByDefault(t *testin
 		"FOREIGN KEY (secret_id,secret_scope) REFERENCES service_secrets(id,scope)",
 		"INSERT INTO php_applications",
 		"SELECT site.subscription_id,site.id,'classic'",
+		"nakpanel_create_php_application_for_site",
+		"CREATE TRIGGER sites_create_php_application",
 		"php_applications_account_teardown_guard",
 		"php_deployments_account_teardown_guard",
 		"php_environment_bindings_account_teardown_guard",

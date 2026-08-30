@@ -122,6 +122,10 @@ const accountChildJobPredicate = `(
 	OR (j.kind='converge_application' AND j.args->>'application_id' IN (
 		SELECT id::text FROM application_instances WHERE subscription_id=$1::bigint
 	))
+	OR (j.kind IN ('deploy_php_release','rollback_php_release','reconcile_php_application','reconcile_php_workers')
+		AND j.args->>'application_id' IN (
+			SELECT id::text FROM php_applications WHERE subscription_id=$1::bigint
+		))
 	OR (j.kind='run_staging_operation' AND j.args->>'operation_id' IN (
 		SELECT operation.id::text FROM staging_operations operation
 		JOIN sites source ON source.id=operation.source_site_id
@@ -146,6 +150,11 @@ const accountChildJobPredicate = `(
 		)
 	))
 )`
+
+const phpEnvironmentSecretCleanupSQL = `WITH removed AS (
+	DELETE FROM php_environment_bindings WHERE subscription_id=$1 RETURNING secret_id
+)
+DELETE FROM service_secrets WHERE id IN (SELECT secret_id FROM removed WHERE secret_id IS NOT NULL)`
 
 func (w *TeardownAccountWorker) Work(ctx context.Context, job *river.Job[TeardownAccountArgs]) error {
 	if w.db == nil {
@@ -269,6 +278,9 @@ WHERE source.subscription_id=$1 ORDER BY operation.id`, subscriptionID)
 	defer tx.Rollback()
 	// Child tables cascade from sites/subscriptions where configured. Explicit deletes keep the tombstone subscription and billing identity.
 	if _, err = tx.ExecContext(ctx, `SELECT set_config('nakpanel.account_teardown','on',true)`); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, phpEnvironmentSecretCleanupSQL, subscriptionID); err != nil {
 		return err
 	}
 	for _, query := range []string{

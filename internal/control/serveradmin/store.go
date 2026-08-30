@@ -22,6 +22,7 @@ var (
 	ErrOperationInProgress = errors.New("a matching server operation is already active")
 
 	identifierPattern  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+	secretScopePattern = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,63}$`)
 	actionPattern      = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,95}$`)
 	secretNamePattern  = regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,127}$`)
 	operationIDPattern = regexp.MustCompile(`^op_[A-Za-z0-9_-]{20,64}$`)
@@ -597,7 +598,7 @@ func (s *Store) putSecret(ctx context.Context, queryer secretQueryer, params Put
 	if s.keyring == nil {
 		return SecretReference{}, ErrSecretUnavailable
 	}
-	if !identifierPattern.MatchString(params.Scope) || !secretNamePattern.MatchString(params.Name) {
+	if !secretScopePattern.MatchString(params.Scope) || !secretNamePattern.MatchString(params.Name) {
 		return SecretReference{}, errors.New("invalid service secret identity")
 	}
 	if params.ActorUserID < 0 {
@@ -640,7 +641,7 @@ func (s *Store) GetSecret(ctx context.Context, scope, name string) ([]byte, Secr
 	if s.keyring == nil {
 		return nil, SecretReference{}, ErrSecretUnavailable
 	}
-	if !identifierPattern.MatchString(scope) || !secretNamePattern.MatchString(name) {
+	if !secretScopePattern.MatchString(scope) || !secretNamePattern.MatchString(name) {
 		return nil, SecretReference{}, errors.New("invalid service secret identity")
 	}
 	record, err := s.loadSecret(ctx, scope, name)
@@ -658,7 +659,7 @@ func (s *Store) RotateSecret(ctx context.Context, scope, name string, actorUserI
 	if s.keyring == nil {
 		return SecretReference{}, ErrSecretUnavailable
 	}
-	if !identifierPattern.MatchString(scope) || !secretNamePattern.MatchString(name) || actorUserID < 0 {
+	if !secretScopePattern.MatchString(scope) || !secretNamePattern.MatchString(name) || actorUserID < 0 {
 		return SecretReference{}, errors.New("invalid service secret rotation")
 	}
 	record, err := s.loadSecret(ctx, scope, name)
@@ -703,7 +704,7 @@ func (s *Store) DeleteSecretTx(ctx context.Context, tx *sql.Tx, scope, name stri
 }
 
 func deleteSecret(ctx context.Context, executor secretExecutor, scope, name string) error {
-	if !identifierPattern.MatchString(scope) || !secretNamePattern.MatchString(name) {
+	if !secretScopePattern.MatchString(scope) || !secretNamePattern.MatchString(name) {
 		return errors.New("invalid service secret identity")
 	}
 	_, err := executor.ExecContext(ctx, `DELETE FROM service_secrets WHERE scope=$1 AND name=$2`, scope, name)

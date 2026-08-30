@@ -64,14 +64,25 @@ WHERE application.subscription_id=site.subscription_id
 	if _, err := db.Exec(`INSERT INTO sites(id,subscription_id,php_version,desired_status) VALUES(303,1,'8.4','active')`); err != nil {
 		t.Fatal(err)
 	}
-	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version) VALUES(2,303,'8.4')`)
-	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,repository_id) VALUES(1,303,'8.4',11)`)
-	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,framework_profile) VALUES(1,303,'8.4','wordpress')`)
-	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,health_path) VALUES(1,303,'8.4','relative')`)
-	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,shared_paths) VALUES(1,303,'8.4','["../escape"]')`)
-	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,shared_paths) VALUES(1,303,'8.4','[1]')`)
-	if _, err := db.Exec(`INSERT INTO php_applications(subscription_id,site_id,php_version,applied_revision) VALUES(1,303,'8.4',1)`); err != nil {
-		t.Fatalf("insert canonical post-migration Classic application: %v", err)
+	var app3 int64
+	if err := db.QueryRow(`SELECT id FROM php_applications WHERE site_id=303 AND subscription_id=1
+AND hosting_mode='classic' AND php_version='8.4' AND applied_revision=1`).Scan(&app3); err != nil {
+		t.Fatalf("new site Classic application trigger: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO sites(id,subscription_id,php_version,desired_status) VALUES(404,1,'8.4','active')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DELETE FROM php_applications WHERE site_id=404`); err != nil {
+		t.Fatal(err)
+	}
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version) VALUES(2,404,'8.4')`)
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,repository_id) VALUES(1,404,'8.4',11)`)
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,framework_profile) VALUES(1,404,'8.4','wordpress')`)
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,health_path) VALUES(1,404,'8.4','relative')`)
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,shared_paths) VALUES(1,404,'8.4','["../escape"]')`)
+	expectPhase30ConstraintError(t, db, `INSERT INTO php_applications(subscription_id,site_id,php_version,shared_paths) VALUES(1,404,'8.4','[1]')`)
+	if _, err := db.Exec(`DELETE FROM sites WHERE id=404`); err != nil {
+		t.Fatal(err)
 	}
 
 	expectPhase30ConstraintError(t, db, fmt.Sprintf(`INSERT INTO php_deployments(subscription_id,application_id,requested_revision,release_number) VALUES(2,%d,'main',1)`, app1))

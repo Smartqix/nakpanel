@@ -32,6 +32,7 @@ CREATE TABLE php_applications (
     composer_install BOOLEAN NOT NULL DEFAULT false,
     composer_allow_scripts BOOLEAN NOT NULL DEFAULT false,
     composer_allow_plugins BOOLEAN NOT NULL DEFAULT false,
+    release_retention INTEGER NOT NULL DEFAULT 5 CHECK (release_retention BETWEEN 1 AND 100),
     desired_state TEXT NOT NULL DEFAULT 'active'
         CHECK (desired_state IN ('active','suspended')),
     observed_state TEXT NOT NULL DEFAULT 'classic'
@@ -151,6 +152,28 @@ SELECT site.subscription_id,site.id,'classic',site.php_version,
        'classic',1,1,'in_sync'
 FROM sites site;
 
+-- Keep the one-application-per-site invariant for every site creation path,
+-- including provisioning APIs and future import/recovery workflows.
+-- +goose StatementBegin
+CREATE FUNCTION nakpanel_create_php_application_for_site()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    INSERT INTO php_applications(subscription_id,site_id,hosting_mode,php_version,
+                                 desired_state,observed_state,desired_revision,
+                                 applied_revision,convergence_status)
+    VALUES(NEW.subscription_id,NEW.id,'classic',NEW.php_version,
+           NEW.desired_status,'classic',1,1,'in_sync');
+    RETURN NEW;
+END;
+$$;
+-- +goose StatementEnd
+
+CREATE TRIGGER sites_create_php_application
+    AFTER INSERT ON sites
+    FOR EACH ROW EXECUTE FUNCTION nakpanel_create_php_application_for_site();
+
 ALTER TABLE notifications DROP CONSTRAINT notifications_kind_check;
 ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check
     CHECK (kind IN ('threshold', 'over_limit', 'collection_failed', 'suspended', 'sync_failed',
@@ -219,6 +242,9 @@ CREATE TRIGGER php_workers_account_teardown_guard
     FOR EACH ROW EXECUTE FUNCTION nakpanel_guard_php_account_teardown();
 
 -- +goose Down
+DROP TRIGGER IF EXISTS sites_create_php_application ON sites;
+DROP FUNCTION IF EXISTS nakpanel_create_php_application_for_site();
+
 -- +goose StatementBegin
 DO $$
 BEGIN
@@ -238,6 +264,7 @@ BEGIN
            OR application.composer_install
            OR application.composer_allow_scripts
            OR application.composer_allow_plugins
+           OR application.release_retention <> 5
            OR application.desired_state <> site.desired_status
            OR application.observed_state <> 'classic'
            OR application.active_deployment_id IS NOT NULL

@@ -586,6 +586,7 @@ type PhpApplication struct {
 	ComposerInstall      bool
 	ComposerAllowScripts bool
 	ComposerAllowPlugins bool
+	ReleaseRetention     int32
 	DesiredState         string
 	ObservedState        string
 	ActiveDeploymentID   sql.NullInt64

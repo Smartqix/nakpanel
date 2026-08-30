@@ -40,10 +40,19 @@ func TestAccountChildJobPredicateCoversIndirectResourceJobs(t *testing.T) {
 		"j.kind='reconcile_system'",
 		"j.args->'sites'",
 		"j.args->'databases'",
+		"j.kind IN ('deploy_php_release','rollback_php_release','reconcile_php_application','reconcile_php_workers')",
+		"SELECT id::text FROM php_applications WHERE subscription_id=$1::bigint",
 	} {
 		if !strings.Contains(accountChildJobPredicate, qualified) {
 			t.Fatalf("account child-job predicate is not kind-qualified: %s", qualified)
 		}
+	}
+}
+
+func TestAccountTeardownRemovesPHPEnvironmentSecretsBeforeSites(t *testing.T) {
+	if !strings.Contains(phpEnvironmentSecretCleanupSQL, "DELETE FROM php_environment_bindings") ||
+		!strings.Contains(phpEnvironmentSecretCleanupSQL, "DELETE FROM service_secrets") {
+		t.Fatal("account teardown does not transactionally remove PHP environment bindings and secrets")
 	}
 }
 
