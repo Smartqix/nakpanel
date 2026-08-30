@@ -59,6 +59,7 @@ func sanitizedPHPWorkspace(workspace controlphpapp.Workspace) controlphpapp.Work
 	if len(capabilities.PHPRuntimes) == 1 {
 		workspace.Runtime = capabilities.PHPRuntimes[0]
 	}
+	workspace.Capabilities = sanitizedPHPCapabilities(workspace.Capabilities)
 	return workspace
 }
 

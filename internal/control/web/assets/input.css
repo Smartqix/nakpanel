@@ -2,6 +2,137 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Phase 30 PHP application workspace. These components deliberately use the
+   established 14-16px reading scale even inside dense operational views. */
+@layer components {
+  .np-php-app { display: grid; gap: 16px; min-width: 0; }
+  .np-php-app-heading { align-items: center; margin: 0; }
+  .np-php-app-heading h2 { font-size: 22px; font-weight: 650; margin: 2px 0 5px; }
+  .np-php-app-heading p { color: var(--np-muted); font-size: 15px; line-height: 1.55; margin: 0; max-width: 780px; }
+  .np-php-app-head-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; }
+  .np-php-app-head-actions form { margin: 0; }
+  .np-php-app-head-actions button { align-items: center; display: inline-flex; gap: 7px; }
+  .np-php-app-tabs { align-items: center; background: var(--np-surface); border: 1px solid var(--np-border); border-radius: 6px; display: flex; gap: 2px; min-height: 48px; overflow-x: auto; padding: 4px; scrollbar-width: thin; }
+  .np-php-app-tabs a { align-items: center; border-radius: 4px; color: var(--np-muted); display: inline-flex; flex: 0 0 auto; font-size: 14px; font-weight: 600; justify-content: center; min-height: 40px; padding: 0 14px; }
+  .np-php-app-tabs a:hover { background: var(--np-hover); color: var(--np-ink); }
+  .np-php-app-tabs a.is-active { background: var(--np-primary-soft); color: var(--np-primary-dark); }
+  .np-php-app .np-panel { margin: 0; min-width: 0; overflow: hidden; }
+  .np-php-app .np-panel-title h3 { font-size: 17px; font-weight: 650; margin: 0; }
+  .np-php-app .np-panel-title h4 { font-size: 15px; margin: 0; }
+  .np-php-summary-band { background: var(--np-surface-2); border-top: 1px solid var(--np-border-soft); display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); margin: 0; }
+  .np-php-summary-band > div { border-right: 1px solid var(--np-border-soft); display: grid; gap: 5px; min-width: 0; padding: 16px; }
+  .np-php-summary-band > div:last-child { border-right: 0; }
+  .np-php-summary-band dt, .np-php-allocation span { color: var(--np-faint); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+  .np-php-summary-band dd { color: var(--np-ink); font-size: 15px; font-weight: 650; margin: 0; overflow-wrap: anywhere; }
+  .np-php-summary-band small { color: var(--np-muted); font-size: 13px; line-height: 1.4; min-height: 18px; overflow-wrap: anywhere; }
+  .np-php-classic > .np-callout, .np-php-app-summary > .np-gate { margin: 16px; }
+  .np-php-diagnostics { grid-template-columns: repeat(2,minmax(0,1fr)); padding: 0 16px; }
+  .np-php-diagnostics > div { min-width: 0; }
+  .np-php-diagnostics code { overflow-wrap: anywhere; white-space: normal; }
+  .np-php-extension-summary { border-top: 1px solid var(--np-border-soft); display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .np-php-extension-summary > div { display: grid; gap: 6px; min-width: 0; padding: 14px 16px; }
+  .np-php-extension-summary > div + div { border-left: 1px solid var(--np-border-soft); }
+  .np-php-extension-summary strong { color: var(--np-ink); font-size: 14px; }
+  .np-php-extension-summary span { color: var(--np-muted); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+  .np-php-extension-summary .is-missing { color: var(--np-fail); font-weight: 600; }
+  .np-php-tool-links { border-top: 1px solid var(--np-border-soft); display: flex; flex-wrap: wrap; gap: 4px; padding: 10px 12px; }
+  .np-php-tool-links a { align-items: center; border-radius: 4px; color: var(--np-primary-dark); display: inline-flex; font-size: 14px; font-weight: 600; min-height: 40px; padding: 0 10px; }
+  .np-php-tool-links a:hover { background: var(--np-primary-soft); }
+  .np-php-empty { padding: 22px; }
+  .np-php-empty h3 { font-size: 18px; margin-bottom: 8px; }
+  .np-php-empty p { color: var(--np-muted); font-size: 15px; line-height: 1.55; }
+  .np-php-object-list, .np-php-worker-list, .np-php-release-list { display: grid; }
+  .np-php-object-list article { align-items: center; border-top: 1px solid var(--np-border-soft); display: grid; gap: 14px; grid-template-columns: minmax(160px,.6fr) minmax(180px,1fr) auto; min-height: 70px; padding: 12px 16px; }
+  .np-php-object-list article > div { display: grid; gap: 4px; min-width: 0; }
+  .np-php-object-list strong { font-size: 15px; }
+  .np-php-object-list small { color: var(--np-muted); font-size: 13px; }
+  .np-php-object-list code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-php-object-list article > .np-row-actions { justify-content: flex-end; }
+  .np-secret-mask { color: var(--np-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 1px; }
+  .np-php-allocation { align-items: center; background: var(--np-surface-2); border-top: 1px solid var(--np-border-soft); display: flex; justify-content: space-between; padding: 12px 16px; }
+  .np-php-allocation strong { font-size: 15px; }
+  .np-php-worker-list article { border-top: 1px solid var(--np-border-soft); display: grid; gap: 12px; padding: 16px; }
+  .np-php-worker-main { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
+  .np-php-worker-main > div { display: grid; gap: 5px; min-width: 0; }
+  .np-php-worker-main strong { font-size: 15px; }
+  .np-php-worker-main code { font-size: 13px; overflow-wrap: anywhere; white-space: normal; }
+  .np-php-worker-list dl { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 0; }
+  .np-php-worker-list dl > div { display: grid; gap: 3px; }
+  .np-php-worker-list dt { color: var(--np-faint); font-size: 12px; }
+  .np-php-worker-list dd { font-size: 14px; font-weight: 600; margin: 0; }
+  .np-php-worker-list .np-row-actions { justify-self: end; }
+  .np-php-release-list article { align-items: center; border-top: 1px solid var(--np-border-soft); display: grid; gap: 16px; grid-template-columns: minmax(200px,1fr) minmax(130px,.35fr) auto; min-height: 82px; padding: 14px 16px; }
+  .np-php-release-identity { align-items: center; display: flex; gap: 12px; min-width: 0; }
+  .np-php-release-identity .np-object-icon { font-size: 12px; font-weight: 700; }
+  .np-php-release-identity > div { display: grid; gap: 3px; min-width: 0; }
+  .np-php-release-identity strong { font-size: 15px; }
+  .np-php-release-identity code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-php-release-identity small { color: var(--np-muted); font-size: 13px; }
+  .np-php-release-list article > div:nth-child(2) { display: grid; gap: 5px; justify-items: start; }
+  .np-php-deployment-detail { border-top: 1px solid var(--np-border-soft); }
+  .np-php-deployment-detail .np-facts { padding: 0 16px; }
+  .np-bounded-output { background: #111827; border-radius: 6px; color: #e5e7eb; font-size: 13px; line-height: 1.55; margin: 12px 16px 16px; max-height: 240px; overflow: auto; padding: 14px; white-space: pre-wrap; }
+  .np-php-log-sources { border-top: 1px solid var(--np-border-soft); display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+  .np-php-log-sources a { display: grid; gap: 5px; min-height: 92px; padding: 16px; }
+  .np-php-log-sources a + a { border-left: 1px solid var(--np-border-soft); }
+  .np-php-log-sources strong { color: var(--np-primary-dark); font-size: 15px; }
+  .np-php-log-sources span { color: var(--np-muted); font-size: 13px; line-height: 1.45; }
+  .np-php-setup-dialog { max-width: 780px; }
+  .np-php-setup { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .np-php-setup-steps, .np-php-review, .np-php-setup > .np-permission-list, .np-php-setup > .np-dialog-actions { grid-column: 1 / -1; }
+  .np-php-setup-steps { display: grid; gap: 4px; grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .np-php-setup-steps span { background: var(--np-surface-2); border-bottom: 2px solid var(--np-border); color: var(--np-muted); font-size: 13px; font-weight: 650; padding: 10px; text-align: center; }
+  .np-php-setup-steps span.is-active { border-color: var(--np-primary); color: var(--np-primary-dark); }
+  .np-php-review { background: var(--np-primary-soft); border-left: 3px solid var(--np-primary); border-radius: 4px; padding: 12px 14px; }
+  .np-php-review strong { font-size: 14px; }
+  .np-php-review p { color: var(--np-muted); font-size: 14px; line-height: 1.5; margin: 4px 0 0; }
+  .np-php-tool-summary { background: var(--np-surface); border: 1px solid var(--np-border); border-radius: 6px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); margin: 0 0 16px; }
+  .np-php-tool-summary > div { display: grid; gap: 4px; min-width: 0; padding: 16px; }
+  .np-php-tool-summary > div + div { border-left: 1px solid var(--np-border-soft); }
+  .np-php-tool-summary dt { color: var(--np-faint); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+  .np-php-tool-summary dd { font-size: 16px; font-weight: 650; margin: 0; }
+  .np-php-tool-summary small { color: var(--np-muted); font-size: 13px; }
+  .np-php-runtime-list { display: grid; gap: 14px; }
+  .np-php-runtime { background: var(--np-surface); border: 1px solid var(--np-border); border-radius: 6px; overflow: hidden; }
+  .np-php-runtime.unavailable { border-left: 3px solid var(--np-fail); }
+  .np-php-runtime header { align-items: center; display: flex; justify-content: space-between; padding: 16px; }
+  .np-php-runtime header > div { align-items: center; display: flex; gap: 12px; }
+  .np-php-runtime h4 { font-size: 18px; margin: 0; }
+  .np-php-runtime header p { color: var(--np-muted); font-size: 14px; margin: 3px 0 0; }
+  .np-php-runtime dl { border-top: 1px solid var(--np-border-soft); display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 0; }
+  .np-php-runtime dl > div { display: grid; gap: 4px; min-width: 0; padding: 14px 16px; }
+  .np-php-runtime dl > div + div { border-left: 1px solid var(--np-border-soft); }
+  .np-php-runtime dt { color: var(--np-faint); font-size: 12px; font-weight: 700; }
+  .np-php-runtime dd { font-size: 14px; font-weight: 650; margin: 0; }
+  .np-php-runtime code { font-size: 12px; overflow-wrap: anywhere; white-space: normal; }
+  .np-php-validation-errors { background: #fff7ed; border-top: 1px solid #fed7aa; color: #7c2d12; padding: 14px 16px; }
+  .np-php-validation-errors strong { font-size: 14px; }
+  .np-php-validation-errors ul { font-size: 13px; line-height: 1.5; margin: 7px 0 0; padding-left: 20px; }
+
+  @media (max-width: 760px) {
+    .np-php-app-heading { align-items: stretch; }
+    .np-php-app-head-actions, .np-php-app-head-actions form, .np-php-app-head-actions button { width: 100%; }
+    .np-php-app-tabs { margin-inline: -4px; }
+    .np-php-app-tabs a { min-height: 44px; padding-inline: 13px; }
+    .np-php-summary-band, .np-php-diagnostics, .np-php-extension-summary, .np-php-log-sources, .np-php-tool-summary, .np-php-runtime dl { grid-template-columns: 1fr; }
+    .np-php-summary-band > div, .np-php-extension-summary > div + div, .np-php-log-sources a + a, .np-php-tool-summary > div + div, .np-php-runtime dl > div + div { border-left: 0; border-right: 0; border-top: 1px solid var(--np-border-soft); }
+    .np-php-object-list article { grid-template-columns: minmax(0,1fr) auto; }
+    .np-php-object-list article > div:nth-child(2) { grid-column: 1 / -1; grid-row: 2; }
+    .np-php-object-list article > .np-row-actions { grid-column: 2; grid-row: 1; }
+    .np-php-object-list article > .np-row-actions button { min-height: 44px; min-width: 44px; }
+    .np-php-worker-list dl { grid-template-columns: repeat(3,minmax(0,1fr)); }
+    .np-php-worker-list .np-row-actions, .np-php-worker-list .np-row-actions form, .np-php-worker-list .np-row-actions button { width: 100%; }
+    .np-php-release-list article { align-items: start; grid-template-columns: minmax(0,1fr) auto; }
+    .np-php-release-list article > div:nth-child(2) { justify-items: end; }
+    .np-php-release-actions { grid-column: 1 / -1; }
+    .np-php-release-actions button { min-height: 44px; width: 100%; }
+    .np-php-setup { grid-template-columns: 1fr; }
+    .np-php-setup > * { grid-column: 1; }
+    .np-php-setup-steps { overflow-x: auto; grid-template-columns: repeat(4,minmax(110px,1fr)); }
+    .np-php-runtime header { align-items: flex-start; gap: 12px; }
+  }
+}
+
 @layer base {
   :root {
     --np-bg: #f4f6f9;

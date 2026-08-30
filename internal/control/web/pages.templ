@@ -1188,8 +1188,7 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 					<div><dt>Memory</dt><dd data-np-focus-memory>Unknown</dd></div>
 				</dl>
 			case "php":
-					<div class="np-settings-focus-head"><div><span class="np-kicker">Web &amp; PHP</span><h3 id="settings-focus-title">PHP Runtime Inventory</h3><p>Supported PHP-FPM versions, service state, host CLI module counts, and FPM configuration validation. Runtime mutation stays hidden until validated apply and rollback are available.</p></div><span class="np-pill np-pill-susp" data-np-server-inventory-state>unknown</span></div>
-				<div class="np-settings-runtime-list" data-np-focus-php><p class="np-empty">Loading PHP-FPM inventory...</p></div>
+				@phpRuntimeInventory(view)
 			case "services":
 				<div class="np-settings-focus-head">
 					<div><span class="np-kicker">Server Management</span><h3 id="settings-focus-title">Managed Services</h3><p>Monitor the allowlisted services that power the panel and hosting stack. Changes are validated and serialized through the system operation queue.</p></div>
@@ -1424,7 +1423,7 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 					</table>
 				</div>
 			case "applications":
-				<div class="np-settings-focus-head"><div><span class="np-kicker">Applications &amp; Containers</span><h3 id="settings-focus-title">Provider Application Catalog</h3><p>Provider-curated, digest-pinned OCI recipes. Managed WordPress, Node.js, and Python recipes remain unavailable until their adapters are installed.</p></div><span class="np-pill np-pill-ok">OCI only</span></div>
+				<div class="np-settings-focus-head"><div><span class="np-kicker">Applications &amp; Containers</span><h3 id="settings-focus-title">Provider Application Catalog</h3><p>Provider-curated, digest-pinned OCI recipes. Managed PHP releases live in each domain's PHP Application workspace; WordPress Toolkit, Node.js, and Python are not implemented.</p></div><span class="np-pill np-pill-ok">OCI only</span></div>
 				<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Recipe</th><th>Runtime</th><th>Image</th><th>Status</th></tr></thead><tbody>
 					for _, preset := range data.SubscriptionServices.ApplicationPresets {
 						<tr><td data-label="Recipe"><strong>{ preset.Name }</strong><small>{ preset.Slug }</small></td><td data-label="Runtime">{ preset.Runtime }</td><td data-label="Image"><code>{ shortImageReference(preset.ImageRef) }</code></td><td data-label="Status">
@@ -1471,6 +1470,44 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 				</dialog>
 		}
 	</section>
+}
+
+templ phpRuntimeInventory(view WorkspaceView) {
+	<div class="np-settings-focus-head"><div><span class="np-kicker">Web &amp; PHP</span><h3 id="settings-focus-title">PHP Runtime Inventory</h3><p>Only complete, validated PHP-FPM runtimes are offered to hosting plans and websites. System package controls remain outside the browser.</p></div>
+		if view.PHPRuntimeInventory != nil && len(view.PHPRuntimeInventory.PHPVersions) > 0 {
+			<span class="np-pill np-pill-ok">{ formatPlanLimit(len(view.PHPRuntimeInventory.PHPVersions)) } ready</span>
+		} else {
+			<span class="np-pill np-pill-fail">No ready runtime</span>
+		}
+	</div>
+	if view.PHPRuntimeInventory == nil {
+		<p class="np-gate is-blocked">PHP capability inventory is unavailable.</p>
+	}
+	if view.PHPRuntimeInventory != nil {
+		@phpRuntimeInventoryContent(*view.PHPRuntimeInventory)
+	}
+}
+
+templ phpRuntimeInventoryContent(inventory types.RuntimeCapabilities) {
+	<div class="np-php-runtime-workspace">
+		<dl class="np-php-tool-summary"><div><dt>Composer</dt><dd>{ phpToolStatus(inventory.ComposerAvailable,"Composer "+inventory.ComposerVersion) }</dd><small>self-update disabled</small></div><div><dt>WP-CLI</dt><dd>{ phpToolStatus(inventory.WPCLIAvailable,"WP-CLI "+inventory.WPCLIVersion) }</dd><small>compatibility tooling</small></div><div><dt>Production default</dt><dd>PHP 8.4</dd><small>recommended for new sites</small></div></dl>
+		<div class="np-php-runtime-list">
+			for _, runtime := range inventory.PHPRuntimes {
+				<article class={ "np-php-runtime " + phpRuntimeState(runtime) }><header><div><span class="np-object-icon">PHP</span><div><h4>PHP { runtime.Version }</h4><p>{ phpRuntimeRecommendation(runtime) } · { phpSupportLabel(runtime.SupportStatus) }</p></div></div>@statusPill(phpRuntimeState(runtime))</header>
+					<dl><div><dt>CLI</dt><dd>{ yesNo(runtime.CLIAvailable) }</dd><code>{ runtime.CLIPath }</code></div><div><dt>PHP-FPM</dt><dd>{ yesNo(runtime.FPMAvailable) }</dd><code>{ runtime.FPMPath }</code></div><div><dt>FPM validation</dt><dd>{ yesNo(runtime.FPMConfigValid) }</dd></div><div><dt>OPcache</dt><dd>{ yesNo(runtime.OPcacheAvailable) }</dd></div></dl>
+					@phpExtensionSummary(runtime)
+					if len(runtime.ValidationErrors) > 0 {
+						<div class="np-php-validation-errors"><strong>Capability checks</strong><ul>
+							for _, message := range runtime.ValidationErrors {
+								<li>{ message }</li>
+							}
+						</ul></div>
+					}
+				</article>
+			}
+			</div>
+			<p class="np-callout">PHP 8.3 remains visible for migrated sites while security support lasts. PHP 8.5 is offered only after every CLI, FPM, extension, OPcache, and probe-pool check succeeds.</p>
+	</div>
 }
 
 templ dnsSettingsFocus(view WorkspaceView) {

@@ -72,6 +72,7 @@ func (m *Manager) Workspace(ctx context.Context, actor auth.SessionUser, siteID 
 	if m.capabilities != nil {
 		capabilities, capabilityErr := m.capabilities.RuntimeCapabilities(ctx)
 		if capabilityErr == nil {
+			workspace.Capabilities = capabilities
 			for _, runtime := range capabilities.PHPRuntimes {
 				if runtime.Version == workspace.Application.PHPVersion {
 					workspace.Runtime = runtime

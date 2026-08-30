@@ -120,4 +120,7 @@ func TestWorkspaceReportsExactUnreadyRuntimeDiagnostics(t *testing.T) {
 	if workspace.Runtime.Version != "8.5" || workspace.Runtime.Ready || len(workspace.Runtime.ValidationErrors) != 1 {
 		t.Fatalf("workspace runtime = %#v; want detailed unready runtime", workspace.Runtime)
 	}
+	if len(workspace.Capabilities.PHPRuntimes) != 1 || workspace.Capabilities.PHPRuntimes[0].Version != "8.5" {
+		t.Fatalf("workspace capabilities = %#v; want complete runtime inventory", workspace.Capabilities)
+	}
 }

@@ -54,8 +54,244 @@ type WorkspaceView struct {
 	DNSSettingsError     string
 	DNSPreview           *types.DNSSyncRun
 	SettingsFocus        string
+	ApplicationTab       string
 	PHPApplication       *controlphpapp.Workspace
 	PHPRuntimeInventory  *types.RuntimeCapabilities
+}
+
+func phpApplicationTab(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	switch value {
+	case "overview", "deployment", "environment", "workers", "releases", "logs", "activity":
+		return value
+	default:
+		return "overview"
+	}
+}
+
+func phpApplicationTabURL(view WorkspaceView, siteID int64, tab string) templ.SafeURL {
+	base := workspacePath(view, "/sites/"+formatJobID(siteID)+"/applications")
+	if tab == "overview" {
+		return templ.SafeURL(base)
+	}
+	return templ.SafeURL(base + "?app_tab=" + url.QueryEscape(phpApplicationTab(tab)))
+}
+
+func phpApplicationTabClass(view WorkspaceView, tab string) string {
+	if phpApplicationTab(view.ApplicationTab) == tab {
+		return "is-active"
+	}
+	return ""
+}
+
+func phpApplicationAriaCurrent(view WorkspaceView, tab string) string {
+	return ariaCurrent(phpApplicationTabClass(view, tab))
+}
+
+func phpHostingModeLabel(mode types.PHPHostingMode) string {
+	if mode == types.PHPHostingModeManaged {
+		return "Managed Deployment"
+	}
+	return "Classic Hosting"
+}
+
+func phpSupportLabel(status types.PHPSupportStatus) string {
+	switch status {
+	case types.PHPSupportActive:
+		return "Active support"
+	case types.PHPSupportSecuritySupported:
+		return "Security support only"
+	default:
+		return "Unsupported"
+	}
+}
+
+func phpRuntimeRecommendation(runtime types.PHPRuntimeCapability) string {
+	switch runtime.Version {
+	case "8.4":
+		return "Recommended default"
+	case "8.5":
+		return "Available when healthy"
+	case "8.3":
+		return "Migration compatibility"
+	default:
+		return "Detected runtime"
+	}
+}
+
+func phpRuntimeState(runtime types.PHPRuntimeCapability) string {
+	if runtime.Ready {
+		return "ready"
+	}
+	return "unavailable"
+}
+
+func phpDeploymentRollbackEligible(deployment types.PHPDeployment, activeID int64) bool {
+	if deployment.ID <= 0 || deployment.ID == activeID || deployment.ResolvedRevision == "" {
+		return false
+	}
+	return deployment.Status == "healthy" || deployment.Status == "retired"
+}
+
+func phpDeploymentMarker(deployment types.PHPDeployment, activeID, previousID int64) string {
+	if deployment.ID == activeID {
+		return "Active"
+	}
+	if deployment.ID == previousID {
+		return "Previous"
+	}
+	return "Retained"
+}
+
+func phpWorkerArguments(arguments []string) string {
+	if len(arguments) == 0 {
+		return "No arguments"
+	}
+	return strings.Join(arguments, " ")
+}
+
+func phpWorkerArgumentsTextarea(arguments []string) string { return strings.Join(arguments, "\n") }
+
+func phpSharedPaths(paths []string) string {
+	if len(paths) == 0 {
+		return "None"
+	}
+	return strings.Join(paths, ", ")
+}
+
+func phpEnvironmentKind(item types.PHPEnvironmentVariable) string {
+	if item.SecretID > 0 {
+		return "Write-only secret"
+	}
+	return "Plain value"
+}
+
+func phpManagedGate(workspace controlphpapp.Workspace) string {
+	if !workspace.Policy.Permissions.ManagedPHPDeployments {
+		return "Managed Deployment is disabled by this subscription plan."
+	}
+	if !workspace.Runtime.Ready {
+		return "The selected PHP runtime is not ready on this server."
+	}
+	return ""
+}
+
+func phpReleaseLimit(workspace controlphpapp.Workspace) string {
+	return formatPlanLimit(workspace.Policy.Resources.MaxPHPReleases)
+}
+
+func phpWorkerLimit(workspace controlphpapp.Workspace) string {
+	return formatPlanLimit(workspace.Policy.Resources.MaxPHPWorkers)
+}
+
+func gitRepositoryAvailable(items []types.GitRepository, siteID int64) bool {
+	_, ok := gitForSite(items, siteID)
+	return ok
+}
+
+func phpToolStatus(available bool, version string) string {
+	if !available {
+		return "Unavailable"
+	}
+	if strings.TrimSpace(version) == "" {
+		return "Available"
+	}
+	return version
+}
+
+func phpExtensionList(items []string) string {
+	if len(items) == 0 {
+		return "No extensions reported"
+	}
+	return strings.Join(items, ", ")
+}
+
+func phpMissingExtensionList(items []string) string {
+	if len(items) == 0 {
+		return "None"
+	}
+	return strings.Join(items, ", ")
+}
+
+func phpMissingExtensionClass(items []string) string {
+	if len(items) > 0 {
+		return "is-missing"
+	}
+	return ""
+}
+
+func phpRepositoryLabel(items []types.GitRepository, repositoryID int64) string {
+	for _, item := range items {
+		if item.ID == repositoryID {
+			return phpGitOption(item)
+		}
+	}
+	return "Repository unavailable"
+}
+
+func phpGitOption(item types.GitRepository) string {
+	label := item.Branch
+	if item.RemoteURL != "" {
+		label = item.RemoteURL + " · " + item.Branch
+	}
+	return label
+}
+
+func phpComposerLabel(spec types.PHPComposerSpec) string {
+	if !spec.Install {
+		return "No dependency installation"
+	}
+	if spec.AllowScripts || spec.AllowPlugins {
+		return "Install with explicitly allowed code execution"
+	}
+	return "Install without scripts or plugins"
+}
+
+func latestPHPDeployment(items []types.PHPDeployment) (types.PHPDeployment, bool) {
+	if len(items) == 0 {
+		return types.PHPDeployment{}, false
+	}
+	return items[0], true
+}
+
+func phpWorkerProcessCount(items []types.PHPWorker) int {
+	total := 0
+	for _, item := range items {
+		if item.DesiredState == "running" {
+			total += item.Processes
+		}
+	}
+	return total
+}
+
+func phpWorkerOppositeState(state string) string {
+	if state == "running" {
+		return "stopped"
+	}
+	return "running"
+}
+
+func phpWorkerStateAction(state string) string {
+	if state == "running" {
+		return "Stop"
+	}
+	return "Start"
+}
+
+func phpDefaultString(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+	return value
+}
+
+func phpSharedPathsTextarea(paths []string) string { return strings.Join(paths, "\n") }
+
+func phpRetentionValue(value int) string {
+	if value <= 0 {
+		return "3"
+	}
+	return strconv.Itoa(value)
 }
 
 // TwoFactorView drives the account 2FA enrollment/status page.
@@ -1643,11 +1879,11 @@ func shortImageReference(value string) string {
 
 func statusPillClass(state string) string {
 	switch strings.ToLower(strings.TrimSpace(state)) {
-	case "active", "completed", "ok", "healthy":
+	case "active", "completed", "ok", "healthy", "in_sync", "ready":
 		return "ok"
 	case "pending", "queued", "scheduled":
 		return "pend"
-	case "running", "provisioning", "restoring":
+	case "running", "provisioning", "restoring", "preparing", "validating", "activating":
 		return "run"
 	case "failed", "discarded", "error":
 		return "fail"

@@ -48,6 +48,94 @@
     });
   }
 
+  function initializePHPApplicationWorkspace() {
+    each("[data-np-php-environment-form]", document, function (form) {
+      var toggle = form.querySelector("[data-np-php-secret-toggle]");
+      var plain = form.querySelector("[data-np-php-plain-field]");
+      var secret = form.querySelector("[data-np-php-secret-field]");
+      if (!toggle || !plain || !secret) return;
+      var plainControl = plain.querySelector("textarea, input");
+      var secretControl = secret.querySelector("input");
+      function update() {
+        plain.hidden = toggle.checked;
+        secret.hidden = !toggle.checked;
+        if (plainControl) plainControl.disabled = toggle.checked;
+        if (secretControl) {
+          secretControl.disabled = !toggle.checked;
+          secretControl.required = toggle.checked;
+        }
+      }
+      toggle.addEventListener("change", update);
+      update();
+    });
+
+    each("[data-np-php-setup]", document, function (form) {
+      var profile = form.querySelector("[data-np-php-profile]");
+      var publicPath = form.querySelector("[data-np-php-public]");
+      var healthPath = form.querySelector("[data-np-php-health]");
+      var sharedPaths = form.querySelector("[data-np-php-shared]");
+      var steps = Array.prototype.slice.call(form.querySelectorAll(".np-php-setup-steps span"));
+      var defaults = {
+        plain: {publicPath: "", healthPath: "/", sharedPaths: ""},
+        laravel: {publicPath: "public", healthPath: "/up", sharedPaths: "storage\nbootstrap/cache"},
+        symfony: {publicPath: "public", healthPath: "/", sharedPaths: "var"},
+        custom: {publicPath: "", healthPath: "/", sharedPaths: ""}
+      };
+      function isKnownValue(control, key) {
+        if (!control || !control.value) return true;
+        return Object.keys(defaults).some(function (name) { return defaults[name][key] === control.value; });
+      }
+      function applyProfile() {
+        var selected = defaults[profile && profile.value] || defaults.custom;
+        if (isKnownValue(publicPath, "publicPath")) publicPath.value = selected.publicPath;
+        if (isKnownValue(healthPath, "healthPath")) healthPath.value = selected.healthPath;
+        if (isKnownValue(sharedPaths, "sharedPaths")) sharedPaths.value = selected.sharedPaths;
+      }
+      if (profile) profile.addEventListener("change", applyProfile);
+      form.addEventListener("focusin", function (event) {
+        if (!steps.length) return;
+        var index = 0;
+        if (event.target.closest("[data-np-php-profile], [data-np-php-public], [data-np-php-health], [data-np-php-shared]")) index = 1;
+        if (event.target.closest(".np-permission-list")) index = 2;
+        if (event.target.closest(".np-php-review, .np-dialog-actions")) index = 3;
+        steps.forEach(function (step, stepIndex) { step.classList.toggle("is-active", stepIndex === index); });
+      });
+    });
+
+    each(".np-php-app form[method='post']", document, function (form) {
+      if (form.hasAttribute("data-np-confirm") || form.querySelector('input[name="confirm"]')) return;
+      form.addEventListener("submit", function (event) {
+        if (!window.fetch || form.dataset.npNativeSubmit === "true") return;
+        event.preventDefault();
+        var submit = form.querySelector("button[type='submit']");
+        if (submit) submit.disabled = true;
+        fetch(form.action, {method: "POST", body: new FormData(form), headers: {"X-Nakpanel-SPA": "true", "Accept": "application/json"}, credentials: "same-origin"})
+          .then(function (response) { return response.json().catch(function () { return {}; }).then(function (payload) { return {response: response, payload: payload}; }); })
+          .then(function (result) {
+            if (!result.response.ok || result.payload.ok === false) throw new Error(result.payload.error || "The PHP application operation could not be completed.");
+            var notice = document.createElement("p");
+            notice.className = "np-notice";
+            notice.setAttribute("role", "status");
+            notice.textContent = "PHP application operation queued successfully.";
+            var workspace = form.closest(".np-php-app");
+            if (workspace) workspace.insertBefore(notice, workspace.firstChild);
+            window.setTimeout(function () { window.location.reload(); }, 500);
+          })
+          .catch(function (error) {
+            var notice = form.querySelector("[data-np-php-form-error]");
+            if (!notice) {
+              notice = document.createElement("p");
+              notice.className = "np-gate is-blocked";
+              notice.setAttribute("data-np-php-form-error", "");
+              form.insertBefore(notice, form.lastElementChild);
+            }
+            notice.textContent = error.message || "The PHP application operation could not be completed.";
+            if (submit) submit.disabled = false;
+          });
+      });
+    });
+  }
+
   function initializeDNSFilters() {
     each("[data-np-dns-workspace]", document, function (workspace) {
       var search = workspace.querySelector("[data-np-dns-search]");
@@ -2392,6 +2480,7 @@
   initializeDNSSettingsTabs();
   initializeDNSRecordForms();
   initializeCodeEditor();
+  initializePHPApplicationWorkspace();
   each("[data-np-service-refresh]", document, function (button) {
     button.addEventListener("click", function () {
       var label = button.querySelector("[data-np-service-refresh-label]");

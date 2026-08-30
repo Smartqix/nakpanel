@@ -34,6 +34,7 @@ type Workspace struct {
 	Workers              []types.PHPWorker
 	Policy               types.HostingPolicy
 	Runtime              types.PHPRuntimeCapability
+	Capabilities         types.RuntimeCapabilities
 	ObservedState        string
 	ConvergenceStatus    string
 	ObservedMessage      string

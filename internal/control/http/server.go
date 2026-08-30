@@ -588,6 +588,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		view.ProviderFilter = strings.TrimSpace(r.URL.Query().Get("provider"))
 		view.CloneFrom = parseQueryInt64(r, "clone_from")
 		view.Tab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tab")))
+		view.ApplicationTab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab")))
 		if route == "tools-settings" {
 			view.SettingsFocus = strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/tools-settings"), "/")
 			if view.SettingsFocus == "application-catalog" {
@@ -831,7 +832,7 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 	if !validWorkspaceTab(page, tab) {
 		tab = "overview"
 	}
-	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
+	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, ApplicationTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab"))), CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
 	if page == "site-detail" && tab == "applications" {
 		if !s.loadPHPApplicationWorkspace(w, r, user, detailID, &view) {
 			return
@@ -2639,6 +2640,10 @@ func (s *Server) handleUpsertResellerPlan(w http.ResponseWriter, r *http.Request
 	p.HostingPolicy.Permissions.Applications = parseFormBool(r, "allow_applications")
 	p.HostingPolicy.Permissions.CustomOCIImages = parseFormBool(r, "allow_custom_oci_images")
 	p.HostingPolicy.Permissions.ApplicationEgress = parseFormBool(r, "allow_application_egress")
+	if err := applyResellerPHPHostingFields(r, &p.HostingPolicy); err != nil {
+		http.Error(w, "Invalid reseller plan: "+err.Error(), http.StatusBadRequest)
+		return
+	}
 	p.HostingPolicy.Access.FTPSEnabled = p.HostingPolicy.Permissions.FTPS
 	p.HostingPolicy.Valkey.Enabled = p.HostingPolicy.Permissions.Valkey
 	p.HostingPolicy.Valkey.MemoryMB = p.HostingPolicy.Resources.ValkeyMemoryMB
@@ -2658,6 +2663,27 @@ func (s *Server) handleUpsertResellerPlan(w http.ResponseWriter, r *http.Request
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "reseller_plan.saved", "reseller_plan", saved.ID, nil)
 	http.Redirect(w, r, "/service-plans/resellers/"+strconv.FormatInt(saved.ID, 10)+"?notice=reseller-plan-saved", 303)
+}
+
+func applyResellerPHPHostingFields(r *http.Request, policy *types.HostingPolicy) error {
+	maxWorkers, err := parsePlanLimitDefault(r, "max_php_workers", 0)
+	if err != nil {
+		return err
+	}
+	maxReleases, err := parsePlanLimitDefault(r, "max_php_releases", 0)
+	if err != nil {
+		return err
+	}
+	if policy.SchemaVersion < 3 {
+		policy.SchemaVersion = 3
+	}
+	policy.Resources.MaxPHPWorkers = maxWorkers
+	policy.Resources.MaxPHPReleases = maxReleases
+	policy.Permissions.Composer = parseFormBool(r, "allow_composer")
+	policy.Permissions.ComposerCodeExecution = parseFormBool(r, "allow_composer_code_execution")
+	policy.Permissions.ManagedPHPDeployments = parseFormBool(r, "allow_managed_php_deployments")
+	policy.Permissions.PHPWorkers = parseFormBool(r, "allow_php_workers")
+	return nil
 }
 
 func applyBroadProviderRuntimeCeilings(policy *types.HostingPolicy) {

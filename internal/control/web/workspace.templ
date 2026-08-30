@@ -3,6 +3,7 @@ package web
 import (
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -358,7 +359,7 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 			} else if view.Tab == "git" {
 				@domainGit(item,subscription,data,view)
 			} else if view.Tab == "applications" {
-				@domainManagedApplications(item,view)
+				@domainPHPApplication(item,subscription,data,view)
 			} else if view.Tab == "containers" {
 				@domainContainers(user,item,subscription,data,view)
 			} else if view.Tab == "staging" {
@@ -420,7 +421,7 @@ templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary
 			@domainTool(item.ID,"backups","archive","Backups","Recovery points",view)
 		}
 		@domainToolGroup("Applications") {
-			@domainDeepTool(item.ID,"applications","package-open","Applications","Managed installers and runtimes",view)
+			@domainDeepTool(item.ID,"applications","package-open","PHP Application","Classic hosting and managed PHP releases",view)
 			@domainDeepTool(item.ID,"containers","server","Containers","Health-gated OCI workloads",view)
 			@domainDeepTool(item.ID,"staging","copy","Staging","Copy or promote with rollback",view)
 			@domainDeepTool(item.ID,"redis","database","Valkey cache","Shared subscription cache",view)
@@ -660,18 +661,281 @@ templ domainGit(item dashboard.Site, subscription types.SubscriptionSummary, dat
 	}
 }
 
-templ domainManagedApplications(item dashboard.Site, view WorkspaceView) {
-	@pageSectionHead("Applications", "Managed installers and language runtimes for this domain.")
-	<section class="np-panel">
-		<div class="np-panel-title"><div><h2>Managed runtimes are not installed yet</h2><span class="np-muted">This page is intentionally truthful about host capabilities.</span></div>@statusPill("unavailable")</div>
-		<p>Normal domain PHP-FPM remains available under PHP settings. WordPress installation, Node.js startup profiles, and Python ASGI/WSGI adapters require their dedicated, verified runtime modules before they can be deployed here.</p>
-		<div class="np-domain-overview-band">
-			<div><dt>WordPress Toolkit</dt><dd>Phase 29</dd><small>Install, import, WP-CLI, updates and staging</small></div>
-			<div><dt>Node.js</dt><dd>Phase 30</dd><small>Curated versions, packages, startup and health</small></div>
-			<div><dt>Python</dt><dd>Phase 30</dd><small>ASGI/WSGI profiles, dependencies and health</small></div>
-		</div>
-		<div class="np-panel-actions"><a class="np-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/containers")) }>Open Containers</a></div>
+templ domainPHPApplication(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	if view.PHPApplication == nil {
+		<p class="np-gate is-blocked">PHP application state is unavailable.</p>
+	} else {
+		{{ workspace := *view.PHPApplication }}
+		{{ activeTab := phpApplicationTab(view.ApplicationTab) }}
+		<section class="np-php-app" data-np-php-app data-np-php-mode={ string(workspace.Application.HostingMode) }>
+			<div class="np-section-heading np-php-app-heading"><div><span class="np-kicker">PHP Application</span><h2>{ phpHostingModeLabel(workspace.Application.HostingMode) }</h2><p>
+				if workspace.Application.HostingMode == types.PHPHostingModeManaged {
+					Immutable Git and Composer releases with health-gated activation and rollback.
+				} else {
+					Mutable public_html for uploaded PHP applications and self-updating WordPress sites.
+				}
+			</p></div><div class="np-php-app-head-actions">@statusPill(workspace.ConvergenceStatus)
+				<form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/reconcile") }>@csrfInput(view)<button type="submit" class="np-secondary-button" data-np-confirm="Reconcile PHP application state with the server?">@icon("activity")<span>Reconcile</span></button></form>
+			</div></div>
+			<nav class="np-php-app-tabs" aria-label="PHP application workspace" data-np-php-app-tabs>
+				@phpApplicationTabLink(item.ID,"overview","Overview",view)
+				@phpApplicationTabLink(item.ID,"deployment","Deployment",view)
+				@phpApplicationTabLink(item.ID,"environment","Environment",view)
+				@phpApplicationTabLink(item.ID,"workers","Workers",view)
+				@phpApplicationTabLink(item.ID,"releases","Releases",view)
+				@phpApplicationTabLink(item.ID,"logs","Logs",view)
+				@phpApplicationTabLink(item.ID,"activity","Activity",view)
+			</nav>
+			if activeTab == "overview" {
+				@phpApplicationOverview(item,subscription,data,workspace,view)
+			} else if activeTab == "deployment" {
+				@phpApplicationDeployment(item,data,workspace,view)
+			} else if activeTab == "environment" {
+				@phpApplicationEnvironment(item,workspace,view)
+			} else if activeTab == "workers" {
+				@phpApplicationWorkers(item,workspace,view)
+			} else if activeTab == "releases" {
+				@phpApplicationReleases(item,workspace,view)
+			} else if activeTab == "logs" {
+				@phpApplicationLogs(item,workspace,view)
+			} else if activeTab == "activity" {
+				@phpApplicationActivity(item,workspace,view)
+			}
+			@phpApplicationDialogs(item,data,workspace,view)
+		</section>
+	}
+}
+
+templ phpApplicationTabLink(siteID int64, tab string, label string, view WorkspaceView) {
+	<a href={ phpApplicationTabURL(view,siteID,tab) } class={ phpApplicationTabClass(view,tab) } aria-current={ phpApplicationAriaCurrent(view,tab) } data-np-php-app-tab={ tab }>{ label }</a>
+}
+
+templ phpRuntimeOptions(workspace controlphpapp.Workspace) {
+	if len(workspace.Capabilities.PHPRuntimes) == 0 {
+		<option value={ workspace.Application.PHPVersion } selected>{ workspace.Application.PHPVersion }</option>
+	} else {
+		for _, runtime := range workspace.Capabilities.PHPRuntimes {
+			if runtime.Ready {
+				<option value={ runtime.Version } selected?={ runtime.Version==workspace.Application.PHPVersion }>PHP { runtime.Version } · { phpRuntimeRecommendation(runtime) }</option>
+			}
+		}
+	}
+}
+
+templ phpApplicationOverview(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, workspace controlphpapp.Workspace, view WorkspaceView) {
+	<section class="np-panel np-php-app-summary">
+		<div class="np-panel-title"><div><h3>Runtime summary</h3><span class="np-muted">Desired, observed, and host capability state are reported separately.</span></div>@statusPill(workspace.ObservedState)</div>
+		<dl class="np-php-summary-band">
+			<div><dt>Mode</dt><dd>{ phpHostingModeLabel(workspace.Application.HostingMode) }</dd><small>{ workspace.Application.FrameworkProfile }</small></div>
+			<div><dt>PHP runtime</dt><dd>PHP { workspace.Application.PHPVersion }</dd><small>{ phpSupportLabel(workspace.Runtime.SupportStatus) }</small></div>
+			<div><dt>Observed</dt><dd>{ workspace.ObservedState }</dd><small>{ workspace.ObservedMessage }</small></div>
+			<div><dt>Revision</dt><dd>{ formatJobID(workspace.AppliedRevision) } / { formatJobID(workspace.Application.DesiredRevision) }</dd><small>applied / desired</small></div>
+			<div><dt>Release</dt><dd>
+				if workspace.ActiveDeploymentID > 0 {
+					<span>#{ formatJobID(workspace.ActiveDeploymentID) }</span>
+				} else {
+					<span>None</span>
+				}
+			</dd><small>previous #{ formatJobID(workspace.PreviousDeploymentID) }</small></div>
+		</dl>
+		if workspace.LastError != "" {
+			<p class="np-gate is-blocked"><strong>Last convergence error</strong><br/>{ workspace.LastError }</p>
+		}
 	</section>
+	if workspace.Application.HostingMode == types.PHPHostingModeClassic {
+		<section class="np-panel np-php-classic">
+			<div class="np-panel-title"><div><h3>Classic hosting diagnostics</h3><span class="np-muted">The subscription account owns writable application content.</span></div>
+				if workspace.Policy.Permissions.ManagedPHPDeployments && workspace.Runtime.Ready && gitRepositoryAvailable(data.SubscriptionServices.Git,item.ID) {
+					<button type="button" data-np-dialog-open="php-managed-setup-dialog">Configure Managed Deployment</button>
+				}
+			</div>
+			<p class="np-callout">Classic hosting keeps <strong>mutable public_html</strong> available to WordPress and applications that update their own code or content. Panel-triggered Composer deployment is available only in Managed Deployment.</p>
+			<dl class="np-facts np-php-diagnostics"><div><dt>Document root</dt><dd><code>{ item.DocumentRoot }</code></dd></div><div><dt>CLI</dt><dd><code>{ workspace.Runtime.CLIPath }</code></dd></div><div><dt>PHP-FPM</dt><dd><code>{ workspace.Runtime.FPMPath }</code></dd></div><div><dt>FPM configuration</dt><dd>{ yesNo(workspace.Runtime.FPMConfigValid) }</dd></div><div><dt>OPcache</dt><dd>{ yesNo(workspace.Runtime.OPcacheAvailable) }</dd></div><div><dt>Composer</dt><dd>{ phpToolStatus(workspace.Capabilities.ComposerAvailable,workspace.Capabilities.ComposerVersion) }</dd></div><div><dt>WP-CLI</dt><dd>{ phpToolStatus(workspace.Capabilities.WPCLIAvailable,workspace.Capabilities.WPCLIVersion) }</dd></div><div><dt>FPM children</dt><dd>{ formatPlanLimit(subscription.PHPFPMMaxChildren) }</dd></div><div><dt>Memory</dt><dd>{ formatPlanLimitMB(subscription.PHPMemoryMB) }</dd></div></dl>
+			@phpExtensionSummary(workspace.Runtime)
+			<div class="np-php-tool-links"><a href={ templ.SafeURL(fileBasePath(view,item.ID)) }>Files</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/access")) }>Access</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?tab=php")) }>PHP</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/git")) }>Git</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?tab=databases")) }>Databases</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?tab=backups")) }>Backups</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs")) }>Logs</a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/scheduled-tasks")) }>Tasks</a></div>
+			if gate := phpManagedGate(workspace); gate != "" {
+				<p class="np-gate">{ gate }</p>
+			}
+		</section>
+	} else {
+		<section class="np-panel"><div class="np-panel-title"><div><h3>Managed application</h3><span class="np-muted">Git source, immutable releases, and bounded PHP-FPM execution.</span></div><button type="button" data-np-dialog-open="php-deploy-dialog">Deploy release</button></div>
+			<dl class="np-facts"><div><dt>Profile</dt><dd>{ workspace.Application.FrameworkProfile }</dd></div><div><dt>Repository</dt><dd>{ phpRepositoryLabel(data.SubscriptionServices.Git,workspace.Application.RepositoryID) }</dd></div><div><dt>Reference</dt><dd><code>{ workspace.Application.RepositoryRef }</code></dd></div><div><dt>Public directory</dt><dd><code>{ workspace.Application.PublicPath }</code></dd></div><div><dt>Shared paths</dt><dd>{ phpSharedPaths(workspace.Application.SharedPaths) }</dd></div><div><dt>Health path</dt><dd><code>{ workspace.Application.HealthPath }</code></dd></div><div><dt>Release retention</dt><dd>{ formatPlanLimit(workspace.Application.ReleaseRetention) } (plan limit { phpReleaseLimit(workspace) })</dd></div><div><dt>Composer</dt><dd>{ phpComposerLabel(workspace.Application.Composer) }</dd></div></dl>
+		</section>
+	}
+}
+
+templ phpApplicationDeployment(item dashboard.Site, data dashboard.Data, workspace controlphpapp.Workspace, view WorkspaceView) {
+	if workspace.Application.HostingMode != types.PHPHostingModeManaged {
+		<section class="np-panel np-php-empty"><h3>Managed Deployment is not configured</h3><p>Classic Hosting remains live. Connect the existing site Git repository and complete the guided setup to create the first immutable release.</p>
+			if gate := phpManagedGate(workspace); gate != "" {
+				<p class="np-gate">{ gate }</p>
+			} else if !gitRepositoryAvailable(data.SubscriptionServices.Git,item.ID) {
+				<p class="np-gate">Configure a Git repository for this domain first.</p>
+			} else {
+				<button type="button" data-np-dialog-open="php-managed-setup-dialog">Start managed setup</button>
+			}
+		</section>
+	} else {
+		<section class="np-panel"><div class="np-panel-title"><div><h3>Deploy from Git</h3><span class="np-muted">The current release remains active unless the candidate passes Composer, FPM, nginx, and live health checks.</span></div><button type="button" data-np-dialog-open="php-deploy-dialog">Queue deployment</button></div>
+			<dl class="np-facts"><div><dt>Source</dt><dd>{ phpRepositoryLabel(data.SubscriptionServices.Git,workspace.Application.RepositoryID) }</dd></div><div><dt>Default ref</dt><dd><code>{ workspace.Application.RepositoryRef }</code></dd></div><div><dt>Health gate</dt><dd>3 successful HTTP 200–399 probes</dd></div><div><dt>Composer audit</dt><dd>High and critical findings block activation</dd></div></dl>
+			if deployment, ok := latestPHPDeployment(workspace.Deployments); ok {
+				@phpDeploymentDetail(deployment,workspace)
+			} else {
+				<p class="np-empty">No deployment has been queued yet.</p>
+			}
+		</section>
+	}
+}
+
+templ phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Workspace, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h3>Environment</h3><span class="np-muted">Plain values are visible. Secret values are encrypted and remain write-only.</span></div><button type="button" data-np-dialog-open="php-environment-dialog">Add variable</button></div>
+		if workspace.Application.HostingMode != types.PHPHostingModeManaged {
+			<p class="np-gate">Environment injection is available after Managed Deployment is configured.</p>
+		}
+		if workspace.Application.HostingMode == types.PHPHostingModeManaged && len(workspace.Environment) == 0 {
+			<p class="np-empty">No environment variables are configured.</p>
+		}
+		if workspace.Application.HostingMode == types.PHPHostingModeManaged && len(workspace.Environment) > 0 {
+			<div class="np-php-object-list">
+				for _, item := range workspace.Environment {
+					<article><div><strong>{ item.Name }</strong><small>{ phpEnvironmentKind(item) }</small></div><div>
+						if item.SecretID > 0 {
+							<span class="np-secret-mask">••••••••</span>
+						}
+						if item.SecretID == 0 {
+							<code>{ item.Value }</code>
+						}
+					</div><div class="np-row-actions"><button type="button" class="np-icon-button" data-np-dialog-open={ "php-environment-edit-"+item.Name } title={ "Edit "+item.Name }>@icon("pencil")</button><button type="button" class="np-icon-button" data-np-dialog-open={ "php-environment-delete-"+item.Name } title={ "Delete "+item.Name }>@icon("trash")</button></div></article>
+				}
+			</div>
+		}
+	</section>
+}
+
+templ phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspace, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h3>PHP workers</h3><span class="np-muted">Workers execute the selected PHP binary and a validated site-relative script directly, without a shell.</span></div><button type="button" data-np-dialog-open="php-worker-dialog" disabled?={ workspace.Application.HostingMode != types.PHPHostingModeManaged || !workspace.Policy.Permissions.PHPWorkers || workspace.ActiveDeploymentID == 0 }>Add worker</button></div>
+		<div class="np-php-allocation"><span>Process allocation</span><strong>{ phpWorkerProcessCount(workspace.Workers) } / { phpWorkerLimit(workspace) }</strong></div>
+		if !workspace.Policy.Permissions.PHPWorkers {
+			<p class="np-gate">PHP workers are disabled by this subscription plan.</p>
+		}
+		if workspace.Policy.Permissions.PHPWorkers && workspace.Application.HostingMode != types.PHPHostingModeManaged {
+			<p class="np-gate">Workers require Managed Deployment.</p>
+		}
+		if workspace.Policy.Permissions.PHPWorkers && workspace.Application.HostingMode == types.PHPHostingModeManaged && workspace.ActiveDeploymentID == 0 {
+			<p class="np-gate">Deploy the first healthy release before creating workers.</p>
+		}
+		if workspace.Policy.Permissions.PHPWorkers && workspace.Application.HostingMode == types.PHPHostingModeManaged && workspace.ActiveDeploymentID > 0 && len(workspace.Workers) == 0 {
+			<p class="np-empty">No background workers are configured.</p>
+		}
+		if workspace.Policy.Permissions.PHPWorkers && workspace.Application.HostingMode == types.PHPHostingModeManaged && workspace.ActiveDeploymentID > 0 && len(workspace.Workers) > 0 {
+			<div class="np-php-worker-list">
+				for _, worker := range workspace.Workers {
+					<article><div class="np-php-worker-main"><div><strong>{ worker.Name }</strong><code>php { worker.Script } { phpWorkerArguments(worker.Arguments) }</code></div>@statusPill(worker.ConvergenceStatus)</div><dl><div><dt>Processes</dt><dd>{ formatPlanLimit(worker.Processes) }</dd></div><div><dt>Desired</dt><dd>{ worker.DesiredState }</dd></div><div><dt>Observed</dt><dd>{ worker.ObservedState }</dd></div></dl>
+						if worker.LastError != "" {
+							<p class="np-error">{ worker.LastError }</p>
+						}
+						<div class="np-row-actions"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers/"+formatJobID(worker.ID)+"/state") }>@csrfInput(view)<input type="hidden" name="state" value={ phpWorkerOppositeState(worker.DesiredState) }/><button type="submit" class="np-secondary-button">{ phpWorkerStateAction(worker.DesiredState) }</button></form><button type="button" class="np-icon-button" data-np-dialog-open={ "php-worker-edit-"+formatJobID(worker.ID) } title={ "Edit "+worker.Name }>@icon("pencil")</button><button type="button" class="np-icon-button" data-np-dialog-open={ "php-worker-delete-"+formatJobID(worker.ID) } title={ "Delete "+worker.Name }>@icon("trash")</button></div>
+					</article>
+				}
+			</div>
+		}
+	</section>
+}
+
+templ phpApplicationReleases(item dashboard.Site, workspace controlphpapp.Workspace, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h3>Release history</h3><span class="np-muted">Active and previous healthy releases are retained even when the plan limit is lower.</span></div><span class="np-pill np-pill-run">limit { phpReleaseLimit(workspace) }</span></div>
+		if workspace.Application.HostingMode != types.PHPHostingModeManaged {
+			<p class="np-gate">Release history begins after Managed Deployment is configured.</p>
+		}
+		if workspace.Application.HostingMode == types.PHPHostingModeManaged && len(workspace.Deployments) == 0 {
+			<p class="np-empty">No releases yet.</p>
+		}
+		if workspace.Application.HostingMode == types.PHPHostingModeManaged && len(workspace.Deployments) > 0 {
+			<div class="np-php-release-list">
+				for _, deployment := range workspace.Deployments {
+					@phpReleaseRow(item,deployment,workspace,view)
+				}
+			</div>
+		}
+	</section>
+}
+
+templ phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspace controlphpapp.Workspace, view WorkspaceView) {
+	<article><div class="np-php-release-identity"><span class="np-object-icon">#{ formatJobID(deployment.ID) }</span><div><strong>{ deployment.RequestedRevision }</strong><code>{ deployment.ResolvedRevision }</code><small>{ formatTime(deployment.CreatedAt) }</small></div></div><div><span class="np-kicker">{ phpDeploymentMarker(deployment,workspace.ActiveDeploymentID,workspace.PreviousDeploymentID) }</span>@statusPill(deployment.Status)</div><div class="np-php-release-actions">
+		if phpDeploymentRollbackEligible(deployment,workspace.ActiveDeploymentID) {
+			<button type="button" class="np-secondary-button" data-np-dialog-open={ "php-rollback-"+formatJobID(deployment.ID) }>Roll back</button>
+		}
+	</div></article>
+}
+
+templ phpApplicationLogs(item dashboard.Site, workspace controlphpapp.Workspace, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h3>PHP application logs</h3><span class="np-muted">Deployment and worker sources use the bounded domain log browser.</span></div><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs")) }>Open log browser</a></div>
+		<div class="np-php-log-sources"><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs?source=php-deployment")) }><strong>Deployment output</strong><span>Sanitized Composer and activation output</span></a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs?source=php-worker")) }><strong>Worker logs</strong><span>Bounded stdout and service errors</span></a><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/logs?source=php-fpm")) }><strong>PHP-FPM errors</strong><span>Dedicated domain process manager</span></a></div>
+		if deployment, ok := latestPHPDeployment(workspace.Deployments); ok {
+			@phpDeploymentDetail(deployment,workspace)
+		}
+	</section>
+}
+
+templ phpApplicationActivity(item dashboard.Site, workspace controlphpapp.Workspace, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h3>Application activity</h3><span class="np-muted">Mutation and convergence events remain attributable to the signed-in actor.</span></div><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/activity")) }>Open Activity</a></div><dl class="np-facts"><div><dt>Desired revision</dt><dd>{ formatJobID(workspace.Application.DesiredRevision) }</dd></div><div><dt>Applied revision</dt><dd>{ formatJobID(workspace.AppliedRevision) }</dd></div><div><dt>Last reconciliation</dt><dd>{ formatTime(workspace.LoadedAt) }</dd></div><div><dt>Convergence</dt><dd>{ workspace.ConvergenceStatus }</dd></div></dl></section>
+}
+
+templ phpDeploymentDetail(deployment types.PHPDeployment, workspace controlphpapp.Workspace) {
+	<div class="np-php-deployment-detail"><div class="np-panel-title"><div><h4>Deployment #{ formatJobID(deployment.ID) }</h4><span class="np-muted">{ deployment.RequestedRevision } → { deployment.ResolvedRevision }</span></div>@statusPill(deployment.Status)</div><dl class="np-facts"><div><dt>Started</dt><dd>{ formatTime(deployment.StartedAt) }</dd></div><div><dt>Finished</dt><dd>{ formatTime(deployment.FinishedAt) }</dd></div><div><dt>Health</dt><dd>{ deployment.HealthMessage }</dd></div><div><dt>Composer audit</dt><dd>{ deployment.ComposerAudit }</dd></div></dl>
+		if deployment.LastError != "" {
+			<pre class="np-bounded-output">{ deployment.LastError }</pre>
+		}
+	</div>
+}
+
+templ phpExtensionSummary(runtime types.PHPRuntimeCapability) {
+	<div class="np-php-extension-summary"><div><strong>Loaded extension baseline</strong><span>{ phpExtensionList(runtime.Extensions) }</span></div><div><strong>Missing required extensions</strong><span class={ phpMissingExtensionClass(runtime.MissingExtensions) }>{ phpMissingExtensionList(runtime.MissingExtensions) }</span></div></div>
+}
+
+templ phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace controlphpapp.Workspace, view WorkspaceView) {
+	<dialog class="np-dialog np-php-setup-dialog" id="php-managed-setup-dialog" data-np-dialog><div class="np-dialog-head"><div><span class="np-kicker">Managed Deployment</span><h2>Configure PHP application</h2><p>Classic Hosting stays live until the first managed release passes every health gate.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div>
+		<form class="np-form np-dialog-form np-php-setup" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application") } data-np-php-setup data-np-dirty-guard>@csrfInput(view)<input type="hidden" name="hosting_mode" value="managed"/>
+			<div class="np-php-setup-steps" aria-label="Managed setup steps"><span class="is-active">1 Source</span><span>2 Runtime</span><span>3 Environment</span><span>4 Review</span></div>
+			<label>Git repository<select name="repository_id" required>
+				for _, repository := range data.SubscriptionServices.Git {
+					if repository.SiteID == item.ID {
+						<option value={ formatJobID(repository.ID) } selected?={ repository.ID==workspace.Application.RepositoryID }>{ phpGitOption(repository) }</option>
+					}
+				}
+			</select></label>
+			<label>Repository reference<input name="repository_ref" value={ phpDefaultString(workspace.Application.RepositoryRef,"main") } required/></label>
+			<label>Framework profile<select name="framework_profile" data-np-php-profile><option value="plain">Plain PHP</option><option value="laravel">Laravel</option><option value="symfony">Symfony</option><option value="custom">Custom</option></select></label>
+			<label>PHP runtime<select name="php_version" required>@phpRuntimeOptions(workspace)</select></label>
+			<label>Public directory<input name="public_path" value={ workspace.Application.PublicPath } data-np-php-public placeholder="public"/></label><label>Health path<input name="health_path" value={ phpDefaultString(workspace.Application.HealthPath,"/") } data-np-php-health required/></label><label class="np-wide-field">Shared writable paths<textarea name="shared_paths" rows="3" data-np-php-shared placeholder="storage&#10;bootstrap/cache">{ phpSharedPathsTextarea(workspace.Application.SharedPaths) }</textarea></label>
+			<label>Healthy releases to retain<input type="number" name="release_retention" min="1" max="100" value={ phpRetentionValue(workspace.Application.ReleaseRetention) } required/></label>
+			<div class="np-permission-list"><label class="np-permission-row"><input type="checkbox" name="composer_install" value="true" checked?={ workspace.Policy.Permissions.Composer } disabled?={ !workspace.Policy.Permissions.Composer }/><span>Install Composer dependencies</span></label><label class="np-permission-row"><input type="checkbox" name="composer_allow_scripts" value="true" disabled?={ !workspace.Policy.Permissions.ComposerCodeExecution }/><span>Allow Composer scripts</span></label><label class="np-permission-row"><input type="checkbox" name="composer_allow_plugins" value="true" disabled?={ !workspace.Policy.Permissions.ComposerCodeExecution }/><span>Allow Composer plugins</span></label></div>
+			<div class="np-php-review"><strong>Security boundary</strong><p>Paths are site-relative, secrets remain write-only, and activation is atomic after three successful probes. Plan limits: { phpReleaseLimit(workspace) } releases and { phpWorkerLimit(workspace) } worker processes.</p></div>
+			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save and reconcile</button></div>
+		</form>
+	</dialog>
+	<dialog class="np-dialog" id="php-deploy-dialog" data-np-dialog><div class="np-dialog-head"><div><h2>Queue PHP deployment</h2><p>The active release stays online until the candidate is healthy.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/deployments") }>@csrfInput(view)<label>Git revision<input name="revision" value={ phpDefaultString(workspace.Application.RepositoryRef,"main") } required maxlength="128"/></label><p class="np-form-help">Use a branch, tag, or commit known to the configured repository. Composer lock and security checks run before activation.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Queue deployment</button></div></form></dialog>
+	<dialog class="np-dialog" id="php-environment-dialog" data-np-dialog><div class="np-dialog-head"><div><h2>Add environment variable</h2><p>Choose plain text or an encrypted write-only secret.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/environment") } data-np-php-environment-form>@csrfInput(view)<label>Name<input name="name" pattern="[A-Z_][A-Z0-9_]{0,127}" autocomplete="off" required/></label><label class="np-check"><input type="checkbox" name="secret" value="true" data-np-php-secret-toggle/>Encrypted secret</label><label data-np-php-plain-field>Value<textarea name="value" rows="3"></textarea></label><label data-np-php-secret-field hidden>Secret value<input type="password" name="secret_value" autocomplete="new-password"/></label><p class="np-form-help">Secret values are never rendered after submission and are not included in jobs, audits, logs, or responses.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save variable</button></div></form></dialog>
+	<dialog class="np-dialog" id="php-worker-dialog" data-np-dialog><div class="np-dialog-head"><div><h2>Add PHP worker</h2><p>The PHP binary executes a site-relative script directly. Shell strings are not accepted.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers") }>@csrfInput(view)<label>Name<input name="name" required maxlength="48"/></label><label>Site-relative PHP script<input name="script" placeholder="artisan" required/></label><label>Arguments, one per line<textarea name="arguments" rows="4" placeholder="queue:work&#10;--tries=3"></textarea></label><label>Processes<input type="number" name="processes" min="1" value="1" required/></label><input type="hidden" name="desired_state" value="running"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create worker</button></div></form></dialog>
+	for _, environment := range workspace.Environment {
+		<dialog class="np-dialog" id={ "php-environment-edit-"+environment.Name } data-np-dialog><div class="np-dialog-head"><div><h2>Edit { environment.Name }</h2><p>
+			if environment.SecretID > 0 {
+				Enter a replacement value. The existing secret is never rendered.
+			} else {
+				Update the plain environment value or convert it to a write-only secret.
+			}
+		</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/environment") } data-np-php-environment-form>@csrfInput(view)<label>Name<input name="name" value={ environment.Name } readonly/></label><label class="np-check"><input type="checkbox" name="secret" value="true" checked?={ environment.SecretID > 0 } data-np-php-secret-toggle/>Encrypted secret</label><label data-np-php-plain-field hidden?={ environment.SecretID > 0 }>Value<textarea name="value" rows="3">{ environment.Value }</textarea></label><label data-np-php-secret-field hidden?={ environment.SecretID == 0 }>Replacement secret<input type="password" name="secret_value" autocomplete="new-password" required?={ environment.SecretID > 0 }/></label><p class="np-form-help">Saving a secret replaces its encrypted value; Nakpanel never displays the previous value.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save variable</button></div></form></dialog>
+		<dialog class="np-dialog" id={ "php-environment-delete-"+environment.Name } data-np-dialog><div class="np-dialog-head"><div><h2>Delete { environment.Name }?</h2><p>The next reconciliation removes this binding from PHP-FPM and worker services.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/environment/delete") }>@csrfInput(view)<input type="hidden" name="name" value={ environment.Name }/><input type="hidden" name="confirm" value="delete"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Delete variable</button></div></form></dialog>
+	}
+	for _, worker := range workspace.Workers {
+		<dialog class="np-dialog" id={ "php-worker-edit-"+formatJobID(worker.ID) } data-np-dialog><div class="np-dialog-head"><div><h2>Edit { worker.Name }</h2><p>The PHP binary continues to execute this site-relative script directly without a shell.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers") }>@csrfInput(view)<input type="hidden" name="worker_id" value={ formatJobID(worker.ID) }/><label>Name<input name="name" value={ worker.Name } required maxlength="48"/></label><label>Site-relative PHP script<input name="script" value={ worker.Script } required/></label><label>Arguments, one per line<textarea name="arguments" rows="4">{ phpWorkerArgumentsTextarea(worker.Arguments) }</textarea></label><label>Processes<input type="number" name="processes" min="1" value={ formatPlanLimit(worker.Processes) } required/></label><input type="hidden" name="desired_state" value={ worker.DesiredState }/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Save worker</button></div></form></dialog>
+		<dialog class="np-dialog" id={ "php-worker-delete-"+formatJobID(worker.ID) } data-np-dialog><div class="np-dialog-head"><div><h2>Delete { worker.Name }?</h2><p>The worker service will be removed during reconciliation.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/workers/"+formatJobID(worker.ID)+"/delete") }>@csrfInput(view)<input type="hidden" name="confirm" value="delete"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Delete worker</button></div></form></dialog>
+	}
+	for _, deployment := range workspace.Deployments {
+		if phpDeploymentRollbackEligible(deployment,workspace.ActiveDeploymentID) {
+			<dialog class="np-dialog" id={ "php-rollback-"+formatJobID(deployment.ID) } data-np-dialog><div class="np-dialog-head"><div><h2>Roll back to release #{ formatJobID(deployment.ID) }?</h2><p>The target is health checked before production switches. The current release is restored automatically on failure.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/php-application/deployments/"+formatJobID(deployment.ID)+"/rollback") }>@csrfInput(view)<input type="hidden" name="confirm" value="rollback"/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Roll back</button></div></form></dialog>
+		}
+	}
 }
 
 templ domainContainers(user auth.SessionUser, item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
@@ -2117,12 +2381,12 @@ templ routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runti
 		}
 		<section class="np-plan-general"><div class="np-plan-general-grid"><label>Plan name<input name="name" value={ plan.Name } required maxlength="120"/></label><label class="np-plan-description">Description<textarea name="description" rows="2">{ plan.Description }</textarea></label><label class="np-switch"><input type="hidden" name="is_active" value="false"/><input type="checkbox" name="is_active" value="true" checked?={ plan.IsActive }/><span>Available for new resellers</span></label></div></section>
 		<nav class="np-plan-editor-tabs" aria-label="Reseller plan properties">@planEditorTabLink(view,"resources","Resources") @planEditorTabLink(view,"permissions","Permissions")</nav>
-		<section class="np-plan-property-panel" data-np-plan-panel="resources" hidden?={ planEditorTab(view) != "resources" }><div class="np-property-head"><h2>Resources</h2><p>These are provider-wide allocation ceilings across every downstream customer.</p></div><div class="np-plan-field-grid">@planLimitField("Customers","max_customers",plan.MaxCustomers,"count") @planLimitField("Subscriptions","max_subscriptions",plan.MaxSubscriptions,"count") @planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Database users","max_database_users",plan.HostingPolicy.Resources.MaxDatabaseUsers,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("Mail aliases","max_mail_aliases",plan.HostingPolicy.Resources.MaxMailAliases,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Scheduled tasks","max_scheduled_tasks",plan.HostingPolicy.Resources.MaxScheduledTasks,"count") @planLimitField("Applications","max_applications",plan.HostingPolicy.Resources.MaxApplications,"count") @planLimitField("Container storage","container_storage_mb",plan.HostingPolicy.Resources.ContainerStorageMB,"MB") @planLimitField("Valkey memory","valkey_memory_mb",plan.HostingPolicy.Resources.ValkeyMemoryMB,"MB") @planLimitField("CPU quota","cpu_percent",plan.HostingPolicy.Resources.CPUPercent,"percent") @planLimitField("Memory","memory_limit_mb",plan.HostingPolicy.Resources.MemoryMB,"MB") @planLimitField("I/O read","io_read_mbps",plan.HostingPolicy.Resources.IOReadMBPS,"MBps") @planLimitField("I/O write","io_write_mbps",plan.HostingPolicy.Resources.IOWriteMBPS,"MBps") @planLimitField("Processes","max_tasks",plan.HostingPolicy.Resources.MaxTasks,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB")</div></section>
-		<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ planEditorTab(view) != "permissions" }><div class="np-property-head"><h2>Permissions</h2><p>Resellers may grant only capabilities included in this allocation.</p></div><div class="np-permission-list">@planToggle("allow_custom_plans","Create custom subscription snapshots",plan.AllowCustomPlans) @planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",plan.AllowTLS) @planToggle("allow_backups","Backup and restore management",plan.AllowBackups) @planToggle("allow_php_settings","PHP settings management",plan.AllowPHPSettings) @planToggle("allow_ssh","SSH access",plan.AllowSSH) @planToggle("allow_sftp","SFTP identities",plan.HostingPolicy.Permissions.SFTP) @planToggle("allow_ftps","TLS-only FTPS",plan.HostingPolicy.Permissions.FTPS) @planToggle("allow_logs","Domain logs",plan.HostingPolicy.Permissions.Logs) @planToggle("allow_git","Git deployment",plan.HostingPolicy.Permissions.Git) @planToggle("allow_staging","Staging workflows",plan.HostingPolicy.Permissions.Staging) @planToggle("allow_valkey","Valkey cache",plan.HostingPolicy.Permissions.Valkey) @planToggle("allow_scheduled_tasks","Scheduled tasks",plan.HostingPolicy.Permissions.ScheduledTasks) @planToggle("allow_applications","Application catalog",plan.HostingPolicy.Permissions.Applications) @planToggle("allow_custom_oci_images","Custom OCI images",plan.HostingPolicy.Permissions.CustomOCIImages) @planToggle("allow_application_egress","Application network egress",plan.HostingPolicy.Permissions.ApplicationEgress)</div><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">
+		<section class="np-plan-property-panel" data-np-plan-panel="resources" hidden?={ planEditorTab(view) != "resources" }><div class="np-property-head"><h2>Resources</h2><p>These are provider-wide allocation ceilings across every downstream customer. Zero disables a resource; Unlimited removes the numeric ceiling.</p></div><div class="np-plan-field-grid">@planLimitField("Customers","max_customers",plan.MaxCustomers,"count") @planLimitField("Subscriptions","max_subscriptions",plan.MaxSubscriptions,"count") @planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Database users","max_database_users",plan.HostingPolicy.Resources.MaxDatabaseUsers,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("Mail aliases","max_mail_aliases",plan.HostingPolicy.Resources.MaxMailAliases,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Scheduled tasks","max_scheduled_tasks",plan.HostingPolicy.Resources.MaxScheduledTasks,"count") @planLimitField("Applications","max_applications",plan.HostingPolicy.Resources.MaxApplications,"count") @planLimitField("Container storage","container_storage_mb",plan.HostingPolicy.Resources.ContainerStorageMB,"MB") @planLimitField("PHP worker processes","max_php_workers",plan.HostingPolicy.Resources.MaxPHPWorkers,"count") @planLimitField("PHP releases","max_php_releases",plan.HostingPolicy.Resources.MaxPHPReleases,"count") @planLimitField("Valkey memory","valkey_memory_mb",plan.HostingPolicy.Resources.ValkeyMemoryMB,"MB") @planLimitField("CPU quota","cpu_percent",plan.HostingPolicy.Resources.CPUPercent,"percent") @planLimitField("Memory","memory_limit_mb",plan.HostingPolicy.Resources.MemoryMB,"MB") @planLimitField("I/O read","io_read_mbps",plan.HostingPolicy.Resources.IOReadMBPS,"MBps") @planLimitField("I/O write","io_write_mbps",plan.HostingPolicy.Resources.IOWriteMBPS,"MBps") @planLimitField("Processes","max_tasks",plan.HostingPolicy.Resources.MaxTasks,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB")</div></section>
+		<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ planEditorTab(view) != "permissions" }><div class="np-property-head"><h2>Permissions</h2><p>Resellers may grant only capabilities included in this allocation.</p></div><div class="np-permission-list">@planToggle("allow_custom_plans","Create custom subscription snapshots",plan.AllowCustomPlans) @planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",plan.AllowTLS) @planToggle("allow_backups","Backup and restore management",plan.AllowBackups) @planToggle("allow_php_settings","PHP settings management",plan.AllowPHPSettings) @planToggle("allow_composer","Composer",plan.HostingPolicy.Permissions.Composer) @planToggle("allow_composer_code_execution","Composer code execution",plan.HostingPolicy.Permissions.ComposerCodeExecution) @planToggle("allow_managed_php_deployments","Managed PHP deployments",plan.HostingPolicy.Permissions.ManagedPHPDeployments) @planToggle("allow_php_workers","PHP workers",plan.HostingPolicy.Permissions.PHPWorkers) @planToggle("allow_ssh","SSH access",plan.AllowSSH) @planToggle("allow_sftp","SFTP identities",plan.HostingPolicy.Permissions.SFTP) @planToggle("allow_ftps","TLS-only FTPS",plan.HostingPolicy.Permissions.FTPS) @planToggle("allow_logs","Domain logs",plan.HostingPolicy.Permissions.Logs) @planToggle("allow_git","Git deployment",plan.HostingPolicy.Permissions.Git) @planToggle("allow_staging","Staging workflows",plan.HostingPolicy.Permissions.Staging) @planToggle("allow_valkey","Valkey cache",plan.HostingPolicy.Permissions.Valkey) @planToggle("allow_scheduled_tasks","Scheduled tasks",plan.HostingPolicy.Permissions.ScheduledTasks) @planToggle("allow_applications","Application catalog",plan.HostingPolicy.Permissions.Applications) @planToggle("allow_custom_oci_images","Custom OCI images",plan.HostingPolicy.Permissions.CustomOCIImages) @planToggle("allow_application_egress","Application network egress",plan.HostingPolicy.Permissions.ApplicationEgress)</div><p class="np-form-help">Zero disables workers or release retention. Unlimited may be delegated only when the provider ceiling is also unlimited.</p><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">
 			for _, version := range capabilities.PHPVersions {
 				<label class="np-check"><input type="checkbox" name="php_versions" value={ version } checked?={ stringInSlice(plan.HostingPolicy.PHP.AllowedVersions,version) }/>{ version }</label>
 			}
-		</div></fieldset><fieldset class="np-field-group"><legend>Operational container runtime</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="oci" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"oci") }/>OCI containers</label></div><p class="np-form-help">Managed PHP, WordPress, Node.js, and Python adapters are not deployable in Phase 28.</p></fieldset><label>Allowed registries<input name="allowed_registries" value={ joinStrings(plan.HostingPolicy.Applications.AllowedRegistries) } placeholder="docker.io,ghcr.io"/></label></section>
+		</div></fieldset><fieldset class="np-field-group"><legend>Operational container runtime</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="oci" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"oci") }/>OCI containers</label></div><p class="np-form-help">OCI remains a separate Containers product. Classic PHP is operational; resellers may grant Managed PHP only within the Composer, worker, release, and provider ceilings above. WordPress Toolkit, Node.js, and Python are not implemented.</p></fieldset><label>Allowed registries<input name="allowed_registries" value={ joinStrings(plan.HostingPolicy.Applications.AllowedRegistries) } placeholder="docker.io,ghcr.io"/></label></section>
 		<div class="np-plan-action-bar"><div><strong>{ resellerPlanEditorSaveTitle(plan) }</strong><span>Existing reseller allocations are validated before this change is committed.</span></div><div><a class="np-secondary-button" href="/service-plans?type=reseller">Cancel</a><button type="submit">{ resellerPlanEditorSubmitLabel(plan) }</button></div></div>
 	</form>
 }
@@ -2229,7 +2493,7 @@ templ routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspa
 				}
 				@planLimitField("Per-site disk quota","site_disk_quota_mb",plan.SiteDiskQuotaMB,"MB")
 			</div></section>
-			<section class="np-plan-property-panel" data-np-plan-panel="php" hidden?={ planEditorTab(view) != "php" }><div class="np-property-head"><h2>PHP Settings</h2><p>Set the allowed runtimes and dedicated PHP-FPM defaults.</p></div><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">@phpVersionChecks(plan,data.Capabilities)</div></fieldset><div class="np-plan-field-grid">@planLimitField("PHP-FPM max children","php_max_children",plan.PHPFPMMaxChildren,"count") @planLimitField("PHP memory","php_memory_mb",plan.PHPMemoryMB,"MB")<label>FPM mode<select name="php_fpm_mode"><option value="ondemand" selected?={ plan.HostingPolicy.PHP.FPMMode=="ondemand" }>On demand</option><option value="dynamic" selected?={ plan.HostingPolicy.PHP.FPMMode=="dynamic" }>Dynamic</option></select></label><label>Max execution time<input type="number" min="0" name="php_max_execution_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)) }/></label><label>Max input time<input type="number" min="0" name="php_max_input_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)) }/></label><label>POST max size, MB<input type="number" min="0" name="php_post_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.PostMaxMB)) }/></label><label>Upload max size, MB<input type="number" min="0" name="php_upload_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)) }/></label><label>FPM max requests<input type="number" min="0" name="php_fpm_max_requests" value={ formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)) }/></label><label>FPM idle timeout<input type="number" min="0" name="php_fpm_idle_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.PHP.FPMIdleTimeoutSecs)) }/></label><label>Request termination timeout<input type="number" min="0" name="php_request_terminate_seconds" value={ formatPlanID(int64(plan.HostingPolicy.PHP.RequestTerminateSecs)) }/></label><label>OPcache memory, MB<input type="number" min="0" name="php_opcache_memory_mb" value={ formatPlanID(int64(plan.HostingPolicy.PHP.OPcacheMemoryMB)) }/></label></div><div class="np-permission-list">@planToggle("php_log_errors","Log PHP errors",plan.Presets.PHP.LogErrors) @planToggle("php_display_errors","Display PHP errors",plan.Presets.PHP.DisplayErrors) @planToggle("php_allow_url_fopen","Allow URL fopen",plan.Presets.PHP.AllowURLFOpen) @planToggle("php_opcache_enabled","OPcache",plan.HostingPolicy.PHP.OPcacheEnabled) @planToggle("php_exec_enabled","PHP process execution",plan.HostingPolicy.PHP.ExecEnabled)</div></section>
+			<section class="np-plan-property-panel" data-np-plan-panel="php" hidden?={ planEditorTab(view) != "php" }><div class="np-property-head"><h2>PHP Settings</h2><p>Set allowed runtimes, dedicated PHP-FPM defaults, and production deployment capabilities. Zero disables a limit; Unlimited removes its numeric ceiling.</p></div><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">@phpVersionChecks(plan,data.Capabilities)</div></fieldset><div class="np-plan-field-grid">@planLimitField("PHP-FPM max children","php_max_children",plan.PHPFPMMaxChildren,"count") @planLimitField("PHP memory","php_memory_mb",plan.PHPMemoryMB,"MB") @planLimitField("PHP worker processes","max_php_workers",plan.HostingPolicy.Resources.MaxPHPWorkers,"count") @planLimitField("PHP releases","max_php_releases",plan.HostingPolicy.Resources.MaxPHPReleases,"count")<label>FPM mode<select name="php_fpm_mode"><option value="ondemand" selected?={ plan.HostingPolicy.PHP.FPMMode=="ondemand" }>On demand</option><option value="dynamic" selected?={ plan.HostingPolicy.PHP.FPMMode=="dynamic" }>Dynamic</option></select></label><label>Max execution time<input type="number" min="0" name="php_max_execution_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)) }/></label><label>Max input time<input type="number" min="0" name="php_max_input_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)) }/></label><label>POST max size, MB<input type="number" min="0" name="php_post_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.PostMaxMB)) }/></label><label>Upload max size, MB<input type="number" min="0" name="php_upload_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)) }/></label><label>FPM max requests<input type="number" min="0" name="php_fpm_max_requests" value={ formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)) }/></label><label>FPM idle timeout<input type="number" min="0" name="php_fpm_idle_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.PHP.FPMIdleTimeoutSecs)) }/></label><label>Request termination timeout<input type="number" min="0" name="php_request_terminate_seconds" value={ formatPlanID(int64(plan.HostingPolicy.PHP.RequestTerminateSecs)) }/></label><label>OPcache memory, MB<input type="number" min="0" name="php_opcache_memory_mb" value={ formatPlanID(int64(plan.HostingPolicy.PHP.OPcacheMemoryMB)) }/></label></div><div class="np-permission-list">@planToggle("allow_composer","Composer",plan.HostingPolicy.Permissions.Composer) @planToggle("allow_composer_code_execution","Composer code execution",plan.HostingPolicy.Permissions.ComposerCodeExecution) @planToggle("allow_managed_php_deployments","Managed PHP deployments",plan.HostingPolicy.Permissions.ManagedPHPDeployments) @planToggle("allow_php_workers","PHP workers",plan.HostingPolicy.Permissions.PHPWorkers) @planToggle("php_log_errors","Log PHP errors",plan.Presets.PHP.LogErrors) @planToggle("php_display_errors","Display PHP errors",plan.Presets.PHP.DisplayErrors) @planToggle("php_allow_url_fopen","Allow URL fopen",plan.Presets.PHP.AllowURLFOpen) @planToggle("php_opcache_enabled","OPcache",plan.HostingPolicy.PHP.OPcacheEnabled) @planToggle("php_exec_enabled","PHP process execution",plan.HostingPolicy.PHP.ExecEnabled)</div></section>
 		@planPresetPanels(plan,view)
 		<div class="np-plan-action-bar"><div><strong>{ planEditorSaveTitle(plan,addon) }</strong><span>{ planEditorSaveHint(plan,addon) }</span></div><div><a class="np-secondary-button" href={ templ.SafeURL(planListBackURL(addon)) }>Cancel</a><button type="submit" data-np-plan-submit>{ planEditorSubmitLabel(plan,addon) }</button></div></div>
 	</form>
@@ -2268,7 +2532,7 @@ templ planPresetPanels(plan controlquota.Plan, view WorkspaceView) {
 	<section class="np-plan-property-panel" data-np-plan-panel="dns" hidden?={ planEditorTab(view) != "dns" }><div class="np-property-head"><h2>DNS</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Zone mode<select name="dns_mode"><option value="authoritative" selected?={ plan.Presets.DNS.Mode == "primary" || plan.HostingPolicy.DNS.Mode == "authoritative" }>Authoritative</option><option value="external" selected?={ plan.Presets.DNS.Mode == "secondary" || plan.HostingPolicy.DNS.Mode == "external" }>External</option></select></label><label>Default TTL<input type="number" name="dns_default_ttl" min="60" value={ formatPlanID(int64(plan.Presets.DNS.DefaultTTL)) }/></label></div><div class="np-permission-list">@planToggle("dnssec","DNSSEC",plan.HostingPolicy.DNS.DNSSEC)</div></section>
 	<section class="np-plan-property-panel" data-np-plan-panel="performance" hidden?={ planEditorTab(view) != "performance" }><div class="np-property-head"><h2>Performance</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Maximum connections<input type="number" min="0" name="performance_max_connections" value={ formatPlanID(int64(plan.Presets.Performance.MaxConnections)) }/></label><label>Request rate per second<input type="number" min="0" name="request_rate_per_second" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestRatePerSecond)) }/></label><label>Request burst<input type="number" min="0" name="request_burst" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestBurst)) }/></label><label>Index files<input name="web_index_files" value={ plan.HostingPolicy.Web.IndexFiles }/></label><label>Request body, MB<input type="number" min="0" name="web_request_body_mb" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestBodyLimitMB)) }/></label><label>Cache TTL, seconds<input type="number" min="0" name="web_cache_ttl_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Web.CacheTTLSeconds)) }/></label><label>Connect timeout<input type="number" min="0" name="web_connect_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Web.ConnectTimeoutSecs)) }/></label><label>Read timeout<input type="number" min="0" name="web_read_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Web.ReadTimeoutSecs)) }/></label><label>Security headers<select name="web_security_headers"><option value="off" selected?={ plan.HostingPolicy.Web.SecurityHeaderPreset=="off" }>Off</option><option value="balanced" selected?={ plan.HostingPolicy.Web.SecurityHeaderPreset=="balanced" }>Balanced</option><option value="strict" selected?={ plan.HostingPolicy.Web.SecurityHeaderPreset=="strict" }>Strict</option></select></label><label>Valkey max clients<input type="number" min="1" name="valkey_max_clients" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.MaxClients)) }/></label><label>Valkey idle timeout<input type="number" min="0" name="valkey_idle_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.IdleTimeoutSeconds)) }/></label><label>Valkey CPU %<input type="number" min="1" name="valkey_cpu_percent" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.CPUPercent)) }/></label><label>Valkey process limit<input type="number" min="8" name="valkey_process_limit" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.ProcessLimit)) }/></label></div><div class="np-permission-list">@planToggle("web_compression","Compression",plan.HostingPolicy.Web.Compression) @planToggle("performance_static_cache","Static file caching",plan.Presets.Performance.StaticFileCache) @planToggle("fastcgi_microcache","FastCGI microcache",plan.HostingPolicy.Web.FastCGIMicrocache)</div></section>
 	<section class="np-plan-property-panel" data-np-plan-panel="logs" hidden?={ planEditorTab(view) != "logs" }><div class="np-property-head"><h2>Logs & Statistics</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Log retention, days<input type="number" min="1" name="logs_retention_days" value={ formatPlanID(int64(plan.Presets.Logs.RetentionDays)) }/></label>@planToggle("logs_rotation_enabled","Rotate logs",plan.Presets.Logs.RotationEnabled) @planToggle("logs_statistics_enabled","Traffic statistics",plan.Presets.Logs.StatisticsEnabled)</div></section>
-	<section class="np-plan-property-panel" data-np-plan-panel="applications" hidden?={ planEditorTab(view) != "applications" }><div class="np-property-head"><h2>Applications &amp; Containers</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("applications_catalog_enabled","Provider container catalog",plan.Presets.Applications.CatalogEnabled)</div><fieldset class="np-field-group"><legend>Operational runtime</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="oci" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"oci") }/>OCI containers</label></div><p class="np-form-help">Managed PHP, WordPress, Node.js, and Python adapters remain unavailable until their Ubuntu verifiers pass.</p></fieldset><div class="np-plan-field-grid"><label>Allowed registries<input name="allowed_registries" value={ joinStrings(plan.HostingPolicy.Applications.AllowedRegistries) } placeholder="docker.io,ghcr.io"/></label><label>Allowed provider recipe slugs<input name="allowed_catalog_slugs" value={ joinStrings(plan.Presets.Applications.Allowed) } placeholder="whoami,static-app"/></label></div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="applications" hidden?={ planEditorTab(view) != "applications" }><div class="np-property-head"><h2>Applications &amp; Containers</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("applications_catalog_enabled","Provider container catalog",plan.Presets.Applications.CatalogEnabled)</div><fieldset class="np-field-group"><legend>Operational runtimes</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="oci" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"oci") }/>OCI containers</label></div><p class="np-form-help">Classic PHP hosting is operational. Managed PHP entitlement is configured in PHP Settings and uses the PHP Application workspace when healthy. WordPress Toolkit, Node.js, and Python are not implemented; OCI remains in Containers.</p></fieldset><div class="np-plan-field-grid"><label>Allowed registries<input name="allowed_registries" value={ joinStrings(plan.HostingPolicy.Applications.AllowedRegistries) } placeholder="docker.io,ghcr.io"/></label><label>Allowed provider recipe slugs<input name="allowed_catalog_slugs" value={ joinStrings(plan.Presets.Applications.Allowed) } placeholder="whoami,static-app"/></label></div></section>
 }
 
 templ presetStatus() { <span class="np-preset-badge">Stored preset</span> }

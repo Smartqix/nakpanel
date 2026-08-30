@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
@@ -108,9 +109,13 @@ func TestPHPApplicationWorkspaceLoadsAfterScopedSiteVisibility(t *testing.T) {
 }
 
 func TestPHPApplicationWorkspaceSupportsAllHostingRoles(t *testing.T) {
+	const secret = "role-scoped-secret-must-not-render"
 	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleReseller, auth.RoleClient} {
 		t.Run(string(role), func(t *testing.T) {
-			service := &fakePHPApplicationService{}
+			service := &fakePHPApplicationService{workspace: controlphpapp.Workspace{
+				Application: types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, HostingMode: types.PHPHostingModeManaged},
+				Environment: []types.PHPEnvironmentVariable{{Name: "APP_SECRET", Value: secret, SecretID: 99}},
+			}}
 			handler, _ := newTestHandlerWithOptions(t, role, ServerOptions{DashboardReader: &fakeDashboardReader{data: phpApplicationDashboard(7)}, PHPApplications: service})
 			email, password := "admin@nakpanel.test", "NakpanelAdmin!2026"
 			if role == auth.RoleReseller {
@@ -123,7 +128,7 @@ func TestPHPApplicationWorkspaceSupportsAllHostingRoles(t *testing.T) {
 			addAuthenticatedCookie(req, cookie)
 			rec := httptest.NewRecorder()
 			handler.ServeHTTP(rec, req)
-			if rec.Code != http.StatusOK || service.actor.Role != role {
+			if rec.Code != http.StatusOK || service.actor.Role != role || strings.Contains(rec.Body.String(), secret) {
 				t.Fatalf("role %s workspace = %d actor=%s", role, rec.Code, service.actor.Role)
 			}
 		})
@@ -131,17 +136,35 @@ func TestPHPApplicationWorkspaceSupportsAllHostingRoles(t *testing.T) {
 }
 
 func TestPHPApplicationWorkspaceSupportScopeAndUnavailableService(t *testing.T) {
+	const secret = "support-secret-must-not-render"
 	reader := &fakeDashboardReader{data: dashboard.Data{
 		Customers: []types.Customer{{ID: 88, DisplayName: "Owned"}, {ID: 99, DisplayName: "Other"}},
-		Sites:     []dashboard.Site{{ID: 7, Domain: "owned.test", CustomerID: 88}, {ID: 8, Domain: "other.test", CustomerID: 99}},
+		Sites:     []dashboard.Site{{ID: 7, Domain: "owned.test", CustomerID: 88, SubscriptionID: 20}, {ID: 8, Domain: "other.test", CustomerID: 99, SubscriptionID: 21}},
+		Subscriptions: []types.SubscriptionSummary{
+			{ID: 20, CustomerID: 88, SubscriptionName: "Owned"},
+			{ID: 21, CustomerID: 99, SubscriptionName: "Other"},
+		},
 	}}
-	service := &fakePHPApplicationService{}
+	service := &fakePHPApplicationService{workspace: controlphpapp.Workspace{
+		Application: types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, HostingMode: types.PHPHostingModeManaged},
+		Environment: []types.PHPEnvironmentVariable{{Name: "APP_SECRET", Value: secret, SecretID: 99}},
+	}}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader, PHPApplications: service})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/support/customers/88/sites/8/applications", nil)
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/support/customers/88/sites/7/applications?app_tab=environment", nil)
 	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), secret) ||
+		!strings.Contains(rec.Body.String(), `/support/customers/88/sites/7/applications`) {
+		t.Fatalf("support workspace = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	service.called = ""
+	req = httptest.NewRequest(http.MethodGet, "https://panel.test/support/customers/88/sites/8/applications", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotFound || service.called != "" {
 		t.Fatalf("wrong support customer = %d call=%q", rec.Code, service.called)
@@ -178,7 +201,12 @@ func TestPHPApplicationSupportMutationRejectsWrongCustomerBeforeService(t *testi
 }
 
 func TestPHPRuntimeToolsAreProviderOnlyAndScoped(t *testing.T) {
-	service := &fakePHPApplicationService{capabilities: types.RuntimeCapabilities{PHPRuntimes: []types.PHPRuntimeCapability{{Version: "8.4", Ready: true}}}}
+	service := &fakePHPApplicationService{capabilities: types.RuntimeCapabilities{
+		PHPVersions: []string{"8.4"}, ComposerAvailable: true, ComposerVersion: "2.8.11", WPCLIAvailable: true, WPCLIVersion: "2.12.0",
+		PHPRuntimes: []types.PHPRuntimeCapability{{Version: "8.4", Ready: true, SupportStatus: types.PHPSupportActive,
+			CLIPath: "/usr/bin/php8.4", FPMPath: "/usr/sbin/php-fpm8.4", CLIAvailable: true, FPMAvailable: true,
+			FPMConfigValid: true, OPcacheAvailable: true, Extensions: []string{"curl", "mysqli", "opcache"}}},
+	}}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{}, PHPApplications: service})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 	req := httptest.NewRequest(http.MethodGet, "https://panel.test/tools-settings/php", nil)
@@ -187,6 +215,11 @@ func TestPHPRuntimeToolsAreProviderOnlyAndScoped(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || service.called != "capabilities" {
 		t.Fatalf("admin PHP tools = %d call=%q", rec.Code, service.called)
+	}
+	for _, want := range []string{"PHP Runtime Inventory", "PHP 8.4", "Recommended default", "/usr/bin/php8.4", "Composer 2.8.11", "WP-CLI 2.12.0", "mysqli"} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("runtime inventory missing %q: %s", want, rec.Body.String())
+		}
 	}
 
 	service.called = ""
@@ -198,6 +231,83 @@ func TestPHPRuntimeToolsAreProviderOnlyAndScoped(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusForbidden || service.called != "" {
 		t.Fatalf("client PHP tools = %d call=%q", rec.Code, service.called)
+	}
+}
+
+func TestPHPApplicationWorkspaceRendersManagedTabsWithoutSecretOrLegacyOCI(t *testing.T) {
+	const secret = "distinctive-render-secret-621"
+	data := phpApplicationDashboard(7)
+	data.Subscriptions = []types.SubscriptionSummary{{ID: 20, CustomerID: 88, SubscriptionName: "Production", PlanName: "Business", Status: "active"}}
+	data.SubscriptionServices.Git = []types.GitRepository{{ID: 12, SiteID: 7, Mode: "remote", Branch: "main", RemoteURL: "ssh://git.example/app.git"}}
+	workspace := controlphpapp.Workspace{
+		Application: types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, SubscriptionID: 20, HostingMode: types.PHPHostingModeManaged,
+			PHPVersion: "8.4", RepositoryID: 12, RepositoryRef: "main", FrameworkProfile: types.PHPFrameworkLaravel,
+			PublicPath: "public", HealthPath: "/up", SharedPaths: []string{"storage", "bootstrap/cache"}, ReleaseRetention: 4,
+			Composer: types.PHPComposerSpec{Install: true}},
+		Environment: []types.PHPEnvironmentVariable{{Name: "APP_ENV", Value: "production"}, {Name: "APP_KEY", Value: secret, SecretID: 9}},
+		Workers: []types.PHPWorker{{ID: 51, ApplicationID: 31, Name: "queue", Script: "artisan", Arguments: []string{"queue:work", "--tries=3"},
+			Processes: 2, DesiredState: "running", ObservedState: "running", ConvergenceStatus: "in_sync"}},
+		Deployments: []types.PHPDeployment{
+			{ID: 41, ApplicationID: 31, RequestedRevision: "main", ResolvedRevision: "abc123", Status: "healthy", CreatedAt: time.Now()},
+			{ID: 40, ApplicationID: 31, RequestedRevision: "v1", ResolvedRevision: "def456", Status: "healthy", CreatedAt: time.Now().Add(-time.Hour)},
+		},
+		Policy: types.HostingPolicy{SchemaVersion: 3, Permissions: types.HostingPermissionPolicy{Composer: true, ManagedPHPDeployments: true, PHPWorkers: true},
+			Resources: types.HostingResourcePolicy{MaxPHPWorkers: 4, MaxPHPReleases: 5}},
+		Runtime: types.PHPRuntimeCapability{Version: "8.4", Ready: true, SupportStatus: types.PHPSupportActive, CLIAvailable: true, FPMAvailable: true,
+			FPMConfigValid: true, OPcacheAvailable: true, CLIPath: "/usr/bin/php8.4", FPMPath: "/usr/sbin/php-fpm8.4", Extensions: []string{"curl", "mysqli"}},
+		ObservedState: "healthy", ConvergenceStatus: "in_sync", ActiveDeploymentID: 41, PreviousDeploymentID: 40,
+	}
+	service := &fakePHPApplicationService{workspace: workspace}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{data: data}, PHPApplications: service})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/7/applications?app_tab=environment", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("managed workspace = %d body=%s", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, want := range []string{"PHP Application", "Managed Deployment", "Environment", "APP_ENV", "APP_KEY", "Write-only secret", `type="password"`, `data-np-php-app-tab="environment"`, `id="php-environment-edit-APP_ENV"`, `id="php-environment-edit-APP_KEY"`, `id="php-worker-edit-51"`} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("managed workspace missing %q: %s", want, body)
+		}
+	}
+	for _, forbidden := range []string{secret, "Managed runtimes are not installed yet", "Deploy container", "WordPress Toolkit"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("managed workspace exposed stale/secret content %q: %s", forbidden, body)
+		}
+	}
+}
+
+func TestPHPApplicationWorkspaceRendersClassicDiagnosticsAndEntitlementGate(t *testing.T) {
+	data := phpApplicationDashboard(7)
+	data.Sites[0].PHPVersion = "8.4"
+	data.Sites[0].DocumentRoot = "/home/np7/domains/owned.test/public_html"
+	data.Subscriptions = []types.SubscriptionSummary{{ID: 20, CustomerID: 88, SubscriptionName: "Classic", PlanName: "Starter", Status: "active"}}
+	workspace := controlphpapp.Workspace{
+		Application: types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, SubscriptionID: 20, HostingMode: types.PHPHostingModeClassic, PHPVersion: "8.4"},
+		Policy:      types.HostingPolicy{SchemaVersion: 3, Permissions: types.HostingPermissionPolicy{Composer: true}},
+		Runtime: types.PHPRuntimeCapability{Version: "8.4", Ready: true, SupportStatus: types.PHPSupportActive, CLIPath: "/usr/bin/php8.4",
+			FPMPath: "/usr/sbin/php-fpm8.4", CLIAvailable: true, FPMAvailable: true, FPMConfigValid: true, OPcacheAvailable: true,
+			Extensions: []string{"curl", "mysqli"}},
+		Capabilities:  types.RuntimeCapabilities{ComposerAvailable: true, ComposerVersion: "2.8.11", WPCLIAvailable: true, WPCLIVersion: "2.12.0"},
+		ObservedState: "healthy", ConvergenceStatus: "in_sync",
+	}
+	service := &fakePHPApplicationService{workspace: workspace, capabilities: types.RuntimeCapabilities{ComposerAvailable: true, ComposerVersion: "2.8.11", WPCLIAvailable: true, WPCLIVersion: "2.12.0"}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{DashboardReader: &fakeDashboardReader{data: data}, PHPApplications: service})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/7/applications", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("classic workspace = %d body=%s", rec.Code, rec.Body.String())
+	}
+	for _, want := range []string{"Classic Hosting", "mutable public_html", "/home/np7/domains/owned.test/public_html", "PHP 8.4", "/usr/sbin/php-fpm8.4", "OPcache", "Files", "Databases", "Backups"} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Fatalf("classic workspace missing %q: %s", want, rec.Body.String())
+		}
 	}
 }
 
@@ -537,5 +647,31 @@ func TestParsePlanIncludesPHPHostingV3Fields(t *testing.T) {
 		!permissions.ManagedPHPDeployments || !permissions.PHPWorkers || plan.HostingPolicy.Resources.MaxPHPWorkers != 4 ||
 		plan.HostingPolicy.Resources.MaxPHPReleases != -1 {
 		t.Fatalf("v3 hosting policy not parsed: %#v", plan.HostingPolicy)
+	}
+}
+
+func TestApplyResellerPHPHostingFieldsIncludesPhase30Ceilings(t *testing.T) {
+	form := url.Values{
+		"allow_composer":                {"true"},
+		"allow_composer_code_execution": {"true"},
+		"allow_managed_php_deployments": {"true"},
+		"allow_php_workers":             {"true"},
+		"max_php_workers":               {"6"},
+		"max_php_releases_unlimited":    {"true"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/reseller-plans", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := req.ParseForm(); err != nil {
+		t.Fatal(err)
+	}
+	var policy types.HostingPolicy
+	if err := applyResellerPHPHostingFields(req, &policy); err != nil {
+		t.Fatal(err)
+	}
+	if policy.SchemaVersion != 3 || !policy.Permissions.Composer ||
+		!policy.Permissions.ComposerCodeExecution || !policy.Permissions.ManagedPHPDeployments ||
+		!policy.Permissions.PHPWorkers || policy.Resources.MaxPHPWorkers != 6 ||
+		policy.Resources.MaxPHPReleases != -1 {
+		t.Fatalf("phase 30 reseller ceilings not parsed: %#v", policy)
 	}
 }
