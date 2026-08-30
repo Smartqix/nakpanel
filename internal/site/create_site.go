@@ -100,8 +100,20 @@ func NormalizeDomain(domain string) string {
 }
 
 func ValidateCreateSiteRequest(req types.CreateSiteReq) error {
-	if err := ValidateUsername(req.Username); err != nil {
-		return err
+	return validateCreateSiteRequest(req, true)
+}
+
+// ValidateSubscriptionCreateSiteRequest validates browser-controlled site
+// fields while leaving the Linux identity to the subscription account store.
+func ValidateSubscriptionCreateSiteRequest(req types.CreateSiteReq) error {
+	return validateCreateSiteRequest(req, false)
+}
+
+func validateCreateSiteRequest(req types.CreateSiteReq, validateUsername bool) error {
+	if validateUsername {
+		if err := ValidateUsername(req.Username); err != nil {
+			return err
+		}
 	}
 	if err := ValidateDomain(req.Domain); err != nil {
 		return err

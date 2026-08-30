@@ -140,7 +140,7 @@ func TestManagerCreatesSiteForSelectedSubscription(t *testing.T) {
 	manager := NewManager(repo, WithQuotaStore(quotas))
 
 	_, err := manager.CreateSiteForSubscription(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 44, types.CreateSiteReq{
-		Username:       "npdemo",
+		Username:       "root",
 		Domain:         "example.test",
 		PHPVersion:     "8.3",
 		SubscriptionID: 44,
@@ -153,6 +153,9 @@ func TestManagerCreatesSiteForSelectedSubscription(t *testing.T) {
 	}
 	if repo.req.SubscriptionID != 44 {
 		t.Fatalf("repository subscription = %d, want 44", repo.req.SubscriptionID)
+	}
+	if repo.req.Username != "" {
+		t.Fatalf("repository username = %q, want the browser value discarded", repo.req.Username)
 	}
 	if repo.ownerID != 1 {
 		t.Fatalf("legacy ownerID = %d, want actor 1", repo.ownerID)

@@ -442,6 +442,9 @@ func (m *Manager) CreateSiteForSubscription(ctx context.Context, actor auth.Sess
 	}
 
 	normalized := site.NormalizeCreateSiteRequest(req)
+	// The subscription account is authoritative. A browser-supplied username
+	// must neither select nor block the Linux identity used for this site.
+	normalized.Username = ""
 	limits, entitlement, err := controlquota.SiteLimitsForSubscription(ctx, m.quotaStore, subscriptionID)
 	if err != nil {
 		return 0, err
@@ -450,7 +453,7 @@ func (m *Manager) CreateSiteForSubscription(ctx context.Context, actor auth.Sess
 	if err != nil {
 		return 0, err
 	}
-	if err := site.ValidateCreateSiteRequest(normalized); err != nil {
+	if err := site.ValidateSubscriptionCreateSiteRequest(normalized); err != nil {
 		return 0, err
 	}
 	if err := m.validateInstalledPHP(ctx, normalized.PHPVersion); err != nil {
