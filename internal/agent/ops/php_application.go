@@ -2,6 +2,7 @@ package ops
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -361,6 +362,12 @@ func parseComposerAuditReport(data []byte) (composerAuditReport, error) {
 }
 
 func evaluateComposerAudit(data []byte, executionErr error) (string, error) {
+	// Composer 2.8 emits no JSON when the lock contains no packages. An empty
+	// successful result is therefore clean; any empty non-zero result remains a
+	// hard failure below because there is no report explaining the exit status.
+	if len(bytes.TrimSpace(data)) == 0 && executionErr == nil {
+		return "clean", nil
+	}
 	report, err := parseComposerAuditReport(data)
 	if err != nil {
 		return "", err
