@@ -304,7 +304,7 @@ set -euo pipefail
 username="$1"
 docroot="/home/${username}/domains/phase30-classic.test/public_html"
 sudo -u "${username}" find "${docroot}" -mindepth 1 -delete
-timeout 10m sudo -u "${username}" wp core download --version=7.1 --locale=en_US --path="${docroot}"
+timeout 10m sudo -u "${username}" wp core download https://wordpress.org/wordpress-7.1.zip --locale=en_US --path="${docroot}"
 REMOTE
 printf '%s' "${DB_PASSWORD}" | multipass exec "${VM_NAME}" --working-directory / -- sudo -u "${username}" timeout 5m \
   wp config create --path="/home/${username}/domains/phase30-classic.test/public_html" \

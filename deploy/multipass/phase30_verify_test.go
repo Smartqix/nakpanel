@@ -36,7 +36,7 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 			"phase30-classic.test", "service-plans", "customers", "subscriptions", "databases",
 			"subscription_system_accounts", "panelctl --actor phase30", "ssl set-custom",
 			"/usr/local/share/ca-certificates/nakpanel-phase30-root.crt", "--cacert",
-			"wp core download --version=7.1", "wp core verify-checksums", "wp core install",
+			"wp core download https://wordpress.org/wordpress-7.1.zip", "wp core verify-checksums", "wp core install",
 			"wp rewrite structure", "wp plugin activate", "wp media import", "wp cron event schedule",
 			"session_start", "opcache_get_status", "backup create", "panelctl --actor phase30 restore",
 			"desired_php_version=8.5", `"php${version}-fpm"`, "quota -u", "repquota -up /", "Phase30 Isolated",
@@ -66,6 +66,7 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 		"curl -k --cacert",
 		"curl -sk --cacert",
 		"wp core download --force",
+		"wp core download --version=7.1",
 	} {
 		if strings.Contains(script, forbidden) {
 			t.Errorf("verifier contains forbidden bypass %q", forbidden)
@@ -234,7 +235,7 @@ func TestPhase30VerifierBoundsEveryCurlAndExternalInstaller(t *testing.T) {
 	}
 	for _, want := range []string{
 		"timeout 45m deploy/install/install.sh --yes --allow-downgrade --force",
-		`timeout 10m sudo -u "${username}" wp core download --version=7.1`,
+		`timeout 10m sudo -u "${username}" wp core download https://wordpress.org/wordpress-7.1.zip`,
 		`timeout 5m sudo -u "${username}" wp eval`,
 		"timeout 1m openssl s_client",
 	} {
