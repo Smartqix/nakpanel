@@ -12,7 +12,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
-SECRET_DIR="/run/nakpanel/phase30-verifier"
+SECRET_DIR="/var/lib/nakpanel/phase30-verifier"
 DB_SECRET_FILE="${SECRET_DIR}/phase30-db-secret"
 APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
 WP_ADMIN_SECRET_FILE="${SECRET_DIR}/phase30-wp-admin-secret"
@@ -241,7 +241,7 @@ journal_cursor="$(multipass_exec_short "${VM_NAME}" -- sudo journalctl \
 multipass exec "${VM_NAME}" -- sudo bash -se -- "${database_id}" <<'REMOTE'
 set -euo pipefail
 database_id="$1"
-SECRET_DIR=/run/nakpanel/phase30-verifier
+SECRET_DIR=/var/lib/nakpanel/phase30-verifier
 DB_SECRET_FILE="${SECRET_DIR}/phase30-db-secret"
 APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
 WP_ADMIN_SECRET_FILE="${SECRET_DIR}/phase30-wp-admin-secret"
@@ -303,7 +303,7 @@ post_as phase30-classic-redirect "sites/${classic_site_id}/hosting" -d 'desired_
 wait_for "Classic HTTPS redirect" "SELECT https_redirect::text||':'||settings_status FROM sites WHERE id=${classic_site_id}" "true:in_sync"
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
-echo | openssl s_client -connect 127.0.0.1:443 -servername phase30-classic.test \
+echo | timeout 1m openssl s_client -connect 127.0.0.1:443 -servername phase30-classic.test \
   -CAfile /usr/local/share/ca-certificates/nakpanel-phase30-root.crt -verify_return_error 2>/dev/null \
   | openssl x509 -noout -checkhost phase30-classic.test >/dev/null
 headers="$(curl --connect-timeout 5 --max-time 30 --silent --show-error --head --resolve phase30-classic.test:80:127.0.0.1 http://phase30-classic.test/)"
@@ -317,9 +317,9 @@ multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" "${db_name}" "${db
 set -euo pipefail
 username="$1"; db_name="$2"; db_user="$3"
 docroot="/home/${username}/domains/phase30-classic.test/public_html"
-DB_SECRET_FILE=/run/nakpanel/phase30-verifier/phase30-db-secret
-WP_ADMIN_SECRET_FILE=/run/nakpanel/phase30-verifier/phase30-wp-admin-secret
-DB_CNF=/run/nakpanel/phase30-verifier/database.cnf
+DB_SECRET_FILE=/var/lib/nakpanel/phase30-verifier/phase30-db-secret
+WP_ADMIN_SECRET_FILE=/var/lib/nakpanel/phase30-verifier/phase30-wp-admin-secret
+DB_CNF=/var/lib/nakpanel/phase30-verifier/database.cnf
 sudo -u "${username}" find "${docroot}" -mindepth 1 -delete
 timeout 10m sudo -u "${username}" wp core download --version=7.1 --locale=en_US --path="${docroot}"
 {
@@ -462,8 +462,8 @@ nonempty_artifacts=(
 existing_artifacts=(
   "/var/log/nginx/${slug}.error.log"
   "/var/log/php-fpm/${slug}.error.log"
-  "/run/nakpanel/phase30-verifier/phase30-db-secret"
-  "/run/nakpanel/phase30-verifier/phase30-wp-admin-secret"
+  "/var/lib/nakpanel/phase30-verifier/phase30-db-secret"
+  "/var/lib/nakpanel/phase30-verifier/phase30-wp-admin-secret"
   "/etc/nakpanel/secret-keys.json"
 )
 require_first_subscription_artifact(){
@@ -547,7 +547,7 @@ post_as phase30-public-env "sites/${managed_site_id}/php-application/environment
 multipass exec "${VM_NAME}" -- sudo bash -se -- "${managed_site_id}" <<'REMOTE'
 set -euo pipefail
 site_id="$1"
-SECRET_DIR=/run/nakpanel/phase30-verifier
+SECRET_DIR=/var/lib/nakpanel/phase30-verifier
 APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
 session="$(awk '$6=="nakpanel_session"{v=$7} END{print v}' "${SECRET_DIR}/admin.cookies")"
 csrf="$(printf 'nakpanel-csrf-v1:%s' "${session}" | sha256sum | awk '{print $1}')"
@@ -616,7 +616,7 @@ curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "
 multipass exec "${VM_NAME}" -- sudo bash -se -- "${managed_application_id}" "${managed_site_id}" "${worker_id}" "${stopped_worker_id}" "${second_username}" "${journal_cursor}" <<'REMOTE'
 set -euo pipefail
 application_id="$1"; site_id="$2"; worker_id="$3"; stopped_worker_id="$4"; second_username="$5"; journal_cursor="$6"
-SECRET_DIR=/run/nakpanel/phase30-verifier
+SECRET_DIR=/var/lib/nakpanel/phase30-verifier
 APP_SECRET_FILE="${SECRET_DIR}/phase30-app-secret"
 DB_SECRET_FILE="${SECRET_DIR}/phase30-db-secret"
 WP_ADMIN_SECRET_FILE="${SECRET_DIR}/phase30-wp-admin-secret"
@@ -710,6 +710,27 @@ wait_for "desired-stopped worker after explicit reconciliation" "SELECT desired_
 assert_worker_inactive "desired-stopped worker after explicit reconciliation" "${stopped_worker_id}"
 curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
 
+# Stop both secret-consuming daemons before the reboot-boundary capture. Once
+# inactive, they cannot append a later pre-reboot entry outside this snapshot.
+multipass exec "${VM_NAME}" -- sudo bash -se -- "${SECRET_DIR}" "${journal_cursor}" <<'REMOTE'
+set -euo pipefail
+secret_dir="$1"; journal_cursor="$2"
+systemctl stop nakpanel.service nakpanel-agent.service
+for unit in nakpanel.service nakpanel-agent.service; do
+  if systemctl is-active --quiet "${unit}"; then
+    echo "${unit} remained active before the journal boundary capture" >&2
+    exit 1
+  fi
+done
+journalctl --sync
+journalctl -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise \
+  --after-cursor "${journal_cursor}" >"${secret_dir}/journal-pre-reboot.out"
+test -s "${secret_dir}/journal-pre-reboot.out" || {
+  echo 'pre-reboot panel/agent journal capture is empty' >&2
+  exit 1
+}
+REMOTE
+
 multipass restart "${VM_NAME}"
 wait_for_cloud_init "${VM_NAME}"
 VM_IP="$(vm_ip)"
@@ -753,6 +774,82 @@ for stale_promise in 'Deploy WordPress' 'WordPress Toolkit' 'Node.js application
     fail "application catalog advertises stale runtime promise: ${stale_promise}"
   fi
 done
+
+final_secret_non_disclosure_sweep(){
+  multipass exec "${VM_NAME}" -- sudo bash -se -- \
+    "${managed_application_id}" "${managed_site_id}" "${worker_id}" "${stopped_worker_id}" "${SECRET_DIR}" <<'REMOTE'
+set -euo pipefail
+application_id="$1"; site_id="$2"; worker_id="$3"; stopped_worker_id="$4"; secret_dir="$5"
+app_secret_file="${secret_dir}/phase30-app-secret"
+db_secret_file="${secret_dir}/phase30-db-secret"
+wp_admin_secret_file="${secret_dir}/phase30-wp-admin-secret"
+for secret_file in "${app_secret_file}" "${db_secret_file}" "${wp_admin_secret_file}"; do
+  test -s "${secret_file}" || { echo "final secret evidence is unavailable: ${secret_file}" >&2; exit 1; }
+done
+
+# Refresh the authenticated application response before capturing the final
+# journal checkpoint so even the last UI read is inside the inspected window.
+curl --connect-timeout 5 --max-time 30 -sk --fail -c "${secret_dir}/admin.cookies" -L \
+  -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
+  https://127.0.0.1:7443/login -o /dev/null
+curl --connect-timeout 5 --max-time 30 -sk --fail -b "${secret_dir}/admin.cookies" \
+  "https://127.0.0.1:7443/sites/${site_id}/applications" >"${secret_dir}/application-final.html"
+
+sudo -u postgres psql -Atqd nakpanel -c \
+  "SELECT args::text FROM river_job
+     WHERE kind LIKE '%php%' OR kind IN ('create_database','system_database_mutation');
+   SELECT metadata::text FROM audit_events
+     WHERE action LIKE 'php.%' OR action LIKE 'database.%';
+   SELECT request::text||result::text||last_error FROM server_operations
+     WHERE target_type='database';
+   SELECT COALESCE(last_error,'')||COALESCE(health_message,'')||COALESCE(composer_audit::text,'')
+     FROM php_deployments WHERE application_id=${application_id};" \
+  >"${secret_dir}/database-surfaces-final.out"
+
+fpm_unit="nakpanel-php-fpm@${site_id}.service"
+running_worker_unit="nakpanel-php-worker@${worker_id}.service"
+stopped_worker_unit="nakpanel-php-worker@${stopped_worker_id}.service"
+if ! systemctl show "${fpm_unit}" "${running_worker_unit}" "${stopped_worker_unit}" >"${secret_dir}/systemd-final.out"; then
+  echo 'failed to capture final PHP unit metadata' >&2
+  exit 1
+fi
+for unit in "${fpm_unit}" "${running_worker_unit}" "${stopped_worker_unit}"; do
+  grep -Fxq "Id=${unit}" "${secret_dir}/systemd-final.out" || {
+    echo "failed to capture final PHP unit metadata for ${unit}" >&2
+    exit 1
+  }
+done
+find /etc/nginx /etc/nakpanel/php-fpm -type f -maxdepth 5 -print0 2>/dev/null \
+  | xargs -0r grep -h '' >"${secret_dir}/tenant-config-final.out"
+
+# The pre-reboot file ends after both secret-consuming services stop. The
+# current-boot file starts at boot and is captured only after final reconcile.
+journalctl --sync
+journalctl -b 0 -u nakpanel.service -u nakpanel-agent.service --no-pager --output=short-precise \
+  >"${secret_dir}/journal-post-reboot.out"
+cat "${secret_dir}/journal-pre-reboot.out" "${secret_dir}/journal-post-reboot.out" \
+  >"${secret_dir}/journal-final.out"
+test -s "${secret_dir}/journal-final.out" || { echo 'final panel/agent journal capture is empty' >&2; exit 1; }
+
+assert_final_secret_absent(){
+  local surface="$1" path="$2" secret_file="$3"
+  if grep -Fq -f "${secret_file}" "${path}"; then
+    echo "secret leaked into final ${surface}" >&2
+    exit 1
+  fi
+}
+for secret_file in "${app_secret_file}" "${db_secret_file}" "${wp_admin_secret_file}"; do
+  assert_final_secret_absent 'journal window' "${secret_dir}/journal-final.out" "${secret_file}"
+  assert_final_secret_absent 'durable database/deployment surfaces' "${secret_dir}/database-surfaces-final.out" "${secret_file}"
+  assert_final_secret_absent 'exact systemd metadata' "${secret_dir}/systemd-final.out" "${secret_file}"
+  assert_final_secret_absent 'nginx/PHP configuration' "${secret_dir}/tenant-config-final.out" "${secret_file}"
+  assert_final_secret_absent 'application HTML' "${secret_dir}/application-final.html" "${secret_file}"
+  assert_final_secret_absent 'application JSON' "${secret_dir}/application-secret.json" "${secret_file}"
+  assert_final_secret_absent 'database rotation JSON' "${secret_dir}/database-rotation.json" "${secret_file}"
+done
+REMOTE
+}
+final_secret_non_disclosure_sweep
 
 [[ "$(db "SELECT php_version FROM sites WHERE id=${explicit83_site}")" == "8.3" ]] || fail "explicit PHP 8.3 site changed during Phase 30"
 echo "Phase 30 production PHP, WordPress 7.1, managed release, worker, isolation, and reboot verification passed on ${VM_NAME} (${VM_IP})."

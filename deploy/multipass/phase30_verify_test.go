@@ -150,10 +150,36 @@ func TestPhase30VerifierBoundsEveryCurlAndExternalInstaller(t *testing.T) {
 		"timeout 45m deploy/install/install.sh --yes --allow-downgrade --force",
 		`timeout 10m sudo -u "${username}" wp core download --version=7.1`,
 		`timeout 5m sudo -u "${username}" wp eval`,
+		"timeout 1m openssl s_client",
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("verifier is missing outer command bound %q", want)
 		}
+	}
+	for lineNumber, line := range strings.Split(logical, "\n") {
+		if strings.Contains(line, "openssl s_client") && !strings.Contains(line, "timeout ") {
+			t.Errorf("logical line %d contains an unbounded openssl network command: %s", lineNumber+1, strings.TrimSpace(line))
+		}
+	}
+}
+
+func TestPhase30VerifierRunsFinalSecretSweepAfterRebootReconciliation(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	for _, want := range []string{
+		`SECRET_DIR="/var/lib/nakpanel/phase30-verifier"`,
+		"journal-pre-reboot.out", "systemctl stop nakpanel.service nakpanel-agent.service",
+		"journal-post-reboot.out", "journal-final.out", "database-surfaces-final.out",
+		"systemd-final.out", "tenant-config-final.out", "final_secret_non_disclosure_sweep",
+		`nakpanel-php-worker@${worker_id}.service`, `nakpanel-php-worker@${stopped_worker_id}.service`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("verifier is missing final disclosure contract %q", want)
+		}
+	}
+	postReboot := strings.Index(script, "post-reboot desired-stopped worker")
+	finalSweep := strings.LastIndex(script, "final_secret_non_disclosure_sweep")
+	if postReboot < 0 || finalSweep < 0 || finalSweep <= postReboot {
+		t.Fatalf("final secret sweep must run after post-reboot reconciliation assertions")
 	}
 }
 
