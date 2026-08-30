@@ -229,8 +229,15 @@ wait_for "SELECT convergence_status||':'||observed_state FROM application_instan
 curl -s --fail --resolve "${domain}:80:${VM_IP}" "http://${domain}/phase28/" >/dev/null
 
 curl -sk --fail -b "${tmpdir}/admin2.cookies" "${BASE_URL}/sites/${site_id}/applications" -o "${tmpdir}/applications.html"
-grep -Fq "Managed runtimes are not installed yet" "${tmpdir}/applications.html" || fail "managed Applications page advertises unavailable runtimes"
+for marker in 'PHP Application' 'Classic Hosting' 'Managed Deployment'; do
+  grep -Fq "${marker}" "${tmpdir}/applications.html" || fail "PHP application workspace is missing ${marker}"
+done
 if grep -Fq "Deploy application" "${tmpdir}/applications.html"; then fail "managed Applications page exposes a deploy action"; fi
+for unsupported in 'value="node"' 'value="python"' 'WordPress Toolkit'; do
+  if grep -Fq "${unsupported}" "${tmpdir}/applications.html"; then
+    fail "PHP application workspace advertises unsupported runtime ${unsupported}"
+  fi
+done
 curl -sk --fail -b "${tmpdir}/admin2.cookies" "${BASE_URL}/sites/${site_id}/containers" -o "${tmpdir}/containers.html"
 for marker in "Deploy container" "Digest-pinned OCI workloads" "Secret values (write-only JSON)" \
   "Volume size (MB)" "Subscription container limits"; do

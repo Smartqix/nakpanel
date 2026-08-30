@@ -19,13 +19,16 @@ func TestPhase28VerifierCoversOperationalContainerRuntime(t *testing.T) {
 		"phase27-verify.sh", "uidmap", "/etc/subuid", "/etc/subgid",
 		"docker.io/library/nginx@", "route_prefix=/phase28/", "in_sync:healthy",
 		"127.0.0.1:", "definitely-unhealthy", "active_generation", "multipass restart",
-		"desired_status=suspended", "Managed runtimes are not installed yet",
+		"desired_status=suspended", "PHP Application", "Classic Hosting", "Managed Deployment",
 		"retired application containers remain", "data-np-container-logs", "/logs?lines=20&bytes=4096",
 		"/tools-settings/application-catalog", "Phase 28 operational application runtime verification passed",
 	} {
 		if !strings.Contains(script, marker) {
 			t.Fatalf("%s is missing %q", path, marker)
 		}
+	}
+	if strings.Contains(script, "Managed runtimes are not installed yet") {
+		t.Fatal("phase28 verifier still requires the retired application placeholder")
 	}
 	info, err := os.Stat(path)
 	if err != nil {
