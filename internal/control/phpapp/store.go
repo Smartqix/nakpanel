@@ -278,7 +278,7 @@ func (s *SQLStore) ConfigureApplication(ctx context.Context, actorID, siteID int
 	}
 	input, err = validateApplicationConfiguration(input, record.spec.Policy, record.spec.HostingMode)
 	if err != nil {
-		return types.PHPApplicationSpec{}, err
+		return types.PHPApplicationSpec{}, invalidInput(err)
 	}
 	if err = recheckRuntime(runtime, input.PHPVersion); err != nil {
 		return types.PHPApplicationSpec{}, err
@@ -345,7 +345,7 @@ func (s *SQLStore) QueueDeployment(ctx context.Context, actorID, siteID int64, i
 		input.RequestedRevision = record.spec.RepositoryRef
 	}
 	if !gitRefPattern.MatchString(input.RequestedRevision) || strings.Contains(input.RequestedRevision, "..") {
-		return types.PHPDeployment{}, errors.New("requested Git revision is invalid")
+		return types.PHPDeployment{}, invalidInput(errors.New("requested Git revision is invalid"))
 	}
 	if err = supersedeDeploymentIntentsTx(ctx, tx, record.spec.ApplicationID); err != nil {
 		return types.PHPDeployment{}, err
@@ -395,7 +395,7 @@ func (s *SQLStore) QueueRollback(ctx context.Context, actorID, siteID, targetID 
 		return types.PHPDeployment{}, err
 	}
 	if targetID == record.activeDeploymentID {
-		return types.PHPDeployment{}, errors.New("rollback target is already active")
+		return types.PHPDeployment{}, fmt.Errorf("%w: rollback target is already active", ErrRevisionConflict)
 	}
 	target, err := scanDeployment(tx.QueryRowContext(ctx, rollbackTargetSelect, targetID, record.spec.ApplicationID))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -405,7 +405,7 @@ func (s *SQLStore) QueueRollback(ctx context.Context, actorID, siteID, targetID 
 		return types.PHPDeployment{}, err
 	}
 	if err = validateRollbackTarget(record, target); err != nil {
-		return types.PHPDeployment{}, err
+		return types.PHPDeployment{}, fmt.Errorf("%w: %v", ErrRevisionConflict, err)
 	}
 	if record.spec.ReleaseRetention > 0 {
 		var latest int64
@@ -413,7 +413,7 @@ func (s *SQLStore) QueueRollback(ctx context.Context, actorID, siteID, targetID 
 			return types.PHPDeployment{}, err
 		}
 		if latest-target.ReleaseNumber >= int64(record.spec.ReleaseRetention) && targetID != record.previousDeploymentID {
-			return types.PHPDeployment{}, errors.New("rollback target is outside retained releases")
+			return types.PHPDeployment{}, fmt.Errorf("%w: rollback target is outside retained releases", ErrRevisionConflict)
 		}
 	}
 	if err = supersedeDeploymentIntentsTx(ctx, tx, record.spec.ApplicationID); err != nil {

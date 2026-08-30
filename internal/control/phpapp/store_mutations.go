@@ -47,7 +47,7 @@ func configuredSubscriptionWorkerProcessesTx(ctx context.Context, tx *sql.Tx, su
 func (s *SQLStore) UpsertEnvironment(ctx context.Context, actorID, siteID int64, input EnvironmentInput) (types.PHPEnvironmentVariable, error) {
 	input, err := validateEnvironment(input)
 	if err != nil {
-		return types.PHPEnvironmentVariable{}, err
+		return types.PHPEnvironmentVariable{}, invalidInput(err)
 	}
 	tx, err := s.beginMutation(ctx)
 	if err != nil {
@@ -113,7 +113,7 @@ RETURNING id,application_id,name,COALESCE(plain_value,''),COALESCE(secret_id,0),
 func (s *SQLStore) DeleteEnvironment(ctx context.Context, actorID, siteID int64, name string) error {
 	input, err := validateEnvironment(EnvironmentInput{Name: name, Value: ""})
 	if err != nil {
-		return err
+		return invalidInput(err)
 	}
 	tx, err := s.beginMutation(ctx)
 	if err != nil {
@@ -175,7 +175,7 @@ func (s *SQLStore) UpsertWorker(ctx context.Context, actorID, siteID int64, inpu
 	}
 	input, err = validateWorker(input, record.spec.Policy, otherProcesses)
 	if err != nil {
-		return types.PHPWorker{}, err
+		return types.PHPWorker{}, invalidInput(err)
 	}
 	arguments, err := json.Marshal(input.Arguments)
 	if err != nil {
@@ -254,7 +254,7 @@ func (s *SQLStore) DeleteWorker(ctx context.Context, actorID, siteID, workerID i
 func (s *SQLStore) SetWorkerState(ctx context.Context, actorID, siteID, workerID int64, state string) error {
 	state = strings.ToLower(strings.TrimSpace(state))
 	if state != "running" && state != "stopped" {
-		return errors.New("worker state must be running or stopped")
+		return invalidInput(errors.New("worker state must be running or stopped"))
 	}
 	tx, err := s.beginMutation(ctx)
 	if err != nil {
@@ -320,7 +320,7 @@ func requireManagedMutation(record applicationRecord) error {
 		return err
 	}
 	if record.spec.HostingMode != types.PHPHostingModeManaged {
-		return errors.New("managed PHP application is not configured")
+		return fmt.Errorf("%w: managed PHP application is not configured", ErrRevisionConflict)
 	}
 	if !record.spec.Policy.Permissions.ManagedPHPDeployments {
 		return fmt.Errorf("%w: managed PHP deployments are disabled", controlquota.ErrExceeded)

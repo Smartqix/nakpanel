@@ -20,10 +20,11 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	controlfiles "github.com/nakroteck/nakpanel/internal/control/filemanager"
+	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
 	controlpolicy "github.com/nakroteck/nakpanel/internal/control/policy"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
-	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/control/web"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/nakroteck/nakpanel/internal/version"
@@ -60,6 +61,20 @@ type DashboardReader interface {
 
 type ApplicationLogReader interface {
 	ReadApplicationLog(context.Context, types.ApplicationLogReq) (types.ApplicationLogResult, error)
+}
+
+type PHPApplicationService interface {
+	Workspace(context.Context, auth.SessionUser, int64) (controlphpapp.Workspace, error)
+	RuntimeCapabilities(context.Context) (types.RuntimeCapabilities, error)
+	ConfigureApplication(context.Context, auth.SessionUser, int64, controlphpapp.ConfigureApplicationInput) (types.PHPApplicationSpec, error)
+	QueueDeployment(context.Context, auth.SessionUser, int64, controlphpapp.DeploymentInput) (types.PHPDeployment, error)
+	QueueRollback(context.Context, auth.SessionUser, int64, int64) (types.PHPDeployment, error)
+	UpsertEnvironment(context.Context, auth.SessionUser, int64, controlphpapp.EnvironmentInput) (types.PHPEnvironmentVariable, error)
+	DeleteEnvironment(context.Context, auth.SessionUser, int64, string) error
+	UpsertWorker(context.Context, auth.SessionUser, int64, controlphpapp.WorkerInput) (types.PHPWorker, error)
+	DeleteWorker(context.Context, auth.SessionUser, int64, int64) error
+	SetWorkerState(context.Context, auth.SessionUser, int64, int64, string) error
+	RequestReconcile(context.Context, auth.SessionUser, int64) error
 }
 
 type JobRetrier interface {
@@ -224,6 +239,7 @@ type ServerOptions struct {
 	DatabaseAdmin              DatabaseAdminService
 	DNSTemplates               DNSTemplateManager
 	ApplicationLogs            ApplicationLogReader
+	PHPApplications            PHPApplicationService
 	SMTPConfigured             bool
 	// SecurityDB backs the durable login throttle, TOTP state, login
 	// challenges, and auth audit/alerting. Optional; without it the login
@@ -252,6 +268,7 @@ type Server struct {
 	databaseAdmin      DatabaseAdminService
 	dnsTemplates       DNSTemplateManager
 	applicationLogs    ApplicationLogReader
+	phpApplications    PHPApplicationService
 	smtpConfigured     bool
 	securityDB         *sql.DB
 	securityKeyring    *serveradmin.Keyring
@@ -282,6 +299,7 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		databaseAdmin:      opts.DatabaseAdmin,
 		dnsTemplates:       opts.DNSTemplates,
 		applicationLogs:    opts.ApplicationLogs,
+		phpApplications:    opts.PHPApplications,
 		smtpConfigured:     opts.SMTPConfigured,
 		securityDB:         opts.SecurityDB,
 		securityKeyring:    opts.SecurityKeyring,
@@ -369,6 +387,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /sites/{id}/git/webhook", s.handleGitWebhookRotate)
 	mux.HandleFunc("POST /git/hooks/{siteID}/{token}", s.handleGitWebhook)
 	mux.HandleFunc("POST /sites/{id}/staging", s.handleStagingOperation)
+	mux.HandleFunc("POST /sites/{id}/php-application", s.handleConfigurePHPApplication)
+	mux.HandleFunc("POST /sites/{id}/php-application/deployments", s.handleQueuePHPDeployment)
+	mux.HandleFunc("POST /sites/{id}/php-application/deployments/{deploymentID}/rollback", s.handleQueuePHPRollback)
+	mux.HandleFunc("POST /sites/{id}/php-application/environment", s.handleUpsertPHPEnvironment)
+	mux.HandleFunc("POST /sites/{id}/php-application/environment/delete", s.handleDeletePHPEnvironment)
+	mux.HandleFunc("POST /sites/{id}/php-application/workers", s.handleUpsertPHPWorker)
+	mux.HandleFunc("POST /sites/{id}/php-application/workers/{workerID}/state", s.handleSetPHPWorkerState)
+	mux.HandleFunc("POST /sites/{id}/php-application/workers/{workerID}/delete", s.handleDeletePHPWorker)
+	mux.HandleFunc("POST /sites/{id}/php-application/reconcile", s.handleReconcilePHPApplication)
 	mux.HandleFunc("GET /sites/{id}/logs/data", s.handleSiteLogData)
 	mux.HandleFunc("POST /subscriptions/{id}/services/{kind}/{resourceID}/delete", s.handleDeleteSubscriptionService)
 	s.registerFileManagerRoutes(mux)
@@ -600,6 +627,16 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		if route == "site-detail" && view.Tab == "applications" {
+			if !s.loadPHPApplicationWorkspace(w, r, user, view.DetailID, &view) {
+				return
+			}
+		}
+		if route == "tools-settings" && view.SettingsFocus == "php" {
+			if !s.loadPHPRuntimeInventory(w, r, &view) {
+				return
+			}
+		}
 		if route == "site-detail" && view.ContainerID > 0 {
 			visible := false
 			for _, application := range data.SubscriptionServices.Applications {
@@ -795,6 +832,11 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 		tab = "overview"
 	}
 	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
+	if page == "site-detail" && tab == "applications" {
+		if !s.loadPHPApplicationWorkspace(w, r, user, detailID, &view) {
+			return
+		}
+	}
 	renderPage(w, r, web.RoutedDashboardPage("Support · "+name, user, data, s.dashboardActions(auth.SessionUser{Role: auth.RoleClient}), view))
 }
 
@@ -3086,6 +3128,24 @@ func dashboardNotice(code string) string {
 		return "Archive extracted."
 	case "file-permissions":
 		return "Permissions updated."
+	case "php-application-saved":
+		return "PHP application settings saved and reconciliation queued."
+	case "php-deployment-queued":
+		return "PHP release deployment queued."
+	case "php-rollback-queued":
+		return "PHP release rollback queued."
+	case "php-environment-saved":
+		return "PHP environment variable saved."
+	case "php-environment-deleted":
+		return "PHP environment variable deleted."
+	case "php-worker-saved":
+		return "PHP worker saved and reconciliation queued."
+	case "php-worker-state-saved":
+		return "PHP worker state updated."
+	case "php-worker-deleted":
+		return "PHP worker deleted."
+	case "php-reconcile-queued":
+		return "PHP application reconciliation queued."
 	default:
 		return ""
 	}
@@ -3237,7 +3297,7 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		dnsMode = "external"
 	}
 	plan.HostingPolicy = types.HostingPolicy{
-		SchemaVersion: 2,
+		SchemaVersion: 3,
 		Resources: types.HostingResourcePolicy{
 			DiskMB: plan.DiskMB, TrafficMB: plan.BandwidthMB, MaxSites: plan.MaxSites,
 			MaxDatabases: plan.MaxDatabases, MaxMailboxes: plan.MaxMailboxes,
@@ -3253,7 +3313,9 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 			CustomOCIImages: parseFormBool(r, "allow_custom_oci_images"), ApplicationEgress: parseFormBool(r, "allow_application_egress"),
 			FTPS: parseFormBool(r, "allow_ftps"), Logs: formBoolDefault(r, "allow_logs", true),
 			Git: parseFormBool(r, "allow_git"), Staging: parseFormBool(r, "allow_staging"),
-			Valkey: parseFormBool(r, "allow_valkey"),
+			Valkey: parseFormBool(r, "allow_valkey"), Composer: parseFormBool(r, "allow_composer"),
+			ComposerCodeExecution: parseFormBool(r, "allow_composer_code_execution"),
+			ManagedPHPDeployments: parseFormBool(r, "allow_managed_php_deployments"), PHPWorkers: parseFormBool(r, "allow_php_workers"),
 		},
 		Web: types.HostingWebPolicy{
 			PreferredDomain: plan.Presets.Hosting.PreferredDomain, MaxConnections: plan.Presets.Performance.MaxConnections,
@@ -3301,6 +3363,7 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		"max_tasks": &plan.HostingPolicy.Resources.MaxTasks, "max_database_users": &plan.HostingPolicy.Resources.MaxDatabaseUsers,
 		"max_mail_aliases": &plan.HostingPolicy.Resources.MaxMailAliases, "max_scheduled_tasks": &plan.HostingPolicy.Resources.MaxScheduledTasks,
 		"max_applications": &plan.HostingPolicy.Resources.MaxApplications, "container_storage_mb": &plan.HostingPolicy.Resources.ContainerStorageMB,
+		"max_php_workers": &plan.HostingPolicy.Resources.MaxPHPWorkers, "max_php_releases": &plan.HostingPolicy.Resources.MaxPHPReleases,
 		"request_rate_per_second": &plan.HostingPolicy.Web.RequestRatePerSecond, "request_burst": &plan.HostingPolicy.Web.RequestBurst,
 		"mailbox_quota_mb": &plan.HostingPolicy.Mail.MailboxQuotaMB,
 	} {

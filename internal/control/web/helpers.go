@@ -14,6 +14,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -53,6 +54,8 @@ type WorkspaceView struct {
 	DNSSettingsError     string
 	DNSPreview           *types.DNSSyncRun
 	SettingsFocus        string
+	PHPApplication       *controlphpapp.Workspace
+	PHPRuntimeInventory  *types.RuntimeCapabilities
 }
 
 // TwoFactorView drives the account 2FA enrollment/status page.

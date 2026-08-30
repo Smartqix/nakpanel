@@ -64,7 +64,7 @@ func main() {
 		log.Fatalf("load secret keyring: %v", err)
 	}
 
-	riverClient, serverAdminManager, databaseAdminManager, dnsTemplateManager, err := newRiverClient(db, queries, cfg)
+	riverClient, serverAdminManager, databaseAdminManager, dnsTemplateManager, phpApplicationStore, err := newRiverClient(db, queries, cfg)
 	if err != nil {
 		log.Fatalf("create river client: %v", err)
 	}
@@ -94,6 +94,7 @@ func main() {
 		log.Printf("sweep stale file transfers: %v", err)
 	}
 	agentCapabilities := agentclient.New(config.AgentSocket)
+	phpApplicationManager := controlphpapp.NewManager(phpApplicationStore, workspaceStore, agentCapabilities)
 	dashboardStore := dashboard.NewStore(
 		dashboardQuerier{queries: queries},
 		dashboard.WithJobReader(dashboard.NewSQLJobStore(db)),
@@ -138,6 +139,7 @@ func main() {
 		DatabaseAdmin:              databaseAdminManager,
 		DNSTemplates:               dnsTemplateManager,
 		ApplicationLogs:            agentCapabilities,
+		PHPApplications:            phpApplicationManager,
 		SMTPConfigured:             cfg.SMTPHost != "" && cfg.SMTPFrom != "",
 		SecurityDB:                 db,
 		SecurityKeyring:            securityKeyring,
@@ -196,7 +198,7 @@ func (q dashboardQuerier) ListDatabases(ctx context.Context) ([]store.Database, 
 	return q.queries.ListDatabases(ctx)
 }
 
-func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelRuntimeConfig) (*river.Client[*sql.Tx], *serveradmin.Manager, *databaseadmin.Manager, *dnstemplate.Manager, error) {
+func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelRuntimeConfig) (*river.Client[*sql.Tx], *serveradmin.Manager, *databaseadmin.Manager, *dnstemplate.Manager, *controlphpapp.SQLStore, error) {
 	workers := river.NewWorkers()
 	agent := agentclient.New(config.AgentSocket)
 	var runtimeConfig config.PanelRuntimeConfig
@@ -205,7 +207,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	}
 	keyring, err := serveradmin.LoadKeyring(runtimeConfig.SecretKeyFile)
 	if err != nil {
-		return nil, nil, nil, nil, fmt.Errorf("load server secret keyring: %w", err)
+		return nil, nil, nil, nil, nil, fmt.Errorf("load server secret keyring: %w", err)
 	}
 	serverAdminStore := serveradmin.NewStore(db, keyring)
 	phpApplicationStore := controlphpapp.NewSQLStore(db, nil, serverAdminStore)
@@ -290,11 +292,11 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 
 	backupSchedule, err := cron.ParseStandard("0 2 * * *")
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	pruneSchedule, err := cron.ParseStandard("0 3 * * *")
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
 		PeriodicJobs: []*river.PeriodicJob{
@@ -362,7 +364,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		RescueStuckJobsAfter: 13 * time.Hour,
 	})
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	usageWorker.SetRiverClient(client)
 	phpApplicationStore.SetRiverClient(client)
@@ -382,7 +384,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	databaseAdminManager.SetRiverClient(client)
 	teardownAccountWorker.SetRiverClient(client)
 	dnsTemplateManager.SetRiverClient(client)
-	return client, serverAdminManager, databaseAdminManager, dnsTemplateManager, nil
+	return client, serverAdminManager, databaseAdminManager, dnsTemplateManager, phpApplicationStore, nil
 }
 
 func panelQueueConfig() map[string]river.QueueConfig {

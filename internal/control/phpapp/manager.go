@@ -18,6 +18,16 @@ func NewManager(store ManagerStore, access AccessPolicy, capabilities Capability
 	return &Manager{store: store, access: access, capabilities: capabilities}
 }
 
+// RuntimeCapabilities exposes the same capability source used for deployment
+// validation. HTTP callers use it for the provider-only PHP inventory page;
+// it does not weaken the per-site checks performed by mutation methods.
+func (m *Manager) RuntimeCapabilities(ctx context.Context) (types.RuntimeCapabilities, error) {
+	if m == nil || m.capabilities == nil {
+		return types.RuntimeCapabilities{}, ErrRuntimeUnavailable
+	}
+	return m.capabilities.RuntimeCapabilities(ctx)
+}
+
 func (m *Manager) authorizeSite(ctx context.Context, actor auth.SessionUser, siteID int64) (SiteIdentity, error) {
 	if m == nil || m.store == nil || m.access == nil || siteID <= 0 {
 		return SiteIdentity{}, ErrNotFound

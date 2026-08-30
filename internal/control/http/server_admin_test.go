@@ -293,7 +293,7 @@ func TestServerReauthenticationThrottlesAndAuditsFailures(t *testing.T) {
 }
 
 func TestFocusedServerAdminWorkspacesReuseAdminSettingsPage(t *testing.T) {
-	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{})
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{PHPApplications: &fakePHPApplicationService{}})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 	for _, path := range []string{
 		"/tools-settings/server",

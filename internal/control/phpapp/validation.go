@@ -211,3 +211,12 @@ func contains(values []string, want string) bool {
 	}
 	return false
 }
+
+func invalidInput(err error) error {
+	if err == nil || errors.Is(err, controlquota.ErrExceeded) || errors.Is(err, ErrManagedToClassic) ||
+		errors.Is(err, ErrInactive) || errors.Is(err, ErrNotFound) || errors.Is(err, ErrRuntimeUnavailable) ||
+		errors.Is(err, ErrRevisionConflict) {
+		return err
+	}
+	return fmt.Errorf("%w: %v", ErrInvalidInput, err)
+}

@@ -1,0 +1,422 @@
+package panelhttp
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+
+	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/types"
+)
+
+type fakePHPApplicationService struct {
+	workspace       controlphpapp.Workspace
+	capabilities    types.RuntimeCapabilities
+	err             error
+	called          string
+	actor           auth.SessionUser
+	siteID          int64
+	deploymentID    int64
+	workerID        int64
+	configureInput  controlphpapp.ConfigureApplicationInput
+	deploymentInput controlphpapp.DeploymentInput
+	environment     controlphpapp.EnvironmentInput
+	environmentName string
+	worker          controlphpapp.WorkerInput
+	workerState     string
+}
+
+func (f *fakePHPApplicationService) Workspace(_ context.Context, actor auth.SessionUser, siteID int64) (controlphpapp.Workspace, error) {
+	f.called, f.actor, f.siteID = "workspace", actor, siteID
+	return f.workspace, f.err
+}
+func (f *fakePHPApplicationService) RuntimeCapabilities(context.Context) (types.RuntimeCapabilities, error) {
+	f.called = "capabilities"
+	return f.capabilities, f.err
+}
+func (f *fakePHPApplicationService) ConfigureApplication(_ context.Context, actor auth.SessionUser, siteID int64, input controlphpapp.ConfigureApplicationInput) (types.PHPApplicationSpec, error) {
+	f.called, f.actor, f.siteID, f.configureInput = "configure", actor, siteID, input
+	return types.PHPApplicationSpec{ApplicationID: 31, SiteID: siteID}, f.err
+}
+func (f *fakePHPApplicationService) QueueDeployment(_ context.Context, actor auth.SessionUser, siteID int64, input controlphpapp.DeploymentInput) (types.PHPDeployment, error) {
+	f.called, f.actor, f.siteID, f.deploymentInput = "deploy", actor, siteID, input
+	return types.PHPDeployment{ID: 41, ApplicationID: 31, Status: "pending"}, f.err
+}
+func (f *fakePHPApplicationService) QueueRollback(_ context.Context, actor auth.SessionUser, siteID, deploymentID int64) (types.PHPDeployment, error) {
+	f.called, f.actor, f.siteID, f.deploymentID = "rollback", actor, siteID, deploymentID
+	return types.PHPDeployment{ID: 42, ApplicationID: 31, Status: "pending"}, f.err
+}
+func (f *fakePHPApplicationService) UpsertEnvironment(_ context.Context, actor auth.SessionUser, siteID int64, input controlphpapp.EnvironmentInput) (types.PHPEnvironmentVariable, error) {
+	f.called, f.actor, f.siteID, f.environment = "environment", actor, siteID, input
+	return types.PHPEnvironmentVariable{Name: input.Name, SecretID: 9}, f.err
+}
+func (f *fakePHPApplicationService) DeleteEnvironment(_ context.Context, actor auth.SessionUser, siteID int64, name string) error {
+	f.called, f.actor, f.siteID, f.environmentName = "delete-environment", actor, siteID, name
+	return f.err
+}
+func (f *fakePHPApplicationService) UpsertWorker(_ context.Context, actor auth.SessionUser, siteID int64, input controlphpapp.WorkerInput) (types.PHPWorker, error) {
+	f.called, f.actor, f.siteID, f.worker = "worker", actor, siteID, input
+	return types.PHPWorker{ID: 51, ApplicationID: 31, Name: input.Name}, f.err
+}
+func (f *fakePHPApplicationService) DeleteWorker(_ context.Context, actor auth.SessionUser, siteID, workerID int64) error {
+	f.called, f.actor, f.siteID, f.workerID = "delete-worker", actor, siteID, workerID
+	return f.err
+}
+func (f *fakePHPApplicationService) SetWorkerState(_ context.Context, actor auth.SessionUser, siteID, workerID int64, state string) error {
+	f.called, f.actor, f.siteID, f.workerID, f.workerState = "worker-state", actor, siteID, workerID, state
+	return f.err
+}
+func (f *fakePHPApplicationService) RequestReconcile(_ context.Context, actor auth.SessionUser, siteID int64) error {
+	f.called, f.actor, f.siteID = "reconcile", actor, siteID
+	return f.err
+}
+
+func phpApplicationDashboard(siteID int64) dashboard.Data {
+	return dashboard.Data{Sites: []dashboard.Site{{ID: siteID, Domain: "owned.test", Status: "active", CustomerID: 88, SubscriptionID: 20}}}
+}
+
+func TestPHPApplicationWorkspaceLoadsAfterScopedSiteVisibility(t *testing.T) {
+	reader := &fakeDashboardReader{data: phpApplicationDashboard(7)}
+	service := &fakePHPApplicationService{workspace: controlphpapp.Workspace{Application: types.PHPApplicationSpec{ApplicationID: 31, SiteID: 7, HostingMode: types.PHPHostingModeClassic}}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{DashboardReader: reader, PHPApplications: service})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/7/applications", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || service.called != "workspace" || service.siteID != 7 {
+		t.Fatalf("workspace GET = %d call=%q site=%d body=%s", rec.Code, service.called, service.siteID, rec.Body.String())
+	}
+
+	service.called = ""
+	req = httptest.NewRequest(http.MethodGet, "https://panel.test/sites/8/applications", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound || service.called != "" {
+		t.Fatalf("cross-tenant GET = %d call=%q", rec.Code, service.called)
+	}
+}
+
+func TestPHPApplicationWorkspaceSupportsAllHostingRoles(t *testing.T) {
+	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleReseller, auth.RoleClient} {
+		t.Run(string(role), func(t *testing.T) {
+			service := &fakePHPApplicationService{}
+			handler, _ := newTestHandlerWithOptions(t, role, ServerOptions{DashboardReader: &fakeDashboardReader{data: phpApplicationDashboard(7)}, PHPApplications: service})
+			email, password := "admin@nakpanel.test", "NakpanelAdmin!2026"
+			if role == auth.RoleReseller {
+				email, password = "reseller@nakpanel.test", "NakpanelReseller!2026"
+			} else if role == auth.RoleClient {
+				email, password = "client@nakpanel.test", "NakpanelClient!2026"
+			}
+			cookie := login(t, handler, email, password)
+			req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/7/applications", nil)
+			addAuthenticatedCookie(req, cookie)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK || service.actor.Role != role {
+				t.Fatalf("role %s workspace = %d actor=%s", role, rec.Code, service.actor.Role)
+			}
+		})
+	}
+}
+
+func TestPHPApplicationWorkspaceSupportScopeAndUnavailableService(t *testing.T) {
+	reader := &fakeDashboardReader{data: dashboard.Data{
+		Customers: []types.Customer{{ID: 88, DisplayName: "Owned"}, {ID: 99, DisplayName: "Other"}},
+		Sites:     []dashboard.Site{{ID: 7, Domain: "owned.test", CustomerID: 88}, {ID: 8, Domain: "other.test", CustomerID: 99}},
+	}}
+	service := &fakePHPApplicationService{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader, PHPApplications: service})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/support/customers/88/sites/8/applications", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound || service.called != "" {
+		t.Fatalf("wrong support customer = %d call=%q", rec.Code, service.called)
+	}
+
+	handler, _ = newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{data: phpApplicationDashboard(7)}})
+	cookie = login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	req = httptest.NewRequest(http.MethodGet, "https://panel.test/sites/7/applications", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable || strings.Contains(rec.Body.String(), "database") {
+		t.Fatalf("unconfigured workspace = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPHPApplicationSupportMutationRejectsWrongCustomerBeforeService(t *testing.T) {
+	service := &fakePHPApplicationService{}
+	reader := &fakeDashboardReader{data: dashboard.Data{
+		Customers: []types.Customer{{ID: 88, DisplayName: "Owned"}, {ID: 99, DisplayName: "Other"}},
+		Sites:     []dashboard.Site{{ID: 8, Domain: "other.test", CustomerID: 99}},
+	}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader, PHPApplications: service})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	form := url.Values{"support_customer_id": {"88"}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/8/php-application/reconcile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound || service.called != "" {
+		t.Fatalf("wrong support mutation = %d call=%q body=%s", rec.Code, service.called, rec.Body.String())
+	}
+}
+
+func TestPHPRuntimeToolsAreProviderOnlyAndScoped(t *testing.T) {
+	service := &fakePHPApplicationService{capabilities: types.RuntimeCapabilities{PHPRuntimes: []types.PHPRuntimeCapability{{Version: "8.4", Ready: true}}}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{}, PHPApplications: service})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/tools-settings/php", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || service.called != "capabilities" {
+		t.Fatalf("admin PHP tools = %d call=%q", rec.Code, service.called)
+	}
+
+	service.called = ""
+	handler, _ = newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{DashboardReader: &fakeDashboardReader{}, PHPApplications: service})
+	cookie = login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req = httptest.NewRequest(http.MethodGet, "https://panel.test/tools-settings/php", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || service.called != "" {
+		t.Fatalf("client PHP tools = %d call=%q", rec.Code, service.called)
+	}
+}
+
+func TestPHPApplicationMutationRoutes(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		form       url.Values
+		wantCall   string
+		wantStatus int
+	}{
+		{"configure", "/sites/7/php-application", url.Values{"hosting_mode": {"managed"}, "php_version": {"8.4"}, "repository_id": {"12"}, "repository_ref": {"main"}, "framework_profile": {"laravel"}, "public_path": {"public"}, "health_path": {"/up"}, "shared_path": {"storage", "bootstrap/cache"}, "release_retention": {"4"}, "composer_install": {"true"}}, "configure", http.StatusOK},
+		{"deploy", "/sites/7/php-application/deployments", url.Values{"revision": {"main"}}, "deploy", http.StatusAccepted},
+		{"rollback", "/sites/7/php-application/deployments/41/rollback", url.Values{"confirm": {"rollback"}}, "rollback", http.StatusAccepted},
+		{"environment", "/sites/7/php-application/environment", url.Values{"name": {"APP_ENV"}, "value": {"production"}}, "environment", http.StatusOK},
+		{"delete environment", "/sites/7/php-application/environment/delete", url.Values{"name": {"APP_ENV"}, "confirm": {"delete"}}, "delete-environment", http.StatusOK},
+		{"worker", "/sites/7/php-application/workers", url.Values{"worker_id": {"51"}, "name": {"queue"}, "script": {"artisan"}, "argument": {"queue:work", "--tries=3"}, "processes": {"2"}, "desired_state": {"running"}}, "worker", http.StatusOK},
+		{"worker state", "/sites/7/php-application/workers/51/state", url.Values{"state": {"stopped"}}, "worker-state", http.StatusOK},
+		{"delete worker", "/sites/7/php-application/workers/51/delete", url.Values{"confirm": {"delete"}}, "delete-worker", http.StatusOK},
+		{"reconcile", "/sites/7/php-application/reconcile", url.Values{}, "reconcile", http.StatusAccepted},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &fakePHPApplicationService{}
+			workspace := &fakeWorkspaceService{}
+			handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{PHPApplications: service, Workspace: workspace})
+			cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+			req := httptest.NewRequest(http.MethodPost, "https://panel.test"+tc.path, strings.NewReader(tc.form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("X-Nakpanel-SPA", "true")
+			addAuthenticatedCookie(req, cookie)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != tc.wantStatus || service.called != tc.wantCall {
+				t.Fatalf("%s = %d call=%q body=%s", tc.path, rec.Code, service.called, rec.Body.String())
+			}
+			if !strings.Contains(rec.Header().Get("Content-Type"), "application/json") || len(workspace.audits) != 1 {
+				t.Fatalf("response content-type=%q audits=%#v", rec.Header().Get("Content-Type"), workspace.audits)
+			}
+		})
+	}
+}
+
+func TestPHPApplicationFormsUsePRGAndSupportRedirect(t *testing.T) {
+	service := &fakePHPApplicationService{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{PHPApplications: service, DashboardReader: &fakeDashboardReader{data: phpApplicationDashboard(7)}})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	form := url.Values{"revision": {"main"}, "support_customer_id": {"88"}, "return_to": {"https://attacker.test/steal"}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-application/deployments", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/support/customers/88/sites/7/applications?notice=php-deployment-queued" {
+		t.Fatalf("PRG = %d location=%q", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+func TestPHPApplicationCSRFConfirmationAndBoundsRejectBeforeService(t *testing.T) {
+	service := &fakePHPApplicationService{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{PHPApplications: service})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-application/reconcile", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || service.called != "" {
+		t.Fatalf("missing CSRF = %d call=%q", rec.Code, service.called)
+	}
+
+	for _, path := range []string{"/sites/7/php-application/deployments/41/rollback", "/sites/7/php-application/environment/delete", "/sites/7/php-application/workers/51/delete"} {
+		service.called = ""
+		req = httptest.NewRequest(http.MethodPost, "https://panel.test"+path, strings.NewReader("confirm=no"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		addAuthenticatedCookie(req, cookie)
+		rec = httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != http.StatusBadRequest || service.called != "" {
+			t.Fatalf("confirmation %s = %d call=%q", path, rec.Code, service.called)
+		}
+	}
+
+	service.called = ""
+	form := url.Values{"name": {"worker"}, "script": {"artisan"}, "processes": {"1"}}
+	for i := 0; i < 65; i++ {
+		form.Add("argument", "value")
+	}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-application/workers", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest || service.called != "" {
+		t.Fatalf("argument bound = %d call=%q", rec.Code, service.called)
+	}
+}
+
+func TestPHPApplicationAcceptsFormCSRFAndRejectsUnconfiguredService(t *testing.T) {
+	service := &fakePHPApplicationService{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{PHPApplications: service})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	dummy := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-application/reconcile", nil)
+	dummy.AddCookie(cookie)
+	form := url.Values{"csrf_token": {csrfToken(dummy)}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-application/reconcile", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || service.called != "reconcile" {
+		t.Fatalf("form CSRF = %d call=%q body=%s", rec.Code, service.called, rec.Body.String())
+	}
+
+	handler, _ = newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{})
+	cookie = login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-application/reconcile", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable || strings.Contains(rec.Body.String(), "unconfigured") {
+		t.Fatalf("unconfigured mutation = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPHPApplicationSecretIsNeverReturnedOrAudited(t *testing.T) {
+	const secret = "distinctive-secret-value-934"
+	service := &fakePHPApplicationService{}
+	workspace := &fakeWorkspaceService{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{PHPApplications: service, Workspace: workspace})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	form := url.Values{"name": {"APP_KEY"}, "secret": {"true"}, "secret_value": {secret}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-application/environment", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("X-Nakpanel-SPA", "true")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || service.environment.Value != secret || !service.environment.Secret {
+		t.Fatalf("secret write = %d input=%#v", rec.Code, service.environment)
+	}
+	combined := rec.Body.String() + rec.Header().Get("Location")
+	for _, audit := range workspace.audits {
+		combined += string(audit.Metadata)
+	}
+	if strings.Contains(combined, secret) || rec.Header().Get("Cache-Control") != "private, no-store" {
+		t.Fatalf("secret leaked or response cacheable: headers=%v body=%s audits=%#v", rec.Header(), rec.Body.String(), workspace.audits)
+	}
+
+	service.called = ""
+	form = url.Values{"name": {"APP_KEY"}, "secret": {"true"}, "secret_value": {secret}, "value": {"plain"}}
+	req = httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-application/environment", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest || service.called != "" || strings.Contains(rec.Body.String(), secret) {
+		t.Fatalf("mixed secret/plain = %d call=%q body=%s", rec.Code, service.called, rec.Body.String())
+	}
+}
+
+func TestSanitizedPHPWorkspaceClearsDefensiveSecretValues(t *testing.T) {
+	const secret = "must-not-enter-rendered-view"
+	workspace := sanitizedPHPWorkspace(controlphpapp.Workspace{Environment: []types.PHPEnvironmentVariable{
+		{Name: "SAFE", Value: "visible"}, {Name: "SECRET", Value: secret, SecretID: 9},
+	}})
+	if workspace.Environment[0].Value != "visible" || workspace.Environment[1].Value != "" {
+		t.Fatalf("sanitized environment = %#v", workspace.Environment)
+	}
+}
+
+func TestPHPApplicationErrorsAreMappedWithoutDetails(t *testing.T) {
+	tests := []struct {
+		err  error
+		want int
+	}{
+		{controlphpapp.ErrNotFound, http.StatusNotFound},
+		{controlphpapp.ErrInactive, http.StatusConflict},
+		{controlphpapp.ErrRuntimeUnavailable, http.StatusConflict},
+		{controlphpapp.ErrRevisionConflict, http.StatusConflict},
+		{controlphpapp.ErrInvalidInput, http.StatusBadRequest},
+		{controlquota.ErrExceeded, http.StatusBadRequest},
+		{errors.New("database password=never-render"), http.StatusInternalServerError},
+	}
+	for _, tc := range tests {
+		service := &fakePHPApplicationService{err: tc.err}
+		handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{PHPApplications: service})
+		cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+		req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/php-application/deployments", strings.NewReader("revision=main"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Nakpanel-SPA", "true")
+		addAuthenticatedCookie(req, cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != tc.want || strings.Contains(rec.Body.String(), "password") || strings.Contains(rec.Body.String(), tc.err.Error()) {
+			t.Fatalf("error %v = %d body=%s", tc.err, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestParsePlanIncludesPHPHostingV3Fields(t *testing.T) {
+	form := url.Values{
+		"name": {"Managed PHP"}, "allow_composer": {"true"}, "allow_composer_code_execution": {"true"},
+		"allow_managed_php_deployments": {"true"}, "allow_php_workers": {"true"},
+		"max_php_workers": {"4"}, "max_php_releases_unlimited": {"true"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/plans", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err := req.ParseForm(); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := parsePlan(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	permissions := plan.HostingPolicy.Permissions
+	if plan.HostingPolicy.SchemaVersion != 3 || !permissions.Composer || !permissions.ComposerCodeExecution ||
+		!permissions.ManagedPHPDeployments || !permissions.PHPWorkers || plan.HostingPolicy.Resources.MaxPHPWorkers != 4 ||
+		plan.HostingPolicy.Resources.MaxPHPReleases != -1 {
+		t.Fatalf("v3 hosting policy not parsed: %#v", plan.HostingPolicy)
+	}
+}

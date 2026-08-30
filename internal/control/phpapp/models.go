@@ -15,6 +15,7 @@ var (
 	ErrRuntimeUnavailable = errors.New("PHP runtime is unavailable")
 	ErrRevisionConflict   = errors.New("PHP application revision conflict")
 	ErrManagedToClassic   = errors.New("managed-to-classic conversion is not supported")
+	ErrInvalidInput       = errors.New("invalid PHP application input")
 )
 
 type SiteIdentity struct {
