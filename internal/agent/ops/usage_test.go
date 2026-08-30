@@ -426,6 +426,44 @@ func TestUsageCollectorMeasuresHomeAndIncrementalNginxTraffic(t *testing.T) {
 	}
 }
 
+func TestUsageCollectorCountsManagedPHPStorageOnceAtAccountScope(t *testing.T) {
+	root := t.TempDir()
+	homeRoot := filepath.Join(root, "home")
+	logRoot := filepath.Join(root, "logs")
+	publicRoot := filepath.Join(homeRoot, "acct", "domains", "example.test", "public_html")
+	managedRoot := filepath.Join(homeRoot, "acct", ".nakpanel", "php", "site-7")
+	for path, contents := range map[string]string{
+		filepath.Join(publicRoot, "index.php"):                  "public",
+		filepath.Join(managedRoot, "releases", "22", "app.php"): "release-bytes",
+		filepath.Join(managedRoot, "shared", "cache.bin"):       "shared-bytes",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(logRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	collector := NewUsageCollector(homeRoot, logRoot, "")
+	result, err := collector.CollectUsage(context.Background(), types.CollectUsageReq{Sites: []types.SiteUsageInput{{
+		SiteID: 7, Username: "acct", Domain: "example.test", AccessLog: "example.test.access.log",
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Sites) != 1 || result.Sites[0].HomeBytes != int64(len("public")) {
+		t.Fatalf("per-site document-root usage = %#v", result.Sites)
+	}
+	wantAccount := int64(len("public") + len("release-bytes") + len("shared-bytes"))
+	if result.AccountBytes != wantAccount {
+		t.Fatalf("account bytes = %d, want %d with managed storage counted once", result.AccountBytes, wantAccount)
+	}
+}
+
 func TestUsageCollectorMonthlyResetIgnoresPriorLogEntries(t *testing.T) {
 	root := t.TempDir()
 	homeRoot := filepath.Join(root, "home")

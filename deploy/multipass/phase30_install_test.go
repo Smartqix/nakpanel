@@ -48,6 +48,22 @@ func TestPhase30InstallerPinsAndValidatesProductionPHPToolchain(t *testing.T) {
 	}
 }
 
+func TestPhase30InstallerMakesClamAVSignaturesReadyOrFailsClosed(t *testing.T) {
+	data, err := os.ReadFile("../install/phase30-install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, want := range []string{
+		"clamav-freshclam", "freshclam", "/var/lib/clamav/*.cvd", "/var/lib/clamav/*.cld",
+		"ClamAV signatures are unavailable", "clamscan --version",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("phase30 installer does not fail closed on missing ClamAV readiness: missing %q", want)
+		}
+	}
+}
+
 func TestUnifiedInstallerRunsPhase30AfterPhase21To25(t *testing.T) {
 	data, err := os.ReadFile("../install/install.sh")
 	if err != nil {

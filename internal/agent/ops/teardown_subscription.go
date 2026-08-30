@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/site"
@@ -20,32 +21,34 @@ var (
 )
 
 type SubscriptionTeardownOptions struct {
-	HomeRoot          string
-	Paths             SitePathConfig
-	SystemdUnitDir    string
-	TaskStateDir      string
-	SSHConfigDir      string
-	AuthorizedKeysDir string
-	ValkeyConfigRoot  string
-	ValkeyRuntimeRoot string
-	GitRoot           string
-	StagingRoot       string
-	PodmanBinary      string
-	Runner            CommandRunner
+	HomeRoot                string
+	Paths                   SitePathConfig
+	SystemdUnitDir          string
+	TaskStateDir            string
+	SSHConfigDir            string
+	AuthorizedKeysDir       string
+	ValkeyConfigRoot        string
+	ValkeyRuntimeRoot       string
+	GitRoot                 string
+	StagingRoot             string
+	PHPApplicationStateRoot string
+	PodmanBinary            string
+	Runner                  CommandRunner
 }
 type SubscriptionTeardownProvisioner struct {
-	homeRoot          string
-	paths             SitePathConfig
-	systemdUnitDir    string
-	taskStateDir      string
-	sshConfigDir      string
-	authorizedKeysDir string
-	valkeyConfigRoot  string
-	valkeyRuntimeRoot string
-	gitRoot           string
-	stagingRoot       string
-	podmanBinary      string
-	runner            CommandRunner
+	homeRoot                string
+	paths                   SitePathConfig
+	systemdUnitDir          string
+	taskStateDir            string
+	sshConfigDir            string
+	authorizedKeysDir       string
+	valkeyConfigRoot        string
+	valkeyRuntimeRoot       string
+	gitRoot                 string
+	stagingRoot             string
+	phpApplicationStateRoot string
+	podmanBinary            string
+	runner                  CommandRunner
 }
 
 func NewSubscriptionTeardownProvisioner(opts SubscriptionTeardownOptions) *SubscriptionTeardownProvisioner {
@@ -86,11 +89,12 @@ func NewSubscriptionTeardownProvisioner(opts SubscriptionTeardownOptions) *Subsc
 		homeRoot: root, paths: paths, systemdUnitDir: systemdUnitDir,
 		taskStateDir: taskStateDir,
 		sshConfigDir: filepath.Clean(sshConfigDir), authorizedKeysDir: filepath.Clean(authorizedKeysDir),
-		valkeyConfigRoot:  defaultPath(opts.ValkeyConfigRoot, "/etc/nakpanel/valkey"),
-		valkeyRuntimeRoot: defaultPath(opts.ValkeyRuntimeRoot, "/run/nakpanel/valkey"),
-		gitRoot:           defaultPath(opts.GitRoot, "/var/lib/nakpanel/git"),
-		stagingRoot:       defaultPath(opts.StagingRoot, "/var/lib/nakpanel/staging"),
-		podmanBinary:      defaultPath(opts.PodmanBinary, "/usr/bin/podman"), runner: runner,
+		valkeyConfigRoot:        defaultPath(opts.ValkeyConfigRoot, "/etc/nakpanel/valkey"),
+		valkeyRuntimeRoot:       defaultPath(opts.ValkeyRuntimeRoot, "/run/nakpanel/valkey"),
+		gitRoot:                 defaultPath(opts.GitRoot, "/var/lib/nakpanel/git"),
+		stagingRoot:             defaultPath(opts.StagingRoot, "/var/lib/nakpanel/staging"),
+		phpApplicationStateRoot: defaultPath(opts.PHPApplicationStateRoot, "/var/lib/nakpanel/php-applications"),
+		podmanBinary:            defaultPath(opts.PodmanBinary, "/usr/bin/podman"), runner: runner,
 	}
 }
 
@@ -126,9 +130,24 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 			return result, fmt.Errorf("invalid database identifier %q", name)
 		}
 	}
-	for _, id := range append(append([]int64{}, req.TaskIDs...), req.StagingOperationIDs...) {
+	ids := append(append([]int64{}, req.TaskIDs...), req.StagingOperationIDs...)
+	ids = append(ids, req.PHPApplicationIDs...)
+	ids = append(ids, req.PHPWorkerIDs...)
+	for _, id := range ids {
 		if id <= 0 {
 			return result, fmt.Errorf("invalid teardown object identity %d", id)
+		}
+	}
+	siteIDs := make(map[int64]struct{}, len(req.SiteIDs))
+	for _, siteID := range req.SiteIDs {
+		siteIDs[siteID] = struct{}{}
+	}
+	for _, deployment := range req.PHPDeployments {
+		if deployment.SiteID <= 0 || deployment.DeploymentID <= 0 {
+			return result, errors.New("invalid PHP deployment teardown identity")
+		}
+		if _, exists := siteIDs[deployment.SiteID]; !exists {
+			return result, errors.New("PHP deployment teardown site is outside the subscription snapshot")
 		}
 	}
 	for _, application := range req.Applications {
@@ -166,6 +185,24 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 		}
 		result.Removed = append(result.Removed, "application:"+application.Name)
 	}
+	for _, deployment := range req.PHPDeployments {
+		unit := fmt.Sprintf("nakpanel-php-fpm-candidate@%d-%d.service", deployment.SiteID, deployment.DeploymentID)
+		output, inspectErr := p.runner.Run(ctx, "systemctl", "show", "--property=LoadState", "--value", "--no-pager", unit)
+		if inspectErr != nil {
+			return result, fmt.Errorf("inspect managed PHP candidate %s: %w: %s", unit, inspectErr, strings.TrimSpace(string(output)))
+		}
+		loadState := strings.TrimSpace(string(output))
+		if loadState == "not-found" {
+			continue
+		}
+		if loadState == "" {
+			return result, fmt.Errorf("inspect managed PHP candidate %s: systemd returned no load state", unit)
+		}
+		if output, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", unit); stopErr != nil {
+			return result, fmt.Errorf("stop managed PHP candidate %s: %w: %s", unit, stopErr, strings.TrimSpace(string(output)))
+		}
+		needsDaemonReload = true
+	}
 	for index, domain := range req.Domains {
 		for _, php := range p.teardownPHPVersions() {
 			plan, planErr := NewSitePlan(types.CreateSiteReq{SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain, PHPVersion: php, SharedAccount: true}, p.paths)
@@ -202,8 +239,67 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 				return result, fmt.Errorf("remove site Git repository: %w", err)
 			}
 			needsDaemonReload = true
+			candidatePattern := filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-php-fpm-candidate@%d-*.service", req.SiteIDs[index]))
+			candidateUnits, globErr := filepath.Glob(candidatePattern)
+			if globErr != nil {
+				return result, globErr
+			}
+			for _, unitPath := range candidateUnits {
+				unitName := filepath.Base(unitPath)
+				if _, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", unitName); stopErr != nil {
+					return result, fmt.Errorf("stop managed PHP candidate %s: %w", unitName, stopErr)
+				}
+				if err = os.Remove(unitPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return result, err
+				}
+			}
+			for _, pattern := range []string{
+				filepath.Join(p.paths.NginxConfDir, fmt.Sprintf("90-nakpanel-php-candidate-%d-*.conf", req.SiteIDs[index])),
+				filepath.Join(p.paths.PHPFPMDedicatedRunDir, fmt.Sprintf("candidate-%d-*.sock", req.SiteIDs[index])),
+			} {
+				artifacts, artifactErr := filepath.Glob(pattern)
+				if artifactErr != nil {
+					return result, artifactErr
+				}
+				for _, artifact := range artifacts {
+					if err = os.Remove(artifact); err != nil && !errors.Is(err, os.ErrNotExist) {
+						return result, err
+					}
+				}
+			}
 		}
 		result.Removed = append(result.Removed, "domain:"+domain)
+	}
+	for _, workerID := range req.PHPWorkerIDs {
+		patterns := []string{
+			filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-php-worker@%d.service", workerID)),
+			filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-php-worker@%d-*.service", workerID)),
+		}
+		for _, pattern := range patterns {
+			units, globErr := filepath.Glob(pattern)
+			if globErr != nil {
+				return result, globErr
+			}
+			for _, unitPath := range units {
+				unitName := filepath.Base(unitPath)
+				if _, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", unitName); stopErr != nil {
+					return result, fmt.Errorf("stop managed PHP worker %s: %w", unitName, stopErr)
+				}
+				if err = os.Remove(unitPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+					return result, err
+				}
+				needsDaemonReload = true
+			}
+		}
+	}
+	for _, applicationID := range req.PHPApplicationIDs {
+		if err = os.Remove(filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-php-app-%d.slice", applicationID))); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return result, err
+		}
+		if err = os.RemoveAll(filepath.Join(p.phpApplicationStateRoot, "app-"+strconv.FormatInt(applicationID, 10))); err != nil {
+			return result, err
+		}
+		needsDaemonReload = true
 	}
 	if needsDaemonReload {
 		if output, reloadErr := p.runner.Run(ctx, "systemctl", "daemon-reload"); reloadErr != nil {

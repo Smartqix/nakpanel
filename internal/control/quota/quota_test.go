@@ -132,3 +132,21 @@ func TestZeroDatabaseAndBackupLimitsDenyProvisioning(t *testing.T) {
 		t.Fatalf("CheckBackup error = %v, want ErrExceeded", err)
 	}
 }
+
+func TestResolvePHPVersionPrefersPHP84ForNewSitesWithoutChangingExplicitLegacyVersion(t *testing.T) {
+	limits := Limits{PHPAllowlist: "8.5,8.4,8.3", DefaultPHPVersion: "8.5", OverusePolicy: types.PlanOveruseBlock}
+	got, err := ResolvePHPVersion(limits, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "8.4" {
+		t.Fatalf("empty site PHP selection resolved to %q, want 8.4", got)
+	}
+	got, err = ResolvePHPVersion(limits, "8.3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "8.3" {
+		t.Fatalf("explicit legacy PHP selection resolved to %q, want unchanged 8.3", got)
+	}
+}

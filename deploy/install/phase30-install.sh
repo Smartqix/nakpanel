@@ -22,7 +22,26 @@ export DEBIAN_FRONTEND=noninteractive
 readonly -a PHP_VERSIONS=(8.3 8.4 8.5)
 
 apt-get update
-apt-get install -y acl ca-certificates clamav curl gnupg software-properties-common
+apt-get install -y acl ca-certificates clamav clamav-freshclam curl gnupg software-properties-common
+
+# Managed releases scan both exported source and installed dependencies. Do
+# not advertise that path until the scanner has a real signature database.
+systemctl stop clamav-freshclam.service >/dev/null 2>&1 || true
+if ! timeout 5m freshclam --stdout; then
+  echo "ClamAV signatures are unavailable; run freshclam after fixing network or mirror access" >&2
+  exit 1
+fi
+shopt -s nullglob
+clamav_signatures=(/var/lib/clamav/*.cvd /var/lib/clamav/*.cld)
+shopt -u nullglob
+if [[ "${#clamav_signatures[@]}" -eq 0 ]] || ! clamscan --version >/dev/null; then
+  echo "ClamAV signatures are unavailable; managed PHP deployment cannot scan releases" >&2
+  exit 1
+fi
+systemctl enable --now clamav-freshclam.service >/dev/null 2>&1 || {
+  echo "ClamAV signature updates could not be enabled" >&2
+  exit 1
+}
 add-apt-repository --yes ppa:ondrej/php
 
 # Ubuntu 24.04 writes PPA sources in deb822 format. Refuse a source that does

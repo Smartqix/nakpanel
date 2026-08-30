@@ -793,14 +793,11 @@ func planTabURL(view WorkspaceView, tab string) string {
 }
 
 func planEditorDefault(capabilities types.RuntimeCapabilities) controlquota.Plan {
-	phpVersion := ""
-	phpVersions := []string{}
-	if len(capabilities.PHPVersions) > 0 {
-		phpVersion = capabilities.PHPVersions[0]
-		phpVersions = append(phpVersions, phpVersion)
-	}
+	phpVersions := append([]string(nil), capabilities.PHPVersions...)
+	phpAllowlist := strings.Join(phpVersions, ",")
+	phpVersion := controlquota.PreferredNewSitePHPVersion(phpAllowlist, "")
 	return controlquota.Plan{Name: "", DiskMB: 5120, MaxSites: 1, MaxDatabases: 2, BandwidthMB: 102400,
-		MaxMailboxes: 0, BackupRetentionDays: 7, PHPAllowlist: phpVersion, DefaultPHPVersion: phpVersion,
+		MaxMailboxes: 0, BackupRetentionDays: 7, PHPAllowlist: phpAllowlist, DefaultPHPVersion: phpVersion,
 		PHPFPMMaxChildren: 3, PHPMemoryMB: 128, SiteDiskQuotaMB: 5120, MaxBackups: 7,
 		BackupStorageMB: 5120, IsActive: true, OverusePolicy: types.PlanOveruseBlock,
 		DiskWarningPercent: 80, TrafficWarningPercent: 80, MaxSubdomains: 0,
@@ -1079,6 +1076,15 @@ func subscriptionPHPVersions(items []types.SubscriptionSummary, capabilities typ
 			if version = strings.TrimSpace(version); version != "" && !seen[version] {
 				seen[version] = true
 				out = append(out, version)
+			}
+		}
+	}
+	if preferred := controlquota.PreferredNewSitePHPVersion(strings.Join(out, ","), ""); preferred != "" {
+		for index, version := range out {
+			if version == preferred {
+				copy(out[1:index+1], out[0:index])
+				out[0] = preferred
+				break
 			}
 		}
 	}

@@ -235,6 +235,33 @@ WHERE source.subscription_id=$1 ORDER BY operation.id`, subscriptionID)
 	if err != nil {
 		return err
 	}
+	snapshot.PHPApplicationIDs, err = int64Column(ctx, w.db, `SELECT id FROM php_applications WHERE subscription_id=$1 ORDER BY id`, subscriptionID)
+	if err != nil {
+		return err
+	}
+	snapshot.PHPWorkerIDs, err = int64Column(ctx, w.db, `SELECT id FROM php_workers WHERE subscription_id=$1 ORDER BY id`, subscriptionID)
+	if err != nil {
+		return err
+	}
+	deploymentRows, err := w.db.QueryContext(ctx, `SELECT deployment.id,application.site_id
+FROM php_deployments deployment JOIN php_applications application ON application.id=deployment.application_id
+WHERE deployment.subscription_id=$1 ORDER BY deployment.id`, subscriptionID)
+	if err != nil {
+		return err
+	}
+	for deploymentRows.Next() {
+		var deployment types.TeardownPHPDeployment
+		if err = deploymentRows.Scan(&deployment.DeploymentID, &deployment.SiteID); err != nil {
+			deploymentRows.Close()
+			return err
+		}
+		snapshot.PHPDeployments = append(snapshot.PHPDeployments, deployment)
+	}
+	if err = deploymentRows.Err(); err != nil {
+		deploymentRows.Close()
+		return err
+	}
+	deploymentRows.Close()
 	if err = w.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM valkey_instances WHERE subscription_id=$1)`, subscriptionID).Scan(&snapshot.ValkeyPresent); err != nil {
 		return err
 	}

@@ -252,6 +252,14 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 		summary.ServicesStarted = append(summary.ServicesStarted, unit)
 	}
 	for _, unit := range enumerateInstanceUnits() {
+		start, err := shouldStartRestoredInstanceUnit(ctx, unit, runQuiet)
+		if err != nil {
+			opts.log("warning: inspect %s desired state failed: %v", unit, err)
+			continue
+		}
+		if !start {
+			continue
+		}
 		if err := runQuiet(ctx, "systemctl", "start", unit); err != nil {
 			opts.log("warning: start %s failed: %v", unit, err)
 			continue
@@ -726,16 +734,37 @@ func unitFileExists(unit string) bool {
 
 func enumerateInstanceUnits() []string {
 	var units []string
-	patterns := []string{
-		"/etc/systemd/system/nakpanel-php-fpm@*.service",
-		"/etc/systemd/system/nakpanel-valkey@*.service",
-		"/etc/systemd/system/nakpanel-task-*.timer",
-	}
-	for _, pattern := range patterns {
+	for _, pattern := range instanceUnitPatterns() {
 		matches, _ := filepath.Glob(pattern)
 		for _, match := range matches {
 			units = append(units, filepath.Base(match))
 		}
 	}
 	return units
+}
+
+func instanceUnitPatterns() []string {
+	return []string{
+		"/etc/systemd/system/nakpanel-php-fpm@*.service",
+		"/etc/systemd/system/nakpanel-php-worker@*.service",
+		"/etc/systemd/system/nakpanel-php-app-*.slice",
+		"/etc/systemd/system/nakpanel-valkey@*.service",
+		"/etc/systemd/system/nakpanel-task-*.timer",
+	}
+}
+
+type restoreCommandRunner func(context.Context, string, ...string) error
+
+func shouldStartRestoredInstanceUnit(ctx context.Context, unit string, run restoreCommandRunner) (bool, error) {
+	if strings.HasPrefix(unit, "nakpanel-php-fpm@") || strings.HasPrefix(unit, "nakpanel-php-app-") {
+		// The application reconciliation sweep restores only active application
+		// runtimes after the control plane has recovered its desired state.
+		return false, nil
+	}
+	if strings.HasPrefix(unit, "nakpanel-php-worker@") {
+		// Reconciliation disables desired-stopped workers. Preserve that durable
+		// systemd state instead of starting every restored worker unit file.
+		return run(ctx, "systemctl", "is-enabled", unit) == nil, nil
+	}
+	return true, nil
 }

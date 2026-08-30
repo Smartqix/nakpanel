@@ -182,6 +182,32 @@ func TestFinalPHPJobAttemptUsesRiverAttemptBudget(t *testing.T) {
 	}
 }
 
+func TestPHPFailureNotificationsUseDistinctPublicCategories(t *testing.T) {
+	worker := phpFailureNotification(phpFailureWorker, 7, errors.New("worker exited"))
+	if worker.kind != "php_worker_failed" || worker.key != workerFailureKey(7) {
+		t.Fatalf("worker failure notification = %#v", worker)
+	}
+	composer := phpFailureNotification(phpFailureDeployment, 7, errors.New("Composer audit found a blocking security advisory"))
+	if composer.kind != "php_composer_security" || composer.key != composerSecurityKey(7) {
+		t.Fatalf("Composer failure notification = %#v", composer)
+	}
+	reconcile := phpFailureNotification(phpFailureReconcile, 7, errors.New("socket drift"))
+	if reconcile.kind != "php_reconciliation_failed" || reconcile.key != reconcileFailureKey(7) {
+		t.Fatalf("reconciliation failure notification = %#v", reconcile)
+	}
+}
+
+func TestComposerAuditNotificationResolvesOnlyAfterCleanAudit(t *testing.T) {
+	if kind, _, resolve := composerAuditNotification("low=2, abandoned=1"); kind != "php_composer_security" || resolve {
+		t.Fatalf("Composer findings notification = kind %q resolve %v", kind, resolve)
+	}
+	for _, summary := range []string{"clean", "not required", `{"summary":"clean"}`} {
+		if kind, _, resolve := composerAuditNotification(summary); kind != "" || !resolve {
+			t.Fatalf("clean Composer audit %q = kind %q resolve %v", summary, kind, resolve)
+		}
+	}
+}
+
 func TestSupersededDeploymentIntentIsTerminalized(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

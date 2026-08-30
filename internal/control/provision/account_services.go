@@ -333,7 +333,23 @@ func (m *Manager) ReadSiteLog(ctx context.Context, actor auth.SessionUser, siteI
 		return types.SiteLogResult{}, err
 	}
 	req.SiteID, req.Username, req.Domain = siteID, username, authoritativeDomain
-	return m.hostingToolkitAgent.ReadSiteLog(ctx, req)
+	result, err := m.hostingToolkitAgent.ReadSiteLog(ctx, req)
+	if err != nil {
+		return types.SiteLogResult{}, err
+	}
+	if req.Source == types.SiteLogPHPDeployment || req.Source == types.SiteLogPHPWorker || req.Source == types.SiteLogPHPFPM {
+		redactor, ok := m.quotaStore.(interface {
+			RedactPHPEnvironmentSecrets(context.Context, int64, []string) ([]string, error)
+		})
+		if !ok {
+			return types.SiteLogResult{}, errors.New("PHP log secret redaction is unavailable")
+		}
+		result.Lines, err = redactor.RedactPHPEnvironmentSecrets(ctx, siteID, result.Lines)
+		if err != nil {
+			return types.SiteLogResult{}, err
+		}
+	}
+	return result, nil
 }
 
 func (m *Manager) RunScheduledTask(ctx context.Context, actor auth.SessionUser, subscriptionID, taskID int64) (types.ScheduledTaskRun, error) {

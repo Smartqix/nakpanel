@@ -17,7 +17,9 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(home, "domains", "example.test"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	runner := &teardownRunner{}
+	runner := &teardownRunner{outputs: map[string][]byte{
+		"systemctl show --property=LoadState --value --no-pager nakpanel-php-fpm-candidate@17-42.service": []byte("loaded\n"),
+	}}
 	stateRoot := t.TempDir()
 	systemdRoot := filepath.Join(stateRoot, "systemd")
 	if err := os.MkdirAll(systemdRoot, 0o755); err != nil {
@@ -25,6 +27,10 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 	}
 	for _, unit := range []string{
 		"nakpanel-php-fpm@17.service",
+		"nakpanel-php-fpm-candidate@17-41.service",
+		"nakpanel-php-worker@51.service",
+		"nakpanel-php-worker@51-2.service",
+		"nakpanel-php-app-31.slice",
 		"nakpanel-task-23.service",
 		"nakpanel-task-23.timer",
 		"nakpanel-valkey@4.service",
@@ -33,17 +39,34 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	phpStateRoot := filepath.Join(stateRoot, "php-applications")
+	if err := os.MkdirAll(filepath.Join(phpStateRoot, "app-31", "candidate-41"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	nginxCandidateRoot := t.TempDir()
+	phpRunRoot := t.TempDir()
+	for _, path := range []string{
+		filepath.Join(nginxCandidateRoot, "90-nakpanel-php-candidate-17-41.conf"),
+		filepath.Join(phpRunRoot, "candidate-17-41.sock"),
+	} {
+		if err := os.WriteFile(path, []byte("candidate"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
 	p := NewSubscriptionTeardownProvisioner(SubscriptionTeardownOptions{
 		HomeRoot: root, SystemdUnitDir: systemdRoot, TaskStateDir: filepath.Join(stateRoot, "tasks"),
 		ValkeyConfigRoot: filepath.Join(stateRoot, "valkey-config"), ValkeyRuntimeRoot: filepath.Join(stateRoot, "valkey-runtime"),
-		GitRoot: filepath.Join(stateRoot, "git"), StagingRoot: filepath.Join(stateRoot, "staging"), PodmanBinary: "/usr/bin/podman",
-		Paths:  SitePathConfig{HomeRoot: root, NginxAvailableDir: t.TempDir(), NginxEnabledDir: t.TempDir(), NginxConfDir: t.TempDir(), PHPFPMPoolDir: t.TempDir()},
+		PHPApplicationStateRoot: phpStateRoot,
+		GitRoot:                 filepath.Join(stateRoot, "git"), StagingRoot: filepath.Join(stateRoot, "staging"), PodmanBinary: "/usr/bin/podman",
+		Paths:  SitePathConfig{HomeRoot: root, NginxAvailableDir: t.TempDir(), NginxEnabledDir: t.TempDir(), NginxConfDir: nginxCandidateRoot, PHPFPMPoolDir: t.TempDir(), PHPFPMDedicatedRunDir: phpRunRoot},
 		Runner: runner,
 	})
 	result, err := p.TeardownSubscription(context.Background(), types.TeardownSubscriptionReq{
 		SubscriptionID: 4, Username: "npaccount", HomePath: home, SiteIDs: []int64{17}, Domains: []string{"example.test"},
 		DatabaseNames: []string{"np_4_app"}, TaskIDs: []int64{23}, StagingOperationIDs: []int64{31},
-		Applications: []types.TeardownApplication{{ID: 29, Name: "wordpress"}}, ValkeyPresent: true,
+		PHPApplicationIDs: []int64{31}, PHPWorkerIDs: []int64{51},
+		PHPDeployments: []types.TeardownPHPDeployment{{SiteID: 17, DeploymentID: 42}},
+		Applications:   []types.TeardownApplication{{ID: 29, Name: "wordpress"}}, ValkeyPresent: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -60,6 +83,29 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 	if !runner.saw("systemctl", "disable", "--now", "nakpanel-php-fpm@17.service") ||
 		!runner.saw("systemctl", "daemon-reload") {
 		t.Fatalf("dedicated PHP service was not removed: %#v", runner.calls)
+	}
+	for _, unit := range []string{"nakpanel-php-fpm-candidate@17-41.service", "nakpanel-php-worker@51.service", "nakpanel-php-worker@51-2.service"} {
+		if !runner.saw("systemctl", "disable", "--now", unit) {
+			t.Fatalf("managed PHP teardown did not stop %s: %#v", unit, runner.calls)
+		}
+		if _, statErr := os.Stat(filepath.Join(systemdRoot, unit)); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("managed PHP unit %s remains: %v", unit, statErr)
+		}
+	}
+	if !runner.saw("systemctl", "disable", "--now", "nakpanel-php-fpm-candidate@17-42.service") {
+		t.Fatalf("loaded PHP candidate without a unit file was not stopped: %#v", runner.calls)
+	}
+	if _, statErr := os.Stat(filepath.Join(systemdRoot, "nakpanel-php-app-31.slice")); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("managed PHP slice remains: %v", statErr)
+	}
+	for _, path := range []string{
+		filepath.Join(phpStateRoot, "app-31"),
+		filepath.Join(nginxCandidateRoot, "90-nakpanel-php-candidate-17-41.conf"),
+		filepath.Join(phpRunRoot, "candidate-17-41.sock"),
+	} {
+		if _, statErr := os.Stat(path); !errors.Is(statErr, os.ErrNotExist) {
+			t.Fatalf("managed PHP teardown artifact remains at %s: %v", path, statErr)
+		}
 	}
 	if !runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-app-29") ||
 		!runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-app-29-candidate") ||
@@ -93,6 +139,9 @@ func TestSubscriptionTeardownRejectsTraversalAndSymlinks(t *testing.T) {
 		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), SiteIDs: []int64{0}, Domains: []string{"example.test"}},
 		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), DatabaseNames: []string{"db;DROP"}},
 		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), TaskIDs: []int64{0}},
+		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), PHPApplicationIDs: []int64{0}},
+		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), PHPWorkerIDs: []int64{0}},
+		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), PHPDeployments: []types.TeardownPHPDeployment{{SiteID: 1}}},
 		{SubscriptionID: 1, Username: "npaccount", HomePath: filepath.Join(root, "npaccount"), Applications: []types.TeardownApplication{{ID: 1, Name: "../bad"}}},
 	}
 	for i, req := range requests {
@@ -155,6 +204,9 @@ func (r *teardownRunner) Run(_ context.Context, name string, args ...string) ([]
 	r.calls = append(r.calls, append([]string{name}, args...))
 	if name == r.failName {
 		return []byte("forced failure"), errors.New("forced failure")
+	}
+	if output, exists := r.outputs[strings.Join(append([]string{name}, args...), " ")]; exists {
+		return output, nil
 	}
 	return r.outputs[name], nil
 }

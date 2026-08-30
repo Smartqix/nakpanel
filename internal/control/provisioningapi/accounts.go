@@ -344,10 +344,7 @@ func (s *AccountService) Create(ctx context.Context, keyID int64, req createAcco
 	if err = tx.QueryRowContext(ctx, `INSERT INTO subscription_system_accounts(subscription_id,username,home_path,desired_state,applied_state,convergence_status,migration_status) VALUES($1,$2,'/home/'||$2,'active','pending','pending','pending') RETURNING id`, subscriptionID, username).Scan(&accountID); err != nil {
 		return accountView{}, false, &accountError{409, "username_conflict", "system username is already in use", nil}
 	}
-	php := plan.DefaultPHP
-	if php == "" {
-		php = strings.TrimSpace(strings.Split(plan.PHPAllowlist, ",")[0])
-	}
+	php := controlquota.PreferredNewSitePHPVersion(plan.PHPAllowlist, plan.DefaultPHP)
 	if php == "" {
 		php = "8.3"
 	}

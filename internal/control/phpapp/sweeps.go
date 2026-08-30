@@ -152,29 +152,40 @@ ORDER BY application.subscription_id,application.php_version`)
 	defer tx.Rollback()
 	for _, target := range targets {
 		runtime, exists := byVersion[target.version]
-		key := fmt.Sprintf("php:runtime:%d:%s", target.subscriptionID, target.version)
+		legacyKey := fmt.Sprintf("php:runtime:%d:%s", target.subscriptionID, target.version)
+		missingKey := fmt.Sprintf("php:runtime-missing:%d:%s", target.subscriptionID, target.version)
+		supportKey := fmt.Sprintf("php:end-of-support:%d:%s", target.subscriptionID, target.version)
+		if err := resolveNotificationTx(ctx, tx, legacyKey); err != nil {
+			return err
+		}
 		if !exists || !runtime.Ready {
 			body := fmt.Sprintf("PHP %s is not ready on this server.", target.version)
 			if exists && len(runtime.ValidationErrors) > 0 {
 				body += " " + strings.Join(runtime.ValidationErrors, "; ")
 			}
-			if err := upsertNotificationTx(ctx, tx, target.subscriptionID, target.customerID, "php_runtime_unsupported", "critical", "PHP runtime unavailable", safeMessage(body), key); err != nil {
+			if err := upsertNotificationTx(ctx, tx, target.subscriptionID, target.customerID, "php_runtime_missing", "critical", "PHP runtime unavailable", safeMessage(body), missingKey); err != nil {
+				return err
+			}
+			if err := resolveNotificationTx(ctx, tx, supportKey); err != nil {
 				return err
 			}
 			continue
+		}
+		if err := resolveNotificationTx(ctx, tx, missingKey); err != nil {
+			return err
 		}
 		if runtime.SupportStatus == types.PHPSupportUnsupported || runtime.SupportStatus == types.PHPSupportSecuritySupported {
 			severity, title := "critical", "PHP runtime is end of support"
 			if runtime.SupportStatus == types.PHPSupportSecuritySupported {
 				severity, title = "warning", "PHP runtime is in security support"
 			}
-			if err := upsertNotificationTx(ctx, tx, target.subscriptionID, target.customerID, "php_runtime_unsupported", severity, title,
-				fmt.Sprintf("PHP %s support status is %s. Plan an upgrade.", target.version, runtime.SupportStatus), key); err != nil {
+			if err := upsertNotificationTx(ctx, tx, target.subscriptionID, target.customerID, "php_end_of_support", severity, title,
+				fmt.Sprintf("PHP %s support status is %s. Plan an upgrade.", target.version, runtime.SupportStatus), supportKey); err != nil {
 				return err
 			}
 			continue
 		}
-		if err := resolveNotificationTx(ctx, tx, key); err != nil {
+		if err := resolveNotificationTx(ctx, tx, supportKey); err != nil {
 			return err
 		}
 	}

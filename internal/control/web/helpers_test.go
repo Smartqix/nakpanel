@@ -280,6 +280,29 @@ func TestPHPVersionsRequireInstalledAllowedRuntime(t *testing.T) {
 	}
 }
 
+func TestNewPlanPrefersReadyPHP84AndKeepsPHP85Selectable(t *testing.T) {
+	capabilities := types.RuntimeCapabilities{PHPVersions: []string{"8.5", "8.4", "8.3"}}
+	plan := planEditorDefault(capabilities)
+	if plan.DefaultPHPVersion != "8.4" {
+		t.Fatalf("new plan default PHP = %q, want ready PHP 8.4", plan.DefaultPHPVersion)
+	}
+	if plan.PHPAllowlist != "8.5,8.4,8.3" {
+		t.Fatalf("new plan PHP allowlist = %q, want every ready runtime", plan.PHPAllowlist)
+	}
+	if got := planPHPVersions(plan, capabilities); len(got) != 3 || got[0] != "8.5" || got[1] != "8.4" || got[2] != "8.3" {
+		t.Fatalf("new plan selectable PHP versions = %#v", got)
+	}
+}
+
+func TestSiteRuntimeChoicesPutPreferredPHP84First(t *testing.T) {
+	capabilities := types.RuntimeCapabilities{PHPVersions: []string{"8.5", "8.4", "8.3"}}
+	subscriptions := []types.SubscriptionSummary{{PHPAllowlist: "8.5,8.4,8.3"}}
+	got := subscriptionPHPVersions(subscriptions, capabilities)
+	if len(got) != 3 || got[0] != "8.4" || got[1] != "8.5" || got[2] != "8.3" {
+		t.Fatalf("site runtime choices = %#v, want preferred PHP 8.4 first", got)
+	}
+}
+
 func TestApplicationDeploymentRequiresPresetOrCustomOCI(t *testing.T) {
 	policy := types.HostingPolicy{
 		Permissions:  types.HostingPermissionPolicy{Applications: true},

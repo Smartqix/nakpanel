@@ -79,16 +79,24 @@ const (
 )
 
 type TeardownSubscriptionReq struct {
-	SubscriptionID      int64                 `json:"subscription_id"`
-	Username            string                `json:"username"`
-	HomePath            string                `json:"home_path"`
-	SiteIDs             []int64               `json:"site_ids,omitempty"`
-	Domains             []string              `json:"domains"`
-	DatabaseNames       []string              `json:"database_names"`
-	TaskIDs             []int64               `json:"task_ids,omitempty"`
-	StagingOperationIDs []int64               `json:"staging_operation_ids,omitempty"`
-	Applications        []TeardownApplication `json:"applications,omitempty"`
-	ValkeyPresent       bool                  `json:"valkey_present,omitempty"`
+	SubscriptionID      int64                   `json:"subscription_id"`
+	Username            string                  `json:"username"`
+	HomePath            string                  `json:"home_path"`
+	SiteIDs             []int64                 `json:"site_ids,omitempty"`
+	Domains             []string                `json:"domains"`
+	DatabaseNames       []string                `json:"database_names"`
+	TaskIDs             []int64                 `json:"task_ids,omitempty"`
+	StagingOperationIDs []int64                 `json:"staging_operation_ids,omitempty"`
+	PHPApplicationIDs   []int64                 `json:"php_application_ids,omitempty"`
+	PHPWorkerIDs        []int64                 `json:"php_worker_ids,omitempty"`
+	PHPDeployments      []TeardownPHPDeployment `json:"php_deployments,omitempty"`
+	Applications        []TeardownApplication   `json:"applications,omitempty"`
+	ValkeyPresent       bool                    `json:"valkey_present,omitempty"`
+}
+
+type TeardownPHPDeployment struct {
+	SiteID       int64 `json:"site_id"`
+	DeploymentID int64 `json:"deployment_id"`
 }
 
 type TeardownApplication struct {

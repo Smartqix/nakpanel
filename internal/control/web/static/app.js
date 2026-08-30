@@ -387,6 +387,7 @@
       select.appendChild(option);
     });
     if (versions.indexOf(previous) !== -1) select.value = previous;
+    else if (versions.indexOf(data.defaultPhp || "") !== -1) select.value = data.defaultPhp;
     select.disabled = versions.length === 0;
   }
 

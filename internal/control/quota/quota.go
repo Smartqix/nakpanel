@@ -354,7 +354,7 @@ func ResolvePHPVersion(limits Limits, requested string) (string, error) {
 		return requested, nil
 	}
 	if requested == "" {
-		requested = strings.TrimSpace(limits.DefaultPHPVersion)
+		requested = PreferredNewSitePHPVersion(limits.PHPAllowlist, limits.DefaultPHPVersion)
 	}
 	if requested == "" {
 		return "", errors.New("subscription has no default PHP version")
@@ -365,6 +365,24 @@ func ResolvePHPVersion(limits Limits, requested string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("PHP %s is not allowed by the subscription", requested)
+}
+
+func PreferredNewSitePHPVersion(allowlist, configuredDefault string) string {
+	for _, version := range strings.Split(allowlist, ",") {
+		if strings.TrimSpace(version) == "8.4" {
+			return "8.4"
+		}
+	}
+	configuredDefault = strings.TrimSpace(configuredDefault)
+	if configuredDefault != "" {
+		return configuredDefault
+	}
+	for _, version := range strings.Split(allowlist, ",") {
+		if version = strings.TrimSpace(version); version != "" {
+			return version
+		}
+	}
+	return ""
 }
 
 func positiveLimit(value int) int {
@@ -396,13 +414,15 @@ func ValidateLimits(limits Limits) error {
 }
 
 type SQLStore struct {
-	db      *sql.DB
-	river   *river.Client[*sql.Tx]
-	secrets *serveradmin.Store
+	db            *sql.DB
+	river         *river.Client[*sql.Tx]
+	secrets       *serveradmin.Store
+	phpLogSecrets phpLogSecretReader
 }
 
 func (s *SQLStore) SetServiceSecretStore(secrets *serveradmin.Store) {
 	s.secrets = secrets
+	s.phpLogSecrets = secrets
 }
 
 func NewSQLStore(db *sql.DB, clients ...*river.Client[*sql.Tx]) *SQLStore {

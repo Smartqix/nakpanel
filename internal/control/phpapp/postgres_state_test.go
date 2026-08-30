@@ -171,6 +171,27 @@ UPDATE php_applications SET applied_revision=desired_revision,convergence_status
 	if err != nil || !claimed {
 		t.Fatalf("guarded rollback claim: claimed=%v err=%v", claimed, err)
 	}
+	if _, err = db.Exec(`INSERT INTO notifications(customer_id,subscription_id,kind,severity,title,body,dedupe_key)
+VALUES(5,4,'php_composer_security','warning','Composer security findings','low=1',$1)`, composerSecurityKey(14)); err != nil {
+		t.Fatal(err)
+	}
+	rollbackLoaded := loadedApplication{record: applicationRecord{spec: types.PHPApplicationSpec{
+		ApplicationID: 14, SubscriptionID: 4,
+	}, customerID: 5}}
+	if err = store.completeRollback(ctx, RollbackPHPReleaseArgs{
+		ApplicationID: 14, DeploymentID: 142, TargetDeploymentID: 141, DesiredRevision: 4,
+	}, rollbackLoaded, types.PHPDeployment{
+		ID: 141, ApplicationID: 14, ResolvedRevision: strings.Repeat("b", 40), ComposerAudit: "clean",
+	}, types.RollbackPHPReleaseResult{DeploymentID: 142, ActiveDeploymentID: 141, HealthMessage: "healthy"}); err != nil {
+		t.Fatalf("guarded rollback completion: %v", err)
+	}
+	var composerResolved bool
+	if err = db.QueryRow(`SELECT resolved_at IS NOT NULL FROM notifications WHERE dedupe_key=$1`, composerSecurityKey(14)).Scan(&composerResolved); err != nil {
+		t.Fatal(err)
+	}
+	if !composerResolved {
+		t.Fatal("clean rollback target did not resolve Composer security notification")
+	}
 	loaded := loadedApplication{record: applicationRecord{spec: types.PHPApplicationSpec{
 		ApplicationID: 15, SubscriptionID: 4, HostingMode: types.PHPHostingModeManaged, DesiredState: "active",
 	}, customerID: 5}}
@@ -186,7 +207,7 @@ UPDATE php_applications SET applied_revision=desired_revision,convergence_status
  (SELECT status FROM php_deployments WHERE id=142)`).Scan(&retryStatus, &failedStatus, &supersededStatus, &rollbackStatus); err != nil {
 		t.Fatal(err)
 	}
-	if retryStatus != "healthy" || failedStatus != "failed" || supersededStatus != "failed" || rollbackStatus != "preparing" {
+	if retryStatus != "healthy" || failedStatus != "failed" || supersededStatus != "failed" || rollbackStatus != "rolled_back" {
 		t.Fatalf("guarded transition states = %q/%q/%q/%q", retryStatus, failedStatus, supersededStatus, rollbackStatus)
 	}
 }

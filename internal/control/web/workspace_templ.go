@@ -25032,25 +25032,38 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2218, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2218, "\" data-default-php=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1172 string
-			templ_7745c5c3_Var1172, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSelectLabel(subscription))
+			templ_7745c5c3_Var1172, templ_7745c5c3_Err = templ.JoinStringErrs(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2599, Col: 629}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2599, Col: 706}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1172))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2219, "</option>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2219, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1173 string
+			templ_7745c5c3_Var1173, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSelectLabel(subscription))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2599, Col: 748}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1173))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2220, "</option>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2220, "</select></label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2221, "</select></label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25074,12 +25087,12 @@ func customerDialog(view WorkspaceView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1173 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1173 == nil {
-			templ_7745c5c3_Var1173 = templ.NopComponent
+		templ_7745c5c3_Var1174 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1174 == nil {
+			templ_7745c5c3_Var1174 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2221, "<dialog class=\"np-dialog\" id=\"customer-dialog\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2222, "<dialog class=\"np-dialog\" id=\"customer-dialog\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25087,7 +25100,7 @@ func customerDialog(view WorkspaceView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2222, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">Account management</span><h2>Add customer</h2><p>Create a contact-only customer or enable panel access now.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"/customers\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2223, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">Account management</span><h2>Add customer</h2><p>Create a contact-only customer or enable panel access now.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"/customers\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25095,7 +25108,7 @@ func customerDialog(view WorkspaceView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2223, "<label>Email<input type=\"email\" name=\"customer_email\" required></label><label>Name<input name=\"customer_name\"></label><label>Company<input name=\"company\"></label><label>Notes<input name=\"notes\"></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enable_login\" value=\"true\">Enable panel login</label><label>Password<input type=\"password\" name=\"password\" autocomplete=\"new-password\"></label><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">Create customer</button></div></form></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2224, "<label>Email<input type=\"email\" name=\"customer_email\" required></label><label>Name<input name=\"customer_name\"></label><label>Company<input name=\"company\"></label><label>Notes<input name=\"notes\"></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enable_login\" value=\"true\">Enable panel login</label><label>Password<input type=\"password\" name=\"password\" autocomplete=\"new-password\"></label><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">Create customer</button></div></form></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -384,16 +384,7 @@ func serviceIsActive(ctx context.Context, unit string) bool {
 
 func collectNakpanelUnits() ([]string, error) {
 	var units []string
-	patterns := []string{
-		"/etc/systemd/system/nakpanel-php-fpm@*.service",
-		"/etc/systemd/system/nakpanel-valkey@*.service",
-		"/etc/systemd/system/nakpanel-task-*.service",
-		"/etc/systemd/system/nakpanel-task-*.timer",
-		"/etc/systemd/system/nakpanel-proftpd.service",
-		"/etc/systemd/system/multi-user.target.wants/nakpanel-*",
-		"/etc/systemd/system/timers.target.wants/nakpanel-task-*",
-	}
-	for _, pattern := range patterns {
+	for _, pattern := range nakpanelUnitPatterns() {
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
 			return nil, err
@@ -401,6 +392,20 @@ func collectNakpanelUnits() ([]string, error) {
 		units = append(units, matches...)
 	}
 	return units, nil
+}
+
+func nakpanelUnitPatterns() []string {
+	return []string{
+		"/etc/systemd/system/nakpanel-php-fpm@*.service",
+		"/etc/systemd/system/nakpanel-php-worker@*.service",
+		"/etc/systemd/system/nakpanel-php-app-*.slice",
+		"/etc/systemd/system/nakpanel-valkey@*.service",
+		"/etc/systemd/system/nakpanel-task-*.service",
+		"/etc/systemd/system/nakpanel-task-*.timer",
+		"/etc/systemd/system/nakpanel-proftpd.service",
+		"/etc/systemd/system/multi-user.target.wants/nakpanel-*",
+		"/etc/systemd/system/timers.target.wants/nakpanel-task-*",
+	}
 }
 
 // collectSystemIdentity captures numeric ids and subordinate ranges for the

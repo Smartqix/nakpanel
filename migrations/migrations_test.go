@@ -344,3 +344,25 @@ func TestPhase30DownRemovesNotificationsBeforeRestoringConstraint(t *testing.T) 
 		t.Fatal("Phase 30 down constraint still permits Phase 30 notification kinds")
 	}
 }
+
+func TestPhase30IntegrationNotificationKindsAreDistinctAndReversible(t *testing.T) {
+	data, err := os.ReadFile("20260830000045_phase30_integration.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, kind := range []string{
+		"php_deployment_failed", "php_worker_failed", "php_composer_security",
+		"php_runtime_missing", "php_end_of_support", "php_reconciliation_failed",
+	} {
+		if !strings.Contains(script, "'"+kind+"'") {
+			t.Fatalf("Phase 30 integration migration is missing notification kind %q", kind)
+		}
+	}
+	down := script[strings.Index(script, "-- +goose Down"):]
+	removeRows := strings.Index(down, "DELETE FROM notifications WHERE kind IN")
+	restoreConstraint := strings.LastIndex(down, "ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check")
+	if removeRows < 0 || restoreConstraint < 0 || removeRows > restoreConstraint {
+		t.Fatal("Phase 30 integration Down must remove its notification rows before restoring the prior constraint")
+	}
+}

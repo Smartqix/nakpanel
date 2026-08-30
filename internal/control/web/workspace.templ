@@ -2596,7 +2596,7 @@ templ routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities t
 templ routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities) {
 	<label>Subscription <select name="subscription_id" required>
 		for _, subscription := range subscriptions {
-			<option value={ formatQuotaUserID(subscription.ID) } data-subscription-id={ formatQuotaUserID(subscription.ID) } data-customer-id={ formatQuotaUserID(subscription.CustomerID) } data-email={ subscription.CustomerEmail } data-plan-name={ subscription.PlanName } data-has-quota="true" data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.SitesUsed) } data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) } data-php-versions={ joinStrings(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist)) }>{ subscriptionSelectLabel(subscription) }</option>
+			<option value={ formatQuotaUserID(subscription.ID) } data-subscription-id={ formatQuotaUserID(subscription.ID) } data-customer-id={ formatQuotaUserID(subscription.CustomerID) } data-email={ subscription.CustomerEmail } data-plan-name={ subscription.PlanName } data-has-quota="true" data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.SitesUsed) } data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) } data-php-versions={ joinStrings(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist)) } data-default-php={ controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion) }>{ subscriptionSelectLabel(subscription) }</option>
 		}
 	</select></label>
 }

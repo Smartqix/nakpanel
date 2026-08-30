@@ -3,6 +3,7 @@ package phpapp
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -665,6 +666,9 @@ WHERE id=$1 AND desired_revision=$5`, args.ApplicationID, args.DeploymentID, old
 	if err = resolveNotificationTx(ctx, tx, deploymentFailureKey(args.ApplicationID)); err != nil {
 		return err
 	}
+	if err = reconcileComposerNotificationTx(ctx, tx, loaded, args.ApplicationID, result.ComposerAudit); err != nil {
+		return err
+	}
 	if err = auditTx(ctx, tx, 0, loaded.record.customerID, loaded.record.spec.SubscriptionID,
 		"php.deployment.healthy", "php_deployment", args.DeploymentID, map[string]any{"resolved_revision": result.ResolvedRevision, "revision": args.DesiredRevision}); err != nil {
 		return err
@@ -718,6 +722,9 @@ observed_message=$4,applied_revision=$5,convergence_status='in_sync',last_error=
 		return err
 	}
 	if err = resolveNotificationTx(ctx, tx, deploymentFailureKey(args.ApplicationID)); err != nil {
+		return err
+	}
+	if err = reconcileComposerNotificationTx(ctx, tx, loaded, args.ApplicationID, target.ComposerAudit); err != nil {
 		return err
 	}
 	if err = auditTx(ctx, tx, 0, loaded.record.customerID, loaded.record.spec.SubscriptionID, "php.deployment.rolled_back", "php_deployment", args.DeploymentID,
@@ -854,13 +861,77 @@ applied_revision=desired_revision,convergence_status='in_sync',last_error='',las
 }
 
 func (s *SQLStore) failDeployment(ctx context.Context, applicationID, deploymentID, revision int64, message string) error {
-	return s.recordFailure(ctx, applicationID, deploymentID, revision, "php_deployment_failed", "PHP deployment failed", message, deploymentFailureKey(applicationID), true)
+	err := s.recordFailure(ctx, applicationID, deploymentID, revision, "php_deployment_failed", "PHP deployment failed", message, deploymentFailureKey(applicationID), true)
+	composer := phpFailureNotification(phpFailureDeployment, applicationID, errors.New(message))
+	if composer.kind == "php_composer_security" {
+		err = errors.Join(err, s.recordComposerSecurityFailure(ctx, applicationID, revision, message))
+	}
+	return err
 }
 func (s *SQLStore) failReconcile(ctx context.Context, applicationID, revision int64, message string) error {
-	return s.recordFailure(ctx, applicationID, 0, revision, "php_reconciliation_failed", "PHP reconciliation failed", message, reconcileFailureKey(applicationID), false)
+	notification := phpFailureNotification(phpFailureReconcile, applicationID, errors.New(message))
+	return s.recordFailure(ctx, applicationID, 0, revision, notification.kind, notification.title, message, notification.key, false)
 }
 func (s *SQLStore) failWorkers(ctx context.Context, applicationID, revision int64, message string) error {
-	return s.recordFailure(ctx, applicationID, 0, revision, "php_reconciliation_failed", "PHP worker reconciliation failed", message, workerFailureKey(applicationID), false)
+	notification := phpFailureNotification(phpFailureWorker, applicationID, errors.New(message))
+	return s.recordFailure(ctx, applicationID, 0, revision, notification.kind, notification.title, message, notification.key, false)
+}
+
+type phpFailureType string
+
+const (
+	phpFailureDeployment phpFailureType = "deployment"
+	phpFailureReconcile  phpFailureType = "reconcile"
+	phpFailureWorker     phpFailureType = "worker"
+)
+
+type phpNotification struct {
+	kind  string
+	title string
+	key   string
+}
+
+func phpFailureNotification(failureType phpFailureType, applicationID int64, cause error) phpNotification {
+	message := ""
+	if cause != nil {
+		message = cause.Error()
+	}
+	if failureType == phpFailureDeployment && strings.Contains(message, "Composer audit found a blocking security advisory") {
+		return phpNotification{kind: "php_composer_security", title: "Composer security findings", key: composerSecurityKey(applicationID)}
+	}
+	switch failureType {
+	case phpFailureWorker:
+		return phpNotification{kind: "php_worker_failed", title: "PHP worker reconciliation failed", key: workerFailureKey(applicationID)}
+	case phpFailureReconcile:
+		return phpNotification{kind: "php_reconciliation_failed", title: "PHP reconciliation failed", key: reconcileFailureKey(applicationID)}
+	default:
+		return phpNotification{kind: "php_deployment_failed", title: "PHP deployment failed", key: deploymentFailureKey(applicationID)}
+	}
+}
+
+func composerAuditNotification(summary string) (kind, body string, resolve bool) {
+	summary = strings.TrimSpace(summary)
+	if strings.HasPrefix(summary, "{") {
+		var document struct {
+			Summary string `json:"summary"`
+		}
+		if json.Unmarshal([]byte(summary), &document) == nil {
+			summary = strings.TrimSpace(document.Summary)
+		}
+	}
+	if summary == "" || summary == "clean" || summary == "not required" {
+		return "", "", true
+	}
+	return "php_composer_security", safeMessage("Composer audit findings: " + summary), false
+}
+
+func reconcileComposerNotificationTx(ctx context.Context, tx *sql.Tx, loaded loadedApplication, applicationID int64, summary string) error {
+	kind, body, resolve := composerAuditNotification(summary)
+	if resolve {
+		return resolveNotificationTx(ctx, tx, composerSecurityKey(applicationID))
+	}
+	return upsertNotificationTx(ctx, tx, loaded.record.spec.SubscriptionID, loaded.record.customerID,
+		kind, "warning", "Composer security findings", body, composerSecurityKey(applicationID))
 }
 
 func (s *SQLStore) retryDeployment(ctx context.Context, applicationID, deploymentID, revision int64, message string) error {
@@ -946,6 +1017,27 @@ FROM php_applications application JOIN sites site ON site.id=application.site_id
 	return tx.Commit()
 }
 
+func (s *SQLStore) recordComposerSecurityFailure(ctx context.Context, applicationID, revision int64, message string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var subscriptionID, customerID, current int64
+	if err = tx.QueryRowContext(ctx, `SELECT application.subscription_id,site.customer_id,application.desired_revision
+FROM php_applications application JOIN sites site ON site.id=application.site_id WHERE application.id=$1 FOR UPDATE OF application`, applicationID).Scan(&subscriptionID, &customerID, &current); err != nil {
+		return err
+	}
+	if current != revision {
+		return tx.Commit()
+	}
+	if err = upsertNotificationTx(ctx, tx, subscriptionID, customerID, "php_composer_security", "critical",
+		"Composer security findings", message, composerSecurityKey(applicationID)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func upsertNotificationTx(ctx context.Context, tx *sql.Tx, subscriptionID, customerID int64, kind, severity, title, body, key string) error {
 	_, err := tx.ExecContext(ctx, `WITH recipient AS (SELECT login_user_id,reseller_id,email FROM customers WHERE id=$1), upserted AS (
 INSERT INTO notifications(recipient_user_id,customer_id,reseller_id,subscription_id,kind,severity,title,body,dedupe_key)
@@ -970,5 +1062,8 @@ func reconcileFailureKey(applicationID int64) string {
 }
 func workerFailureKey(applicationID int64) string {
 	return fmt.Sprintf("php:workers:%d", applicationID)
+}
+func composerSecurityKey(applicationID int64) string {
+	return fmt.Sprintf("php:composer:%d", applicationID)
 }
 func safeMessage(value string) string { return redactPHPFailure(errors.New(value), nil) }

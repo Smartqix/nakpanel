@@ -169,6 +169,30 @@ AND hosting_mode='classic' AND php_version='8.4' AND applied_revision=1`).Scan(&
 	}
 }
 
+func TestPhase30IntegrationNotificationKindsPostgreSQL(t *testing.T) {
+	db := phase30Postgres(t)
+	createPhase30Baseline(t, db)
+	phase30Up, _ := phase30MigrationSections(t)
+	if _, err := db.Exec(phase30Up); err != nil {
+		t.Fatal(err)
+	}
+	up, down := migrationSections(t, "20260830000045_phase30_integration.sql")
+	if _, err := db.Exec(up); err != nil {
+		t.Fatalf("Phase 30 integration Up: %v", err)
+	}
+	for _, kind := range []string{"php_worker_failed", "php_composer_security", "php_runtime_missing", "php_end_of_support"} {
+		if _, err := db.Exec(`INSERT INTO notifications(kind) VALUES($1)`, kind); err != nil {
+			t.Fatalf("insert %s notification: %v", kind, err)
+		}
+	}
+	if _, err := db.Exec(down); err != nil {
+		t.Fatalf("Phase 30 integration Down: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO notifications(kind) VALUES('php_worker_failed')`); err == nil {
+		t.Fatal("Phase 30 integration Down still permits php_worker_failed")
+	}
+}
+
 func phase30Postgres(t *testing.T) *sql.DB {
 	t.Helper()
 	candidates := []string{os.Getenv("NAKPANEL_TEST_DATABASE_URL")}
@@ -267,6 +291,19 @@ func phase30MigrationSections(t *testing.T) (string, string) {
 	parts := strings.SplitN(string(data), "-- +goose Down", 2)
 	if len(parts) != 2 {
 		t.Fatal("Phase 30 migration has no Down section")
+	}
+	return parts[0], parts[1]
+}
+
+func migrationSections(t *testing.T, name string) (string, string) {
+	t.Helper()
+	data, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := strings.SplitN(string(data), "-- +goose Down", 2)
+	if len(parts) != 2 {
+		t.Fatalf("migration %s has no Down section", name)
 	}
 	return parts[0], parts[1]
 }
