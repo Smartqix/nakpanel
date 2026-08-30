@@ -37,6 +37,22 @@ func TestHostingToolkitVerifierChain(t *testing.T) {
 	}
 }
 
+func TestPhase24VerifierAcceptsPhase30PHPApplicationWorkspace(t *testing.T) {
+	data, err := os.ReadFile("phase24-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, marker := range []string{"PHP Application", "Classic Hosting", "Managed Deployment"} {
+		if !strings.Contains(script, marker) {
+			t.Errorf("phase24 verifier is missing Phase 30 workspace marker %q", marker)
+		}
+	}
+	if strings.Contains(script, "Managed runtimes are not installed yet") {
+		t.Fatal("phase24 verifier still requires the retired Phase 28 application placeholder")
+	}
+}
+
 func TestSecurityVerifierChainsFinalFunctionalPhase(t *testing.T) {
 	data, err := os.ReadFile("security-verify.sh")
 	if err != nil {

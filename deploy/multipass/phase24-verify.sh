@@ -101,9 +101,12 @@ multipass_exec_short "${VM_NAME}" -- sudo grep -Fq 'auth_basic "Phase 24 private
 [[ "$(db "SELECT COUNT(*) FROM audit_events WHERE metadata::text LIKE '%Phase24-Protected!2026%'")" == "0" ]] || fail "protected-directory password leaked into audit metadata"
 
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}/applications" -o "${tmpdir}/applications.html"
-# Phase 29 note: the applications workspace became the Phase 28 truthful
-# capability page (phase28-verify asserts the same URL and copy).
-grep -Fq 'Managed runtimes are not installed yet' "${tmpdir}/applications.html" || fail "curated application preset workspace is missing"
+# Phase 30 promotes this compatibility URL to the PHP Application workspace.
+# The later verifier exercises both Classic and Managed behavior in depth; this
+# earlier phase only proves that its route survives the full verifier chain.
+for marker in 'PHP Application' 'Classic Hosting' 'Managed Deployment'; do
+  grep -Fq "${marker}" "${tmpdir}/applications.html" || fail "PHP application workspace is missing ${marker}"
+done
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}/staging" -o "${tmpdir}/staging.html"
 grep -Eq 'automatic rollback point|Create a second domain' "${tmpdir}/staging.html" || fail "staging workflow is missing"
 
