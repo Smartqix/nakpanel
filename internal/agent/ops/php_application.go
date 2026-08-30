@@ -78,6 +78,15 @@ type phpObservedMarker struct {
 	PreviousDeploymentID int64  `json:"previous_deployment_id,omitempty"`
 	ResolvedRevision     string `json:"resolved_revision"`
 	ReleasePath          string `json:"release_path"`
+	EnvironmentPath      string `json:"environment_path"`
+}
+
+type phpCandidateMarker struct {
+	ApplicationID    int64  `json:"application_id"`
+	SiteID           int64  `json:"site_id"`
+	DeploymentID     int64  `json:"deployment_id"`
+	DesiredRevision  int64  `json:"desired_revision"`
+	ResolvedRevision string `json:"resolved_revision"`
 }
 
 func NewPHPApplicationProvisioner(opts PHPApplicationProvisionerOptions) *PHPApplicationProvisioner {
@@ -280,22 +289,35 @@ func phpComposerCommands(spec types.PHPApplicationSpec, release string) [][]stri
 	return commands
 }
 
+type composerAuditReport struct {
+	summary    string
+	advisories int
+	abandoned  int
+}
+
 func parseComposerAudit(data []byte) (string, error) {
+	report, err := parseComposerAuditReport(data)
+	return report.summary, err
+}
+
+func parseComposerAuditReport(data []byte) (composerAuditReport, error) {
 	var document map[string]json.RawMessage
 	if err := json.Unmarshal(data, &document); err != nil {
-		return "", errors.New("Composer audit returned malformed JSON")
+		return composerAuditReport{}, errors.New("Composer audit returned malformed JSON")
 	}
 	raw, exists := document["advisories"]
 	if !exists {
-		return "", errors.New("Composer audit response is incomplete")
+		return composerAuditReport{}, errors.New("Composer audit response is incomplete")
 	}
 	var advisories map[string][]map[string]any
 	if err := json.Unmarshal(raw, &advisories); err != nil {
-		return "", errors.New("Composer audit advisories are malformed")
+		return composerAuditReport{}, errors.New("Composer audit advisories are malformed")
 	}
 	counts := make(map[string]int)
+	totalAdvisories := 0
 	for _, packageAdvisories := range advisories {
 		for _, advisory := range packageAdvisories {
+			totalAdvisories++
 			severity, _ := advisory["severity"].(string)
 			severity = strings.ToLower(strings.TrimSpace(severity))
 			if severity == "" {
@@ -304,7 +326,7 @@ func parseComposerAudit(data []byte) (string, error) {
 			counts[severity]++
 			encoded, _ := json.Marshal(advisory)
 			if severity == "high" || severity == "critical" || strings.Contains(strings.ToLower(string(encoded)), "malware") {
-				return "", errors.New("Composer audit found a blocking security advisory")
+				return composerAuditReport{}, errors.New("Composer audit found a blocking security advisory")
 			}
 		}
 	}
@@ -333,9 +355,35 @@ func parseComposerAudit(data []byte) (string, error) {
 		parts = append(parts, "abandoned="+strconv.Itoa(abandoned))
 	}
 	if len(parts) == 0 {
-		return "clean", nil
+		return composerAuditReport{summary: "clean"}, nil
 	}
-	return strings.Join(parts, ", "), nil
+	return composerAuditReport{summary: strings.Join(parts, ", "), advisories: totalAdvisories, abandoned: abandoned}, nil
+}
+
+func evaluateComposerAudit(data []byte, executionErr error) (string, error) {
+	report, err := parseComposerAuditReport(data)
+	if err != nil {
+		return "", err
+	}
+	if executionErr == nil {
+		return report.summary, nil
+	}
+	type exitCoder interface{ ExitCode() int }
+	var coder exitCoder
+	if !errors.As(executionErr, &coder) {
+		return "", errors.New("Composer audit execution failed")
+	}
+	expected := 0
+	if report.advisories > 0 {
+		expected |= 1
+	}
+	if report.abandoned > 0 {
+		expected |= 2
+	}
+	if code := coder.ExitCode(); code < 1 || code > 3 || code != expected {
+		return "", errors.New("Composer audit execution failed with an unexplained status")
+	}
+	return report.summary, nil
 }
 
 func renderPHPEnvironmentFile(environment []types.PHPEnvironmentPayload) (string, error) {
@@ -400,20 +448,13 @@ func renderPHPWorkerUnit(spec types.PHPApplicationSpec, worker types.PHPWorker, 
 	for index := range arguments {
 		arguments[index] = systemdQuoteArgument(arguments[index])
 	}
-	memory := spec.Policy.Resources.MemoryMB
-	if memory <= 0 {
-		memory = 256
-	}
-	tasks := spec.Policy.Resources.MaxTasks
-	if tasks <= 0 {
-		tasks = 64
-	}
 	return fmt.Sprintf(`[Unit]
 Description=Nakpanel PHP worker %d for site %d
 After=network.target nakpanel-php-fpm@%d.service
 
 [Service]
 Type=simple
+Slice=%s
 User=%s
 Group=%s
 WorkingDirectory=%s
@@ -426,15 +467,35 @@ PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=%s
-MemoryMax=%dM
-CPUQuota=%d%%
-TasksMax=%d
 TimeoutStopSec=30s
 
 [Install]
 WantedBy=multi-user.target
-`, worker.ID, spec.SiteID, spec.SiteID, spec.Username, spec.Username, release, environmentFile,
-		strings.Join(arguments, " "), filepath.Join(filepath.Dir(filepath.Dir(release)), "shared"), memory, effectivePHPCPUPercent(spec.Policy.Resources.CPUPercent), tasks), nil
+`, worker.ID, spec.SiteID, spec.SiteID, phpApplicationSliceName(spec.ApplicationID), spec.Username, spec.Username, release, environmentFile,
+		strings.Join(arguments, " "), filepath.Join(filepath.Dir(filepath.Dir(release)), "shared")), nil
+}
+
+func phpApplicationSliceName(applicationID int64) string {
+	return fmt.Sprintf("nakpanel-php-app-%d.slice", applicationID)
+}
+
+func renderPHPApplicationSlice(spec types.PHPApplicationSpec) string {
+	memory := spec.Policy.Resources.MemoryMB
+	if memory <= 0 {
+		memory = 512
+	}
+	tasks := spec.Policy.Resources.MaxTasks
+	if tasks <= 0 {
+		tasks = 128
+	}
+	return fmt.Sprintf(`[Unit]
+Description=Nakpanel aggregate PHP runtime limits for application %d
+
+[Slice]
+MemoryMax=%dM
+CPUQuota=%d%%
+TasksMax=%d
+`, spec.ApplicationID, memory, effectivePHPCPUPercent(spec.Policy.Resources.CPUPercent), tasks)
 }
 
 func systemdQuoteArgument(value string) string {
@@ -589,6 +650,9 @@ func (p *PHPApplicationProvisioner) DeployPHPRelease(ctx context.Context, req ty
 			PreviousDeploymentID: existing.PreviousDeploymentID, HealthMessage: "already active", Changed: false,
 		}, nil
 	}
+	if err := p.resetCandidateArtifacts(ctx, spec, req.Deployment.ID, req.Environment); err != nil {
+		return result, err
+	}
 
 	_ = os.RemoveAll(paths.candidateRelease)
 	if err := os.MkdirAll(paths.releaseRoot, 0o710); err != nil {
@@ -597,6 +661,13 @@ func (p *PHPApplicationProvisioner) DeployPHPRelease(ctx context.Context, req ty
 	if err := p.prepareReleaseRoot(ctx, spec, paths.releaseRoot, req.Environment); err != nil {
 		return result, err
 	}
+	defer func() {
+		if err != nil {
+			if _, markerErr := p.readMarker(spec.ApplicationID); markerErr != nil {
+				_ = p.revokeManagedWebAccess(context.Background(), spec, req.Environment)
+			}
+		}
+	}()
 	defer func() {
 		_ = os.RemoveAll(paths.candidateRelease)
 		p.removeCandidateArtifacts(spec, req.Deployment.ID)
@@ -625,16 +696,25 @@ func (p *PHPApplicationProvisioner) DeployPHPRelease(ctx context.Context, req ty
 	if err := p.makeReleaseImmutable(ctx, spec, paths.candidateRelease, req.Environment); err != nil {
 		return result, err
 	}
-	environmentPath, err := p.writeEnvironment(spec, req.Environment)
+	environmentPath, err := p.writeEnvironment(spec, req.Deployment.ID, req.Environment)
 	if err != nil {
 		return result, err
 	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		active, markerErr := p.readMarker(spec.ApplicationID)
+		if markerErr != nil || active.EnvironmentPath != environmentPath {
+			_ = os.Remove(environmentPath)
+		}
+	}()
 	port, releasePort, err := p.reserveCandidatePort(req.Deployment.ID)
 	if err != nil {
 		return result, err
 	}
 	defer releasePort()
-	if err := p.startCandidate(ctx, spec, req.Deployment.ID, paths.candidateRelease, environmentPath, port, req.Environment); err != nil {
+	if err := p.startCandidate(ctx, spec, req.Deployment.ID, resolved, paths.candidateRelease, environmentPath, port, req.Environment); err != nil {
 		return result, err
 	}
 	if _, statErr := os.Lstat(paths.release); statErr == nil {
@@ -654,16 +734,19 @@ func (p *PHPApplicationProvisioner) DeployPHPRelease(ctx context.Context, req ty
 	marker := phpObservedMarker{
 		ApplicationID: spec.ApplicationID, SiteID: spec.SiteID, DesiredRevision: spec.DesiredRevision,
 		ActiveDeploymentID: req.Deployment.ID, PreviousDeploymentID: req.Deployment.PreviousDeploymentID,
-		ResolvedRevision: resolved, ReleasePath: paths.release,
+		ResolvedRevision: resolved, ReleasePath: paths.release, EnvironmentPath: environmentPath,
 	}
 	if err := p.activateRelease(ctx, spec, marker, environmentPath, req.Environment); err != nil {
 		return result, err
 	}
 	keepFailedRelease = true
-	if err := p.reconcileWorkersForActive(ctx, spec, spec.Workers, req.Environment, paths.release); err != nil {
+	if err := p.reconcileWorkersForActive(ctx, spec, spec.Workers, req.Environment, environmentPath, paths.release); err != nil {
 		return result, err
 	}
 	if err := p.pruneReleases(paths.releaseRoot, spec.ReleaseRetention, marker.ActiveDeploymentID, marker.PreviousDeploymentID); err != nil {
+		return result, err
+	}
+	if err := p.pruneEnvironments(spec.ApplicationID, marker.ActiveDeploymentID, marker.PreviousDeploymentID); err != nil {
 		return result, err
 	}
 	return types.DeployPHPReleaseResult{
@@ -816,7 +899,45 @@ func (p *PHPApplicationProvisioner) prepareSharedPaths(ctx context.Context, spec
 	if err != nil {
 		return redactPHPError(fmt.Errorf("set shared path ownership: %w: %s", err, strings.TrimSpace(string(output))), environment)
 	}
+	return p.grantSharedWebAccess(ctx, spec, sharedRoot, environment)
+}
+
+func (p *PHPApplicationProvisioner) grantSharedWebAccess(ctx context.Context, spec types.PHPApplicationSpec, sharedRoot string, environment []types.PHPEnvironmentPayload) error {
+	for _, relative := range spec.SharedPaths {
+		if !phpSharedPathIsPublic(spec.PublicPath, relative) {
+			continue
+		}
+		shared := filepath.Join(sharedRoot, filepath.FromSlash(relative))
+		if !site.PathWithinDir(sharedRoot, shared) {
+			return errors.New("shared web path escaped its server-derived root")
+		}
+		if err := validateManagedDirectoryPath(sharedRoot, shared); err != nil {
+			return err
+		}
+		info, err := os.Lstat(shared)
+		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("shared web path is missing or unsafe")
+		}
+		ancestors := []string{sharedRoot}
+		for parent := filepath.Dir(shared); parent != sharedRoot; parent = filepath.Dir(parent) {
+			ancestors = append(ancestors, parent)
+		}
+		sort.Strings(ancestors)
+		if output, err := p.runner.Run(ctx, "setfacl", append([]string{"-m", "u:www-data:--x"}, ancestors...)...); err != nil {
+			return redactPHPError(fmt.Errorf("grant nginx shared path traversal: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+		if output, err := p.runner.Run(ctx, "setfacl", "-R", "-m", "u:www-data:r-X", shared); err != nil {
+			return redactPHPError(fmt.Errorf("grant nginx shared content access: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+		if output, err := p.runner.Run(ctx, "setfacl", "-m", "d:u:www-data:r-X", shared); err != nil {
+			return redactPHPError(fmt.Errorf("grant nginx inherited shared content access: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+	}
 	return nil
+}
+
+func phpSharedPathIsPublic(publicPath, sharedPath string) bool {
+	return publicPath == "" || sharedPath == publicPath || strings.HasPrefix(sharedPath, publicPath+"/")
 }
 
 func (p *PHPApplicationProvisioner) prepareReleaseRoot(ctx context.Context, spec types.PHPApplicationSpec, releaseRoot string, environment []types.PHPEnvironmentPayload) error {
@@ -833,6 +954,10 @@ func (p *PHPApplicationProvisioner) prepareReleaseRoot(ctx context.Context, spec
 	output, err := p.runner.Run(ctx, "chown", "root:"+spec.Username, managedRoot, releaseRoot)
 	if err != nil {
 		return redactPHPError(fmt.Errorf("prepare PHP release management roots: %w: %s", err, strings.TrimSpace(string(output))), environment)
+	}
+	output, err = p.runner.Run(ctx, "setfacl", "-m", "u:www-data:--x", managedRoot, releaseRoot)
+	if err != nil {
+		return redactPHPError(fmt.Errorf("grant nginx managed release traversal: %w: %s", err, strings.TrimSpace(string(output))), environment)
 	}
 	return nil
 }
@@ -937,12 +1062,10 @@ func (p *PHPApplicationProvisioner) runComposer(ctx context.Context, spec types.
 		args = append(args, command...)
 		output, err := p.runner.Run(ctx, "systemd-run", args...)
 		if index == len(commands)-1 {
-			summary, auditErr := parseComposerAudit(output)
+			summary, auditErr := evaluateComposerAudit(output, err)
 			if auditErr != nil {
 				return "", auditErr
 			}
-			// Composer exits nonzero when advisories exist. A parsed audit with
-			// only non-blocking severities remains a warning by policy.
 			return summary, nil
 		}
 		if err != nil {
@@ -987,23 +1110,84 @@ func (p *PHPApplicationProvisioner) makeReleaseImmutable(ctx context.Context, sp
 	return nil
 }
 
-func (p *PHPApplicationProvisioner) writeEnvironment(spec types.PHPApplicationSpec, environment []types.PHPEnvironmentPayload) (string, error) {
+func (p *PHPApplicationProvisioner) environmentPath(applicationID, deploymentID, desiredRevision int64) string {
+	return filepath.Join(p.stateRoot, "app-"+strconv.FormatInt(applicationID, 10), "environments",
+		fmt.Sprintf("deployment-%d-revision-%d.env", deploymentID, desiredRevision))
+}
+
+func (p *PHPApplicationProvisioner) writeEnvironment(spec types.PHPApplicationSpec, deploymentID int64, environment []types.PHPEnvironmentPayload) (string, error) {
+	if spec.ApplicationID <= 0 || deploymentID <= 0 || spec.DesiredRevision <= 0 {
+		return "", errors.New("PHP environment generation identity is required")
+	}
 	data, err := renderPHPEnvironmentFile(environment)
 	if err != nil {
 		return "", err
 	}
-	directory := filepath.Join(p.stateRoot, "app-"+strconv.FormatInt(spec.ApplicationID, 10))
+	path := p.environmentPath(spec.ApplicationID, deploymentID, spec.DesiredRevision)
+	directory := filepath.Dir(path)
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return "", err
 	}
 	if err := os.Chmod(directory, 0o700); err != nil {
 		return "", err
 	}
-	path := filepath.Join(directory, "runtime.env")
+	if existing, readErr := os.ReadFile(path); readErr == nil {
+		if string(existing) != data {
+			return "", errors.New("PHP environment generation is immutable")
+		}
+		return path, nil
+	} else if !os.IsNotExist(readErr) {
+		return "", readErr
+	}
 	if err := writeFileAtomic(path, []byte(data), 0o600); err != nil {
 		return "", err
 	}
 	return path, nil
+}
+
+func (p *PHPApplicationProvisioner) pruneEnvironments(applicationID int64, protectedDeployments ...int64) error {
+	directory := filepath.Dir(p.environmentPath(applicationID, 1, 1))
+	entries, err := os.ReadDir(directory)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	protected := make(map[int64]struct{}, len(protectedDeployments))
+	for _, deploymentID := range protectedDeployments {
+		if deploymentID > 0 {
+			protected[deploymentID] = struct{}{}
+		}
+	}
+	pattern := regexp.MustCompile(`^deployment-([1-9][0-9]*)-revision-[1-9][0-9]*\.env$`)
+	for _, entry := range entries {
+		match := pattern.FindStringSubmatch(entry.Name())
+		if entry.IsDir() || len(match) != 2 {
+			continue
+		}
+		deploymentID, _ := strconv.ParseInt(match[1], 10, 64)
+		if _, keep := protected[deploymentID]; keep {
+			continue
+		}
+		if err := os.Remove(filepath.Join(directory, entry.Name())); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *PHPApplicationProvisioner) validEnvironmentPath(spec types.PHPApplicationSpec, deploymentID int64, environmentPath string) bool {
+	directory := filepath.Dir(p.environmentPath(spec.ApplicationID, 1, 1))
+	if !site.PathWithinDir(directory, environmentPath) {
+		return false
+	}
+	pattern := regexp.MustCompile(fmt.Sprintf(`^deployment-%d-revision-[1-9][0-9]*\.env$`, deploymentID))
+	if !pattern.MatchString(filepath.Base(environmentPath)) {
+		return false
+	}
+	info, err := os.Lstat(environmentPath)
+	return err == nil && info.Mode().IsRegular() && info.Mode()&os.ModeSymlink == 0 && info.Mode().Perm() == 0o600
 }
 
 func phpCandidatePort(deploymentID int64) int {
@@ -1029,7 +1213,70 @@ func (p *PHPApplicationProvisioner) reserveCandidatePort(deploymentID int64) (in
 	return 0, nil, errors.New("no managed PHP candidate ports are available")
 }
 
-func (p *PHPApplicationProvisioner) startCandidate(ctx context.Context, spec types.PHPApplicationSpec, deploymentID int64, release, environmentPath string, port int, environment []types.PHPEnvironmentPayload) error {
+func (p *PHPApplicationProvisioner) candidateMarkerPath(applicationID, deploymentID int64) string {
+	return filepath.Join(p.stateRoot, "app-"+strconv.FormatInt(applicationID, 10),
+		"candidate-"+strconv.FormatInt(deploymentID, 10), "candidate.json")
+}
+
+func (p *PHPApplicationProvisioner) readCandidateMarker(applicationID, deploymentID int64) (phpCandidateMarker, error) {
+	var marker phpCandidateMarker
+	data, err := os.ReadFile(p.candidateMarkerPath(applicationID, deploymentID))
+	if err != nil {
+		return marker, err
+	}
+	if err := json.Unmarshal(data, &marker); err != nil {
+		return marker, err
+	}
+	return marker, nil
+}
+
+func (p *PHPApplicationProvisioner) resetCandidateArtifacts(ctx context.Context, spec types.PHPApplicationSpec, deploymentID int64, environment []types.PHPEnvironmentPayload) error {
+	siteConfigMutationMu.Lock()
+	defer siteConfigMutationMu.Unlock()
+	unitName := fmt.Sprintf("nakpanel-php-fpm-candidate@%d-%d.service", spec.SiteID, deploymentID)
+	unitPath := filepath.Join(p.systemdUnitDir, unitName)
+	nginxPath := filepath.Join(p.nginxCandidateDir, fmt.Sprintf("90-nakpanel-php-candidate-%d-%d.conf", spec.SiteID, deploymentID))
+	_, unitErr := os.Lstat(unitPath)
+	unitExists := unitErr == nil
+	if unitErr != nil && !os.IsNotExist(unitErr) {
+		return unitErr
+	}
+	_, nginxErr := os.Lstat(nginxPath)
+	nginxExists := nginxErr == nil
+	if nginxErr != nil && !os.IsNotExist(nginxErr) {
+		return nginxErr
+	}
+	if unitExists {
+		output, err := p.runner.Run(ctx, "systemctl", "disable", "--now", unitName)
+		if err != nil {
+			return redactPHPError(fmt.Errorf("stop stale PHP release candidate: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+	}
+	for _, path := range []string{unitPath, nginxPath, filepath.Join(p.phpRunDir, fmt.Sprintf("candidate-%d-%d.sock", spec.SiteID, deploymentID))} {
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if err := os.RemoveAll(filepath.Dir(p.candidateMarkerPath(spec.ApplicationID, deploymentID))); err != nil {
+		return err
+	}
+	if unitExists {
+		if output, err := p.runner.Run(ctx, "systemctl", "daemon-reload"); err != nil {
+			return redactPHPError(fmt.Errorf("reload units after stale PHP candidate cleanup: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+	}
+	if nginxExists {
+		if output, err := p.runner.Run(ctx, "nginx", "-t"); err != nil {
+			return redactPHPError(fmt.Errorf("validate nginx after stale PHP candidate cleanup: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+		if output, err := p.runner.Run(ctx, "systemctl", "reload", "nginx"); err != nil {
+			return redactPHPError(fmt.Errorf("reload nginx after stale PHP candidate cleanup: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+	}
+	return nil
+}
+
+func (p *PHPApplicationProvisioner) startCandidate(ctx context.Context, spec types.PHPApplicationSpec, deploymentID int64, resolvedRevision, release, environmentPath string, port int, environment []types.PHPEnvironmentPayload) error {
 	siteConfigMutationMu.Lock()
 	defer siteConfigMutationMu.Unlock()
 	if port < 31000 || port > 31999 {
@@ -1045,6 +1292,17 @@ func (p *PHPApplicationProvisioner) startCandidate(ctx context.Context, spec typ
 	unitPath := filepath.Join(p.systemdUnitDir, unitName)
 	nginxPath := filepath.Join(p.nginxCandidateDir, fmt.Sprintf("90-nakpanel-php-candidate-%d-%d.conf", spec.SiteID, deploymentID))
 	documentRoot := phpDocumentRoot(release, spec.PublicPath)
+	marker := phpCandidateMarker{
+		ApplicationID: spec.ApplicationID, SiteID: spec.SiteID, DeploymentID: deploymentID,
+		DesiredRevision: spec.DesiredRevision, ResolvedRevision: resolvedRevision,
+	}
+	markerData, err := json.Marshal(marker)
+	if err != nil {
+		return err
+	}
+	if err := writeFileAtomic(p.candidateMarkerPath(spec.ApplicationID, deploymentID), append(markerData, '\n'), 0o600); err != nil {
+		return err
+	}
 	if err := writeFileAtomic(fpmConfig, []byte(renderManagedFPMConfig(spec, documentRoot, socket)), 0o600); err != nil {
 		return err
 	}
@@ -1069,6 +1327,10 @@ func (p *PHPApplicationProvisioner) startCandidate(ctx context.Context, spec typ
 	}
 	if err := p.probeThree(ctx, fmt.Sprintf("http://127.0.0.1:%d%s", port, spec.HealthPath), spec.Domain); err != nil {
 		return fmt.Errorf("PHP release candidate failed readiness: %w", err)
+	}
+	observed, err := p.readCandidateMarker(spec.ApplicationID, deploymentID)
+	if err != nil || observed != marker {
+		return errors.New("PHP release candidate generation marker changed during readiness checks")
 	}
 	return nil
 }
@@ -1146,7 +1408,8 @@ func (p *PHPApplicationProvisioner) activateRelease(ctx context.Context, spec ty
 	resolvedHome, homeErr := filepath.EvalSymlinks(p.homeRoot)
 	if marker.ApplicationID != spec.ApplicationID || marker.SiteID != spec.SiteID || marker.ActiveDeploymentID <= 0 ||
 		homeErr != nil || !phpResolvedRefRE.MatchString(marker.ResolvedRevision) ||
-		!site.PathWithinDir(filepath.Join(resolvedHome, spec.Username, "domains", spec.Domain, ".nakpanel", "releases"), marker.ReleasePath) {
+		!site.PathWithinDir(filepath.Join(resolvedHome, spec.Username, "domains", spec.Domain, ".nakpanel", "releases"), marker.ReleasePath) ||
+		marker.EnvironmentPath != environmentPath || !p.validEnvironmentPath(spec, marker.ActiveDeploymentID, environmentPath) {
 		return errors.New("active PHP release marker is invalid")
 	}
 	info, err := os.Lstat(marker.ReleasePath)
@@ -1160,8 +1423,9 @@ func (p *PHPApplicationProvisioner) activateRelease(ctx context.Context, spec ty
 	fpmConfig := filepath.Join(p.phpConfigDir, strconv.FormatInt(spec.SiteID, 10)+".conf")
 	unitName := fmt.Sprintf("nakpanel-php-fpm@%d.service", spec.SiteID)
 	unitPath := filepath.Join(p.systemdUnitDir, unitName)
+	slicePath := filepath.Join(p.systemdUnitDir, phpApplicationSliceName(spec.ApplicationID))
 	nginxPath := filepath.Join(p.nginxAvailableDir, spec.Domain+".conf")
-	paths := []string{fpmConfig, unitPath, nginxPath, p.markerPath(spec.ApplicationID)}
+	paths := []string{fpmConfig, unitPath, slicePath, nginxPath, p.markerPath(spec.ApplicationID)}
 	snapshots, err := snapshotFiles(paths)
 	if err != nil {
 		return err
@@ -1195,6 +1459,9 @@ func (p *PHPApplicationProvisioner) activateRelease(ctx context.Context, spec ty
 	}
 	if err := writeFileAtomic(fpmConfig, []byte(renderManagedFPMConfig(spec, documentRoot, filepath.Join(p.phpRunDir, fmt.Sprintf("site-%d.sock", spec.SiteID)))), 0o600); err != nil {
 		return err
+	}
+	if err := writeFileAtomic(slicePath, []byte(renderPHPApplicationSlice(spec)), 0o644); err != nil {
+		return rollback(err)
 	}
 	if err := writeFileAtomic(unitPath, []byte(renderManagedFPMUnit(spec, fpmConfig, environmentPath, marker.ReleasePath, filepath.Join(p.phpRunDir, fmt.Sprintf("site-%d.sock", spec.SiteID)), false)), 0o644); err != nil {
 		return rollback(err)
@@ -1286,8 +1553,11 @@ func renderManagedFPMUnit(spec types.PHPApplicationSpec, fpmConfig, environmentF
 		tasks = 128
 	}
 	description := fmt.Sprintf("Nakpanel managed PHP-FPM for site %d", spec.SiteID)
+	slice := ""
 	if candidate {
 		description += " candidate"
+	} else {
+		slice = "Slice=" + phpApplicationSliceName(spec.ApplicationID) + "\n"
 	}
 	return fmt.Sprintf(`[Unit]
 Description=%s
@@ -1295,7 +1565,7 @@ After=network.target
 
 [Service]
 Type=simple
-EnvironmentFile=%s
+%sEnvironmentFile=%s
 ExecStartPre=/usr/sbin/php-fpm%s -t -y %s
 ExecStart=/usr/sbin/php-fpm%s --nodaemonize -y %s
 Restart=on-failure
@@ -1314,7 +1584,7 @@ TasksMax=%d
 
 [Install]
 WantedBy=multi-user.target
-`, description, environmentFile, spec.PHPVersion, fpmConfig, spec.PHPVersion, fpmConfig,
+`, description, slice, environmentFile, spec.PHPVersion, fpmConfig, spec.PHPVersion, fpmConfig,
 		filepath.Join(filepath.Dir(filepath.Dir(release)), "shared"), "/var/log/php-fpm", filepath.Dir(socket), memory,
 		effectivePHPCPUPercent(spec.Policy.Resources.CPUPercent), tasks)
 }
@@ -1487,15 +1757,24 @@ func (p *PHPApplicationProvisioner) RollbackPHPRelease(ctx context.Context, req 
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return types.RollbackPHPReleaseResult{}, errors.New("rollback release is missing or unsafe")
 	}
+	if err := p.prepareReleaseRoot(ctx, spec, paths.releaseRoot, req.Environment); err != nil {
+		return types.RollbackPHPReleaseResult{}, err
+	}
+	if err := p.grantSharedWebAccess(ctx, spec, paths.sharedRoot, req.Environment); err != nil {
+		return types.RollbackPHPReleaseResult{}, err
+	}
+	if err := p.makeReleaseImmutable(ctx, spec, paths.release, req.Environment); err != nil {
+		return types.RollbackPHPReleaseResult{}, err
+	}
 	current, _ := p.readMarker(spec.ApplicationID)
-	environmentPath, err := p.writeEnvironment(spec, req.Environment)
+	environmentPath, err := p.writeEnvironment(spec, req.TargetDeployment.ID, req.Environment)
 	if err != nil {
 		return types.RollbackPHPReleaseResult{}, err
 	}
 	marker := phpObservedMarker{
 		ApplicationID: spec.ApplicationID, SiteID: spec.SiteID, DesiredRevision: spec.DesiredRevision,
 		ActiveDeploymentID: req.TargetDeployment.ID, PreviousDeploymentID: current.ActiveDeploymentID,
-		ResolvedRevision: req.TargetDeployment.ResolvedRevision, ReleasePath: paths.release,
+		ResolvedRevision: req.TargetDeployment.ResolvedRevision, ReleasePath: paths.release, EnvironmentPath: environmentPath,
 	}
 	if current.ActiveDeploymentID == marker.ActiveDeploymentID && current.DesiredRevision == marker.DesiredRevision {
 		return types.RollbackPHPReleaseResult{DeploymentID: req.DeploymentID, ActiveDeploymentID: marker.ActiveDeploymentID, ResolvedRevision: marker.ResolvedRevision, HealthMessage: "already active"}, nil
@@ -1503,7 +1782,7 @@ func (p *PHPApplicationProvisioner) RollbackPHPRelease(ctx context.Context, req 
 	if err := p.activateRelease(ctx, spec, marker, environmentPath, req.Environment); err != nil {
 		return types.RollbackPHPReleaseResult{}, err
 	}
-	if err := p.reconcileWorkersForActive(ctx, spec, spec.Workers, req.Environment, paths.release); err != nil {
+	if err := p.reconcileWorkersForActive(ctx, spec, spec.Workers, req.Environment, environmentPath, paths.release); err != nil {
 		return types.RollbackPHPReleaseResult{}, err
 	}
 	return types.RollbackPHPReleaseResult{DeploymentID: req.DeploymentID, ActiveDeploymentID: marker.ActiveDeploymentID, ResolvedRevision: marker.ResolvedRevision, HealthMessage: "healthy", Changed: true}, nil
@@ -1523,6 +1802,9 @@ func (p *PHPApplicationProvisioner) ReconcilePHPApplication(ctx context.Context,
 		if err := p.stopApplicationWorkers(ctx, spec.ApplicationID, nil, req.Environment); err != nil {
 			return types.ReconcilePHPApplicationResult{}, err
 		}
+		if err := p.revokeManagedWebAccess(ctx, spec, req.Environment); err != nil {
+			return types.ReconcilePHPApplicationResult{}, err
+		}
 		return types.ReconcilePHPApplicationResult{ApplicationID: spec.ApplicationID, ObservedState: "classic", Message: "Classic Hosting remains active"}, nil
 	}
 	if spec.DesiredState == "suspended" {
@@ -1534,6 +1816,9 @@ func (p *PHPApplicationProvisioner) ReconcilePHPApplication(ctx context.Context,
 			return types.ReconcilePHPApplicationResult{}, redactPHPError(fmt.Errorf("stop managed PHP-FPM: %w: %s", err, strings.TrimSpace(string(output))), req.Environment)
 		}
 		if err := p.stopApplicationWorkers(ctx, spec.ApplicationID, nil, req.Environment); err != nil {
+			return types.ReconcilePHPApplicationResult{}, err
+		}
+		if err := p.revokeManagedWebAccess(ctx, spec, req.Environment); err != nil {
 			return types.ReconcilePHPApplicationResult{}, err
 		}
 		return types.ReconcilePHPApplicationResult{ApplicationID: spec.ApplicationID, ObservedState: "suspended", Changed: true}, nil
@@ -1556,10 +1841,16 @@ func (p *PHPApplicationProvisioner) ReconcilePHPApplication(ctx context.Context,
 	if err != nil {
 		return types.ReconcilePHPApplicationResult{}, err
 	}
+	if err := p.prepareReleaseRoot(ctx, normalized, paths.releaseRoot, req.Environment); err != nil {
+		return types.ReconcilePHPApplicationResult{}, err
+	}
+	if err := p.grantSharedWebAccess(ctx, normalized, paths.sharedRoot, req.Environment); err != nil {
+		return types.ReconcilePHPApplicationResult{}, err
+	}
 	if err := p.makeReleaseImmutable(ctx, normalized, paths.release, req.Environment); err != nil {
 		return types.ReconcilePHPApplicationResult{}, err
 	}
-	environmentPath, err := p.writeEnvironment(normalized, req.Environment)
+	environmentPath, err := p.writeEnvironment(normalized, deployment.ID, req.Environment)
 	if err != nil {
 		return types.ReconcilePHPApplicationResult{}, err
 	}
@@ -1570,7 +1861,7 @@ func (p *PHPApplicationProvisioner) ReconcilePHPApplication(ctx context.Context,
 	marker := phpObservedMarker{
 		ApplicationID: spec.ApplicationID, SiteID: spec.SiteID, DesiredRevision: spec.DesiredRevision,
 		ActiveDeploymentID: deployment.ID, PreviousDeploymentID: previousID,
-		ResolvedRevision: deployment.ResolvedRevision, ReleasePath: paths.release,
+		ResolvedRevision: deployment.ResolvedRevision, ReleasePath: paths.release, EnvironmentPath: environmentPath,
 	}
 	current, markerErr := p.readMarker(spec.ApplicationID)
 	changed := markerErr != nil || current != marker
@@ -1578,6 +1869,68 @@ func (p *PHPApplicationProvisioner) ReconcilePHPApplication(ctx context.Context,
 		return types.ReconcilePHPApplicationResult{}, err
 	}
 	return types.ReconcilePHPApplicationResult{ApplicationID: spec.ApplicationID, ActiveDeploymentID: deployment.ID, ObservedState: "healthy", Message: "managed PHP release converged", Changed: changed}, nil
+}
+
+func (p *PHPApplicationProvisioner) revokeManagedWebAccess(ctx context.Context, spec types.PHPApplicationSpec, environment []types.PHPEnvironmentPayload) error {
+	marker, markerErr := p.readMarker(spec.ApplicationID)
+	if markerErr == nil && marker.ReleasePath != "" {
+		if output, err := p.runner.Run(ctx, "setfacl", "-R", "-x", "u:www-data", marker.ReleasePath); err != nil {
+			return redactPHPError(fmt.Errorf("revoke nginx release access: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+	}
+	resolvedHome, err := filepath.EvalSymlinks(p.homeRoot)
+	if err != nil {
+		return err
+	}
+	domainRoot := filepath.Join(resolvedHome, spec.Username, "domains", spec.Domain)
+	managedRoot := filepath.Join(domainRoot, ".nakpanel")
+	releaseRoot := filepath.Join(managedRoot, "releases")
+	sharedRoot := filepath.Join(managedRoot, "shared")
+	if _, err := os.Lstat(managedRoot); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, relative := range spec.SharedPaths {
+		if !phpSharedPathIsPublic(spec.PublicPath, relative) {
+			continue
+		}
+		shared := filepath.Join(sharedRoot, filepath.FromSlash(relative))
+		if _, err := os.Lstat(shared); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return err
+		}
+		if output, err := p.runner.Run(ctx, "setfacl", "-R", "-x", "u:www-data", shared); err != nil {
+			return redactPHPError(fmt.Errorf("revoke nginx shared content access: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+		if output, err := p.runner.Run(ctx, "setfacl", "-x", "d:u:www-data", shared); err != nil {
+			return redactPHPError(fmt.Errorf("revoke nginx inherited shared access: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+		var ancestors []string
+		for parent := filepath.Dir(shared); parent != sharedRoot; parent = filepath.Dir(parent) {
+			ancestors = append(ancestors, parent)
+		}
+		if len(ancestors) > 0 {
+			sort.Strings(ancestors)
+			if output, err := p.runner.Run(ctx, "setfacl", append([]string{"-x", "u:www-data"}, ancestors...)...); err != nil {
+				return redactPHPError(fmt.Errorf("revoke nginx shared path traversal: %w: %s", err, strings.TrimSpace(string(output))), environment)
+			}
+		}
+	}
+	if _, err := os.Lstat(releaseRoot); err == nil {
+		if output, err := p.runner.Run(ctx, "setfacl", "-x", "u:www-data", managedRoot, releaseRoot); err != nil {
+			return redactPHPError(fmt.Errorf("revoke nginx managed release traversal: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+	}
+	if _, err := os.Lstat(sharedRoot); err == nil {
+		if output, err := p.runner.Run(ctx, "setfacl", "-x", "u:www-data", sharedRoot); err != nil {
+			return redactPHPError(fmt.Errorf("revoke nginx shared root traversal: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+	}
+	return nil
 }
 
 func (p *PHPApplicationProvisioner) ReconcilePHPWorkers(ctx context.Context, req types.ReconcilePHPWorkersReq) (types.ReconcilePHPWorkersResult, error) {
@@ -1604,14 +1957,14 @@ func (p *PHPApplicationProvisioner) ReconcilePHPWorkers(ctx context.Context, req
 	if err != nil || marker.ActiveDeploymentID <= 0 {
 		return types.ReconcilePHPWorkersResult{}, errors.New("PHP workers require a healthy active release")
 	}
-	environmentPath, err := p.writeEnvironment(normalized, req.Environment)
-	if err != nil {
-		return types.ReconcilePHPWorkersResult{}, err
+	environmentPath := marker.EnvironmentPath
+	if !p.validEnvironmentPath(normalized, marker.ActiveDeploymentID, environmentPath) {
+		return types.ReconcilePHPWorkersResult{}, errors.New("active PHP environment generation is missing or unsafe")
 	}
 	return p.reconcileWorkerRecords(ctx, normalized, req.Workers, req.Environment, environmentPath, marker.ReleasePath)
 }
 
-func (p *PHPApplicationProvisioner) reconcileWorkersForActive(ctx context.Context, spec types.PHPApplicationSpec, workers []types.PHPWorkerSpec, environment []types.PHPEnvironmentPayload, release string) error {
+func (p *PHPApplicationProvisioner) reconcileWorkersForActive(ctx context.Context, spec types.PHPApplicationSpec, workers []types.PHPWorkerSpec, environment []types.PHPEnvironmentPayload, environmentPath, release string) error {
 	if len(workers) == 0 {
 		return p.stopApplicationWorkers(ctx, spec.ApplicationID, nil, environment)
 	}
@@ -1622,11 +1975,7 @@ func (p *PHPApplicationProvisioner) reconcileWorkersForActive(ctx context.Contex
 			Name: worker.Name, Script: worker.Script, Arguments: worker.Arguments, Processes: worker.Processes, DesiredState: worker.DesiredState,
 		})
 	}
-	environmentPath, err := p.writeEnvironment(spec, environment)
-	if err != nil {
-		return err
-	}
-	_, err = p.reconcileWorkerRecords(ctx, spec, converted, environment, environmentPath, release)
+	_, err := p.reconcileWorkerRecords(ctx, spec, converted, environment, environmentPath, release)
 	return err
 }
 
@@ -1656,10 +2005,15 @@ func (p *PHPApplicationProvisioner) reconcileWorkerRecords(ctx context.Context, 
 	if !spec.Policy.Permissions.PHPWorkers || (spec.Policy.Resources.MaxPHPWorkers >= 0 && total > spec.Policy.Resources.MaxPHPWorkers) {
 		return result, errors.New("PHP worker process count exceeds the subscription policy")
 	}
-	previous, _ := p.readWorkerState(spec.ApplicationID)
-	if err := p.stopApplicationWorkers(ctx, spec.ApplicationID, requested, environment); err != nil {
+	slicePath := filepath.Join(p.systemdUnitDir, phpApplicationSliceName(spec.ApplicationID))
+	if err := writeFileAtomic(slicePath, []byte(renderPHPApplicationSlice(spec)), 0o644); err != nil {
 		return result, err
 	}
+	type desiredWorkerUnit struct {
+		name  string
+		state string
+	}
+	var desired []desiredWorkerUnit
 	for _, worker := range workers {
 		scriptPath := filepath.Join(release, filepath.FromSlash(worker.Script))
 		resolvedScript, resolveErr := filepath.EvalSymlinks(scriptPath)
@@ -1681,17 +2035,12 @@ func (p *PHPApplicationProvisioner) reconcileWorkerRecords(ctx context.Context, 
 			if err := writeFileAtomic(unitPath, []byte(unit), 0o644); err != nil {
 				return result, err
 			}
-			command := "enable"
-			if worker.DesiredState == "stopped" {
-				command = "disable"
-			}
-			args := []string{command, "--now", unitName}
-			output, err := p.runner.Run(ctx, "systemctl", args...)
-			if err != nil {
-				return result, redactPHPError(fmt.Errorf("reconcile PHP worker: %w: %s", err, strings.TrimSpace(string(output))), environment)
-			}
+			desired = append(desired, desiredWorkerUnit{name: unitName, state: worker.DesiredState})
 		}
-		matches, _ := filepath.Glob(filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-php-worker@%d*.service", worker.ID)))
+		matches, err := p.exactWorkerUnitPaths(worker.ID)
+		if err != nil {
+			return result, err
+		}
 		for _, match := range matches {
 			if _, keep := desiredUnits[filepath.Base(match)]; keep {
 				continue
@@ -1708,13 +2057,32 @@ func (p *PHPApplicationProvisioner) reconcileWorkerRecords(ctx context.Context, 
 		result.Reconciled = append(result.Reconciled, worker.ID)
 		result.Changed = true
 	}
+	previous, _ := p.readWorkerState(spec.ApplicationID)
 	for _, id := range previous {
 		if _, exists := requested[id]; !exists {
+			if _, err := p.removeExactWorkerUnits(ctx, id, environment); err != nil {
+				return result, err
+			}
 			result.Removed = append(result.Removed, id)
 		}
 	}
 	if output, err := p.runner.Run(ctx, "systemctl", "daemon-reload"); err != nil {
 		return result, redactPHPError(fmt.Errorf("reload PHP worker units: %w: %s", err, strings.TrimSpace(string(output))), environment)
+	}
+	for _, unit := range desired {
+		if unit.state == "stopped" {
+			output, err := p.runner.Run(ctx, "systemctl", "disable", "--now", unit.name)
+			if err != nil {
+				return result, redactPHPError(fmt.Errorf("stop desired-inactive PHP worker: %w: %s", err, strings.TrimSpace(string(output))), environment)
+			}
+			continue
+		}
+		if output, err := p.runner.Run(ctx, "systemctl", "enable", unit.name); err != nil {
+			return result, redactPHPError(fmt.Errorf("enable PHP worker: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
+		if output, err := p.runner.Run(ctx, "systemctl", "restart", unit.name); err != nil {
+			return result, redactPHPError(fmt.Errorf("restart PHP worker onto active release: %w: %s", err, strings.TrimSpace(string(output))), environment)
+		}
 	}
 	if err := p.writeWorkerState(spec.ApplicationID, requested); err != nil {
 		return result, err
@@ -1756,23 +2124,66 @@ func (p *PHPApplicationProvisioner) stopApplicationWorkers(ctx context.Context, 
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
+	changed := false
 	for _, id := range ids {
 		if _, exists := keep[id]; exists {
 			continue
 		}
-		matches, _ := filepath.Glob(filepath.Join(p.systemdUnitDir, fmt.Sprintf("nakpanel-php-worker@%d*.service", id)))
-		for _, match := range matches {
-			unitName := filepath.Base(match)
-			output, runErr := p.runner.Run(ctx, "systemctl", "disable", "--now", unitName)
-			if runErr != nil {
-				return redactPHPError(fmt.Errorf("stop orphaned PHP worker: %w: %s", runErr, strings.TrimSpace(string(output))), environment)
-			}
-			if err := os.Remove(match); err != nil && !os.IsNotExist(err) {
-				return err
-			}
+		removed, err := p.removeExactWorkerUnits(ctx, id, environment)
+		if err != nil {
+			return err
+		}
+		changed = changed || removed
+	}
+	if changed {
+		if output, err := p.runner.Run(ctx, "systemctl", "daemon-reload"); err != nil {
+			return redactPHPError(fmt.Errorf("reload units after PHP worker cleanup: %w: %s", err, strings.TrimSpace(string(output))), environment)
 		}
 	}
 	return nil
+}
+
+var phpWorkerUnitFileRE = regexp.MustCompile(`^nakpanel-php-worker@([1-9][0-9]*)(?:-([2-9]|[1-9][0-9]*))?\.service$`)
+
+func (p *PHPApplicationProvisioner) exactWorkerUnitPaths(workerID int64) ([]string, error) {
+	entries, err := os.ReadDir(p.systemdUnitDir)
+	if err != nil {
+		return nil, err
+	}
+	var paths []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		match := phpWorkerUnitFileRE.FindStringSubmatch(entry.Name())
+		if len(match) != 3 {
+			continue
+		}
+		id, err := strconv.ParseInt(match[1], 10, 64)
+		if err == nil && id == workerID {
+			paths = append(paths, filepath.Join(p.systemdUnitDir, entry.Name()))
+		}
+	}
+	sort.Strings(paths)
+	return paths, nil
+}
+
+func (p *PHPApplicationProvisioner) removeExactWorkerUnits(ctx context.Context, workerID int64, environment []types.PHPEnvironmentPayload) (bool, error) {
+	paths, err := p.exactWorkerUnitPaths(workerID)
+	if err != nil {
+		return false, err
+	}
+	for _, path := range paths {
+		unitName := filepath.Base(path)
+		output, runErr := p.runner.Run(ctx, "systemctl", "disable", "--now", unitName)
+		if runErr != nil {
+			return false, redactPHPError(fmt.Errorf("stop exact PHP worker unit: %w: %s", runErr, strings.TrimSpace(string(output))), environment)
+		}
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return false, err
+		}
+	}
+	return len(paths) > 0, nil
 }
 
 func phpWorkerUnitName(workerID int64, process int) string {

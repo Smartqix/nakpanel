@@ -150,6 +150,38 @@ func TestComposerAuditBlocksHighCriticalMalwareAndMalformed(t *testing.T) {
 	}
 }
 
+type composerAuditExitError int
+
+func (e composerAuditExitError) Error() string { return fmt.Sprintf("Composer exited %d", int(e)) }
+func (e composerAuditExitError) ExitCode() int { return int(e) }
+
+func TestComposerAuditExecutionStatusFailsClosed(t *testing.T) {
+	tests := []struct {
+		name   string
+		output string
+		err    error
+		ok     bool
+	}{
+		{name: "clean", output: `{"advisories":{},"abandoned":[]}`, ok: true},
+		{name: "moderate advisory status", output: `{"advisories":{"pkg":[{"severity":"moderate"}]},"abandoned":[]}`, err: composerAuditExitError(1), ok: true},
+		{name: "abandoned status", output: `{"advisories":{},"abandoned":["old/pkg"]}`, err: composerAuditExitError(2), ok: true},
+		{name: "combined status", output: `{"advisories":{"pkg":[{"severity":"low"}]},"abandoned":["old/pkg"]}`, err: composerAuditExitError(3), ok: true},
+		{name: "timeout with clean-looking JSON", output: `{"advisories":{},"abandoned":[]}`, err: errors.New("context deadline exceeded")},
+		{name: "signal with clean-looking JSON", output: `{"advisories":{},"abandoned":[]}`, err: composerAuditExitError(-1)},
+		{name: "unknown status", output: `{"advisories":{},"abandoned":[]}`, err: composerAuditExitError(4)},
+		{name: "status unexplained by JSON", output: `{"advisories":{},"abandoned":[]}`, err: composerAuditExitError(1)},
+		{name: "malformed output", output: `not-json`, err: composerAuditExitError(1)},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := evaluateComposerAudit([]byte(test.output), test.err)
+			if (err == nil) != test.ok {
+				t.Fatalf("evaluateComposerAudit error = %v, want success=%t", err, test.ok)
+			}
+		})
+	}
+}
+
 func TestRenderPHPEnvironmentAndWorkerUnitDoNotPermitInjectionOrShell(t *testing.T) {
 	environment := []types.PHPEnvironmentPayload{{Name: "APP_ENV", Value: "production"}, {Name: "APP_KEY", Secret: "secret'\nvalue"}}
 	rendered, err := renderPHPEnvironmentFile(environment)
@@ -166,7 +198,8 @@ func TestRenderPHPEnvironmentAndWorkerUnitDoNotPermitInjectionOrShell(t *testing
 		t.Fatal(err)
 	}
 	if strings.Contains(unit, "sh -c") || !strings.Contains(unit, "ExecStart=/usr/bin/php8.4 "+release+"/artisan queue:work --tries=3") ||
-		!strings.Contains(unit, "MemoryMax=") || !strings.Contains(unit, "TasksMax=") || !strings.Contains(unit, "EnvironmentFile=") ||
+		!strings.Contains(unit, "EnvironmentFile=") || !strings.Contains(unit, "Slice=nakpanel-php-app-9.slice") ||
+		strings.Contains(unit, "MemoryMax=") || strings.Contains(unit, "CPUQuota=") || strings.Contains(unit, "TasksMax=") ||
 		!strings.Contains(unit, "ReadWritePaths=/home/clientabc/domains/example.test/.nakpanel/shared") || strings.Contains(unit, "ReadWritePaths=/home/clientabc/domains/example.test/.nakpanel/releases") {
 		t.Fatalf("worker unit = %s", unit)
 	}
@@ -182,7 +215,8 @@ func TestRenderPHPEnvironmentAndWorkerUnitDoNotPermitInjectionOrShell(t *testing
 
 func TestManagedPHPFPMUnitPreservesSharedRuntimeDirectory(t *testing.T) {
 	unit := renderManagedFPMUnit(managedPHPSpec(), "/config", "/environment", "/release", "/run/nakpanel-php/site-7.sock", false)
-	if !strings.Contains(unit, "RuntimeDirectory=nakpanel-php") || !strings.Contains(unit, "RuntimeDirectoryPreserve=yes") {
+	if !strings.Contains(unit, "RuntimeDirectory=nakpanel-php") || !strings.Contains(unit, "RuntimeDirectoryPreserve=yes") ||
+		!strings.Contains(unit, "Slice=nakpanel-php-app-9.slice") {
 		t.Fatalf("shared PHP runtime directory can be removed when one site stops:\n%s", unit)
 	}
 }
@@ -388,13 +422,160 @@ func TestDeployPHPReleaseHealthGatesActivationAndRedactsSecrets(t *testing.T) {
 	if target, err := filepath.EvalSymlinks(filepath.Join(result.ReleasePath, "storage")); err != nil || target != sharedStorage {
 		t.Fatalf("release shared path target=%q err=%v", target, err)
 	}
-	if mode := mustStat(t, filepath.Join(filepath.Dir(provisioner.markerPath(spec.ApplicationID)), "runtime.env")).Mode().Perm(); mode != 0o600 {
+	if mode := mustStat(t, provisioner.environmentPath(spec.ApplicationID, request.Deployment.ID, spec.DesiredRevision)).Mode().Perm(); mode != 0o600 {
 		t.Fatalf("runtime environment mode=%o", mode)
 	}
 
 	again, err := provisioner.DeployPHPRelease(context.Background(), request)
 	if err != nil || again.Changed || probes != 6 {
 		t.Fatalf("idempotent deploy=%+v err=%v probes=%d", again, err, probes)
+	}
+}
+
+func TestPHPWebAccessACLsCoverManagedAncestorsAndPublicSharedData(t *testing.T) {
+	runner := &scriptedPHPAppRunner{}
+	provisioner, spec := newPHPApplicationTestProvisioner(t, runner, nil)
+	spec.FrameworkProfile = types.PHPFrameworkCustom
+	spec.SharedPaths = []string{"public/uploads"}
+	request := types.DeployPHPReleaseReq{Application: spec, Deployment: types.PHPDeployment{
+		ID: 22, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID, RequestedRevision: "main",
+	}}
+	result, err := provisioner.DeployPHPRelease(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	managedRoot := filepath.Dir(filepath.Dir(result.ReleasePath))
+	releaseRoot := filepath.Dir(result.ReleasePath)
+	sharedRoot := filepath.Join(managedRoot, "shared")
+	publicShared := filepath.Join(sharedRoot, "public", "uploads")
+	joined := strings.Join(runner.calls, "\n")
+	for _, want := range []string{
+		"setfacl -m u:www-data:--x " + managedRoot + " " + releaseRoot,
+		"setfacl -m u:www-data:--x " + sharedRoot + " " + filepath.Join(sharedRoot, "public"),
+		"setfacl -R -m u:www-data:r-X " + publicShared,
+		"setfacl -m d:u:www-data:r-X " + publicShared,
+		"setfacl -R -m u:www-data:r-X " + filepath.Join(releaseRoot, ".22.candidate"),
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("managed web access omitted %q:\n%s", want, joined)
+		}
+	}
+
+	runner.calls = nil
+	spec.DesiredState = "suspended"
+	if _, err := provisioner.ReconcilePHPApplication(context.Background(), types.ReconcilePHPApplicationReq{Application: spec}); err != nil {
+		t.Fatal(err)
+	}
+	joined = strings.Join(runner.calls, "\n")
+	for _, want := range []string{
+		"setfacl -R -x u:www-data " + result.ReleasePath,
+		"setfacl -x u:www-data " + managedRoot + " " + releaseRoot,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("suspension did not revoke web access %q:\n%s", want, joined)
+		}
+	}
+
+	runner.calls = nil
+	spec.DesiredState = "active"
+	active := types.PHPDeployment{
+		ID: request.Deployment.ID, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID,
+		ResolvedRevision: result.ResolvedRevision,
+	}
+	if _, err := provisioner.ReconcilePHPApplication(context.Background(), types.ReconcilePHPApplicationReq{
+		Application: spec, ActiveDeployment: &active,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	joined = strings.Join(runner.calls, "\n")
+	for _, want := range []string{
+		"setfacl -m u:www-data:--x " + managedRoot + " " + releaseRoot,
+		"setfacl -m u:www-data:--x " + sharedRoot + " " + filepath.Join(sharedRoot, "public"),
+		"setfacl -R -m u:www-data:r-X " + publicShared,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("reactivation did not restore web access %q:\n%s", want, joined)
+		}
+	}
+}
+
+func TestPHPSharedPathPublicScopeIncludesThePublicDirectoryItself(t *testing.T) {
+	for _, test := range []struct {
+		publicPath string
+		sharedPath string
+		want       bool
+	}{
+		{publicPath: "", sharedPath: "storage", want: true},
+		{publicPath: "public", sharedPath: "public", want: true},
+		{publicPath: "public", sharedPath: "public/uploads", want: true},
+		{publicPath: "public", sharedPath: "storage", want: false},
+	} {
+		if got := phpSharedPathIsPublic(test.publicPath, test.sharedPath); got != test.want {
+			t.Fatalf("phpSharedPathIsPublic(%q, %q) = %t, want %t", test.publicPath, test.sharedPath, got, test.want)
+		}
+	}
+}
+
+func TestDeployPHPReleaseResetsAndFencesStaleCandidateGeneration(t *testing.T) {
+	runner := &scriptedPHPAppRunner{}
+	probes := 0
+	markerObserved := false
+	var provisioner *PHPApplicationProvisioner
+	var spec types.PHPApplicationSpec
+	provisioner, spec = newPHPApplicationTestProvisioner(t, runner, func(context.Context, string, string) error {
+		probes++
+		if probes == 1 {
+			markerPath := provisioner.candidateMarkerPath(spec.ApplicationID, 22)
+			data, err := os.ReadFile(markerPath)
+			if err != nil || !strings.Contains(string(data), strings.Repeat("a", 40)) {
+				return fmt.Errorf("candidate marker was not fenced to the resolved revision: %v: %s", err, data)
+			}
+			markerObserved = true
+		}
+		return nil
+	})
+	unitName := "nakpanel-php-fpm-candidate@7-22.service"
+	unitPath := filepath.Join(provisioner.systemdUnitDir, unitName)
+	nginxPath := filepath.Join(provisioner.nginxCandidateDir, "90-nakpanel-php-candidate-7-22.conf")
+	statePath := filepath.Join(provisioner.stateRoot, "app-9", "candidate-22")
+	if err := os.MkdirAll(statePath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for path, content := range map[string]string{unitPath: "stale-unit", nginxPath: "stale-nginx", filepath.Join(statePath, "candidate.json"): `{"resolved_revision":"stale"}`} {
+		if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := provisioner.DeployPHPRelease(context.Background(), types.DeployPHPReleaseReq{Application: spec, Deployment: types.PHPDeployment{
+		ID: 22, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID, RequestedRevision: "main",
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(runner.calls, "\n")
+	stopAt := strings.Index(joined, "systemctl disable --now "+unitName)
+	startAt := strings.Index(joined, "systemctl start "+unitName)
+	if stopAt < 0 || startAt < 0 || stopAt > startAt || !markerObserved {
+		t.Fatalf("stale candidate was not reset/fenced before startup:\n%s", joined)
+	}
+}
+
+func TestCandidateMarkerTamperingFailsHealthGate(t *testing.T) {
+	runner := &scriptedPHPAppRunner{}
+	probes := 0
+	var provisioner *PHPApplicationProvisioner
+	var spec types.PHPApplicationSpec
+	provisioner, spec = newPHPApplicationTestProvisioner(t, runner, func(context.Context, string, string) error {
+		probes++
+		if probes == 3 {
+			return os.WriteFile(provisioner.candidateMarkerPath(spec.ApplicationID, 22), []byte(`{"application_id":9,"deployment_id":22,"resolved_revision":"tampered"}`), 0o600)
+		}
+		return nil
+	})
+	_, err := provisioner.DeployPHPRelease(context.Background(), types.DeployPHPReleaseReq{Application: spec, Deployment: types.PHPDeployment{
+		ID: 22, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID, RequestedRevision: "main",
+	}})
+	if err == nil {
+		t.Fatal("tampered candidate marker was accepted")
 	}
 }
 
@@ -429,7 +610,7 @@ func TestActivatePHPReleaseRestoresAllFilesWhenNginxReloadFails(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(paths.release, "public"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	envPath, err := provisioner.writeEnvironment(spec, nil)
+	envPath, err := provisioner.writeEnvironment(spec, 22, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -440,7 +621,7 @@ func TestActivatePHPReleaseRestoresAllFilesWhenNginxReloadFails(t *testing.T) {
 	}
 	err = provisioner.activateRelease(context.Background(), spec, phpObservedMarker{
 		ApplicationID: spec.ApplicationID, SiteID: spec.SiteID, DesiredRevision: spec.DesiredRevision,
-		ActiveDeploymentID: 22, ResolvedRevision: strings.Repeat("a", 40), ReleasePath: paths.release,
+		ActiveDeploymentID: 22, ResolvedRevision: strings.Repeat("a", 40), ReleasePath: paths.release, EnvironmentPath: envPath,
 	}, envPath, nil)
 	if err == nil {
 		t.Fatal("activation unexpectedly succeeded")
@@ -502,6 +683,73 @@ func TestActivatePHPReleaseRollsBackEveryValidationStageAndReportsRollbackFailur
 	})
 }
 
+func TestFailedSecondGenerationRestoresPreviousEnvironmentReference(t *testing.T) {
+	stages := []struct {
+		name      string
+		failure   string
+		failAfter int
+		liveProbe bool
+	}{
+		{name: "FPM validation", failure: "php-fpm8.4 -t -y", failAfter: 2},
+		{name: "daemon reload", failure: "systemctl daemon-reload", failAfter: 2},
+		{name: "FPM restart", failure: "systemctl restart nakpanel-php-fpm@7.service"},
+		{name: "nginx validation", failure: "nginx -t", failAfter: 2},
+		{name: "nginx reload", failure: "systemctl reload nginx", failAfter: 2},
+		{name: "live probe", liveProbe: true},
+	}
+	for _, stage := range stages {
+		t.Run(stage.name, func(t *testing.T) {
+			runner := &scriptedPHPAppRunner{}
+			probes := 0
+			provisioner, spec := newPHPApplicationTestProvisioner(t, runner, func(context.Context, string, string) error {
+				probes++
+				if stage.liveProbe && probes == 10 {
+					return errors.New("second generation live probe failed")
+				}
+				return nil
+			})
+			oldSecret, newSecret := "old-generation-secret", "new-generation-secret"
+			first := types.DeployPHPReleaseReq{
+				Application: spec,
+				Deployment:  types.PHPDeployment{ID: 22, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID, RequestedRevision: "main"},
+				Environment: []types.PHPEnvironmentPayload{{Name: "APP_KEY", Secret: oldSecret}},
+			}
+			if _, err := provisioner.DeployPHPRelease(context.Background(), first); err != nil {
+				t.Fatal(err)
+			}
+			oldRevision := spec.DesiredRevision
+			oldEnvironment := provisioner.environmentPath(spec.ApplicationID, 22, oldRevision)
+			spec.DesiredRevision++
+			runner.fail, runner.failAfter, runner.failHits = stage.failure, stage.failAfter, 0
+			second := types.DeployPHPReleaseReq{
+				Application: spec,
+				Deployment: types.PHPDeployment{ID: 23, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID,
+					RequestedRevision: "main", PreviousDeploymentID: 22},
+				Environment: []types.PHPEnvironmentPayload{{Name: "APP_KEY", Secret: newSecret}},
+			}
+			if _, err := provisioner.DeployPHPRelease(context.Background(), second); err == nil {
+				t.Fatal("second generation unexpectedly activated")
+			}
+			unit, err := os.ReadFile(filepath.Join(provisioner.systemdUnitDir, "nakpanel-php-fpm@7.service"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(unit), "EnvironmentFile="+oldEnvironment) || strings.Contains(string(unit), provisioner.environmentPath(spec.ApplicationID, 23, spec.DesiredRevision)) ||
+				strings.Contains(string(unit), oldSecret) || strings.Contains(string(unit), newSecret) {
+				t.Fatalf("previous environment reference was not restored:\n%s", unit)
+			}
+			oldData, err := os.ReadFile(oldEnvironment)
+			if err != nil || !strings.Contains(string(oldData), oldSecret) || strings.Contains(string(oldData), newSecret) {
+				t.Fatalf("previous environment changed: %v: %s", err, oldData)
+			}
+			marker, err := provisioner.readMarker(spec.ApplicationID)
+			if err != nil || marker.ActiveDeploymentID != 22 {
+				t.Fatalf("previous marker was not restored: %+v %v", marker, err)
+			}
+		})
+	}
+}
+
 func assertActivationRollback(t *testing.T, provisioner *PHPApplicationProvisioner, spec types.PHPApplicationSpec, environment []types.PHPEnvironmentPayload) {
 	t.Helper()
 	nginxPath := filepath.Join(provisioner.nginxAvailableDir, spec.Domain+".conf")
@@ -537,13 +785,13 @@ func activateTestRelease(t *testing.T, provisioner *PHPApplicationProvisioner, s
 	if err := os.MkdirAll(filepath.Join(paths.release, "public"), 0o750); err != nil {
 		t.Fatal(err)
 	}
-	environmentPath, err := provisioner.writeEnvironment(spec, environment)
+	environmentPath, err := provisioner.writeEnvironment(spec, 22, environment)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return provisioner.activateRelease(context.Background(), spec, phpObservedMarker{
 		ApplicationID: spec.ApplicationID, SiteID: spec.SiteID, DesiredRevision: spec.DesiredRevision,
-		ActiveDeploymentID: 22, ResolvedRevision: strings.Repeat("a", 40), ReleasePath: paths.release,
+		ActiveDeploymentID: 22, ResolvedRevision: strings.Repeat("a", 40), ReleasePath: paths.release, EnvironmentPath: environmentPath,
 	}, environmentPath, environment)
 }
 
@@ -672,7 +920,7 @@ func TestPHPSharedStorageRejectsSymlinkedManagedPaths(t *testing.T) {
 }
 
 func TestPHPWorkerReconcileBoundsDefinitionsAndRedactsServiceErrors(t *testing.T) {
-	runner := &scriptedPHPAppRunner{fail: "systemctl enable --now nakpanel-php-worker@18.service"}
+	runner := &scriptedPHPAppRunner{fail: "systemctl restart nakpanel-php-worker@18.service"}
 	provisioner, spec := newPHPApplicationTestProvisioner(t, runner, nil)
 	secret := "secret-value"
 	_, err := provisioner.DeployPHPRelease(context.Background(), types.DeployPHPReleaseReq{
@@ -694,6 +942,98 @@ func TestPHPWorkerReconcileBoundsDefinitionsAndRedactsServiceErrors(t *testing.T
 	if _, err := provisioner.reconcileWorkerRecords(context.Background(), spec, workers, nil, "/env", "/release"); err == nil {
 		t.Fatal("more than 64 worker definitions were accepted")
 	}
+}
+
+func TestPHPWorkersReloadBeforeRestartAndShareOneAggregateSlice(t *testing.T) {
+	runner := &scriptedPHPAppRunner{}
+	provisioner, spec := newPHPApplicationTestProvisioner(t, runner, nil)
+	first := types.DeployPHPReleaseReq{Application: spec, Deployment: types.PHPDeployment{
+		ID: 22, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID, RequestedRevision: "main",
+	}}
+	if _, err := provisioner.DeployPHPRelease(context.Background(), first); err != nil {
+		t.Fatal(err)
+	}
+	runner.calls = nil
+	spec.DesiredRevision++
+	second := types.DeployPHPReleaseReq{Application: spec, Deployment: types.PHPDeployment{
+		ID: 23, SubscriptionID: spec.SubscriptionID, ApplicationID: spec.ApplicationID, RequestedRevision: "main", PreviousDeploymentID: 22,
+	}}
+	if _, err := provisioner.DeployPHPRelease(context.Background(), second); err != nil {
+		t.Fatal(err)
+	}
+	secondPaths, err := provisioner.pathsFor(spec, 23)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workerUnit := filepath.Join(provisioner.systemdUnitDir, "nakpanel-php-worker@18.service")
+	replicaUnit := filepath.Join(provisioner.systemdUnitDir, "nakpanel-php-worker@18-2.service")
+	for _, path := range []string{workerUnit, replicaUnit} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), filepath.Join(secondPaths.release, "artisan")) ||
+			!strings.Contains(string(data), "Slice=nakpanel-php-app-9.slice") || strings.Contains(string(data), "MemoryMax=") {
+			t.Fatalf("worker unit does not use the new release and aggregate slice:\n%s", data)
+		}
+	}
+	sliceData, err := os.ReadFile(filepath.Join(provisioner.systemdUnitDir, "nakpanel-php-app-9.slice"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"MemoryMax=512M", "CPUQuota=100%", "TasksMax=64"} {
+		if strings.Count(string(sliceData), want) != 1 {
+			t.Fatalf("aggregate slice omitted or duplicated %q:\n%s", want, sliceData)
+		}
+	}
+	reloadAt, restartAt := -1, -1
+	for index, call := range runner.calls {
+		if call == "systemctl daemon-reload" {
+			reloadAt = index
+		}
+		if call == "systemctl restart nakpanel-php-worker@18.service" {
+			restartAt = index
+			break
+		}
+	}
+	if reloadAt < 0 || restartAt < 0 || reloadAt > restartAt {
+		t.Fatalf("worker unit was not loaded before restart:\n%s", strings.Join(runner.calls, "\n"))
+	}
+}
+
+func TestPHPWorkerCleanupMatchesExactIDs(t *testing.T) {
+	runner := &scriptedPHPAppRunner{}
+	provisioner, spec := newPHPApplicationTestProvisioner(t, runner, nil)
+	for _, name := range []string{
+		"nakpanel-php-worker@1.service",
+		"nakpanel-php-worker@1-2.service",
+		"nakpanel-php-worker@10.service",
+		"nakpanel-php-worker@11-2.service",
+	} {
+		if err := os.WriteFile(filepath.Join(provisioner.systemdUnitDir, name), []byte("unit"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := pWriteWorkerStateForTest(provisioner, spec.ApplicationID, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := provisioner.stopApplicationWorkers(context.Background(), spec.ApplicationID, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, removed := range []string{"nakpanel-php-worker@1.service", "nakpanel-php-worker@1-2.service"} {
+		if _, err := os.Stat(filepath.Join(provisioner.systemdUnitDir, removed)); !os.IsNotExist(err) {
+			t.Fatalf("worker %s was not removed: %v", removed, err)
+		}
+	}
+	for _, retained := range []string{"nakpanel-php-worker@10.service", "nakpanel-php-worker@11-2.service"} {
+		if _, err := os.Stat(filepath.Join(provisioner.systemdUnitDir, retained)); err != nil {
+			t.Fatalf("unrelated worker %s was removed: %v", retained, err)
+		}
+	}
+}
+
+func pWriteWorkerStateForTest(provisioner *PHPApplicationProvisioner, applicationID, workerID int64) error {
+	return provisioner.writeWorkerState(applicationID, map[int64]struct{}{workerID: {}})
 }
 
 func mustStat(t *testing.T, path string) os.FileInfo {
