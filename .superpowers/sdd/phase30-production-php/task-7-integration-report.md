@@ -2,7 +2,10 @@
 
 ## Status
 
-Implementation commit: `b32998b1bdc78a5d79b314b5179caf2733295a5e`
+Implementation commits:
+
+- `b32998b1bdc78a5d79b314b5179caf2733295a5e` - initial integration repairs.
+- `9d8f8bb` - review round 1 lifecycle, notification, redaction, teardown, and API readiness repairs.
 
 All required local verification passed. The only remaining concern is that the Ubuntu package/PPA/ClamAV path and a destructive whole-server restore were not executed against a disposable Ubuntu host during this task.
 
@@ -11,7 +14,7 @@ All required local verification passed. The only remaining concern is that the U
 ### New-site PHP selection
 
 - Found: ready capability order could make PHP 8.5 the new-plan and new-site default, and the default plan retained only one selectable runtime.
-- Repaired: new sites prefer PHP 8.4 whenever their allowlist permits it; all ready runtimes remain selectable; the browser selects the subscription default; provisioning API creation uses the same resolver.
+- Repaired: new sites prefer PHP 8.4 whenever their allowlist permits it; all ready runtimes remain selectable; the browser selects the subscription default; provisioning API creation intersects plan permission with live agent readiness, falls back to another ready permitted runtime, and fails closed when none is ready.
 - Preserved: an explicit existing/migrated PHP 8.3 selection is returned unchanged.
 
 ### Hosting-policy v3 propagation
@@ -26,7 +29,7 @@ All required local verification passed. The only remaining concern is that the U
 - Found: account teardown omitted managed PHP candidate units, worker generations, application slices, agent state, candidate nginx/socket artifacts, and loaded candidates whose unit file had disappeared.
 - Repaired: teardown snapshots now carry only validated application, worker, site, and deployment identifiers; the agent derives exact artifacts, stops loaded candidates, removes worker units/slices/state, and reloads systemd.
 - Found: restore enumeration omitted worker and slice artifacts and would have started every newly enumerated worker.
-- Repaired: server backup and restore include worker/slice units; restore starts only systemd-enabled workers and leaves managed FPM/slice activation to the startup application reconciliation sweep. Desired-stopped workers therefore remain stopped.
+- Repaired: server backup and restore include worker/slice units; restore never starts PHP FPM, worker, or slice units directly and leaves all PHP activation to the startup application reconciliation sweep. Desired-stopped and inherited-suspended workers therefore remain stopped.
 - Existing coverage confirms inherited suspension stops FPM/workers and application sweeps run every five minutes with `RunOnStart: true`.
 
 ### Backup, restore, and retention
@@ -77,6 +80,17 @@ All required local verification passed. The only remaining concern is that the U
 - Legacy notification-key test first observed `php:runtime-missing:*` where `php:runtime:*` resolution was expected; both old and new lifecycles now reconcile.
 - Composer rollback PostgreSQL test first left the advisory unresolved; it now resolves a clean stored JSON audit summary.
 
+## Review fix round 1
+
+Review artifact: `.superpowers/sdd/phase30-production-php/task-7-integration-review.md`.
+
+- Restore authority: `TestRestoreStartsOnlyDesiredActiveManagedPHPUnits` failed when an enabled PHP worker consulted systemd and returned start=true. The restore helper no longer accepts a systemd runner and returns false for every PHP FPM, worker, and application-slice unit.
+- Stale runtime warnings: the sweep test failed because the first operation was current-key resolution instead of enumerating active warnings. The sweep now locks active runtime-warning rows, computes the complete current subscription/version key set, and resolves keys whose pair disappeared before reconciling current targets.
+- Multiline/control secrets: the focused test returned `first` and `second\uFFFDthird` unchanged. Secret candidates now use the same buffered newline splitting, CR/LF trimming, and control-rune replacement as the agent log reader before longest-first replacement.
+- Fileless loaded units: teardown first skipped a stable FPM whose unit file was absent and then failed the stronger `LoadState=not-found`, `ActiveState=active` case. It now inspects both states and stops the exact stable unit unless it is both absent and inactive. Loaded worker generations are enumerated through systemd, filtered through the exact numeric worker-unit regex, stopped, and then known files/state are removed.
+- Provisioning API readiness: the initial focused test did not compile because the account service had no capability dependency. It now prefers ready permitted 8.4, falls back to ready permitted 8.5, rejects ready-but-unpermitted runtimes, returns a stable fail-closed API error when none are ready, and rolls back before customer/subscription/site mutation. `cmd/panel` supplies the agent capability reader.
+- Review repair commit: `9d8f8bb`.
+
 ## Files changed
 
 - Installer: `deploy/install/phase30-install.sh`, `deploy/multipass/phase30_install_test.go`.
@@ -84,7 +98,7 @@ All required local verification passed. The only remaining concern is that the U
 - Restore: `internal/backup/restore.go`, `restore_phase30_test.go`.
 - PHP control plane: `internal/control/phpapp/sweeps.go`, `sweeps_test.go`, `workers.go`, `workers_test.go`, `postgres_state_test.go`.
 - Log redaction: `internal/control/provision/account_services.go`, `php_log_test.go`, `internal/control/quota/php_logs.go`, `php_logs_test.go`, `quota.go`.
-- Site defaults/teardown snapshot/UI: `internal/control/provisioningapi/accounts.go`, `jobs.go`, `internal/control/quota/quota_test.go`, `internal/control/web/helpers.go`, `helpers_test.go`, `static/app.js`, `workspace.templ`, generated `workspace_templ.go`, `internal/types/envelope.go`.
+- Site defaults/teardown snapshot/UI: `cmd/panel/main.go`, `internal/control/provisioningapi/accounts.go`, `accounts_runtime_test.go`, `jobs.go`, `internal/control/quota/quota_test.go`, `internal/control/web/helpers.go`, `helpers_test.go`, `static/app.js`, `workspace.templ`, generated `workspace_templ.go`, `internal/types/envelope.go`.
 - Notifications migration/tests: `migrations/20260830000045_phase30_integration.sql`, `migrations/migrations_test.go`, `migrations/phase30_postgres_test.go`.
 
 ## Verification
@@ -95,6 +109,16 @@ All required local verification passed. The only remaining concern is that the U
 - `go test -race ./migrations ./internal/agent/ops ./internal/backup ./internal/control/phpapp ./internal/control/provision ./internal/control/provisioningapi ./internal/control/quota ./internal/control/web ./internal/types -count=1`: pass.
 - `go vet ./...`: pass.
 - `task build`: pass; sqlc/templ/Tailwind generation and panel/agent/panelctl builds completed.
+- `git diff --check`: pass.
+- `bash -n deploy/**/*.sh`: pass.
+
+Review round 1 final verification:
+
+- All five focused red/green tests: pass.
+- `go test -race ./cmd/panel ./internal/backup ./internal/control/phpapp ./internal/control/quota ./internal/agent/ops ./internal/control/provisioningapi -count=1`: pass; `internal/agent/ops` race was rerun after the final systemd-state refinement.
+- `go test ./... -count=1`: pass after the final refinement.
+- `go vet ./...`: pass.
+- `task build`: pass.
 - `git diff --check`: pass.
 - `bash -n deploy/**/*.sh`: pass.
 
