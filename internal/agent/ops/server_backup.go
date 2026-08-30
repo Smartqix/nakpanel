@@ -74,6 +74,7 @@ func NewServerBackupProvisioner(opts ServerBackupProvisionerOptions) *ServerBack
 var serverBackupTrees = []string{
 	"/etc/nakpanel",
 	"/etc/stalwart",
+	"/etc/nginx/conf.d",
 	"/etc/nginx/sites-available",
 	"/etc/nginx/sites-enabled",
 	"/etc/nginx/nakpanel",
