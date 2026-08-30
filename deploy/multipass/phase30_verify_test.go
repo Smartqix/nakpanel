@@ -200,6 +200,16 @@ func TestPhase30VerifierSchedulesWordPressCronIdempotently(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierValidatesQuotaStatusOutputDespiteQuotaonExitCode(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	if !strings.Contains(script, `quota_status="$(quotaon -p / || true)"`) {
+		t.Fatal("quotaon status output must be inspected even when inactive quota classes make it exit nonzero")
+	}
+	if !strings.Contains(script, `grep -q 'user quota .* is on' <<<"${quota_status}"`) {
+		t.Fatal("verifier must still require active user quotas")
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{

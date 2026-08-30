@@ -434,7 +434,7 @@ classic_document_root="$(db "SELECT document_root FROM sites WHERE id=${classic_
 multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${username}" "${second_username}" "${classic_site_id}" "${classic_document_root}" <<'REMOTE'
 set -euo pipefail
 username="$1"; second_username="$2"; site_id="$3"; classic_document_root="$4"
-quota_status="$(quotaon -p /)"
+quota_status="$(quotaon -p / || true)"
 grep -q 'user quota .* is on' <<<"${quota_status}"
 quota -u "${username}" >/tmp/phase30-quota.out
 expected_hard_kib=$((512 * 1024))
