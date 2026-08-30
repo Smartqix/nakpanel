@@ -84,7 +84,7 @@ trusted_curl(){
 
 echo "phase30: install and prove the current worktree"
 sync_repo "${ROOT_DIR}"
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${REMOTE_SRC}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" <<'REMOTE'
 set -euo pipefail
 src="$1"
 cd "${src}"
@@ -114,7 +114,7 @@ curl --connect-timeout 5 --max-time 30 -skf "https://${VM_IP}:7443/healthz" >/de
 
 # RuntimeCapabilities is the authoritative inventory; PHPVersions is its
 # ready-only list and must not contain a degraded runtime.
-multipass exec "${VM_NAME}" -- sudo -u nakpanel /usr/local/lib/nakpanel/phase30-agentprobe \
+multipass exec "${VM_NAME}" --working-directory / -- sudo -u nakpanel /usr/local/lib/nakpanel/phase30-agentprobe \
   -op runtime_capabilities >"${tmpdir}/runtime.json"
 python3 - "${tmpdir}/runtime.json" <<'PY'
 import json, sys
@@ -134,7 +134,7 @@ for version in ("8.3", "8.4", "8.5"):
     assert required_extensions <= loaded, (version, required_extensions - loaded)
 PY
 
-multipass exec "${VM_NAME}" -- sudo bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se <<'REMOTE'
 set -euo pipefail
 for version in 8.3 8.4 8.5; do
 	command -v "php${version}" >/dev/null
@@ -255,7 +255,7 @@ test "${database_rotation_status}" = 202
 wait_for "database password rotation" "SELECT status FROM server_operations WHERE target_type='database' AND target_key='${database_id}' AND action='rotate_password' ORDER BY id DESC LIMIT 1" "succeeded"
 
 echo "phase30: install WordPress 7.1 through Classic hosting"
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${classic_site_id}" "${username}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${classic_site_id}" "${username}" <<'REMOTE'
 set -euo pipefail
 site_id="$1"; username="$2"
 domain=phase30-classic.test
@@ -299,21 +299,21 @@ REMOTE
 
 db_name="$(db "SELECT db_name FROM databases WHERE id=${database_id}")"
 db_user="$(db "SELECT db_user FROM databases WHERE id=${database_id}")"
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${username}" <<'REMOTE'
 set -euo pipefail
 username="$1"
 docroot="/home/${username}/domains/phase30-classic.test/public_html"
 sudo -u "${username}" find "${docroot}" -mindepth 1 -delete
 timeout 10m sudo -u "${username}" wp core download --version=7.1 --locale=en_US --path="${docroot}"
 REMOTE
-printf '%s' "${DB_PASSWORD}" | multipass exec "${VM_NAME}" -- sudo -u "${username}" timeout 5m \
+printf '%s' "${DB_PASSWORD}" | multipass exec "${VM_NAME}" --working-directory / -- sudo -u "${username}" timeout 5m \
   wp config create --path="/home/${username}/domains/phase30-classic.test/public_html" \
   --dbname="${db_name}" --dbuser="${db_user}" --dbhost=localhost --prompt=dbpass --skip-check
-printf '%s' "${WP_ADMIN_PASSWORD}" | multipass exec "${VM_NAME}" -- sudo -u "${username}" timeout 5m \
+printf '%s' "${WP_ADMIN_PASSWORD}" | multipass exec "${VM_NAME}" --working-directory / -- sudo -u "${username}" timeout 5m \
   wp core install --path="/home/${username}/domains/phase30-classic.test/public_html" \
   --url=https://phase30-classic.test --title='Phase 30 WordPress' --admin_user=phase30admin \
   --prompt=admin_password --admin_email=phase30-wp@nakpanel.test --skip-email
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${username}" <<'REMOTE'
 set -euo pipefail
 username="$1"
 docroot="/home/${username}/domains/phase30-classic.test/public_html"
@@ -371,7 +371,7 @@ backup_output="$(cli backup create phase30-classic.test)"
 backup_id="$(sed -nE 's/^Backup queued \(backup ([0-9]+)\)\.$/\1/p' <<<"${backup_output}")"
 [[ "${backup_id}" =~ ^[0-9]+$ ]] || fail "could not parse Classic backup id"
 wait_for "Classic backup" "SELECT status FROM backups WHERE id=${backup_id}" "active"
-multipass exec "${VM_NAME}" -- sudo -u "${username}" bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo -u "${username}" bash -se <<'REMOTE'
 set -euo pipefail
 docroot=/home/"$(id -un)"/domains/phase30-classic.test/public_html
 printf 'after\n' >"${docroot}/phase30-restore.txt"
@@ -379,7 +379,7 @@ timeout 5m wp option update phase30_restore_canary after --path="${docroot}" >/d
 REMOTE
 multipass_exec_short "${VM_NAME}" -- sudo -u nakpanel env NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' NAKPANEL_AGENT_SOCKET='/run/nakpanel/agent.sock' NAKPANEL_SECRET_KEY_FILE='/etc/nakpanel/secret-keys.json' panelctl --actor phase30 restore "${backup_id}" --yes >/dev/null
 wait_for "Classic restore" "SELECT status FROM restore_runs WHERE backup_id=${backup_id} ORDER BY id DESC LIMIT 1" "active"
-multipass exec "${VM_NAME}" -- sudo -u "${username}" bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo -u "${username}" bash -se <<'REMOTE'
 set -euo pipefail
 docroot=/home/"$(id -un)"/domains/phase30-classic.test/public_html
 grep -Fxq before "${docroot}/phase30-restore.txt"
@@ -390,7 +390,7 @@ post_as phase30-classic-php85 "sites/${classic_site_id}/hosting" -d 'desired_sta
   -d 'desired_php_version=8.5' -d 'desired_https_redirect=true'
 wait_for "Classic PHP 8.5 switch" "SELECT php_version||':'||settings_status FROM sites WHERE id=${classic_site_id}" "8.5:in_sync"
 trusted_curl phase30-classic.test / | grep -Fq 'Phase 30 WordPress'
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${classic_site_id}" "${username}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${classic_site_id}" "${username}" <<'REMOTE'
 set -euo pipefail
 site_id="$1"; username="$2"
 unit="nakpanel-php-fpm@${site_id}.service"
@@ -423,7 +423,7 @@ wait_for "isolated account provisioning" "SELECT convergence_status FROM subscri
 second_username="$(db "SELECT username FROM subscription_system_accounts WHERE subscription_id=${second_subscription_id}")"
 classic_document_root="$(db "SELECT document_root FROM sites WHERE id=${classic_site_id}")"
 [[ "${classic_document_root}" == "/home/${username}/"* ]] || fail "Classic document root is not owned by the first subscription"
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" "${second_username}" "${classic_site_id}" "${classic_document_root}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${username}" "${second_username}" "${classic_site_id}" "${classic_document_root}" <<'REMOTE'
 set -euo pipefail
 username="$1"; second_username="$2"; site_id="$3"; classic_document_root="$4"
 quotaon -p / | grep -q 'user quota .* is on'
@@ -484,7 +484,7 @@ post_as phase30-hosted-git "sites/${managed_site_id}/git" -d "subscription_id=${
 wait_for "hosted Git provisioning" "SELECT convergence_status FROM git_repositories WHERE site_id=${managed_site_id}" "in_sync"
 repository_id="$(db "SELECT id FROM git_repositories WHERE site_id=${managed_site_id}")"
 
-multipass exec "${VM_NAME}" -- sudo -u "${username}" bash -se -- "${managed_site_id}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo -u "${username}" bash -se -- "${managed_site_id}" <<'REMOTE'
 set -euo pipefail
 site_id="$1"
 work="$(mktemp -d)"
@@ -565,7 +565,7 @@ assert_worker_inactive(){
 assert_worker_inactive "desired-stopped worker before suspension" "${stopped_worker_id}"
 
 echo "phase30: reject an unhealthy release and retain the active release"
-multipass exec "${VM_NAME}" -- sudo -u "${username}" bash -se -- "${managed_site_id}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo -u "${username}" bash -se -- "${managed_site_id}" <<'REMOTE'
 set -euo pipefail
 site_id="$1"
 work="$(mktemp -d)"
@@ -613,7 +613,7 @@ done
 INITIAL_TENANT_CONFIG="$(multipass_exec_short "${VM_NAME}" -- sudo bash -c \
   "find /etc/nginx /etc/nakpanel/php-fpm -type f -maxdepth 5 -print0 2>/dev/null | xargs -0r grep -h ''")"
 
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${managed_application_id}" "${second_username}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${managed_application_id}" "${second_username}" <<'REMOTE'
 set -euo pipefail
 application_id="$1"; second_username="$2"
 environment_path="$(find "/var/lib/nakpanel/php-applications/app-${application_id}/environments" -type f | head -1)"
@@ -667,7 +667,7 @@ curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.tes
 
 # Stop both secret-consuming daemons before the reboot-boundary capture. Once
 # inactive, they cannot append a later pre-reboot entry outside this snapshot.
-PRE_REBOOT_JOURNAL="$(multipass exec "${VM_NAME}" -- sudo bash -se -- "${journal_cursor}" <<'REMOTE'
+PRE_REBOOT_JOURNAL="$(multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${journal_cursor}" <<'REMOTE'
 set -euo pipefail
 journal_cursor="$1"
 systemctl stop nakpanel.service nakpanel-agent.service

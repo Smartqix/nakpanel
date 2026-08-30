@@ -149,6 +149,16 @@ func TestPhase30VerifierRuntimeGateAvoidsEarlyExitPipelines(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierUsesNeutralGuestWorkingDirectory(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	if strings.Contains(script, `multipass exec "${VM_NAME}" -- sudo`) {
+		t.Fatal("guest commands must not inherit /home/ubuntu when testing isolated subscription users")
+	}
+	if got := strings.Count(script, `multipass exec "${VM_NAME}" --working-directory / -- sudo`); got < 14 {
+		t.Fatalf("neutral guest working-directory uses = %d, want at least 14", got)
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{
