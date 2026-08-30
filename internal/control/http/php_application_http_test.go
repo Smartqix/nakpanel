@@ -359,6 +359,57 @@ func TestPHPApplicationScalarLimitsRejectBeforeServiceWithoutEcho(t *testing.T) 
 	}
 }
 
+func TestPHPApplicationRawListLimitsRejectBeforeServiceWithoutEcho(t *testing.T) {
+	const marker = "L7NX"
+	configureBase := func() url.Values {
+		return url.Values{"hosting_mode": {"managed"}, "php_version": {"8.4"}, "repository_id": {"12"},
+			"repository_ref": {"main"}, "framework_profile": {"plain"}, "health_path": {"/"}, "release_retention": {"4"}}
+	}
+	workerBase := func() url.Values {
+		return url.Values{"name": {"queue"}, "script": {"artisan"}, "processes": {"1"}, "desired_state": {"running"}}
+	}
+	sharedDuplicate := configureBase()
+	sharedDuplicate["shared_paths"] = []string{"storage", marker}
+	argumentDuplicate := workerBase()
+	argumentDuplicate["arguments"] = []string{"--safe", marker}
+	tests := []struct {
+		name string
+		path string
+		form url.Values
+	}{
+		{"whitespace shared item", "/sites/7/php-application", withFormValue(configureBase(), "shared_path", strings.Repeat(" ", 241))},
+		{"whitespace worker argument", "/sites/7/php-application/workers", withFormValue(workerBase(), "argument", strings.Repeat(" ", 4097))},
+		{"oversized shared textarea", "/sites/7/php-application", withFormValue(configureBase(), "shared_paths", strings.Repeat(" \n", 1921)+marker)},
+		{"oversized arguments textarea", "/sites/7/php-application/workers", withFormValue(workerBase(), "arguments", strings.Repeat(" \n", 16385)+marker)},
+		{"duplicate shared textarea", "/sites/7/php-application", sharedDuplicate},
+		{"duplicate arguments textarea", "/sites/7/php-application/workers", argumentDuplicate},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &fakePHPApplicationService{}
+			workspace := &fakeWorkspaceService{}
+			handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{PHPApplications: service, Workspace: workspace})
+			cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+			req := httptest.NewRequest(http.MethodPost, "https://panel.test"+tc.path, strings.NewReader(tc.form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("X-Nakpanel-SPA", "true")
+			addAuthenticatedCookie(req, cookie)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest || service.called != "" {
+				t.Fatalf("raw list bound = %d call=%q body=%s", rec.Code, service.called, rec.Body.String())
+			}
+			combined := rec.Body.String() + fmt.Sprint(rec.Header())
+			for _, audit := range workspace.audits {
+				combined += string(audit.Metadata)
+			}
+			if strings.Contains(combined, marker) || len(workspace.audits) != 0 {
+				t.Fatalf("raw list input echoed/audited: headers=%v body=%s audits=%#v", rec.Header(), rec.Body.String(), workspace.audits)
+			}
+		})
+	}
+}
+
 func withFormValue(form url.Values, name, value string) url.Values {
 	form.Set(name, value)
 	return form

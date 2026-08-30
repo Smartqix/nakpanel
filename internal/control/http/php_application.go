@@ -607,19 +607,41 @@ func boundedFormBool(r *http.Request, name string) (bool, error) {
 }
 
 func boundedFormList(r *http.Request, repeatedName, linesName string, maximumItems, maximumItemBytes, maximumTotalBytes int) ([]string, error) {
-	values := append([]string(nil), r.Form[repeatedName]...)
-	if lines := r.Form.Get(linesName); lines != "" {
-		values = append(values, strings.Split(strings.ReplaceAll(lines, "\r\n", "\n"), "\n")...)
+	values := make([]string, 0, len(r.Form[repeatedName]))
+	rawTotal := 0
+	for _, raw := range r.Form[repeatedName] {
+		rawTotal += len(raw)
+		if len(raw) > maximumItemBytes || rawTotal > maximumTotalBytes || strings.ContainsAny(raw, "\x00\r\n") {
+			return nil, errors.New("invalid raw list value")
+		}
+		values = append(values, raw)
+	}
+	lineFields := r.Form[linesName]
+	if len(lineFields) > 1 {
+		return nil, errors.New("invalid repeated list field")
+	}
+	if len(lineFields) == 1 {
+		raw := lineFields[0]
+		rawTotal += len(raw)
+		if len(raw) > maximumTotalBytes || rawTotal > maximumTotalBytes || strings.ContainsRune(raw, '\x00') {
+			return nil, errors.New("invalid raw list field length")
+		}
+		for _, line := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
+			if len(line) > maximumItemBytes || strings.ContainsRune(line, '\r') {
+				return nil, errors.New("invalid raw list item")
+			}
+			values = append(values, line)
+		}
 	}
 	result := make([]string, 0, len(values))
-	total := 0
-	for _, value := range values {
-		value = strings.TrimSpace(value)
+	normalizedTotal := 0
+	for _, raw := range values {
+		value := strings.TrimSpace(raw)
 		if value == "" {
 			continue
 		}
-		total += len(value)
-		if len(value) > maximumItemBytes || total > maximumTotalBytes || strings.ContainsAny(value, "\x00\r\n") {
+		normalizedTotal += len(value)
+		if len(value) > maximumItemBytes || normalizedTotal > maximumTotalBytes || strings.ContainsAny(value, "\x00\r\n") {
 			return nil, errors.New("invalid list value")
 		}
 		result = append(result, value)
