@@ -233,6 +233,26 @@ func TestPhase30VerifierUpsertsReusableWorkerFixtures(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierWaitsForExplicitApplicationReconcileBeforeTraffic(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	postAt := strings.Index(script, `post_as phase30-managed-reconcile`)
+	waitAt := strings.Index(script, `wait_for "explicit application reconciliation"`)
+	trafficAt := -1
+	if postAt >= 0 {
+		if offset := strings.Index(script[postAt:], `managed_body="$(curl`); offset >= 0 {
+			trafficAt = postAt + offset
+		}
+	}
+	if postAt < 0 || waitAt < 0 || trafficAt < 0 || !(postAt < waitAt && waitAt < trafficAt) {
+		t.Fatalf("explicit application reconciliation must converge before traffic: post=%d wait=%d traffic=%d", postAt, waitAt, trafficAt)
+	}
+	for _, want := range []string{"desired_revision=applied_revision", "convergence_status='in_sync'"} {
+		if !strings.Contains(script[waitAt:trafficAt], want) {
+			t.Errorf("explicit reconciliation wait is missing %q", want)
+		}
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{
