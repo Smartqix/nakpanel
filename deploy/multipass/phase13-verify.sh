@@ -49,15 +49,11 @@ schema="$(db_value "SELECT (SELECT COUNT(*) FROM information_schema.columns WHER
 
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
-if ! dpkg-query -W -f='${Status}' php8.2-fpm 2>/dev/null | grep -Fq 'install ok installed'; then
-  export DEBIAN_FRONTEND=noninteractive
-  sudo apt-get update
-  sudo apt-get install -y software-properties-common
-  sudo add-apt-repository -y ppa:ondrej/php
-  sudo apt-get update
-  sudo apt-get install -y php8.2-fpm
-fi
-sudo systemctl enable --now php8.2-fpm
+for version in 8.3 8.4; do
+  dpkg-query -W -f='${Status}' "php${version}-fpm" 2>/dev/null | grep -Fq 'install ok installed'
+  "php${version}" -m | grep -Fq 'Zend OPcache'
+  sudo systemctl enable --now "php${version}-fpm"
+done
 sudo systemctl restart nakpanel-agent.service nakpanel.service
 REMOTE
 
@@ -85,7 +81,7 @@ post_as admin phase13-provider-permissions reseller-plans -d "reseller_plan_id=$
   -d 'max_mailboxes=0' -d 'max_backups=4' -d 'backup_storage_mb=200' -d 'max_subdomains=0' \
   -d 'max_domain_aliases=0' -d 'max_ftp_accounts=0' -d 'allow_custom_plans=true' -d 'allow_dns=true' \
   -d 'allow_tls=true' -d 'allow_backups=true' -d 'allow_php_settings=true' -d 'allow_logs=true' \
-  -d 'php_versions=8.3' -d 'php_versions=8.2' -d 'is_active=true'
+  -d 'php_versions=8.3' -d 'php_versions=8.4' -d 'is_active=true'
 
 # Restore ownership if a previous interrupted run stopped after subscriber transfer.
 if [[ "$(db_value "SELECT customer_id FROM subscriptions WHERE id=${subscription_id}")" != "${original_customer_id}" ]]; then
@@ -107,7 +103,7 @@ phase13_plan_id="$(db_value "SELECT id FROM plans WHERE name='Phase13 Domain Wor
 post_as reseller phase13-plan plans -d "plan_id=${phase13_plan_id:-0}" \
   -d 'name=Phase13 Domain Workspace' -d 'description=Plesk-style domain tools verification' \
   -d 'disk_mb=64' -d 'max_sites=2' -d 'max_databases=2' -d 'bandwidth_mb=-1' -d 'max_mailboxes=0' \
-  -d 'backup_retention_days=7' -d 'php_allowlist=8.3,8.2' -d 'default_php_version=8.3' \
+  -d 'backup_retention_days=7' -d 'php_allowlist=8.3,8.4' -d 'default_php_version=8.3' \
   -d 'php_max_children=2' -d 'php_memory_mb=128' -d 'site_disk_quota_mb=64' -d 'max_backups=2' \
   -d 'backup_storage_mb=128' -d 'allow_dns=true' -d 'allow_tls=true' -d 'allow_backups=true' \
   -d 'allow_php_settings=true' -d 'hosting_enabled=true' -d 'is_active=true'
@@ -128,12 +124,12 @@ for tab in overview hosting php dns ssl databases backups; do
   assert_contains "${tmpdir}/site-${tab}.html" 'np-domain-tabs'
 done
 
-post_as reseller phase13-php "sites/${site_id}/php" -d 'desired_status=active' -d 'desired_php_version=8.2' -d 'desired_https_redirect=false'
-wait_for_value 'PHP switching' "SELECT php_version||':'||settings_status FROM sites WHERE id=${site_id}" '8.2:in_sync'
+post_as reseller phase13-php "sites/${site_id}/php" -d 'desired_status=active' -d 'desired_php_version=8.4' -d 'desired_https_redirect=false'
+wait_for_value 'PHP switching' "SELECT php_version||':'||settings_status FROM sites WHERE id=${site_id}" '8.4:in_sync'
 
 post_as reseller phase13-certificate certificates -d 'domain=phase12-reseller.test' -d "site_id=${site_id}" -d 'issuer=local-self-signed'
 wait_for_value 'local certificate issuance' "SELECT tls_status FROM sites WHERE id=${site_id}" 'active'
-post_as reseller phase13-redirect "sites/${site_id}/hosting" -d 'desired_status=active' -d 'desired_php_version=8.2' -d 'desired_https_redirect=true'
+post_as reseller phase13-redirect "sites/${site_id}/hosting" -d 'desired_status=active' -d 'desired_php_version=8.4' -d 'desired_https_redirect=true'
 wait_for_value 'HTTPS redirect convergence' "SELECT https_redirect::text||':'||settings_status FROM sites WHERE id=${site_id}" 'true:in_sync'
 
 zone_id="$(db_value "SELECT id FROM dns_zones WHERE site_id=${site_id}")"
@@ -156,7 +152,7 @@ backup_id="$(db_value "SELECT id FROM backups WHERE site_id=${site_id} ORDER BY 
 post_as reseller phase13-restore restores -d "backup_id=${backup_id}" -d "site_id=${site_id}"
 wait_for_value 'domain backup restore' "SELECT status FROM restore_runs WHERE backup_id=${backup_id} ORDER BY id DESC LIMIT 1" 'active'
 
-post_as reseller phase13-domain-suspend "sites/${site_id}/hosting" -d 'desired_status=suspended' -d 'desired_php_version=8.2' -d 'desired_https_redirect=true'
+post_as reseller phase13-domain-suspend "sites/${site_id}/hosting" -d 'desired_status=suspended' -d 'desired_php_version=8.4' -d 'desired_https_redirect=true'
 wait_for_value 'individual domain suspension' "SELECT status||':'||desired_status FROM sites WHERE id=${site_id}" 'suspended:suspended'
 post_as reseller phase13-sub-suspend subscriptions/bulk-status -d "subscription_id=${subscription_id}" -d 'status=suspended'
 post_as reseller phase13-sub-active subscriptions/bulk-status -d "subscription_id=${subscription_id}" -d 'status=active'

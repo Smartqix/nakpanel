@@ -193,6 +193,36 @@ func TestPhase30IntegrationNotificationKindsPostgreSQL(t *testing.T) {
 	}
 }
 
+func TestPhase30SitePHPVersionConstraintPostgreSQL(t *testing.T) {
+	db := phase30Postgres(t)
+	if _, err := db.Exec(`CREATE TABLE sites(
+		id BIGINT PRIMARY KEY,
+		php_version TEXT NOT NULL,
+		CONSTRAINT sites_php_version_check CHECK (php_version IN ('8.2','8.3'))
+	);
+	INSERT INTO sites(id,php_version) VALUES(1,'8.2'),(2,'8.3');`); err != nil {
+		t.Fatal(err)
+	}
+	up, down := migrationSections(t, "20260830000046_phase30_site_php_versions.sql")
+	if _, err := db.Exec(up); err != nil {
+		t.Fatalf("Phase 30 site PHP versions Up: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO sites(id,php_version) VALUES(3,'8.4'),(4,'8.5')`); err != nil {
+		t.Fatalf("Phase 30 versions were rejected: %v", err)
+	}
+	expectPhase30ConstraintError(t, db, `INSERT INTO sites(id,php_version) VALUES(5,'8.6')`)
+	if _, err := db.Exec(down); err == nil || !strings.Contains(err.Error(), "cannot restore the pre-Phase 30 PHP version constraint") {
+		t.Fatalf("Down with Phase 30 sites error = %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM sites WHERE php_version IN ('8.4','8.5')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(down); err != nil {
+		t.Fatalf("clean Phase 30 site PHP versions Down: %v", err)
+	}
+	expectPhase30ConstraintError(t, db, `INSERT INTO sites(id,php_version) VALUES(6,'8.4')`)
+}
+
 func phase30Postgres(t *testing.T) *sql.DB {
 	t.Helper()
 	candidates := []string{os.Getenv("NAKPANEL_TEST_DATABASE_URL")}

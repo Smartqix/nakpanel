@@ -177,3 +177,23 @@ func TestUnifiedInstallerRunsPhase30AfterPhase21To25(t *testing.T) {
 		t.Fatal("unified installer must run phase30-install.sh after phase21-25-install.sh")
 	}
 }
+
+func TestPhase13VerifierUsesPhase30SupportedPHPVersions(t *testing.T) {
+	data, err := os.ReadFile("phase13-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	if strings.Contains(script, "8.2") {
+		t.Fatal("Phase 13 verifier must not install or request unsupported PHP 8.2")
+	}
+	for _, want := range []string{
+		`php_versions=8.3`, `php_versions=8.4`,
+		`php_allowlist=8.3,8.4`, `desired_php_version=8.4`,
+		`8.4:in_sync`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("Phase 13 verifier is missing supported multi-PHP assertion %q", want)
+		}
+	}
+}

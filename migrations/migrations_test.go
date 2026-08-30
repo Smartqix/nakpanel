@@ -366,3 +366,22 @@ func TestPhase30IntegrationNotificationKindsAreDistinctAndReversible(t *testing.
 		t.Fatal("Phase 30 integration Down must remove its notification rows before restoring the prior constraint")
 	}
 }
+
+func TestPhase30SitePHPVersionConstraintMigrationIsBoundedAndReversible(t *testing.T) {
+	data, err := os.ReadFile("20260830000046_phase30_site_php_versions.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	for _, marker := range []string{
+		"DROP CONSTRAINT IF EXISTS sites_php_version_check",
+		"php_version IN ('8.2','8.3','8.4','8.5')",
+		"php_version NOT IN ('8.2','8.3')",
+		"cannot restore the pre-Phase 30 PHP version constraint",
+		"-- +goose Down",
+	} {
+		if !strings.Contains(script, marker) {
+			t.Fatalf("Phase 30 site PHP version migration is missing %q", marker)
+		}
+	}
+}
