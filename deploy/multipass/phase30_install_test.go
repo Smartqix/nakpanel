@@ -1,16 +1,68 @@
 package multipass
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 	"testing"
 )
 
+func singleActiveCommandPosition(script, command string) (int, error) {
+	position := -1
+	count := 0
+	offset := 0
+	for _, line := range strings.SplitAfter(script, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") && trimmed == command {
+			count++
+			if position < 0 {
+				position = offset + strings.Index(line, command)
+			}
+		}
+		offset += len(line)
+	}
+	if count != 1 {
+		return -1, fmt.Errorf("found %d active exact %q commands, want 1", count, command)
+	}
+	return position, nil
+}
+
 func TestPhase30InstallerHasValidShellSyntax(t *testing.T) {
 	cmd := exec.Command("bash", "-n", "../install/phase30-install.sh")
 	if output, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("bash -n phase30-install.sh: %v\n%s", err, output)
+	}
+}
+
+func TestSingleActiveCommandPositionRejectsCommentedAndDuplicateCommands(t *testing.T) {
+	command := `sudo bash "${REMOTE_SRC}/deploy/install/phase30-install.sh"`
+	tests := []struct {
+		name    string
+		script  string
+		wantErr bool
+	}{
+		{name: "single active command", script: "echo before\n  " + command + "\necho after\n"},
+		{name: "comment plus single active command", script: "# " + command + "\n  " + command + "\n"},
+		{name: "commented command", script: "echo before\n  # " + command + "\necho after\n", wantErr: true},
+		{name: "duplicate active commands", script: command + "\necho between\n" + command + "\n", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			position, err := singleActiveCommandPosition(tt.script, command)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("singleActiveCommandPosition() position = %d, want error", position)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := strings.LastIndex(tt.script, command); position != want {
+				t.Fatalf("singleActiveCommandPosition() position = %d, want %d", position, want)
+			}
+		})
 	}
 }
 
@@ -30,9 +82,9 @@ func TestLegacyBootstrapsRunCanonicalPhase30InstallerBeforeBuildServicesAndProvi
 				t.Fatal(err)
 			}
 			script := string(data)
-			installer := strings.Index(script, `sudo bash "${REMOTE_SRC}/deploy/install/phase30-install.sh"`)
-			if installer < 0 {
-				t.Fatalf("%s must run the canonical phase30-install.sh", tt.name)
+			installer, err := singleActiveCommandPosition(script, `sudo bash "${REMOTE_SRC}/deploy/install/phase30-install.sh"`)
+			if err != nil {
+				t.Fatalf("%s must run the canonical phase30-install.sh exactly once: %v", tt.name, err)
 			}
 			for _, boundary := range []struct {
 				label  string
