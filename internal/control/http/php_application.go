@@ -15,10 +15,9 @@ import (
 )
 
 const (
-	maxPHPApplicationString = 4096
-	maxPHPEnvironmentValue  = 64 << 10
-	maxPHPSharedPaths       = 16
-	maxPHPWorkerArguments   = 64
+	maxPHPEnvironmentValue = 64 << 10
+	maxPHPSharedPaths      = 16
+	maxPHPWorkerArguments  = 64
 )
 
 func (s *Server) loadPHPApplicationWorkspace(w http.ResponseWriter, r *http.Request, actor auth.SessionUser, siteID int64, view *web.WorkspaceView) bool {
@@ -116,22 +115,66 @@ func (s *Server) handleConfigurePHPApplication(w http.ResponseWriter, r *http.Re
 		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
 		return
 	}
+	hostingMode, err := boundedFormString(r, "hosting_mode", 16)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
+		return
+	}
+	phpVersion, err := boundedFormString(r, "php_version", 16)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
+		return
+	}
+	repositoryRef, err := boundedFormString(r, "repository_ref", 128)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
+		return
+	}
+	frameworkProfile, err := boundedFormString(r, "framework_profile", 16)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
+		return
+	}
+	publicPath, err := boundedFormString(r, "public_path", 240)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
+		return
+	}
+	healthPath, err := boundedFormString(r, "health_path", 240)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
+		return
+	}
+	composerInstall, err := boundedFormBool(r, "composer_install")
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
+		return
+	}
+	composerScripts, err := boundedFormBool(r, "composer_allow_scripts")
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
+		return
+	}
+	composerPlugins, err := boundedFormBool(r, "composer_allow_plugins")
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP application settings")
+		return
+	}
 	input := controlphpapp.ConfigureApplicationInput{
-		HostingMode:      types.PHPHostingMode(strings.ToLower(strings.TrimSpace(r.Form.Get("hosting_mode")))),
-		PHPVersion:       boundedFormString(r, "php_version", 16),
+		HostingMode:      types.PHPHostingMode(strings.ToLower(hostingMode)),
+		PHPVersion:       phpVersion,
 		RepositoryID:     repositoryID,
-		RepositoryRef:    boundedFormString(r, "repository_ref", 128),
-		FrameworkProfile: types.PHPFrameworkProfile(strings.ToLower(boundedFormString(r, "framework_profile", 16))),
-		PublicPath:       boundedFormString(r, "public_path", 240),
-		HealthPath:       boundedFormString(r, "health_path", 240),
+		RepositoryRef:    repositoryRef,
+		FrameworkProfile: types.PHPFrameworkProfile(strings.ToLower(frameworkProfile)),
+		PublicPath:       publicPath,
+		HealthPath:       healthPath,
 		SharedPaths:      sharedPaths,
 		ReleaseRetention: retention,
 		Composer: types.PHPComposerSpec{
-			Install: parseFormBool(r, "composer_install"), AllowScripts: parseFormBool(r, "composer_allow_scripts"),
-			AllowPlugins: parseFormBool(r, "composer_allow_plugins"),
+			Install: composerInstall, AllowScripts: composerScripts, AllowPlugins: composerPlugins,
 		},
 	}
-	if input.PHPVersion == "" || input.HostingMode == "" || formFieldTooLong(r, maxPHPApplicationString) {
+	if input.PHPVersion == "" || input.HostingMode == "" {
 		s.writePHPApplicationError(w, r, errors.New("invalid settings"), "Invalid PHP application settings")
 		return
 	}
@@ -153,9 +196,9 @@ func (s *Server) handleQueuePHPDeployment(w http.ResponseWriter, r *http.Request
 		s.writePHPApplicationError(w, r, err, "Invalid deployment request")
 		return
 	}
-	revision := boundedFormString(r, "revision", 128)
-	if len(strings.TrimSpace(r.Form.Get("revision"))) > 128 {
-		s.writePHPApplicationError(w, r, errors.New("revision too long"), "Invalid deployment request")
+	revision, err := boundedFormString(r, "revision", 128)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid deployment request")
 		return
 	}
 	deployment, err := s.phpApplications.QueueDeployment(r.Context(), actor, siteID, controlphpapp.DeploymentInput{RequestedRevision: revision})
@@ -201,10 +244,23 @@ func (s *Server) handleUpsertPHPEnvironment(w http.ResponseWriter, r *http.Reque
 		s.writePHPApplicationError(w, r, err, "Invalid environment variable")
 		return
 	}
-	plainValue, secretValue := r.Form.Get("value"), r.Form.Get("secret_value")
-	secret := parseFormBool(r, "secret") || secretValue != ""
-	if len(plainValue) > maxPHPEnvironmentValue || len(secretValue) > maxPHPEnvironmentValue ||
-		(secret && (secretValue == "" || plainValue != "")) || (!secret && secretValue != "") {
+	plainValue, err := boundedRawFormString(r, "value", maxPHPEnvironmentValue)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid environment variable")
+		return
+	}
+	secretValue, err := boundedRawFormString(r, "secret_value", maxPHPEnvironmentValue)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid environment variable")
+		return
+	}
+	secret, err := boundedFormBool(r, "secret")
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid environment variable")
+		return
+	}
+	secret = secret || secretValue != ""
+	if (secret && (secretValue == "" || plainValue != "")) || (!secret && secretValue != "") {
 		s.writePHPApplicationError(w, r, errors.New("invalid environment value"), "Invalid environment variable")
 		return
 	}
@@ -212,8 +268,13 @@ func (s *Server) handleUpsertPHPEnvironment(w http.ResponseWriter, r *http.Reque
 	if secret {
 		value = secretValue
 	}
-	input := controlphpapp.EnvironmentInput{Name: boundedFormString(r, "name", 128), Value: value, Secret: secret}
-	if input.Name == "" || len(strings.TrimSpace(r.Form.Get("name"))) > 128 {
+	name, err := boundedFormString(r, "name", 128)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid environment variable")
+		return
+	}
+	input := controlphpapp.EnvironmentInput{Name: name, Value: value, Secret: secret}
+	if input.Name == "" {
 		s.writePHPApplicationError(w, r, errors.New("invalid environment name"), "Invalid environment variable")
 		return
 	}
@@ -235,8 +296,12 @@ func (s *Server) handleDeletePHPEnvironment(w http.ResponseWriter, r *http.Reque
 		s.writePHPApplicationError(w, r, errors.New("confirmation required"), "Delete confirmation is required")
 		return
 	}
-	name := boundedFormString(r, "name", 128)
-	if name == "" || len(strings.TrimSpace(r.Form.Get("name"))) > 128 {
+	name, err := boundedFormString(r, "name", 128)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid environment variable")
+		return
+	}
+	if name == "" {
 		s.writePHPApplicationError(w, r, errors.New("invalid environment name"), "Invalid environment variable")
 		return
 	}
@@ -272,8 +337,23 @@ func (s *Server) handleUpsertPHPWorker(w http.ResponseWriter, r *http.Request) {
 		s.writePHPApplicationError(w, r, err, "Invalid PHP worker")
 		return
 	}
-	input := controlphpapp.WorkerInput{ID: workerID, Name: boundedFormString(r, "name", 48), Script: boundedFormString(r, "script", 240), Arguments: arguments, Processes: processes, DesiredState: strings.ToLower(boundedFormString(r, "desired_state", 16))}
-	if input.Name == "" || input.Script == "" || formFieldTooLong(r, maxPHPApplicationString) {
+	name, err := boundedFormString(r, "name", 48)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP worker")
+		return
+	}
+	script, err := boundedFormString(r, "script", 240)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP worker")
+		return
+	}
+	desiredState, err := boundedFormString(r, "desired_state", 16)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP worker")
+		return
+	}
+	input := controlphpapp.WorkerInput{ID: workerID, Name: name, Script: script, Arguments: arguments, Processes: processes, DesiredState: strings.ToLower(desiredState)}
+	if input.Name == "" || input.Script == "" {
 		s.writePHPApplicationError(w, r, errors.New("invalid worker"), "Invalid PHP worker")
 		return
 	}
@@ -295,7 +375,12 @@ func (s *Server) handleSetPHPWorkerState(w http.ResponseWriter, r *http.Request)
 		s.writePHPApplicationError(w, r, err, "Invalid PHP worker state")
 		return
 	}
-	state := strings.ToLower(strings.TrimSpace(r.Form.Get("state")))
+	state, err := boundedFormString(r, "state", 16)
+	if err != nil {
+		s.writePHPApplicationError(w, r, err, "Invalid PHP worker state")
+		return
+	}
+	state = strings.ToLower(state)
 	if state != "running" && state != "stopped" {
 		s.writePHPApplicationError(w, r, errors.New("invalid state"), "Invalid PHP worker state")
 		return
@@ -452,7 +537,10 @@ func isPHPHTTPValidationError(err error) bool {
 }
 
 func optionalPositiveFormID(r *http.Request, name string) (int64, error) {
-	raw := strings.TrimSpace(r.Form.Get(name))
+	raw, err := boundedFormString(r, name, 20)
+	if err != nil {
+		return 0, err
+	}
 	if raw == "" || raw == "0" {
 		return 0, nil
 	}
@@ -464,7 +552,10 @@ func optionalPositiveFormID(r *http.Request, name string) (int64, error) {
 }
 
 func boundedFormInt(r *http.Request, name string, fallback, minimum, maximum int) (int, error) {
-	raw := strings.TrimSpace(r.Form.Get(name))
+	raw, err := boundedFormString(r, name, 20)
+	if err != nil {
+		return 0, err
+	}
 	if raw == "" {
 		return fallback, nil
 	}
@@ -475,12 +566,44 @@ func boundedFormInt(r *http.Request, name string, fallback, minimum, maximum int
 	return value, nil
 }
 
-func boundedFormString(r *http.Request, name string, maximum int) string {
-	value := strings.TrimSpace(r.Form.Get(name))
-	if len(value) > maximum {
-		return ""
+func boundedFormString(r *http.Request, name string, maximum int) (string, error) {
+	value, err := boundedRawFormString(r, name, maximum)
+	if err != nil {
+		return "", err
 	}
-	return value
+	return strings.TrimSpace(value), nil
+}
+
+func boundedRawFormString(r *http.Request, name string, maximum int) (string, error) {
+	values := r.Form[name]
+	if len(values) == 0 {
+		return "", nil
+	}
+	if len(values) != 1 {
+		return "", errors.New("invalid repeated scalar field")
+	}
+	value := values[0]
+	if len(value) > maximum {
+		return "", errors.New("invalid form field length")
+	}
+	return value, nil
+}
+
+func boundedFormBool(r *http.Request, name string) (bool, error) {
+	result := false
+	for _, raw := range r.Form[name] {
+		if len(raw) > 5 {
+			return false, errors.New("invalid boolean field length")
+		}
+		switch strings.ToLower(strings.TrimSpace(raw)) {
+		case "true", "on", "1", "yes":
+			result = true
+		case "", "false", "off", "0", "no":
+		default:
+			return false, errors.New("invalid boolean field")
+		}
+	}
+	return result, nil
 }
 
 func boundedFormList(r *http.Request, repeatedName, linesName string, maximumItems, maximumItemBytes, maximumTotalBytes int) ([]string, error) {
@@ -505,20 +628,6 @@ func boundedFormList(r *http.Request, repeatedName, linesName string, maximumIte
 		}
 	}
 	return result, nil
-}
-
-func formFieldTooLong(r *http.Request, maximum int) bool {
-	for name, values := range r.Form {
-		if name == "secret_value" || name == "value" || name == "csrf_token" {
-			continue
-		}
-		for _, value := range values {
-			if len(value) > maximum {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func boundedSafeText(value string, maximum int) string {

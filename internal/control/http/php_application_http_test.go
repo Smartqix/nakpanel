@@ -3,6 +3,7 @@ package panelhttp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -294,6 +295,73 @@ func TestPHPApplicationCSRFConfirmationAndBoundsRejectBeforeService(t *testing.T
 	if rec.Code != http.StatusBadRequest || service.called != "" {
 		t.Fatalf("argument bound = %d call=%q", rec.Code, service.called)
 	}
+}
+
+func TestPHPApplicationScalarLimitsRejectBeforeServiceWithoutEcho(t *testing.T) {
+	const marker = "Z9QX"
+	over := func(limit int) string {
+		return strings.Repeat("x", limit+1-len(marker)) + marker
+	}
+	configureBase := func() url.Values {
+		return url.Values{"hosting_mode": {"managed"}, "php_version": {"8.4"}, "repository_id": {"12"},
+			"repository_ref": {"main"}, "framework_profile": {"plain"}, "health_path": {"/"}, "release_retention": {"4"}}
+	}
+	tests := []struct {
+		name string
+		path string
+		form url.Values
+	}{
+		{"hosting mode", "/sites/7/php-application", withFormValue(configureBase(), "hosting_mode", over(16))},
+		{"PHP version", "/sites/7/php-application", withFormValue(configureBase(), "php_version", over(16))},
+		{"repository ref", "/sites/7/php-application", withFormValue(configureBase(), "repository_ref", over(128))},
+		{"framework profile", "/sites/7/php-application", withFormValue(configureBase(), "framework_profile", over(16))},
+		{"public path", "/sites/7/php-application", withFormValue(configureBase(), "public_path", over(240))},
+		{"health path", "/sites/7/php-application", withFormValue(configureBase(), "health_path", over(240))},
+		{"shared path", "/sites/7/php-application", withFormValue(configureBase(), "shared_path", over(240))},
+		{"composer install", "/sites/7/php-application", withFormValue(configureBase(), "composer_install", over(5))},
+		{"composer scripts", "/sites/7/php-application", withFormValue(configureBase(), "composer_allow_scripts", over(5))},
+		{"composer plugins", "/sites/7/php-application", withFormValue(configureBase(), "composer_allow_plugins", over(5))},
+		{"deployment revision", "/sites/7/php-application/deployments", url.Values{"revision": {over(128)}}},
+		{"environment name", "/sites/7/php-application/environment", url.Values{"name": {over(128)}, "value": {"safe"}}},
+		{"environment plain value", "/sites/7/php-application/environment", url.Values{"name": {"APP_ENV"}, "value": {over(maxPHPEnvironmentValue)}}},
+		{"environment secret value", "/sites/7/php-application/environment", url.Values{"name": {"APP_KEY"}, "secret": {"true"}, "secret_value": {over(maxPHPEnvironmentValue)}}},
+		{"environment secret flag", "/sites/7/php-application/environment", url.Values{"name": {"APP_KEY"}, "secret": {over(5)}, "secret_value": {"safe"}}},
+		{"delete environment name", "/sites/7/php-application/environment/delete", url.Values{"name": {over(128)}, "confirm": {"delete"}}},
+		{"worker name", "/sites/7/php-application/workers", url.Values{"name": {over(48)}, "script": {"artisan"}, "processes": {"1"}, "desired_state": {"running"}}},
+		{"worker script", "/sites/7/php-application/workers", url.Values{"name": {"queue"}, "script": {over(240)}, "processes": {"1"}, "desired_state": {"running"}}},
+		{"worker desired state", "/sites/7/php-application/workers", url.Values{"name": {"queue"}, "script": {"artisan"}, "processes": {"1"}, "desired_state": {over(16)}}},
+		{"worker argument", "/sites/7/php-application/workers", url.Values{"name": {"queue"}, "script": {"artisan"}, "processes": {"1"}, "desired_state": {"running"}, "argument": {over(4096)}}},
+		{"worker state", "/sites/7/php-application/workers/51/state", url.Values{"state": {over(16)}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			service := &fakePHPApplicationService{}
+			workspace := &fakeWorkspaceService{}
+			handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{PHPApplications: service, Workspace: workspace})
+			cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+			req := httptest.NewRequest(http.MethodPost, "https://panel.test"+tc.path, strings.NewReader(tc.form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("X-Nakpanel-SPA", "true")
+			addAuthenticatedCookie(req, cookie)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusBadRequest || service.called != "" {
+				t.Fatalf("overlong scalar = %d call=%q body=%s", rec.Code, service.called, rec.Body.String())
+			}
+			combined := rec.Body.String() + fmt.Sprint(rec.Header())
+			for _, audit := range workspace.audits {
+				combined += string(audit.Metadata)
+			}
+			if strings.Contains(combined, marker) {
+				t.Fatalf("overlong scalar echoed: headers=%v body=%s audits=%#v", rec.Header(), rec.Body.String(), workspace.audits)
+			}
+		})
+	}
+}
+
+func withFormValue(form url.Values, name, value string) url.Values {
+	form.Set(name, value)
+	return form
 }
 
 func TestPHPApplicationAcceptsFormCSRFAndRejectsUnconfiguredService(t *testing.T) {
