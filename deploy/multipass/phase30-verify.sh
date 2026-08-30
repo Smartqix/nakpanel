@@ -246,7 +246,7 @@ WP_ADMIN_PASSWORD="Wp9!$(openssl rand -hex 18)"
 database_rotation_result="$(printf '%s' "${DB_PASSWORD}" | \
   curl --connect-timeout 5 --max-time 30 -sk -w $'\n%{http_code}' \
   -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
-  -H 'Accept: application/json' \
+	  -H 'X-Nakpanel-SPA: true' \
   --data-urlencode "password@-" \
   "https://${VM_IP}:7443/tools-settings/databases/${database_id}/password")"
 database_rotation_status="${database_rotation_result##*$'\n'}"
@@ -538,7 +538,7 @@ post_as phase30-public-env "sites/${managed_site_id}/php-application/environment
 application_secret_result="$(printf '%s' "${APP_SECRET}" | \
   curl --connect-timeout 5 --max-time 30 -sk -w $'\n%{http_code}' \
   -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
-  -H 'Accept: application/json' \
+	  -H 'X-Nakpanel-SPA: true' \
   -d 'name=PHASE30_SECRET' -d 'secret=true' --data-urlencode "secret_value@-" \
   "https://${VM_IP}:7443/sites/${managed_site_id}/php-application/environment")"
 application_secret_status="${application_secret_result##*$'\n'}"

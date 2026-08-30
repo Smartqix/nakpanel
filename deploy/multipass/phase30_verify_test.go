@@ -51,7 +51,7 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 		"secret_hygiene": {
 			"DB_PASSWORD", "APP_SECRET", "WP_ADMIN_PASSWORD", "unset DB_PASSWORD APP_SECRET WP_ADMIN_PASSWORD",
 			"river_job", "audit_events", "deployment data", "journalctl", "systemctl show",
-			"assert_secret_absent_in_memory", "Accept: application/json", "password@-", "secret_value@-",
+			"assert_secret_absent_in_memory", "X-Nakpanel-SPA: true", "password@-", "secret_value@-",
 			"DATABASE_ROTATION_RESPONSE", "APPLICATION_SECRET_RESPONSE", "PRE_REBOOT_JOURNAL", "FINAL_JOURNAL",
 			"system_database_mutation",
 		},
@@ -207,6 +207,14 @@ func TestPhase30VerifierValidatesQuotaStatusOutputDespiteQuotaonExitCode(t *test
 	}
 	if !strings.Contains(script, `grep -q 'user quota .* is on' <<<"${quota_status}"`) {
 		t.Fatal("verifier must still require active user quotas")
+	}
+}
+
+func TestPhase30VerifierRequestsEnhancedJSONForSecretMutation(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	secretRequest := script[strings.Index(script, `application_secret_result=`):strings.Index(script, `application_secret_status=`)]
+	if !strings.Contains(secretRequest, `-H 'X-Nakpanel-SPA: true'`) {
+		t.Fatal("secret mutation must use the panel's enhanced-request header before asserting HTTP 200")
 	}
 }
 
