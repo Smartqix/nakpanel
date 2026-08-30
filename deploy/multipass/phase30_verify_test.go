@@ -90,6 +90,21 @@ func TestPhase30VerifierUsesBoundedWaitsAndMemoryOnlySecrets(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierAcceptsWPCLIInfoWhitespace(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	for _, want := range []string{
+		`wp_info="$(timeout 1m wp --info)"`,
+		`grep -Eq 'WP-CLI version:[[:space:]]+2\.12\.0' <<<"${wp_info}"`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("verifier is missing whitespace-safe WP-CLI assertion %q", want)
+		}
+	}
+	if strings.Contains(script, `grep -Fq 'WP-CLI version: 2.12.0'`) {
+		t.Fatal("verifier must not assume WP-CLI uses a literal space before its version")
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{

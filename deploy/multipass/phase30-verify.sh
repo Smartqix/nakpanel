@@ -161,7 +161,8 @@ test "${composer_phar_hash_after}" = "${composer_phar_hash_before}"
 test "${composer_version_after}" = "${composer_version_before}"
 test "$(stat -c '%U:%G:%a' /usr/local/bin/composer)" = root:root:755
 test "$(stat -c '%U:%G:%a' /usr/local/lib/nakpanel/composer.phar)" = root:root:555
-timeout 1m wp --info | grep -Fq 'WP-CLI version: 2.12.0'
+wp_info="$(timeout 1m wp --info)"
+grep -Eq 'WP-CLI version:[[:space:]]+2\.12\.0' <<<"${wp_info}"
 timeout 1m wp --version --allow-root | grep -Fq 'WP-CLI 2.12.0'
 command -v freshclam >/dev/null
 command -v clamscan >/dev/null
