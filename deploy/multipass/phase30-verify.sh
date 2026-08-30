@@ -311,7 +311,7 @@ printf '%s' "${DB_PASSWORD}" | multipass exec "${VM_NAME}" --working-directory /
   --dbname="${db_name}" --dbuser="${db_user}" --dbhost=localhost --prompt=dbpass --skip-check
 printf '%s' "${WP_ADMIN_PASSWORD}" | multipass exec "${VM_NAME}" --working-directory / -- sudo -u "${username}" timeout 5m \
   wp core install --path="/home/${username}/domains/phase30-classic.test/public_html" \
-  --url=https://phase30-classic.test --title='Phase 30 WordPress' --admin_user=phase30admin \
+	--url=https://phase30-classic.test --title=Phase30WordPress --admin_user=phase30admin \
   --prompt=admin_password --admin_email=phase30-wp@nakpanel.test --skip-email
 multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${username}" <<'REMOTE'
 set -euo pipefail
@@ -319,7 +319,8 @@ username="$1"
 docroot="/home/${username}/domains/phase30-classic.test/public_html"
 chmod 0600 "${docroot}/wp-config.php"
 chown "${username}:${username}" "${docroot}/wp-config.php"
-timeout 5m sudo -u "${username}" wp core version --path="${docroot}" | grep -Fxq '7.1'
+wordpress_version="$(timeout 5m sudo -u "${username}" wp core version --path="${docroot}")"
+grep -Fxq '7.1' <<<"${wordpress_version}"
 timeout 5m sudo -u "${username}" wp core verify-checksums --path="${docroot}" --version=7.1
 timeout 5m sudo -u "${username}" wp rewrite structure '/%postname%/' --hard --path="${docroot}"
 timeout 5m sudo -u "${username}" wp post create --path="${docroot}" --post_type=page --post_status=publish \
@@ -350,7 +351,8 @@ chown "${username}:${username}" "${docroot}/phase30-media.png"
 attachment_id="$(timeout 5m sudo -u "${username}" wp media import "${docroot}/phase30-media.png" --title='Phase30 Media' --porcelain --path="${docroot}")"
 test "${attachment_id}" -gt 0
 timeout 5m sudo -u "${username}" wp cron event schedule phase30_event '+1 hour' --repeat=hourly --path="${docroot}"
-timeout 5m sudo -u "${username}" wp cron event list --fields=hook --path="${docroot}" | grep -Fxq 'phase30_event'
+cron_hooks="$(timeout 5m sudo -u "${username}" wp cron event list --fields=hook --path="${docroot}")"
+grep -Fxq 'phase30_event' <<<"${cron_hooks}"
 timeout 5m sudo -u "${username}" wp eval '$r=wp_remote_get("https://api.wordpress.org/core/version-check/1.7/", ["timeout"=>20]); if (is_wp_error($r) || wp_remote_retrieve_response_code($r)!==200) { exit(1); }' --path="${docroot}"
 timeout 5m sudo -u "${username}" wp option update phase30_restore_canary before --path="${docroot}" >/dev/null
 printf 'before\n' >"${docroot}/phase30-restore.txt"
@@ -358,9 +360,11 @@ chown "${username}:${username}" "${docroot}/phase30-restore.txt"
 test "$(stat -c '%U:%G' "${docroot}")" = "${username}:${username}"
 REMOTE
 
-trusted_curl phase30-classic.test / | grep -Fq 'Phase 30 WordPress'
+classic_home_html="$(trusted_curl phase30-classic.test /)"
+grep -Fq 'Phase30WordPress' <<<"${classic_home_html}"
 trusted_curl phase30-classic.test /wp-admin/ >/dev/null
-trusted_curl phase30-classic.test /phase30-clean/ | grep -Fq 'Phase30 Clean Permalink'
+classic_permalink_html="$(trusted_curl phase30-classic.test /phase30-clean/)"
+grep -Fq 'Phase30 Clean Permalink' <<<"${classic_permalink_html}"
 runtime_body="$(trusted_curl phase30-classic.test '/?phase30_runtime=1')"
 grep -Fxq 'session=active' <<<"${runtime_body}"
 grep -Fxq 'opcache=active' <<<"${runtime_body}"
@@ -389,7 +393,8 @@ REMOTE
 post_as phase30-classic-php85 "sites/${classic_site_id}/hosting" -d 'desired_status=active' \
   -d 'desired_php_version=8.5' -d 'desired_https_redirect=true'
 wait_for "Classic PHP 8.5 switch" "SELECT php_version||':'||settings_status FROM sites WHERE id=${classic_site_id}" "8.5:in_sync"
-trusted_curl phase30-classic.test / | grep -Fq 'Phase 30 WordPress'
+classic_home_html="$(trusted_curl phase30-classic.test /)"
+grep -Fq 'Phase30WordPress' <<<"${classic_home_html}"
 multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${classic_site_id}" "${username}" <<'REMOTE'
 set -euo pipefail
 site_id="$1"; username="$2"
@@ -426,7 +431,8 @@ classic_document_root="$(db "SELECT document_root FROM sites WHERE id=${classic_
 multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${username}" "${second_username}" "${classic_site_id}" "${classic_document_root}" <<'REMOTE'
 set -euo pipefail
 username="$1"; second_username="$2"; site_id="$3"; classic_document_root="$4"
-quotaon -p / | grep -q 'user quota .* is on'
+quota_status="$(quotaon -p /)"
+grep -q 'user quota .* is on' <<<"${quota_status}"
 quota -u "${username}" >/tmp/phase30-quota.out
 expected_hard_kib=$((512 * 1024))
 hard_kib="$(repquota -up / | awk -v user="${username}" '$1==user {print $5; found=1} END{if (!found) exit 1}')"
@@ -586,7 +592,8 @@ REMOTE
 post_as phase30-unhealthy-deploy "sites/${managed_site_id}/php-application/deployments" -d 'revision=main'
 wait_for "unhealthy deployment rejection" "SELECT status FROM php_deployments WHERE application_id=${managed_application_id} ORDER BY id DESC LIMIT 1" "failed"
 [[ "$(db "SELECT active_deployment_id FROM php_applications WHERE id=${managed_application_id}")" == "${active_deployment_id}" ]] || fail "unhealthy deployment replaced the active release"
-curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
+managed_body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/)"
+grep -Fq 'public=visible' <<<"${managed_body}"
 
 echo "phase30: prove secret absence from durable/control-plane surfaces"
 MANAGED_APPLICATION_HTML="$(curl --connect-timeout 5 --max-time 30 -sk --fail \
@@ -663,7 +670,8 @@ wait_for "desired-running worker after explicit reconciliation" "SELECT desired_
 assert_worker_active "desired-running worker after explicit reconciliation" "${worker_id}"
 wait_for "desired-stopped worker after explicit reconciliation" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped:in_sync"
 assert_worker_inactive "desired-stopped worker after explicit reconciliation" "${stopped_worker_id}"
-curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
+managed_body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/)"
+grep -Fq 'public=visible' <<<"${managed_body}"
 
 # Stop both secret-consuming daemons before the reboot-boundary capture. Once
 # inactive, they cannot append a later pre-reboot entry outside this snapshot.
@@ -700,8 +708,10 @@ assert_worker_active "post-reboot desired-running worker" "${worker_id}"
 wait_for "post-reboot desired-stopped worker" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_workers WHERE id=${stopped_worker_id}" "stopped:stopped:in_sync"
 assert_worker_inactive "post-reboot desired-stopped worker" "${stopped_worker_id}"
 [[ "$(db "SELECT active_deployment_id FROM php_applications WHERE id=${managed_application_id}")" == "${active_deployment_id}" ]] || fail "reboot changed the active managed release"
-trusted_curl phase30-classic.test / | grep -Fq 'Phase 30 WordPress'
-curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/ | grep -Fq 'public=visible'
+classic_home_html="$(trusted_curl phase30-classic.test /)"
+grep -Fq 'Phase30WordPress' <<<"${classic_home_html}"
+managed_body="$(curl --connect-timeout 5 --max-time 30 -sS --fail --resolve "phase30-managed.test:80:${VM_IP}" http://phase30-managed.test/)"
+grep -Fq 'public=visible' <<<"${managed_body}"
 
 echo "phase30: verify PHP UI and product-boundary copy"
 curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${classic_site_id}/applications" -o "${tmpdir}/classic-app.html"

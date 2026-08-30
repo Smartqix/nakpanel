@@ -109,6 +109,19 @@ func TestEnsureSubscriptionAccountCreatesSharedLayoutAndLimits(t *testing.T) {
 			t.Fatalf("%s mode = %o, want 711 traversal-only anchor", path, got)
 		}
 	}
+	for _, path := range []string{
+		filepath.Join(home, ".wp-cli", "cache"),
+		filepath.Join(home, ".cache", "composer"),
+		filepath.Join(home, ".config", "composer"),
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("hosting tool directory %s: %v", path, err)
+		}
+		if got := info.Mode().Perm(); got != 0o700 {
+			t.Fatalf("%s mode = %o, want 700 account-private", path, got)
+		}
+	}
 }
 
 func TestEnsureSubscriptionAccountRejectsSymlinkedDomainRoot(t *testing.T) {

@@ -559,7 +559,13 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 	if err := p.users.EnsureUser(ctx, req.Username); err != nil {
 		return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("ensure subscription user: %w", err)
 	}
-	for _, dir := range []string{req.HomePath, filepath.Join(req.HomePath, "domains")} {
+	for _, dir := range []string{
+		req.HomePath,
+		filepath.Join(req.HomePath, "domains"),
+		filepath.Join(req.HomePath, ".wp-cli", "cache"),
+		filepath.Join(req.HomePath, ".cache", "composer"),
+		filepath.Join(req.HomePath, ".config", "composer"),
+	} {
 		if err := ensureManagedDirectory(p.homeRoot, dir, 0o700); err != nil {
 			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("create account directory %q: %w", dir, err)
 		}

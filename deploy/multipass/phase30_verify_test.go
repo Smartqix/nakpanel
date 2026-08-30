@@ -159,6 +159,23 @@ func TestPhase30VerifierUsesNeutralGuestWorkingDirectory(t *testing.T) {
 	}
 }
 
+func TestPhase30VerifierAvoidsSplitArgumentsAndEarlyExitChecks(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	if !strings.Contains(script, `--title=Phase30WordPress`) {
+		t.Fatal("direct Multipass WP-CLI arguments must not contain an embedded display-title space")
+	}
+	for _, forbidden := range []string{
+		`--title='Phase 30 WordPress'`,
+		`| grep -Fq`,
+		`| grep -Fxq`,
+		`| grep -q`,
+	} {
+		if strings.Contains(script, forbidden) {
+			t.Errorf("verifier retains split or pipefail-sensitive contract %q", forbidden)
+		}
+	}
+}
+
 func TestPhase30VerifierReviewRoundOneContracts(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{
