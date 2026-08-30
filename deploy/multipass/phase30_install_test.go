@@ -117,8 +117,10 @@ func TestPhase30InstallerPinsAndValidatesProductionPHPToolchain(t *testing.T) {
 		`php${version}-curl`, `php${version}-gd`, `php${version}-imagick`,
 		`php${version}-intl`, `php${version}-mbstring`, `php${version}-mysql`,
 		`php${version}-redis`, `php${version}-soap`, `php${version}-xml`,
-		`php${version}-zip`, `php${version}-common`, `php${version}-opcache`,
+		`php${version}-zip`, `php${version}-common`,
 		`php${version}-readline`, `php${version}-apcu`,
+		`apt_package_has_candidate`, `opcache_package="php${version}-opcache"`,
+		`packages+=("${opcache_package}")`, `Candidate:`, `(none)`,
 		`COMPOSER_VERSION=`, `getcomposer.org/download/${COMPOSER_VERSION}/composer.phar`,
 		`composer.phar.sha256sum`, `WP_CLI_VERSION=2.12.0`,
 		`wp-cli-${WP_CLI_VERSION}.phar.sha512`, `wp-cli.sha512.check`,
@@ -135,6 +137,15 @@ func TestPhase30InstallerPinsAndValidatesProductionPHPToolchain(t *testing.T) {
 	}
 	if strings.Contains(script, "NAKPANEL_PHP_VERSIONS") {
 		t.Fatal("canonical installer must not inherit a runtime subset override")
+	}
+	conditional := strings.Index(script, `if apt_package_has_candidate "${opcache_package}"`)
+	appendPackage := strings.Index(script, `packages+=("${opcache_package}")`)
+	install := strings.Index(script, `apt-get install -y "${packages[@]}"`)
+	if conditional < 0 || appendPackage < conditional || install < appendPackage {
+		t.Fatal("split OPcache packages must be added only when APT has a candidate, before package installation")
+	}
+	if !strings.Contains(script, `"Zend OPcache"`) {
+		t.Fatal("runtime validation must still require OPcache when the repository bundles it into PHP")
 	}
 }
 

@@ -53,6 +53,18 @@ if [[ -z "${ppa_source}" ]] || ! grep -qsE '^(Signed-By:|deb .*signed-by=)' "${p
 fi
 
 apt-get update
+
+# PHP extensions may move between a split Debian package and the core SAPI
+# package across upstream releases. PHP 8.5 currently bundles OPcache while
+# 8.3 and 8.4 publish phpX.Y-opcache separately. Add the split package only
+# when APT can actually install it; validate the loaded Zend extension below
+# for every runtime either way.
+apt_package_has_candidate() {
+  local candidate
+  candidate="$(apt-cache policy "$1" | awk '/^[[:space:]]*Candidate:/ { print $2; exit }')"
+  [[ -n "${candidate}" && "${candidate}" != "(none)" ]]
+}
+
 packages=()
 for version in "${PHP_VERSIONS[@]}"; do
   packages+=(
@@ -70,10 +82,13 @@ for version in "${PHP_VERSIONS[@]}"; do
     "php${version}-xml"
     "php${version}-zip"
     "php${version}-common"
-    "php${version}-opcache"
     "php${version}-readline"
     "php${version}-apcu"
   )
+  opcache_package="php${version}-opcache"
+  if apt_package_has_candidate "${opcache_package}"; then
+    packages+=("${opcache_package}")
+  fi
 done
 apt-get install -y "${packages[@]}"
 
