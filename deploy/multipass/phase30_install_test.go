@@ -14,6 +14,30 @@ func TestPhase30InstallerHasValidShellSyntax(t *testing.T) {
 	}
 }
 
+func TestPhase3RunsCanonicalPhase30InstallerBeforeServicesAndProvisioning(t *testing.T) {
+	data, err := os.ReadFile("phase3-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	installer := strings.Index(script, `sudo bash "${REMOTE_SRC}/deploy/install/phase30-install.sh"`)
+	agentStart := strings.Index(script, "sudo systemctl restart nakpanel-agent.service")
+	panelStart := strings.Index(script, "sudo systemctl restart nakpanel.service")
+	provision := strings.Index(script, `create_status="$(curl`)
+	if installer < 0 {
+		t.Fatal("Phase 3 must run the canonical phase30-install.sh")
+	}
+	for label, index := range map[string]int{
+		"agent startup":     agentStart,
+		"panel startup":     panelStart,
+		"site provisioning": provision,
+	} {
+		if index < 0 || installer >= index {
+			t.Fatalf("Phase 3 must run phase30-install.sh before %s", label)
+		}
+	}
+}
+
 func TestPhase30InstallerPinsAndValidatesProductionPHPToolchain(t *testing.T) {
 	data, err := os.ReadFile("../install/phase30-install.sh")
 	if err != nil {
