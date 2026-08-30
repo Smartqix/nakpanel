@@ -42,6 +42,32 @@ func NewSQLStore(db *sql.DB, riverClient RiverInserter, secrets SecretStore) *SQ
 
 func (s *SQLStore) SetRiverClient(client RiverInserter) { s.river = client }
 
+// ReconcileSiteApplication applies an effective hosting-state change without
+// changing the customer's desired application revision.
+func (s *SQLStore) ReconcileSiteApplication(ctx context.Context, siteID int64) error {
+	if s == nil || s.db == nil || s.river == nil {
+		return errors.New("PHP application reconciliation is unavailable")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var applicationID, revision int64
+	err = tx.QueryRowContext(ctx, `SELECT id,desired_revision FROM php_applications WHERE site_id=$1 FOR UPDATE`, siteID).
+		Scan(&applicationID, &revision)
+	if errors.Is(err, sql.ErrNoRows) {
+		return tx.Commit()
+	}
+	if err != nil {
+		return err
+	}
+	if err = s.enqueueTx(ctx, tx, ReconcilePHPApplicationArgs{ApplicationID: applicationID, DesiredRevision: revision}); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *SQLStore) SiteIdentity(ctx context.Context, siteID int64) (SiteIdentity, error) {
 	if s == nil || s.db == nil || siteID <= 0 {
 		return SiteIdentity{}, ErrNotFound

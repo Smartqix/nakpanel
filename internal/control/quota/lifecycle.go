@@ -149,14 +149,21 @@ type HostingStateAgent interface {
 type SiteRuntimeAgent interface {
 	ApplySiteRuntime(context.Context, types.ApplySiteRuntimeReq) (types.Response, error)
 }
+type SiteApplicationReconciler interface {
+	ReconcileSiteApplication(context.Context, int64) error
+}
 type SetHostingStateWorker struct {
 	river.WorkerDefaults[SetHostingStateArgs]
-	agent HostingStateAgent
-	db    *sql.DB
+	agent                 HostingStateAgent
+	db                    *sql.DB
+	applicationReconciler SiteApplicationReconciler
 }
 
 func NewSetHostingStateWorker(agent HostingStateAgent, db *sql.DB) *SetHostingStateWorker {
 	return &SetHostingStateWorker{agent: agent, db: db}
+}
+func (w *SetHostingStateWorker) SetApplicationReconciler(reconciler SiteApplicationReconciler) {
+	w.applicationReconciler = reconciler
 }
 func (w *SetHostingStateWorker) Work(ctx context.Context, job *river.Job[SetHostingStateArgs]) error {
 	if w.agent == nil {
@@ -222,6 +229,11 @@ func (w *SetHostingStateWorker) Work(ctx context.Context, job *river.Job[SetHost
 SELECT u.id,s.customer_id,s.subscription_id,'hosting.state_converged','site',s.id,$2::jsonb
 FROM sites s CROSS JOIN LATERAL (SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1) u WHERE s.id=$1`, job.Args.SiteID, string(metadata)); auditErr != nil {
 			return fmt.Errorf("record hosting convergence audit: %w", auditErr)
+		}
+		if w.applicationReconciler != nil {
+			if err := w.applicationReconciler.ReconcileSiteApplication(ctx, job.Args.SiteID); err != nil {
+				return fmt.Errorf("reconcile site PHP application: %w", err)
+			}
 		}
 		return nil
 	}
