@@ -22,8 +22,8 @@ import (
 	controlfiles "github.com/nakroteck/nakpanel/internal/control/filemanager"
 	controlpolicy "github.com/nakroteck/nakpanel/internal/control/policy"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
-	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/control/web"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/nakroteck/nakpanel/internal/version"
@@ -497,7 +497,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if user.Role == auth.RoleAdmin {
-		data.Notice, data.NoticeKind = workspaceNotice(r)
+		data.Notice, data.NoticeKind = workspaceNotice(w, r)
 	}
 
 	renderPage(w, r, web.DashboardPage(title, user, data, web.DashboardActions{
@@ -539,7 +539,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			http.Error(w, "Could not load workspace", http.StatusInternalServerError)
 			return
 		}
-		data.Notice, data.NoticeKind = workspaceNotice(r)
+		data.Notice, data.NoticeKind = workspaceNotice(w, r)
 		view := web.WorkspaceView{Route: route, Title: dashboardTitle(user.Role), CSRFToken: csrfToken(r)}
 		if raw := r.PathValue("id"); raw != "" {
 			view.DetailID, err = strconv.ParseInt(raw, 10, 64)
@@ -1110,7 +1110,7 @@ func (s *Server) handleOnboardSubscription(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid onboarding form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid onboarding form")
 		return
 	}
 	req := types.OnboardSubscriptionReq{CustomerMode: strings.TrimSpace(r.Form.Get("customer_mode")), Customer: parseCustomerRequest(r), PlanID: parseFormInt64Default(r, "plan_id", 0), SubscriptionName: strings.TrimSpace(r.Form.Get("subscription_name")), CreateSite: parseFormBool(r, "create_site"), Site: types.CreateSiteReq{Username: strings.ToLower(strings.TrimSpace(firstNonEmpty(r.Form.Get("system_username"), r.Form.Get("username")))), Domain: strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))), PHPVersion: strings.TrimSpace(r.Form.Get("php_version"))}}
@@ -1164,7 +1164,7 @@ func (s *Server) handleSubscriptionStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid subscription status form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscription status form")
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -1196,12 +1196,12 @@ func (s *Server) handleClonePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid plan clone form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid plan clone form")
 		return
 	}
 	data, err := s.loadDashboard(r.Context(), user)
 	if err != nil {
-		http.Error(w, "Could not load plan", http.StatusInternalServerError)
+		formFailure(w, r, "Could not load plan")
 		return
 	}
 	var source controlquota.Plan
@@ -1317,7 +1317,7 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 			writeSPAError(w, http.StatusBadRequest, "Invalid site form")
 			return
 		}
-		http.Error(w, "Invalid site form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid site form")
 		return
 	}
 
@@ -1337,7 +1337,7 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 			writeSPAError(w, http.StatusBadRequest, "Invalid site form: "+err.Error())
 			return
 		}
-		http.Error(w, "Invalid site form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid site form: "+err.Error())
 		return
 	}
 	siteID, err := s.sites.CreateSiteFor(r.Context(), user, resourceOwnerID, req)
@@ -1350,7 +1350,7 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 			writeSPAError(w, http.StatusBadRequest, "Could not create site: "+err.Error())
 			return
 		}
-		http.Error(w, "Could not create site: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not create site: "+err.Error())
 		return
 	}
 	customerID := int64(0)
@@ -1385,7 +1385,7 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid database form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid database form")
 		return
 	}
 
@@ -1406,7 +1406,7 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 	resourceOwnerID, err := parseOptionalOwnerID(r, user.ID)
 	if err != nil {
-		http.Error(w, "Invalid database form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid database form: "+err.Error())
 		return
 	}
 	databaseID, err := s.databases.CreateDatabaseFor(r.Context(), user, resourceOwnerID, req)
@@ -1415,7 +1415,7 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		http.Error(w, "Could not create database: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not create database: "+err.Error())
 		return
 	}
 	customerID := int64(0)
@@ -1449,7 +1449,7 @@ func (s *Server) handleIssueCertificate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid certificate form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid certificate form")
 		return
 	}
 
@@ -1464,7 +1464,7 @@ func (s *Server) handleIssueCertificate(w http.ResponseWriter, r *http.Request) 
 			http.NotFound(w, r)
 			return
 		}
-		http.Error(w, "Could not issue certificate: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not issue certificate: "+err.Error())
 		return
 	}
 	customerID := int64(0)
@@ -1504,7 +1504,7 @@ func (s *Server) handleInstallCustomCertificate(w http.ResponseWriter, r *http.R
 			http.Error(w, "Certificate request is too large", http.StatusRequestEntityTooLarge)
 			return
 		}
-		http.Error(w, "Invalid custom certificate form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid custom certificate form")
 		return
 	}
 	if r.MultipartForm != nil {
@@ -1533,7 +1533,7 @@ func (s *Server) handleInstallCustomCertificate(w http.ResponseWriter, r *http.R
 			http.NotFound(w, r)
 			return
 		}
-		http.Error(w, "Could not install custom certificate: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not install custom certificate: "+err.Error())
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "certificate.custom_queued", "site", siteID, map[string]any{"job_id": jobID})
@@ -1577,17 +1577,17 @@ func (s *Server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid job retry form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid job retry form")
 		return
 	}
 
 	jobID, err := strconv.ParseInt(strings.TrimSpace(r.Form.Get("job_id")), 10, 64)
 	if err != nil || jobID <= 0 {
-		http.Error(w, "Invalid job id", http.StatusBadRequest)
+		formFailure(w, r, "Invalid job id")
 		return
 	}
 	if err := s.jobs.RetryProvisioningJob(r.Context(), jobID); err != nil {
-		http.Error(w, "Could not retry job: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not retry job: "+err.Error())
 		return
 	}
 	http.Redirect(w, r, "/?notice=job-retried", http.StatusSeeOther)
@@ -1608,7 +1608,7 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid backup form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid backup form")
 		return
 	}
 	req := types.CreateBackupReq{
@@ -1621,7 +1621,7 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	resourceOwnerID, err := parseOptionalOwnerID(r, user.ID)
 	if err != nil {
-		http.Error(w, "Invalid backup form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid backup form: "+err.Error())
 		return
 	}
 	backupID, err := s.phase6.CreateBackupFor(r.Context(), user, resourceOwnerID, req)
@@ -1630,7 +1630,7 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		http.Error(w, "Could not create backup: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not create backup: "+err.Error())
 		return
 	}
 	customerID := int64(0)
@@ -1664,12 +1664,12 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid restore form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid restore form")
 		return
 	}
 	backupID, err := strconv.ParseInt(strings.TrimSpace(r.Form.Get("backup_id")), 10, 64)
 	if err != nil || backupID <= 0 {
-		http.Error(w, "Invalid backup id", http.StatusBadRequest)
+		formFailure(w, r, "Invalid backup id")
 		return
 	}
 	restoreID, err := s.phase6.RestoreBackup(r.Context(), user, backupID)
@@ -1678,7 +1678,7 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		http.Error(w, "Could not restore backup: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not restore backup: "+err.Error())
 		return
 	}
 	customerID := int64(0)
@@ -1703,7 +1703,7 @@ func (s *Server) handleConfigureWebmail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid webmail form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid webmail form")
 		return
 	}
 	domain := strings.TrimSpace(r.Form.Get("domain"))
@@ -1748,7 +1748,7 @@ func (s *Server) handleConfigureDNS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid dns form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid dns form")
 		return
 	}
 	domain := strings.TrimSpace(r.Form.Get("domain"))
@@ -1759,7 +1759,7 @@ func (s *Server) handleConfigureDNS(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		http.Error(w, "Could not configure dns: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not configure dns: "+err.Error())
 		return
 	}
 	customerID := int64(0)
@@ -1784,7 +1784,7 @@ func (s *Server) handleReconcileSystem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := s.phase6.ReconcileSystem(r.Context(), user); err != nil {
-		http.Error(w, "Could not reconcile system: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not reconcile system: "+err.Error())
 		return
 	}
 	http.Redirect(w, r, "/?notice=reconcile-queued", http.StatusSeeOther)
@@ -1817,16 +1817,16 @@ func (s *Server) handleUpsertQuota(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid quota form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid quota form")
 		return
 	}
 	limits, err := parseQuotaLimits(r)
 	if err != nil {
-		http.Error(w, "Invalid quota form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid quota form: "+err.Error())
 		return
 	}
 	if err := s.quotas.UpsertAccountQuota(r.Context(), user, limits); err != nil {
-		http.Error(w, "Could not save quota: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not save quota: "+err.Error())
 		return
 	}
 	http.Redirect(w, r, "/?notice=quota-saved", http.StatusSeeOther)
@@ -1842,12 +1842,12 @@ func (s *Server) handleUpsertPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid plan form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid plan form")
 		return
 	}
 	plan, err := parsePlan(r)
 	if err != nil {
-		http.Error(w, "Invalid plan form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid plan form: "+err.Error())
 		return
 	}
 	saved, err := s.quotas.UpsertPlan(r.Context(), user, plan)
@@ -1900,12 +1900,12 @@ func (s *Server) handleSetPlanStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid plan status form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid plan status form")
 		return
 	}
 	planID, err := parseFormInt64(r, "plan_id")
 	if err != nil {
-		http.Error(w, "Invalid plan status form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid plan status form: "+err.Error())
 		return
 	}
 	active := strings.TrimSpace(r.Form.Get("is_active")) == "true"
@@ -1927,7 +1927,7 @@ func (s *Server) handleBulkPlanStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid plan status form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid plan status form")
 		return
 	}
 	active := parseFormBool(r, "is_active")
@@ -1952,7 +1952,7 @@ func (s *Server) handleBulkAddonPlanStatus(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid add-on status form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid add-on status form")
 		return
 	}
 	ids, err := parseFormInt64List(r, "addon_id")
@@ -1977,7 +1977,7 @@ func (s *Server) handleBulkResellerPlanStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid reseller plan status form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid reseller plan status form")
 		return
 	}
 	ids, err := parseFormInt64List(r, "reseller_plan_id")
@@ -2006,13 +2006,13 @@ func (s *Server) handleAssignSubscription(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid subscription form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscription form")
 		return
 	}
 	if strings.TrimSpace(r.Form.Get("customer_id")) != "" || strings.TrimSpace(r.Form.Get("customer_mode")) == "new" || strings.TrimSpace(r.Form.Get("subscription_name")) != "" {
 		req, err := s.parseCreateSubscriptionRequest(r, user)
 		if err != nil {
-			http.Error(w, "Invalid subscription form: "+err.Error(), http.StatusBadRequest)
+			formFailure(w, r, "Invalid subscription form: "+err.Error())
 			return
 		}
 		subscription, err := s.quotas.CreateSubscription(r.Context(), user, req)
@@ -2030,17 +2030,17 @@ func (s *Server) handleAssignSubscription(w http.ResponseWriter, r *http.Request
 	}
 	customerUserID, err := parseFormInt64(r, "customer_user_id")
 	if err != nil {
-		http.Error(w, "Invalid subscription form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscription form: "+err.Error())
 		return
 	}
 	planID, err := parseFormInt64(r, "plan_id")
 	if err != nil {
-		http.Error(w, "Invalid subscription form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscription form: "+err.Error())
 		return
 	}
 	assignment, err := s.quotas.AssignSubscription(r.Context(), user, customerUserID, planID)
 	if err != nil {
-		http.Error(w, "Could not assign subscription: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not assign subscription: "+err.Error())
 		return
 	}
 	if assignment.Warning != "" {
@@ -2060,7 +2060,7 @@ func (s *Server) handleCreateCustomer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid customer form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid customer form")
 		return
 	}
 	req := parseCustomerRequest(r)
@@ -2083,12 +2083,12 @@ func (s *Server) handleEnableCustomerLogin(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid customer login form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid customer login form")
 		return
 	}
 	customerID, err := parseFormInt64(r, "customer_id")
 	if err != nil {
-		http.Error(w, "Invalid customer login form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid customer login form: "+err.Error())
 		return
 	}
 	if _, err := s.quotas.EnableCustomerLogin(r.Context(), user, customerID, strings.TrimSpace(r.Form.Get("email")), r.Form.Get("password")); err != nil {
@@ -2109,12 +2109,12 @@ func (s *Server) handleSetCustomerStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid customer status form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid customer status form")
 		return
 	}
 	customerID, err := parseFormInt64(r, "customer_id")
 	if err != nil {
-		http.Error(w, "Invalid customer status form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid customer status form: "+err.Error())
 		return
 	}
 	status := strings.TrimSpace(r.Form.Get("status"))
@@ -2153,12 +2153,12 @@ func (s *Server) handleBulkCustomerStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid bulk customer action", http.StatusBadRequest)
+		formFailure(w, r, "Invalid bulk customer action")
 		return
 	}
 	ids, err := parseFormIDs(r, "customer_id")
 	if err != nil {
-		http.Error(w, "Invalid bulk customer action: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid bulk customer action: "+err.Error())
 		return
 	}
 	status := strings.TrimSpace(r.Form.Get("status"))
@@ -2178,12 +2178,12 @@ func (s *Server) handleBulkSubscriptionStatus(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid bulk subscription action", http.StatusBadRequest)
+		formFailure(w, r, "Invalid bulk subscription action")
 		return
 	}
 	ids, err := parseFormIDs(r, "subscription_id")
 	if err != nil {
-		http.Error(w, "Invalid bulk subscription action: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid bulk subscription action: "+err.Error())
 		return
 	}
 	status := strings.TrimSpace(r.Form.Get("status"))
@@ -2207,17 +2207,17 @@ func (s *Server) handleBulkSubscriptionPlan(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid subscription plan form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscription plan form")
 		return
 	}
 	ids, err := parseFormIDs(r, "subscription_id")
 	if err != nil {
-		http.Error(w, "Invalid subscription plan form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscription plan form: "+err.Error())
 		return
 	}
 	planID, err := parseFormInt64(r, "plan_id")
 	if err != nil {
-		http.Error(w, "Invalid subscription plan form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscription plan form: "+err.Error())
 		return
 	}
 	if err = s.domains.ChangeSubscriptionPlans(r.Context(), user, ids, planID); err != nil {
@@ -2240,17 +2240,17 @@ func (s *Server) handleBulkSubscriptionSubscriber(w http.ResponseWriter, r *http
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid subscriber form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscriber form")
 		return
 	}
 	ids, err := parseFormIDs(r, "subscription_id")
 	if err != nil {
-		http.Error(w, "Invalid subscriber form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscriber form: "+err.Error())
 		return
 	}
 	customerID, err := parseFormInt64(r, "customer_id")
 	if err != nil {
-		http.Error(w, "Invalid subscriber form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid subscriber form: "+err.Error())
 		return
 	}
 	if err = s.domains.ChangeSubscriptionSubscriber(r.Context(), user, ids, customerID); err != nil {
@@ -2281,7 +2281,7 @@ func (s *Server) handleSitePHPSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid PHP settings", http.StatusBadRequest)
+		formFailure(w, r, "Invalid PHP settings")
 		return
 	}
 	siteID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -2291,7 +2291,7 @@ func (s *Server) handleSitePHPSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	patch, err := typedSitePolicyPatch(r)
 	if err != nil {
-		http.Error(w, "Invalid PHP settings", http.StatusBadRequest)
+		formFailure(w, r, "Invalid PHP settings")
 		return
 	}
 	req := types.UpdateSitePHPSettingsReq{
@@ -2318,7 +2318,7 @@ func (s *Server) handleTLSAutoRenew(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid TLS settings", http.StatusBadRequest)
+		formFailure(w, r, "Invalid TLS settings")
 		return
 	}
 	siteID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -2346,7 +2346,7 @@ func (s *Server) handleSiteSettings(w http.ResponseWriter, r *http.Request, tab 
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid domain settings", http.StatusBadRequest)
+		formFailure(w, r, "Invalid domain settings")
 		return
 	}
 	siteID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -2374,7 +2374,7 @@ func (s *Server) handleUpsertDNSRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid DNS record form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid DNS record form")
 		return
 	}
 	siteID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -2434,17 +2434,17 @@ func (s *Server) handleUpdateOversellSettings(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid oversell settings form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid oversell settings form")
 		return
 	}
 	capacity, err := parseFormInt(r, "server_disk_capacity_mb")
 	if err != nil {
-		http.Error(w, "Invalid oversell settings form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid oversell settings form: "+err.Error())
 		return
 	}
 	valkeyCapacity, err := parseFormInt(r, "valkey_capacity_mb")
 	if err != nil {
-		http.Error(w, "Invalid oversell settings form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid oversell settings form: "+err.Error())
 		return
 	}
 	settings := controlquota.Settings{
@@ -2453,7 +2453,7 @@ func (s *Server) handleUpdateOversellSettings(w http.ResponseWriter, r *http.Req
 		ValkeyCapacityMB:     valkeyCapacity,
 	}
 	if err := s.quotas.UpdateSettings(r.Context(), user, settings); err != nil {
-		http.Error(w, "Could not update oversell settings: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not update oversell settings: "+err.Error())
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "settings.oversell_changed", "settings", 1, map[string]any{
@@ -2474,19 +2474,19 @@ func (s *Server) handleCreateReseller(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid reseller form", http.StatusBadRequest)
+		formFailure(w, r, "Invalid reseller form")
 		return
 	}
 	planID, err := parseFormInt64(r, "reseller_plan_id")
 	if err != nil {
-		http.Error(w, "Invalid reseller form: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid reseller form: "+err.Error())
 		return
 	}
 	req := parseCustomerRequest(r)
 	req.Password = r.Form.Get("password")
 	reseller, err := s.quotas.CreateReseller(r.Context(), user, req, planID)
 	if err != nil {
-		http.Error(w, "Could not create reseller: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not create reseller: "+err.Error())
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "reseller.created", "reseller", reseller.ID, nil)
@@ -2522,17 +2522,17 @@ func (s *Server) handleBulkResellerStatus(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Invalid bulk reseller action", http.StatusBadRequest)
+		formFailure(w, r, "Invalid bulk reseller action")
 		return
 	}
 	ids, err := parseFormIDs(r, "reseller_id")
 	if err != nil {
-		http.Error(w, "Invalid bulk reseller action: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Invalid bulk reseller action: "+err.Error())
 		return
 	}
 	status := strings.TrimSpace(r.Form.Get("status"))
 	if err := s.quotas.SetResellerStatuses(r.Context(), user, ids, status); err != nil {
-		http.Error(w, "Could not update resellers: "+err.Error(), http.StatusBadRequest)
+		formFailure(w, r, "Could not update resellers: "+err.Error())
 		return
 	}
 	for _, id := range ids {
@@ -2587,7 +2587,7 @@ func (s *Server) handleUpsertResellerPlan(w http.ResponseWriter, r *http.Request
 	} {
 		*target, err = parsePlanLimitDefault(r, name, 0)
 		if err != nil {
-			http.Error(w, "Invalid reseller plan: "+err.Error(), http.StatusBadRequest)
+			formFailure(w, r, "Invalid reseller plan: "+err.Error())
 			return
 		}
 	}
@@ -3010,13 +3010,64 @@ func formErrorTarget(r *http.Request, fallback string) string {
 // redirectFormError returns the operator to their form with an actionable
 // message. Before this, 163 failure paths replaced the whole panel with an
 // unstyled 400 and discarded everything the user had typed.
-func redirectFormError(w http.ResponseWriter, r *http.Request, fallback, message string) {
-	target := formErrorTarget(r, fallback)
-	separator := "?"
-	if strings.Contains(target, "?") {
-		separator = "&"
+// formFailure reports a failed form submission. SPA callers get JSON; a normal
+// browser POST is redirected back to the form it came from with the reason,
+// instead of an unstyled 4xx page that discards everything the operator typed.
+func formFailure(w http.ResponseWriter, r *http.Request, message string) {
+	if wantsSPAJSON(r) {
+		writeSPAError(w, http.StatusBadRequest, message)
+		return
 	}
-	http.Redirect(w, r, target+separator+"error="+url.QueryEscape(sanitizeNoticeText(message)), http.StatusSeeOther)
+	redirectFormError(w, r, "/dashboard", message)
+}
+
+func redirectFormError(w http.ResponseWriter, r *http.Request, fallback, message string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     FormErrorCookieName,
+		Value:    url.QueryEscape(sanitizeNoticeText(message)),
+		Path:     "/",
+		MaxAge:   formErrorCookieTTL,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.Redirect(w, r, formErrorTarget(r, fallback), http.StatusSeeOther)
+}
+
+// FormErrorCookieName carries a failed POST's message across the redirect back
+// to the form.
+//
+// The message deliberately does NOT travel in the query string. A reflected
+// parameter would let anyone craft a link that renders arbitrary text inside
+// the panel's own error banner — a convincing phishing surface on an
+// authenticated admin tool. A server-set, one-shot cookie carries the same
+// text with no attacker-controllable path into it.
+const FormErrorCookieName = "nakpanel_form_error"
+
+// formErrorCookieTTL only has to outlive one redirect.
+const formErrorCookieTTL = 30
+
+// takeFormError reads the message and immediately expires the cookie, so a
+// failure is reported once instead of on every later page view.
+func takeFormError(w http.ResponseWriter, r *http.Request) string {
+	cookie, err := r.Cookie(FormErrorCookieName)
+	if err != nil || strings.TrimSpace(cookie.Value) == "" {
+		return ""
+	}
+	http.SetCookie(w, &http.Cookie{
+		Name:     FormErrorCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		Secure:   true,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	decoded, decodeErr := url.QueryUnescape(cookie.Value)
+	if decodeErr != nil {
+		return ""
+	}
+	return sanitizeNoticeText(decoded)
 }
 
 func redirectAfterPost(w http.ResponseWriter, r *http.Request, legacyTarget, routedTarget string) {
@@ -3073,9 +3124,9 @@ func clearSessionCookie(w http.ResponseWriter) {
 // render nothing at all, so creating a website confirmed silently.
 // workspaceNotice resolves the banner for a request: a catalogued success or
 // warning code, or an error message returned from a failed form POST.
-func workspaceNotice(r *http.Request) (string, dashboard.NoticeKind) {
-	if failure := strings.TrimSpace(r.URL.Query().Get("error")); failure != "" {
-		return sanitizeNoticeText(failure), dashboard.NoticeError
+func workspaceNotice(w http.ResponseWriter, r *http.Request) (string, dashboard.NoticeKind) {
+	if failure := takeFormError(w, r); failure != "" {
+		return failure, dashboard.NoticeError
 	}
 	return dashboardNotice(r.URL.Query().Get("notice"))
 }
@@ -3094,18 +3145,18 @@ type noticeEntry struct {
 
 var noticeCatalogue = map[string]noticeEntry{
 	// Provisioning
-	"site-queued":            {"Website queued. Provisioning usually completes within a minute.", dashboard.NoticeSuccess},
-	"database-queued":        {"Database queued. Credentials are shown once it is ready.", dashboard.NoticeSuccess},
-	"certificate-queued":     {"Certificate requested. The status updates when the issuer responds.", dashboard.NoticeSuccess},
-	"backup-queued":          {"Backup queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
-	"restore-queued":         {"Restore queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
-	"webmail-queued":         {"Webmail configuration queued.", dashboard.NoticeSuccess},
-	"dns-queued":             {"DNS zone configuration queued.", dashboard.NoticeSuccess},
-	"reconcile-queued":       {"Reconciliation queued. Generated configs will be refreshed from intent.", dashboard.NoticeSuccess},
-	"staging-queued":         {"Staging operation queued. A rollback point will be created before the target changes.", dashboard.NoticeSuccess},
-	"git-deploy-queued":      {"Git deployment queued. The previous revision remains available as a rollback point.", dashboard.NoticeSuccess},
-	"job-retried":            {"Retry queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
-	"task-ran":               {"Scheduled task started. Its run appears in the task history.", dashboard.NoticeSuccess},
+	"site-queued":        {"Website queued. Provisioning usually completes within a minute.", dashboard.NoticeSuccess},
+	"database-queued":    {"Database queued. Credentials are shown once it is ready.", dashboard.NoticeSuccess},
+	"certificate-queued": {"Certificate requested. The status updates when the issuer responds.", dashboard.NoticeSuccess},
+	"backup-queued":      {"Backup queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"restore-queued":     {"Restore queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"webmail-queued":     {"Webmail configuration queued.", dashboard.NoticeSuccess},
+	"dns-queued":         {"DNS zone configuration queued.", dashboard.NoticeSuccess},
+	"reconcile-queued":   {"Reconciliation queued. Generated configs will be refreshed from intent.", dashboard.NoticeSuccess},
+	"staging-queued":     {"Staging operation queued. A rollback point will be created before the target changes.", dashboard.NoticeSuccess},
+	"git-deploy-queued":  {"Git deployment queued. The previous revision remains available as a rollback point.", dashboard.NoticeSuccess},
+	"job-retried":        {"Retry queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"task-ran":           {"Scheduled task started. Its run appears in the task history.", dashboard.NoticeSuccess},
 
 	// Mail
 	"mail-settings-saved":     {"Mail server settings saved and convergence queued.", dashboard.NoticeSuccess},
@@ -3183,7 +3234,7 @@ func dashboardTitle(role auth.Role) string {
 func renderPage(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	var body bytes.Buffer
 	if err := component.Render(r.Context(), &body); err != nil {
-		http.Error(w, "Could not render page", http.StatusInternalServerError)
+		formFailure(w, r, "Could not render page")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

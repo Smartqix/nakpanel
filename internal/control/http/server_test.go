@@ -933,8 +933,13 @@ func TestRetryJobRejectsInvalidJobID(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("POST /jobs/retry status = %d, want 400", rec.Code)
+	// A bad form value returns the operator to the page they submitted from,
+	// carrying the reason, rather than replacing the panel with a bare 400.
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /jobs/retry status = %d, want 303", rec.Code)
+	}
+	if message := formErrorFromRecorder(rec); !strings.Contains(message, "job") {
+		t.Fatalf("form error = %q, want it to name the invalid field", message)
 	}
 	if retrier.called {
 		t.Fatal("invalid job id invoked retrier")
@@ -1769,6 +1774,21 @@ func TestClientCannotManagePlansSubscriptionsOrSettings(t *testing.T) {
 	}
 }
 
+// formErrorFromRecorder decodes the one-shot cookie a failed form POST sets.
+func formErrorFromRecorder(rec *httptest.ResponseRecorder) string {
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name != FormErrorCookieName {
+			continue
+		}
+		decoded, err := url.QueryUnescape(cookie.Value)
+		if err != nil {
+			return cookie.Value
+		}
+		return decoded
+	}
+	return ""
+}
+
 func TestOverQuotaCreateShowsClearBadRequest(t *testing.T) {
 	creator := &fakeSiteCreator{err: controlquota.ErrExceeded}
 	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleAdmin, creator)
@@ -1780,11 +1800,17 @@ func TestOverQuotaCreateShowsClearBadRequest(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("POST /sites status = %d, want 400", rec.Code)
+	// The operator goes back to their form with the reason preserved, which is
+	// the whole point: a bare 400 discarded everything they had typed.
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /sites status = %d, want 303", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "quota exceeded") {
-		t.Fatalf("over-quota response missing clear message:\n%s", rec.Body.String())
+	message := formErrorFromRecorder(rec)
+	if !strings.Contains(message, "quota exceeded") {
+		t.Fatalf("over-quota form error = %q, want the quota reason preserved", message)
+	}
+	if location := rec.Header().Get("Location"); strings.Contains(location, "quota exceeded") {
+		t.Fatalf("Location = %q, want the message kept out of the URL", location)
 	}
 }
 
@@ -2937,4 +2963,97 @@ func login(t *testing.T, handler http.Handler, email string, password string) *h
 	}
 	t.Fatal("login did not set session cookie")
 	return nil
+}
+
+// A failed form POST must not put its message in the URL: a reflected
+// parameter lets anyone craft a link that renders arbitrary text inside the
+// panel's own error banner.
+func TestFormErrorTravelsInAOneShotCookieNotTheURL(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", nil)
+	req.Header.Set("Referer", "https://panel.test/sites?tab=hosting")
+	rec := httptest.NewRecorder()
+
+	redirectFormError(rec, req, "/dashboard", "Could not create site: limit reached")
+
+	location := rec.Header().Get("Location")
+	if strings.Contains(location, "error=") || strings.Contains(location, "limit reached") {
+		t.Fatalf("Location = %q, want the message kept out of the URL", location)
+	}
+	if location != "/sites?tab=hosting" {
+		t.Fatalf("Location = %q, want the operator returned to their form", location)
+	}
+
+	var carrier *http.Cookie
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == FormErrorCookieName {
+			carrier = cookie
+		}
+	}
+	if carrier == nil {
+		t.Fatal("no form-error cookie was set")
+	}
+	if !carrier.HttpOnly || !carrier.Secure || carrier.SameSite != http.SameSiteLaxMode {
+		t.Fatalf("cookie = %+v, want HttpOnly, Secure and SameSite=Lax", carrier)
+	}
+
+	// Reading it clears it, so the failure is reported once.
+	read := httptest.NewRequest(http.MethodGet, "https://panel.test/sites", nil)
+	read.AddCookie(carrier)
+	readRec := httptest.NewRecorder()
+	message, kind := workspaceNotice(readRec, read)
+	if message != "Could not create site: limit reached" {
+		t.Fatalf("message = %q", message)
+	}
+	if kind != dashboard.NoticeError {
+		t.Fatalf("kind = %q, want an error notice", kind)
+	}
+	cleared := false
+	for _, cookie := range readRec.Result().Cookies() {
+		if cookie.Name == FormErrorCookieName && cookie.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Fatal("the message must be cleared after it is shown once")
+	}
+}
+
+func TestSanitizeNoticeTextBoundsAndFlattensInput(t *testing.T) {
+	got := sanitizeNoticeText("line one\nline\ttwo\x00\x07")
+	if got != "line one line two" {
+		t.Fatalf("sanitizeNoticeText = %q", got)
+	}
+	if long := sanitizeNoticeText(strings.Repeat("x", 900)); len([]rune(long)) > 241 {
+		t.Fatalf("sanitized length = %d, want bounded", len([]rune(long)))
+	}
+}
+
+// Every notice code a handler can emit must resolve to text; an unlisted code
+// renders nothing, which is how creating a website used to confirm silently.
+func TestEveryEmittedNoticeCodeResolves(t *testing.T) {
+	for _, code := range []string{
+		"site-queued", "database-queued", "certificate-queued", "task-ran",
+		"policy-saved", "provider-saved", "reseller-saved", "reseller-status-saved",
+		"reseller-plan-saved", "addon-saved", "addons-saved", "subscription-mode-saved",
+		"subscription-synced", "dns-record-restored", "dns-soa-saved",
+		"dns-subdomain-mode-saved", "dns-sync-started", "dns-template-saved",
+		"dns-template-started", "dns-template-reset", "dns-template-record-saved",
+		"dns-template-record-deleted", "dns-zone-mode-saved", "dns-zone-reset",
+	} {
+		message, kind := dashboardNotice(code)
+		if strings.TrimSpace(message) == "" {
+			t.Errorf("notice %q renders nothing", code)
+		}
+		if kind == "" {
+			t.Errorf("notice %q has no severity", code)
+		}
+	}
+}
+
+func TestFailedOutcomesDoNotRenderAsSuccess(t *testing.T) {
+	for _, code := range []string{"subscription-warning", "subscription-site-warning"} {
+		if _, kind := dashboardNotice(code); kind != dashboard.NoticeWarning {
+			t.Errorf("notice %q kind = %q, want a warning", code, kind)
+		}
+	}
 }

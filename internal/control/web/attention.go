@@ -631,6 +631,8 @@ func severityPillClass(s Severity) string {
 		return "np-pill-fail"
 	case SeverityWarning:
 		return "np-pill-pend"
+	case SeverityInfo:
+		return "np-pill-run"
 	default:
 		return "np-pill-susp"
 	}
@@ -767,4 +769,17 @@ func groupedAlerts(alerts []types.UsageAlert) []AttentionItem {
 	}
 	sort.SliceStable(items, func(i, j int) bool { return items[i].Severity > items[j].Severity })
 	return items
+}
+
+// capacityAllClearCopy phrases the no-pressure case for both an estate with
+// subscriptions and one without, rather than reporting "All 0 subscriptions".
+func capacityAllClearCopy(p CapacityPressure) string {
+	switch p.Total {
+	case 0:
+		return "No subscriptions yet."
+	case 1:
+		return "The only subscription is inside its limits."
+	default:
+		return fmt.Sprintf("All %d subscriptions are inside their limits.", p.Total)
+	}
 }

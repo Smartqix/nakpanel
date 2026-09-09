@@ -333,12 +333,9 @@ templ attentionPanel(attention Attention, view WorkspaceView) {
 					<div class="np-attention-row">
 						<span class={ "np-attention-dot " + severityDotClass(item.Severity) } aria-hidden="true"></span>
 						<div class="np-attention-copy">
-							<strong>
-								{ item.Title }
-								if item.Occurrences() != "" {
-									<span class="np-attention-count">· { item.Occurrences() }</span>
-								}
-							</strong>
+							<strong>{ item.Title }if item.Occurrences() != "" {
+								<span class="np-attention-count">· { item.Occurrences() }</span>
+							}</strong>
 							if item.Detail != "" {
 								<span>{ item.Detail }</span>
 							}
@@ -357,7 +354,7 @@ templ attentionPanel(attention Attention, view WorkspaceView) {
 // are summarised, so a page of "0/1 sites" rows cannot hide the ones at limit.
 templ capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) {
 	if len(pressure.Items) == 0 {
-		<p class="np-empty">All { formatPlanLimit(pressure.Total) } subscriptions are inside their limits.</p>
+		<p class="np-empty">{ capacityAllClearCopy(pressure) }</p>
 	} else {
 		<div class="np-usage-list">
 			for _, item := range pressure.Items {
@@ -1652,12 +1649,9 @@ templ routedActivity(data dashboard.Data, user auth.SessionUser, view WorkspaceV
 					<div class="np-attention-row" data-np-list-row data-severity={ alert.Severity.Label() }>
 						<span class={ "np-attention-dot " + severityDotClass(alert.Severity) } aria-hidden="true"></span>
 						<div class="np-attention-copy">
-							<strong>
-								{ alert.Title }
-								if alert.Occurrences() != "" {
-									<span class="np-attention-count">· { alert.Occurrences() }</span>
-								}
-							</strong>
+							<strong>{ alert.Title }if alert.Occurrences() != "" {
+								<span class="np-attention-count">· { alert.Occurrences() }</span>
+							}</strong>
 							<span>{ alert.Detail }</span>
 						</div>
 						<span class={ "np-pill " + severityPillClass(alert.Severity) }>{ alert.Severity.Label() }</span>
