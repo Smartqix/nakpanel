@@ -50,28 +50,33 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 }
 
 templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
+	{{ attention := workspaceAttention(data) }}
 	<aside class="np-routed-side" data-np-sidebar>
 		<div class="np-side-brand">
 			<span class="np-brand-mark" aria-hidden="true">n</span>
 			<span class="np-side-brand-text"><strong>nakpanel</strong><small>ns1.nakroteck.com</small></span>
+			<span class={ "np-side-health " + attentionHealthClass(attention) } title={ attentionHealthLabel(attention) }>
+				<span class="np-side-health-dot" aria-hidden="true"></span>
+				<span class="np-sr-only">{ attentionHealthLabel(attention) }</span>
+			</span>
 		</div>
 		<nav class="np-routed-nav" aria-label="Primary navigation">
 			@navRoute(workspacePath(view, "/dashboard"), "Home", "home", routeActive(view.Route, "dashboard"), "")
 			if user.Role == auth.RoleAdmin && view.SupportCustomerID == 0 {
 				<span class="np-nav-label">Hosting services</span>
-				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), formatBadgeCount(len(data.Customers)))
-				@navRoute("/resellers", "Resellers", "users", routeActive(view.Route, "resellers", "reseller-detail"), formatBadgeCount(len(data.Resellers)))
-				@navRoute("/sites", "Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(data.Sites)))
-				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), formatBadgeCount(len(data.Subscriptions)))
+				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), "")
+				@navRoute("/resellers", "Resellers", "users", routeActive(view.Route, "resellers", "reseller-detail"), "")
+				@navAlert("/sites", "Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), sitesNeedingAttention(data.Sites), SeverityWarning)
+				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), "")
 		@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new", "reseller-plan-new"), "")
 				<span class="np-nav-label">Server management</span>
-				@navRoute("/activity", "Activity", "activity", routeActive(view.Route, "activity"), formatBadgeCount(len(data.Jobs)))
+				@navAlert("/activity", "Activity", "activity", routeActive(view.Route, "activity"), attention.Total(), attention.BadgeSeverity())
 				@navRoute("/tools-settings", "Tools & Settings", "settings", routeActive(view.Route, "tools-settings"), "")
 			} else if user.Role == auth.RoleReseller && view.SupportCustomerID == 0 {
 				<span class="np-nav-label">Hosting services</span>
-				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), formatBadgeCount(len(data.Customers)))
-				@navRoute("/sites", "Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(data.Sites)))
-				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), formatBadgeCount(len(data.Subscriptions)))
+				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), "")
+				@navAlert("/sites", "Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), sitesNeedingAttention(data.Sites), SeverityWarning)
+				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), "")
 		@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new"), "")
 				<span class="np-nav-label">Account</span>
 				@navRoute("/activity", "Activity", "activity", routeActive(view.Route, "activity"), "")
@@ -79,10 +84,10 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 				@navRoute("/my-resources", "My Resources", "activity", routeActive(view.Route, "my-resources"), "")
 			} else {
 				<span class="np-nav-label">Hosting services</span>
-				@navRoute(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(sitesForCustomer(data.Sites, view.SupportCustomerID))))
-				@navRoute(workspacePath(view, "/mail"), "Mail", "mail", routeActive(view.Route, "mail"), formatBadgeCount(len(data.SubscriptionServices.Mailboxes)))
-				@navRoute(workspacePath(view, "/subscriptions"), "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail"), formatBadgeCount(len(data.Subscriptions)))
-				@navRoute(workspacePath(view, "/databases"), "Databases", "database", routeActive(view.Route, "databases"), formatBadgeCount(len(databasesForCustomer(data.Databases, view.SupportCustomerID))))
+				@navAlert(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), sitesNeedingAttention(sitesForCustomer(data.Sites, view.SupportCustomerID)), SeverityWarning)
+				@navRoute(workspacePath(view, "/mail"), "Mail", "mail", routeActive(view.Route, "mail"), "")
+				@navRoute(workspacePath(view, "/subscriptions"), "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail"), "")
+				@navRoute(workspacePath(view, "/databases"), "Databases", "database", routeActive(view.Route, "databases"), "")
 				@navRoute(workspacePath(view, "/backups"), "Backups", "archive", routeActive(view.Route, "backups"), "")
 				@navRoute(workspacePath(view, "/dns"), "DNS", "network", routeActive(view.Route, "dns"), "")
 				@navRoute(workspacePath(view, "/certificates"), "SSL/TLS", "shield", routeActive(view.Route, "certificates"), "")
@@ -90,7 +95,17 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 				@navRoute(workspacePath(view, "/activity"), "Activity", "activity", routeActive(view.Route, "activity"), "")
 			}
 		</nav>
-		<div class="np-side-footer"><span class="np-agent-dot"></span><span>Panel session active</span></div>
+		<div class="np-side-footer">
+			<span class="np-side-account-mark" aria-hidden="true">{ userInitials(user) }</span>
+			<span class="np-side-account">
+				<strong>{ accountLabel(user, view) }</strong>
+				<small>{ accountRoleLabel(user, view) }</small>
+			</span>
+			<form method="post" action="/logout">
+				@csrfInput(view)
+				<button class="np-side-signout" type="submit" title={ "Sign out " + user.Email } aria-label={ "Sign out " + user.Email }>@icon("corner-up-left")</button>
+			</form>
+		</div>
 	</aside>
 }
 
@@ -130,10 +145,13 @@ templ routedTopbar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 					}
 				</select></label>
 			}
-			if user.Role == auth.RoleAdmin {
-				<span class="np-health"><span></span>Panel session active</span>
+			{{ attention := workspaceAttention(data) }}
+			if attention.Total() > 0 {
+				<a class={ "np-top-attention " + attentionHealthClass(attention) } href={ templ.SafeURL(workspacePath(view, "/activity")) }>
+					@icon("triangle-alert")
+					<span>{ attentionHealthLabel(attention) }</span>
+				</a>
 			}
-			<form method="post" action="/logout">@csrfInput(view)<button class="np-avatar" type="submit" title={ "Sign out " + user.Email }>{ userInitials(user) }</button></form>
 		</div>
 	</header>
 }
@@ -260,19 +278,103 @@ templ pageHead(kicker string, title string, description string) {
 }
 
 templ routedDashboard(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
-	@pageHead("Control panel", routeTitle(view.Route), "A focused view of hosting health, capacity and work that needs attention.") {
+	{{ attention := workspaceAttention(data) }}
+	{{ pressure := capacityPressure(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID)) }}
+	@pageHead("Control panel", routeTitle(view.Route), "Server health, work that needs attention, and capacity at a glance.") {
 		<a class="np-primary-link" href={ templ.SafeURL(workspacePath(view, "/sites")) }>View websites</a>
 	}
+	@attentionPanel(attention, view)
+	<div class="np-routed-grid">
+		<section class="np-panel">
+			<div class="np-panel-title"><h2>Capacity pressure</h2><a href={ templ.SafeURL(workspacePath(view, "/subscriptions")) }>All subscriptions</a></div>
+			@capacityRows(pressure, canOpenSubscriptionDetails(view), view)
+		</section>
+		<section class="np-panel">
+			<div class="np-panel-title"><h2>Recent websites</h2><a href={ templ.SafeURL(workspacePath(view, "/sites")) }>View all</a></div>
+			@siteRows(recentSites(sitesForCustomer(data.Sites, view.SupportCustomerID)), view)
+		</section>
+	</div>
 	<div class="np-stat-grid np-routed-stats">
 		@statCard("Websites", len(sitesForCustomer(data.Sites, view.SupportCustomerID)), "Active domains and hosting accounts")
 		@statCard("Databases", len(databasesForCustomer(data.Databases, view.SupportCustomerID)), "Provisioned MariaDB resources")
 		@statCard("Backups", len(data.Phase6.Backups), "Recent protected snapshots")
 		@statCard("Subscriptions", len(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID)), "Plans currently assigned")
 	</div>
-	<div class="np-routed-grid">
-		<section class="np-panel"><div class="np-panel-title"><h2>Recent websites</h2><a href={ templ.SafeURL(workspacePath(view, "/sites")) }>View all</a></div>@siteRows(sitesForCustomer(data.Sites, view.SupportCustomerID), view)</section>
-		<section class="np-panel"><div class="np-panel-title"><h2>Subscription usage</h2><span class="np-muted">plan limits</span></div>@subscriptionUsageRows(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), canOpenSubscriptionDetails(view), view)</section>
-	</div>
+}
+
+// attentionPanel is the answer to "what needs me right now". It leads the page
+// because the panel already knew about the critical failure and never said so.
+templ attentionPanel(attention Attention, view WorkspaceView) {
+	if attention.Total() == 0 {
+		<section class="np-panel np-attention np-attention-clear">
+			<div class="np-panel-title">
+				<div class="np-attention-heading">@icon("shield-check")<h2>Nothing needs attention</h2></div>
+				<a href={ templ.SafeURL(workspacePath(view, "/activity")) }>Open activity</a>
+			</div>
+			<p class="np-attention-clear-copy">No failed jobs, unresolved alerts or expiring certificates.</p>
+		</section>
+	} else {
+		<section class={ "np-panel np-attention " + attentionPanelClass(attention) }>
+			<div class="np-panel-title">
+				<div class="np-attention-heading">
+					@icon("triangle-alert")
+					<h2>Needs attention</h2>
+					if attention.Critical > 0 {
+						<span class="np-pill np-pill-fail">{ attentionCountLabel(attention.Critical, "critical") }</span>
+					}
+					if attention.Warning > 0 {
+						<span class="np-pill np-pill-pend">{ attentionCountLabel(attention.Warning, "warning") }</span>
+					}
+				</div>
+				<a href={ templ.SafeURL(workspacePath(view, "/activity")) }>Open activity</a>
+			</div>
+			<div class="np-attention-list">
+				for _, item := range attention.Items {
+					<div class="np-attention-row">
+						<span class={ "np-attention-dot " + severityDotClass(item.Severity) } aria-hidden="true"></span>
+						<div class="np-attention-copy">
+							<strong>
+								{ item.Title }
+								if item.Occurrences() != "" {
+									<span class="np-attention-count">· { item.Occurrences() }</span>
+								}
+							</strong>
+							if item.Detail != "" {
+								<span>{ item.Detail }</span>
+							}
+						</div>
+						if item.Action != "" {
+							<a class="np-secondary-button" href={ templ.SafeURL(item.ActionTo) }>{ item.Action }</a>
+						}
+					</div>
+				}
+			</div>
+		</section>
+	}
+}
+
+// capacityRows shows only the subscriptions actually under pressure; the rest
+// are summarised, so a page of "0/1 sites" rows cannot hide the ones at limit.
+templ capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) {
+	if len(pressure.Items) == 0 {
+		<p class="np-empty">All { formatPlanLimit(pressure.Total) } subscriptions are inside their limits.</p>
+	} else {
+		<div class="np-usage-list">
+			for _, item := range pressure.Items {
+				<a href={ templ.SafeURL(subscriptionUsagePath(item.SubscriptionID, canOpen, view)) }>
+					<span><strong>{ item.Name }</strong><small>{ item.PlanName }</small></span>
+					<span class={ severityTextClass(item.Severity) }>{ item.Label }</span>
+					@tableMeter(item.Used, item.Limit, true)
+				</a>
+			}
+		</div>
+		if pressure.FooterNote() != "" {
+			<div class="np-usage-foot">
+				<span>{ pressure.FooterNote() }</span>
+				<a href={ templ.SafeURL(workspacePath(view, "/subscriptions")) }>Show all</a>
+			</div>
+		}
+	}
 }
 
 templ siteRows(sites []dashboard.Site, view WorkspaceView) {
@@ -2300,4 +2402,14 @@ templ noticeBanner(message string, kind dashboard.NoticeKind) {
 		@icon(noticeKindIcon(kind))
 		<span>{ message }</span>
 	</p>
+}
+
+templ navAlert(path string, label string, iconName string, active string, count int, severity Severity) {
+	<a href={ templ.SafeURL(path) } class={ "np-routed-nav-item " + active } aria-current={ ariaCurrent(active) }>
+		@icon(iconName)
+		<span>{ label }</span>
+		if count > 0 {
+			<span class={ "np-nav-badge " + navBadgeClass(severity) } title={ attentionBadgeTitle(count) }>{ formatBadgeCount(count) }</span>
+		}
+	</a>
 }

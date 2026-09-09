@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/types"
 )
 
 // Severity ranks how urgently an operator must look at something. The panel
@@ -313,6 +314,11 @@ func buildAttention(data dashboard.Data, health SiteHealthMap, now time.Time) At
 		failedJobs[job.Kind]++
 	}
 	for _, kind := range jobOrder {
+		// An alert and its failed job describe the same incident; keep the
+		// alert, which carries the operator-facing detail.
+		if attentionMentions(attention.Items, humanJobKind(kind)+" failed") {
+			continue
+		}
 		attention.Items = append(attention.Items, AttentionItem{
 			Severity: SeverityCritical,
 			Title:    humanJobKind(kind) + " failed",
@@ -407,3 +413,204 @@ func badgeClass(severity Severity) string {
 	}
 	return " np-nav-badge-" + severity.Class()
 }
+
+// navBadgeClass returns the whole class name so the CSS build keeps the rule.
+func navBadgeClass(severity Severity) string {
+	switch severity {
+	case SeverityCritical:
+		return "np-nav-badge-fail"
+	case SeverityWarning:
+		return "np-nav-badge-pend"
+	default:
+		return "np-nav-badge-run"
+	}
+}
+
+func attentionBadgeTitle(count int) string {
+	if count == 1 {
+		return "1 item needs attention"
+	}
+	return fmt.Sprintf("%d items need attention", count)
+}
+
+// attentionHealthClass drives the server dot in the rail header. It must not
+// claim health while a critical item is open.
+func attentionHealthClass(a Attention) string {
+	switch {
+	case a.Critical > 0:
+		return "np-side-health-fail"
+	case a.Warning > 0:
+		return "np-side-health-pend"
+	default:
+		return "np-side-health-ok"
+	}
+}
+
+func attentionHealthLabel(a Attention) string {
+	switch {
+	case a.Critical > 0:
+		return fmt.Sprintf("%d critical", a.Critical)
+	case a.Warning > 0:
+		return fmt.Sprintf("%d warning", a.Warning)
+	default:
+		return "All services healthy"
+	}
+}
+
+// --- capacity ---------------------------------------------------------------
+
+// CapacityItem is one subscription at or approaching a plan limit.
+type CapacityItem struct {
+	SubscriptionID int64
+	Name           string
+	PlanName       string
+	Label          string
+	Used           int
+	Limit          int
+	ratio          float64
+	Severity       Severity
+}
+
+// CapacityPressure separates the subscriptions an operator must act on from
+// the ones that are merely present. The old panel listed every subscription,
+// so rows reading "0/1 sites" outnumbered and hid the ones at their limit.
+type CapacityPressure struct {
+	Items     []CapacityItem
+	Total     int
+	Remaining int
+	Hidden    int
+}
+
+// FooterNote summarises everything the panel is not showing.
+func (p CapacityPressure) FooterNote() string {
+	switch {
+	case p.Hidden > 0 && p.Remaining > 0:
+		return fmt.Sprintf("%d more under pressure · %d inside their limits", p.Hidden, p.Remaining)
+	case p.Hidden > 0:
+		return fmt.Sprintf("%d more subscriptions are under pressure", p.Hidden)
+	case p.Remaining > 0:
+		return fmt.Sprintf("%d further subscriptions are inside their limits", p.Remaining)
+	default:
+		return ""
+	}
+}
+
+// capacityWarnRatio is where a limit starts being worth showing: at 80% an
+// operator still has room to act before provisioning starts failing.
+const capacityWarnRatio = 0.8
+
+func capacityPressure(subscriptions []types.SubscriptionSummary) CapacityPressure {
+	pressure := CapacityPressure{Total: len(subscriptions)}
+	for _, subscription := range subscriptions {
+		worst := CapacityItem{
+			SubscriptionID: subscription.ID,
+			Name:           subscription.SubscriptionName,
+			PlanName:       subscription.PlanName,
+		}
+		consider := func(used, limit int, unit string) {
+			// A limit of zero means unlimited here, so it can never be strained.
+			if limit <= 0 {
+				return
+			}
+			ratio := float64(used) / float64(limit)
+			if ratio < capacityWarnRatio || ratio < worst.ratio {
+				return
+			}
+			severity := SeverityWarning
+			if used >= limit {
+				severity = SeverityCritical
+			}
+			worst.ratio = ratio
+			worst.Used = used
+			worst.Limit = limit
+			worst.Severity = severity
+			worst.Label = fmt.Sprintf("%d/%d %s", used, limit, unit)
+		}
+		consider(subscription.SitesUsed, subscription.MaxSites, "sites")
+		consider(subscription.DatabasesUsed, subscription.MaxDatabases, "databases")
+		consider(subscription.BackupsUsed, subscription.MaxBackups, "backups")
+
+		if worst.Severity == SeverityNone {
+			continue
+		}
+		pressure.Items = append(pressure.Items, worst)
+	}
+	sort.SliceStable(pressure.Items, func(i, j int) bool {
+		if pressure.Items[i].Severity != pressure.Items[j].Severity {
+			return pressure.Items[i].Severity > pressure.Items[j].Severity
+		}
+		return pressure.Items[i].ratio > pressure.Items[j].ratio
+	})
+	pressure.Remaining = pressure.Total - len(pressure.Items)
+	if len(pressure.Items) > capacityDisplayLimit {
+		pressure.Hidden = len(pressure.Items) - capacityDisplayLimit
+		pressure.Items = pressure.Items[:capacityDisplayLimit]
+	}
+	return pressure
+}
+
+// recentSites caps the home list so it stops being a second copy of /sites.
+func recentSites(sites []dashboard.Site) []dashboard.Site {
+	const homeSiteLimit = 6
+	if len(sites) <= homeSiteLimit {
+		return sites
+	}
+	return sites[:homeSiteLimit]
+}
+
+func attentionPanelClass(a Attention) string {
+	if a.Critical > 0 {
+		return "np-attention-fail"
+	}
+	return "np-attention-pend"
+}
+
+func attentionCountLabel(count int, word string) string {
+	return fmt.Sprintf("%d %s", count, word)
+}
+
+func severityDotClass(s Severity) string {
+	switch s {
+	case SeverityCritical:
+		return "np-attention-dot-fail"
+	case SeverityWarning:
+		return "np-attention-dot-pend"
+	default:
+		return "np-attention-dot-run"
+	}
+}
+
+func severityTextClass(s Severity) string {
+	switch s {
+	case SeverityCritical:
+		return "np-usage-value-fail"
+	case SeverityWarning:
+		return "np-usage-value-pend"
+	default:
+		return "np-usage-value-ok"
+	}
+}
+
+// attentionMentions reports whether an equivalent item is already listed, so
+// the same failure is not counted from two sources.
+func attentionMentions(items []AttentionItem, title string) bool {
+	needle := normaliseIncident(title)
+	for _, item := range items {
+		if normaliseIncident(item.Title) == needle {
+			return true
+		}
+	}
+	return false
+}
+
+// normaliseIncident reduces a title to its distinctive words so
+// "System reconciliation failed" and "Reconcile system failed" match.
+func normaliseIncident(title string) string {
+	replacer := strings.NewReplacer("reconciliation", "reconcile", "_", " ")
+	words := strings.Fields(strings.ToLower(replacer.Replace(title)))
+	sort.Strings(words)
+	return strings.Join(words, " ")
+}
+
+// capacityDisplayLimit keeps the Home panel scannable; the rest are counted.
+const capacityDisplayLimit = 5

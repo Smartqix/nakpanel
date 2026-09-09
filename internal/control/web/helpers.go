@@ -2337,3 +2337,29 @@ func noticeKindIcon(kind dashboard.NoticeKind) string {
 		return "shield-check"
 	}
 }
+
+// accountLabel names who is signed in. Under support view it names the customer
+// being managed, because that is the identity the panel is acting with.
+func accountLabel(user auth.SessionUser, view WorkspaceView) string {
+	if view.SupportCustomerID > 0 && strings.TrimSpace(view.SupportCustomerName) != "" {
+		return view.SupportCustomerName
+	}
+	if local, _, ok := strings.Cut(user.Email, "@"); ok && local != "" {
+		return local
+	}
+	return user.Email
+}
+
+func accountRoleLabel(user auth.SessionUser, view WorkspaceView) string {
+	if view.SupportCustomerID > 0 {
+		return "Support view · acting as customer"
+	}
+	switch user.Role {
+	case auth.RoleAdmin:
+		return "Administrator"
+	case auth.RoleReseller:
+		return "Reseller"
+	default:
+		return "Customer"
+	}
+}
