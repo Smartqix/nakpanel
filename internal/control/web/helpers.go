@@ -2301,3 +2301,39 @@ func errorMessages(messages ...string) []string {
 	}
 	return visible
 }
+
+// noticeKindClass maps a notice severity onto the shipped status vocabulary so
+// success, warning and failure are visually distinct instead of all-green.
+// noticeKindClass returns the complete class name on purpose: the CSS build
+// scans source for whole class strings, so a fragment assembled at render time
+// would be stripped from the stylesheet.
+func noticeKindClass(kind dashboard.NoticeKind) string {
+	switch kind {
+	case dashboard.NoticeError:
+		return "np-notice-fail"
+	case dashboard.NoticeWarning:
+		return "np-notice-pend"
+	case dashboard.NoticeInfo:
+		return "np-notice-run"
+	default:
+		return "np-notice-ok"
+	}
+}
+
+// noticeRole promotes failures to an assertive live region; successes stay
+// polite so a screen reader is not interrupted by routine confirmations.
+func noticeRole(kind dashboard.NoticeKind) string {
+	if kind == dashboard.NoticeError {
+		return "alert"
+	}
+	return "status"
+}
+
+func noticeKindIcon(kind dashboard.NoticeKind) string {
+	switch kind {
+	case dashboard.NoticeError, dashboard.NoticeWarning:
+		return "triangle-alert"
+	default:
+		return "shield-check"
+	}
+}

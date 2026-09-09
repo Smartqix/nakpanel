@@ -497,7 +497,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if user.Role == auth.RoleAdmin {
-		data.Notice = dashboardNotice(r.URL.Query().Get("notice"))
+		data.Notice, data.NoticeKind = workspaceNotice(r)
 	}
 
 	renderPage(w, r, web.DashboardPage(title, user, data, web.DashboardActions{
@@ -539,7 +539,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			http.Error(w, "Could not load workspace", http.StatusInternalServerError)
 			return
 		}
-		data.Notice = dashboardNotice(r.URL.Query().Get("notice"))
+		data.Notice, data.NoticeKind = workspaceNotice(r)
 		view := web.WorkspaceView{Route: route, Title: dashboardTitle(user.Role), CSRFToken: csrfToken(r)}
 		if raw := r.PathValue("id"); raw != "" {
 			view.DetailID, err = strconv.ParseInt(raw, 10, 64)
@@ -1270,7 +1270,11 @@ func writeQuotaError(w http.ResponseWriter, r *http.Request, prefix string, err 
 		http.NotFound(w, r)
 		return
 	}
-	http.Error(w, prefix+": "+err.Error(), http.StatusBadRequest)
+	if wantsSPAJSON(r) {
+		writeSPAError(w, http.StatusBadRequest, prefix+": "+err.Error())
+		return
+	}
+	redirectFormError(w, r, "/dashboard", prefix+": "+err.Error())
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -2961,6 +2965,60 @@ func csrfToken(r *http.Request) string {
 	return fmt.Sprintf("%x", sum[:])
 }
 
+// sanitizeNoticeText makes a handler error safe and readable to round-trip
+// through a redirect: one line, bounded, no control characters. It is rendered
+// as escaped text, never as markup.
+func sanitizeNoticeText(message string) string {
+	cleaned := strings.Map(func(r rune) rune {
+		if r == '\n' || r == '\r' || r == '\t' {
+			return ' '
+		}
+		if r < 0x20 || r == 0x7f {
+			return -1
+		}
+		return r
+	}, message)
+	cleaned = strings.Join(strings.Fields(cleaned), " ")
+	const maxNoticeLength = 240
+	if len(cleaned) > maxNoticeLength {
+		cleaned = strings.TrimSpace(cleaned[:maxNoticeLength]) + "…"
+	}
+	return cleaned
+}
+
+// formErrorTarget picks where a failed form POST should land: back on the page
+// the operator submitted from, so their context survives the failure.
+func formErrorTarget(r *http.Request, fallback string) string {
+	referer := strings.TrimSpace(r.Header.Get("Referer"))
+	if referer == "" || !sameOriginHeader(referer, r) {
+		return fallback
+	}
+	parsed, err := url.Parse(referer)
+	if err != nil || parsed.Path == "" || parsed.Path == "/" {
+		return fallback
+	}
+	query := parsed.Query()
+	query.Del("notice")
+	query.Del("error")
+	target := parsed.Path
+	if encoded := query.Encode(); encoded != "" {
+		target += "?" + encoded
+	}
+	return target
+}
+
+// redirectFormError returns the operator to their form with an actionable
+// message. Before this, 163 failure paths replaced the whole panel with an
+// unstyled 400 and discarded everything the user had typed.
+func redirectFormError(w http.ResponseWriter, r *http.Request, fallback, message string) {
+	target := formErrorTarget(r, fallback)
+	separator := "?"
+	if strings.Contains(target, "?") {
+		separator = "&"
+	}
+	http.Redirect(w, r, target+separator+"error="+url.QueryEscape(sanitizeNoticeText(message)), http.StatusSeeOther)
+}
+
 func redirectAfterPost(w http.ResponseWriter, r *http.Request, legacyTarget, routedTarget string) {
 	target := legacyTarget
 	if referer := strings.TrimSpace(r.Header.Get("Referer")); referer != "" {
@@ -3010,85 +3068,103 @@ func clearSessionCookie(w http.ResponseWriter) {
 	})
 }
 
-func dashboardNotice(code string) string {
-	switch code {
-	case "job-retried":
-		return "Retry queued. Refresh in a moment to see the updated status."
-	case "backup-queued":
-		return "Backup queued. Refresh in a moment to see the updated status."
-	case "restore-queued":
-		return "Restore queued. Refresh in a moment to see the updated status."
-	case "webmail-queued":
-		return "Webmail configuration queued."
-	case "mail-settings-saved":
-		return "Mail server settings saved and convergence queued."
-	case "mail-reconfigure-queued":
-		return "Mail server reconfiguration queued."
-	case "mail-restarted":
-		return "Stalwart mail service restarted."
-	case "dns-queued":
-		return "DNS zone configuration queued."
-	case "reconcile-queued":
-		return "Reconciliation queued. Generated configs will be refreshed from intent."
-	case "staging-queued":
-		return "Staging operation queued. A rollback point will be created before the target changes."
-	case "git-deploy-queued":
-		return "Git deployment queued. The previous revision remains available as a rollback point."
-	case "service-saved":
-		return "Hosting service settings saved and reconciliation queued."
-	case "quota-saved":
-		return "Account quota saved."
-	case "plan-saved":
-		return "Plan saved."
-	case "plan-status-saved":
-		return "Plan status updated."
-	case "subscription-saved":
-		return "Subscription assigned."
-	case "subscription-warning":
-		return "Subscription assigned with an oversell warning."
-	case "subscription-site-warning":
-		return "Customer and subscription were created, but the first website was not queued. Retry from this subscription."
-	case "subscription-plan-saved":
-		return "Subscription plan updated."
-	case "subscription-subscriber-saved":
-		return "Subscription subscriber updated."
-	case "site-settings-saved":
-		return "Domain settings queued for application."
-	case "dns-record-saved":
-		return "DNS record saved and zone update queued."
-	case "dns-record-deleted":
-		return "DNS record deleted and zone update queued."
-	case "customer-saved":
-		return "Customer saved."
-	case "customer-login-saved":
-		return "Customer login saved."
-	case "customer-status-saved":
-		return "Customer status updated."
-	case "settings-saved":
-		return "Oversell settings saved."
-	case "file-uploaded":
-		return "Upload complete."
-	case "file-created":
-		return "File or folder created."
-	case "file-saved":
-		return "File saved."
-	case "file-renamed":
-		return "Item renamed."
-	case "file-copied":
-		return "Selected items copied."
-	case "file-moved":
-		return "Selected items moved."
-	case "file-deleted":
-		return "Selected items deleted."
-	case "file-archived":
-		return "ZIP archive created."
-	case "file-extracted":
-		return "Archive extracted."
-	case "file-permissions":
-		return "Permissions updated."
-	default:
-		return ""
+// dashboardNotice maps a redirect code to operator-facing text and a severity.
+// Every code a handler can emit must appear here: an unlisted code used to
+// render nothing at all, so creating a website confirmed silently.
+// workspaceNotice resolves the banner for a request: a catalogued success or
+// warning code, or an error message returned from a failed form POST.
+func workspaceNotice(r *http.Request) (string, dashboard.NoticeKind) {
+	if failure := strings.TrimSpace(r.URL.Query().Get("error")); failure != "" {
+		return sanitizeNoticeText(failure), dashboard.NoticeError
 	}
+	return dashboardNotice(r.URL.Query().Get("notice"))
+}
+
+func dashboardNotice(code string) (string, dashboard.NoticeKind) {
+	if text, ok := noticeCatalogue[code]; ok {
+		return text.message, text.kind
+	}
+	return "", ""
+}
+
+type noticeEntry struct {
+	message string
+	kind    dashboard.NoticeKind
+}
+
+var noticeCatalogue = map[string]noticeEntry{
+	// Provisioning
+	"site-queued":            {"Website queued. Provisioning usually completes within a minute.", dashboard.NoticeSuccess},
+	"database-queued":        {"Database queued. Credentials are shown once it is ready.", dashboard.NoticeSuccess},
+	"certificate-queued":     {"Certificate requested. The status updates when the issuer responds.", dashboard.NoticeSuccess},
+	"backup-queued":          {"Backup queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"restore-queued":         {"Restore queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"webmail-queued":         {"Webmail configuration queued.", dashboard.NoticeSuccess},
+	"dns-queued":             {"DNS zone configuration queued.", dashboard.NoticeSuccess},
+	"reconcile-queued":       {"Reconciliation queued. Generated configs will be refreshed from intent.", dashboard.NoticeSuccess},
+	"staging-queued":         {"Staging operation queued. A rollback point will be created before the target changes.", dashboard.NoticeSuccess},
+	"git-deploy-queued":      {"Git deployment queued. The previous revision remains available as a rollback point.", dashboard.NoticeSuccess},
+	"job-retried":            {"Retry queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"task-ran":               {"Scheduled task started. Its run appears in the task history.", dashboard.NoticeSuccess},
+
+	// Mail
+	"mail-settings-saved":     {"Mail server settings saved and convergence queued.", dashboard.NoticeSuccess},
+	"mail-reconfigure-queued": {"Mail server reconfiguration queued.", dashboard.NoticeSuccess},
+	"mail-restarted":          {"Stalwart mail service restarted.", dashboard.NoticeSuccess},
+
+	// Accounts, plans and policy
+	"service-saved":                 {"Hosting service settings saved and reconciliation queued.", dashboard.NoticeSuccess},
+	"quota-saved":                   {"Account quota saved.", dashboard.NoticeSuccess},
+	"plan-saved":                    {"Plan saved.", dashboard.NoticeSuccess},
+	"plan-status-saved":             {"Plan status updated.", dashboard.NoticeSuccess},
+	"addon-saved":                   {"Add-on plan saved.", dashboard.NoticeSuccess},
+	"addons-saved":                  {"Add-on plans updated.", dashboard.NoticeSuccess},
+	"reseller-plan-saved":           {"Reseller plan saved.", dashboard.NoticeSuccess},
+	"reseller-saved":                {"Reseller saved.", dashboard.NoticeSuccess},
+	"reseller-status-saved":         {"Reseller status updated.", dashboard.NoticeSuccess},
+	"provider-saved":                {"Provider assignment saved.", dashboard.NoticeSuccess},
+	"policy-saved":                  {"Hosting policy saved and reconciliation queued.", dashboard.NoticeSuccess},
+	"subscription-saved":            {"Subscription assigned.", dashboard.NoticeSuccess},
+	"subscription-plan-saved":       {"Subscription plan updated.", dashboard.NoticeSuccess},
+	"subscription-subscriber-saved": {"Subscription subscriber updated.", dashboard.NoticeSuccess},
+	"subscription-mode-saved":       {"Subscription mode updated.", dashboard.NoticeSuccess},
+	"subscription-synced":           {"Subscription synchronised with its plan.", dashboard.NoticeSuccess},
+	"customer-saved":                {"Customer saved.", dashboard.NoticeSuccess},
+	"customer-login-saved":          {"Customer login saved.", dashboard.NoticeSuccess},
+	"customer-status-saved":         {"Customer status updated.", dashboard.NoticeSuccess},
+	"settings-saved":                {"Oversell settings saved.", dashboard.NoticeSuccess},
+	"site-settings-saved":           {"Domain settings queued for application.", dashboard.NoticeSuccess},
+
+	// DNS template surface — every one of these was silent before.
+	"dns-record-saved":            {"DNS record saved and zone update queued.", dashboard.NoticeSuccess},
+	"dns-record-deleted":          {"DNS record deleted and zone update queued.", dashboard.NoticeSuccess},
+	"dns-record-restored":         {"DNS record restored to the template value.", dashboard.NoticeSuccess},
+	"dns-soa-saved":               {"SOA template saved.", dashboard.NoticeSuccess},
+	"dns-subdomain-mode-saved":    {"Subdomain zone placement saved.", dashboard.NoticeSuccess},
+	"dns-sync-started":            {"DNS synchronisation started.", dashboard.NoticeSuccess},
+	"dns-template-saved":          {"DNS template saved.", dashboard.NoticeSuccess},
+	"dns-template-started":        {"DNS template application started.", dashboard.NoticeSuccess},
+	"dns-template-reset":          {"DNS template reset to defaults.", dashboard.NoticeSuccess},
+	"dns-template-record-saved":   {"Template record saved.", dashboard.NoticeSuccess},
+	"dns-template-record-deleted": {"Template record deleted.", dashboard.NoticeSuccess},
+	"dns-zone-mode-saved":         {"Zone placement saved.", dashboard.NoticeSuccess},
+	"dns-zone-reset":              {"Zone reset to the global template.", dashboard.NoticeSuccess},
+
+	// Files
+	"file-uploaded":    {"Upload complete.", dashboard.NoticeSuccess},
+	"file-created":     {"File or folder created.", dashboard.NoticeSuccess},
+	"file-saved":       {"File saved.", dashboard.NoticeSuccess},
+	"file-renamed":     {"Item renamed.", dashboard.NoticeSuccess},
+	"file-copied":      {"Selected items copied.", dashboard.NoticeSuccess},
+	"file-moved":       {"Selected items moved.", dashboard.NoticeSuccess},
+	"file-deleted":     {"Selected items deleted.", dashboard.NoticeSuccess},
+	"file-archived":    {"ZIP archive created.", dashboard.NoticeSuccess},
+	"file-extracted":   {"Archive extracted.", dashboard.NoticeSuccess},
+	"file-permissions": {"Permissions updated.", dashboard.NoticeSuccess},
+
+	// Outcomes that are not successes. These rendered in success green before.
+	"subscription-warning":      {"Subscription assigned with an oversell warning.", dashboard.NoticeWarning},
+	"subscription-site-warning": {"Customer and subscription were created, but the first website was not queued. Retry from this subscription.", dashboard.NoticeWarning},
 }
 
 func dashboardTitle(role auth.Role) string {

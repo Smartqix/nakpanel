@@ -3248,6 +3248,9 @@
   }
 
   .np-notice {
+    align-items: flex-start;
+    display: flex;
+    gap: 10px;
     margin: 0 0 16px;
     padding: 12px 14px;
     border: 1px solid #a7d8bd;
@@ -3349,6 +3352,12 @@
     min-width: 0;
     overflow-wrap: anywhere;
   }
+
+  .np-notice > .np-icon { flex: none; margin-top: 1px; }
+  .np-notice-ok { border-color: #a7d8bd; background: #eef9f2; color: #14532d; }
+  .np-notice-pend { border-color: #eccb92; background: #fff8e8; color: #8a5a0c; }
+  .np-notice-run { border-color: #bfd7fb; background: var(--np-primary-soft); color: var(--np-primary-dark); }
+  .np-notice-fail { border-color: #f4b5ad; background: #fef6f5; color: var(--np-danger); }
 
   .np-error {
     display: block;

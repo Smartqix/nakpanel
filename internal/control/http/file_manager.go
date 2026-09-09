@@ -385,7 +385,7 @@ func (s *Server) fileWorkspaceData(w http.ResponseWriter, r *http.Request, reque
 		return dashboard.Data{}, web.WorkspaceView{}, false
 	}
 	view := web.WorkspaceView{Route: route, Title: dashboardTitle(request.user.Role), DetailID: request.siteID, CSRFToken: csrfToken(r)}
-	data.Notice = dashboardNotice(r.URL.Query().Get("notice"))
+	data.Notice, data.NoticeKind = workspaceNotice(r)
 	if request.supportID > 0 {
 		name := ""
 		for _, customer := range data.Customers {

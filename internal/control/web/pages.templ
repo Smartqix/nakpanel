@@ -169,7 +169,7 @@ templ DashboardPage(title string, user auth.SessionUser, data dashboard.Data, ac
 					@topbar(title, user, actions)
 					<div class="np-workspace">
 						if data.Notice != "" {
-							<p class="np-notice">{ data.Notice }</p>
+							@noticeBanner(data.Notice, data.NoticeKind)
 						}
 						if user.Role == auth.RoleAdmin {
 							@dashboardSections(data, actions)

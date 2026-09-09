@@ -80,6 +80,18 @@ type Store struct {
 	capabilities CapabilityReader
 }
 
+// NoticeKind classifies a post-redirect message so the panel can render a
+// failed outcome as a failure. Before this existed every notice — including
+// "the website was not queued" — rendered in success green.
+type NoticeKind string
+
+const (
+	NoticeSuccess NoticeKind = "success"
+	NoticeWarning NoticeKind = "warning"
+	NoticeError   NoticeKind = "error"
+	NoticeInfo    NoticeKind = "info"
+)
+
 type Data struct {
 	Sites                []Site
 	Databases            []Database
@@ -96,6 +108,7 @@ type Data struct {
 	CommittedDiskMB      int
 	PlanLoadError        string
 	Notice               string
+	NoticeKind           NoticeKind
 	AuditEvents          []types.AuditEvent
 	Resellers            []types.Reseller
 	ResellerPlans        []types.ResellerPlan

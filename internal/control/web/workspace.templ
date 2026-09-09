@@ -27,7 +27,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 					}
 					<main class="np-routed-content" id="main-content">
 						if data.Notice != "" {
-							<p class="np-notice" role="status">{ data.Notice }</p>
+							@noticeBanner(data.Notice, data.NoticeKind)
 						}
 						@routedContent(user, data, actions, view)
 					</main>
@@ -2293,4 +2293,11 @@ templ routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabi
 
 templ customerDialog(view WorkspaceView) {
 	<dialog class="np-dialog" id="customer-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Account management</span><h2>Add customer</h2><p>Create a contact-only customer or enable panel access now.</p></div><form class="np-form np-dialog-form" method="post" action="/customers">@csrfInput(view)<label>Email<input type="email" name="customer_email" required/></label><label>Name<input name="customer_name"/></label><label>Company<input name="company"/></label><label>Notes<input name="notes"/></label><label class="np-check"><input type="checkbox" name="enable_login" value="true"/>Enable panel login</label><label>Password<input type="password" name="password" autocomplete="new-password"/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create customer</button></div></form></dialog>
+}
+
+templ noticeBanner(message string, kind dashboard.NoticeKind) {
+	<p class={ "np-notice " + noticeKindClass(kind) } role={ noticeRole(kind) }>
+		@icon(noticeKindIcon(kind))
+		<span>{ message }</span>
+	</p>
 }
