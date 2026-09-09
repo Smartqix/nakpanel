@@ -415,7 +415,91 @@ templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions [
 			<button type="button" data-np-dialog-open="site-dialog">Add website</button>
 		}
 	}
-	<section class="np-panel">@siteRows(sites, view)</section>
+	if len(sites) == 0 {
+		<section class="np-panel">@siteRows(sites, view)</section>
+	} else {
+		<section class="np-panel np-list" data-np-list data-np-list-page-size="25">
+			<div class="np-list-toolbar">
+				<label class="np-list-search">
+					<span class="np-sr-only">Filter domains</span>
+					@icon("search")
+					<input type="search" placeholder="Filter domains…" autocomplete="off" data-np-list-search/>
+				</label>
+				<label class="np-list-filter">
+					<span class="np-sr-only">Status</span>
+					<select data-np-list-filter="status">
+						<option value="">All statuses</option>
+						for _, status := range siteStatusOptions(sites) {
+							<option value={ status }>{ status }</option>
+						}
+					</select>
+				</label>
+				<label class="np-list-filter">
+					<span class="np-sr-only">Health</span>
+					<select data-np-list-filter="health">
+						<option value="">All websites</option>
+						<option value="attention">Needs attention</option>
+						<option value="healthy">Healthy</option>
+					</select>
+				</label>
+				<span class="np-list-count" data-np-list-count aria-live="polite"></span>
+			</div>
+			<div class="np-table-scroll">
+				<table class="np-table np-list-table">
+					<thead>
+						<tr>
+							<th><button type="button" data-np-list-sort="0">Domain</button></th>
+							<th><button type="button" data-np-list-sort="1">Subscription</button></th>
+							<th><button type="button" data-np-list-sort="2">PHP</button></th>
+							<th><button type="button" data-np-list-sort="3">TLS</button></th>
+							<th><button type="button" data-np-list-sort="4">Status</button></th>
+							<th><button type="button" data-np-list-sort="5">Health</button></th>
+						</tr>
+					</thead>
+					<tbody data-np-list-body>
+						for _, item := range sites {
+							{{ health := siteHealthOf(item) }}
+							<tr data-np-list-row data-status={ item.Status } data-health={ healthFilterValue(health) }>
+								<td data-label="Domain">
+									<a href={ templ.SafeURL(workspacePath(view, "/sites/" + formatJobID(item.ID))) }><strong>{ item.Domain }</strong></a>
+									<small>{ item.Username }</small>
+								</td>
+								<td data-label="Subscription">
+									{ siteSubscriptionName(subscriptions, item) }
+									<small>{ siteSubscriptionPlan(subscriptions, item) }</small>
+								</td>
+								<td data-label="PHP">{ item.PHPVersion }</td>
+								<td data-label="TLS">@tlsCell(item)</td>
+								<td data-label="Status"><span class={ "np-status-pill " + customerStatusClass(item.Status) }>{ item.Status }</span></td>
+								<td data-label="Health">
+									if health.NeedsAttention() {
+										<span class={ "np-pill " + severityPillClass(health.Severity) }>{ health.Summary }</span>
+									} else {
+										<span class="np-muted">&#8212;</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<div class="np-list-foot" data-np-list-foot hidden>
+				<span data-np-list-status></span>
+				<button type="button" class="np-secondary-button" data-np-list-more>Show more</button>
+			</div>
+			<p class="np-empty" data-np-list-empty hidden>No websites match these filters.</p>
+		</section>
+	}
+}
+
+// tlsCell states certificate condition in the list, so an expiring certificate
+// is visible without opening each website.
+templ tlsCell(item dashboard.Site) {
+	{{ tls := tlsSummary(item) }}
+	<span class={ "np-pill " + tls.Class }>{ tls.Label }</span>
+	if tls.Detail != "" {
+		<small>{ tls.Detail }</small>
+	}
 }
 
 templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {

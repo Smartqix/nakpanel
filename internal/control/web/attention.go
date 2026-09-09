@@ -614,3 +614,89 @@ func normaliseIncident(title string) string {
 
 // capacityDisplayLimit keeps the Home panel scannable; the rest are counted.
 const capacityDisplayLimit = 5
+
+// --- list-report helpers -----------------------------------------------------
+
+// healthFilterValue is the row attribute the client-side filter matches on.
+func healthFilterValue(h SiteHealth) string {
+	if h.NeedsAttention() {
+		return "attention"
+	}
+	return "healthy"
+}
+
+func severityPillClass(s Severity) string {
+	switch s {
+	case SeverityCritical:
+		return "np-pill-fail"
+	case SeverityWarning:
+		return "np-pill-pend"
+	default:
+		return "np-pill-susp"
+	}
+}
+
+// siteStatusOptions lists the statuses actually present, so the filter never
+// offers a value that matches nothing.
+func siteStatusOptions(sites []dashboard.Site) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, site := range sites {
+		status := strings.TrimSpace(site.Status)
+		if status == "" || seen[status] {
+			continue
+		}
+		seen[status] = true
+		out = append(out, status)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func siteSubscriptionName(subscriptions []types.SubscriptionSummary, site dashboard.Site) string {
+	for _, subscription := range subscriptions {
+		if subscription.ID == site.SubscriptionID {
+			return subscription.SubscriptionName
+		}
+	}
+	return "—"
+}
+
+func siteSubscriptionPlan(subscriptions []types.SubscriptionSummary, site dashboard.Site) string {
+	for _, subscription := range subscriptions {
+		if subscription.ID == site.SubscriptionID {
+			return subscription.PlanName
+		}
+	}
+	return ""
+}
+
+// TLSSummary describes certificate condition for a list cell.
+type TLSSummary struct {
+	Label  string
+	Detail string
+	Class  string
+}
+
+func tlsSummary(site dashboard.Site) TLSSummary {
+	now := time.Now()
+	if strings.TrimSpace(site.TLSLastError) != "" {
+		return TLSSummary{Label: "Failed", Detail: "Issuance error", Class: "np-pill-fail"}
+	}
+	if !site.TLSExpiresAt.Valid {
+		return TLSSummary{Label: "None", Detail: "Not issued", Class: "np-pill-pend"}
+	}
+	remaining := site.TLSExpiresAt.Time.Sub(now)
+	switch {
+	case remaining <= 0:
+		return TLSSummary{Label: "Expired", Class: "np-pill-fail"}
+	case remaining <= certificateExpiryWindow:
+		summary := TLSSummary{Label: fmt.Sprintf("%d days", int(remaining.Hours()/24)), Class: "np-pill-pend"}
+		if !site.TLSAutoRenew {
+			summary.Detail = "auto-renew off"
+		}
+		return summary
+	default:
+		return TLSSummary{Label: fmt.Sprintf("Valid %dd", int(remaining.Hours()/24)), Class: "np-pill-ok"}
+	}
+}

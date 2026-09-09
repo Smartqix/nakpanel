@@ -2249,6 +2249,120 @@
     if (editor) editor.dataset.npDirty = "true";
   });
 
+  // Reusable list-report controller. Any panel marked [data-np-list] gets
+  // filtering, sorting and paging over rows that are already in the document,
+  // so a list of every hosted domain stays usable without a round trip.
+  function listRows(list) {
+    return Array.prototype.slice.call(list.querySelectorAll("[data-np-list-row]"));
+  }
+
+  function listMatches(row, query, filters) {
+    for (var key in filters) {
+      if (!filters[key]) continue;
+      if ((row.dataset[key] || "") !== filters[key]) return false;
+    }
+    if (!query) return true;
+    return row.textContent.toLowerCase().indexOf(query) !== -1;
+  }
+
+  function applyList(list) {
+    var searchField = list.querySelector("[data-np-list-search]");
+    var query = searchField ? searchField.value.trim().toLowerCase() : "";
+    var filters = {};
+    each("[data-np-list-filter]", list, function (select) {
+      filters[select.getAttribute("data-np-list-filter")] = select.value;
+    });
+
+    var rows = listRows(list);
+    var matched = [];
+    rows.forEach(function (row) {
+      if (listMatches(row, query, filters)) matched.push(row);
+      else row.hidden = true;
+    });
+
+    var pageSize = parseInt(list.getAttribute("data-np-list-page-size"), 10) || 25;
+    var shown = parseInt(list.dataset.npListShown, 10) || pageSize;
+    if (shown < pageSize) shown = pageSize;
+    matched.forEach(function (row, index) { row.hidden = index >= shown; });
+
+    var visible = Math.min(shown, matched.length);
+    var count = list.querySelector("[data-np-list-count]");
+    if (count) {
+      count.textContent = matched.length === rows.length
+        ? rows.length + (rows.length === 1 ? " website" : " websites")
+        : matched.length + " of " + rows.length + " match";
+    }
+    var status = list.querySelector("[data-np-list-status]");
+    if (status) status.textContent = "Showing " + visible + " of " + matched.length;
+    var foot = list.querySelector("[data-np-list-foot]");
+    if (foot) foot.hidden = matched.length <= pageSize;
+    var more = list.querySelector("[data-np-list-more]");
+    if (more) more.hidden = visible >= matched.length;
+    var empty = list.querySelector("[data-np-list-empty]");
+    if (empty) empty.hidden = matched.length !== 0;
+  }
+
+  function sortList(list, columnIndex, button) {
+    var body = list.querySelector("[data-np-list-body]");
+    if (!body) return;
+    var ascending = button.getAttribute("data-np-sorted") !== "asc";
+    each("[data-np-list-sort]", list, function (other) {
+      other.removeAttribute("data-np-sorted");
+      var header = other.closest("th");
+      if (header) header.removeAttribute("aria-sort");
+    });
+    button.setAttribute("data-np-sorted", ascending ? "asc" : "desc");
+    var header = button.closest("th");
+    if (header) header.setAttribute("aria-sort", ascending ? "ascending" : "descending");
+
+    var rows = listRows(list);
+    rows.sort(function (a, b) {
+      var left = (a.children[columnIndex] || {}).textContent || "";
+      var right = (b.children[columnIndex] || {}).textContent || "";
+      return ascending
+        ? left.trim().localeCompare(right.trim(), undefined, { numeric: true })
+        : right.trim().localeCompare(left.trim(), undefined, { numeric: true });
+    });
+    rows.forEach(function (row) { body.appendChild(row); });
+    applyList(list);
+  }
+
+  each("[data-np-list]", document, function (list) { applyList(list); });
+
+  document.addEventListener("input", function (event) {
+    var list = event.target.closest ? event.target.closest("[data-np-list]") : null;
+    if (list && event.target.matches("[data-np-list-search]")) {
+      list.dataset.npListShown = "";
+      applyList(list);
+    }
+  });
+
+  document.addEventListener("change", function (event) {
+    var list = event.target.closest ? event.target.closest("[data-np-list]") : null;
+    if (list && event.target.matches("[data-np-list-filter]")) {
+      list.dataset.npListShown = "";
+      applyList(list);
+    }
+  });
+
+  document.addEventListener("click", function (event) {
+    var sortButton = event.target.closest ? event.target.closest("[data-np-list-sort]") : null;
+    if (sortButton) {
+      var list = sortButton.closest("[data-np-list]");
+      if (list) sortList(list, parseInt(sortButton.getAttribute("data-np-list-sort"), 10) || 0, sortButton);
+      return;
+    }
+    var moreButton = event.target.closest ? event.target.closest("[data-np-list-more]") : null;
+    if (moreButton) {
+      var moreList = moreButton.closest("[data-np-list]");
+      if (!moreList) return;
+      var pageSize = parseInt(moreList.getAttribute("data-np-list-page-size"), 10) || 25;
+      var shown = parseInt(moreList.dataset.npListShown, 10) || pageSize;
+      moreList.dataset.npListShown = String(shown + pageSize);
+      applyList(moreList);
+    }
+  });
+
   document.addEventListener("submit", function (event) {
     var mailQueueFilter = event.target.closest("[data-np-mail-queue-filter]");
     if (mailQueueFilter && window.fetch) {
