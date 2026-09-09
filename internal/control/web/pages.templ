@@ -632,10 +632,10 @@ templ phase6Tables(phase6 dashboard.Phase6Data, csrfToken string) {
 										<form class="np-inline-form" method="post" action="/restores">
 											@csrfTokenInput(csrfToken)
 											<input type="hidden" name="backup_id" value={ formatJobID(backup.ID) }/>
-											<button type="submit">Restore</button>
+											<button class="np-danger-button" type="submit" data-np-confirm={ restoreConfirmation(backup) }>Restore</button>
 										</form>
 									} else {
-										<span class="np-muted">-</span>
+										<span class="np-muted" title={ restoreUnavailableReason(backup) }>{ restoreUnavailableLabel(backup) }</span>
 									}
 								</span>
 							</td>

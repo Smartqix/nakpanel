@@ -700,3 +700,71 @@ func tlsSummary(site dashboard.Site) TLSSummary {
 		return TLSSummary{Label: fmt.Sprintf("Valid %dd", int(remaining.Hours()/24)), Class: "np-pill-ok"}
 	}
 }
+
+func healthPanelClass(h SiteHealth) string {
+	if h.Severity == SeverityCritical {
+		return "np-attention-fail"
+	}
+	return "np-attention-pend"
+}
+
+// groupedAlerts collapses identical alerts into one row carrying an occurrence
+// count and orders them by severity. Before this, fourteen copies of the same
+// warning pushed the single critical row below the fold.
+func groupedAlerts(alerts []types.UsageAlert) []AttentionItem {
+	type bucket struct {
+		item  AttentionItem
+		first time.Time
+		last  time.Time
+	}
+	buckets := map[string]*bucket{}
+	var order []string
+
+	for _, alert := range alerts {
+		if !alert.ResolvedAt.IsZero() {
+			continue
+		}
+		key := alert.Kind + "|" + alert.Title
+		existing, ok := buckets[key]
+		if !ok {
+			buckets[key] = &bucket{
+				item: AttentionItem{
+					Severity: alertSeverity(alert.Severity),
+					Title:    strings.TrimSpace(alert.Title),
+					Detail:   strings.TrimSpace(alert.Body),
+					Count:    1,
+				},
+				first: alert.CreatedAt,
+				last:  alert.CreatedAt,
+			}
+			order = append(order, key)
+			continue
+		}
+		existing.item.Count++
+		if severity := alertSeverity(alert.Severity); severity > existing.item.Severity {
+			existing.item.Severity = severity
+		}
+		if alert.CreatedAt.Before(existing.first) {
+			existing.first = alert.CreatedAt
+		}
+		if alert.CreatedAt.After(existing.last) {
+			existing.last = alert.CreatedAt
+		}
+	}
+
+	items := make([]AttentionItem, 0, len(order))
+	for _, key := range order {
+		grouped := buckets[key]
+		when := grouped.last.Format("15:04")
+		if grouped.item.Count > 1 && grouped.first.Format("15:04") != when {
+			when = grouped.first.Format("15:04") + "–" + when
+		}
+		if grouped.item.Detail != "" {
+			grouped.item.Detail += " · "
+		}
+		grouped.item.Detail += when
+		items = append(items, grouped.item)
+	}
+	sort.SliceStable(items, func(i, j int) bool { return items[i].Severity > items[j].Severity })
+	return items
+}

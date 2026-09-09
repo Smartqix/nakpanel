@@ -2363,3 +2363,31 @@ func accountRoleLabel(user auth.SessionUser, view WorkspaceView) string {
 		return "Customer"
 	}
 }
+
+// restoreConfirmation spells out what a restore replaces. Restore is the most
+// destructive action a tenant can trigger, and this table offered it as a
+// single unguarded click.
+func restoreConfirmation(backup dashboard.Backup) string {
+	target := strings.TrimSpace(backup.TargetName)
+	if target == "" {
+		target = "this website"
+	}
+	return "Restore " + target + " from the " + formatTime(backup.CreatedAt) +
+		" recovery point? Current files and database state may be replaced."
+}
+
+// restoreUnavailableLabel replaces a bare dash with the reason the action is
+// missing, so an operator is not left guessing why a row cannot be restored.
+func restoreUnavailableLabel(backup dashboard.Backup) string {
+	if strings.TrimSpace(backup.ArchivePath) == "" {
+		return "No archive"
+	}
+	return "Not restorable"
+}
+
+func restoreUnavailableReason(backup dashboard.Backup) string {
+	if strings.TrimSpace(backup.ArchivePath) == "" {
+		return "This backup has no stored archive to restore from."
+	}
+	return "Only a completed backup can be restored; this one is " + backup.Status + "."
+}

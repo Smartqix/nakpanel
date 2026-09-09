@@ -2288,8 +2288,10 @@
     var visible = Math.min(shown, matched.length);
     var count = list.querySelector("[data-np-list-count]");
     if (count) {
+      var noun = list.getAttribute("data-np-list-noun") || "items";
+      var singular = list.getAttribute("data-np-list-noun-one") || noun;
       count.textContent = matched.length === rows.length
-        ? rows.length + (rows.length === 1 ? " website" : " websites")
+        ? rows.length + " " + (rows.length === 1 ? singular : noun)
         : matched.length + " of " + rows.length + " match";
     }
     var status = list.querySelector("[data-np-list-status]");

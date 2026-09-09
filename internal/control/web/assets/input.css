@@ -5733,3 +5733,28 @@
 
   .np-list [data-np-list-empty] { padding: 24px 14px; text-align: center; }
 }
+
+@layer components {
+  /* Empty states state the situation and offer the next step. */
+  .np-empty-state {
+    display: grid;
+    gap: 8px;
+    justify-items: center;
+    padding: 28px 16px;
+    text-align: center;
+  }
+
+  .np-empty-state > strong { font-size: 14px; font-weight: 600; }
+  .np-empty-state > p { color: var(--np-muted); font-size: 13px; margin: 0; max-width: 420px; }
+  .np-empty-state .np-empty-icon {
+    align-items: center;
+    background: var(--np-primary-soft);
+    border-radius: var(--np-radius);
+    color: var(--np-primary);
+    display: inline-flex;
+    height: 40px;
+    justify-content: center;
+    width: 40px;
+  }
+  .np-empty-state > a { margin-top: 4px; }
+}

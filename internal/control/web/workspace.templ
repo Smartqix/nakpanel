@@ -379,7 +379,9 @@ templ capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) 
 
 templ siteRows(sites []dashboard.Site, view WorkspaceView) {
 	if len(sites) == 0 {
-		<p class="np-empty">No websites yet.</p>
+		@emptyState("globe", "No websites yet", "A website gives a subscription its document root, PHP runtime, DNS zone and certificate.") {
+			<a class="np-primary-link" href={ templ.SafeURL(workspacePath(view, "/subscriptions")) }>Choose a subscription</a>
+		}
 	} else {
 		<div class="np-object-list">
 			for _, item := range sites {
@@ -395,7 +397,9 @@ templ siteRows(sites []dashboard.Site, view WorkspaceView) {
 
 templ subscriptionUsageRows(items []types.SubscriptionSummary, details bool, view WorkspaceView) {
 	if len(items) == 0 {
-		<p class="np-empty">No active subscriptions.</p>
+		@emptyState("card", "No active subscriptions", "A subscription assigns a service plan to a customer and holds their websites, databases and mailboxes.") {
+			<a class="np-primary-link" href={ templ.SafeURL(workspacePath(view, "/subscriptions/new")) }>Add subscription</a>
+		}
 	} else {
 		<div class="np-usage-list">
 			for _, item := range items {
@@ -418,7 +422,7 @@ templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions [
 	if len(sites) == 0 {
 		<section class="np-panel">@siteRows(sites, view)</section>
 	} else {
-		<section class="np-panel np-list" data-np-list data-np-list-page-size="25">
+		<section class="np-panel np-list" data-np-list data-np-list-page-size="25" data-np-list-noun="websites" data-np-list-noun-one="website">
 			<div class="np-list-toolbar">
 				<label class="np-list-search">
 					<span class="np-sr-only">Filter domains</span>
@@ -571,6 +575,7 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 }
 
 templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	@domainHealthPanel(item, view)
 	<section class="np-panel np-domain-summary"><div class="np-panel-title"><div><h2>Hosting overview</h2><span class="np-muted">Desired and applied service state for this domain</span></div>@statusPill(item.SettingsStatus)</div>
 		<dl class="np-domain-overview-band"><div><dt>PHP</dt><dd>{ item.PHPVersion }</dd><small>dedicated FPM service</small></div><div><dt>TLS</dt><dd>{ formatTLSStatus(item) }</dd><small>HTTPS redirect { yesNo(item.HTTPSRedirect) }</small></div><div><dt>DNS</dt><dd>{ domainDNSState(data.Phase6,item.ID) }</dd><small>authoritative zone</small></div><div><dt>Databases</dt><dd>{ formatPlanLimit(len(databasesForSite(data.Databases,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) } subscription use</small></div><div><dt>Backups</dt><dd>{ formatPlanLimit(len(backupsForSite(data.Phase6.Backups,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.BackupsUsed,subscription.MaxBackups,true) } subscription use</small></div></dl>
 		if usage, ok := usageForSite(data.SubscriptionServices.SiteUsage,item.ID); ok {
@@ -1618,12 +1623,53 @@ templ routedCertificates(sites []dashboard.Site, actions DashboardActions, view 
 
 templ routedActivity(data dashboard.Data, user auth.SessionUser, view WorkspaceView) {
 	@pageHead("Operations", "Activity", "Provisioning jobs and administrator support actions in one timeline.") {}
-	if len(data.UsageAlerts) > 0 {
-		<section class="np-panel"><div class="np-panel-title"><h2>Resource alerts</h2><span class="np-muted">disk, traffic and synchronization</span></div><div class="np-object-list">
-			for _, alert := range data.UsageAlerts {
-				<div class="np-object-row"><span class="np-object-icon">@icon("activity")</span><span><strong>{ alert.Title }</strong><small>{ alert.Body } · { formatTime(alert.CreatedAt) }</small></span>@statusPill(alert.Severity)</div>
-			}
-		</div></section>
+	{{ alerts := groupedAlerts(data.UsageAlerts) }}
+	if len(alerts) > 0 {
+		<section class="np-panel np-list" data-np-list data-np-list-page-size="15" data-np-list-noun="alerts" data-np-list-noun-one="alert">
+			<div class="np-panel-title">
+				<h2>Alerts</h2>
+				<span class="np-muted">most severe first</span>
+			</div>
+			<div class="np-list-toolbar">
+				<label class="np-list-search">
+					<span class="np-sr-only">Filter alerts</span>
+					@icon("search")
+					<input type="search" placeholder="Filter alerts…" autocomplete="off" data-np-list-search/>
+				</label>
+				<label class="np-list-filter">
+					<span class="np-sr-only">Severity</span>
+					<select data-np-list-filter="severity">
+						<option value="">All severities</option>
+						<option value="critical">Critical</option>
+						<option value="warning">Warning</option>
+						<option value="info">Info</option>
+					</select>
+				</label>
+				<span class="np-list-count" data-np-list-count aria-live="polite"></span>
+			</div>
+			<div class="np-attention-list" data-np-list-body>
+				for _, alert := range alerts {
+					<div class="np-attention-row" data-np-list-row data-severity={ alert.Severity.Label() }>
+						<span class={ "np-attention-dot " + severityDotClass(alert.Severity) } aria-hidden="true"></span>
+						<div class="np-attention-copy">
+							<strong>
+								{ alert.Title }
+								if alert.Occurrences() != "" {
+									<span class="np-attention-count">· { alert.Occurrences() }</span>
+								}
+							</strong>
+							<span>{ alert.Detail }</span>
+						</div>
+						<span class={ "np-pill " + severityPillClass(alert.Severity) }>{ alert.Severity.Label() }</span>
+					</div>
+				}
+			</div>
+			<div class="np-list-foot" data-np-list-foot hidden>
+				<span data-np-list-status></span>
+				<button type="button" class="np-secondary-button" data-np-list-more>Show more</button>
+			</div>
+			<p class="np-empty" data-np-list-empty hidden>No alerts match these filters.</p>
+		</section>
 	}
 	<section class="np-panel">@jobsSection(data.Jobs, data.JobLoadError, retryActions(user), view.CSRFToken)</section>
 	if user.Role == auth.RoleAdmin {
@@ -2496,4 +2542,52 @@ templ navAlert(path string, label string, iconName string, active string, count 
 			<span class={ "np-nav-badge " + navBadgeClass(severity) } title={ attentionBadgeTitle(count) }>{ formatBadgeCount(count) }</span>
 		}
 	</a>
+}
+
+// domainHealthPanel answers "what is wrong with this website" in one place.
+// The same facts are otherwise spread over the hosting, SSL, DNS, logs and
+// activity surfaces, so diagnosing one domain meant visiting several pages.
+templ domainHealthPanel(item dashboard.Site, view WorkspaceView) {
+	{{ health := siteHealthOf(item) }}
+	if health.NeedsAttention() {
+		<section class={ "np-panel np-attention " + healthPanelClass(health) }>
+			<div class="np-panel-title">
+				<div class="np-attention-heading">
+					@icon("triangle-alert")
+					<h2>What is wrong with this website</h2>
+				</div>
+				<a href={ templ.SafeURL(workspacePath(view, "/activity")) }>Open activity</a>
+			</div>
+			<div class="np-attention-list">
+				for _, issue := range health.Issues {
+					<div class="np-attention-row">
+						<span class={ "np-attention-dot " + severityDotClass(issue.Severity) } aria-hidden="true"></span>
+						<div class="np-attention-copy">
+							<strong>{ issue.Title }</strong>
+							if issue.Detail != "" {
+								<span>{ issue.Detail }</span>
+							}
+						</div>
+						if issue.Action != "" {
+							<a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view, issue.ActionTo)) }>{ issue.Action }</a>
+						}
+					</div>
+				}
+			</div>
+		</section>
+	}
+}
+
+// emptyState replaces a bare sentence with an explanation and the action that
+// resolves it. Around forty lists previously ended in "No websites yet." with
+// nothing to click.
+templ emptyState(iconName string, title string, detail string) {
+	<div class="np-empty-state">
+		<span class="np-empty-icon">@icon(iconName)</span>
+		<strong>{ title }</strong>
+		if detail != "" {
+			<p>{ detail }</p>
+		}
+		{ children... }
+	</div>
 }
