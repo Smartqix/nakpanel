@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Nakpanel hostname certificate for %I
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=15min
+Unit=nakpanel-hostname-cert@%i.service
+
+[Install]
+WantedBy=timers.target

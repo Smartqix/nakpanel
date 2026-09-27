@@ -10,8 +10,23 @@ https://<server-ip>:7443
 ```
 
 On a fresh install, the panel generates a self-signed bootstrap certificate in
-`/var/lib/nakpanel/tls`. The browser warning is expected until an operator later
-installs a real certificate for the panel hostname.
+`/var/lib/nakpanel/tls`. Once a site for the panel hostname has a trusted ACME
+certificate, set `NAKPANEL_PANEL_HOSTNAME` in `/etc/nakpanel/panel.env` and enable
+the hostname certificate timer. For example, with `panel.example.com`:
+
+```bash
+sudo /usr/local/libexec/nakpanel/sync-panel-hostname-cert --check panel.example.com
+sudo systemctl enable --now nakpanel-hostname-cert@panel.example.com.timer
+sudo systemctl start nakpanel-hostname-cert@panel.example.com.service
+curl --fail --resolve panel.example.com:7443:127.0.0.1 \
+  https://panel.example.com:7443/healthz
+```
+
+The sync verifies hostname, trust, expiration, and key match, then atomically
+updates the private `0600` `/var/lib/nakpanel/tls/panel.pem` and restarts the
+panel. The timer checks for site certificate renewal every 15 minutes. A bad
+managed PEM stops panel startup instead of silently falling back to self-signed
+TLS; restore the previous PEM or remove it for bootstrap recovery.
 
 For Phase 1 Ubuntu/Multipass testing, the seeded accounts are:
 

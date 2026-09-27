@@ -251,6 +251,10 @@ install_agent_and_ctl() {
   install -m 0755 "${stage_dir}/panelctl" /usr/local/bin/panelctl
   install -m 0644 "${ROOT_DIR}/deploy/systemd/nakpanel-agent.service" /etc/systemd/system/nakpanel-agent.service
   install -m 0644 "${ROOT_DIR}/deploy/systemd/nakpanel.service" /etc/systemd/system/nakpanel.service
+  install -d -m 0755 /usr/local/libexec/nakpanel
+  install -m 0755 "${ROOT_DIR}/deploy/install/sync-panel-hostname-cert.sh" /usr/local/libexec/nakpanel/sync-panel-hostname-cert
+  install -m 0644 "${ROOT_DIR}/deploy/systemd/nakpanel-hostname-cert@.service" /etc/systemd/system/
+  install -m 0644 "${ROOT_DIR}/deploy/systemd/nakpanel-hostname-cert@.timer" /etc/systemd/system/
 }
 
 install_panel_binary() {

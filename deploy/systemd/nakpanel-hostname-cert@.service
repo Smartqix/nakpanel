@@ -1,0 +1,7 @@
+[Unit]
+Description=Synchronize Nakpanel hostname certificate for %I
+After=nakpanel.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/nakpanel/sync-panel-hostname-cert %I

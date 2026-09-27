@@ -11,6 +11,7 @@ type PanelRuntimeConfig struct {
 	HTTPSAddr            string
 	DatabaseURL          string
 	TLSDir               string
+	PanelHostname        string
 	SMTPHost             string
 	SMTPPort             int
 	SMTPUsername         string
@@ -48,6 +49,7 @@ func PanelRuntimeConfigFromEnv() PanelRuntimeConfig {
 		HTTPSAddr:            fmt.Sprintf(":%d", PanelPort),
 		DatabaseURL:          databaseURL,
 		TLSDir:               tlsDir,
+		PanelHostname:        strings.ToLower(strings.TrimSpace(os.Getenv("NAKPANEL_PANEL_HOSTNAME"))),
 		SMTPHost:             strings.TrimSpace(os.Getenv("NAKPANEL_SMTP_HOST")),
 		SMTPPort:             smtpPort,
 		SMTPUsername:         strings.TrimSpace(os.Getenv("NAKPANEL_SMTP_USERNAME")),

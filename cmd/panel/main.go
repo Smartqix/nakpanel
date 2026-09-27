@@ -155,9 +155,9 @@ func main() {
 	})
 	handler := provisioningapi.NewRootHandler(provisioningapi.RootOptions{API: apiHandler, UI: uiHandler, DB: db, Sessions: sessionManager})
 
-	certFile, keyFile, err := paneltls.EnsureSelfSigned(cfg.TLSDir)
+	certFile, keyFile, err := paneltls.SelectPanelCertificate(cfg.TLSDir, cfg.PanelHostname)
 	if err != nil {
-		log.Fatalf("ensure panel TLS certificate: %v", err)
+		log.Fatalf("select panel TLS certificate: %v", err)
 	}
 
 	server := newHTTPServer(cfg, handler)

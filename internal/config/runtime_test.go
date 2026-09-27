@@ -5,6 +5,7 @@ import "testing"
 func TestPanelRuntimeConfigDefaults(t *testing.T) {
 	t.Setenv("NAKPANEL_DATABASE_URL", "")
 	t.Setenv("NAKPANEL_TLS_DIR", "")
+	t.Setenv("NAKPANEL_PANEL_HOSTNAME", "")
 	t.Setenv("NAKPANEL_SECRET_KEY_FILE", "")
 
 	cfg := PanelRuntimeConfigFromEnv()
@@ -18,6 +19,9 @@ func TestPanelRuntimeConfigDefaults(t *testing.T) {
 	if cfg.TLSDir != PanelTLSDir {
 		t.Fatalf("TLSDir = %q, want %q", cfg.TLSDir, PanelTLSDir)
 	}
+	if cfg.PanelHostname != "" {
+		t.Fatalf("PanelHostname = %q, want empty by default", cfg.PanelHostname)
+	}
 	if cfg.FileTransferDir != FileTransferDir || cfg.FileUploadMaxBytes != DefaultFileUploadMaxBytes {
 		t.Fatalf("file manager defaults = %q %d", cfg.FileTransferDir, cfg.FileUploadMaxBytes)
 	}
@@ -29,6 +33,7 @@ func TestPanelRuntimeConfigDefaults(t *testing.T) {
 func TestPanelRuntimeConfigEnvOverrides(t *testing.T) {
 	t.Setenv("NAKPANEL_DATABASE_URL", "postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable")
 	t.Setenv("NAKPANEL_TLS_DIR", "/tmp/nakpanel-tls")
+	t.Setenv("NAKPANEL_PANEL_HOSTNAME", "panel.example.test")
 	t.Setenv("NAKPANEL_FILE_TRANSFER_DIR", "/tmp/nakpanel-files")
 	t.Setenv("NAKPANEL_FILE_UPLOAD_MAX_BYTES", "1048576")
 	t.Setenv("NAKPANEL_SECRET_KEY_FILE", "/run/credentials/nakpanel.service/secret-keys.json")
@@ -40,6 +45,9 @@ func TestPanelRuntimeConfigEnvOverrides(t *testing.T) {
 	}
 	if cfg.TLSDir != "/tmp/nakpanel-tls" {
 		t.Fatalf("TLSDir = %q", cfg.TLSDir)
+	}
+	if cfg.PanelHostname != "panel.example.test" {
+		t.Fatalf("PanelHostname = %q", cfg.PanelHostname)
 	}
 	if cfg.FileTransferDir != "/tmp/nakpanel-files" || cfg.FileUploadMaxBytes != 1048576 {
 		t.Fatalf("file manager overrides = %q %d", cfg.FileTransferDir, cfg.FileUploadMaxBytes)

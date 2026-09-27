@@ -16,9 +16,63 @@ import (
 )
 
 const (
-	certFileName = "panel.crt"
-	keyFileName  = "panel.key"
+	certFileName    = "panel.crt"
+	keyFileName     = "panel.key"
+	managedFileName = "panel.pem"
 )
+
+// SelectPanelCertificate uses the managed hostname certificate when present.
+// A malformed managed certificate is fatal instead of silently downgrading to
+// the bootstrap certificate.
+func SelectPanelCertificate(dir, hostname string) (string, string, error) {
+	return selectPanelCertificate(dir, hostname, nil)
+}
+
+func selectPanelCertificate(dir, hostname string, roots *x509.CertPool) (string, string, error) {
+	if hostname == "" {
+		return EnsureSelfSigned(dir)
+	}
+	managed := filepath.Join(dir, managedFileName)
+	info, err := os.Lstat(managed)
+	if os.IsNotExist(err) {
+		return EnsureSelfSigned(dir)
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("inspect managed panel certificate: %w", err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+		return "", "", fmt.Errorf("managed panel certificate must be a private regular file")
+	}
+	pair, err := tls.LoadX509KeyPair(managed, managed)
+	if err != nil {
+		return "", "", fmt.Errorf("load managed panel certificate: %w", err)
+	}
+	leaf, err := x509.ParseCertificate(pair.Certificate[0])
+	if err != nil {
+		return "", "", fmt.Errorf("parse managed panel certificate: %w", err)
+	}
+	if err := leaf.VerifyHostname(hostname); err != nil {
+		return "", "", fmt.Errorf("managed panel certificate hostname: %w", err)
+	}
+	if roots == nil {
+		roots, err = x509.SystemCertPool()
+		if err != nil {
+			return "", "", fmt.Errorf("load system trust store: %w", err)
+		}
+	}
+	intermediates := x509.NewCertPool()
+	for _, der := range pair.Certificate[1:] {
+		cert, err := x509.ParseCertificate(der)
+		if err != nil {
+			return "", "", fmt.Errorf("parse managed certificate chain: %w", err)
+		}
+		intermediates.AddCert(cert)
+	}
+	if _, err := leaf.Verify(x509.VerifyOptions{DNSName: hostname, Roots: roots, Intermediates: intermediates, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}); err != nil {
+		return "", "", fmt.Errorf("verify managed panel certificate: %w", err)
+	}
+	return managed, managed, nil
+}
 
 func EnsureSelfSigned(dir string) (string, string, error) {
 	certFile := filepath.Join(dir, certFileName)
