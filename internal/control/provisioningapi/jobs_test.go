@@ -3,6 +3,7 @@ package provisioningapi
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -53,6 +54,20 @@ func TestAccountTeardownRemovesPHPEnvironmentSecretsBeforeSites(t *testing.T) {
 	if !strings.Contains(phpEnvironmentSecretCleanupSQL, "DELETE FROM php_environment_bindings") ||
 		!strings.Contains(phpEnvironmentSecretCleanupSQL, "DELETE FROM service_secrets") {
 		t.Fatal("account teardown does not transactionally remove PHP environment bindings and secrets")
+	}
+}
+
+func TestAccountTeardownRemovesWordPressBeforeDatabase(t *testing.T) {
+	data, err := os.ReadFile("jobs.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	wp := strings.Index(source, "WITH removed AS (DELETE FROM wordpress_instances")
+	database := strings.Index(source, "DELETE FROM databases WHERE subscription_id=$1")
+	backup := strings.Index(source, "DELETE FROM backups WHERE subscription_id=$1")
+	if wp < 0 || database < wp || backup < wp || !strings.Contains(source[wp:backup], "DELETE FROM service_secrets") {
+		t.Fatal("WordPress metadata and admin secrets must be removed before its referenced database")
 	}
 }
 

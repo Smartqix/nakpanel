@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	controlpolicy "github.com/nakroteck/nakpanel/internal/control/policy"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	dbvalidation "github.com/nakroteck/nakpanel/internal/database"
 	"github.com/nakroteck/nakpanel/internal/site"
@@ -750,9 +751,8 @@ func (m *Manager) UpsertPlan(ctx context.Context, owner auth.SessionUser, plan c
 	if m.quotaAdmin == nil {
 		return controlquota.Plan{}, errors.New("plan store is not configured")
 	}
-	if err := m.validatePlanPHP(ctx, plan.PHPAllowlist, plan.DefaultPHPVersion, plan.HostingEnabled); err != nil {
-		return controlquota.Plan{}, err
-	}
+	plan.RevisionActorUserID = owner.ID
+	plan.RevisionActorLabel = owner.Email
 	if owner.Role == auth.RoleReseller {
 		scope, err := m.quotaAdmin.ProviderScopeForUser(ctx, owner)
 		if err != nil {
@@ -764,6 +764,15 @@ func (m *Manager) UpsertPlan(ctx context.Context, owner auth.SessionUser, plan c
 			}
 		}
 		plan.ResellerID = scope.ResellerID
+	}
+	if plan.LifecycleStatus == types.PlanLifecycleActive || (plan.LifecycleStatus == "" && plan.IsActive) {
+		issues, err := m.validatePlanReadiness(ctx, plan)
+		if err != nil {
+			return controlquota.Plan{}, err
+		}
+		if message := blockingCapabilityMessage(issues); message != "" {
+			return controlquota.Plan{}, fmt.Errorf("cannot activate plan: %s", message)
+		}
 	}
 	return m.quotaAdmin.UpsertPlan(ctx, plan)
 }
@@ -778,9 +787,6 @@ func (m *Manager) PreviewPlan(ctx context.Context, owner auth.SessionUser, plan 
 	if !ok {
 		return types.PlanPreview{}, errors.New("plan preview is not configured")
 	}
-	if err := m.validatePlanPHP(ctx, plan.PHPAllowlist, plan.DefaultPHPVersion, plan.HostingEnabled); err != nil {
-		return types.PlanPreview{}, err
-	}
 	if owner.Role == auth.RoleReseller {
 		scope, err := m.quotaAdmin.ProviderScopeForUser(ctx, owner)
 		if err != nil {
@@ -793,12 +799,46 @@ func (m *Manager) PreviewPlan(ctx context.Context, owner auth.SessionUser, plan 
 		}
 		plan.ResellerID = scope.ResellerID
 	}
-	return previewer.PreviewPlan(ctx, plan)
+	preview, err := previewer.PreviewPlan(ctx, plan)
+	if err != nil {
+		return types.PlanPreview{}, err
+	}
+	issues, err := m.validatePlanReadiness(ctx, plan)
+	if err != nil {
+		issues = []types.PlanCapabilityIssue{{Code: "agent_capabilities_unavailable", Field: "server", Message: err.Error(), Blocking: true}}
+	}
+	preview.CapabilityIssues = issues
+	activation := plan.LifecycleStatus == types.PlanLifecycleActive || (plan.LifecycleStatus == "" && plan.IsActive)
+	if !activation {
+		for i := range preview.CapabilityIssues {
+			preview.CapabilityIssues[i].Blocking = false
+		}
+	}
+	for _, issue := range issues {
+		if activation && issue.Blocking {
+			preview.Allowed = false
+			preview.BlockingReasons = append(preview.BlockingReasons, issue.Message)
+		}
+	}
+	return preview, nil
 }
 
 func (m *Manager) SetPlanActive(ctx context.Context, owner auth.SessionUser, planID int64, active bool) error {
+	lifecycle := types.PlanLifecycleRetired
+	if active {
+		lifecycle = types.PlanLifecycleActive
+	}
+	return m.SetPlanLifecycle(ctx, owner, planID, lifecycle)
+}
+
+func (m *Manager) SetPlanLifecycle(ctx context.Context, owner auth.SessionUser, planID int64, lifecycle types.PlanLifecycleStatus) error {
 	if owner.Role != auth.RoleAdmin && owner.Role != auth.RoleReseller {
 		return ErrForbidden
+	}
+	switch lifecycle {
+	case types.PlanLifecycleDraft, types.PlanLifecycleActive, types.PlanLifecycleRetired:
+	default:
+		return fmt.Errorf("unsupported plan lifecycle %q", lifecycle)
 	}
 	if m.quotaAdmin == nil {
 		return errors.New("plan store is not configured")
@@ -808,7 +848,80 @@ func (m *Manager) SetPlanActive(ctx context.Context, owner auth.SessionUser, pla
 			return err
 		}
 	}
-	return m.quotaAdmin.SetPlanActive(ctx, planID, active)
+	if lifecycle == types.PlanLifecycleActive {
+		reader, ok := m.quotaAdmin.(interface {
+			GetPlan(context.Context, int64) (controlquota.Plan, error)
+		})
+		if !ok {
+			return errors.New("plan readiness lookup is not configured")
+		}
+		plan, err := reader.GetPlan(ctx, planID)
+		if err != nil {
+			return err
+		}
+		issues, err := m.validatePlanReadiness(ctx, plan)
+		if err != nil {
+			m.recordPlanReadiness(ctx, plan.ID, err.Error())
+			return err
+		}
+		if message := blockingCapabilityMessage(issues); message != "" {
+			m.recordPlanReadiness(ctx, plan.ID, message)
+			return fmt.Errorf("cannot activate plan: %s", message)
+		}
+	}
+	if store, ok := m.quotaAdmin.(interface {
+		SetPlanLifecycle(context.Context, int64, types.PlanLifecycleStatus, int64, string, string) error
+	}); ok {
+		return store.SetPlanLifecycle(ctx, planID, lifecycle, owner.ID, owner.Email, "Lifecycle changed to "+string(lifecycle))
+	}
+	return m.quotaAdmin.SetPlanActive(ctx, planID, lifecycle == types.PlanLifecycleActive)
+}
+
+func (m *Manager) validatePlanReadiness(ctx context.Context, plan controlquota.Plan) ([]types.PlanCapabilityIssue, error) {
+	if m.capabilities == nil {
+		return nil, errors.New("runtime capability reader is not configured")
+	}
+	capabilities, err := m.capabilities.RuntimeCapabilities(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load agent capabilities: %w", err)
+	}
+	issues := controlpolicy.ValidatePlanCapabilities(controlquota.EffectivePlanHostingPolicy(plan), capabilities)
+	if plan.SiteDiskQuotaMB > 0 && !capabilities.DiskQuota {
+		hasDiskIssue := false
+		for _, issue := range issues {
+			if issue.Code == "disk_quota_unavailable" {
+				hasDiskIssue = true
+				break
+			}
+		}
+		if !hasDiskIssue {
+			issues = append(issues, types.PlanCapabilityIssue{
+				Code: "disk_quota_unavailable", Field: "site_disk_quota_mb",
+				Message: "Linux disk quotas are unavailable; the finite hosting-account disk quota cannot be enforced.", Blocking: true,
+			})
+		}
+	}
+	return issues, nil
+}
+
+func blockingCapabilityMessage(issues []types.PlanCapabilityIssue) string {
+	for _, issue := range issues {
+		if issue.Blocking {
+			return issue.Message
+		}
+	}
+	return ""
+}
+
+func (m *Manager) recordPlanReadiness(ctx context.Context, planID int64, message string) {
+	if planID <= 0 {
+		return
+	}
+	if recorder, ok := m.quotaAdmin.(interface {
+		RecordPlanReadiness(context.Context, int64, string) error
+	}); ok {
+		_ = recorder.RecordPlanReadiness(ctx, planID, message)
+	}
 }
 
 func (m *Manager) SetPlanStatuses(ctx context.Context, owner auth.SessionUser, planIDs []int64, active bool) error {
@@ -826,8 +939,36 @@ func (m *Manager) SetPlanStatuses(ctx context.Context, owner auth.SessionUser, p
 			return err
 		}
 		resellerID = scope.ResellerID
+		for _, planID := range planIDs {
+			if err := m.canManagePlan(ctx, owner, planID); err != nil {
+				return err
+			}
+		}
 	}
-	if err := bulk.SetPlanStatuses(ctx, planIDs, resellerID, unrestricted, active); err != nil {
+	if active {
+		reader, ok := m.quotaAdmin.(interface {
+			GetPlan(context.Context, int64) (controlquota.Plan, error)
+		})
+		if !ok {
+			return errors.New("plan readiness lookup is not configured")
+		}
+		for _, planID := range planIDs {
+			plan, err := reader.GetPlan(ctx, planID)
+			if err != nil {
+				return err
+			}
+			issues, err := m.validatePlanReadiness(ctx, plan)
+			if err != nil {
+				m.recordPlanReadiness(ctx, plan.ID, err.Error())
+				return err
+			}
+			if message := blockingCapabilityMessage(issues); message != "" {
+				m.recordPlanReadiness(ctx, plan.ID, message)
+				return fmt.Errorf("cannot activate plan %q: %s", plan.Name, message)
+			}
+		}
+	}
+	if err := bulk.SetPlanStatuses(ctx, planIDs, resellerID, unrestricted, active, owner.ID, owner.Email); err != nil {
 		if errors.Is(err, controlquota.ErrProviderScope) {
 			return ErrForbidden
 		}

@@ -165,6 +165,7 @@ func (p *fakeRuntimeCapabilityProbe) addTool(name, path string, output []byte) {
 	p.paths[name] = path
 	p.outputs[runtimeCommandKey(path, "--no-plugins", "--no-scripts", "--version", "--no-ansi")] = output
 	p.outputs[runtimeCommandKey(path, "--version", "--allow-root")] = output
+	p.outputs[runtimeCommandKey(path, "--version")] = output
 }
 
 func findPHPRuntime(t *testing.T, runtimes []types.PHPRuntimeCapability, version string) types.PHPRuntimeCapability {

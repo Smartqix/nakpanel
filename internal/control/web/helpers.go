@@ -16,11 +16,14 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/webstatistics"
+	controlwordpress "github.com/nakroteck/nakpanel/internal/control/wordpress"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
 type DashboardActions struct {
 	CanCreateSite       bool
+	CanUseWordPress     bool
 	CanCreateDatabase   bool
 	CanIssueCertificate bool
 	CanRetryJob         bool
@@ -32,6 +35,12 @@ type DashboardActions struct {
 type WorkspaceView struct {
 	Route                string
 	Title                string
+	SiteCreateError      string
+	SiteCreateDomain     string
+	SiteCreateKind       string
+	SiteCreateTitle      string
+	SiteCreateEmail      string
+	SiteCreated          *SiteCreationResult
 	DetailID             int64
 	ContainerID          int64
 	SelectedSubscription int64
@@ -56,8 +65,24 @@ type WorkspaceView struct {
 	SettingsFocus        string
 	LogSource            string
 	ApplicationTab       string
+	WordPressTab         string
 	PHPApplication       *controlphpapp.Workspace
+	WordPress            *controlwordpress.Workspace
+	WebStatistics        *webstatistics.Workspace
+	StatisticsSettings   *webstatistics.Settings
 	PHPRuntimeInventory  *types.RuntimeCapabilities
+}
+
+type SiteCreationResult struct {
+	SiteID        int64
+	Domain        string
+	Kind          string
+	Redirect      string
+	Message       string
+	OperationID   int64
+	Partial       bool
+	AdminUser     string
+	AdminPassword string
 }
 
 type phpMutationGate struct {
@@ -599,7 +624,7 @@ func domainTabActive(current, candidate string) string {
 
 func domainMoreActive(current string) string {
 	switch current {
-	case "files", "access", "databases", "backups", "logs", "scheduled-tasks", "statistics", "git", "applications", "containers", "staging", "redis":
+	case "files", "access", "databases", "backups", "logs", "scheduled-tasks", "statistics", "git", "applications", "wordpress", "containers", "staging", "redis":
 		return "is-active"
 	default:
 		return ""
@@ -633,6 +658,8 @@ func domainToolLabel(current string) string {
 		return "Git"
 	case "applications":
 		return "Applications"
+	case "wordpress":
+		return "WordPress"
 	case "containers":
 		return "Containers"
 	case "staging":
@@ -642,6 +669,44 @@ func domainToolLabel(current string) string {
 	default:
 		return "More"
 	}
+}
+
+func wordpressTab(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "overview", "plugins", "themes", "security", "updates", "activity":
+		return strings.ToLower(strings.TrimSpace(value))
+	default:
+		return "overview"
+	}
+}
+
+func wordpressTabURL(view WorkspaceView, siteID int64, tab string) templ.SafeURL {
+	return templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(siteID)+"/wordpress") + "?wp_tab=" + url.QueryEscape(wordpressTab(tab)))
+}
+
+func wordpressTabClass(view WorkspaceView, tab string) string {
+	if wordpressTab(view.WordPressTab) == tab {
+		return "is-active"
+	}
+	return ""
+}
+
+func statisticsReportURL(siteID int64, view WorkspaceView) string {
+	path := "/sites/" + strconv.FormatInt(siteID, 10) + "/statistics/report"
+	if view.SupportCustomerID > 0 {
+		path += "?support_customer_id=" + strconv.FormatInt(view.SupportCustomerID, 10)
+	}
+	return path
+}
+
+func wordpressSecurityLabel(state types.WordPressSecurityState) string {
+	if state.Score >= 80 {
+		return "Good"
+	}
+	if state.Score >= 60 {
+		return "Review"
+	}
+	return "Attention required"
 }
 
 func domainCurrentLabel(current string) string {
@@ -692,6 +757,8 @@ func routeTitle(route string) string {
 	switch route {
 	case "dashboard":
 		return "Home"
+	case "site-new":
+		return "Add Website"
 	case "sites", "site-detail", "site-files", "site-file-edit":
 		return "Websites & Domains"
 	case "databases":
@@ -761,11 +828,25 @@ func planTypeClass(current, candidate string) string {
 
 func planEditorTab(view WorkspaceView) string {
 	switch view.PlanTab {
-	case "permissions", "hosting", "php", "mail", "dns", "performance", "logs", "applications":
+	case "overview", "resources", "services", "customer-permissions", "defaults", "advanced":
 		return view.PlanTab
 	default:
-		return "resources"
+		return "overview"
 	}
+}
+
+func resellerPlanEditorTab(view WorkspaceView) string {
+	if view.PlanTab == "permissions" {
+		return "permissions"
+	}
+	return "resources"
+}
+
+func resellerPlanTabClass(view WorkspaceView, tab string) string {
+	if resellerPlanEditorTab(view) == tab {
+		return "is-active"
+	}
+	return ""
 }
 
 func planTabClass(view WorkspaceView, tab string) string {
@@ -799,7 +880,7 @@ func planEditorDefault(capabilities types.RuntimeCapabilities) controlquota.Plan
 	return controlquota.Plan{Name: "", DiskMB: 5120, MaxSites: 1, MaxDatabases: 2, BandwidthMB: 102400,
 		MaxMailboxes: 0, BackupRetentionDays: 7, PHPAllowlist: phpAllowlist, DefaultPHPVersion: phpVersion,
 		PHPFPMMaxChildren: 3, PHPMemoryMB: 128, SiteDiskQuotaMB: 5120, MaxBackups: 7,
-		BackupStorageMB: 5120, IsActive: true, OverusePolicy: types.PlanOveruseBlock,
+		BackupStorageMB: 5120, IsActive: false, LifecycleStatus: types.PlanLifecycleDraft, OverusePolicy: types.PlanOveruseBlock,
 		DiskWarningPercent: 80, TrafficWarningPercent: 80, MaxSubdomains: 0,
 		MaxDomainAliases: 0, MaxFTPAccounts: 0, ValidityDays: -1, HostingEnabled: true,
 		AllowDNS: true, AllowTLS: true, AllowBackups: true,
@@ -815,7 +896,13 @@ func planForCreate(plans []controlquota.Plan, view WorkspaceView, capabilities t
 			source.ID = 0
 			source.Name += " Copy"
 			source.IsActive = false
+			source.LifecycleStatus = types.PlanLifecycleDraft
 			source.Revision = 0
+			source.LastValidatedAt = sql.NullTime{}
+			source.ReadinessError = ""
+			source.RevisionActorUserID = 0
+			source.RevisionActorLabel = ""
+			source.ChangeReason = ""
 			return source
 		}
 	}
@@ -854,7 +941,7 @@ func planEditorLimitUnit(value int) string {
 }
 
 func planMatchesFilter(plan controlquota.Plan, view WorkspaceView) bool {
-	if view.StatusFilter == "active" && !plan.IsActive || view.StatusFilter == "inactive" && plan.IsActive {
+	if view.StatusFilter != "" && view.StatusFilter != planLifecycleStatus(plan) {
 		return false
 	}
 	if view.ProviderFilter == "admin" && plan.ResellerID != 0 {
@@ -865,6 +952,79 @@ func planMatchesFilter(plan controlquota.Plan, view WorkspaceView) bool {
 	}
 	query := strings.ToLower(strings.TrimSpace(view.SearchQuery))
 	return query == "" || strings.Contains(strings.ToLower(plan.Name+" "+plan.Description), query)
+}
+
+func planLifecycleStatus(plan controlquota.Plan) string {
+	if plan.LifecycleStatus != "" {
+		return string(plan.LifecycleStatus)
+	}
+	if plan.IsActive {
+		return string(types.PlanLifecycleActive)
+	}
+	return string(types.PlanLifecycleRetired)
+}
+
+func planReadinessLabel(plan controlquota.Plan) string {
+	if plan.ReadinessError != "" {
+		return "blocked"
+	}
+	if plan.LastValidatedAt.Valid {
+		return "ready"
+	}
+	return "not validated"
+}
+
+func subscriptionComplianceLabel(subscription types.SubscriptionSummary) string {
+	if subscription.ComplianceStatus == "" {
+		return string(types.SubscriptionComplianceUnknown)
+	}
+	return string(subscription.ComplianceStatus)
+}
+
+func planRevisionCount(revisions []types.PlanRevision, planID int64) int {
+	count := 0
+	for _, revision := range revisions {
+		if revision.PlanID == planID {
+			count++
+		}
+	}
+	return count
+}
+
+func planRevisionActor(revision types.PlanRevision) string {
+	if strings.TrimSpace(revision.ActorLabel) != "" {
+		return revision.ActorLabel
+	}
+	if revision.ActorUserID > 0 {
+		return "User #" + strconv.FormatInt(revision.ActorUserID, 10)
+	}
+	return "System"
+}
+
+func planInputEnforcement(name string) string {
+	switch name {
+	case "disk_mb", "bandwidth_mb":
+		return string(types.PlanEnforcementMeasuredLimit)
+	case "max_sites", "max_subdomains", "max_domain_aliases", "max_databases", "max_mailboxes", "max_ftp_accounts", "max_backups", "backup_storage_mb", "max_tasks", "max_database_users", "max_mail_aliases", "max_scheduled_tasks", "max_applications", "container_storage_mb", "valkey_memory_mb", "max_php_workers", "max_php_releases":
+		return string(types.PlanEnforcementHardLimit)
+	case "site_disk_quota_mb", "cpu_percent", "memory_limit_mb", "io_read_mbps", "io_write_mbps", "php_max_children", "php_memory_mb":
+		return string(types.PlanEnforcementCreationDefault)
+	default:
+		return string(types.PlanEnforcementStoredOnly)
+	}
+}
+
+func planEnforcementLabel(name string) string {
+	switch types.PlanEnforcementKind(planInputEnforcement(name)) {
+	case types.PlanEnforcementMeasuredLimit:
+		return "Measured"
+	case types.PlanEnforcementHardLimit:
+		return "Hard limit"
+	case types.PlanEnforcementCreationDefault:
+		return "Provisioning default"
+	default:
+		return "Stored setting"
+	}
 }
 
 func addonMatchesFilter(addon types.AddonPlan, view WorkspaceView) bool {
@@ -1246,6 +1406,19 @@ func yesNo(value bool) string {
 	}
 	return "No"
 }
+
+func latestWordPressRemoval(operations []controlwordpress.Operation) *types.WordPressRemovalResult {
+	for _, operation := range operations {
+		if operation.Kind == types.WordPressActionUninstall && operation.Result.Removal != nil {
+			result := *operation.Result.Removal
+			if result.BackupID == 0 {
+				result.BackupID = operation.BackupID
+			}
+			return &result
+		}
+	}
+	return nil
+}
 func planActiveStatus(value bool) string {
 	if value {
 		return "active"
@@ -1266,6 +1439,16 @@ func subscriptionsForCustomer(items []types.SubscriptionSummary, customerID int6
 	result := make([]types.SubscriptionSummary, 0)
 	for _, item := range items {
 		if item.CustomerID == customerID {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+func activeSubscriptions(items []types.SubscriptionSummary) []types.SubscriptionSummary {
+	result := make([]types.SubscriptionSummary, 0, len(items))
+	for _, item := range items {
+		if item.Status == "active" {
 			result = append(result, item)
 		}
 	}
@@ -1575,6 +1758,86 @@ func workspacePath(view WorkspaceView, path string) string {
 		return "/support/customers/" + strconv.FormatInt(view.SupportCustomerID, 10) + "/" + page
 	}
 	return path
+}
+
+func siteCreateKind(kind string) string {
+	switch kind {
+	case "wordpress", "git":
+		return kind
+	default:
+		return "php"
+	}
+}
+
+func siteCreateChoicePath(view WorkspaceView, kind string) string {
+	values := url.Values{"type": {siteCreateKind(kind)}}
+	if view.SelectedSubscription > 0 {
+		values.Set("subscription_id", strconv.FormatInt(view.SelectedSubscription, 10))
+	}
+	return siteCreateBasePath(view) + "?" + values.Encode()
+}
+
+func siteCreateBasePath(view WorkspaceView) string {
+	if view.SupportCustomerID > 0 {
+		return "/support/customers/" + strconv.FormatInt(view.SupportCustomerID, 10) + "/site-new"
+	}
+	return "/sites/new"
+}
+
+func siteCreateSubmitLabel(kind string) string {
+	switch siteCreateKind(kind) {
+	case "wordpress":
+		return "Set up WordPress"
+	case "git":
+		return "Create website"
+	default:
+		return "Create PHP website"
+	}
+}
+
+func siteOverviewHeading(site dashboard.Site, wordpress *controlwordpress.Workspace) string {
+	if site.Status == "failed" || site.SettingsStatus == "failed" {
+		return "Website needs attention"
+	}
+	if site.Status != "active" || site.SettingsStatus == "pending" {
+		return "Preparing website"
+	}
+	switch siteOverviewWordPressState(wordpress) {
+	case "failed":
+		return "WordPress needs attention"
+	case "removing":
+		return "Removing WordPress"
+	case "installing":
+		return "Installing WordPress"
+	}
+	return "Website is active"
+}
+
+func siteOverviewWordPressState(workspace *controlwordpress.Workspace) string {
+	if workspace == nil || workspace.Instance == nil {
+		return ""
+	}
+	instance := workspace.Instance
+	if instance.ObservedState == "failed" {
+		return "failed"
+	}
+	if instance.ObservedState == "removed" {
+		return "removed"
+	}
+	if instance.DesiredState == "absent" {
+		return "removing"
+	}
+	if instance.ObservedState == "healthy" || instance.ObservedState == "present" || instance.InstalledVersion != "" {
+		return "ready"
+	}
+	return "installing"
+}
+
+func siteWebsiteURL(site dashboard.Site) string {
+	if site.TLSStatus == "active" {
+		return "https://" + site.Domain
+	}
+	return "http://" + site.Domain
 }
 
 type fileCrumb struct{ Label, Path string }
@@ -1966,7 +2229,7 @@ func statusPillClass(state string) string {
 		return "pend"
 	case "running", "provisioning", "restoring", "preparing", "validating", "activating":
 		return "run"
-	case "failed", "discarded", "error":
+	case "failed", "discarded", "error", "over_limit", "capability_blocked", "blocked":
 		return "fail"
 	default:
 		return "susp"

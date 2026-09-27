@@ -228,6 +228,7 @@ type Backup struct {
 	SubscriptionID int64
 	CustomerID     int64
 	ScheduledFor   sql.NullTime
+	DatabaseNames  []string
 }
 
 type BillingAccount struct {
@@ -690,6 +691,22 @@ type Plan struct {
 	AllowPhpSettings      bool
 	HostingPolicy         json.RawMessage
 	ApiSlug               string
+	LifecycleStatus       string
+	LastValidatedAt       sql.NullTime
+	ReadinessError        string
+}
+
+type PlanRevision struct {
+	ID              int64
+	PlanID          int64
+	Revision        int32
+	LifecycleStatus string
+	Definition      json.RawMessage
+	DefinitionHash  string
+	ActorUserID     sql.NullInt64
+	ActorLabel      string
+	ChangeReason    string
+	CreatedAt       time.Time
 }
 
 type PlanServicePreset struct {
@@ -1050,6 +1067,18 @@ type SiteUsageCurrent struct {
 	LastError         string
 }
 
+type SiteWebStatistic struct {
+	SiteID           int64
+	Generation       int64
+	ReportGeneration int64
+	SettingsRevision int64
+	Status           string
+	RequestedAt      sql.NullTime
+	GeneratedAt      sql.NullTime
+	Summary          json.RawMessage
+	LastError        string
+}
+
 type StagingOperation struct {
 	ID                    int64
 	SourceSiteID          int64
@@ -1085,21 +1114,24 @@ type StalwartEmail struct {
 }
 
 type Subscription struct {
-	ID               int64
-	CustomerUserID   sql.NullInt64
-	ResellerUserID   sql.NullInt64
-	PlanID           sql.NullInt64
-	Status           string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	CustomerID       int64
-	Name             string
-	SyncMode         string
-	SyncStatus       string
-	PlanRevision     int32
-	SyncError        string
-	SuspensionReason string
-	ExpiresAt        sql.NullTime
+	ID                  int64
+	CustomerUserID      sql.NullInt64
+	ResellerUserID      sql.NullInt64
+	PlanID              sql.NullInt64
+	Status              string
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	CustomerID          int64
+	Name                string
+	SyncMode            string
+	SyncStatus          string
+	PlanRevision        int32
+	SyncError           string
+	SuspensionReason    string
+	ExpiresAt           sql.NullTime
+	ComplianceStatus    string
+	ComplianceError     string
+	ComplianceCheckedAt sql.NullTime
 }
 
 type SubscriptionAddon struct {
@@ -1245,6 +1277,15 @@ type ValkeyInstance struct {
 	UpdatedAt          time.Time
 }
 
+type WebStatisticsSetting struct {
+	ID            int32
+	Enabled       bool
+	RetentionDays int32
+	ScheduleHour  int32
+	AnonymizeIp   bool
+	Revision      int64
+}
+
 type WebmailHost struct {
 	ID          int64
 	OwnerUserID int64
@@ -1255,4 +1296,57 @@ type WebmailHost struct {
 	LastError   string
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type WordpressInstance struct {
+	ID                int64
+	SubscriptionID    int64
+	SiteID            int64
+	DatabaseID        sql.NullInt64
+	AdminUser         string
+	AdminEmail        string
+	SiteTitle         string
+	AdminSecretID     sql.NullInt64
+	AdminSecretScope  sql.NullString
+	InstalledVersion  string
+	UpdatePolicy      string
+	MaintenanceMode   bool
+	Inventory         json.RawMessage
+	Plugins           json.RawMessage
+	Themes            json.RawMessage
+	Security          json.RawMessage
+	ChecksumStatus    string
+	DesiredState      string
+	ObservedState     string
+	DesiredRevision   int64
+	AppliedRevision   int64
+	ConvergenceStatus string
+	LastError         string
+	LastScannedAt     sql.NullTime
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DatabaseManaged   bool
+}
+
+type WordpressOperation struct {
+	ID                       int64
+	SubscriptionID           int64
+	InstanceID               int64
+	RequestedByUserID        sql.NullInt64
+	Kind                     string
+	TargetType               string
+	TargetSlug               string
+	RequestedVersion         string
+	MaintenanceEnabled       bool
+	BackupID                 sql.NullInt64
+	DesiredRevision          int64
+	Status                   string
+	Result                   json.RawMessage
+	Output                   string
+	LastError                string
+	StartedAt                sql.NullTime
+	FinishedAt               sql.NullTime
+	CreatedAt                time.Time
+	BackupRequested          bool
+	DatabaseRemovalRequested bool
 }

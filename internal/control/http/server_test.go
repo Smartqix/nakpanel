@@ -197,6 +197,7 @@ type fakeQuotaManager struct {
 	plan                 controlquota.Plan
 	planID               int64
 	active               bool
+	lifecycle            types.PlanLifecycleStatus
 	customerUserID       int64
 	customerReq          types.CreateCustomerReq
 	customerStatus       string
@@ -238,6 +239,15 @@ func (m *fakeQuotaManager) SetPlanActive(ctx context.Context, owner auth.Session
 	m.owner = owner
 	m.planID = planID
 	m.active = active
+	m.statusCalled = true
+	return m.err
+}
+
+func (m *fakeQuotaManager) SetPlanLifecycle(ctx context.Context, owner auth.SessionUser, planID int64, lifecycle types.PlanLifecycleStatus) error {
+	m.owner = owner
+	m.planID = planID
+	m.lifecycle = lifecycle
+	m.active = lifecycle == types.PlanLifecycleActive
 	m.statusCalled = true
 	return m.err
 }
@@ -864,6 +874,26 @@ func TestRetryJobShowsSuccessNotice(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Retry queued. Refresh in a moment to see the updated status.") {
 		t.Fatalf("dashboard body missing retry notice:\n%s", rec.Body.String())
+	}
+}
+
+func TestDashboardNoticeToneDistinguishesFailures(t *testing.T) {
+	for _, test := range []struct {
+		code string
+		want string
+	}{
+		{code: "wordpress-install-queued", want: "success"},
+		{code: "wordpress-input-error", want: "error"},
+		{code: "wordpress-disabled", want: "error"},
+		{code: "wordpress-limit-reached", want: "error"},
+		{code: "wordpress-conflict", want: "error"},
+		{code: "wordpress-unavailable", want: "error"},
+		{code: "wordpress-operation-failed", want: "error"},
+		{code: "", want: ""},
+	} {
+		if got := dashboardNoticeTone(test.code); got != test.want {
+			t.Errorf("dashboardNoticeTone(%q) = %q, want %q", test.code, got, test.want)
+		}
 	}
 }
 
@@ -1770,6 +1800,25 @@ func TestClientCannotManagePlansSubscriptionsOrSettings(t *testing.T) {
 	}
 }
 
+func TestAdminCanSetExplicitPlanLifecycle(t *testing.T) {
+	manager := &fakeQuotaManager{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{QuotaManager: manager})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/plans/status", strings.NewReader("plan_id=17&lifecycle_status=draft"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("POST /plans/status = %d, want 303; body=%s", rec.Code, rec.Body.String())
+	}
+	if !manager.statusCalled || manager.planID != 17 || manager.lifecycle != types.PlanLifecycleDraft {
+		t.Fatalf("lifecycle mutation = called:%v plan:%d status:%q", manager.statusCalled, manager.planID, manager.lifecycle)
+	}
+}
+
 func TestOverQuotaCreateShowsClearBadRequest(t *testing.T) {
 	creator := &fakeSiteCreator{err: controlquota.ErrExceeded}
 	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleAdmin, creator)
@@ -2457,7 +2506,7 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 	cases := map[string]string{
-		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Hosting overview", "/sites/7?tab=hosting": "Hosting settings", "/sites/7?tab=databases": "Database allocation summary", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "Audit events", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
+		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Hosting overview", "/sites/7?tab=hosting": "Hosting settings", "/sites/7?tab=databases": "Database allocation summary", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "Audit events", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/addons/new": "Create Add-on", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
 	}
 	for path, marker := range cases {
 		req := httptest.NewRequest(http.MethodGet, "https://panel.test"+path, nil)
@@ -2502,6 +2551,34 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 			for _, want := range []string{"data-np-domain-databases", "owned_db", "owned_user", "Create database", `name="site_id" value="7"`} {
 				if !strings.Contains(rec.Body.String(), want) {
 					t.Fatalf("GET /sites/7?tab=databases missing %q", want)
+				}
+			}
+		}
+		if path == "/service-plans/new" {
+			for _, want := range []string{
+				"Overview", "Resources", "Services", "Customer Permissions", "Defaults", "Advanced",
+				`name="lifecycle_status"`, `value="draft" selected`, `data-np-plan-readiness`,
+				`data-np-enforcement="hard_limit"`, `data-np-preview-changes`,
+				`data-np-preview-impacts`, `data-np-preview-capabilities`, `data-np-preview-blockers`,
+			} {
+				if !strings.Contains(rec.Body.String(), want) {
+					t.Fatalf("GET /service-plans/new missing %q", want)
+				}
+			}
+			if strings.Contains(rec.Body.String(), `name="is_active"`) {
+				t.Fatal("GET /service-plans/new exposed the legacy active checkbox")
+			}
+		}
+		if path == "/service-plans/new" || path == "/service-plans/addons/new" {
+			for _, want := range []string{
+				`name="dns_default_ttl" min="0"`,
+				`min="0" name="valkey_max_clients"`,
+				`min="0" name="valkey_cpu_percent"`,
+				`min="0" name="valkey_process_limit"`,
+				`min="0" name="logs_retention_days"`,
+			} {
+				if !strings.Contains(rec.Body.String(), want) {
+					t.Fatalf("GET %s contains a hidden plan control that rejects its legitimate zero value; missing %q", path, want)
 				}
 			}
 		}

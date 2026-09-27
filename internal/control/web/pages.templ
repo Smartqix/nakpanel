@@ -958,6 +958,7 @@ templ settingsSection(data dashboard.Data, actions DashboardActions, view Worksp
 			<section class="np-settings-category" aria-labelledby="settings-web-title" data-np-settings-category>
 				<header><span class="np-settings-category-icon">@icon("globe")</span><div><h3 id="settings-web-title">Web &amp; PHP</h3><p>PHP-FPM policy and web service configuration.</p></div></header>
 				<div class="np-settings-tool-list">
+					<a class="np-settings-tool is-actionable" href="/tools-settings/web-statistics" data-np-settings-tool data-np-settings-keywords="goaccess web statistics analytics privacy"><span class="np-settings-tool-icon">@icon("activity")</span><span class="np-settings-tool-copy"><strong>Web Statistics</strong><span>GoAccess engine, report window, daily schedule and privacy.</span></span><span class="np-settings-tool-meta">@icon("chevron-right")</span></a>
 					<a class="np-settings-tool is-actionable" href="/tools-settings/php" data-np-settings-tool data-np-settings-keywords="php fpm versions ini extensions limits Default PHP version">
 						<span class="np-settings-tool-icon">@icon("file-code")</span>
 						<span class="np-settings-tool-copy"><strong>PHP Runtime Inventory</strong><span>Default plan policy { settingsDefaultPHPVersion(data.Plans) }; allowed { settingsPHPAllowlist(data.Plans) }; { settingsPHPFPM(data.Plans) }.</span></span>
@@ -1177,6 +1178,10 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 	<section class="np-settings-focus" data-np-settings-inventory aria-labelledby="settings-focus-title">
 		<a class="np-back-link" href="/tools-settings">@icon("corner-up-left") All tools and settings</a>
 		switch view.SettingsFocus {
+			case "web-statistics":
+				if view.StatisticsSettings != nil {
+					@statisticsSettings(*view.StatisticsSettings,view)
+				}
 			case "server":
 					<div class="np-settings-focus-head"><div><span class="np-kicker">Server Management</span><h3 id="settings-focus-title">Server Information</h3><p>Latest host, time, resource, and component inventory collected by the agent.</p></div><span class="np-pill np-pill-susp" data-np-server-inventory-state>unknown</span></div>
 				<dl class="np-settings-facts">
@@ -1423,7 +1428,7 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 					</table>
 				</div>
 			case "applications":
-				<div class="np-settings-focus-head"><div><span class="np-kicker">Applications &amp; Containers</span><h3 id="settings-focus-title">Provider Application Catalog</h3><p>Provider-curated, digest-pinned OCI recipes. Managed PHP releases live in each domain's PHP Application workspace; WordPress Toolkit, Node.js, and Python are not implemented.</p></div><span class="np-pill np-pill-ok">OCI only</span></div>
+				<div class="np-settings-focus-head"><div><span class="np-kicker">Applications &amp; Containers</span><h3 id="settings-focus-title">Provider Application Catalog</h3><p>Provider-curated, digest-pinned OCI recipes. Managed PHP releases and WordPress Toolkit live in their domain workspaces; Node.js and Python adapters remain unavailable.</p></div><span class="np-pill np-pill-ok">OCI catalog</span></div>
 				<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Recipe</th><th>Runtime</th><th>Image</th><th>Status</th></tr></thead><tbody>
 					for _, preset := range data.SubscriptionServices.ApplicationPresets {
 						<tr><td data-label="Recipe"><strong>{ preset.Name }</strong><small>{ preset.Slug }</small></td><td data-label="Runtime">{ preset.Runtime }</td><td data-label="Image"><code>{ shortImageReference(preset.ImageRef) }</code></td><td data-label="Status">

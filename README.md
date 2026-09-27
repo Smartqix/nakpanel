@@ -18,6 +18,9 @@ management, and migration-sensitive control-plane behavior.
 - Login, Argon2id password verification, secure sessions, and role-aware
   dashboards for admins and customers.
 - Customer records, service plans, subscriptions, and entitlement checks.
+- Production service-plan contracts with draft/active/retired lifecycle,
+  live server-readiness validation, immutable revision history, structured
+  synchronization previews, and non-destructive subscription compliance.
 - Site, database, TLS, backup, restore, DNS, webmail, and reconciliation jobs
   through River.
 - First-class, subscription-scoped Mail workspace for domains, mailboxes,
@@ -32,6 +35,9 @@ management, and migration-sensitive control-plane behavior.
 - Domain-centered hosting tools for File Manager, confined SFTP, TLS-only
   FTPS, dedicated PHP-FPM services, structured nginx controls, logs,
   statistics, scheduled tasks, Git, protected directories, and staging.
+- GoAccess web statistics in each domain's Statistics workspace, with inherited
+  plan settings, daily generation, manual refresh, protected detailed reports,
+  and administrator controls for retention, schedule, and IP anonymization.
 - Operational OCI containers with digest-pinned images, rootless
   subscription identities, loopback-only nginx ingress, health-gated
   generations, encrypted write-only secrets, rollback, and reboot
@@ -47,14 +53,22 @@ management, and migration-sensitive control-plane behavior.
 - WordPress 7.1 compatibility on Classic PHP, including trusted custom TLS,
   WP-CLI 2.12.0, backups containing files and tracked MariaDB data, clean
   permalinks, media, cron, sessions, and OPcache.
+- A domain-scoped WordPress Toolkit for entitled Classic PHP sites, with
+  guided installation, discovery, inventory, checksum verification,
+  maintenance mode, hardening, password reset, and backup-gated core,
+  plugin, and theme updates.
+- Safe WordPress removal with distinct **Detach** and **Uninstall** workflows.
+  Detach removes Toolkit tracking without touching hosted data. Uninstall
+  removes WordPress files, defaults to a recovery backup, permits deletion only
+  for a Toolkit-managed database covered by that backup, and preserves the
+  domain, DNS, TLS, PHP, mail, and unrelated databases.
 - Adminer SSO for database access from the authenticated panel.
 - Single-VM Ubuntu 24.04 Multipass deployment verification.
 
-WordPress support is compatibility only: Nakpanel is not a WordPress Toolkit
-and does not manage plugins, themes, cloning, or WordPress lifecycle through a
-dedicated product. Nakpanel does not offer Node.js or Python applications.
-Advanced OCI workloads remain separate under the domain's Containers
-workspace.
+The WordPress Toolkit deliberately stops short of cloning, staging, automatic
+update policies, multisite orchestration, or plugin/theme installation from
+arbitrary sources. Nakpanel does not offer Node.js or Python applications.
+Advanced OCI workloads remain separate under the domain's Containers workspace.
 
 ## Architecture
 
@@ -152,10 +166,22 @@ This creates a fresh `nakpanel-lab` Ubuntu 24.04 Multipass VM, removes old
 Nakpanel phase VMs, installs the service stack, runs migrations, builds the
 panel, agent, and CLI, installs systemd units, and retains the Phase 28 and
 adversarial security gates before Phase 29 reliability/disaster recovery.
-Phase 30 then installs the current worktree and is the final gate: it proves
+Phase 30 then installs the current worktree and proves
 the detailed PHP runtime inventory, a real Classic WordPress 7.1 site, native
 Managed PHP release/worker behavior, cross-subscription isolation, and reboot
-recovery.
+recovery. Phase 31 proves plan lifecycle and assignment rules, fail-closed
+capability validation, immutable revisions, synchronization impact previews,
+and non-destructive subscription compliance. Phase 32 remains directly
+runnable as the Toolkit feature gate: it
+provisions an entitled Classic PHP site through the domain WordPress Toolkit,
+checks inventory and core integrity, requires a completed backup before
+updates, verifies maintenance recovery, enforces the per-subscription site
+limit, and checks that secrets never enter River arguments. Phase 33 is the uninstall gate:
+it proves backup-gated uninstall, managed-database provenance,
+domain preservation, tombstone reinstall, external-database preservation, and
+pre-drop failure recovery. Phase 34 is the final gate: it generates real nginx
+traffic, checks GoAccess reports through the authenticated panel, verifies URL
+privacy filtering, and proves customer report isolation.
 
 The verifier intentionally refuses to delete Multipass VMs whose names do not
 start with `nakpanel-`. Non-Nakpanel VMs such as unrelated local test machines
@@ -256,9 +282,11 @@ Hosting-toolkit verification is split across
 `deploy/multipass/phase21-verify.sh` through
 `deploy/multipass/phase25-verify.sh`. Each script reuses `nakpanel-lab` and
 chains its prerequisite; `deployment-verify.sh` remains the canonical clean
-deployment gate. `deploy/multipass/phase30-verify.sh` is the final direct gate
-and chains Phase 29 unless `NAKPANEL_SKIP_PRIOR_PHASES=1` is set by the
-canonical single-VM runner.
+deployment gate. `deploy/multipass/phase34-verify.sh` is the final direct gate
+and chains Phase 33 unless `NAKPANEL_SKIP_PRIOR_PHASES=1` is set by the
+canonical single-VM runner. Use `deploy/multipass/phase30-verify.sh` directly
+for PHP compatibility or `deploy/multipass/phase32-verify.sh` for the Toolkit
+feature gate without the uninstall acceptance cases.
 
 Destructive commands require an interactive confirmation or `--yes`. Custom
 site certificates can be queued without placing key material in River:
@@ -328,9 +356,9 @@ dumps, or generated junk outside the project’s expected generated files.
 
 Nakpanel currently covers the core control-plane, hosting provisioning, mail
 workspace, external billing provisioning API, Classic PHP, and Managed PHP,
-but it does not yet claim full cPanel/Plesk parity. WordPress Toolkit features,
-Node.js/Python application runtimes, billing invoices, advanced reseller
-hierarchy, and full production hardening remain external or future work.
+but it does not yet claim full cPanel/Plesk parity. Advanced WordPress staging
+and cloning, Node.js/Python application runtimes, billing invoices, advanced
+reseller hierarchy, and full production hardening remain future work.
 
 ## License
 

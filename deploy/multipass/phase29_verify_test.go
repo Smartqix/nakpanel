@@ -182,6 +182,29 @@ func TestUnifiedInstallerImplementsUpgradeRollback(t *testing.T) {
 	}
 }
 
+func TestUnifiedInstallerSerializesUbuntuBackgroundPackageWork(t *testing.T) {
+	script := readExecutableScript(t, "../install/install.sh")
+	for _, want := range []string{
+		"pause_apt_background",
+		"resume_apt_timers",
+		"apt-daily.timer",
+		"apt-daily-upgrade.timer",
+		"apt-daily.service",
+		"apt-daily-upgrade.service",
+		"timed out waiting for Ubuntu background package activity",
+	} {
+		if !strings.Contains(script, want) {
+			t.Fatalf("install.sh is missing package-lock safety %q", want)
+		}
+	}
+	if strings.Count(script, "pause_apt_background") < 3 {
+		t.Fatal("fresh and upgrade paths must both pause background package activity")
+	}
+	if !strings.Contains(script, "resume_apt_timers\n") {
+		t.Fatal("installer cleanup must restore the package timers")
+	}
+}
+
 func TestSoakVerifierIsNonDestructive(t *testing.T) {
 	script := readExecutableScript(t, "soak-verify.sh")
 	for _, want := range []string{

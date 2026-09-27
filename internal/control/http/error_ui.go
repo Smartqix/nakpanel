@@ -54,6 +54,11 @@ func (w *capturedErrorWriter) WriteHeader(status int) {
 	}
 	w.wroteHead = true
 	w.status = status
+	if w.Header().Get("X-Nakpanel-Complete-Error-Page") == "1" {
+		w.Header().Del("X-Nakpanel-Complete-Error-Page")
+		w.target.WriteHeader(status)
+		return
+	}
 	if status >= http.StatusBadRequest {
 		if status < http.StatusInternalServerError && isJSONContentType(w.Header().Get("Content-Type")) {
 			w.target.WriteHeader(status)

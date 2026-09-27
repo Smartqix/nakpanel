@@ -102,6 +102,16 @@ type PHPApplicationProvisioner interface {
 	ReconcilePHPWorkers(context.Context, types.ReconcilePHPWorkersReq) (types.ReconcilePHPWorkersResult, error)
 }
 
+type WordPressProvisioner interface {
+	RunWordPress(context.Context, types.WordPressOperationReq) (types.WordPressOperationResult, error)
+}
+
+type WebStatisticsProvisioner interface {
+	GenerateWebStatistics(context.Context, types.WebStatisticsRequest) (types.WebStatisticsResult, error)
+	ReadWebStatistics(context.Context, types.WebStatisticsRequest) (types.WebStatisticsResult, error)
+	WebStatisticsStatus(context.Context) (types.WebStatisticsStatus, error)
+}
+
 type SubscriptionTeardownProvisioner interface {
 	TeardownSubscription(context.Context, types.TeardownSubscriptionReq) (types.TeardownSubscriptionResult, error)
 }
@@ -207,6 +217,8 @@ type Options struct {
 	Mail                      MailProvisioner
 	Applications              ApplicationProvisioner
 	PHPApplications           PHPApplicationProvisioner
+	WordPress                 WordPressProvisioner
+	WebStatistics             WebStatisticsProvisioner
 	SubscriptionTeardown      SubscriptionTeardownProvisioner
 	ServerAdmin               ServerAdminInspector
 	ServiceController         ManagedServiceController
@@ -241,6 +253,8 @@ type Dispatcher struct {
 	mailQueue                 MailQueueReader
 	applications              ApplicationProvisioner
 	phpApplications           PHPApplicationProvisioner
+	wordpress                 WordPressProvisioner
+	webStatistics             WebStatisticsProvisioner
 	subscriptionTeardown      SubscriptionTeardownProvisioner
 	serverAdmin               ServerAdminInspector
 	serviceController         ManagedServiceController
@@ -296,6 +310,8 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 		mail:                      opts.Mail,
 		applications:              opts.Applications,
 		phpApplications:           opts.PHPApplications,
+		wordpress:                 opts.WordPress,
+		webStatistics:             opts.WebStatistics,
 		subscriptionTeardown:      opts.SubscriptionTeardown,
 		hostingToolkit:            opts.HostingToolkit,
 		serverAdmin:               opts.ServerAdmin,
@@ -319,6 +335,11 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 func (d *Dispatcher) Dispatch(ctx context.Context, req types.Request) types.Response {
 	if strings.TrimSpace(req.ID) == "" {
 		return validationResponse(req.ID, "id is required")
+	}
+	// Report bodies are bounded but large; read-only operations must not fill
+	// the mutation-idempotency cache with a new copy on every browser request.
+	if req.Op == types.OpReadWebStatistics || req.Op == types.OpWebStatisticsStatus {
+		return d.dispatch(ctx, req)
 	}
 
 	d.mu.Lock()
@@ -1094,6 +1115,50 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, "PHP application provisioner is not configured")
 		}
 		result, err := d.phpApplications.ReconcilePHPWorkers(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpWebStatisticsStatus:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.webStatistics == nil {
+			return errorResponse(req.ID, "web statistics unavailable")
+		}
+		result, err := d.webStatistics.WebStatisticsStatus(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpGenerateWebStatistics, types.OpReadWebStatistics:
+		var payload types.WebStatisticsRequest
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.webStatistics == nil {
+			return errorResponse(req.ID, "web statistics unavailable")
+		}
+		var result types.WebStatisticsResult
+		var err error
+		if req.Op == types.OpGenerateWebStatistics {
+			result, err = d.webStatistics.GenerateWebStatistics(ctx, payload)
+		} else {
+			result, err = d.webStatistics.ReadWebStatistics(ctx, payload)
+		}
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpRunWordPress:
+		var payload types.WordPressOperationReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.wordpress == nil {
+			return errorResponse(req.ID, "WordPress provisioner is not configured")
+		}
+		result, err := d.wordpress.RunWordPress(ctx, payload)
 		if err != nil {
 			return errorResponse(req.ID, err.Error())
 		}

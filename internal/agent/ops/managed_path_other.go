@@ -64,7 +64,9 @@ func secureHostedPath(root, target string, info fs.FileInfo, gid int) error {
 	if info.IsDir() {
 		mode |= 0o2050
 	} else if info.Mode().IsRegular() {
-		mode |= 0o040
+		if filepath.Base(target) != "wp-config.php" {
+			mode |= 0o040
+		}
 	} else {
 		return errors.New("hosted tree contains an unsupported file type")
 	}

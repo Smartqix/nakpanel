@@ -1,0 +1,113 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/types"
+)
+
+templ siteCreatePage(subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
+	@pageHead("Hosting services", "Add website", "Choose what to host. PHP and resource limits come from the subscription.") {
+		<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view, "/sites")) }>Back to websites</a>
+	}
+	<div class="np-v2-create">
+		if view.SiteCreated != nil {
+			<div>
+				@siteCreationResult(*view.SiteCreated, view)
+			</div>
+		}
+		if view.SiteCreated == nil {
+			<div class="np-v2-type-list" aria-label="Website type">
+				@siteCreateType(view, "php", "PHP website", "Upload files or use File Manager", "file-code")
+				if actions.CanUseWordPress {
+					@siteCreateType(view, "wordpress", "WordPress", "Install WordPress with its database", "package-open")
+				}
+				@siteCreateType(view, "git", "Deploy from Git", "Connect a repository after hosting is ready", "copy")
+			</div>
+			if view.SiteCreateError != "" {
+				<p class="np-v2-create-error" role="alert">{ view.SiteCreateError }</p>
+			}
+			if len(subscriptions) == 0 {
+				<section class="np-v2-create-empty"><h2>No active subscription</h2><p>A website needs an active subscription. Ask your provider to assign one before continuing.</p></section>
+			}
+			if len(subscriptions) > 0 {
+				<form class="np-v2-create-form" method="post" action="/websites" data-np-v2-create-site-form>
+					@csrfInput(view)
+					<input type="hidden" name="website_type" value={ siteCreateKind(view.SiteCreateKind) }/>
+					@siteCreateSubscription(subscriptions, view)
+					<label class="np-v2-create-field">Domain name<input type="text" name="domain" value={ view.SiteCreateDomain } placeholder="example.com" autocomplete="off" required/></label>
+					if siteCreateKind(view.SiteCreateKind) == "wordpress" {
+						<div class="np-v2-create-wordpress">
+							<h2>WordPress details</h2>
+							<div class="np-v2-create-field-row">
+								<label class="np-v2-create-field">Site title<input name="site_title" value={ view.SiteCreateTitle } placeholder="My website"/></label>
+								<label class="np-v2-create-field">Administrator email<input type="email" name="admin_email" value={ view.SiteCreateEmail } placeholder="you@example.com" autocomplete="email" required/></label>
+							</div>
+							<p class="np-muted">The administrator username is <strong>siteadmin</strong>. A password will be generated and shown once after setup starts.</p>
+							<details class="np-v2-create-advanced"><summary>Choose your own WordPress password</summary><label class="np-v2-create-field">Password<input type="password" name="admin_password" minlength="12" autocomplete="new-password"/></label></details>
+						</div>
+					}
+					<p class="np-v2-create-gate" data-np-v2-create-gate role="status"></p>
+					<div class="np-v2-create-actions">
+						<button type="submit" data-np-v2-create-submit>{ siteCreateSubmitLabel(view.SiteCreateKind) }</button>
+						<a href={ templ.SafeURL(workspacePath(view, "/sites")) }>Cancel</a>
+					</div>
+				</form>
+				<section class="np-v2-created" data-np-v2-live-result hidden aria-live="polite">
+					<div class="np-v2-created-mark">@icon("globe")</div>
+					<h2 data-np-v2-live-title tabindex="-1">Website setup started</h2>
+					<p data-np-v2-live-message></p>
+					<div class="np-v2-credential" data-np-v2-live-credential hidden>
+						<strong>WordPress login</strong><p>Username: <code data-np-v2-live-user></code></p>
+						<div data-np-v2-live-password hidden><div class="np-password-field"><label>Password<input type="text" readonly data-np-generated-password autocomplete="off"/></label><button type="button" class="np-secondary-button" data-np-copy-password title="Copy password">Copy</button></div>
+							<p>Save this password now. It will not be shown again.</p>
+						</div>
+					</div>
+					<div class="np-v2-create-actions"><a class="np-primary-link" href={ templ.SafeURL(workspacePath(view,"/sites")) } data-np-v2-live-redirect>View website setup</a><a href={ templ.SafeURL(workspacePath(view,"/sites")) }>All websites</a></div>
+				</section>
+			}
+		}
+	</div>
+}
+
+templ siteCreateType(view WorkspaceView, kind string, title string, description string, iconName string) {
+	<a class={ "np-v2-type " + activeClass(siteCreateKind(view.SiteCreateKind) == kind) } href={ templ.SafeURL(siteCreateChoicePath(view, kind)) } aria-current={ ariaCurrent(activeClass(siteCreateKind(view.SiteCreateKind) == kind)) }>
+		@icon(iconName)
+		<span><strong>{ title }</strong><small>{ description }</small></span>
+	</a>
+}
+
+templ siteCreateSubscription(subscriptions []types.SubscriptionSummary, view WorkspaceView) {
+	if len(subscriptions) == 1 {
+		<input type="hidden" name="subscription_id" value={ formatJobID(subscriptions[0].ID) } data-np-v2-subscription data-max-sites={ formatPlanLimitFormValue(subscriptions[0].MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscriptions[0].SitesUsed) }/>
+		<div class="np-v2-create-subscription"><span>Subscription</span><strong>{ subscriptions[0].SubscriptionName }</strong><small>{ subscriptions[0].PlanName } · { formatQuotaCompactCount(subscriptions[0].SitesUsed, subscriptions[0].MaxSites, true) } websites</small></div>
+	} else {
+		<label class="np-v2-create-field">Subscription<select name="subscription_id" data-np-v2-subscription required>
+			for _, subscription := range subscriptions {
+				<option value={ formatJobID(subscription.ID) } selected?={ subscription.ID == view.SelectedSubscription } data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.SitesUsed) }>{ subscriptionSelectLabel(subscription) }</option>
+			}
+		</select></label>
+	}
+}
+
+templ siteCreationResult(result SiteCreationResult, view WorkspaceView) {
+	<section class="np-v2-created" data-np-v2-created>
+		<div class="np-v2-created-mark">@icon("globe")</div>
+		if result.Partial {
+			<h2>Website created; WordPress needs attention</h2>
+		} else if result.Kind == "wordpress" {
+			<h2>WordPress setup started</h2>
+		} else {
+			<h2>Website setup started</h2>
+		}
+		<p>{ result.Message }</p>
+		<dl><div><dt>Domain</dt><dd>{ result.Domain }</dd></div><div><dt>Website type</dt><dd>{ result.Kind }</dd></div></dl>
+		if result.AdminUser != "" {
+			<div class="np-v2-credential"><strong>WordPress login</strong><p>Username: <code>{ result.AdminUser }</code></p>
+				if result.AdminPassword != "" {
+					<div class="np-password-field"><label>Password<input type="text" readonly value={ result.AdminPassword } data-np-generated-password autocomplete="off"/></label><button type="button" class="np-secondary-button" data-np-copy-password title="Copy password">Copy</button></div>
+					<p>Save this password now. It will not be shown again.</p>
+				}
+			</div>
+		}
+		<div class="np-v2-create-actions"><a class="np-primary-link" href={ templ.SafeURL(result.Redirect) }>View website setup</a><a href={ templ.SafeURL(workspacePath(view,"/sites")) }>All websites</a></div>
+	</section>
+}

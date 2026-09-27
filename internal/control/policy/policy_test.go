@@ -20,7 +20,7 @@ func testPolicy() types.HostingPolicy {
 	}
 }
 
-func TestUpgradeV1AndV2ToV3PreservesLegacyValuesWithPHPHostingDisabled(t *testing.T) {
+func TestUpgradeV1AndV2ToV4PreservesLegacyValuesWithNewFeaturesDisabled(t *testing.T) {
 	for _, version := range []int{1, 2} {
 		legacy := testPolicy()
 		legacy.SchemaVersion = version
@@ -28,7 +28,7 @@ func TestUpgradeV1AndV2ToV3PreservesLegacyValuesWithPHPHostingDisabled(t *testin
 		legacy.Resources.MaxSites = 7
 
 		got := Upgrade(legacy)
-		if got.SchemaVersion != 3 || !got.Permissions.Git || got.Resources.MaxSites != 7 {
+		if got.SchemaVersion != 5 || !got.Permissions.Git || got.Resources.MaxSites != 7 {
 			t.Fatalf("Upgrade(v%d) did not preserve legacy policy: %#v", version, got)
 		}
 		if got.Permissions.Composer || got.Permissions.ComposerCodeExecution ||
@@ -102,15 +102,52 @@ func TestValidateWithinIncludesPHPHostingCeilings(t *testing.T) {
 	}
 }
 
-func TestDefaultPolicyUsesV3WithoutGrantingPHPHosting(t *testing.T) {
+func TestDefaultPolicyUsesV4WithoutGrantingNewHostingFeatures(t *testing.T) {
 	got := DefaultFromEntitlements(types.SubscriptionEntitlements{HostingEnabled: true})
-	if got.SchemaVersion != 3 {
-		t.Fatalf("schema version = %d, want 3", got.SchemaVersion)
+	if got.SchemaVersion != 5 {
+		t.Fatalf("schema version = %d, want 5", got.SchemaVersion)
 	}
 	if got.Permissions.Composer || got.Permissions.ComposerCodeExecution ||
 		got.Permissions.ManagedPHPDeployments || got.Permissions.PHPWorkers ||
 		got.Resources.MaxPHPWorkers != 0 || got.Resources.MaxPHPReleases != 0 {
 		t.Fatalf("legacy entitlements granted Phase 30 capability: %#v", got)
+	}
+}
+
+func TestUpgradeLegacyPolicyToV4DoesNotGrantWordPressToolkit(t *testing.T) {
+	for _, version := range []int{1, 2, 3} {
+		legacy := testPolicy()
+		legacy.SchemaVersion = version
+		legacy.Resources.MaxSites = 4
+
+		got := Upgrade(legacy)
+		if got.SchemaVersion != 5 || got.Resources.MaxSites != 4 {
+			t.Fatalf("Upgrade(v%d) = %#v", version, got)
+		}
+		if got.Permissions.WordPressToolkit || got.Resources.MaxWordPressSites != 0 {
+			t.Fatalf("Upgrade(v%d) granted WordPress Toolkit: %#v", version, got)
+		}
+	}
+}
+
+func TestValidateWithinEnforcesWordPressToolkitCeiling(t *testing.T) {
+	ceiling := Upgrade(testPolicy())
+	ceiling.Permissions.WordPressToolkit = true
+	ceiling.Resources.MaxWordPressSites = 2
+	child := ceiling
+	if err := ValidateWithin(child, ceiling); err != nil {
+		t.Fatal(err)
+	}
+
+	child.Resources.MaxWordPressSites = 3
+	if err := ValidateWithin(child, ceiling); err == nil {
+		t.Fatal("WordPress site count exceeded provider ceiling")
+	}
+	child = ceiling
+	child.Permissions.WordPressToolkit = true
+	ceiling.Permissions.WordPressToolkit = false
+	if err := ValidateWithin(child, ceiling); err == nil {
+		t.Fatal("WordPress Toolkit permission exceeded provider ceiling")
 	}
 }
 

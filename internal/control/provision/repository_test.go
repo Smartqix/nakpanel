@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,27 @@ func TestNormalizeDNSRecordSupportsSRVAndRejectsTypedFieldOverflow(t *testing.T)
 		if _, err := normalizeDNSRecord("example.test", candidate); err == nil {
 			t.Fatalf("normalizeDNSRecord(%#v) succeeded, want validation error", candidate)
 		}
+	}
+}
+
+func TestMarkBackupActivePersistsNormalizedDatabaseCoverage(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	store := NewSQLPhase6StatusStore(db)
+	mock.ExpectExec(regexp.QuoteMeta(`UPDATE backups SET status='active',archive_path=$2,size_bytes=$3,
+checksum_sha256=$4,database_names=$5,last_error='',updated_at=now() WHERE id=$1`)).
+		WithArgs(int64(41), "/backup.tar.zst", int64(4096), strings.Repeat("a", 64), `{"db_a","db_b"}`).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	if err := store.MarkBackupActive(context.Background(), 41, types.CreateBackupResult{
+		ArchivePath: "/backup.tar.zst", SizeBytes: 4096, SHA256: strings.Repeat("a", 64),
+	}, []string{"db_b", "db_a", "db_b", ""}); err != nil {
+		t.Fatal(err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 

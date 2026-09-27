@@ -26,6 +26,8 @@ import (
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/control/web"
+	"github.com/nakroteck/nakpanel/internal/control/webstatistics"
+	controlwordpress "github.com/nakroteck/nakpanel/internal/control/wordpress"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/nakroteck/nakpanel/internal/version"
 )
@@ -75,6 +77,15 @@ type PHPApplicationService interface {
 	DeleteWorker(context.Context, auth.SessionUser, int64, int64) error
 	SetWorkerState(context.Context, auth.SessionUser, int64, int64, string) error
 	RequestReconcile(context.Context, auth.SessionUser, int64) error
+}
+
+type WordPressService interface {
+	PreflightNewSite(context.Context, auth.SessionUser, int64) error
+	Workspace(context.Context, auth.SessionUser, int64) (controlwordpress.Workspace, error)
+	Install(context.Context, auth.SessionUser, int64, controlwordpress.InstallInput) (controlwordpress.Instance, controlwordpress.Operation, error)
+	QueueOperation(context.Context, auth.SessionUser, int64, controlwordpress.OperationInput) (controlwordpress.Operation, error)
+	Detach(context.Context, auth.SessionUser, int64) error
+	Uninstall(context.Context, auth.SessionUser, int64, controlwordpress.UninstallInput) (controlwordpress.Operation, error)
 }
 
 type JobRetrier interface {
@@ -240,6 +251,8 @@ type ServerOptions struct {
 	DNSTemplates               DNSTemplateManager
 	ApplicationLogs            ApplicationLogReader
 	PHPApplications            PHPApplicationService
+	WordPress                  WordPressService
+	WebStatistics              *webstatistics.Service
 	SMTPConfigured             bool
 	// SecurityDB backs the durable login throttle, TOTP state, login
 	// challenges, and auth audit/alerting. Optional; without it the login
@@ -269,6 +282,8 @@ type Server struct {
 	dnsTemplates       DNSTemplateManager
 	applicationLogs    ApplicationLogReader
 	phpApplications    PHPApplicationService
+	wordpress          WordPressService
+	webStatistics      *webstatistics.Service
 	smtpConfigured     bool
 	securityDB         *sql.DB
 	securityKeyring    *serveradmin.Keyring
@@ -300,6 +315,8 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		dnsTemplates:       opts.DNSTemplates,
 		applicationLogs:    opts.ApplicationLogs,
 		phpApplications:    opts.PHPApplications,
+		wordpress:          opts.WordPress,
+		webStatistics:      opts.WebStatistics,
 		smtpConfigured:     opts.SMTPConfigured,
 		securityDB:         opts.SecurityDB,
 		securityKeyring:    opts.SecurityKeyring,
@@ -323,6 +340,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.HandleFunc("POST /tools-settings/reauthenticate", s.handleServerReauthenticate)
 	mux.HandleFunc("POST /sites", s.handleCreateSite)
+	mux.HandleFunc("POST /websites", s.handleCreateWebsite)
 	mux.HandleFunc("POST /databases", s.handleCreateDatabase)
 	mux.HandleFunc("POST /certificates", s.handleIssueCertificate)
 	mux.HandleFunc("POST /sites/{id}/certificates/custom", s.handleInstallCustomCertificate)
@@ -396,6 +414,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /sites/{id}/php-application/workers/{workerID}/state", s.handleSetPHPWorkerState)
 	mux.HandleFunc("POST /sites/{id}/php-application/workers/{workerID}/delete", s.handleDeletePHPWorker)
 	mux.HandleFunc("POST /sites/{id}/php-application/reconcile", s.handleReconcilePHPApplication)
+	mux.HandleFunc("POST /sites/{id}/wordpress/install", s.handleInstallWordPress)
+	mux.HandleFunc("POST /sites/{id}/wordpress/operations", s.handleWordPressOperation)
+	mux.HandleFunc("POST /sites/{id}/wordpress/detach", s.handleDetachWordPress)
+	mux.HandleFunc("POST /sites/{id}/wordpress/uninstall", s.handleUninstallWordPress)
 	mux.HandleFunc("GET /sites/{id}/logs/data", s.handleSiteLogData)
 	mux.HandleFunc("POST /subscriptions/{id}/services/{kind}/{resourceID}/delete", s.handleDeleteSubscriptionService)
 	s.registerFileManagerRoutes(mux)
@@ -417,14 +439,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /email", s.handleEmailRedirect)
 	mux.HandleFunc("GET /dashboard", s.handleWorkspace("dashboard"))
 	mux.HandleFunc("GET /sites", s.handleWorkspace("sites"))
+	mux.HandleFunc("GET /sites/new", s.handleWorkspace("site-new"))
 	mux.HandleFunc("GET /sites/{id}", s.handleWorkspace("site-detail"))
 	mux.HandleFunc("GET /sites/{id}/access", s.handleSiteTool("access"))
 	mux.HandleFunc("GET /sites/{id}/web-server", s.handleSiteTool("web-server"))
 	mux.HandleFunc("GET /sites/{id}/logs", s.handleSiteTool("logs"))
 	mux.HandleFunc("GET /sites/{id}/scheduled-tasks", s.handleSiteTool("scheduled-tasks"))
 	mux.HandleFunc("GET /sites/{id}/statistics", s.handleSiteTool("statistics"))
+	mux.HandleFunc("POST /sites/{id}/statistics/refresh", s.handleRefreshWebStatistics)
+	mux.HandleFunc("POST /sites/{id}/statistics/settings", s.handleConfigureWebStatistics)
+	mux.HandleFunc("GET /sites/{id}/statistics/report", s.handleWebStatisticsReport)
+	mux.HandleFunc("GET /tools-settings/web-statistics", s.handleStatisticsSettings)
+	mux.HandleFunc("POST /tools-settings/web-statistics", s.handleSaveStatisticsSettings)
 	mux.HandleFunc("GET /sites/{id}/git", s.handleSiteTool("git"))
 	mux.HandleFunc("GET /sites/{id}/applications", s.handleSiteTool("applications"))
+	mux.HandleFunc("GET /sites/{id}/wordpress", s.handleSiteTool("wordpress"))
 	mux.HandleFunc("GET /sites/{id}/containers", s.handleSiteTool("containers"))
 	mux.HandleFunc("GET /sites/{id}/containers/{containerID}", s.handleContainerDetail)
 	mux.HandleFunc("GET /sites/{id}/containers/{containerID}/logs", s.handleContainerLogs)
@@ -524,7 +553,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if user.Role == auth.RoleAdmin {
-		data.Notice = dashboardNotice(r.URL.Query().Get("notice"))
+		noticeCode := r.URL.Query().Get("notice")
+		data.Notice = dashboardNotice(noticeCode)
+		data.NoticeTone = dashboardNoticeTone(noticeCode)
 	}
 
 	renderPage(w, r, web.DashboardPage(title, user, data, web.DashboardActions{
@@ -541,6 +572,7 @@ func (s *Server) dashboardActions(user auth.SessionUser) web.DashboardActions {
 	selfService := user.Role == auth.RoleAdmin || user.Role == auth.RoleClient || user.Role == auth.RoleReseller
 	return web.DashboardActions{
 		CanCreateSite:       selfService && s.sites != nil,
+		CanUseWordPress:     selfService && s.sites != nil && s.wordpress != nil,
 		CanCreateDatabase:   selfService && s.databases != nil,
 		CanIssueCertificate: selfService && s.certificates != nil,
 		CanRetryJob:         user.Role == auth.RoleAdmin && s.jobs != nil,
@@ -566,7 +598,9 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			http.Error(w, "Could not load workspace", http.StatusInternalServerError)
 			return
 		}
-		data.Notice = dashboardNotice(r.URL.Query().Get("notice"))
+		noticeCode := r.URL.Query().Get("notice")
+		data.Notice = dashboardNotice(noticeCode)
+		data.NoticeTone = dashboardNoticeTone(noticeCode)
 		view := web.WorkspaceView{Route: route, Title: dashboardTitle(user.Role), CSRFToken: csrfToken(r)}
 		if raw := r.PathValue("id"); raw != "" {
 			view.DetailID, err = strconv.ParseInt(raw, 10, 64)
@@ -576,6 +610,12 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			}
 		}
 		view.SelectedSubscription = parseQueryInt64(r, "subscription_id")
+		if route == "site-new" {
+			view.SiteCreateKind = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+			if view.SiteCreateKind == "wordpress" && s.wordpress == nil {
+				view.SiteCreateKind = "php"
+			}
+		}
 		view.ContainerID = parseQueryInt64(r, "container_id")
 		view.SelectedMailDomain = parseQueryInt64(r, "domain_id")
 		view.PlanType = strings.TrimSpace(r.URL.Query().Get("type"))
@@ -589,6 +629,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		view.CloneFrom = parseQueryInt64(r, "clone_from")
 		view.Tab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tab")))
 		view.ApplicationTab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab")))
+		view.WordPressTab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("wp_tab")))
 		view.LogSource = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source")))
 		if route == "tools-settings" {
 			view.SettingsFocus = strings.TrimPrefix(strings.TrimPrefix(r.URL.Path, "/tools-settings"), "/")
@@ -631,6 +672,21 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		}
 		if route == "site-detail" && view.Tab == "applications" {
 			if !s.loadPHPApplicationWorkspace(w, r, user, view.DetailID, &view) {
+				return
+			}
+		}
+		if route == "site-detail" && view.Tab == "wordpress" {
+			if !s.loadWordPressWorkspace(w, r, user, view.DetailID, &view) {
+				return
+			}
+		}
+		if route == "site-detail" && view.Tab == "overview" && s.wordpress != nil {
+			if workspace, loadErr := s.wordpress.Workspace(r.Context(), user, view.DetailID); loadErr == nil {
+				view.WordPress = &workspace
+			}
+		}
+		if route == "site-detail" && view.Tab == "statistics" {
+			if !s.loadWebStatistics(w, r, user, view.DetailID, &view) {
 				return
 			}
 		}
@@ -825,6 +881,9 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	data = filterDashboardForCustomer(data, customerID)
+	noticeCode := r.URL.Query().Get("notice")
+	data.Notice = dashboardNotice(noticeCode)
+	data.NoticeTone = dashboardNoticeTone(noticeCode)
 	if !workspaceDetailVisible(page, detailID, data) {
 		http.NotFound(w, r)
 		return
@@ -833,9 +892,31 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 	if !validWorkspaceTab(page, tab) {
 		tab = "overview"
 	}
-	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, ApplicationTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab"))), LogSource: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source"))), CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
+	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, ApplicationTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab"))), WordPressTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("wp_tab"))), LogSource: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source"))), CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
+	if page == "site-new" {
+		view.SelectedSubscription = parseQueryInt64(r, "subscription_id")
+		view.SiteCreateKind = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
+		if view.SiteCreateKind == "wordpress" && s.wordpress == nil {
+			view.SiteCreateKind = "php"
+		}
+	}
 	if page == "site-detail" && tab == "applications" {
 		if !s.loadPHPApplicationWorkspace(w, r, user, detailID, &view) {
+			return
+		}
+	}
+	if page == "site-detail" && tab == "wordpress" {
+		if !s.loadWordPressWorkspace(w, r, user, detailID, &view) {
+			return
+		}
+	}
+	if page == "site-detail" && tab == "overview" && s.wordpress != nil {
+		if workspace, loadErr := s.wordpress.Workspace(r.Context(), user, detailID); loadErr == nil {
+			view.WordPress = &workspace
+		}
+	}
+	if page == "site-detail" && tab == "statistics" {
+		if !s.loadWebStatistics(w, r, user, detailID, &view) {
 			return
 		}
 	}
@@ -847,7 +928,7 @@ func validWorkspaceTab(route, tab string) bool {
 		return map[string]bool{"overview": true, "resources": true, "access": true, "cache": true, "mail": true, "tasks": true, "applications": true, "backups": true, "activity": true}[tab]
 	}
 	if route == "site-detail" {
-		return map[string]bool{"overview": true, "access": true, "hosting": true, "web-server": true, "php": true, "logs": true, "scheduled-tasks": true, "statistics": true, "git": true, "applications": true, "containers": true, "staging": true, "redis": true, "mail": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
+		return map[string]bool{"overview": true, "access": true, "hosting": true, "web-server": true, "php": true, "logs": true, "scheduled-tasks": true, "statistics": true, "git": true, "applications": true, "wordpress": true, "containers": true, "staging": true, "redis": true, "mail": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
 	}
 	return map[string]bool{"overview": true, "hosting": true, "php": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
 }
@@ -1101,7 +1182,7 @@ func (s *Server) loadDashboard(ctx context.Context, user auth.SessionUser) (dash
 }
 
 func workspaceRouteAllowed(role auth.Role, route string) bool {
-	clientRoutes := map[string]bool{"dashboard": true, "sites": true, "site-detail": true, "site-files": true, "site-file-edit": true, "subscriptions": true, "databases": true, "backups": true, "dns": true, "certificates": true, "mail": true, "activity": true, "subscription-detail": true}
+	clientRoutes := map[string]bool{"dashboard": true, "sites": true, "site-new": true, "site-detail": true, "site-files": true, "site-file-edit": true, "subscriptions": true, "databases": true, "backups": true, "dns": true, "certificates": true, "mail": true, "activity": true, "subscription-detail": true}
 	if role == auth.RoleAdmin {
 		return true
 	}
@@ -1109,13 +1190,13 @@ func workspaceRouteAllowed(role auth.Role, route string) bool {
 		return clientRoutes[route]
 	}
 	if role == auth.RoleReseller {
-		return map[string]bool{"dashboard": true, "sites": true, "site-detail": true, "site-files": true, "site-file-edit": true, "databases": true, "backups": true, "dns": true, "certificates": true, "mail": true, "activity": true, "customers": true, "customer-detail": true, "subscriptions": true, "subscription-detail": true, "subscription-new": true, "service-plans": true, "plan-detail": true, "plan-new": true, "addon-detail": true, "addon-new": true, "my-resources": true, "tools-utilities": true}[route]
+		return map[string]bool{"dashboard": true, "sites": true, "site-new": true, "site-detail": true, "site-files": true, "site-file-edit": true, "databases": true, "backups": true, "dns": true, "certificates": true, "mail": true, "activity": true, "customers": true, "customer-detail": true, "subscriptions": true, "subscription-detail": true, "subscription-new": true, "service-plans": true, "plan-detail": true, "plan-new": true, "addon-detail": true, "addon-new": true, "my-resources": true, "tools-utilities": true}[route]
 	}
 	return false
 }
 
 func routeTitle(route string) string {
-	return map[string]string{"dashboard": "Home", "sites": "Domains", "site-detail": "Domain", "site-files": "File Manager", "site-file-edit": "Edit File", "databases": "Databases", "backups": "Backups", "dns": "DNS", "certificates": "SSL/TLS Certificates", "mail": "Mail", "activity": "Activity", "customers": "Customers", "customer-detail": "Customer", "subscriptions": "Subscriptions", "subscription-detail": "Subscription", "subscription-new": "Add Subscription", "service-plans": "Service Plans", "plan-detail": "Service Plan", "plan-new": "Add a Plan", "addon-detail": "Add-on Plan", "addon-new": "Add an Add-on", "reseller-plan-new": "Add Reseller Plan", "reseller-plan-detail": "Reseller Plan", "tools-settings": "Tools & Settings", "tools-utilities": "Tools & Utilities", "resellers": "Resellers", "reseller-detail": "Reseller", "reseller-plans": "Reseller Plans", "my-resources": "My Resources"}[route]
+	return map[string]string{"dashboard": "Home", "sites": "Domains", "site-new": "Add Website", "site-detail": "Domain", "site-files": "File Manager", "site-file-edit": "Edit File", "databases": "Databases", "backups": "Backups", "dns": "DNS", "certificates": "SSL/TLS Certificates", "mail": "Mail", "activity": "Activity", "customers": "Customers", "customer-detail": "Customer", "subscriptions": "Subscriptions", "subscription-detail": "Subscription", "subscription-new": "Add Subscription", "service-plans": "Service Plans", "plan-detail": "Service Plan", "plan-new": "Add a Plan", "addon-detail": "Add-on Plan", "addon-new": "Add an Add-on", "reseller-plan-new": "Add Reseller Plan", "reseller-plan-detail": "Reseller Plan", "tools-settings": "Tools & Settings", "tools-utilities": "Tools & Utilities", "resellers": "Resellers", "reseller-detail": "Reseller", "reseller-plans": "Reseller Plans", "my-resources": "My Resources"}[route]
 }
 
 func parseQueryInt64(r *http.Request, name string) int64 {
@@ -1903,6 +1984,10 @@ type planPreviewer interface {
 	PreviewPlan(ctx context.Context, owner auth.SessionUser, plan controlquota.Plan) (types.PlanPreview, error)
 }
 
+type planLifecycleSetter interface {
+	SetPlanLifecycle(context.Context, auth.SessionUser, int64, types.PlanLifecycleStatus) error
+}
+
 func (s *Server) handlePreviewPlan(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.requireProvider(w, r)
 	if !ok {
@@ -1948,12 +2033,31 @@ func (s *Server) handleSetPlanStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid plan status form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	active := strings.TrimSpace(r.Form.Get("is_active")) == "true"
-	if err := s.quotas.SetPlanActive(r.Context(), user, planID, active); err != nil {
-		writeQuotaError(w, r, "Could not update plan status", err)
+	lifecycle := types.PlanLifecycleStatus(strings.TrimSpace(r.Form.Get("lifecycle_status")))
+	if lifecycle == "" {
+		if strings.TrimSpace(r.Form.Get("is_active")) == "true" {
+			lifecycle = types.PlanLifecycleActive
+		} else {
+			lifecycle = types.PlanLifecycleRetired
+		}
+	}
+	switch lifecycle {
+	case types.PlanLifecycleDraft, types.PlanLifecycleActive, types.PlanLifecycleRetired:
+	default:
+		http.Error(w, "Invalid plan status form: unsupported lifecycle", http.StatusBadRequest)
 		return
 	}
-	s.recordAudit(r.Context(), user, 0, 0, "plan.status_changed", "plan", planID, map[string]any{"active": active})
+	var updateErr error
+	if setter, supported := s.quotas.(planLifecycleSetter); supported {
+		updateErr = setter.SetPlanLifecycle(r.Context(), user, planID, lifecycle)
+	} else {
+		updateErr = s.quotas.SetPlanActive(r.Context(), user, planID, lifecycle == types.PlanLifecycleActive)
+	}
+	if updateErr != nil {
+		writeQuotaError(w, r, "Could not update plan status", updateErr)
+		return
+	}
+	s.recordAudit(r.Context(), user, 0, 0, "plan.status_changed", "plan", planID, map[string]any{"lifecycle_status": lifecycle})
 	redirectAfterPost(w, r, "/?notice=plan-status-saved", "/service-plans/"+strconv.FormatInt(planID, 10)+"?notice=plan-status-saved")
 }
 
@@ -1970,7 +2074,19 @@ func (s *Server) handleBulkPlanStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid plan status form", http.StatusBadRequest)
 		return
 	}
-	active := parseFormBool(r, "is_active")
+	lifecycle := types.PlanLifecycleStatus(strings.TrimSpace(r.Form.Get("lifecycle_status")))
+	if lifecycle == "" {
+		if parseFormBool(r, "is_active") {
+			lifecycle = types.PlanLifecycleActive
+		} else {
+			lifecycle = types.PlanLifecycleRetired
+		}
+	}
+	if lifecycle != types.PlanLifecycleActive && lifecycle != types.PlanLifecycleRetired {
+		http.Error(w, "Bulk plan status must be active or retired", http.StatusBadRequest)
+		return
+	}
+	active := lifecycle == types.PlanLifecycleActive
 	ids, err := parseFormInt64List(r, "plan_id")
 	if err != nil || len(ids) == 0 {
 		http.Error(w, "Select at least one plan", http.StatusBadRequest)
@@ -1981,7 +2097,7 @@ func (s *Server) handleBulkPlanStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, id := range ids {
-		s.recordAudit(r.Context(), user, 0, 0, "plan.status_changed", "plan", id, map[string]any{"active": active, "bulk": true})
+		s.recordAudit(r.Context(), user, 0, 0, "plan.status_changed", "plan", id, map[string]any{"lifecycle_status": lifecycle, "bulk": true})
 	}
 	http.Redirect(w, r, "/service-plans?type=hosting&notice=plan-status-saved", http.StatusSeeOther)
 }
@@ -2634,6 +2750,8 @@ func (s *Server) handleUpsertResellerPlan(w http.ResponseWriter, r *http.Request
 	p.HostingPolicy.Permissions.SFTP = parseFormBool(r, "allow_sftp")
 	p.HostingPolicy.Permissions.FTPS = parseFormBool(r, "allow_ftps")
 	p.HostingPolicy.Permissions.Logs = parseFormBool(r, "allow_logs")
+	p.HostingPolicy.Permissions.WebStatistics = parseFormBool(r, "allow_web_statistics")
+	p.HostingPolicy.Logs = statisticsLogsFromForm(r, p.HostingPolicy.Logs)
 	p.HostingPolicy.Permissions.Git = parseFormBool(r, "allow_git")
 	p.HostingPolicy.Permissions.Staging = parseFormBool(r, "allow_staging")
 	p.HostingPolicy.Permissions.Valkey = parseFormBool(r, "allow_valkey")
@@ -2675,15 +2793,21 @@ func applyResellerPHPHostingFields(r *http.Request, policy *types.HostingPolicy)
 	if err != nil {
 		return err
 	}
-	if policy.SchemaVersion < 3 {
-		policy.SchemaVersion = 3
+	maxWordPressSites, err := parsePlanLimitDefault(r, "max_wordpress_sites", 0)
+	if err != nil {
+		return err
+	}
+	if policy.SchemaVersion < 4 {
+		policy.SchemaVersion = 4
 	}
 	policy.Resources.MaxPHPWorkers = maxWorkers
 	policy.Resources.MaxPHPReleases = maxReleases
+	policy.Resources.MaxWordPressSites = maxWordPressSites
 	policy.Permissions.Composer = parseFormBool(r, "allow_composer")
 	policy.Permissions.ComposerCodeExecution = parseFormBool(r, "allow_composer_code_execution")
 	policy.Permissions.ManagedPHPDeployments = parseFormBool(r, "allow_managed_php_deployments")
 	policy.Permissions.PHPWorkers = parseFormBool(r, "allow_php_workers")
+	policy.Permissions.WordPressToolkit = parseFormBool(r, "allow_wordpress_toolkit")
 	return nil
 }
 
@@ -2871,6 +2995,10 @@ func parsedAddonEntitlements(plan controlquota.Plan) types.SubscriptionEntitleme
 
 func parsedCustomEntitlements(r *http.Request, plan controlquota.Plan) types.SubscriptionEntitlements {
 	entitlements := parsedPlanEntitlements(plan)
+	entitlements.PreserveHostingPolicy = true
+	_, engineEdited := r.Form["logs_statistics_engine"]
+	_, legacyEdited := r.Form["logs_statistics_enabled"]
+	entitlements.StatisticsEdited = engineEdited || legacyEdited
 	if _, submitted := r.Form["default_php_version"]; submitted || !entitlements.HostingEnabled || entitlements.DefaultPHPVersion != "" {
 		return entitlements
 	}
@@ -3173,8 +3301,38 @@ func dashboardNotice(code string) string {
 		return "PHP worker deleted."
 	case "php-reconcile-queued":
 		return "PHP application reconciliation queued."
+	case "wordpress-install-queued":
+		return "WordPress installation queued. The generated database must converge before installation begins."
+	case "wordpress-operation-queued":
+		return "WordPress operation queued. Updates wait for a completed recovery-point backup."
+	case "wordpress-detached":
+		return "WordPress tracking detached. Site files and databases were left unchanged."
+	case "wordpress-input-error":
+		return "The WordPress request was not valid. Review the form and try again."
+	case "wordpress-disabled":
+		return "WordPress Toolkit is disabled by this subscription. Update and synchronize its service plan first."
+	case "wordpress-limit-reached":
+		return "This subscription has reached its WordPress site limit."
+	case "wordpress-conflict":
+		return "The WordPress operation cannot run in the site's current state. Refresh the workspace and check the active subscription."
+	case "wordpress-unavailable":
+		return "WordPress Toolkit is temporarily unavailable. Check the agent, secret store, and WP-CLI runtime."
+	case "wordpress-operation-failed":
+		return "The WordPress operation could not be queued. No secret details were exposed."
 	default:
 		return ""
+	}
+}
+
+func dashboardNoticeTone(code string) string {
+	if dashboardNotice(code) == "" {
+		return ""
+	}
+	switch code {
+	case "wordpress-input-error", "wordpress-disabled", "wordpress-limit-reached", "wordpress-conflict", "wordpress-unavailable", "wordpress-operation-failed":
+		return "error"
+	default:
+		return "success"
 	}
 }
 
@@ -3258,6 +3416,23 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 	if err != nil {
 		return controlquota.Plan{}, err
 	}
+	lifecycle := types.PlanLifecycleStatus(strings.TrimSpace(r.Form.Get("lifecycle_status")))
+	legacyActive := parseFormBool(r, "is_active")
+	if lifecycle == "" {
+		switch {
+		case legacyActive:
+			lifecycle = types.PlanLifecycleActive
+		case planID > 0:
+			lifecycle = types.PlanLifecycleRetired
+		default:
+			lifecycle = types.PlanLifecycleDraft
+		}
+	}
+	switch lifecycle {
+	case types.PlanLifecycleDraft, types.PlanLifecycleActive, types.PlanLifecycleRetired:
+	default:
+		return controlquota.Plan{}, fmt.Errorf("unsupported plan lifecycle %q", lifecycle)
+	}
 	plan := controlquota.Plan{
 		ID:                    planID,
 		Name:                  strings.TrimSpace(r.Form.Get("name")),
@@ -3266,7 +3441,9 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		AllowSSH:              parseFormBool(r, "allow_ssh"),
 		AllowDNS:              parseFormBool(r, "allow_dns"),
 		PHPAllowlist:          strings.TrimSpace(r.Form.Get("php_allowlist")),
-		IsActive:              parseFormBool(r, "is_active"),
+		IsActive:              lifecycle == types.PlanLifecycleActive,
+		LifecycleStatus:       lifecycle,
+		ChangeReason:          strings.TrimSpace(r.Form.Get("change_reason")),
 		OverusePolicy:         types.PlanOverusePolicy(strings.TrimSpace(r.Form.Get("overuse_policy"))),
 		DiskWarningPercent:    parseFormIntDefault(r, "disk_warning_percent", 80),
 		TrafficWarningPercent: parseFormIntDefault(r, "traffic_warning_percent", 80),
@@ -3316,6 +3493,7 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		Logs:         types.LogsPreset{RotationEnabled: formBoolDefault(r, "logs_rotation_enabled", true), RetentionDays: parseFormIntDefault(r, "logs_retention_days", 14), StatisticsEnabled: parseFormBool(r, "logs_statistics_enabled")},
 		Applications: types.ApplicationsPreset{CatalogEnabled: parseFormBool(r, "applications_catalog_enabled"), Allowed: applicationCatalogSlugsFromForm(r)},
 	}
+	plan.Presets.Logs = statisticsLogsFromForm(r, plan.Presets.Logs)
 	dnsMode := plan.Presets.DNS.Mode
 	switch dnsMode {
 	case "primary", "authoritative", "":
@@ -3324,7 +3502,8 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		dnsMode = "external"
 	}
 	plan.HostingPolicy = types.HostingPolicy{
-		SchemaVersion: 3,
+		SchemaVersion: 5,
+		Logs:          plan.Presets.Logs,
 		Resources: types.HostingResourcePolicy{
 			DiskMB: plan.DiskMB, TrafficMB: plan.BandwidthMB, MaxSites: plan.MaxSites,
 			MaxDatabases: plan.MaxDatabases, MaxMailboxes: plan.MaxMailboxes,
@@ -3343,6 +3522,8 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 			Valkey: parseFormBool(r, "allow_valkey"), Composer: parseFormBool(r, "allow_composer"),
 			ComposerCodeExecution: parseFormBool(r, "allow_composer_code_execution"),
 			ManagedPHPDeployments: parseFormBool(r, "allow_managed_php_deployments"), PHPWorkers: parseFormBool(r, "allow_php_workers"),
+			WordPressToolkit: parseFormBool(r, "allow_wordpress_toolkit"),
+			WebStatistics:    parseFormBool(r, "allow_web_statistics"),
 		},
 		Web: types.HostingWebPolicy{
 			PreferredDomain: plan.Presets.Hosting.PreferredDomain, MaxConnections: plan.Presets.Performance.MaxConnections,
@@ -3391,6 +3572,7 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		"max_mail_aliases": &plan.HostingPolicy.Resources.MaxMailAliases, "max_scheduled_tasks": &plan.HostingPolicy.Resources.MaxScheduledTasks,
 		"max_applications": &plan.HostingPolicy.Resources.MaxApplications, "container_storage_mb": &plan.HostingPolicy.Resources.ContainerStorageMB,
 		"max_php_workers": &plan.HostingPolicy.Resources.MaxPHPWorkers, "max_php_releases": &plan.HostingPolicy.Resources.MaxPHPReleases,
+		"max_wordpress_sites":     &plan.HostingPolicy.Resources.MaxWordPressSites,
 		"request_rate_per_second": &plan.HostingPolicy.Web.RequestRatePerSecond, "request_burst": &plan.HostingPolicy.Web.RequestBurst,
 		"mailbox_quota_mb": &plan.HostingPolicy.Mail.MailboxQuotaMB,
 	} {
@@ -3401,6 +3583,16 @@ func parsePlan(r *http.Request) (controlquota.Plan, error) {
 		*target = value
 	}
 	return plan, nil
+}
+
+func statisticsLogsFromForm(r *http.Request, logs types.LogsPreset) types.LogsPreset {
+	if values, present := r.Form["logs_statistics_engine"]; present && len(values) > 0 {
+		logs.StatisticsEngine = strings.TrimSpace(values[0])
+	} else if _, present := r.Form["logs_statistics_enabled"]; present {
+		logs.StatisticsEngine = ""
+		logs.StatisticsEnabled = parseFormBool(r, "logs_statistics_enabled")
+	}
+	return controlpolicy.NormalizeLogs(logs)
 }
 
 func applicationCatalogSlugsFromForm(r *http.Request) []string {

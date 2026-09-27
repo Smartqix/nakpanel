@@ -143,6 +143,7 @@ func (c *UsageCollector) RuntimeCapabilities(ctx context.Context) (types.Runtime
 	}
 	capabilities.ComposerAvailable, capabilities.ComposerVersion = probeToolVersion(ctx, probe, "composer", []string{"--no-plugins", "--no-scripts", "--version", "--no-ansi"}, composerVersionRE)
 	capabilities.WPCLIAvailable, capabilities.WPCLIVersion = probeToolVersion(ctx, probe, "wp", []string{"--version", "--allow-root"}, wpCLIVersionRE)
+	capabilities.GoAccessAvailable, capabilities.GoAccessVersion = probeToolVersion(ctx, probe, "goaccess", []string{"--version"}, goAccessVersionRE)
 	if podman, err := probe.LookPath("podman"); err == nil {
 		output, versionErr := probe.Run(ctx, podman, "--version")
 		if versionErr == nil {

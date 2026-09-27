@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
@@ -136,21 +137,23 @@ func TestFormatPlanPHPHandlesUnlimitedFields(t *testing.T) {
 
 func TestStatusPillClassMapsOperationalStates(t *testing.T) {
 	tests := map[string]string{
-		"active":       "ok",
-		"completed":    "ok",
-		"healthy":      "ok",
-		"in_sync":      "ok",
-		"pending":      "pend",
-		"queued":       "pend",
-		"running":      "run",
-		"provisioning": "run",
-		"preparing":    "run",
-		"validating":   "run",
-		"activating":   "run",
-		"failed":       "fail",
-		"discarded":    "fail",
-		"suspended":    "susp",
-		"unknown":      "susp",
+		"active":             "ok",
+		"completed":          "ok",
+		"healthy":            "ok",
+		"in_sync":            "ok",
+		"pending":            "pend",
+		"queued":             "pend",
+		"running":            "run",
+		"provisioning":       "run",
+		"preparing":          "run",
+		"validating":         "run",
+		"activating":         "run",
+		"failed":             "fail",
+		"discarded":          "fail",
+		"over_limit":         "fail",
+		"capability_blocked": "fail",
+		"suspended":          "susp",
+		"unknown":            "susp",
 	}
 	for state, want := range tests {
 		if got := statusPillClass(state); got != want {
@@ -283,6 +286,9 @@ func TestPHPVersionsRequireInstalledAllowedRuntime(t *testing.T) {
 func TestNewPlanPrefersReadyPHP84AndKeepsPHP85Selectable(t *testing.T) {
 	capabilities := types.RuntimeCapabilities{PHPVersions: []string{"8.5", "8.4", "8.3"}}
 	plan := planEditorDefault(capabilities)
+	if plan.LifecycleStatus != types.PlanLifecycleDraft || plan.IsActive {
+		t.Fatalf("new plan lifecycle = %q active=%t, want draft and unavailable", plan.LifecycleStatus, plan.IsActive)
+	}
 	if plan.DefaultPHPVersion != "8.4" {
 		t.Fatalf("new plan default PHP = %q, want ready PHP 8.4", plan.DefaultPHPVersion)
 	}
@@ -291,6 +297,35 @@ func TestNewPlanPrefersReadyPHP84AndKeepsPHP85Selectable(t *testing.T) {
 	}
 	if got := planPHPVersions(plan, capabilities); len(got) != 3 || got[0] != "8.5" || got[1] != "8.4" || got[2] != "8.3" {
 		t.Fatalf("new plan selectable PHP versions = %#v", got)
+	}
+}
+
+func TestPlanEditorTabsUseProductionContractGroups(t *testing.T) {
+	for _, tab := range []string{"overview", "resources", "services", "customer-permissions", "defaults", "advanced"} {
+		if got := planEditorTab(WorkspaceView{PlanTab: tab}); got != tab {
+			t.Fatalf("planEditorTab(%q) = %q", tab, got)
+		}
+	}
+	if got := planEditorTab(WorkspaceView{PlanTab: "php"}); got != "overview" {
+		t.Fatalf("legacy editor tab should fall back to overview, got %q", got)
+	}
+}
+
+func TestPlanPreviewJavaScriptPreservesZeroValuesAndClearsStaleResults(t *testing.T) {
+	javascript := string(appJS)
+	for _, want := range []string{
+		"function previewValue(value)",
+		"previewValue(change.old_value)",
+		"previewValue(change.new_value)",
+		"function clearPlanPreview()",
+		"clearPlanPreview();",
+		"function revealInvalidPlanField(form)",
+		`selectPlanTab(panel.getAttribute("data-np-plan-panel"), true)`,
+		"invalid.reportValidity()",
+	} {
+		if !strings.Contains(javascript, want) {
+			t.Fatalf("plan preview JavaScript missing %q", want)
+		}
 	}
 }
 
@@ -334,5 +369,11 @@ func TestSitePolicyScopeCustomized(t *testing.T) {
 	}
 	if got := domainMoreActive("databases"); got != "is-active" {
 		t.Fatalf("domainMoreActive() = %q", got)
+	}
+}
+
+func TestSiteCreationRouteTitle(t *testing.T) {
+	if got := routeTitle("site-new"); got != "Add Website" {
+		t.Fatalf("site-new title = %q", got)
 	}
 }

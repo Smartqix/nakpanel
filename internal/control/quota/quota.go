@@ -116,7 +116,7 @@ type BulkStatusStore interface {
 }
 
 type PlanBulkStatusStore interface {
-	SetPlanStatuses(ctx context.Context, planIDs []int64, resellerID int64, unrestricted bool, active bool) error
+	SetPlanStatuses(ctx context.Context, planIDs []int64, resellerID int64, unrestricted bool, active bool, actorUserID int64, actorLabel string) error
 	SetAddonPlanStatuses(ctx context.Context, addonIDs []int64, resellerID int64, unrestricted bool, active bool) error
 	SetResellerPlanStatuses(ctx context.Context, planIDs []int64, active bool) error
 }

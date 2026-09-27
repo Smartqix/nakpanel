@@ -209,6 +209,22 @@
     });
   }
 
+  function initializeWordPressUninstall() {
+    each("[data-np-wordpress-uninstall]", document, function (form) {
+      var backup = form.querySelector("[data-np-uninstall-backup]");
+      var database = form.querySelector("[data-np-uninstall-database]");
+      if (!backup || !database) return;
+
+      function syncDatabaseRemoval() {
+        database.disabled = !backup.checked;
+        if (!backup.checked) database.checked = false;
+      }
+
+      backup.addEventListener("change", syncDatabaseRemoval);
+      syncDatabaseRemoval();
+    });
+  }
+
   function initializeDNSFilters() {
     each("[data-np-dns-workspace]", document, function (workspace) {
       var search = workspace.querySelector("[data-np-dns-search]");
@@ -1790,6 +1806,71 @@
     });
   }
 
+  function updateV2CreateGate(form) {
+    if (!form) return;
+    var control = form.querySelector("[data-np-v2-subscription]");
+    var selected = control && control.tagName === "SELECT" ? control.selectedOptions[0] : control;
+    var used = selected ? parseInt(selected.dataset.sitesUsed || "0", 10) : 0;
+    var max = selected ? parseInt(selected.dataset.maxSites || "-1", 10) : 0;
+    var blocked = !selected || (max >= 0 && used >= max);
+    var gate = form.querySelector("[data-np-v2-create-gate]");
+    var submit = form.querySelector("[data-np-v2-create-submit]");
+    if (gate) gate.textContent = blocked ? "This subscription cannot add another website." : "";
+    if (submit) submit.disabled = blocked;
+  }
+
+  function submitWebsiteV2(form) {
+    var submit = form.querySelector("[data-np-v2-create-submit]");
+    var gate = form.querySelector("[data-np-v2-create-gate]");
+    if (submit) submit.disabled = true;
+    if (gate) { gate.textContent = "Creating website..."; gate.removeAttribute("role"); }
+    fetch(form.action, {
+      method: "POST",
+      body: new FormData(form),
+      credentials: "same-origin",
+      headers: { "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken() }
+    }).then(function (response) {
+      return response.json().then(function (data) {
+        if (!response.ok || !data.ok) throw new Error(data.error || "Website setup could not start.");
+        return data;
+      });
+    }).then(function (data) {
+      var page = form.closest(".np-v2-create");
+      var result = page && page.querySelector("[data-np-v2-live-result]");
+      if (!result) { window.location.assign(data.redirect || "/sites"); return; }
+      var title = result.querySelector("[data-np-v2-live-title]");
+      var message = result.querySelector("[data-np-v2-live-message]");
+      var link = result.querySelector("[data-np-v2-live-redirect]");
+      var credential = result.querySelector("[data-np-v2-live-credential]");
+      var passwordBlock = result.querySelector("[data-np-v2-live-password]");
+      if (title) title.textContent = data.partial ? "Website created; WordPress needs attention" : (data.website_type === "wordpress" ? "WordPress setup started" : "Website setup started");
+      if (message) message.textContent = data.notice || "Website setup is underway.";
+      if (link) link.href = data.redirect || "/sites";
+      if (credential && data.admin_user) {
+        credential.hidden = false;
+        var user = credential.querySelector("[data-np-v2-live-user]");
+        if (user) user.textContent = data.admin_user;
+        if (passwordBlock && data.admin_password) {
+          passwordBlock.hidden = false;
+          var password = passwordBlock.querySelector("[data-np-generated-password]");
+          if (password) password.value = data.admin_password;
+        }
+      }
+      var submittedPassword = form.querySelector('[name="admin_password"]');
+      if (submittedPassword) submittedPassword.value = "";
+      form.hidden = true;
+      var choices = page.querySelector(".np-v2-type-list");
+      if (choices) choices.hidden = true;
+      result.hidden = false;
+      if (title) title.focus && title.focus();
+      result.scrollIntoView({ block: "start" });
+    }).catch(function (error) {
+      updateV2CreateGate(form);
+      if (gate) { gate.textContent = error.message || "Website setup could not start."; gate.setAttribute("role", "alert"); }
+      if (submit && !submit.disabled) submit.focus();
+    });
+  }
+
   function selectPlanTab(tab, updateURL) {
     if (!tab) return;
     each("[data-np-plan-tab]", document, function (link) {
@@ -1817,6 +1898,24 @@
     if (unit) unit.disabled = input.checked;
   }
 
+  function revealInvalidPlanField(form) {
+    if (!form) return false;
+    var controls = form.querySelectorAll("input, select, textarea");
+    var invalid = null;
+    for (var i = 0; i < controls.length; i += 1) {
+      if (typeof controls[i].checkValidity === "function" && !controls[i].checkValidity()) {
+        invalid = controls[i];
+        break;
+      }
+    }
+    if (!invalid) return false;
+    var panel = invalid.closest("[data-np-plan-panel]");
+    if (panel) selectPlanTab(panel.getAttribute("data-np-plan-panel"), true);
+    invalid.focus();
+    if (typeof invalid.reportValidity === "function") invalid.reportValidity();
+    return true;
+  }
+
   function populatePlanPreview(preview) {
     var mapping = {
       "[data-np-preview-synced]": preview.synced_subscriptions,
@@ -1837,6 +1936,88 @@
         resellerValue.textContent = (preview.reseller_committed_disk_mb < 0 ? "Unlimited" : preview.reseller_committed_disk_mb + " MB") + " / " + (preview.reseller_capacity_mb < 0 ? "Unlimited" : preview.reseller_capacity_mb + " MB");
       }
     }
+
+    function renderPreviewList(selector, items, renderItem, emptyText) {
+      var target = document.querySelector(selector);
+      if (!target) return;
+      target.replaceChildren();
+      if (!items || !items.length) {
+        var empty = document.createElement("p");
+        empty.className = "np-empty";
+        empty.textContent = emptyText;
+        target.appendChild(empty);
+        target.hidden = false;
+        return;
+      }
+      items.forEach(function (item) { target.appendChild(renderItem(item)); });
+      target.hidden = false;
+    }
+
+    function previewValue(value) {
+      return value === null || value === undefined || value === "" ? "Not set" : String(value);
+    }
+
+    renderPreviewList("[data-np-preview-changes]", preview.changes, function (change) {
+      var row = document.createElement("div");
+      row.className = "np-preview-item";
+      var copy = document.createElement("span");
+      var title = document.createElement("strong");
+      title.textContent = change.label || change.path;
+      var values = document.createElement("small");
+      values.textContent = previewValue(change.old_value) + " to " + previewValue(change.new_value);
+      copy.append(title, values);
+      var badge = document.createElement("span");
+      badge.className = "np-contract-badge";
+      badge.dataset.npEnforcement = change.enforcement || "stored_only";
+      badge.textContent = String(change.enforcement || "stored only").replaceAll("_", " ");
+      row.append(copy, badge);
+      return row;
+    }, "No entitlement changes.");
+
+    renderPreviewList("[data-np-preview-impacts]", preview.subscription_impacts, function (impact) {
+      var row = document.createElement("div");
+      row.className = "np-preview-item is-impact";
+      var copy = document.createElement("span");
+      var title = document.createElement("strong");
+      title.textContent = impact.subscription_name || "Subscription #" + impact.subscription_id;
+      var detail = document.createElement("small");
+      detail.textContent = [impact.customer_name, (impact.violations || []).join("; ")].filter(Boolean).join(" - ");
+      copy.append(title, detail);
+      row.appendChild(copy);
+      return row;
+    }, "No synchronized subscriptions are over the proposed limits.");
+
+    renderPreviewList("[data-np-preview-capabilities]", preview.capability_issues, function (issue) {
+      var row = document.createElement("div");
+      row.className = "np-preview-item" + (issue.blocking ? " is-blocked" : "");
+      var copy = document.createElement("span");
+      var title = document.createElement("strong");
+      title.textContent = issue.field || issue.code || "Runtime capability";
+      var detail = document.createElement("small");
+      detail.textContent = issue.message;
+      copy.append(title, detail);
+      row.appendChild(copy);
+      return row;
+    }, "Capability checks passed.");
+
+    renderPreviewList("[data-np-preview-blockers]", preview.blocking_reasons, function (message) {
+      var row = document.createElement("p");
+      row.className = "np-gate is-blocked";
+      row.textContent = message;
+      return row;
+    }, "");
+    var blockers = document.querySelector("[data-np-preview-blockers]");
+    if (blockers && (!preview.blocking_reasons || !preview.blocking_reasons.length)) blockers.hidden = true;
+
+    renderPreviewList("[data-np-preview-warnings]", preview.warnings, function (message) {
+      var row = document.createElement("p");
+      row.className = "np-gate";
+      row.textContent = message;
+      return row;
+    }, "");
+    var warnings = document.querySelector("[data-np-preview-warnings]");
+    if (warnings && (!preview.warnings || !preview.warnings.length)) warnings.hidden = true;
+
     var warning = document.querySelector("[data-np-preview-warning]");
     if (warning) {
       warning.textContent = preview.warning || "Capacity checks passed.";
@@ -1846,10 +2027,22 @@
     if (confirm) confirm.disabled = !preview.allowed;
   }
 
+  function clearPlanPreview() {
+    each("[data-np-preview-changes], [data-np-preview-impacts], [data-np-preview-capabilities], [data-np-preview-blockers], [data-np-preview-warnings]", document, function (target) {
+      target.replaceChildren();
+      target.hidden = true;
+    });
+    var resellerRow = document.querySelector("[data-np-preview-reseller-row]");
+    if (resellerRow) resellerRow.hidden = true;
+    var confirm = document.querySelector("[data-np-plan-confirm-submit]");
+    if (confirm) confirm.disabled = true;
+  }
+
   function reviewPlan(form) {
     pendingPlanForm = form;
     var submit = form.querySelector("[data-np-plan-submit]");
     if (submit) submit.disabled = true;
+    clearPlanPreview();
     fetch("/plans/preview", {
       method: "POST",
       body: new FormData(form),
@@ -2321,6 +2514,14 @@
   }
 
   document.addEventListener("click", function (event) {
+    var planSubmit = event.target.closest("[data-np-plan-submit]");
+    if (planSubmit) {
+      var planEditor = planSubmit.closest("[data-np-plan-editor]");
+      if (revealInvalidPlanField(planEditor)) {
+        event.preventDefault();
+        return;
+      }
+    }
     var disabledBulkSummary = event.target.closest('[data-np-bulk-menu][data-enabled="false"] > summary');
     if (disabledBulkSummary) {
       event.preventDefault();
@@ -2453,6 +2654,7 @@
 
   document.addEventListener("change", function (event) {
     if (event.target.matches('[data-np-create-site-form] select[name="subscription_id"]')) updateCreateGate(event.target.closest("form"));
+    if (event.target.matches('[data-np-v2-create-site-form] select[name="subscription_id"]')) updateV2CreateGate(event.target.closest("form"));
     if (event.target.matches('input[name="customer_mode"], [data-np-create-first-site], [data-np-onboarding-plan]')) updateOnboarding();
     if (event.target.matches("[data-np-subscription-nav]") && event.target.value) window.location.assign(event.target.value);
     if (event.target.matches("[data-np-bulk-all]")) {
@@ -2541,7 +2743,7 @@
 	var planEditorForm = event.target.closest("[data-np-plan-editor]");
 	var planForm = event.target.closest('[data-np-plan-editor][action="/plans"]');
 	if (planForm) {
-	  if (!planSubmitBypass && parseInt(planForm.dataset.npPlanId || "0", 10) > 0 && document.getElementById("plan-preview-dialog")) {
+	  if (!planSubmitBypass && document.getElementById("plan-preview-dialog")) {
         event.preventDefault();
         reviewPlan(planForm);
         return;
@@ -2549,7 +2751,13 @@
       planSubmitBypass = false;
     }
 	if (planEditorForm) planEditorForm.dataset.npDirty = "false";
-    var form = event.target.closest("[data-np-create-site-form]");
+	var v2Form = event.target.closest("[data-np-v2-create-site-form]");
+	if (v2Form && window.fetch) {
+	  event.preventDefault();
+	  submitWebsiteV2(v2Form);
+	  return;
+	}
+	var form = event.target.closest("[data-np-create-site-form]");
     if (!form) return;
     updateCreateGate(form);
     if (form.dataset.npGateBlocked === "true") { event.preventDefault(); return; }
@@ -2639,6 +2847,7 @@
     });
   });
   updateCreateGate(document);
+  each("[data-np-v2-create-site-form]", document, updateV2CreateGate);
   updateOnboarding();
   each("[data-np-bulk-form]", document, updateBulkForm);
   each("[data-np-unlimited]", document, updateUnlimited);
@@ -2650,6 +2859,13 @@
   initializeDNSRecordForms();
   initializeCodeEditor();
   initializePHPApplicationWorkspace();
+  initializeWordPressUninstall();
+  if (document.querySelector("[data-np-wordpress-progress]")) {
+    window.setInterval(function () {
+      if (document.hidden || document.querySelector("dialog[open]") || document.querySelector('[data-np-dirty-guard][data-np-dirty="true"]')) return;
+      window.location.reload();
+    }, 8000);
+  }
   each("[data-np-service-refresh]", document, function (button) {
     button.addEventListener("click", function () {
       var label = button.querySelector("[data-np-service-refresh-label]");

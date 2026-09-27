@@ -491,3 +491,145 @@ installs the current worktree on Ubuntu 24.04, proves WordPress 7.1
 compatibility and Managed PHP rollback/suspension/reboot behavior, and verifies
 cross-subscription access denial. This is compatibility coverage, not a
 WordPress Toolkit, and it does not add Node.js or Python application runtimes.
+
+## Service Plan Recovery (Phase 31)
+
+Plan rows are current intent; `plan_revisions` is immutable history. Never
+repair a subscription by editing `subscription_entitlements` or a revision row
+directly. Open the plan in **Service Plans**, review readiness and preview,
+save a new revision with a reason, then wait for synchronized subscriptions to
+return to `in_sync`.
+
+An activation blocked by runtime readiness is deliberate. Repair the reported
+server capability first, confirm it under **Tools & Settings**, then activate
+the draft again. A failed check leaves the plan draft and records the readiness
+error; it does not make an undeliverable offer assignable.
+
+Lowering a limit never deletes existing customer data. A synchronized
+subscription already beyond the new contract is marked `over_limit` and shows
+the violated count or measured limit. Restore compliance through normal
+product operations or a new plan revision. Collect fresh usage before judging
+disk or traffic; `unknown` means measurement is incomplete, not compliant.
+
+Useful read-only diagnostics:
+
+```bash
+sudo -u postgres psql nakpanel -c \
+  "SELECT id,name,lifecycle_status,revision,last_validated_at,readiness_error FROM plans ORDER BY id"
+sudo -u postgres psql nakpanel -c \
+  "SELECT plan_id,revision,definition_hash,actor_label,change_reason,created_at FROM plan_revisions ORDER BY id DESC LIMIT 20"
+sudo -u postgres psql nakpanel -c \
+  "SELECT id,name,sync_status,compliance_status,compliance_error,compliance_checked_at FROM subscriptions ORDER BY id"
+```
+
+The final live contract gate is `deploy/multipass/phase31-verify.sh`. It runs
+Phase 30 unless explicitly told to reuse an already verified lab.
+
+## WordPress Toolkit Recovery (Phase 32)
+
+The Toolkit treats PostgreSQL intent, the encrypted service-secret row, the
+panel-tracked MariaDB database, and the site document root as one managed
+installation. Do not place credentials in River rows or repair an installation
+by editing `wordpress_instances` directly.
+
+Every core, plugin, theme, or aggregate update first creates a normal Nakpanel
+backup and waits for it to become active. If an update fails, keep that recovery
+point, restore it through the supported backup workflow, and then refresh the
+domain's **WordPress** workspace. A failed candidate never deletes its backup.
+
+For an interrupted install, first confirm whether WordPress was configured in
+the document root. Retrying the same Toolkit install is safe when the generated
+database identity matches; the agent observes the existing installation instead
+of replacing `wp-config.php`. A failed discovery placeholder can be retried from
+the same domain without creating a second Toolkit identity.
+
+Useful diagnostics avoid printing database or administrator credentials:
+
+```bash
+sudo -u postgres psql nakpanel -c \
+  "SELECT site_id,installed_version,desired_revision,applied_revision,convergence_status,last_error FROM wordpress_instances ORDER BY site_id"
+sudo -u postgres psql nakpanel -c \
+  "SELECT instance_id,kind,target_type,status,backup_id,last_error,created_at FROM wordpress_operations ORDER BY id DESC LIMIT 20"
+sudo journalctl -u nakpanel -u nakpanel-agent --no-pager -n 200
+```
+
+Use the WordPress workspace to refresh inventory, verify checksums, reapply
+hardening, or explicitly disable maintenance mode after service recovery.
+Password resets are write-only and cannot be recovered from the panel; set a
+new password instead.
+
+The final live Toolkit gate is `deploy/multipass/phase32-verify.sh`. It runs
+Phase 31 unless explicitly told to reuse an already verified lab.
+
+## Safe WordPress Uninstall Recovery (Phase 33)
+
+**Detach** and **Uninstall** have different recovery contracts. Detach removes
+the Toolkit record and operation history but leaves WordPress files and its
+database unchanged. Uninstall keeps the site, subscription, DNS, TLS, PHP,
+mail, and unrelated databases while replacing WordPress with the Nakpanel
+placeholder. Never imitate either operation with manual deletes.
+
+An uninstall normally moves through these states:
+
+- `waiting_backup`: the recovery backup is still being created or verified.
+- `removing`: backup evidence is complete and the agent is converging files
+  and, when explicitly requested, the Toolkit-managed database.
+- `removed` with `in_sync`: PostgreSQL intent is committed, the domain serves
+  the placeholder, and the asynchronous quarantine cleanup may be finishing.
+- `failed`: convergence stopped safely. Read `last_error`, repair the reported
+  dependency, confirm the original site state, then retry from the WordPress
+  workspace. Do not edit the instance revision or operation status.
+
+Find the recovery point without printing secrets or archive paths:
+
+```bash
+sudo -u postgres psql nakpanel -c \
+  "SELECT operation.id,operation.status,operation.backup_id,backup.status AS backup_status,backup.size_bytes,(backup.checksum_sha256<>'') AS checksum_present,backup.database_names FROM wordpress_operations operation LEFT JOIN backups backup ON backup.id=operation.backup_id WHERE operation.kind='uninstall' ORDER BY operation.id DESC LIMIT 20"
+sudo -u postgres psql nakpanel -c \
+  "SELECT site_id,desired_state,observed_state,desired_revision,applied_revision,convergence_status,last_error FROM wordpress_instances ORDER BY site_id"
+```
+
+Database removal is allowed only for a Toolkit-managed database and only after
+the active same-site recovery backup lists that exact database in
+`database_names`. A discovered or external database is always preserved. If a
+database check fails before mutation, the agent leaves or restores the original
+WordPress document root and records a retryable failure; repair MariaDB before
+retrying.
+
+The agent owns the root-only removal marker and quarantine under the domain
+account. Do not delete, rename, chown, or edit these artifacts manually. They
+are the idempotency and rollback record used after worker interruption or
+restart. Reinstall from the removed workspace reuses the tombstone identity and
+creates fresh managed application data through normal product routes.
+
+The final live safety gate is `deploy/multipass/phase33-verify.sh`. It runs
+Phase 32 unless explicitly told to reuse an already verified lab.
+
+## Web Statistics Recovery (Phase 34)
+
+GoAccess reports supplement the existing disk and traffic quota counters.
+Report generation failures do not suspend hosting or change quota usage.
+Open the domain's Statistics workspace to inspect the latest successful
+generation, report period, pending work, and any collection error. A manual
+refresh queues background work and is rate-limited.
+
+Administrators manage the engine, daily schedule, retention, and IP privacy
+under Tools & Settings > Web Statistics. Domain settings inherit from the
+subscription's entitlement snapshot; updating a service plan requires the
+normal subscription synchronization workflow. A site override requires the
+plan's statistics-management permission.
+
+When a refresh fails, the last complete report remains available. A privacy
+settings change may temporarily make an older report unavailable until a new
+report has been generated under the new settings. Do not publish report files
+inside a tenant document root or bypass the panel's report access checks.
+
+Reports can only cover retained nginx logs. Increasing report retention cannot
+reconstruct logs already removed by log rotation. Visitor counts are log-based
+estimates, and origin logs do not include requests served entirely by a CDN.
+
+Check the installed engine with `goaccess --version`, and inspect panel/agent
+service logs when generation fails. Fix the underlying package, filesystem,
+or parsing issue, then use Refresh report. Do not alter quota cursors to
+repair analytics. The Phase 34 verifier exercises report generation through
+the panel and the privileged agent on the existing single-VM stack.

@@ -3,6 +3,8 @@ package provision
 import (
 	"context"
 	"encoding/json"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -20,8 +22,9 @@ func (a *recordingReconcileAgent) ReconcileSystem(_ context.Context, req types.R
 }
 
 type refreshingPhase6StatusStore struct {
-	refreshed ReconcileSystemArgs
-	activeID  int64
+	refreshed     ReconcileSystemArgs
+	activeID      int64
+	databaseNames []string
 }
 
 type recordingSiteApplicationReconciler struct {
@@ -39,7 +42,8 @@ func (s *refreshingPhase6StatusStore) RefreshReconcileIntent(_ context.Context, 
 	return args, nil
 }
 
-func (*refreshingPhase6StatusStore) MarkBackupActive(context.Context, int64, types.CreateBackupResult) error {
+func (s *refreshingPhase6StatusStore) MarkBackupActive(_ context.Context, _ int64, _ types.CreateBackupResult, databaseNames []string) error {
+	s.databaseNames = databaseNames
 	return nil
 }
 func (*refreshingPhase6StatusStore) MarkBackupFailed(context.Context, int64, string) error {
@@ -93,5 +97,32 @@ func TestReconcileWorkerRefreshesCurrentIntentBeforeAgentDispatch(t *testing.T) 
 	}
 	if len(applications.siteIDs) != 1 || applications.siteIDs[0] != 7 {
 		t.Fatalf("reconciled PHP application sites = %v, want [7]", applications.siteIDs)
+	}
+}
+
+type successfulBackupAgent struct{}
+
+func (successfulBackupAgent) CreateBackup(context.Context, types.CreateBackupReq) (types.Response, error) {
+	data, _ := json.Marshal(types.CreateBackupResult{
+		ArchivePath: "/var/lib/nakpanel/backups/site.tar.zst",
+		SizeBytes:   4096,
+		SHA256:      strings.Repeat("a", 64),
+	})
+	return types.Response{OK: true, Data: data}, nil
+}
+
+func TestCreateBackupWorkerPersistsDatabaseCoverage(t *testing.T) {
+	store := &refreshingPhase6StatusStore{}
+	worker := NewCreateBackupWorker(successfulBackupAgent{}, store)
+	databaseNames := []string{"wp_s7_deadbeef"}
+	job := &river.Job[CreateBackupArgs]{Args: CreateBackupArgs{
+		BackupID: 41, SiteID: 7, SubscriptionID: 3, Databases: databaseNames,
+	}}
+	if err := worker.Work(context.Background(), job); err != nil {
+		t.Fatal(err)
+	}
+	databaseNames[0] = "mutated_after_work"
+	if !slices.Equal([]string{"wp_s7_deadbeef"}, store.databaseNames) {
+		t.Fatalf("database coverage mismatch: %v", store.databaseNames)
 	}
 }

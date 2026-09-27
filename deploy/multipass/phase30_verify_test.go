@@ -474,7 +474,7 @@ func TestPhase30DocumentationMatchesProvenProductBoundary(t *testing.T) {
 	checks := map[string][]string{
 		"../../README.md": {
 			"PHP 8.3, 8.4, and 8.5", "Classic PHP", "Managed PHP", "WordPress 7.1 compatibility",
-			"not a WordPress Toolkit", "does not offer Node.js or Python applications", "phase30-verify.sh",
+			"domain-scoped WordPress Toolkit", "does not offer Node.js or Python applications", "phase30-verify.sh",
 		},
 		"../../docs/RECOVERY.md": {
 			"Phase 30", "PHP application", "active release", "desired-active worker", "phase30-verify.sh",

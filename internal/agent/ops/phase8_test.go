@@ -97,6 +97,15 @@ func TestSiteProvisionerAppliesUserDiskQuota(t *testing.T) {
 	if got, want := quota.path, filepath.Join(paths.HomeRoot, "npdemo"); got != want {
 		t.Fatalf("quota path = %q, want %q", got, want)
 	}
+	if err := provisioner.CreateSite(context.Background(), types.CreateSiteReq{
+		Username: "npdemo", Domain: "unlimited.test", PHPVersion: "8.3",
+		Limits: types.SiteResourceLimits{DiskQuotaMB: -1},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if quota.calls != 2 || quota.limitMB != -1 {
+		t.Fatalf("unlimited plan did not clear the previous quota: %#v", quota)
+	}
 }
 
 func TestLinuxDiskQuotaManagerUsesFindmntAndSetquota(t *testing.T) {
@@ -110,6 +119,26 @@ func TestLinuxDiskQuotaManagerUsesFindmntAndSetquota(t *testing.T) {
 	want := []commandCall{
 		{name: "findmnt", args: []string{"-n", "-o", "TARGET", "--target", "/home/npdemo"}},
 		{name: "setquota", args: []string{"-u", "npdemo", "0", "524288", "0", "0", "/"}},
+	}
+	if len(runner.calls) != len(want) {
+		t.Fatalf("calls = %#v, want %#v", runner.calls, want)
+	}
+	for i := range want {
+		if runner.calls[i].name != want[i].name || !slices.Equal(runner.calls[i].args, want[i].args) {
+			t.Fatalf("call %d = %#v, want %#v", i, runner.calls[i], want[i])
+		}
+	}
+}
+
+func TestLinuxDiskQuotaManagerClearsInheritedLimitForUnlimitedPlan(t *testing.T) {
+	runner := &quotaCommandRunner{}
+	manager := NewLinuxDiskQuotaManager(runner)
+	if err := manager.ApplyUserQuota(context.Background(), "npdemo", "/home/npdemo", -1); err != nil {
+		t.Fatal(err)
+	}
+	want := []commandCall{
+		{name: "findmnt", args: []string{"-n", "-o", "TARGET", "--target", "/home/npdemo"}},
+		{name: "setquota", args: []string{"-u", "npdemo", "0", "0", "0", "0", "/"}},
 	}
 	if len(runner.calls) != len(want) {
 		t.Fatalf("calls = %#v, want %#v", runner.calls, want)

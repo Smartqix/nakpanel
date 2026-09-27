@@ -61,6 +61,28 @@ func TestClientCreateSiteOverUnixSocket(t *testing.T) {
 	}
 }
 
+func TestClientRunWordPressOverUnixSocket(t *testing.T) {
+	socketPath, stop := startTestAgent(t)
+	defer stop()
+
+	result, err := New(socketPath).RunWordPress(context.Background(), types.WordPressOperationReq{
+		Action: types.WordPressActionInspect,
+		Site: types.WordPressSiteSpec{
+			SiteID:      1,
+			Username:    "npdemo",
+			Domain:      "example.test",
+			PHPVersion:  "8.4",
+			HostingMode: types.PHPHostingModeClassic,
+		},
+	})
+	if err != nil {
+		t.Fatalf("RunWordPress returned error: %v", err)
+	}
+	if result.Action != types.WordPressActionInspect {
+		t.Fatalf("RunWordPress action = %q", result.Action)
+	}
+}
+
 func TestClientCreateDatabaseOverUnixSocket(t *testing.T) {
 	socketPath, stop := startTestAgent(t)
 	defer stop()
@@ -270,6 +292,7 @@ func startTestAgent(t *testing.T) (string, func()) {
 		DatabaseProvisioner:    testDatabaseProvisioner{},
 		CertificateProvisioner: testCertificateProvisioner{},
 		ServerAdmin:            testServerAdmin{},
+		WordPress:              testWordPressProvisioner{},
 	})
 	server := agentrpc.NewServer(dispatcher)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -316,6 +339,12 @@ func (testCertificateProvisioner) IssueCert(ctx context.Context, req types.Issue
 }
 
 type testServerAdmin struct{}
+
+type testWordPressProvisioner struct{}
+
+func (testWordPressProvisioner) RunWordPress(_ context.Context, req types.WordPressOperationReq) (types.WordPressOperationResult, error) {
+	return types.WordPressOperationResult{Action: req.Action}, nil
+}
 
 func (testServerAdmin) InspectServer(context.Context) (types.ServerInventory, error) {
 	return types.ServerInventory{Hostname: "phase26.test", Status: types.ServerStateHealthy}, nil

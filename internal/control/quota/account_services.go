@@ -162,6 +162,9 @@ func (s *SQLStore) SetSitePolicy(ctx context.Context, siteID, actorID int64, pat
 	if err != nil {
 		return err
 	}
+	if err = controlpolicy.ValidateSitePatchPermissions(subscriptionPolicy, patch); err != nil {
+		return err
+	}
 	patch, err = mergeSitePolicyPatch(existingPatch, patch)
 	if err != nil {
 		return err
@@ -191,8 +194,8 @@ VALUES($1,$2,$3) ON CONFLICT(site_id) DO UPDATE SET policy_patch=EXCLUDED.policy
 
 func (s *SQLStore) ResetSitePolicy(ctx context.Context, siteID, actorID int64, scope string) error {
 	scope = strings.ToLower(strings.TrimSpace(scope))
-	if scope != "web" && scope != "php" && scope != "all" {
-		return errors.New("reset scope must be web, php, or all")
+	if scope != "web" && scope != "php" && scope != "logs" && scope != "all" {
+		return errors.New("reset scope must be web, php, logs, or all")
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

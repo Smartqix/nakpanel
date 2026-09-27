@@ -322,6 +322,12 @@ func (c *Client) ReconcilePHPWorkers(ctx context.Context, req types.ReconcilePHP
 	return result, err
 }
 
+func (c *Client) RunWordPress(ctx context.Context, req types.WordPressOperationReq) (types.WordPressOperationResult, error) {
+	var result types.WordPressOperationResult
+	err := c.doResult(ctx, types.OpRunWordPress, req, &result)
+	return result, err
+}
+
 func (c *Client) doTyped(ctx context.Context, op string, payload any) (types.Response, error) {
 	data, err := json.Marshal(payload)
 	if err != nil {

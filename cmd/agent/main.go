@@ -66,6 +66,9 @@ func main() {
 		FTPSTLSKeyPath:    os.Getenv("NAKPANEL_FTPS_TLS_KEY"),
 	})
 	phpApplications := ops.NewPHPApplicationProvisioner(ops.PHPApplicationProvisionerOptions{})
+	wordpress := ops.NewWordPressProvisioner(ops.WordPressProvisionerOptions{
+		DatabaseRemover: ops.NewLazyMariaDBWordPressRemover(os.Getenv("NAKPANEL_MARIADB_DSN")),
+	})
 	serverAdminInspector := ops.NewServerAdminInspector(ops.ServerAdminInspectorOptions{})
 	managedOperations := ops.NewManagedOperations(ops.ManagedOperationsOptions{Services: serverAdminInspector})
 	securityController := ops.NewServerSecurityController(ops.ServerSecurityControllerOptions{})
@@ -118,6 +121,8 @@ func main() {
 			Mail:                    mailProvisioner,
 			Applications:            podmanProvisioner,
 			PHPApplications:         phpApplications,
+			WordPress:               wordpress,
+			WebStatistics:           ops.NewWebStatisticsGenerator(),
 			SubscriptionTeardown:    teardownProvisioner,
 			HostingToolkit:          hostingToolkit,
 			ServerAdmin:             serverAdminInspector,

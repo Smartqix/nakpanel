@@ -28,6 +28,8 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/control/store"
 	paneltls "github.com/nakroteck/nakpanel/internal/control/tls"
+	"github.com/nakroteck/nakpanel/internal/control/webstatistics"
+	controlwordpress "github.com/nakroteck/nakpanel/internal/control/wordpress"
 	"github.com/nakroteck/nakpanel/internal/control/workspace"
 	"github.com/nakroteck/nakpanel/internal/version"
 	"github.com/riverqueue/river"
@@ -64,7 +66,7 @@ func main() {
 		log.Fatalf("load secret keyring: %v", err)
 	}
 
-	riverClient, serverAdminManager, databaseAdminManager, dnsTemplateManager, phpApplicationStore, err := newRiverClient(db, queries, cfg)
+	riverClient, serverAdminManager, databaseAdminManager, dnsTemplateManager, phpApplicationStore, wordpressStore, err := newRiverClient(db, queries, cfg)
 	if err != nil {
 		log.Fatalf("create river client: %v", err)
 	}
@@ -117,6 +119,7 @@ func main() {
 		provision.WithMailAgent(agentCapabilities),
 		provision.WithHostingToolkitAgent(agentCapabilities),
 	)
+	wordpressManager := controlwordpress.NewManager(wordpressStore, workspaceStore, siteManager)
 	if err := provision.SweepCustomTLSStagingForJobs(ctx, db, provision.DefaultCustomTLSStagingDir, 24*time.Hour); err != nil {
 		log.Printf("sweep stale custom TLS staging files: %v", err)
 	}
@@ -140,6 +143,8 @@ func main() {
 		DNSTemplates:               dnsTemplateManager,
 		ApplicationLogs:            agentCapabilities,
 		PHPApplications:            phpApplicationManager,
+		WordPress:                  wordpressManager,
+		WebStatistics:              webstatistics.New(db, agentclient.New(config.AgentSocket), riverClient),
 		SMTPConfigured:             cfg.SMTPHost != "" && cfg.SMTPFrom != "",
 		SecurityDB:                 db,
 		SecurityKeyring:            securityKeyring,
@@ -198,7 +203,7 @@ func (q dashboardQuerier) ListDatabases(ctx context.Context) ([]store.Database, 
 	return q.queries.ListDatabases(ctx)
 }
 
-func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelRuntimeConfig) (*river.Client[*sql.Tx], *serveradmin.Manager, *databaseadmin.Manager, *dnstemplate.Manager, *controlphpapp.SQLStore, error) {
+func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelRuntimeConfig) (*river.Client[*sql.Tx], *serveradmin.Manager, *databaseadmin.Manager, *dnstemplate.Manager, *controlphpapp.SQLStore, *controlwordpress.SQLStore, error) {
 	workers := river.NewWorkers()
 	agent := agentclient.New(config.AgentSocket)
 	var runtimeConfig config.PanelRuntimeConfig
@@ -207,10 +212,14 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	}
 	keyring, err := serveradmin.LoadKeyring(runtimeConfig.SecretKeyFile)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("load server secret keyring: %w", err)
+		return nil, nil, nil, nil, nil, nil, fmt.Errorf("load server secret keyring: %w", err)
 	}
 	serverAdminStore := serveradmin.NewStore(db, keyring)
 	phpApplicationStore := controlphpapp.NewSQLStore(db, nil, serverAdminStore)
+	wordpressStore := controlwordpress.NewSQLStore(db, nil, serverAdminStore)
+	statisticsService := webstatistics.New(db, agent, nil)
+	river.AddWorker(workers, &webstatistics.GenerateWorker{Service: statisticsService})
+	river.AddWorker(workers, &webstatistics.SweepWorker{Service: statisticsService})
 	serverAdminManager := serveradmin.NewManager(serverAdminStore, nil, agent)
 	databaseAdminManager := databaseadmin.NewManager(db, agent, serverAdminStore, nil)
 	dnsTemplateManager := dnstemplate.NewManager(db, nil)
@@ -270,6 +279,9 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	river.AddWorker(workers, controlphpapp.NewReconcilePHPWorkersWorker(phpApplicationStore, agent, agent))
 	river.AddWorker(workers, controlphpapp.NewSweepPHPApplicationsWorker(phpApplicationStore))
 	river.AddWorker(workers, controlphpapp.NewSweepPHPRuntimesWorker(phpApplicationStore, agent))
+	river.AddWorker(workers, controlwordpress.NewOperationWorker(wordpressStore, agent))
+	river.AddWorker(workers, controlwordpress.NewCleanupRemovalWorker(wordpressStore, agent))
+	river.AddWorker(workers, controlwordpress.NewSweepWorker(wordpressStore))
 	usageWorker := controlquota.NewCollectUsageWorker(db, agent)
 	river.AddWorker(workers, usageWorker)
 	river.AddWorker(workers, controlquota.NewDeliverNotificationsWorker(db, controlquota.SMTPConfig{
@@ -296,14 +308,18 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 
 	backupSchedule, err := cron.ParseStandard("0 2 * * *")
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	pruneSchedule, err := cron.ParseStandard("0 3 * * *")
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
 		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(river.PeriodicInterval(time.Hour), func() (river.JobArgs, *river.InsertOpts) { return webstatistics.SweepArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(6*time.Hour), func() (river.JobArgs, *river.InsertOpts) {
+				return controlwordpress.SweepArgs{}, nil
+			}, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(5*time.Minute), func() (river.JobArgs, *river.InsertOpts) {
 				return controlphpapp.SweepPHPApplicationsArgs{}, nil
 			}, &river.PeriodicJobOpts{RunOnStart: true}),
@@ -368,10 +384,12 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		RescueStuckJobsAfter: 13 * time.Hour,
 	})
 	if err != nil {
-		return nil, nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, err
 	}
 	usageWorker.SetRiverClient(client)
 	phpApplicationStore.SetRiverClient(client)
+	wordpressStore.SetRiverClient(client)
+	statisticsService.SetRiverClient(client)
 	syncPlanWorker.SetRiverClient(client)
 	syncAddonWorker.SetRiverClient(client)
 	scheduledTaskSweepWorker.SetRiverClient(client)
@@ -388,7 +406,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	databaseAdminManager.SetRiverClient(client)
 	teardownAccountWorker.SetRiverClient(client)
 	dnsTemplateManager.SetRiverClient(client)
-	return client, serverAdminManager, databaseAdminManager, dnsTemplateManager, phpApplicationStore, nil
+	return client, serverAdminManager, databaseAdminManager, dnsTemplateManager, phpApplicationStore, wordpressStore, nil
 }
 
 func panelQueueConfig() map[string]river.QueueConfig {

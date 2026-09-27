@@ -35,10 +35,12 @@ func (accountTestOwnership) ChownRecursive(context.Context, string, string) erro
 type accountTestQuota struct {
 	username, path string
 	limit          int
+	calls          int
 }
 
 func (q *accountTestQuota) ApplyUserQuota(_ context.Context, username, path string, limit int) error {
 	q.username, q.path, q.limit = username, path, limit
+	q.calls++
 	return nil
 }
 
@@ -121,6 +123,13 @@ func TestEnsureSubscriptionAccountCreatesSharedLayoutAndLimits(t *testing.T) {
 		if got := info.Mode().Perm(); got != 0o700 {
 			t.Fatalf("%s mode = %o, want 700 account-private", path, got)
 		}
+	}
+	req.Policy.Resources.DiskMB = -1
+	if _, err := p.EnsureSubscriptionAccount(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if quota.calls != 2 || quota.limit != -1 {
+		t.Fatalf("unlimited account did not clear its previous quota: %#v", quota)
 	}
 }
 

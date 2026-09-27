@@ -321,7 +321,7 @@ func TestPHPApplicationWorkspaceRendersManagedTabsWithoutSecretOrLegacyOCI(t *te
 			t.Fatalf("managed workspace missing %q: %s", want, body)
 		}
 	}
-	for _, forbidden := range []string{secret, "Managed runtimes are not installed yet", "Deploy container", "WordPress Toolkit"} {
+	for _, forbidden := range []string{secret, "Managed runtimes are not installed yet", "Deploy container"} {
 		if strings.Contains(body, forbidden) {
 			t.Fatalf("managed workspace exposed stale/secret content %q: %s", forbidden, body)
 		}
@@ -676,10 +676,11 @@ func TestPHPApplicationErrorsAreMappedWithoutDetails(t *testing.T) {
 	}
 }
 
-func TestParsePlanIncludesPHPHostingV3Fields(t *testing.T) {
+func TestParsePlanIncludesPHPHostingV4Fields(t *testing.T) {
 	form := url.Values{
 		"name": {"Managed PHP"}, "allow_composer": {"true"}, "allow_composer_code_execution": {"true"},
 		"allow_managed_php_deployments": {"true"}, "allow_php_workers": {"true"},
+		"allow_wordpress_toolkit": {"true"}, "max_wordpress_sites": {"3"},
 		"max_php_workers": {"4"}, "max_php_releases_unlimited": {"true"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/plans", strings.NewReader(form.Encode()))
@@ -692,10 +693,11 @@ func TestParsePlanIncludesPHPHostingV3Fields(t *testing.T) {
 		t.Fatal(err)
 	}
 	permissions := plan.HostingPolicy.Permissions
-	if plan.HostingPolicy.SchemaVersion != 3 || !permissions.Composer || !permissions.ComposerCodeExecution ||
+	if plan.HostingPolicy.SchemaVersion != 5 || !permissions.Composer || !permissions.ComposerCodeExecution ||
 		!permissions.ManagedPHPDeployments || !permissions.PHPWorkers || plan.HostingPolicy.Resources.MaxPHPWorkers != 4 ||
+		!permissions.WordPressToolkit || plan.HostingPolicy.Resources.MaxWordPressSites != 3 ||
 		plan.HostingPolicy.Resources.MaxPHPReleases != -1 {
-		t.Fatalf("v3 hosting policy not parsed: %#v", plan.HostingPolicy)
+		t.Fatalf("v4 hosting policy not parsed: %#v", plan.HostingPolicy)
 	}
 }
 
@@ -705,8 +707,10 @@ func TestApplyResellerPHPHostingFieldsIncludesPhase30Ceilings(t *testing.T) {
 		"allow_composer_code_execution": {"true"},
 		"allow_managed_php_deployments": {"true"},
 		"allow_php_workers":             {"true"},
+		"allow_wordpress_toolkit":       {"true"},
 		"max_php_workers":               {"6"},
 		"max_php_releases_unlimited":    {"true"},
+		"max_wordpress_sites":           {"8"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "/reseller-plans", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -717,10 +721,11 @@ func TestApplyResellerPHPHostingFieldsIncludesPhase30Ceilings(t *testing.T) {
 	if err := applyResellerPHPHostingFields(req, &policy); err != nil {
 		t.Fatal(err)
 	}
-	if policy.SchemaVersion != 3 || !policy.Permissions.Composer ||
+	if policy.SchemaVersion != 4 || !policy.Permissions.Composer ||
 		!policy.Permissions.ComposerCodeExecution || !policy.Permissions.ManagedPHPDeployments ||
 		!policy.Permissions.PHPWorkers || policy.Resources.MaxPHPWorkers != 6 ||
+		!policy.Permissions.WordPressToolkit || policy.Resources.MaxWordPressSites != 8 ||
 		policy.Resources.MaxPHPReleases != -1 {
-		t.Fatalf("phase 30 reseller ceilings not parsed: %#v", policy)
+		t.Fatalf("phase 32 reseller ceilings not parsed: %#v", policy)
 	}
 }

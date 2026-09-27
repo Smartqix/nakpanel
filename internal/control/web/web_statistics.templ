@@ -1,0 +1,74 @@
+package web
+
+import "github.com/nakroteck/nakpanel/internal/control/webstatistics"
+import "strconv"
+
+templ domainGoAccess(siteID int64, stats webstatistics.Workspace, view WorkspaceView) {
+	<section class="np-statistics-workspace">
+	@pageSectionHead("Web Statistics", "")
+	if stats.Overridden {
+		<p class="np-muted">Custom domain setting</p>
+	} else {
+		<p class="np-muted">Inherited from subscription</p>
+	}
+	if stats.CanConfigure && stats.Active {
+		<form class="np-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(siteID)+"/statistics/settings") }>@csrfInput(view)
+			<label>Statistics engine<select name="engine"><option value="inherit" selected?={ !stats.Overridden }>Inherit subscription</option><option value="disabled" selected?={ stats.Overridden && stats.Engine=="disabled" }>Disabled</option><option value="goaccess" selected?={ stats.Overridden && stats.Engine=="goaccess" }>GoAccess</option></select></label>
+			<button type="submit">@icon("save") Apply</button>
+		</form>
+	}
+	<div class="np-statistics-toolbar"><span class="np-status-pill np-status-pill-muted">{ stats.Engine }</span>@statusPill(stats.Status)
+		if stats.Enabled && stats.Active {
+			<form method="post" action={ templ.SafeURL("/sites/"+formatJobID(siteID)+"/statistics/refresh") }>@csrfInput(view)<button type="submit" disabled?={ stats.Status=="pending" }>@icon("refresh-cw") Refresh report</button></form>
+		}
+	</div>
+	if !stats.Enabled {
+		<p class="np-callout">Web statistics are disabled by the subscription or server settings.</p>
+	} else {
+		if stats.LastError!="" {
+			<p class="np-statistics-error" role="alert">{ stats.LastError }</p>
+		}
+		if stats.Status=="pending" {
+			<p class="np-callout">Report generation is pending.</p>
+		}
+		if stats.ReportAvailable {
+			<div class="np-statistics-metrics">
+				<div><span>Requests</span><strong>{ strconv.FormatInt(stats.Summary.Requests,10) }</strong></div>
+				<div><span>Estimated visitors</span><strong>{ strconv.FormatInt(stats.Summary.Visitors,10) }</strong></div>
+				<div><span>Transferred</span><strong>{ formatBytes(stats.Summary.Bandwidth) }</strong></div>
+				<div><span>HTTP errors</span><strong>{ strconv.FormatInt(stats.Summary.Errors,10) }</strong></div>
+			</div>
+			<dl class="np-detail-list"><dt>Generated</dt><dd>{ stats.Summary.GeneratedAt.UTC().Format("2006-01-02 15:04 UTC") }</dd><dt>Report window</dt><dd>{ stats.Summary.PeriodStart.UTC().Format("2006-01-02") } to { stats.Summary.PeriodEnd.UTC().Format("2006-01-02") }</dd></dl>
+			<details class="np-statistics-detail"><summary>Open detailed GoAccess report</summary><iframe title="Detailed GoAccess report" sandbox="allow-scripts" referrerpolicy="no-referrer" loading="lazy" src={ statisticsReportURL(siteID,view) } style="display:block;width:100%;height:760px;border:1px solid #d5d9dd;"></iframe></details>
+		} else {
+			<p class="np-muted">No report is available for the current settings.</p>
+		}
+	}
+	</section>
+}
+
+templ statisticsSettings(settings webstatistics.Settings,view WorkspaceView) {
+	<section class="np-statistics-workspace">
+	@pageSectionHead("Web Statistics", "")
+	<dl class="np-detail-list"><dt>Engine</dt><dd>GoAccess</dd><dt>Status</dt><dd>
+		if settings.Engine.Available {
+			{ settings.Engine.Version }
+		} else {
+			Unavailable
+		}
+	</dd></dl>
+	<form class="np-statistics-settings" method="post" action="/tools-settings/web-statistics">@csrfInput(view)
+		<fieldset><legend>Generation &amp; schedule</legend>
+		<label class="np-check"><input type="checkbox" name="enabled" value="true" checked?={ settings.Enabled }/>Enable web statistics generation</label>
+		<div class="np-statistics-fields">
+		<label>Report window (days)<input type="number" name="retention_days" min="1" max="90" value={ strconv.Itoa(settings.RetentionDays) } required/></label>
+		<label>Daily generation hour (UTC)<input type="number" name="schedule_hour" min="0" max="23" value={ strconv.Itoa(settings.ScheduleHour) } required/></label>
+		</div></fieldset>
+		<fieldset><legend>Visitor privacy</legend>
+		<label class="np-check"><input type="checkbox" name="anonymize_ip" value="true" checked?={ settings.AnonymizeIP }/>Anonymize visitor IP addresses</label>
+		<p class="np-muted">Query strings and URL credentials are excluded. Reports include available retained access logs within the selected window.</p>
+		</fieldset>
+		<button type="submit">@icon("save") Save settings</button>
+	</form>
+	</section>
+}

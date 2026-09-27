@@ -21,6 +21,7 @@ type HostingPolicy struct {
 	Backups       HostingBackupPolicy      `json:"backups"`
 	Applications  HostingApplicationPolicy `json:"applications"`
 	Valkey        HostingValkeyPolicy      `json:"valkey"`
+	Logs          LogsPreset               `json:"logs"`
 }
 
 type HostingResourcePolicy struct {
@@ -46,6 +47,7 @@ type HostingResourcePolicy struct {
 	ValkeyMemoryMB     int `json:"valkey_memory_mb"`
 	MaxPHPWorkers      int `json:"max_php_workers"`
 	MaxPHPReleases     int `json:"max_php_releases"`
+	MaxWordPressSites  int `json:"max_wordpress_sites"`
 }
 
 type HostingPermissionPolicy struct {
@@ -72,6 +74,8 @@ type HostingPermissionPolicy struct {
 	ComposerCodeExecution bool `json:"composer_code_execution"`
 	ManagedPHPDeployments bool `json:"managed_php_deployments"`
 	PHPWorkers            bool `json:"php_workers"`
+	WordPressToolkit      bool `json:"wordpress_toolkit"`
+	WebStatistics         bool `json:"web_statistics"`
 }
 
 type HostingWebPolicy struct {

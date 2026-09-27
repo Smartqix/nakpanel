@@ -1,10 +1,13 @@
 package web
 
 import (
+	"strings"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
+	controlwordpress "github.com/nakroteck/nakpanel/internal/control/wordpress"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	controlpolicy "github.com/nakroteck/nakpanel/internal/control/policy"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
@@ -28,14 +31,14 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 					}
 					<main class="np-routed-content" id="main-content">
 						if data.Notice != "" {
-							<p class="np-notice" role="status">{ data.Notice }</p>
+							<p class={ "np-notice np-notice-" + data.NoticeTone } role="status">{ data.Notice }</p>
 						}
 						@routedContent(user, data, actions, view)
 					</main>
 				</div>
 			</div>
 			<div class="np-mobile-scrim" data-np-menu-close hidden></div>
-			if actions.CanCreateSite {
+			if actions.CanCreateSite && view.Route != "site-new" {
 				@routedSiteDialog(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), data.Capabilities, view)
 			}
 			if (user.Role == auth.RoleAdmin || user.Role == auth.RoleReseller) && actions.CanManageQuotas {
@@ -62,7 +65,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 				<span class="np-nav-label">Hosting services</span>
 				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), formatBadgeCount(len(data.Customers)))
 				@navRoute("/resellers", "Resellers", "users", routeActive(view.Route, "resellers", "reseller-detail"), formatBadgeCount(len(data.Resellers)))
-				@navRoute("/sites", "Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(data.Sites)))
+				@navRoute("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(data.Sites)))
 				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), formatBadgeCount(len(data.Subscriptions)))
 		@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new", "reseller-plan-new"), "")
 				<span class="np-nav-label">Server management</span>
@@ -71,7 +74,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 			} else if user.Role == auth.RoleReseller && view.SupportCustomerID == 0 {
 				<span class="np-nav-label">Hosting services</span>
 				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), formatBadgeCount(len(data.Customers)))
-				@navRoute("/sites", "Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(data.Sites)))
+				@navRoute("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(data.Sites)))
 				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), formatBadgeCount(len(data.Subscriptions)))
 		@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new"), "")
 				<span class="np-nav-label">Account</span>
@@ -80,15 +83,11 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 				@navRoute("/my-resources", "My Resources", "activity", routeActive(view.Route, "my-resources"), "")
 			} else {
 				<span class="np-nav-label">Hosting services</span>
-				@navRoute(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(sitesForCustomer(data.Sites, view.SupportCustomerID))))
+				@navRoute(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit"), formatBadgeCount(len(sitesForCustomer(data.Sites, view.SupportCustomerID))))
 				@navRoute(workspacePath(view, "/mail"), "Mail", "mail", routeActive(view.Route, "mail"), formatBadgeCount(len(data.SubscriptionServices.Mailboxes)))
-				@navRoute(workspacePath(view, "/subscriptions"), "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail"), formatBadgeCount(len(data.Subscriptions)))
-				@navRoute(workspacePath(view, "/databases"), "Databases", "database", routeActive(view.Route, "databases"), formatBadgeCount(len(databasesForCustomer(data.Databases, view.SupportCustomerID))))
 				@navRoute(workspacePath(view, "/backups"), "Backups", "archive", routeActive(view.Route, "backups"), "")
-				@navRoute(workspacePath(view, "/dns"), "DNS", "network", routeActive(view.Route, "dns"), "")
-				@navRoute(workspacePath(view, "/certificates"), "SSL/TLS", "shield", routeActive(view.Route, "certificates"), "")
 				<span class="np-nav-label">Account</span>
-				@navRoute(workspacePath(view, "/activity"), "Activity", "activity", routeActive(view.Route, "activity"), "")
+				@navRoute(workspacePath(view, "/subscriptions"), "Account & Usage", "card", routeActive(view.Route, "subscriptions", "subscription-detail"), "")
 			}
 		</nav>
 		<div class="np-side-footer"><span class="np-agent-dot"></span><span>Panel session active</span></div>
@@ -162,6 +161,8 @@ templ routedContent(user auth.SessionUser, data dashboard.Data, actions Dashboar
 			@routedDashboard(user, data, view)
 		case "sites":
 			@routedSites(user, sitesForSubscription(sitesForCustomer(data.Sites, view.SupportCustomerID), view.SelectedSubscription), selectedSubscription(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), view.SelectedSubscription), actions, view)
+		case "site-new":
+			@siteCreatePage(activeSubscriptions(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID)), actions, view)
 		case "site-detail":
 			@routedSiteDetail(user, data, actions, view)
 		case "site-files":
@@ -311,7 +312,7 @@ templ subscriptionUsageRows(items []types.SubscriptionSummary, details bool, vie
 templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
 	@pageHead("Hosting services", "Websites & Domains", "Manage hosting, PHP, certificates, DNS and backups from each website.") {
 		if actions.CanCreateSite {
-			<button type="button" data-np-dialog-open="site-dialog">Add website</button>
+			<a class="np-primary-link" href={ templ.SafeURL(siteCreateBasePath(view)) }>Add website</a>
 		}
 	}
 	<section class="np-panel">@siteRows(sites, view)</section>
@@ -325,7 +326,7 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 			}
 			<div class="np-domain-commandbar">
 				<div><span class={ "np-status-pill " + customerStatusClass(item.Status) }>{ item.Status }</span><span>PHP { item.PHPVersion }</span><span>{ formatTLSStatus(item) }</span></div>
-				<a href={ templ.SafeURL("http://" + item.Domain) } target="_blank" rel="noreferrer">@icon("globe")<span>Open website</span></a>
+				<a href={ templ.SafeURL(siteWebsiteURL(item)) } target="_blank" rel="noreferrer">@icon("globe")<span>Open website</span></a>
 			</div>
 			@domainNavigation(item.ID,view.Tab,view,actions.CanUseFileManager)
 			if data.ServiceLoadError != "" && siteServiceTab(view.Tab) {
@@ -355,11 +356,17 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 			} else if view.Tab == "scheduled-tasks" {
 				@domainScheduledTasks(item,subscription,data,view)
 			} else if view.Tab == "statistics" {
-				@domainStatistics(item,subscription,data,view)
+				if view.WebStatistics != nil {
+					@domainGoAccess(item.ID,*view.WebStatistics,view)
+				}
 			} else if view.Tab == "git" {
 				@domainGit(item,subscription,data,view)
 			} else if view.Tab == "applications" {
 				@domainPHPApplication(item,subscription,data,view)
+			} else if view.Tab == "wordpress" {
+				if view.WordPress != nil {
+					@domainWordPress(item,subscription,*view.WordPress,view)
+				}
 			} else if view.Tab == "containers" {
 				@domainContainers(user,item,subscription,data,view)
 			} else if view.Tab == "staging" {
@@ -386,6 +393,7 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 }
 
 templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	@domainOverviewPrimary(item, actions, view)
 	<section class="np-panel np-domain-summary"><div class="np-panel-title"><div><h2>Hosting overview</h2><span class="np-muted">Desired and applied service state for this domain</span></div>@statusPill(item.SettingsStatus)</div>
 		<dl class="np-domain-overview-band"><div><dt>PHP</dt><dd>{ item.PHPVersion }</dd><small>dedicated FPM service</small></div><div><dt>TLS</dt><dd>{ formatTLSStatus(item) }</dd><small>HTTPS redirect { yesNo(item.HTTPSRedirect) }</small></div><div><dt>DNS</dt><dd>{ domainDNSState(data.Phase6,item.ID) }</dd><small>authoritative zone</small></div><div><dt>Databases</dt><dd>{ formatPlanLimit(len(databasesForSite(data.Databases,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) } subscription use</small></div><div><dt>Backups</dt><dd>{ formatPlanLimit(len(backupsForSite(data.Phase6.Backups,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.BackupsUsed,subscription.MaxBackups,true) } subscription use</small></div></dl>
 		if usage, ok := usageForSite(data.SubscriptionServices.SiteUsage,item.ID); ok {
@@ -393,7 +401,7 @@ templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary
 		}
 		<dl class="np-facts"><div><dt>System user</dt><dd>{ item.Username }</dd></div><div><dt>Document root</dt><dd><code>{ item.DocumentRoot }</code></dd></div></dl>
 	</section>
-	<div class="np-domain-tool-groups">
+	<details class="np-v2-advanced-tools"><summary><span>Advanced tools</span>@icon("chevron-down")</summary><div class="np-domain-tool-groups">
 		@domainToolGroup("Hosting & DNS") {
 			@domainDeepTool(item.ID,"web-server","settings","Hosting & nginx","Typed web-server controls",view)
 			@domainTool(item.ID,"php","activity","PHP settings","Version and dedicated FPM",view)
@@ -421,6 +429,7 @@ templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary
 			@domainTool(item.ID,"backups","archive","Backups","Recovery points",view)
 		}
 		@domainToolGroup("Applications") {
+			@domainDeepTool(item.ID,"wordpress","package-open","WordPress Toolkit","Install, update and secure WordPress",view)
 			@domainDeepTool(item.ID,"applications","package-open","PHP Application","Classic hosting and managed PHP releases",view)
 			@domainDeepTool(item.ID,"containers","server","Containers","Health-gated OCI workloads",view)
 			@domainDeepTool(item.ID,"staging","copy","Staging","Copy or promote with rollback",view)
@@ -429,7 +438,7 @@ templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary
 		@domainToolGroup("Mail") {
 			@domainTool(item.ID,"mail","mail","Mail settings","Mailboxes, aliases and webmail",view)
 		}
-	</div>
+	</div></details>
 }
 
 templ domainToolGroup(title string) {
@@ -1195,6 +1204,7 @@ templ domainNavigation(siteID int64, current string, view WorkspaceView, canUseF
 					@domainDeepTab(siteID,"statistics","Statistics",current,view)
 					@domainDeepTab(siteID,"git","Git",current,view)
 					<strong>Applications</strong>
+					@domainDeepTab(siteID,"wordpress","WordPress Toolkit",current,view)
 					@domainDeepTab(siteID,"applications","Applications",current,view)
 					@domainDeepTab(siteID,"containers","Containers",current,view)
 					@domainDeepTab(siteID,"staging","Staging",current,view)
@@ -1223,6 +1233,7 @@ templ domainNavigation(siteID int64, current string, view WorkspaceView, canUseF
 			@domainDeepTab(siteID,"scheduled-tasks","Scheduled Tasks",current,view)
 			@domainDeepTab(siteID,"statistics","Statistics",current,view)
 			@domainDeepTab(siteID,"git","Git",current,view)
+			@domainDeepTab(siteID,"wordpress","WordPress Toolkit",current,view)
 			@domainDeepTab(siteID,"applications","Applications",current,view)
 			@domainDeepTab(siteID,"containers","Containers",current,view)
 			@domainDeepTab(siteID,"staging","Staging",current,view)
@@ -1242,6 +1253,207 @@ templ domainTool(siteID int64, tab string, iconName string, title string, copy s
 }
 templ domainDeepTool(siteID int64, route string, iconName string, title string, copy string, view WorkspaceView) {
 	<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(siteID)+"/"+route)) }>@icon(iconName)<strong>{ title }</strong><span>{ copy }</span></a>
+}
+
+templ domainWordPress(item dashboard.Site, subscription types.SubscriptionSummary, workspace controlwordpress.Workspace, view WorkspaceView) {
+	@pageSectionHead("WordPress Toolkit", "Install, inspect, update, and secure WordPress on Classic PHP websites.")
+	<section class="np-settings-summary np-wordpress-summary">
+		<div><span>Availability</span><strong>{ yesNo(workspace.Available) }</strong></div>
+		<div><span>Plan allocation</span><strong>{ formatPlanLimit(workspace.Policy.Resources.MaxWordPressSites) }</strong></div>
+		<div><span>Hosting mode</span><strong>{ phpHostingModeLabel(workspace.Site.HostingMode) }</strong></div>
+		<div><span>WP-CLI boundary</span><strong>Subscription account</strong></div>
+	</section>
+	if !workspace.Available {
+		<section class="np-panel"><p class="np-gate is-blocked">{ workspace.Reason }</p><p class="np-muted">The provider must update and synchronize the service plan before WordPress operations are available.</p></section>
+	}
+	if workspace.Available && workspace.Instance == nil {
+		<section class="np-panel np-wordpress-empty">
+			<div class="np-empty-state"><span class="np-empty-icon">@icon("package-open")</span><h2>No managed WordPress installation</h2><p>Install into a fresh Nakpanel site or an empty public_html, or discover an existing installation already hosted here.</p>
+				if workspace.Reason != "" {
+					<p class="np-callout np-error">{ workspace.Reason }</p>
+				}
+				<div class="np-button-row"><button type="button" data-np-dialog-open="wordpress-install-dialog">Install WordPress</button><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="discover"/><button type="submit" class="np-secondary-button">Discover installation</button></form></div></div>
+		</section>
+		@wordpressInstallDialog(item,view)
+	}
+	if workspace.Instance != nil && workspace.Instance.ObservedState == "removed" {
+		@domainWordPressRemoved(item, *workspace.Instance, workspace.Operations, view)
+	}
+	if workspace.Instance != nil && workspace.Instance.DesiredState == "absent" && workspace.Instance.ObservedState != "removed" {
+		@domainWordPressRemoving(*workspace.Instance)
+	}
+	if workspace.Available && workspace.Instance != nil && workspace.Instance.DesiredState != "absent" && workspace.Instance.InstalledVersion == "" {
+		@domainWordPressIncomplete(item, *workspace.Instance, view)
+	}
+	if workspace.Available && workspace.Instance != nil && workspace.Instance.DesiredState != "absent" && workspace.Instance.InstalledVersion != "" {
+		@domainWordPressInstalled(item, *workspace.Instance, workspace.Operations, view)
+	}
+}
+
+templ domainWordPressRemoving(instance controlwordpress.Instance) {
+	<section class="np-panel np-wordpress-empty" data-np-wordpress-progress>
+		<div class="np-empty-state"><span class="np-empty-icon">@icon("activity")</span><h2>Removing WordPress</h2><p>The uninstall is converging through a recovery backup, the privileged agent, and final cleanup. The domain, DNS, TLS, PHP settings, mail, and unrelated data remain in place.</p>@statusPill(instance.ConvergenceStatus)
+			if instance.LastError != "" {
+				<p class="np-callout np-error">{ instance.LastError }</p>
+			}
+		</div>
+	</section>
+}
+
+templ domainWordPressRemoved(item dashboard.Site, instance controlwordpress.Instance, operations []controlwordpress.Operation, view WorkspaceView) {
+	<section class="np-panel np-wordpress-empty">
+		<div class="np-empty-state"><span class="np-empty-icon">@icon("package-open")</span><h2>WordPress removed</h2><p>The website domain and hosting configuration are preserved. The document root now contains the Nakpanel placeholder.</p>
+			if removal := latestWordPressRemoval(operations); removal != nil {
+				<div class="np-wordpress-removal-summary"><span>Files<strong>Removed</strong></span>
+					if removal.DatabaseRemoved {
+						<span>Database<strong>Removed</strong></span>
+					} else {
+						<span>Database<strong>Database preserved</strong></span>
+					}
+					if removal.BackupID > 0 {
+						<span>Recovery point<strong>Recovery backup { formatJobID(removal.BackupID) }</strong></span>
+					}
+				</div>
+			}
+			<div class="np-button-row"><button type="button" data-np-dialog-open="wordpress-install-dialog">Install WordPress again</button><a class="np-secondary-link" href={ wordpressTabURL(view,item.ID,"activity") }>View operation history</a></div>
+		</div>
+	</section>
+	@wordpressInstallDialog(item,view)
+}
+
+templ domainWordPressIncomplete(item dashboard.Site, instance controlwordpress.Instance, view WorkspaceView) {
+	<section class="np-panel np-wordpress-empty" data-np-wordpress-progress?={ instance.ObservedState != "failed" }>
+		<div class="np-empty-state"><span class="np-empty-icon">@icon("activity")</span>
+			if instance.ObservedState == "failed" {
+				<h2>Installation needs attention</h2>
+			} else {
+				<h2>Installation is in progress</h2>
+			}
+			<p>WordPress has not been observed as installed yet. Nakpanel keeps desired and observed state separate until WP-CLI confirms the installation.</p>
+			if instance.LastError != "" {
+				<p class="np-callout np-error">{ instance.LastError }</p>
+			}
+			if instance.ObservedState == "failed" && instance.DatabaseID > 0 {
+				<p class="np-muted">Retry installation reuses the existing encrypted credentials and scoped database. No password is returned to or accepted from the browser.</p>
+				<div class="np-button-row"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="install"/><button type="submit" data-np-confirm="Retry the failed WordPress installation using the existing database and encrypted credentials?">Retry installation</button></form><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="discover"/><button type="submit" class="np-secondary-button">Discover existing installation</button></form></div>
+			}
+		</div>
+	</section>
+}
+
+templ domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Instance, operations []controlwordpress.Operation, view WorkspaceView) {
+		<div class="np-domain-commandbar np-wordpress-commandbar"><div>@statusPill(instance.ObservedState)<span>WordPress { instance.InstalledVersion }</span><span>{ formatPlanLimit(instance.Inventory.UpdatesAvailable) } updates</span><span>Security { formatPlanLimit(instance.Security.Score) }/100</span></div><div class="np-button-row"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="refresh"/><button type="submit" class="np-secondary-button">Refresh</button></form><button type="button" data-np-dialog-open="wordpress-password-dialog">Reset password</button></div></div>
+		<nav class="np-php-app-tabs" aria-label="WordPress Toolkit sections">
+			@wordpressTabLink(item.ID,"overview","Overview",view)
+			@wordpressTabLink(item.ID,"plugins","Plugins",view)
+			@wordpressTabLink(item.ID,"themes","Themes",view)
+			@wordpressTabLink(item.ID,"security","Security",view)
+			@wordpressTabLink(item.ID,"updates","Updates",view)
+			@wordpressTabLink(item.ID,"activity","Activity",view)
+		</nav>
+		if wordpressTab(view.WordPressTab) == "overview" {
+			<section class="np-panel"><div class="np-panel-title"><div><h2>Installation</h2><span class="np-muted">Observed inventory from WP-CLI</span></div>@statusPill(instance.ConvergenceStatus)</div><dl class="np-facts np-wordpress-facts"><div><dt>Site title</dt><dd>{ instance.SiteTitle }</dd></div><div><dt>Site URL</dt><dd>{ instance.Inventory.SiteURL }</dd></div><div><dt>Administrator</dt><dd>{ instance.AdminUser }</dd></div><div><dt>Contact email</dt><dd>{ instance.AdminEmail }</dd></div><div><dt>PHP</dt><dd>{ instance.Inventory.PHPVersion }</dd></div><div><dt>Last scan</dt><dd>{ formatTime(instance.LastScannedAt) }</dd></div></dl></section>
+			<section class="np-panel"><div class="np-panel-title"><div><h2>Runtime state</h2><span class="np-muted">Desired state, observed state, and revision convergence are tracked separately.</span></div></div><dl class="np-domain-overview-band"><div><dt>Desired</dt><dd>{ instance.DesiredState }</dd></div><div><dt>Observed</dt><dd>{ instance.ObservedState }</dd></div><div><dt>Revision</dt><dd>{ formatJobID(instance.AppliedRevision) } / { formatJobID(instance.DesiredRevision) }</dd></div><div><dt>Checksums</dt><dd>{ instance.ChecksumStatus }</dd></div><div><dt>Maintenance</dt><dd>{ yesNo(instance.MaintenanceMode) }</dd></div></dl>
+				if instance.LastError != "" {
+					<p class="np-error">{ instance.LastError }</p>
+				}
+				<div class="np-panel-actions"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="maintenance"/>
+					if instance.MaintenanceMode {
+						<input type="hidden" name="maintenance" value="false"/><button type="submit" class="np-secondary-button" data-np-confirm="Disable WordPress maintenance mode and make the site public?">Disable maintenance mode</button>
+					} else {
+						<input type="hidden" name="maintenance" value="true"/><button type="submit" class="np-secondary-button" data-np-confirm="Enable WordPress maintenance mode for this site?">Enable maintenance mode</button>
+					}
+				</form></div>
+			</section>
+			<section class="np-panel np-danger-zone"><div class="np-panel-title"><div><h2>Detach from Toolkit</h2><span class="np-muted">Stop managing this installation without changing hosted data.</span></div></div><p>Detaching removes Nakpanel's WordPress inventory and operation history. It does not delete WordPress files or its database. Retry-only administrator secrets are already retired after successful use.</p><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/detach") }>@csrfInput(view)<input type="hidden" name="confirm" value="detach"/><button type="submit" class="np-secondary-button" data-np-confirm="Detach this installation from the WordPress Toolkit? Files and databases will remain unchanged.">Detach tracking</button></form></section>
+			<section class="np-panel np-danger-zone"><div class="np-panel-title"><div><h2>Uninstall WordPress</h2><span class="np-muted">Remove this WordPress installation while preserving the hosted domain.</span></div></div><p>Uninstall replaces WordPress with the Nakpanel placeholder. Backups are enabled by default, and only a Toolkit-managed database can be removed after verified backup coverage.</p><button type="button" class="np-danger-button" data-np-dialog-open="wordpress-uninstall-dialog">Review uninstall</button></section>
+		} else if wordpressTab(view.WordPressTab) == "plugins" {
+			@wordpressComponents(item,instance.Inventory.Plugins,"plugin",view)
+		} else if wordpressTab(view.WordPressTab) == "themes" {
+			@wordpressComponents(item,instance.Inventory.Themes,"theme",view)
+		} else if wordpressTab(view.WordPressTab) == "security" {
+			<section class="np-panel"><div class="np-panel-title"><div><h2>Security status</h2><span class="np-muted">Checks are observational; hardening changes only allowlisted WordPress settings and file modes.</span></div><strong>{ wordpressSecurityLabel(instance.Security) }</strong></div><div class="np-wordpress-checks"><span>Core checksums<strong>{ yesNo(instance.Security.CoreChecksumsValid) }</strong></span><span>File permissions<strong>{ yesNo(instance.Security.FilePermissionsSafe) }</strong></span><span>File editor disabled<strong>{ yesNo(instance.Security.FileEditingDisabled) }</strong></span><span>Debug disabled<strong>{ yesNo(instance.Security.DebugDisabled) }</strong></span><span>HTTPS configured<strong>{ yesNo(instance.Security.HTTPSConfigured) }</strong></span></div>
+				if len(instance.Security.Findings) > 0 {
+					<ul class="np-wordpress-findings">
+						for _, finding := range instance.Security.Findings {
+							<li>{ finding }</li>
+						}
+					</ul>
+				}
+				<div class="np-button-row"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="verify"/><button type="submit" class="np-secondary-button">Verify again</button></form><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="harden"/><button type="submit">Apply safe hardening</button></form></div>
+			</section>
+		} else if wordpressTab(view.WordPressTab) == "updates" {
+			<section class="np-panel"><div class="np-panel-title"><div><h2>Updates</h2><span class="np-muted">Every update waits for a completed Nakpanel recovery-point backup.</span></div><strong>{ formatPlanLimit(instance.Inventory.UpdatesAvailable) } available</strong></div><p class="np-callout">Updates never run directly from the browser request. The current site and database are backed up first, then River invokes the typed WP-CLI operation.</p><div class="np-button-row"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="update"/><input type="hidden" name="target_type" value="core"/><input type="hidden" name="confirm" value="update"/><button type="submit" class="np-secondary-button">Update core</button></form><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="update"/><input type="hidden" name="target_type" value="all"/><input type="hidden" name="confirm" value="update"/><button type="submit">Back up and update all</button></form></div></section>
+		} else if wordpressTab(view.WordPressTab) == "activity" {
+			<section class="np-panel"><div class="np-panel-title"><div><h2>Operation history</h2><span class="np-muted">Sanitized results from durable WordPress jobs.</span></div></div>
+				if len(operations) == 0 {
+					<p class="np-empty">No WordPress operations have run.</p>
+				} else {
+					<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Operation</th><th>Target</th><th>Status</th><th>Requested</th><th>Result</th></tr></thead><tbody>
+						for _, operation := range operations {
+							<tr><td data-label="Operation"><strong>{ string(operation.Kind) }</strong></td><td data-label="Target">{ string(operation.TargetType) } { operation.TargetSlug }</td><td data-label="Status">@statusPill(operation.Status)</td><td data-label="Requested">{ formatTime(operation.CreatedAt) }</td><td data-label="Result">
+								if operation.LastError != "" {
+									<span class="np-error">{ operation.LastError }</span>
+								} else {
+									<span>{ operation.Output }</span>
+								}
+							</td></tr>
+						}
+					</tbody></table></div>
+				}
+			</section>
+		}
+		@wordpressPasswordDialog(item,instance,view)
+		@wordpressUninstallDialog(item,instance,view)
+}
+
+templ wordpressTabLink(siteID int64, tab string, label string, view WorkspaceView) {
+	<a href={ wordpressTabURL(view,siteID,tab) } class={ wordpressTabClass(view,tab) } aria-current={ ariaCurrent(wordpressTabClass(view,tab)) }>{ label }</a>
+}
+
+templ wordpressComponents(item dashboard.Site, components []types.WordPressComponent, target string, view WorkspaceView) {
+	<section class="np-panel"><div class="np-panel-title"><div><h2>{ strings.ToUpper(target[:1]) + target[1:] + "s" }</h2><span class="np-muted">Observed WordPress component inventory</span></div><strong>{ formatPlanLimit(len(components)) }</strong></div>
+		if len(components) == 0 {
+			<p class="np-empty">No { target } inventory is available. Refresh the installation.</p>
+		} else {
+			<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Name</th><th>Version</th><th>State</th><th>Update</th><th></th></tr></thead><tbody>
+				for _, component := range components {
+					<tr><td data-label="Name"><strong>{ component.Slug }</strong></td><td data-label="Version">{ component.Version }</td><td data-label="State">{ component.Status }</td><td data-label="Update">
+						if component.UpdateVersion != "" {
+							{ component.UpdateVersion }
+						} else {
+							<span class="np-muted">Current</span>
+						}
+					</td><td data-label="Action">
+						if component.UpdateVersion != "" {
+							<form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="update"/><input type="hidden" name="target_type" value={ target }/><input type="hidden" name="target_slug" value={ component.Slug }/><input type="hidden" name="confirm" value="update"/><button type="submit" class="np-secondary-button">Update</button></form>
+						}
+					</td></tr>
+				}
+			</tbody></table></div>
+		}
+	</section>
+}
+
+templ wordpressInstallDialog(item dashboard.Site, view WorkspaceView) {
+	<dialog class="np-dialog" id="wordpress-install-dialog" data-np-dialog aria-labelledby="wordpress-install-title"><div class="np-dialog-head"><div><span class="np-kicker">WordPress Toolkit</span><h2 id="wordpress-install-title">Install WordPress</h2><p>Requires a fresh Nakpanel placeholder or an empty public_html. Nakpanel never replaces modified or customer-owned content. It creates a scoped MariaDB database and encrypts the administrator credential only while the retryable install is pending.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/install") } data-np-wordpress-install>@csrfInput(view)<label>Site title<input name="site_title" maxlength="200" required/></label><label>Administrator username<input name="admin_user" value="siteadmin" pattern="[A-Za-z0-9_.@-]{1,60}" autocomplete="off" required/></label><label>Administrator email<input type="email" name="admin_email" maxlength="254" required/></label><label>Administrator password<span class="np-password-field"><input type="password" name="admin_password" minlength="12" maxlength="256" autocomplete="new-password" data-np-generated-password required/><button type="button" class="np-icon-button" title="Generate secure password" data-np-generate-password>@icon("activity")</button><button type="button" class="np-icon-button" title="Copy password" data-np-copy-password>@icon("copy")</button></span></label><label>WordPress version<select name="version"><option value="latest">Latest verified release</option><option value="7.1">WordPress 7.1</option></select></label><p class="np-form-help">The password is write-only, never enters River arguments, and is retired after successful installation.</p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create database and install</button></div></form></dialog>
+}
+
+templ wordpressPasswordDialog(item dashboard.Site, instance controlwordpress.Instance, view WorkspaceView) {
+	<dialog class="np-dialog" id="wordpress-password-dialog" data-np-dialog aria-labelledby="wordpress-password-title"><div class="np-dialog-head"><div><h2 id="wordpress-password-title">Reset administrator password</h2><p>Reset the password for { instance.AdminUser }. The new value remains write-only.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/operations") }>@csrfInput(view)<input type="hidden" name="action" value="password_reset"/><label>New password<span class="np-password-field"><input type="password" name="admin_password" minlength="12" maxlength="256" autocomplete="new-password" data-np-generated-password required/><button type="button" class="np-icon-button" title="Generate secure password" data-np-generate-password>@icon("activity")</button><button type="button" class="np-icon-button" title="Copy password" data-np-copy-password>@icon("copy")</button></span></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Reset password</button></div></form></dialog>
+}
+
+templ wordpressUninstallDialog(item dashboard.Site, instance controlwordpress.Instance, view WorkspaceView) {
+	<dialog class="np-dialog" id="wordpress-uninstall-dialog" data-np-dialog aria-labelledby="wordpress-uninstall-title"><div class="np-dialog-head"><div><span class="np-kicker">Destructive action</span><h2 id="wordpress-uninstall-title">Uninstall WordPress</h2><p>This removes WordPress files but preserves the domain, DNS, TLS, PHP configuration, mail, and unrelated databases. Type the exact domain to confirm.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/wordpress/uninstall") } data-np-wordpress-uninstall>@csrfInput(view)
+		<label class="np-check"><input type="checkbox" name="create_backup" value="true" checked data-np-uninstall-backup/>Create a recovery backup before uninstalling</label>
+		if instance.DatabaseManaged && instance.DatabaseID > 0 {
+			<label class="np-check"><input type="checkbox" name="delete_database" value="true" data-np-uninstall-database/>Also remove the Toolkit-managed database</label><p class="np-form-help">Database removal remains blocked until the completed recovery backup proves it contains this database.</p>
+		} else {
+			<p class="np-callout">The linked database is discovered or externally managed and will be preserved.</p>
+		}
+		<label>Confirm domain <strong>{ item.Domain }</strong><input name="confirm_domain" maxlength="253" autocomplete="off" required data-np-uninstall-confirm/></label>
+		<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Uninstall WordPress</button></div>
+	</form></dialog>
 }
 
 templ routedFileManager(view WorkspaceView) {
@@ -1886,7 +2098,7 @@ templ routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Works
 						</td>
 						<td data-label="Plan" class="np-subscription-plan-cell"><span class="np-plan-pill">{ subscription.PlanName }</span></td>
 						<td data-label="Usage" class="np-subscription-usage-cell"><span><strong>{ formatQuotaCompactCount(subscription.SitesUsed,subscription.MaxSites,true) }</strong> domains</span><span><strong>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) }</strong> databases</span></td>
-						<td data-label="Status" class="np-subscription-status-cell">@statusPill(subscription.Status)</td>
+						<td data-label="Status" class="np-subscription-status-cell">@statusPill(subscription.Status) @statusPill(subscriptionComplianceLabel(subscription))</td>
 						<td data-label="Action" class="np-subscription-action-cell"><a class="np-manage-button" href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(subscription.ID))) }>Manage</a></td>
 					</tr>
 				}
@@ -1900,7 +2112,7 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 			@pageHead("Subscription", subscription.SubscriptionName, subscription.CustomerName + " · " + subscription.PlanName) {
 			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/subscriptions")) }>Back to subscriptions</a>
 			}
-			<div class="np-subscription-overview"><div class="np-stat-grid np-routed-stats">@statCard("Domains", subscription.SitesUsed, "Limit " + formatPlanLimit(subscription.MaxSites))@statCard("Databases", subscription.DatabasesUsed, "Limit " + formatPlanLimit(subscription.MaxDatabases))@statCard("Backups", subscription.BackupsUsed, "Limit " + formatPlanLimit(subscription.MaxBackups))@statCard("Backup storage", int(subscription.BackupBytesUsed/1024/1024), "MB used")</div><aside class="np-subscription-account"><div><span>Subscriber</span><strong>{ subscription.CustomerName }</strong><small>{ subscription.CustomerEmail }</small></div><div><span>Service plan</span><strong>{ subscription.PlanName }</strong></div><div><span>Status</span>@statusPill(subscription.Status)</div></aside></div>
+			<div class="np-subscription-overview"><div class="np-stat-grid np-routed-stats">@statCard("Domains", subscription.SitesUsed, "Limit " + formatPlanLimit(subscription.MaxSites))@statCard("Databases", subscription.DatabasesUsed, "Limit " + formatPlanLimit(subscription.MaxDatabases))@statCard("Backups", subscription.BackupsUsed, "Limit " + formatPlanLimit(subscription.MaxBackups))@statCard("Backup storage", int(subscription.BackupBytesUsed/1024/1024), "MB used")</div><aside class="np-subscription-account"><div><span>Subscriber</span><strong>{ subscription.CustomerName }</strong><small>{ subscription.CustomerEmail }</small></div><div><span>Service plan</span><strong>{ subscription.PlanName }</strong></div><div><span>Status</span>@statusPill(subscription.Status)</div><div><span>Compliance</span>@statusPill(subscriptionComplianceLabel(subscription))</div></aside></div>
 			<nav class="np-domain-tabs np-subscription-tabs" aria-label="Subscription workspace">
 				<a class={ subscriptionTabClass(view.Tab,"overview") } href={ subscriptionTabPath(view,subscription.ID,"overview") }>Websites &amp; Domains</a>
 				<a class={ subscriptionTabClass(view.Tab,"resources") } href={ subscriptionTabPath(view,subscription.ID,"resources") }>Resources<span class="np-sr-only"> Subscription settings</span></a>
@@ -1915,7 +2127,7 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 			if view.Tab == "overview" {
 			<section class="np-panel np-subscription-domains"><div class="np-panel-title"><div><h2>Websites &amp; Domains</h2><span class="np-muted">Everything hosted under this subscription</span></div>
 			if actions.CanCreateSite {
-				<button type="button" data-np-dialog-open="site-dialog" data-np-subscription-id={ formatJobID(subscription.ID) }>@icon("globe")<span>Add Domain</span></button>
+				<a class="np-primary-link" href={ templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID:view.SupportCustomerID,SelectedSubscription:subscription.ID},"php")) }>@icon("globe")<span>Add Domain</span></a>
 			}
 		</div>
 			if len(sitesForSubscription(data.Sites,subscription.ID))==0 {
@@ -1931,9 +2143,12 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 			}
 			if user.Role != auth.RoleClient && view.Tab == "resources" {
 		<section class="np-panel np-subscription-settings"><div class="np-panel-title"><h2>Subscription settings</h2><span class={ "np-status-pill " + customerStatusClass(subscription.Status) }>{ subscription.Status }</span></div>
-			<dl class="np-facts"><div><dt>Entitlements</dt><dd>{ subscription.SyncMode }</dd></div><div><dt>Synchronization</dt><dd>@statusPill(subscription.SyncStatus)</dd></div><div><dt>Plan revision</dt><dd>{ formatPlanLimit(subscription.PlanRevision) }</dd></div><div><dt>Provider</dt><dd>{ formatProviderID(subscription.ResellerID) }</dd></div></dl>
+			<dl class="np-facts"><div><dt>Entitlements</dt><dd>{ subscription.SyncMode }</dd></div><div><dt>Synchronization</dt><dd>@statusPill(subscription.SyncStatus)</dd></div><div><dt>Compliance</dt><dd>@statusPill(subscriptionComplianceLabel(subscription))</dd></div><div><dt>Plan revision</dt><dd>{ formatPlanLimit(subscription.PlanRevision) }</dd></div><div><dt>Provider</dt><dd>{ formatProviderID(subscription.ResellerID) }</dd></div></dl>
 			if subscription.SyncError != "" {
 				<p class="np-error">{ subscription.SyncError }</p>
+			}
+			if subscription.ComplianceError != "" {
+				<p class="np-gate is-blocked">Plan compliance: { subscription.ComplianceError }. Existing resources were preserved; new provisioning remains subject to the active snapshot.</p>
 			}
 			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status") }>
 				@csrfInput(view)
@@ -1984,7 +2199,7 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 				@customEntitlementEditor(subscription,data,view)
 				@subscriptionPolicyEditor(subscription,data,view)
 			if isSiteRetryNotice(data.Notice) {
-				<div class="np-panel-actions"><button type="button" data-np-dialog-open="site-dialog">Retry website setup</button></div>
+				<div class="np-panel-actions"><a class="np-primary-link" href={ templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID:view.SupportCustomerID,SelectedSubscription:subscription.ID},"php")) }>Retry website setup</a></div>
 			}
 			</section>
 			}
@@ -2234,7 +2449,6 @@ templ customEntitlementEditor(subscription types.SubscriptionSummary, data dashb
 			<input type="hidden" name="performance_static_cache" value={ formatBool(subscription.ServicePresets.Performance.StaticFileCache) }/>
 			<input type="hidden" name="logs_rotation_enabled" value={ formatBool(subscription.ServicePresets.Logs.RotationEnabled) }/>
 			<input type="hidden" name="logs_retention_days" value={ formatJobID(int64(subscription.ServicePresets.Logs.RetentionDays)) }/>
-			<input type="hidden" name="logs_statistics_enabled" value={ formatBool(subscription.ServicePresets.Logs.StatisticsEnabled) }/>
 			<input type="hidden" name="applications_catalog_enabled" value={ formatBool(subscription.ServicePresets.Applications.CatalogEnabled) }/>
 			for _, application := range subscription.ServicePresets.Applications.Allowed {
 				<input type="hidden" name="applications_allowed" value={ application }/>
@@ -2321,7 +2535,7 @@ templ routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView
 			for _, reseller := range data.Resellers {
 				<option value={ formatPlanID(reseller.ID) } selected?={ view.ProviderFilter == formatPlanID(reseller.ID) }>{ reseller.DisplayName }</option>
 			}
-		</select></label><label><span class="np-sr-only">Status</span><select name="status"><option value="">All statuses</option><option value="active" selected?={ view.StatusFilter == "active" }>Active</option><option value="inactive" selected?={ view.StatusFilter == "inactive" }>Inactive</option></select></label><button class="np-secondary-button" type="submit">Filter</button></form>
+		</select></label><label><span class="np-sr-only">Status</span><select name="status"><option value="">All statuses</option><option value="draft" selected?={ view.StatusFilter == "draft" }>Draft</option><option value="active" selected?={ view.StatusFilter == "active" }>Active</option><option value="retired" selected?={ view.StatusFilter == "retired" }>Retired</option></select></label><button class="np-secondary-button" type="submit">Filter</button></form>
 	</section>
 		if planListType(view) == "hosting" {
 			@hostingPlanTable(data, view)
@@ -2336,11 +2550,11 @@ templ routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView
 
 templ hostingPlanTable(data dashboard.Data, view WorkspaceView) {
 	<section class="np-panel np-plan-list-panel"><form method="post" action="/plans/bulk-status" data-np-bulk-form>@csrfInput(view)
-		<div class="np-bulk-bar"><label class="np-check"><input type="checkbox" data-np-bulk-all/>Select all</label><span data-np-bulk-count>0 selected</span><div><button type="submit" name="is_active" value="true" class="np-secondary-button">Activate</button><button type="submit" name="is_active" value="false" class="np-secondary-button">Deactivate</button></div></div>
+		<div class="np-bulk-bar"><label class="np-check"><input type="checkbox" data-np-bulk-all/>Select all</label><span data-np-bulk-count>0 selected</span><div><button type="submit" name="lifecycle_status" value="active" class="np-secondary-button">Activate</button><button type="submit" name="lifecycle_status" value="retired" class="np-secondary-button">Retire</button></div></div>
 		<div class="np-table-wrap"><table class="np-table np-plan-table"><thead><tr><th><span class="np-sr-only">Select</span></th><th>Plan name</th><th>Provider</th><th>Subscriptions</th><th>Resources</th><th>Price</th><th>Sync</th><th>Status</th></tr></thead><tbody>
 			for _, plan := range data.Plans {
 				if planMatchesFilter(plan, view) {
-				<tr><td data-label="Select" class="np-select-cell"><input type="checkbox" name="plan_id" value={ formatPlanID(plan.ID) } data-np-bulk-check aria-label={ "Select " + plan.Name }/></td><td data-label="Plan"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)) }><strong>{ plan.Name }</strong><small>Revision { formatPlanID(int64(plan.Revision)) }</small></a></td><td data-label="Provider">{ planProvider(plan, data.Resellers) }</td><td data-label="Subscriptions">{ formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))) }</td><td data-label="Resources"><span class="np-resource-summary"><strong>{ formatPlanLimitMB(plan.DiskMB) }</strong><small>{ formatPlanLimit(plan.MaxSites) } sites · { formatPlanLimit(plan.MaxDatabases) } databases · { formatPlanLimitMB(plan.BandwidthMB) } traffic</small></span></td><td data-label="Price">{ formatPlanPrice(plan.PriceCents) }</td><td data-label="Sync">@statusPill(planSyncLabel(plan.ID, data.Subscriptions))</td><td data-label="Status">@statusPill(planActiveStatus(plan.IsActive))</td></tr>
+				<tr><td data-label="Select" class="np-select-cell"><input type="checkbox" name="plan_id" value={ formatPlanID(plan.ID) } data-np-bulk-check aria-label={ "Select " + plan.Name }/></td><td data-label="Plan"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)) }><strong>{ plan.Name }</strong><small>Revision { formatPlanID(int64(plan.Revision)) } · { planReadinessLabel(plan) }</small></a></td><td data-label="Provider">{ planProvider(plan, data.Resellers) }</td><td data-label="Subscriptions">{ formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))) }</td><td data-label="Resources"><span class="np-resource-summary"><strong>{ formatPlanLimitMB(plan.DiskMB) }</strong><small>{ formatPlanLimit(plan.MaxSites) } sites · { formatPlanLimit(plan.MaxDatabases) } databases · { formatPlanLimitMB(plan.BandwidthMB) } traffic</small></span></td><td data-label="Price">{ formatPlanPrice(plan.PriceCents) }</td><td data-label="Sync">@statusPill(planSyncLabel(plan.ID, data.Subscriptions))</td><td data-label="Status">@statusPill(planLifecycleStatus(plan))</td></tr>
 				}
 			}
 		</tbody></table></div>
@@ -2426,13 +2640,17 @@ templ routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runti
 			<input type="hidden" name="reseller_plan_id" value={ formatPlanID(plan.ID) }/>
 		}
 		<section class="np-plan-general"><div class="np-plan-general-grid"><label>Plan name<input name="name" value={ plan.Name } required maxlength="120"/></label><label class="np-plan-description">Description<textarea name="description" rows="2">{ plan.Description }</textarea></label><label class="np-switch"><input type="hidden" name="is_active" value="false"/><input type="checkbox" name="is_active" value="true" checked?={ plan.IsActive }/><span>Available for new resellers</span></label></div></section>
-		<nav class="np-plan-editor-tabs" aria-label="Reseller plan properties">@planEditorTabLink(view,"resources","Resources") @planEditorTabLink(view,"permissions","Permissions")</nav>
-		<section class="np-plan-property-panel" data-np-plan-panel="resources" hidden?={ planEditorTab(view) != "resources" }><div class="np-property-head"><h2>Resources</h2><p>These are provider-wide allocation ceilings across every downstream customer. Zero disables a resource; Unlimited removes the numeric ceiling.</p></div><div class="np-plan-field-grid">@planLimitField("Customers","max_customers",plan.MaxCustomers,"count") @planLimitField("Subscriptions","max_subscriptions",plan.MaxSubscriptions,"count") @planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Database users","max_database_users",plan.HostingPolicy.Resources.MaxDatabaseUsers,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("Mail aliases","max_mail_aliases",plan.HostingPolicy.Resources.MaxMailAliases,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Scheduled tasks","max_scheduled_tasks",plan.HostingPolicy.Resources.MaxScheduledTasks,"count") @planLimitField("Applications","max_applications",plan.HostingPolicy.Resources.MaxApplications,"count") @planLimitField("Container storage","container_storage_mb",plan.HostingPolicy.Resources.ContainerStorageMB,"MB") @planLimitField("PHP worker processes","max_php_workers",plan.HostingPolicy.Resources.MaxPHPWorkers,"count") @planLimitField("PHP releases","max_php_releases",plan.HostingPolicy.Resources.MaxPHPReleases,"count") @planLimitField("Valkey memory","valkey_memory_mb",plan.HostingPolicy.Resources.ValkeyMemoryMB,"MB") @planLimitField("CPU quota","cpu_percent",plan.HostingPolicy.Resources.CPUPercent,"percent") @planLimitField("Memory","memory_limit_mb",plan.HostingPolicy.Resources.MemoryMB,"MB") @planLimitField("I/O read","io_read_mbps",plan.HostingPolicy.Resources.IOReadMBPS,"MBps") @planLimitField("I/O write","io_write_mbps",plan.HostingPolicy.Resources.IOWriteMBPS,"MBps") @planLimitField("Processes","max_tasks",plan.HostingPolicy.Resources.MaxTasks,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB")</div></section>
-		<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ planEditorTab(view) != "permissions" }><div class="np-property-head"><h2>Permissions</h2><p>Resellers may grant only capabilities included in this allocation.</p></div><div class="np-permission-list">@planToggle("allow_custom_plans","Create custom subscription snapshots",plan.AllowCustomPlans) @planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",plan.AllowTLS) @planToggle("allow_backups","Backup and restore management",plan.AllowBackups) @planToggle("allow_php_settings","PHP settings management",plan.AllowPHPSettings) @planToggle("allow_composer","Composer",plan.HostingPolicy.Permissions.Composer) @planToggle("allow_composer_code_execution","Composer code execution",plan.HostingPolicy.Permissions.ComposerCodeExecution) @planToggle("allow_managed_php_deployments","Managed PHP deployments",plan.HostingPolicy.Permissions.ManagedPHPDeployments) @planToggle("allow_php_workers","PHP workers",plan.HostingPolicy.Permissions.PHPWorkers) @planToggle("allow_ssh","SSH access",plan.AllowSSH) @planToggle("allow_sftp","SFTP identities",plan.HostingPolicy.Permissions.SFTP) @planToggle("allow_ftps","TLS-only FTPS",plan.HostingPolicy.Permissions.FTPS) @planToggle("allow_logs","Domain logs",plan.HostingPolicy.Permissions.Logs) @planToggle("allow_git","Git deployment",plan.HostingPolicy.Permissions.Git) @planToggle("allow_staging","Staging workflows",plan.HostingPolicy.Permissions.Staging) @planToggle("allow_valkey","Valkey cache",plan.HostingPolicy.Permissions.Valkey) @planToggle("allow_scheduled_tasks","Scheduled tasks",plan.HostingPolicy.Permissions.ScheduledTasks) @planToggle("allow_applications","Application catalog",plan.HostingPolicy.Permissions.Applications) @planToggle("allow_custom_oci_images","Custom OCI images",plan.HostingPolicy.Permissions.CustomOCIImages) @planToggle("allow_application_egress","Application network egress",plan.HostingPolicy.Permissions.ApplicationEgress)</div><p class="np-form-help">Zero disables workers or release retention. Unlimited may be delegated only when the provider ceiling is also unlimited.</p><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">
+		<nav class="np-plan-editor-tabs" aria-label="Reseller plan properties"><a href={ templ.SafeURL(planTabURL(view,"resources")) } class={ resellerPlanTabClass(view,"resources") } data-np-plan-tab="resources">Resources</a><a href={ templ.SafeURL(planTabURL(view,"permissions")) } class={ resellerPlanTabClass(view,"permissions") } data-np-plan-tab="permissions">Permissions</a></nav>
+		<section class="np-plan-property-panel" data-np-plan-panel="resources" hidden?={ resellerPlanEditorTab(view) != "resources" }><div class="np-property-head"><h2>Resources</h2><p>These are provider-wide allocation ceilings across every downstream customer. Zero disables a resource; Unlimited removes the numeric ceiling.</p></div><div class="np-plan-field-grid">@planLimitField("Customers","max_customers",plan.MaxCustomers,"count") @planLimitField("Subscriptions","max_subscriptions",plan.MaxSubscriptions,"count") @planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("WordPress sites","max_wordpress_sites",plan.HostingPolicy.Resources.MaxWordPressSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Database users","max_database_users",plan.HostingPolicy.Resources.MaxDatabaseUsers,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("Mail aliases","max_mail_aliases",plan.HostingPolicy.Resources.MaxMailAliases,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Scheduled tasks","max_scheduled_tasks",plan.HostingPolicy.Resources.MaxScheduledTasks,"count") @planLimitField("Applications","max_applications",plan.HostingPolicy.Resources.MaxApplications,"count") @planLimitField("Container storage","container_storage_mb",plan.HostingPolicy.Resources.ContainerStorageMB,"MB") @planLimitField("PHP worker processes","max_php_workers",plan.HostingPolicy.Resources.MaxPHPWorkers,"count") @planLimitField("PHP releases","max_php_releases",plan.HostingPolicy.Resources.MaxPHPReleases,"count") @planLimitField("Valkey memory","valkey_memory_mb",plan.HostingPolicy.Resources.ValkeyMemoryMB,"MB") @planLimitField("CPU quota","cpu_percent",plan.HostingPolicy.Resources.CPUPercent,"percent") @planLimitField("Memory","memory_limit_mb",plan.HostingPolicy.Resources.MemoryMB,"MB") @planLimitField("I/O read","io_read_mbps",plan.HostingPolicy.Resources.IOReadMBPS,"MBps") @planLimitField("I/O write","io_write_mbps",plan.HostingPolicy.Resources.IOWriteMBPS,"MBps") @planLimitField("Processes","max_tasks",plan.HostingPolicy.Resources.MaxTasks,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB")</div></section>
+		<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ resellerPlanEditorTab(view) != "permissions" }><div class="np-property-head"><h2>Permissions</h2><p>Resellers may grant only capabilities included in this allocation.</p></div><div class="np-permission-list">@planToggle("allow_custom_plans","Create custom subscription snapshots",plan.AllowCustomPlans) @planToggle("allow_wordpress_toolkit","WordPress Toolkit",plan.HostingPolicy.Permissions.WordPressToolkit) @planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",plan.AllowTLS) @planToggle("allow_backups","Backup and restore management",plan.AllowBackups) @planToggle("allow_php_settings","PHP settings management",plan.AllowPHPSettings) @planToggle("allow_composer","Composer",plan.HostingPolicy.Permissions.Composer) @planToggle("allow_composer_code_execution","Composer code execution",plan.HostingPolicy.Permissions.ComposerCodeExecution) @planToggle("allow_managed_php_deployments","Managed PHP deployments",plan.HostingPolicy.Permissions.ManagedPHPDeployments) @planToggle("allow_php_workers","PHP workers",plan.HostingPolicy.Permissions.PHPWorkers) @planToggle("allow_ssh","SSH access",plan.AllowSSH) @planToggle("allow_sftp","SFTP identities",plan.HostingPolicy.Permissions.SFTP) @planToggle("allow_ftps","TLS-only FTPS",plan.HostingPolicy.Permissions.FTPS) @planToggle("allow_logs","Domain logs",plan.HostingPolicy.Permissions.Logs) @planToggle("allow_git","Git deployment",plan.HostingPolicy.Permissions.Git) @planToggle("allow_staging","Staging workflows",plan.HostingPolicy.Permissions.Staging) @planToggle("allow_valkey","Valkey cache",plan.HostingPolicy.Permissions.Valkey) @planToggle("allow_scheduled_tasks","Scheduled tasks",plan.HostingPolicy.Permissions.ScheduledTasks) @planToggle("allow_applications","Application catalog",plan.HostingPolicy.Permissions.Applications) @planToggle("allow_custom_oci_images","Custom OCI images",plan.HostingPolicy.Permissions.CustomOCIImages) @planToggle("allow_application_egress","Application network egress",plan.HostingPolicy.Permissions.ApplicationEgress)</div><p class="np-form-help">Zero disables workers, releases, or WordPress sites. Unlimited may be delegated only when the provider ceiling is also unlimited.</p><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">
 			for _, version := range capabilities.PHPVersions {
 				<label class="np-check"><input type="checkbox" name="php_versions" value={ version } checked?={ stringInSlice(plan.HostingPolicy.PHP.AllowedVersions,version) }/>{ version }</label>
 			}
-		</div></fieldset><fieldset class="np-field-group"><legend>Operational container runtime</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="oci" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"oci") }/>OCI containers</label></div><p class="np-form-help">OCI remains a separate Containers product. Classic PHP is operational; resellers may grant Managed PHP only within the Composer, worker, release, and provider ceilings above. WordPress Toolkit, Node.js, and Python are not implemented.</p></fieldset><label>Allowed registries<input name="allowed_registries" value={ joinStrings(plan.HostingPolicy.Applications.AllowedRegistries) } placeholder="docker.io,ghcr.io"/></label></section>
+		</div></fieldset><fieldset class="np-field-group"><legend>Operational container runtime</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="oci" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"oci") }/>OCI containers</label></div><p class="np-form-help">OCI remains a separate Containers product. Classic and Managed PHP are operational; WordPress Toolkit may be delegated within its explicit count and provider ceilings. Node.js and Python adapters remain unavailable.</p></fieldset><label>Allowed registries<input name="allowed_registries" value={ joinStrings(plan.HostingPolicy.Applications.AllowedRegistries) } placeholder="docker.io,ghcr.io"/></label></section>
+		<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ resellerPlanEditorTab(view) != "permissions" }>
+			<h2>Web Statistics</h2>
+			<div class="np-plan-field-grid">@statisticsEngineSelect(plan.HostingPolicy.Logs) @planToggle("allow_web_statistics", "Delegate per-site statistics changes", plan.HostingPolicy.Permissions.WebStatistics)</div>
+		</section>
 		<div class="np-plan-action-bar"><div><strong>{ resellerPlanEditorSaveTitle(plan) }</strong><span>Existing reseller allocations are validated before this change is committed.</span></div><div><a class="np-secondary-button" href="/service-plans?type=reseller">Cancel</a><button type="submit">{ resellerPlanEditorSubmitLabel(plan) }</button></div></div>
 	</form>
 }
@@ -2493,7 +2711,7 @@ templ routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspa
 		</div>
 	}
 	if plan.ID > 0 {
-		<section class="np-plan-summary"><div><span>Status</span>@statusPill(planActiveStatus(plan.IsActive))</div><div><span>Revision</span><strong>{ formatPlanID(int64(plan.Revision)) }</strong></div><div><span>Subscriptions</span><strong>{ formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))) }</strong></div><div><span>Synchronization</span><strong>{ planSyncLabel(plan.ID, data.Subscriptions) }</strong></div><div><span>Provider</span><strong>{ planProvider(plan, data.Resellers) }</strong></div></section>
+		<section class="np-plan-summary"><div><span>Lifecycle</span>@statusPill(planLifecycleStatus(plan))</div><div><span>Readiness</span><strong data-np-plan-readiness>{ planReadinessLabel(plan) }</strong></div><div><span>Revision</span><strong>{ formatPlanID(int64(plan.Revision)) }</strong></div><div><span>Subscriptions</span><strong>{ formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))) }</strong></div><div><span>Synchronization</span><strong>{ planSyncLabel(plan.ID, data.Subscriptions) }</strong></div><div><span>Provider</span><strong>{ planProvider(plan, data.Resellers) }</strong></div></section>
 	}
 	<form class="np-plan-editor" method="post" action={ templ.SafeURL(planEditorAction(addon)) } data-np-plan-editor data-np-plan-id={ formatPlanID(plan.ID) } data-np-dirty-guard>
 		@csrfInput(view)
@@ -2504,19 +2722,34 @@ templ routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspa
 				<input type="hidden" name="plan_id" value={ formatPlanID(plan.ID) }/>
 			}
 		}
-		<section class="np-plan-general"><div class="np-plan-general-grid"><label>{ planEditorNameLabel(addon) }<input name="name" value={ plan.Name } required maxlength="120"/></label>
-			if !addon {
-				<label>Price, cents<input type="number" min="0" name="price_cents" value={ formatPlanPriceCents(plan.PriceCents) }/></label>
-			}
-			<label class="np-plan-description">Description<textarea name="description" rows="2">{ plan.Description }</textarea></label><label class="np-switch"><input type="hidden" name="is_active" value="false"/><input type="checkbox" name="is_active" value="true" checked?={ plan.IsActive }/><span>Available for new subscriptions</span></label></div></section>
 		<nav class="np-plan-editor-tabs" aria-label="Plan properties">
-			@planEditorTabLink(view,"resources","Resources") @planEditorTabLink(view,"permissions","Permissions") @planEditorTabLink(view,"hosting","Hosting") @planEditorTabLink(view,"php","PHP Settings") @planEditorTabLink(view,"mail","Mail") @planEditorTabLink(view,"dns","DNS") @planEditorTabLink(view,"performance","Performance") @planEditorTabLink(view,"logs","Logs & Statistics") @planEditorTabLink(view,"applications","Applications")
+			@planEditorTabLink(view,"overview","Overview") @planEditorTabLink(view,"resources","Resources") @planEditorTabLink(view,"services","Services") @planEditorTabLink(view,"customer-permissions","Customer Permissions") @planEditorTabLink(view,"defaults","Defaults") @planEditorTabLink(view,"advanced","Advanced")
 		</nav>
-		<section class="np-plan-property-panel" data-np-plan-panel="resources" hidden?={ planEditorTab(view) != "resources" }><div class="np-property-head"><h2>Resources</h2><p>Set hard allocations, warning thresholds and overuse behavior.</p></div>
+		<section class="np-plan-property-panel" data-np-plan-panel="overview" hidden?={ planEditorTab(view) != "overview" }><div class="np-property-head"><div><h2>Plan contract</h2><p>Name the offer, control assignment availability, and record why this revision exists.</p></div><span class="np-contract-badge" data-np-enforcement="service_permission">Lifecycle controlled</span></div><div class="np-plan-general-grid"><label>{ planEditorNameLabel(addon) }<input name="name" value={ plan.Name } required maxlength="120"/></label>
+			if !addon {
+				<label>Reference price, cents<input type="number" min="0" name="price_cents" value={ formatPlanPriceCents(plan.PriceCents) }/><small>Catalog reference only. Billing is not connected.</small></label>
+			}
+			<label class="np-plan-description">Description<textarea name="description" rows="3">{ plan.Description }</textarea></label>
+			if addon {
+				<label class="np-switch"><input type="hidden" name="is_active" value="false"/><input type="checkbox" name="is_active" value="true" checked?={ plan.IsActive }/><span>Available for subscriptions</span></label>
+			} else {
+				<label>Lifecycle<select name="lifecycle_status" required><option value="draft" selected?={ planLifecycleStatus(plan) == "draft" }>Draft</option><option value="active" selected?={ planLifecycleStatus(plan) == "active" }>Active</option><option value="retired" selected?={ planLifecycleStatus(plan) == "retired" }>Retired</option></select><small>Only active plans can be assigned. Activation validates live server capabilities.</small></label>
+				<label class="np-plan-description">Revision reason<input name="change_reason" value={ plan.ChangeReason } required?={ plan.ID > 0 } placeholder="Why this contract is changing"/><small>Stored with the immutable revision history.</small></label>
+			}
+		</div>
+		if !addon {
+			<div class="np-plan-readiness" data-np-plan-readiness><div><strong>{ planReadinessLabel(plan) }</strong><span>Runtime readiness</span></div><p>Drafts may describe future products. Active plans must be deliverable by this server before they can be assigned.</p>
+			if plan.ReadinessError != "" {
+				<p class="np-gate is-blocked">{ plan.ReadinessError }</p>
+			}
+			</div>
+		}
+		</section>
+		<section class="np-plan-property-panel" data-np-plan-panel="resources" hidden?={ planEditorTab(view) != "resources" }><div class="np-property-head"><div><h2>Resources</h2><p>Set hard allocations, measured thresholds, and provisioning defaults. Zero disables a resource; Unlimited removes its numeric ceiling.</p></div></div><div class="np-contract-legend"><span data-np-enforcement="hard_limit">Hard limit</span><span data-np-enforcement="measured_limit">Measured usage</span><span data-np-enforcement="creation_default">Provisioning default</span><span data-np-enforcement="stored_only">Stored setting</span></div><p class="np-plan-caveat">Disk and traffic enforcement requires a fresh complete usage scan. Subscription disk usage currently includes site homes, databases, and backups; system mail and journal storage are reported separately until attribution is complete.</p>
 			if !addon {
 				<fieldset class="np-field-group"><legend>Overuse policy</legend><div class="np-overuse-options">@overuseOption(plan,"block","Overuse is not allowed") @overuseOption(plan,"normal","Overuse is allowed") @overuseOption(plan,"notify","Allow and notify") @overuseOption(plan,"not_suspend","Disk and traffic only") @overuseOption(plan,"not_suspend_notify","Disk and traffic with notifications")</div></fieldset>
 			}
-				<div class="np-plan-field-grid">@planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB") @planLimitField("Backup retention","backup_retention_days",plan.BackupRetentionDays,"days")
+				<div class="np-plan-field-grid">@planLimitField("Disk space","disk_mb",plan.DiskMB,"MB") @planLimitField("Monthly traffic","bandwidth_mb",plan.BandwidthMB,"MB") @planLimitField("Websites","max_sites",plan.MaxSites,"count") @planLimitField("WordPress sites","max_wordpress_sites",plan.HostingPolicy.Resources.MaxWordPressSites,"count") @planLimitField("Subdomains","max_subdomains",plan.MaxSubdomains,"count") @planLimitField("Domain aliases","max_domain_aliases",plan.MaxDomainAliases,"count") @planLimitField("Databases","max_databases",plan.MaxDatabases,"count") @planLimitField("Mailboxes","max_mailboxes",plan.MaxMailboxes,"count") @planLimitField("FTP accounts","max_ftp_accounts",plan.MaxFTPAccounts,"count") @planLimitField("Backups","max_backups",plan.MaxBackups,"count") @planLimitField("Backup storage","backup_storage_mb",plan.BackupStorageMB,"MB") @planLimitField("Backup retention","backup_retention_days",plan.BackupRetentionDays,"days")
 				if !addon {
 					@planLimitField("Subscription validity","validity_days",plan.ValidityDays,"days")
 				}
@@ -2528,29 +2761,42 @@ templ routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspa
 				<div class="np-plan-field-grid np-threshold-grid"><label>Disk warning threshold<div class="np-input-suffix"><input type="number" name="disk_warning_percent" min="1" max="100" value={ formatPlanID(int64(plan.DiskWarningPercent)) } required/><span>%</span></div></label><label>Traffic warning threshold<div class="np-input-suffix"><input type="number" name="traffic_warning_percent" min="1" max="100" value={ formatPlanID(int64(plan.TrafficWarningPercent)) } required/><span>%</span></div></label></div>
 			}
 		</section>
-			<section class="np-plan-property-panel" data-np-plan-panel="permissions" hidden?={ planEditorTab(view) != "permissions" }><div class="np-property-head"><h2>Permissions</h2><p>Choose which hosting tools the subscription may use.</p></div><div class="np-permission-list">@planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificate management",plan.AllowTLS) @planToggle("allow_backups","Backup and restore management",plan.AllowBackups) @planToggle("allow_php_settings","PHP version and settings management",plan.AllowPHPSettings) @planToggle("allow_ssh","SSH access",plan.AllowSSH) @planToggle("allow_sftp","SFTP identities",plan.HostingPolicy.Permissions.SFTP) @planToggle("allow_ftps","TLS-only FTPS",plan.HostingPolicy.Permissions.FTPS) @planToggle("allow_logs","Domain log browser",plan.HostingPolicy.Permissions.Logs) @planToggle("allow_git","Git deployment",plan.HostingPolicy.Permissions.Git) @planToggle("allow_staging","Staging copy and promote",plan.HostingPolicy.Permissions.Staging) @planToggle("allow_valkey","Valkey cache",plan.HostingPolicy.Permissions.Valkey) @planToggle("allow_scheduled_tasks","Scheduled tasks",plan.HostingPolicy.Permissions.ScheduledTasks) @planToggle("allow_mail","Mail hosting",plan.HostingPolicy.Permissions.Mail) @planToggle("allow_cgi","CGI execution",plan.HostingPolicy.Permissions.CGI) @planToggle("allow_applications","Applications",plan.HostingPolicy.Permissions.Applications) @planToggle("allow_custom_oci_images","Custom OCI images",plan.HostingPolicy.Permissions.CustomOCIImages) @planToggle("allow_application_egress","Application network egress",plan.HostingPolicy.Permissions.ApplicationEgress)</div><div class="np-plan-field-grid"><label>Shell mode<select name="shell_mode"><option value="disabled" selected?={ plan.HostingPolicy.Access.ShellMode == "disabled" }>Disabled</option><option value="sftp" selected?={ plan.HostingPolicy.Access.ShellMode == "sftp" }>SFTP only</option><option value="nspawn" selected?={ plan.HostingPolicy.Access.ShellMode == "nspawn" }>Isolated shell</option></select></label><label>nspawn image<input name="nspawn_image" value={ plan.HostingPolicy.Access.NspawnImage }/></label><label>SSH idle timeout<input type="number" min="0" name="ssh_idle_timeout_minutes" value={ formatPlanID(int64(plan.HostingPolicy.Access.SSHIdleTimeoutMins)) }/></label></div></section>
-		<section class="np-plan-property-panel" data-np-plan-panel="hosting" hidden?={ planEditorTab(view) != "hosting" }><div class="np-property-head"><h2>Hosting parameters</h2><p>Configure the default web-hosting runtime.</p></div>
+		<section class="np-plan-property-panel" data-np-plan-panel="services" hidden?={ planEditorTab(view) != "services" }><div class="np-property-head"><div><h2>Services</h2><p>Choose which hosted services this subscription may provision.</p></div><span class="np-contract-badge" data-np-enforcement="service_permission">Provisioning gates</span></div><div class="np-permission-list">@planToggle("hosting_enabled","Web hosting",plan.HostingEnabled) @planToggle("allow_wordpress_toolkit","WordPress Toolkit",plan.HostingPolicy.Permissions.WordPressToolkit) @planToggle("allow_dns","DNS zone management",plan.AllowDNS) @planToggle("allow_tls","SSL/TLS certificates",plan.AllowTLS) @planToggle("allow_backups","Backups and restores",plan.AllowBackups) @planToggle("allow_sftp","SFTP identities",plan.HostingPolicy.Permissions.SFTP) @planToggle("allow_ftps","TLS-only FTPS",plan.HostingPolicy.Permissions.FTPS) @planToggle("allow_logs","Domain log browser",plan.HostingPolicy.Permissions.Logs) @planToggle("allow_git","Git deployment",plan.HostingPolicy.Permissions.Git) @planToggle("allow_staging","Staging workflows",plan.HostingPolicy.Permissions.Staging) @planToggle("allow_valkey","Valkey cache",plan.HostingPolicy.Permissions.Valkey) @planToggle("allow_scheduled_tasks","Scheduled tasks",plan.HostingPolicy.Permissions.ScheduledTasks) @planToggle("allow_mail","Mail hosting",plan.HostingPolicy.Permissions.Mail) @planToggle("allow_cgi","CGI execution",plan.HostingPolicy.Permissions.CGI) @planToggle("allow_applications","OCI containers",plan.HostingPolicy.Permissions.Applications) @planToggle("allow_application_egress","Application egress",plan.HostingPolicy.Permissions.ApplicationEgress) @planToggle("allow_composer","Composer",plan.HostingPolicy.Permissions.Composer) @planToggle("allow_managed_php_deployments","Managed PHP deployments",plan.HostingPolicy.Permissions.ManagedPHPDeployments) @planToggle("allow_php_workers","PHP workers",plan.HostingPolicy.Permissions.PHPWorkers)</div></section>
+		<section class="np-plan-property-panel" data-np-plan-panel="customer-permissions" hidden?={ planEditorTab(view) != "customer-permissions" }><div class="np-property-head"><div><h2>Customer Permissions</h2><p>Control which security-sensitive settings customers may change themselves.</p></div><span class="np-contract-badge" data-np-enforcement="management_permission">Management authority</span></div><div class="np-permission-list">@planToggle("allow_php_settings","Change PHP version and settings",plan.AllowPHPSettings) @planToggle("allow_ssh","SSH access",plan.AllowSSH) @planToggle("allow_custom_oci_images","Use custom OCI images",plan.HostingPolicy.Permissions.CustomOCIImages) @planToggle("allow_composer_code_execution","Composer code execution (plugins and scripts)",plan.HostingPolicy.Permissions.ComposerCodeExecution)</div><div class="np-plan-field-grid"><label>Shell mode<select name="shell_mode"><option value="disabled" selected?={ plan.HostingPolicy.Access.ShellMode == "disabled" }>Disabled</option><option value="sftp" selected?={ plan.HostingPolicy.Access.ShellMode == "sftp" }>SFTP only</option><option value="nspawn" selected?={ plan.HostingPolicy.Access.ShellMode == "nspawn" }>Isolated shell</option></select></label><label>nspawn image<input name="nspawn_image" value={ plan.HostingPolicy.Access.NspawnImage }/><small>Stored for a future isolated-shell runtime; not currently enforced.</small></label><label>SSH idle timeout<input type="number" min="0" name="ssh_idle_timeout_minutes" value={ formatPlanID(int64(plan.HostingPolicy.Access.SSHIdleTimeoutMins)) }/></label></div></section>
+		<section class="np-plan-property-panel" data-np-plan-panel="defaults" hidden?={ planEditorTab(view) != "defaults" }><div class="np-property-head"><div><h2>Hosting defaults</h2><p>Values copied into new domain configuration. Customers may override only where the plan grants permission.</p></div><span class="np-contract-badge" data-np-enforcement="creation_default">Inherited defaults</span></div>
 			if !addon && len(data.Capabilities.PHPVersions) == 0 {
 				<p class="np-gate is-blocked">No PHP-FPM runtime was reported by the agent. Install PHP-FPM before enabling web hosting in this plan.</p>
 			}
 			<div class="np-plan-field-grid">
 				if !addon {
-					@planToggle("hosting_enabled","Web hosting enabled",plan.HostingEnabled)<label>Web server<select name="hosting_web_server"><option value="nginx" selected>Nginx</option></select></label><label>Preferred domain<select name="preferred_domain"><option value="none" selected?={ plan.Presets.Hosting.PreferredDomain == "none" }>No preference</option><option value="www" selected?={ plan.Presets.Hosting.PreferredDomain == "www" }>www</option><option value="non-www" selected?={ plan.Presets.Hosting.PreferredDomain == "non-www" }>non-www</option></select></label><label>Default PHP version<select name="default_php_version">@phpVersionOptions(plan,data.Capabilities)</select></label>
+					<label>Web server<select name="hosting_web_server"><option value="nginx" selected>Nginx</option></select></label><label>Preferred domain<select name="preferred_domain"><option value="none" selected?={ plan.Presets.Hosting.PreferredDomain == "none" }>No preference</option><option value="www" selected?={ plan.Presets.Hosting.PreferredDomain == "www" }>www</option><option value="non-www" selected?={ plan.Presets.Hosting.PreferredDomain == "non-www" }>non-www</option></select></label><label>Default PHP version<select name="default_php_version">@phpVersionOptions(plan,data.Capabilities)</select></label>
 				}
 				@planLimitField("Per-site disk quota","site_disk_quota_mb",plan.SiteDiskQuotaMB,"MB")
 			</div></section>
-			<section class="np-plan-property-panel" data-np-plan-panel="php" hidden?={ planEditorTab(view) != "php" }><div class="np-property-head"><h2>PHP Settings</h2><p>Set allowed runtimes, dedicated PHP-FPM defaults, and production deployment capabilities. Zero disables a limit; Unlimited removes its numeric ceiling.</p></div><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">@phpVersionChecks(plan,data.Capabilities)</div></fieldset><div class="np-plan-field-grid">@planLimitField("PHP-FPM max children","php_max_children",plan.PHPFPMMaxChildren,"count") @planLimitField("PHP memory","php_memory_mb",plan.PHPMemoryMB,"MB") @planLimitField("PHP worker processes","max_php_workers",plan.HostingPolicy.Resources.MaxPHPWorkers,"count") @planLimitField("PHP releases","max_php_releases",plan.HostingPolicy.Resources.MaxPHPReleases,"count")<label>FPM mode<select name="php_fpm_mode"><option value="ondemand" selected?={ plan.HostingPolicy.PHP.FPMMode=="ondemand" }>On demand</option><option value="dynamic" selected?={ plan.HostingPolicy.PHP.FPMMode=="dynamic" }>Dynamic</option></select></label><label>Max execution time<input type="number" min="0" name="php_max_execution_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)) }/></label><label>Max input time<input type="number" min="0" name="php_max_input_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)) }/></label><label>POST max size, MB<input type="number" min="0" name="php_post_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.PostMaxMB)) }/></label><label>Upload max size, MB<input type="number" min="0" name="php_upload_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)) }/></label><label>FPM max requests<input type="number" min="0" name="php_fpm_max_requests" value={ formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)) }/></label><label>FPM idle timeout<input type="number" min="0" name="php_fpm_idle_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.PHP.FPMIdleTimeoutSecs)) }/></label><label>Request termination timeout<input type="number" min="0" name="php_request_terminate_seconds" value={ formatPlanID(int64(plan.HostingPolicy.PHP.RequestTerminateSecs)) }/></label><label>OPcache memory, MB<input type="number" min="0" name="php_opcache_memory_mb" value={ formatPlanID(int64(plan.HostingPolicy.PHP.OPcacheMemoryMB)) }/></label></div><div class="np-permission-list">@planToggle("allow_composer","Composer",plan.HostingPolicy.Permissions.Composer) @planToggle("allow_composer_code_execution","Composer code execution",plan.HostingPolicy.Permissions.ComposerCodeExecution) @planToggle("allow_managed_php_deployments","Managed PHP deployments",plan.HostingPolicy.Permissions.ManagedPHPDeployments) @planToggle("allow_php_workers","PHP workers",plan.HostingPolicy.Permissions.PHPWorkers) @planToggle("php_log_errors","Log PHP errors",plan.Presets.PHP.LogErrors) @planToggle("php_display_errors","Display PHP errors",plan.Presets.PHP.DisplayErrors) @planToggle("php_allow_url_fopen","Allow URL fopen",plan.Presets.PHP.AllowURLFOpen) @planToggle("php_opcache_enabled","OPcache",plan.HostingPolicy.PHP.OPcacheEnabled) @planToggle("php_exec_enabled","PHP process execution",plan.HostingPolicy.PHP.ExecEnabled)</div></section>
+			<section class="np-plan-property-panel" data-np-plan-panel="defaults" hidden?={ planEditorTab(view) != "defaults" }><div class="np-property-head"><div><h2>PHP defaults</h2><p>Set allowed runtimes, dedicated PHP-FPM defaults, and inherited directives.</p></div><span class="np-contract-badge" data-np-enforcement="creation_default">Inherited defaults</span></div><fieldset class="np-field-group"><legend>Allowed PHP versions</legend><div class="np-checkbox-grid">@phpVersionChecks(plan,data.Capabilities)</div></fieldset><div class="np-plan-field-grid">@planLimitField("PHP-FPM max children","php_max_children",plan.PHPFPMMaxChildren,"count") @planLimitField("PHP memory","php_memory_mb",plan.PHPMemoryMB,"MB") @planLimitField("PHP worker processes","max_php_workers",plan.HostingPolicy.Resources.MaxPHPWorkers,"count") @planLimitField("PHP releases","max_php_releases",plan.HostingPolicy.Resources.MaxPHPReleases,"count")<label>FPM mode<select name="php_fpm_mode"><option value="ondemand" selected?={ plan.HostingPolicy.PHP.FPMMode=="ondemand" }>On demand</option><option value="dynamic" selected?={ plan.HostingPolicy.PHP.FPMMode=="dynamic" }>Dynamic</option></select></label><label>Max execution time<input type="number" min="0" name="php_max_execution_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)) }/></label><label>Max input time<input type="number" min="0" name="php_max_input_seconds" value={ formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)) }/></label><label>POST max size, MB<input type="number" min="0" name="php_post_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.PostMaxMB)) }/></label><label>Upload max size, MB<input type="number" min="0" name="php_upload_max_mb" value={ formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)) }/></label><label>FPM max requests<input type="number" min="0" name="php_fpm_max_requests" value={ formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)) }/></label><label>FPM idle timeout<input type="number" min="0" name="php_fpm_idle_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.PHP.FPMIdleTimeoutSecs)) }/></label><label>Request termination timeout<input type="number" min="0" name="php_request_terminate_seconds" value={ formatPlanID(int64(plan.HostingPolicy.PHP.RequestTerminateSecs)) }/></label><label>OPcache memory, MB<input type="number" min="0" name="php_opcache_memory_mb" value={ formatPlanID(int64(plan.HostingPolicy.PHP.OPcacheMemoryMB)) }/></label></div><div class="np-permission-list">@planToggle("php_log_errors","Log PHP errors",plan.Presets.PHP.LogErrors) @planToggle("php_display_errors","Display PHP errors",plan.Presets.PHP.DisplayErrors) @planToggle("php_allow_url_fopen","Allow URL fopen",plan.Presets.PHP.AllowURLFOpen) @planToggle("php_opcache_enabled","OPcache",plan.HostingPolicy.PHP.OPcacheEnabled) @planToggle("php_exec_enabled","PHP process execution",plan.HostingPolicy.PHP.ExecEnabled)</div></section>
 		@planPresetPanels(plan,view)
 		<div class="np-plan-action-bar"><div><strong>{ planEditorSaveTitle(plan,addon) }</strong><span>{ planEditorSaveHint(plan,addon) }</span></div><div><a class="np-secondary-button" href={ templ.SafeURL(planListBackURL(addon)) }>Cancel</a><button type="submit" data-np-plan-submit>{ planEditorSubmitLabel(plan,addon) }</button></div></div>
 	</form>
-	if !addon && plan.ID > 0 {
+	if !addon {
 		@planPreviewDialog(plan,view)
+	}
+	if !addon && plan.ID > 0 {
+		<section class="np-panel np-plan-revision-history"><div class="np-panel-title"><div><h2>Revision history</h2><span class="np-muted">Immutable plan contract records</span></div></div><div class="np-object-list">
+			if planRevisionCount(data.PlanRevisions, plan.ID) == 0 {
+				<p class="np-empty">No revision history is available yet.</p>
+			}
+			for _, revision := range data.PlanRevisions {
+				if revision.PlanID == plan.ID {
+					<div class="np-object-row np-plan-revision-row"><span><strong>Revision { formatPlanID(int64(revision.Revision)) }</strong><small>{ revision.ChangeReason }</small></span><span><strong>{ planRevisionActor(revision) }</strong><small>{ formatTime(revision.CreatedAt) }</small></span>@statusPill(string(revision.LifecycleStatus))</div>
+				}
+			}
+		</div></section>
 	}
 }
 
 templ planEditorTabLink(view WorkspaceView, tab string, label string) { <a href={ templ.SafeURL(planTabURL(view,tab)) } class={ planTabClass(view,tab) } data-np-plan-tab={ tab }>{ label }</a> }
 
-templ planLimitField(label string, name string, value int, unit string) { <div class="np-limit-field"><span>{ label }</span><span class="np-limit-controls"><input type="number" min="0" name={ name } value={ planEditorLimitDisplayValue(value,unit) } aria-label={ label } required/>
+templ planLimitField(label string, name string, value int, unit string) { <div class="np-limit-field" data-np-enforcement={ planInputEnforcement(name) }><span>{ label }<small class="np-contract-badge" data-np-enforcement={ planInputEnforcement(name) }>{ planEnforcementLabel(name) }</small></span><span class="np-limit-controls"><input type="number" min="0" name={ name } value={ planEditorLimitDisplayValue(value,unit) } aria-label={ label } required/>
 	if unit == "MB" {
 		<select name={ name + "_unit" } aria-label={ label + " unit" }><option value="MB" selected?={ planEditorLimitUnit(value) == "MB" }>MB</option><option value="GB" selected?={ planEditorLimitUnit(value) == "GB" }>GB</option><option value="TB" selected?={ planEditorLimitUnit(value) == "TB" }>TB</option></select>
 	} else {
@@ -2574,16 +2820,26 @@ templ phpVersionChecks(plan controlquota.Plan, capabilities types.RuntimeCapabil
 }
 
 templ planPresetPanels(plan controlquota.Plan, view WorkspaceView) {
-	<section class="np-plan-property-panel" data-np-plan-panel="mail" hidden?={ planEditorTab(view) != "mail" }><div class="np-property-head"><h2>Mail</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("mail_webmail_enabled","Webmail enabled",plan.Presets.Mail.WebmailEnabled) @planToggle("mail_spam_filter","Spam filtering",plan.Presets.Mail.SpamFilter) @planToggle("mail_dkim","DKIM signing",plan.Presets.Mail.DKIM) @planToggle("mail_autoresponders","Autoresponders",plan.HostingPolicy.Mail.Autoresponders) @planToggle("mail_catch_all","Catch-all mailbox",plan.HostingPolicy.Mail.CatchAll)</div><div class="np-plan-field-grid">@planLimitField("Mailbox quota","mailbox_quota_mb",plan.HostingPolicy.Mail.MailboxQuotaMB,"MB")<label>DMARC policy<select name="mail_dmarc_policy"><option value="none" selected?={ plan.Presets.Mail.DMARCPolicy == "none" }>None</option><option value="quarantine" selected?={ plan.Presets.Mail.DMARCPolicy == "quarantine" }>Quarantine</option><option value="reject" selected?={ plan.Presets.Mail.DMARCPolicy == "reject" }>Reject</option></select></label></div></section>
-	<section class="np-plan-property-panel" data-np-plan-panel="dns" hidden?={ planEditorTab(view) != "dns" }><div class="np-property-head"><h2>DNS</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Zone mode<select name="dns_mode"><option value="authoritative" selected?={ plan.Presets.DNS.Mode == "primary" || plan.HostingPolicy.DNS.Mode == "authoritative" }>Authoritative</option><option value="external" selected?={ plan.Presets.DNS.Mode == "secondary" || plan.HostingPolicy.DNS.Mode == "external" }>External</option></select></label><label>Default TTL<input type="number" name="dns_default_ttl" min="60" value={ formatPlanID(int64(plan.Presets.DNS.DefaultTTL)) }/></label></div><div class="np-permission-list">@planToggle("dnssec","DNSSEC",plan.HostingPolicy.DNS.DNSSEC)</div></section>
-	<section class="np-plan-property-panel" data-np-plan-panel="performance" hidden?={ planEditorTab(view) != "performance" }><div class="np-property-head"><h2>Performance</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Maximum connections<input type="number" min="0" name="performance_max_connections" value={ formatPlanID(int64(plan.Presets.Performance.MaxConnections)) }/></label><label>Request rate per second<input type="number" min="0" name="request_rate_per_second" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestRatePerSecond)) }/></label><label>Request burst<input type="number" min="0" name="request_burst" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestBurst)) }/></label><label>Index files<input name="web_index_files" value={ plan.HostingPolicy.Web.IndexFiles }/></label><label>Request body, MB<input type="number" min="0" name="web_request_body_mb" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestBodyLimitMB)) }/></label><label>Cache TTL, seconds<input type="number" min="0" name="web_cache_ttl_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Web.CacheTTLSeconds)) }/></label><label>Connect timeout<input type="number" min="0" name="web_connect_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Web.ConnectTimeoutSecs)) }/></label><label>Read timeout<input type="number" min="0" name="web_read_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Web.ReadTimeoutSecs)) }/></label><label>Security headers<select name="web_security_headers"><option value="off" selected?={ plan.HostingPolicy.Web.SecurityHeaderPreset=="off" }>Off</option><option value="balanced" selected?={ plan.HostingPolicy.Web.SecurityHeaderPreset=="balanced" }>Balanced</option><option value="strict" selected?={ plan.HostingPolicy.Web.SecurityHeaderPreset=="strict" }>Strict</option></select></label><label>Valkey max clients<input type="number" min="1" name="valkey_max_clients" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.MaxClients)) }/></label><label>Valkey idle timeout<input type="number" min="0" name="valkey_idle_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.IdleTimeoutSeconds)) }/></label><label>Valkey CPU %<input type="number" min="1" name="valkey_cpu_percent" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.CPUPercent)) }/></label><label>Valkey process limit<input type="number" min="8" name="valkey_process_limit" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.ProcessLimit)) }/></label></div><div class="np-permission-list">@planToggle("web_compression","Compression",plan.HostingPolicy.Web.Compression) @planToggle("performance_static_cache","Static file caching",plan.Presets.Performance.StaticFileCache) @planToggle("fastcgi_microcache","FastCGI microcache",plan.HostingPolicy.Web.FastCGIMicrocache)</div></section>
-	<section class="np-plan-property-panel" data-np-plan-panel="logs" hidden?={ planEditorTab(view) != "logs" }><div class="np-property-head"><h2>Logs & Statistics</h2>@presetStatus()</div><div class="np-plan-field-grid"><label>Log retention, days<input type="number" min="1" name="logs_retention_days" value={ formatPlanID(int64(plan.Presets.Logs.RetentionDays)) }/></label>@planToggle("logs_rotation_enabled","Rotate logs",plan.Presets.Logs.RotationEnabled) @planToggle("logs_statistics_enabled","Traffic statistics",plan.Presets.Logs.StatisticsEnabled)</div></section>
-	<section class="np-plan-property-panel" data-np-plan-panel="applications" hidden?={ planEditorTab(view) != "applications" }><div class="np-property-head"><h2>Applications &amp; Containers</h2>@presetStatus()</div><div class="np-permission-list">@planToggle("applications_catalog_enabled","Provider container catalog",plan.Presets.Applications.CatalogEnabled)</div><fieldset class="np-field-group"><legend>Operational runtimes</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="oci" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"oci") }/>OCI containers</label></div><p class="np-form-help">Classic PHP hosting is operational. Managed PHP entitlement is configured in PHP Settings and uses the PHP Application workspace when healthy. WordPress Toolkit, Node.js, and Python are not implemented; OCI remains in Containers.</p></fieldset><div class="np-plan-field-grid"><label>Allowed registries<input name="allowed_registries" value={ joinStrings(plan.HostingPolicy.Applications.AllowedRegistries) } placeholder="docker.io,ghcr.io"/></label><label>Allowed provider recipe slugs<input name="allowed_catalog_slugs" value={ joinStrings(plan.Presets.Applications.Allowed) } placeholder="whoami,static-app"/></label></div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="defaults" hidden?={ planEditorTab(view) != "defaults" }><div class="np-property-head"><div><h2>Mail defaults</h2><p>Defaults for mail domains created under this plan.</p></div>@presetStatus()</div><div class="np-permission-list">@planToggle("mail_webmail_enabled","Webmail enabled",plan.Presets.Mail.WebmailEnabled) @planToggle("mail_spam_filter","Spam filtering",plan.Presets.Mail.SpamFilter) @planToggle("mail_dkim","DKIM signing",plan.Presets.Mail.DKIM) @planToggle("mail_autoresponders","Autoresponders",plan.HostingPolicy.Mail.Autoresponders) @planToggle("mail_catch_all","Catch-all mailbox",plan.HostingPolicy.Mail.CatchAll)</div><div class="np-plan-field-grid">@planLimitField("Mailbox quota","mailbox_quota_mb",plan.HostingPolicy.Mail.MailboxQuotaMB,"MB")<label>DMARC policy<select name="mail_dmarc_policy"><option value="none" selected?={ plan.Presets.Mail.DMARCPolicy == "none" }>None</option><option value="quarantine" selected?={ plan.Presets.Mail.DMARCPolicy == "quarantine" }>Quarantine</option><option value="reject" selected?={ plan.Presets.Mail.DMARCPolicy == "reject" }>Reject</option></select></label></div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="defaults" hidden?={ planEditorTab(view) != "defaults" }><div class="np-property-head"><div><h2>DNS defaults</h2><p>Initial zone mode and time-to-live settings. Zero means no configured TTL.</p></div>@presetStatus()</div><div class="np-plan-field-grid"><label>Zone mode<select name="dns_mode"><option value="authoritative" selected?={ plan.Presets.DNS.Mode == "primary" || plan.HostingPolicy.DNS.Mode == "authoritative" }>Authoritative</option><option value="external" selected?={ plan.Presets.DNS.Mode == "secondary" || plan.HostingPolicy.DNS.Mode == "external" }>External</option></select></label><label>Default TTL<input type="number" name="dns_default_ttl" min="0" value={ formatPlanID(int64(plan.Presets.DNS.DefaultTTL)) }/></label></div><div class="np-permission-list">@planToggle("dnssec","DNSSEC (stored, not yet operational)",plan.HostingPolicy.DNS.DNSSEC)</div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="advanced" hidden?={ planEditorTab(view) != "advanced" }><div class="np-property-head"><div><h2>Web performance</h2><p>Structured nginx and cache defaults applied during reconciliation. Zero keeps optional Valkey limits disabled.</p></div><span class="np-contract-badge" data-np-enforcement="creation_default">Applied defaults</span></div><div class="np-plan-field-grid"><label>Maximum connections<input type="number" min="0" name="performance_max_connections" value={ formatPlanID(int64(plan.Presets.Performance.MaxConnections)) }/></label><label>Request rate per second<input type="number" min="0" name="request_rate_per_second" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestRatePerSecond)) }/></label><label>Request burst<input type="number" min="0" name="request_burst" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestBurst)) }/></label><label>Index files<input name="web_index_files" value={ plan.HostingPolicy.Web.IndexFiles }/></label><label>Request body, MB<input type="number" min="0" name="web_request_body_mb" value={ formatPlanID(int64(plan.HostingPolicy.Web.RequestBodyLimitMB)) }/></label><label>Cache TTL, seconds<input type="number" min="0" name="web_cache_ttl_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Web.CacheTTLSeconds)) }/></label><label>Connect timeout<input type="number" min="0" name="web_connect_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Web.ConnectTimeoutSecs)) }/></label><label>Read timeout<input type="number" min="0" name="web_read_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Web.ReadTimeoutSecs)) }/></label><label>Security headers<select name="web_security_headers"><option value="off" selected?={ plan.HostingPolicy.Web.SecurityHeaderPreset=="off" }>Off</option><option value="balanced" selected?={ plan.HostingPolicy.Web.SecurityHeaderPreset=="balanced" }>Balanced</option><option value="strict" selected?={ plan.HostingPolicy.Web.SecurityHeaderPreset=="strict" }>Strict</option></select></label><label>Valkey max clients<input type="number" min="0" name="valkey_max_clients" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.MaxClients)) }/></label><label>Valkey idle timeout<input type="number" min="0" name="valkey_idle_timeout_seconds" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.IdleTimeoutSeconds)) }/></label><label>Valkey CPU %<input type="number" min="0" name="valkey_cpu_percent" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.CPUPercent)) }/></label><label>Valkey process limit<input type="number" min="0" name="valkey_process_limit" value={ formatPlanID(int64(plan.HostingPolicy.Valkey.ProcessLimit)) }/></label></div><div class="np-permission-list">@planToggle("web_compression","Compression",plan.HostingPolicy.Web.Compression) @planToggle("performance_static_cache","Static file caching",plan.Presets.Performance.StaticFileCache) @planToggle("fastcgi_microcache","FastCGI microcache",plan.HostingPolicy.Web.FastCGIMicrocache)</div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="advanced" hidden?={ planEditorTab(view) != "advanced" }><div class="np-property-head"><div><h2>Logs &amp; Statistics</h2><p>Operational retention and traffic reporting defaults. Zero disables retention.</p></div><span class="np-contract-badge" data-np-enforcement="creation_default">Applied defaults</span></div><div class="np-plan-field-grid"><label>Log retention, days<input type="number" min="0" name="logs_retention_days" value={ formatPlanID(int64(plan.Presets.Logs.RetentionDays)) }/></label>@planToggle("logs_rotation_enabled","Rotate logs",plan.Presets.Logs.RotationEnabled)
+		@statisticsEngineSelect(controlquota.EffectivePlanHostingPolicy(plan).Logs)
+		@planToggle("allow_web_statistics", "Allow per-site statistics changes", plan.HostingPolicy.Permissions.WebStatistics)
+	</div></section>
+	<section class="np-plan-property-panel" data-np-plan-panel="advanced" hidden?={ planEditorTab(view) != "advanced" }><div class="np-property-head"><div><h2>Applications &amp; Containers</h2><p>Provider-curated container catalog and registry boundaries.</p></div>@presetStatus()</div><div class="np-permission-list">@planToggle("applications_catalog_enabled","Provider container catalog",plan.Presets.Applications.CatalogEnabled)</div><fieldset class="np-field-group"><legend>Operational runtimes</legend><div class="np-checkbox-grid"><label class="np-check"><input type="checkbox" name="allowed_runtimes" value="oci" checked?={ stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes,"oci") }/>OCI containers</label></div><p class="np-form-help">Classic and Managed PHP are operational. WordPress Toolkit is controlled in Services and runs only on Classic PHP sites. Node.js and Python adapters remain unavailable.</p></fieldset><div class="np-plan-field-grid"><label>Allowed registries<input name="allowed_registries" value={ joinStrings(plan.HostingPolicy.Applications.AllowedRegistries) } placeholder="docker.io,ghcr.io"/></label><label>Allowed provider recipe slugs<input name="allowed_catalog_slugs" value={ joinStrings(plan.Presets.Applications.Allowed) } placeholder="whoami,static-app"/></label></div></section>
 }
 
 templ presetStatus() { <span class="np-preset-badge">Stored preset</span> }
 
-templ planPreviewDialog(plan controlquota.Plan, view WorkspaceView) { <dialog class="np-dialog np-plan-preview-dialog" id="plan-preview-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Update & Sync</span><h2>Review synchronization impact</h2><p>Synced subscriptions receive the new revision. Locked and custom subscriptions retain their current snapshots.</p></div><dl class="np-preview-facts"><div><dt>Synced subscriptions</dt><dd data-np-preview-synced>-</dd></div><div><dt>Locked subscriptions</dt><dd data-np-preview-locked>-</dd></div><div><dt>Custom subscriptions</dt><dd data-np-preview-custom>-</dd></div><div><dt>Server committed disk</dt><dd data-np-preview-disk>-</dd></div><div data-np-preview-reseller-row hidden><dt>Reseller allocation</dt><dd data-np-preview-reseller>-</dd></div></dl><p class="np-gate" data-np-preview-warning></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="button" data-np-plan-confirm-submit>Update & Sync</button></div></dialog> }
+templ statisticsEngineSelect(logs types.LogsPreset) {
+	<label>Statistics engine<select name="logs_statistics_engine">
+		<option value="disabled" selected?={ controlpolicy.StatisticsEngine(logs) == "disabled" }>Disabled</option>
+		<option value="goaccess" selected?={ controlpolicy.StatisticsEngine(logs) == "goaccess" }>GoAccess</option>
+	</select></label>
+}
+
+templ planPreviewDialog(plan controlquota.Plan, view WorkspaceView) { <dialog class="np-dialog np-plan-preview-dialog" id="plan-preview-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Contract review</span><h2>Review activation and synchronization</h2><p>Activation requires a deliverable runtime. Synced subscriptions receive a new immutable snapshot; locked and custom subscriptions retain their current contract.</p></div><dl class="np-preview-facts"><div><dt>Synced subscriptions</dt><dd data-np-preview-synced>-</dd></div><div><dt>Locked subscriptions</dt><dd data-np-preview-locked>-</dd></div><div><dt>Custom subscriptions</dt><dd data-np-preview-custom>-</dd></div><div><dt>Server committed disk</dt><dd data-np-preview-disk>-</dd></div><div data-np-preview-reseller-row hidden><dt>Reseller allocation</dt><dd data-np-preview-reseller>-</dd></div></dl><div class="np-preview-section"><h3>Contract changes</h3><div class="np-preview-list" data-np-preview-changes><p class="np-empty">No entitlement changes.</p></div></div><div class="np-preview-section"><h3>Affected subscriptions</h3><div class="np-preview-list" data-np-preview-impacts><p class="np-empty">No synchronized subscriptions are affected.</p></div></div><div class="np-preview-section"><h3>Server readiness</h3><div class="np-preview-list" data-np-preview-capabilities><p class="np-empty">Capability checks passed.</p></div></div><div class="np-preview-list is-blocked" data-np-preview-blockers hidden></div><div class="np-preview-list" data-np-preview-warnings hidden></div><p class="np-gate" data-np-preview-warning></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="button" data-np-plan-confirm-submit>{ planEditorSubmitLabel(plan,false) }</button></div></dialog> }
 
 templ routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities, view WorkspaceView) {
 	<dialog class="np-dialog" id="site-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Hosting services</span><h2>Add website</h2><p>Limits are derived from the selected subscription.</p></div><form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>@csrfInput(view)@routedSubscriptionSelect(subscriptions,capabilities)<label>Domain<input name="domain" required/></label><input type="hidden" name="username" value="npsystem"/><label>PHP<select name="php_version" data-np-site-php>

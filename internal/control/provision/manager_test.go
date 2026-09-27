@@ -3,6 +3,7 @@ package provision
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
@@ -19,6 +20,7 @@ type fakeSiteRepository struct {
 type fakeRuntimeCapabilities struct {
 	result types.RuntimeCapabilities
 	err    error
+	calls  *int
 }
 
 type fakeDomainSettingsStore struct {
@@ -63,6 +65,9 @@ func (p capabilityAccessPolicy) CanManageTLS(context.Context, auth.SessionUser, 
 }
 
 func (f fakeRuntimeCapabilities) RuntimeCapabilities(context.Context) (types.RuntimeCapabilities, error) {
+	if f.calls != nil {
+		*f.calls++
+	}
 	return f.result, f.err
 }
 
@@ -120,6 +125,253 @@ type fakeBulkAdminStore struct {
 	customerIDs     []int64
 	subscriptionIDs []int64
 	resellerIDs     []int64
+}
+
+type fakePlanAdminStore struct {
+	controlquota.AdminStore
+	plan               controlquota.Plan
+	saved              controlquota.Plan
+	activeCalls        int
+	getCalls           int
+	readinessCalls     int
+	readinessPlanID    int64
+	readinessError     string
+	bulkCalls          int
+	bulkActorUserID    int64
+	bulkActorLabel     string
+	providerResellerID int64
+}
+
+func (s *fakePlanAdminStore) UpsertPlan(_ context.Context, plan controlquota.Plan) (controlquota.Plan, error) {
+	s.saved = plan
+	return plan, nil
+}
+
+func (s *fakePlanAdminStore) GetPlan(context.Context, int64) (controlquota.Plan, error) {
+	s.getCalls++
+	return s.plan, nil
+}
+
+func (s *fakePlanAdminStore) SetPlanActive(context.Context, int64, bool) error {
+	s.activeCalls++
+	return nil
+}
+
+func (s *fakePlanAdminStore) PreviewPlan(context.Context, controlquota.Plan) (types.PlanPreview, error) {
+	return types.PlanPreview{Allowed: true}, nil
+}
+
+func (s *fakePlanAdminStore) RecordPlanReadiness(_ context.Context, planID int64, message string) error {
+	s.readinessCalls++
+	s.readinessPlanID = planID
+	s.readinessError = message
+	return nil
+}
+
+func (s *fakePlanAdminStore) ProviderScopeForUser(_ context.Context, user auth.SessionUser) (types.ProviderScope, error) {
+	return types.ProviderScope{ActorUserID: user.ID, Role: string(user.Role), ResellerID: s.providerResellerID}, nil
+}
+
+func (s *fakePlanAdminStore) SetPlanStatuses(_ context.Context, _ []int64, _ int64, _ bool, _ bool, actorUserID int64, actorLabel string) error {
+	s.bulkCalls++
+	s.bulkActorUserID = actorUserID
+	s.bulkActorLabel = actorLabel
+	return nil
+}
+
+func (s *fakePlanAdminStore) SetAddonPlanStatuses(context.Context, []int64, int64, bool, bool) error {
+	return nil
+}
+
+func (s *fakePlanAdminStore) SetResellerPlanStatuses(context.Context, []int64, bool) error {
+	return nil
+}
+
+func TestPlanActivationFailsClosedWhenAdvertisedRuntimeIsUnavailable(t *testing.T) {
+	plan := controlquota.Plan{
+		ID: 7, Name: "Production PHP", LifecycleStatus: types.PlanLifecycleActive,
+		HostingEnabled: true, PHPAllowlist: "8.4,8.5", DefaultPHPVersion: "8.4",
+		HostingPolicy: types.HostingPolicy{
+			SchemaVersion: 3,
+			Resources:     types.HostingResourcePolicy{DiskMB: 2048},
+			Permissions:   types.HostingPermissionPolicy{Hosting: true, Composer: true, ManagedPHPDeployments: true},
+			PHP:           types.HostingPHPPolicy{DefaultVersion: "8.4", AllowedVersions: []string{"8.4", "8.5"}},
+		},
+	}
+	store := &fakePlanAdminStore{plan: plan}
+	manager := NewManager(nil,
+		WithQuotaStore(store),
+		WithRuntimeCapabilities(fakeRuntimeCapabilities{result: types.RuntimeCapabilities{PHPVersions: []string{"8.4"}}}),
+	)
+	admin := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
+
+	if _, err := manager.UpsertPlan(context.Background(), admin, plan); err == nil || !strings.Contains(err.Error(), "cannot activate") {
+		t.Fatalf("UpsertPlan activation error = %v, want readiness rejection", err)
+	}
+	if store.saved.ID != 0 {
+		t.Fatalf("unready active plan reached store: %+v", store.saved)
+	}
+	if store.readinessCalls != 0 {
+		t.Fatalf("rejected candidate overwrote stored readiness %d times", store.readinessCalls)
+	}
+	if err := manager.SetPlanActive(context.Background(), admin, plan.ID, true); err == nil || !strings.Contains(err.Error(), "cannot activate") {
+		t.Fatalf("SetPlanActive error = %v, want readiness rejection", err)
+	}
+	if store.activeCalls != 0 {
+		t.Fatalf("unready activation reached store %d times", store.activeCalls)
+	}
+	if store.readinessCalls != 1 || store.readinessPlanID != plan.ID || !strings.Contains(store.readinessError, "8.5") {
+		t.Fatalf("stored activation readiness = calls:%d id:%d error:%q", store.readinessCalls, store.readinessPlanID, store.readinessError)
+	}
+}
+
+func TestActivePlanUpdateAuthorizesResellerBeforeCapabilityInspection(t *testing.T) {
+	calls := 0
+	store := &fakePlanAdminStore{providerResellerID: 9}
+	manager := NewManager(nil,
+		WithQuotaStore(store),
+		WithAccessPolicy(fakeAccessPolicy{allow: false}),
+		WithRuntimeCapabilities(fakeRuntimeCapabilities{calls: &calls}),
+	)
+	_, err := manager.UpsertPlan(context.Background(), auth.SessionUser{ID: 3, Role: auth.RoleReseller}, controlquota.Plan{
+		ID: 77, Name: "Foreign", LifecycleStatus: types.PlanLifecycleActive,
+	})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("foreign active plan update error = %v, want ErrForbidden", err)
+	}
+	if calls != 0 || store.saved.ID != 0 {
+		t.Fatalf("foreign plan reached capability/store boundary: capability calls=%d saved=%+v", calls, store.saved)
+	}
+}
+
+func TestLegacyActivePlanFieldsCannotBypassRuntimeReadiness(t *testing.T) {
+	store := &fakePlanAdminStore{}
+	manager := NewManager(nil,
+		WithQuotaStore(store),
+		WithRuntimeCapabilities(fakeRuntimeCapabilities{result: types.RuntimeCapabilities{PHPVersions: []string{"8.4"}}}),
+	)
+	plan := controlquota.Plan{
+		Name: "Legacy PHP 8.5", LifecycleStatus: types.PlanLifecycleActive,
+		HostingEnabled: true, PHPAllowlist: "8.5", DefaultPHPVersion: "8.5",
+	}
+	if _, err := manager.UpsertPlan(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, plan); err == nil || !strings.Contains(err.Error(), "8.5") {
+		t.Fatalf("legacy active plan error = %v, want unavailable PHP rejection", err)
+	}
+	if store.saved.Name != "" {
+		t.Fatalf("unready legacy plan reached store: %+v", store.saved)
+	}
+}
+
+func TestBulkPlanActivationAuthorizesBeforeCapabilityLookupAndAttributesRevision(t *testing.T) {
+	resellerStore := &fakePlanAdminStore{providerResellerID: 9, plan: controlquota.Plan{ID: 7, Name: "Foreign"}}
+	resellerManager := NewManager(nil,
+		WithQuotaStore(resellerStore),
+		WithAccessPolicy(fakeAccessPolicy{allow: false}),
+		WithRuntimeCapabilities(fakeRuntimeCapabilities{result: types.RuntimeCapabilities{}}),
+	)
+	reseller := auth.SessionUser{ID: 3, Email: "reseller@example.test", Role: auth.RoleReseller}
+	if err := resellerManager.SetPlanStatuses(context.Background(), reseller, []int64{7}, true); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("foreign bulk activation error = %v, want ErrForbidden", err)
+	}
+	if resellerStore.getCalls != 0 || resellerStore.bulkCalls != 0 {
+		t.Fatalf("foreign plan was inspected or changed: get=%d bulk=%d", resellerStore.getCalls, resellerStore.bulkCalls)
+	}
+
+	adminStore := &fakePlanAdminStore{plan: controlquota.Plan{ID: 8, Name: "Owned"}}
+	adminManager := NewManager(nil,
+		WithQuotaStore(adminStore),
+		WithRuntimeCapabilities(fakeRuntimeCapabilities{result: types.RuntimeCapabilities{}}),
+	)
+	admin := auth.SessionUser{ID: 1, Email: "admin@example.test", Role: auth.RoleAdmin}
+	if err := adminManager.SetPlanStatuses(context.Background(), admin, []int64{8}, true); err != nil {
+		t.Fatal(err)
+	}
+	if adminStore.bulkCalls != 1 || adminStore.bulkActorUserID != admin.ID || adminStore.bulkActorLabel != admin.Email {
+		t.Fatalf("bulk revision actor = calls:%d id:%d label:%q", adminStore.bulkCalls, adminStore.bulkActorUserID, adminStore.bulkActorLabel)
+	}
+}
+
+func TestBulkPlanActivationPersistsReadinessFailure(t *testing.T) {
+	store := &fakePlanAdminStore{plan: controlquota.Plan{
+		ID: 8, Name: "Unavailable PHP", LifecycleStatus: types.PlanLifecycleRetired,
+		HostingPolicy: types.HostingPolicy{SchemaVersion: 3,
+			Permissions: types.HostingPermissionPolicy{Hosting: true},
+			PHP:         types.HostingPHPPolicy{DefaultVersion: "8.5", AllowedVersions: []string{"8.5"}},
+		},
+	}}
+	manager := NewManager(nil,
+		WithQuotaStore(store),
+		WithRuntimeCapabilities(fakeRuntimeCapabilities{result: types.RuntimeCapabilities{PHPVersions: []string{"8.4"}}}),
+	)
+	err := manager.SetPlanStatuses(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, []int64{8}, true)
+	if err == nil || !strings.Contains(err.Error(), "8.5") {
+		t.Fatalf("bulk activation error = %v, want unavailable PHP rejection", err)
+	}
+	if store.bulkCalls != 0 {
+		t.Fatalf("unready bulk activation reached the store %d times", store.bulkCalls)
+	}
+	if store.readinessCalls != 1 || store.readinessPlanID != 8 || !strings.Contains(store.readinessError, "8.5") {
+		t.Fatalf("bulk readiness failure was not retained: calls=%d id=%d error=%q", store.readinessCalls, store.readinessPlanID, store.readinessError)
+	}
+}
+
+func TestDraftPlanCanBeSavedWhileRuntimeIsUnavailable(t *testing.T) {
+	plan := controlquota.Plan{
+		Name: "Future PHP", LifecycleStatus: types.PlanLifecycleDraft,
+		HostingEnabled: true, PHPAllowlist: "8.5", DefaultPHPVersion: "8.5",
+		HostingPolicy: types.HostingPolicy{
+			SchemaVersion: 3,
+			Permissions:   types.HostingPermissionPolicy{Hosting: true},
+			PHP:           types.HostingPHPPolicy{DefaultVersion: "8.5", AllowedVersions: []string{"8.5"}},
+		},
+	}
+	store := &fakePlanAdminStore{}
+	manager := NewManager(nil,
+		WithQuotaStore(store),
+		WithRuntimeCapabilities(fakeRuntimeCapabilities{result: types.RuntimeCapabilities{PHPVersions: []string{"8.4"}}}),
+	)
+	if _, err := manager.UpsertPlan(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, plan); err != nil {
+		t.Fatalf("UpsertPlan draft: %v", err)
+	}
+	if store.saved.Name != plan.Name {
+		t.Fatalf("draft plan was not saved: %+v", store.saved)
+	}
+}
+
+func TestDraftPreviewReportsFutureCapabilityWithoutBlockingSave(t *testing.T) {
+	plan := controlquota.Plan{
+		Name: "Future PHP", LifecycleStatus: types.PlanLifecycleDraft,
+		HostingPolicy: types.HostingPolicy{SchemaVersion: 3,
+			Permissions: types.HostingPermissionPolicy{Hosting: true},
+			PHP:         types.HostingPHPPolicy{DefaultVersion: "8.5", AllowedVersions: []string{"8.5"}},
+		},
+	}
+	manager := NewManager(nil,
+		WithQuotaStore(&fakePlanAdminStore{}),
+		WithRuntimeCapabilities(fakeRuntimeCapabilities{result: types.RuntimeCapabilities{PHPVersions: []string{"8.4"}}}),
+	)
+	preview, err := manager.PreviewPlan(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, plan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !preview.Allowed || len(preview.CapabilityIssues) == 0 || preview.CapabilityIssues[0].Blocking {
+		t.Fatalf("draft preview = %+v, want allowed with non-blocking future capability issue", preview)
+	}
+}
+
+func TestActivePlanFailsClosedWithoutCapabilityReader(t *testing.T) {
+	store := &fakePlanAdminStore{}
+	manager := NewManager(nil, WithQuotaStore(store))
+	plan := controlquota.Plan{
+		Name: "Unverified", LifecycleStatus: types.PlanLifecycleActive,
+		HostingPolicy: types.HostingPolicy{SchemaVersion: 3},
+	}
+	if _, err := manager.UpsertPlan(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, plan); err == nil || !strings.Contains(err.Error(), "capability") {
+		t.Fatalf("UpsertPlan error = %v, want fail-closed capability error", err)
+	}
+	if store.saved.Name != "" {
+		t.Fatalf("unverified plan reached store: %+v", store.saved)
+	}
 }
 
 func (s *fakeBulkAdminStore) SetCustomerStatuses(_ context.Context, ids []int64, _ string) error {

@@ -1,0 +1,44 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+)
+
+templ domainOverviewPrimary(item dashboard.Site, actions DashboardActions, view WorkspaceView) {
+	<section class="np-v2-domain-primary" aria-label="Website status and actions">
+		<div class="np-v2-domain-primary-head">
+			<div><span class="np-kicker">Website status</span><h2>{ siteOverviewHeading(item, view.WordPress) }</h2>
+				if item.Status == "failed" || item.SettingsStatus == "failed" {
+					<p>Hosting did not finish applying. Review the activity and retry the failed operation.</p>
+				} else if item.Status != "active" {
+					<p>Hosting and PHP are being prepared. This page updates when the website is ready.</p>
+				} else if siteOverviewWordPressState(view.WordPress) == "failed" {
+					<p>WordPress installation needs attention. Open WordPress Toolkit to review or retry it.</p>
+				} else if siteOverviewWordPressState(view.WordPress) == "removing" {
+					<p>WordPress removal is in progress. The website and its hosting settings remain in place.</p>
+				} else if siteOverviewWordPressState(view.WordPress) == "installing" {
+					<p>Hosting is ready. WordPress installation is still running.</p>
+				} else {
+					<p>{ item.Domain } is configured for PHP { item.PHPVersion }.</p>
+				}
+			</div>
+			@statusPill(item.Status)
+		</div>
+		<div class="np-v2-domain-actions">
+			if item.Status == "active" {
+				<a class="np-primary-link" href={ templ.SafeURL(siteWebsiteURL(item)) } target="_blank" rel="noreferrer">@icon("globe")<span>Open website</span></a>
+			}
+			if view.WordPress != nil && view.WordPress.Instance != nil {
+				<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/wordpress")) }>@icon("package-open")<span>WordPress</span></a>
+			} else if actions.CanUseFileManager {
+				<a href={ templ.SafeURL(fileBasePath(view,item.ID)) }>@icon("folder")<span>Upload files</span></a>
+			}
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID))+"?tab=php") }>@icon("activity")<span>PHP</span></a>
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID))+"?tab=ssl") }>@icon("shield")<span>SSL/TLS</span></a>
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID))+"?tab=backups") }>@icon("archive")<span>Backups</span></a>
+		</div>
+		if item.Status == "active" && item.TLSStatus != "active" {
+			<p class="np-v2-domain-next">HTTPS is not active yet. <a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID))+"?tab=ssl") }>Check certificate setup</a>.</p>
+		}
+	</section>
+}

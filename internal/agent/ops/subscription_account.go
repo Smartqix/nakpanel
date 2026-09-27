@@ -594,7 +594,7 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("secure domain directory %q: %w", domain.Domain, err)
 		}
 	}
-	if req.Policy.Resources.DiskMB > 0 {
+	if req.Policy.Resources.DiskMB != 0 {
 		if p.diskQuota == nil {
 			return types.EnsureSubscriptionAccountResult{}, errors.New("disk quota manager is not configured")
 		}

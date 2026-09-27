@@ -47,6 +47,35 @@ func TestParsePlanAcceptsPleskStyleGroupedProperties(t *testing.T) {
 	}
 }
 
+func TestParsePlanUsesExplicitProductionLifecycleAndChangeReason(t *testing.T) {
+	for lifecycle, active := range map[string]bool{"draft": false, "active": true, "retired": false} {
+		form := url.Values{
+			"name": {"Lifecycle plan"}, "lifecycle_status": {lifecycle}, "change_reason": {"Capacity review"},
+			"overuse_policy": {"block"}, "default_php_version": {"8.4"}, "php_versions": {"8.4"},
+		}
+		req := httptest.NewRequest("POST", "/plans", strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		if err := req.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		plan, err := parsePlan(req)
+		if err != nil {
+			t.Fatalf("parse %s: %v", lifecycle, err)
+		}
+		if plan.LifecycleStatus != types.PlanLifecycleStatus(lifecycle) || plan.IsActive != active || plan.ChangeReason != "Capacity review" {
+			t.Fatalf("parsed %s plan = %+v", lifecycle, plan)
+		}
+	}
+
+	form := url.Values{"name": {"Bad"}, "lifecycle_status": {"deleted"}}
+	req := httptest.NewRequest("POST", "/plans", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	_ = req.ParseForm()
+	if _, err := parsePlan(req); err == nil || !strings.Contains(err.Error(), "lifecycle") {
+		t.Fatalf("invalid lifecycle error = %v", err)
+	}
+}
+
 func TestParsePlanLimitRejectsUnitConversionOverflow(t *testing.T) {
 	form := url.Values{
 		"disk_mb":      {strconv.Itoa(int(^uint(0) >> 1))},

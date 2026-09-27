@@ -311,6 +311,7 @@ WHERE deployment.subscription_id=$1 ORDER BY deployment.id`, subscriptionID)
 		return err
 	}
 	for _, query := range []string{
+		`WITH removed AS (DELETE FROM wordpress_instances WHERE subscription_id=$1 RETURNING admin_secret_id) DELETE FROM service_secrets WHERE id IN (SELECT admin_secret_id FROM removed WHERE admin_secret_id IS NOT NULL)`,
 		`DELETE FROM backups WHERE subscription_id=$1`,
 		`DELETE FROM ftp_accounts WHERE subscription_id=$1`,
 		`DELETE FROM valkey_instances WHERE subscription_id=$1`,

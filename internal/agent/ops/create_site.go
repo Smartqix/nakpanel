@@ -1128,7 +1128,7 @@ func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteRe
 	if err := secureHostedDocumentTree(plan.Docroot); err != nil {
 		return fmt.Errorf("grant nginx document-root access: %w", err)
 	}
-	if plan.Limits.DiskQuotaMB > 0 {
+	if plan.Limits.DiskQuotaMB != 0 {
 		if p.diskQuotas == nil {
 			return errors.New("disk quota manager is not configured")
 		}
@@ -1266,8 +1266,8 @@ func (m *LinuxDiskQuotaManager) ApplyUserQuota(ctx context.Context, username, pa
 	if !quotaUsernameRE.MatchString(username) {
 		return fmt.Errorf("unsafe quota username %q", username)
 	}
-	if limitMB <= 0 {
-		return errors.New("disk quota limit must be greater than 0 MB")
+	if limitMB == 0 || limitMB < -1 {
+		return errors.New("disk quota limit must be positive or -1 for unlimited")
 	}
 	cleanPath := filepath.Clean(strings.TrimSpace(path))
 	if cleanPath == "." || !filepath.IsAbs(cleanPath) {
@@ -1281,7 +1281,10 @@ func (m *LinuxDiskQuotaManager) ApplyUserQuota(ctx context.Context, username, pa
 	if mountpoint == "" || !filepath.IsAbs(mountpoint) {
 		return fmt.Errorf("find quota filesystem for %q: empty mount target", cleanPath)
 	}
-	hardKiB := strconv.Itoa(limitMB * 1024)
+	hardKiB := "0"
+	if limitMB > 0 {
+		hardKiB = strconv.Itoa(limitMB * 1024)
+	}
 	output, err = m.runner.Run(ctx, "setquota", "-u", username, "0", hardKiB, "0", "0", mountpoint)
 	if err != nil {
 		return fmt.Errorf("setquota user %q on %q: %w: %s", username, mountpoint, err, strings.TrimSpace(string(output)))

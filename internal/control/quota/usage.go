@@ -187,6 +187,9 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, usage.SubscriptionID, usage.PeriodStart, usag
 		usage.DatabaseBytes, usage.BackupBytes, usage.DiskBytes, usage.TrafficBytes, usage.CollectedAt); err != nil {
 		return err
 	}
+	if err := refreshSubscriptionComplianceTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
 	if err := evaluateUsageTx(ctx, tx, usage, w.river); err != nil {
 		return err
 	}

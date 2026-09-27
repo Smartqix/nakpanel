@@ -161,6 +161,24 @@ func TestComposeEntitlementsCombinesPHPHostingAddonWithoutImplicitGrant(t *testi
 	}
 }
 
+func TestComposeEntitlementsCombinesWordPressToolkitAddon(t *testing.T) {
+	base := types.SubscriptionEntitlements{PlanName: "Classic", HostingPolicy: types.HostingPolicy{SchemaVersion: 4}}
+	addon := types.AddonPlan{Name: "WordPress Toolkit", Entitlements: types.SubscriptionEntitlements{
+		HostingPolicy: types.HostingPolicy{
+			SchemaVersion: 4,
+			Resources:     types.HostingResourcePolicy{MaxWordPressSites: 2},
+			Permissions:   types.HostingPermissionPolicy{WordPressToolkit: true},
+		},
+	}}
+	got, err := ComposeEntitlements(base, []types.AddonPlan{addon})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.HostingPolicy.Resources.MaxWordPressSites != 2 || !got.HostingPolicy.Permissions.WordPressToolkit {
+		t.Fatalf("WordPress add-on was not composed: %#v", got.HostingPolicy)
+	}
+}
+
 func TestSetSubscriptionModeCustomQueuesHostConvergence(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

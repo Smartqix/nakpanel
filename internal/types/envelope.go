@@ -76,6 +76,7 @@ const (
 	OpRollbackPHPRelease          = "rollback_php_release"
 	OpReconcilePHPApplication     = "reconcile_php_application"
 	OpReconcilePHPWorkers         = "reconcile_php_workers"
+	OpRunWordPress                = "run_wordpress"
 )
 
 type TeardownSubscriptionReq struct {
@@ -488,6 +489,8 @@ type ResellerSubscription struct {
 }
 
 type SubscriptionEntitlements struct {
+	PreserveHostingPolicy bool               `json:"-"`
+	StatisticsEdited      bool               `json:"-"`
 	SubscriptionID        int64              `json:"subscription_id"`
 	PlanName              string             `json:"plan_name"`
 	DiskMB                int                `json:"disk_mb"`
@@ -531,29 +534,107 @@ const (
 	PlanOveruseNotSuspendNotify PlanOverusePolicy = "not_suspend_notify"
 )
 
+type PlanLifecycleStatus string
+
+const (
+	PlanLifecycleDraft   PlanLifecycleStatus = "draft"
+	PlanLifecycleActive  PlanLifecycleStatus = "active"
+	PlanLifecycleRetired PlanLifecycleStatus = "retired"
+)
+
+type SubscriptionComplianceStatus string
+
+const (
+	SubscriptionComplianceCompliant         SubscriptionComplianceStatus = "compliant"
+	SubscriptionComplianceOverLimit         SubscriptionComplianceStatus = "over_limit"
+	SubscriptionComplianceCapabilityBlocked SubscriptionComplianceStatus = "capability_blocked"
+	SubscriptionComplianceUnknown           SubscriptionComplianceStatus = "unknown"
+)
+
+type PlanEnforcementKind string
+
+const (
+	PlanEnforcementHardLimit            PlanEnforcementKind = "hard_limit"
+	PlanEnforcementMeasuredLimit        PlanEnforcementKind = "measured_limit"
+	PlanEnforcementServicePermission    PlanEnforcementKind = "service_permission"
+	PlanEnforcementManagementPermission PlanEnforcementKind = "management_permission"
+	PlanEnforcementCreationDefault      PlanEnforcementKind = "creation_default"
+	PlanEnforcementStoredOnly           PlanEnforcementKind = "stored_only"
+)
+
+type PlanContractField struct {
+	Path        string              `json:"path"`
+	Label       string              `json:"label"`
+	Enforcement PlanEnforcementKind `json:"enforcement"`
+	Description string              `json:"description,omitempty"`
+}
+
+type PlanRevision struct {
+	ID              int64               `json:"id"`
+	PlanID          int64               `json:"plan_id"`
+	Revision        int                 `json:"revision"`
+	LifecycleStatus PlanLifecycleStatus `json:"lifecycle_status"`
+	Definition      json.RawMessage     `json:"definition"`
+	DefinitionHash  string              `json:"definition_hash"`
+	ActorUserID     int64               `json:"actor_user_id,omitempty"`
+	ActorLabel      string              `json:"actor_label,omitempty"`
+	ChangeReason    string              `json:"change_reason"`
+	CreatedAt       time.Time           `json:"created_at"`
+}
+
+type PlanFieldChange struct {
+	Path        string              `json:"path"`
+	Label       string              `json:"label"`
+	OldValue    string              `json:"old_value"`
+	NewValue    string              `json:"new_value"`
+	Enforcement PlanEnforcementKind `json:"enforcement"`
+}
+
+type SubscriptionImpact struct {
+	SubscriptionID   int64    `json:"subscription_id"`
+	SubscriptionName string   `json:"subscription_name"`
+	CustomerName     string   `json:"customer_name"`
+	Violations       []string `json:"violations"`
+}
+
+type PlanCapabilityIssue struct {
+	Code     string `json:"code"`
+	Field    string `json:"field"`
+	Message  string `json:"message"`
+	Blocking bool   `json:"blocking"`
+}
+
 type PlanDefinition struct {
-	ID          int64              `json:"id,omitempty"`
-	Name        string             `json:"name"`
-	Description string             `json:"description"`
-	PriceCents  *int64             `json:"price_cents,omitempty"`
-	Resources   PlanResources      `json:"resources"`
-	Permissions PlanPermissions    `json:"permissions"`
-	Presets     PlanServicePresets `json:"presets"`
-	IsActive    bool               `json:"is_active"`
-	Revision    int                `json:"revision"`
+	ID              int64               `json:"id,omitempty"`
+	ResellerID      int64               `json:"reseller_id,omitempty"`
+	Name            string              `json:"name"`
+	Description     string              `json:"description"`
+	PriceCents      *int64              `json:"price_cents,omitempty"`
+	Resources       PlanResources       `json:"resources"`
+	Permissions     PlanPermissions     `json:"permissions"`
+	Presets         PlanServicePresets  `json:"presets"`
+	HostingPolicy   HostingPolicy       `json:"hosting_policy"`
+	LifecycleStatus PlanLifecycleStatus `json:"lifecycle_status"`
+	IsActive        bool                `json:"is_active"`
+	Revision        int                 `json:"revision"`
 }
 
 type PlanPreview struct {
-	SyncedSubscriptions int    `json:"synced_subscriptions"`
-	LockedSubscriptions int    `json:"locked_subscriptions"`
-	CustomSubscriptions int    `json:"custom_subscriptions"`
-	CommittedDiskMB     int    `json:"committed_disk_mb"`
-	ServerCapacityMB    int    `json:"server_capacity_mb"`
-	ResellerCommittedMB int    `json:"reseller_committed_disk_mb"`
-	ResellerCapacityMB  int    `json:"reseller_capacity_mb"`
-	HasResellerCapacity bool   `json:"has_reseller_capacity"`
-	Allowed             bool   `json:"allowed"`
-	Warning             string `json:"warning,omitempty"`
+	SyncedSubscriptions int                   `json:"synced_subscriptions"`
+	LockedSubscriptions int                   `json:"locked_subscriptions"`
+	CustomSubscriptions int                   `json:"custom_subscriptions"`
+	CommittedDiskMB     int                   `json:"committed_disk_mb"`
+	ServerCapacityMB    int                   `json:"server_capacity_mb"`
+	ResellerCommittedMB int                   `json:"reseller_committed_disk_mb"`
+	ResellerCapacityMB  int                   `json:"reseller_capacity_mb"`
+	HasResellerCapacity bool                  `json:"has_reseller_capacity"`
+	Changes             []PlanFieldChange     `json:"changes,omitempty"`
+	SubscriptionImpacts []SubscriptionImpact  `json:"subscription_impacts,omitempty"`
+	CapabilityIssues    []PlanCapabilityIssue `json:"capability_issues,omitempty"`
+	BlockingReasons     []string              `json:"blocking_reasons,omitempty"`
+	Warnings            []string              `json:"warnings,omitempty"`
+	Allowed             bool                  `json:"allowed"`
+	Warning             string                `json:"warning,omitempty"`
 }
 
 type PlanResources struct {
@@ -571,6 +652,11 @@ type PlanResources struct {
 	OverusePolicy         PlanOverusePolicy `json:"overuse_policy"`
 	DiskWarningPercent    int               `json:"disk_warning_percent"`
 	TrafficWarningPercent int               `json:"traffic_warning_percent"`
+	BackupRetentionDays   int               `json:"backup_retention_days"`
+	SiteDiskQuotaMB       int               `json:"site_disk_quota_mb"`
+	PHPFPMMaxChildren     int               `json:"php_fpm_max_children"`
+	PHPMemoryMB           int               `json:"php_memory_mb"`
+	PHPAllowlist          string            `json:"php_allowlist"`
 }
 
 type PlanPermissions struct {
@@ -629,9 +715,10 @@ type PerformancePreset struct {
 }
 
 type LogsPreset struct {
-	RotationEnabled   bool `json:"rotation_enabled"`
-	RetentionDays     int  `json:"retention_days"`
-	StatisticsEnabled bool `json:"statistics_enabled"`
+	StatisticsEngine  string `json:"statistics_engine"`
+	RotationEnabled   bool   `json:"rotation_enabled"`
+	RetentionDays     int    `json:"retention_days"`
+	StatisticsEnabled bool   `json:"statistics_enabled"`
 }
 
 type ApplicationsPreset struct {
@@ -703,6 +790,8 @@ type CollectUsageResult struct {
 }
 
 type RuntimeCapabilities struct {
+	GoAccessAvailable    bool                   `json:"goaccess_available"`
+	GoAccessVersion      string                 `json:"goaccess_version,omitempty"`
 	PHPVersions          []string               `json:"php_versions"`
 	PHPRuntimes          []PHPRuntimeCapability `json:"php_runtimes,omitempty"`
 	ComposerAvailable    bool                   `json:"composer_available"`
@@ -859,55 +948,58 @@ type AuditEvent struct {
 }
 
 type SubscriptionSummary struct {
-	ID                    int64              `json:"id"`
-	CustomerID            int64              `json:"customer_id"`
-	CustomerUserID        int64              `json:"customer_user_id,omitempty"`
-	CustomerEmail         string             `json:"customer_email"`
-	CustomerName          string             `json:"customer_name"`
-	CustomerCompany       string             `json:"customer_company"`
-	PlanID                int64              `json:"plan_id"`
-	PlanName              string             `json:"plan_name"`
-	SubscriptionName      string             `json:"subscription_name"`
-	Status                string             `json:"status"`
-	MaxSites              int                `json:"max_sites"`
-	MaxDatabases          int                `json:"max_databases"`
-	DiskMB                int                `json:"disk_mb"`
-	MaxBackups            int                `json:"max_backups"`
-	BackupStorageMB       int                `json:"backup_storage_mb"`
-	SitesUsed             int                `json:"sites_used"`
-	DatabasesUsed         int                `json:"databases_used"`
-	BackupsUsed           int                `json:"backups_used"`
-	BackupBytesUsed       int64              `json:"backup_bytes_used"`
-	Warning               string             `json:"warning,omitempty"`
-	CreatedAt             time.Time          `json:"created_at"`
-	UpdatedAt             time.Time          `json:"updated_at"`
-	ResellerID            int64              `json:"reseller_id,omitempty"`
-	SyncMode              string             `json:"sync_mode"`
-	SyncStatus            string             `json:"sync_status"`
-	PlanRevision          int                `json:"plan_revision"`
-	SyncError             string             `json:"sync_error,omitempty"`
-	AllowDNS              bool               `json:"allow_dns"`
-	AllowSSH              bool               `json:"allow_ssh"`
-	PHPAllowlist          string             `json:"php_allowlist"`
-	PHPFPMMaxChildren     int                `json:"php_fpm_max_children"`
-	PHPMemoryMB           int                `json:"php_memory_mb"`
-	SiteDiskQuotaMB       int                `json:"site_disk_quota_mb"`
-	BandwidthMB           int                `json:"bandwidth_mb"`
-	MaxMailboxes          int                `json:"max_mailboxes"`
-	BackupRetentionDays   int                `json:"backup_retention_days"`
-	MaxSubdomains         int                `json:"max_subdomains"`
-	MaxDomainAliases      int                `json:"max_domain_aliases"`
-	MaxFTPAccounts        int                `json:"max_ftp_accounts"`
-	ValidityDays          int                `json:"validity_days"`
-	HostingEnabled        bool               `json:"hosting_enabled"`
-	DefaultPHPVersion     string             `json:"default_php_version"`
-	AllowTLS              bool               `json:"allow_tls"`
-	AllowBackups          bool               `json:"allow_backups"`
-	AllowPHPSettings      bool               `json:"allow_php_settings"`
-	OverusePolicy         PlanOverusePolicy  `json:"overuse_policy"`
-	DiskWarningPercent    int                `json:"disk_warning_percent"`
-	TrafficWarningPercent int                `json:"traffic_warning_percent"`
-	ServicePresets        PlanServicePresets `json:"service_presets"`
+	ID                    int64                        `json:"id"`
+	CustomerID            int64                        `json:"customer_id"`
+	CustomerUserID        int64                        `json:"customer_user_id,omitempty"`
+	CustomerEmail         string                       `json:"customer_email"`
+	CustomerName          string                       `json:"customer_name"`
+	CustomerCompany       string                       `json:"customer_company"`
+	PlanID                int64                        `json:"plan_id"`
+	PlanName              string                       `json:"plan_name"`
+	SubscriptionName      string                       `json:"subscription_name"`
+	Status                string                       `json:"status"`
+	MaxSites              int                          `json:"max_sites"`
+	MaxDatabases          int                          `json:"max_databases"`
+	DiskMB                int                          `json:"disk_mb"`
+	MaxBackups            int                          `json:"max_backups"`
+	BackupStorageMB       int                          `json:"backup_storage_mb"`
+	SitesUsed             int                          `json:"sites_used"`
+	DatabasesUsed         int                          `json:"databases_used"`
+	BackupsUsed           int                          `json:"backups_used"`
+	BackupBytesUsed       int64                        `json:"backup_bytes_used"`
+	Warning               string                       `json:"warning,omitempty"`
+	CreatedAt             time.Time                    `json:"created_at"`
+	UpdatedAt             time.Time                    `json:"updated_at"`
+	ResellerID            int64                        `json:"reseller_id,omitempty"`
+	SyncMode              string                       `json:"sync_mode"`
+	SyncStatus            string                       `json:"sync_status"`
+	PlanRevision          int                          `json:"plan_revision"`
+	SyncError             string                       `json:"sync_error,omitempty"`
+	ComplianceStatus      SubscriptionComplianceStatus `json:"compliance_status"`
+	ComplianceError       string                       `json:"compliance_error,omitempty"`
+	ComplianceCheckedAt   time.Time                    `json:"compliance_checked_at,omitempty"`
+	AllowDNS              bool                         `json:"allow_dns"`
+	AllowSSH              bool                         `json:"allow_ssh"`
+	PHPAllowlist          string                       `json:"php_allowlist"`
+	PHPFPMMaxChildren     int                          `json:"php_fpm_max_children"`
+	PHPMemoryMB           int                          `json:"php_memory_mb"`
+	SiteDiskQuotaMB       int                          `json:"site_disk_quota_mb"`
+	BandwidthMB           int                          `json:"bandwidth_mb"`
+	MaxMailboxes          int                          `json:"max_mailboxes"`
+	BackupRetentionDays   int                          `json:"backup_retention_days"`
+	MaxSubdomains         int                          `json:"max_subdomains"`
+	MaxDomainAliases      int                          `json:"max_domain_aliases"`
+	MaxFTPAccounts        int                          `json:"max_ftp_accounts"`
+	ValidityDays          int                          `json:"validity_days"`
+	HostingEnabled        bool                         `json:"hosting_enabled"`
+	DefaultPHPVersion     string                       `json:"default_php_version"`
+	AllowTLS              bool                         `json:"allow_tls"`
+	AllowBackups          bool                         `json:"allow_backups"`
+	AllowPHPSettings      bool                         `json:"allow_php_settings"`
+	OverusePolicy         PlanOverusePolicy            `json:"overuse_policy"`
+	DiskWarningPercent    int                          `json:"disk_warning_percent"`
+	TrafficWarningPercent int                          `json:"traffic_warning_percent"`
+	ServicePresets        PlanServicePresets           `json:"service_presets"`
 }
 
 type CreateBackupResult struct {

@@ -20,6 +20,7 @@ import (
 var (
 	composerVersionRE = regexp.MustCompile(`(?i)\bcomposer(?:\s+version)?\s+([0-9]+(?:\.[0-9]+){1,2})\b`)
 	wpCLIVersionRE    = regexp.MustCompile(`(?i)\bwp-cli\s+([0-9]+(?:\.[0-9]+){1,2})\b`)
+	goAccessVersionRE = regexp.MustCompile(`(?i)\bgoaccess\s+(?:-\s*)?([0-9]+(?:\.[0-9]+){1,2})\b`)
 	phpFPMVersionRE   = regexp.MustCompile(`(?i)\bPHP\s+([0-9]+\.[0-9]+)(?:\.[0-9]+)?\b`)
 )
 

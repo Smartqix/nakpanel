@@ -58,6 +58,12 @@ type Plan struct {
 	AllowPHPSettings      bool
 	Presets               types.PlanServicePresets
 	HostingPolicy         types.HostingPolicy
+	LifecycleStatus       types.PlanLifecycleStatus
+	LastValidatedAt       sql.NullTime
+	ReadinessError        string
+	RevisionActorUserID   int64
+	RevisionActorLabel    string
+	ChangeReason          string
 }
 
 type Settings struct {
@@ -84,6 +90,11 @@ func ValidatePlan(plan Plan) error {
 	}
 	if plan.PriceCents.Valid && plan.PriceCents.Int64 < 0 {
 		return errors.New("price_cents cannot be negative")
+	}
+	switch plan.LifecycleStatus {
+	case types.PlanLifecycleDraft, types.PlanLifecycleActive, types.PlanLifecycleRetired:
+	default:
+		return fmt.Errorf("unsupported plan lifecycle %q", plan.LifecycleStatus)
 	}
 	for name, value := range map[string]int{
 		"disk_mb":               plan.DiskMB,
@@ -138,7 +149,8 @@ const planCoreColumns = `p.id, p.name, p.description, p.price_cents, p.disk_mb, 
        p.backup_storage_mb, p.is_active, p.created_at, p.updated_at, COALESCE(p.reseller_id, 0), p.revision,
        p.overuse_policy, p.disk_warning_percent, p.traffic_warning_percent, p.max_subdomains,
        p.max_domain_aliases, p.max_ftp_accounts, p.validity_days, p.hosting_enabled,
-	       p.default_php_version, p.allow_tls, p.allow_backups, p.allow_php_settings, p.hosting_policy`
+       p.default_php_version, p.allow_tls, p.allow_backups, p.allow_php_settings, p.hosting_policy,
+       p.lifecycle_status, p.last_validated_at, p.readiness_error`
 
 const planPresetJSON = `jsonb_build_object(
        'schema_version', COALESCE(ps.schema_version, 1),
@@ -201,6 +213,51 @@ func (s *SQLStore) ListPlansForUser(ctx context.Context, userID int64) ([]Plan, 
 	return out, rows.Err()
 }
 
+func (s *SQLStore) GetPlan(ctx context.Context, planID int64) (Plan, error) {
+	if s == nil || s.db == nil {
+		return Plan{}, errors.New("quota database is not configured")
+	}
+	return scanPlanWithPresets(s.db.QueryRowContext(ctx, `SELECT `+planCoreColumns+`, `+planPresetJSON+`
+FROM plans p LEFT JOIN plan_service_presets ps ON ps.plan_id=p.id WHERE p.id=$1`, planID))
+}
+
+func (s *SQLStore) ListPlanRevisions(ctx context.Context, limit int) ([]types.PlanRevision, error) {
+	return s.listPlanRevisions(ctx, 0, true, limit)
+}
+
+func (s *SQLStore) ListPlanRevisionsForUser(ctx context.Context, userID int64, limit int) ([]types.PlanRevision, error) {
+	return s.listPlanRevisions(ctx, userID, false, limit)
+}
+
+func (s *SQLStore) listPlanRevisions(ctx context.Context, userID int64, unrestricted bool, limit int) ([]types.PlanRevision, error) {
+	if s == nil || s.db == nil {
+		return nil, errors.New("quota database is not configured")
+	}
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT r.id,r.plan_id,r.revision,r.lifecycle_status,r.definition,r.definition_hash,
+COALESCE(r.actor_user_id,0),r.actor_label,r.change_reason,r.created_at
+FROM plan_revisions r JOIN plans p ON p.id=r.plan_id
+WHERE $2 OR p.reseller_id=(SELECT id FROM reseller_accounts WHERE login_user_id=$1)
+ORDER BY r.created_at DESC,r.id DESC LIMIT $3`, userID, unrestricted, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var revisions []types.PlanRevision
+	for rows.Next() {
+		var revision types.PlanRevision
+		if err := rows.Scan(&revision.ID, &revision.PlanID, &revision.Revision, &revision.LifecycleStatus,
+			&revision.Definition, &revision.DefinitionHash, &revision.ActorUserID, &revision.ActorLabel,
+			&revision.ChangeReason, &revision.CreatedAt); err != nil {
+			return nil, err
+		}
+		revisions = append(revisions, revision)
+	}
+	return revisions, rows.Err()
+}
+
 func (s *SQLStore) UpsertPlan(ctx context.Context, plan Plan) (Plan, error) {
 	if s == nil || s.db == nil {
 		return Plan{}, errors.New("quota database is not configured")
@@ -241,6 +298,15 @@ func (s *SQLStore) UpsertPlan(ctx context.Context, plan Plan) (Plan, error) {
 		return Plan{}, err
 	}
 	saved.HostingPolicy = plan.HostingPolicy
+	saved.LifecycleStatus = plan.LifecycleStatus
+	saved.IsActive = plan.LifecycleStatus == types.PlanLifecycleActive
+	if saved.LifecycleStatus == types.PlanLifecycleActive {
+		if _, err := tx.ExecContext(ctx, `UPDATE plans SET last_validated_at=now(),readiness_error='' WHERE id=$1`, saved.ID); err != nil {
+			return Plan{}, err
+		}
+		saved.LastValidatedAt = sql.NullTime{Time: time.Now().UTC(), Valid: true}
+		saved.ReadinessError = ""
+	}
 	if err := validatePlanWithinResellerTx(ctx, tx, saved); err != nil {
 		return Plan{}, err
 	}
@@ -270,6 +336,12 @@ func (s *SQLStore) UpsertPlan(ctx context.Context, plan Plan) (Plan, error) {
 			}
 		}
 	}
+	saved.RevisionActorUserID = plan.RevisionActorUserID
+	saved.RevisionActorLabel = plan.RevisionActorLabel
+	saved.ChangeReason = plan.ChangeReason
+	if err := insertPlanRevisionTx(ctx, tx, saved); err != nil {
+		return Plan{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return Plan{}, err
 	}
@@ -277,14 +349,58 @@ func (s *SQLStore) UpsertPlan(ctx context.Context, plan Plan) (Plan, error) {
 }
 
 func (s *SQLStore) SetPlanActive(ctx context.Context, planID int64, active bool) error {
+	lifecycle := types.PlanLifecycleRetired
+	if active {
+		lifecycle = types.PlanLifecycleActive
+	}
+	return s.SetPlanLifecycle(ctx, planID, lifecycle, 0, "system", "Legacy plan status change")
+}
+
+func (s *SQLStore) RecordPlanReadiness(ctx context.Context, planID int64, readinessError string) error {
+	if s == nil || s.db == nil || planID <= 0 {
+		return nil
+	}
+	_, err := s.db.ExecContext(ctx, `UPDATE plans SET readiness_error=$2,updated_at=now() WHERE id=$1`, planID, truncateError(errors.New(readinessError)))
+	return err
+}
+
+func (s *SQLStore) SetPlanLifecycle(ctx context.Context, planID int64, lifecycle types.PlanLifecycleStatus, actorUserID int64, actorLabel, reason string) error {
 	if s == nil || s.db == nil {
 		return errors.New("quota database is not configured")
 	}
 	if planID <= 0 {
 		return errors.New("plan id is required")
 	}
-	_, err := s.db.ExecContext(ctx, `UPDATE plans SET is_active = $2, updated_at = now() WHERE id = $1`, planID, active)
-	return err
+	switch lifecycle {
+	case types.PlanLifecycleDraft, types.PlanLifecycleActive, types.PlanLifecycleRetired:
+	default:
+		return fmt.Errorf("unsupported plan lifecycle %q", lifecycle)
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = selectPlanForUpdateTx(ctx, tx, planID); err != nil {
+		return err
+	}
+	active := lifecycle == types.PlanLifecycleActive
+	if _, err = tx.ExecContext(ctx, `UPDATE plans SET lifecycle_status=$2,is_active=$3,revision=revision+1,
+last_validated_at=CASE WHEN $3 THEN now() ELSE last_validated_at END,
+readiness_error=CASE WHEN $3 THEN '' ELSE readiness_error END,updated_at=now() WHERE id=$1`, planID, lifecycle, active); err != nil {
+		return err
+	}
+	saved, err := selectPlanForUpdateTx(ctx, tx, planID)
+	if err != nil {
+		return err
+	}
+	saved.RevisionActorUserID = actorUserID
+	saved.RevisionActorLabel = actorLabel
+	saved.ChangeReason = reason
+	if err = insertPlanRevisionTx(ctx, tx, saved); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func (s *SQLStore) PreviewPlan(ctx context.Context, plan Plan) (types.PlanPreview, error) {
@@ -300,15 +416,72 @@ func (s *SQLStore) PreviewPlan(ctx context.Context, plan Plan) (types.PlanPrevie
 		return types.PlanPreview{}, err
 	}
 	defer tx.Rollback()
+	var current Plan
+	if plan.ID > 0 {
+		current, err = selectPlanForUpdateTx(ctx, tx, plan.ID)
+		if err != nil {
+			return types.PlanPreview{}, err
+		}
+		plan = preserveStoredPlanProvider(plan, current)
+	}
 	if err := validatePlanWithinResellerTx(ctx, tx, plan); err != nil {
 		return types.PlanPreview{}, err
 	}
 	preview := types.PlanPreview{Allowed: true}
 	if plan.ID > 0 {
+		preview.Changes, err = DiffPlanDefinitions(current, plan)
+		if err != nil {
+			return types.PlanPreview{}, err
+		}
 		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FILTER (WHERE sync_mode='synced')::int,
 COUNT(*) FILTER (WHERE sync_mode='locked')::int,COUNT(*) FILTER (WHERE sync_mode='custom')::int
 FROM subscriptions WHERE plan_id=$1`, plan.ID).Scan(&preview.SyncedSubscriptions, &preview.LockedSubscriptions, &preview.CustomSubscriptions); err != nil {
 			return types.PlanPreview{}, err
+		}
+		rows, err := tx.QueryContext(ctx, `SELECT s.id,s.name,c.display_name
+FROM subscriptions s JOIN customers c ON c.id=s.customer_id
+WHERE s.plan_id=$1 AND s.sync_mode='synced' ORDER BY s.id`, plan.ID)
+		if err != nil {
+			return types.PlanPreview{}, err
+		}
+		type affectedSubscription struct {
+			id             int64
+			name, customer string
+		}
+		var affected []affectedSubscription
+		for rows.Next() {
+			var item affectedSubscription
+			if err := rows.Scan(&item.id, &item.name, &item.customer); err != nil {
+				rows.Close()
+				return types.PlanPreview{}, err
+			}
+			affected = append(affected, item)
+		}
+		if err := rows.Close(); err != nil {
+			return types.PlanPreview{}, err
+		}
+		for _, item := range affected {
+			addons, err := loadSubscriptionAddonsTx(ctx, tx, item.id)
+			if err != nil {
+				return types.PlanPreview{}, err
+			}
+			entitlements, err := ComposeEntitlements(entitlementsFromPlan(plan), addons)
+			if err != nil {
+				return types.PlanPreview{}, err
+			}
+			usage, err := loadSubscriptionComplianceUsage(ctx, tx, item.id)
+			if err != nil {
+				return types.PlanPreview{}, err
+			}
+			status, violations := EvaluateSubscriptionCompliance(entitlements, usage)
+			if status == types.SubscriptionComplianceOverLimit {
+				preview.SubscriptionImpacts = append(preview.SubscriptionImpacts, types.SubscriptionImpact{
+					SubscriptionID: item.id, SubscriptionName: item.name, CustomerName: item.customer, Violations: violations,
+				})
+			}
+		}
+		if len(preview.SubscriptionImpacts) > 0 {
+			preview.Warnings = append(preview.Warnings, fmt.Sprintf("%d synchronized subscription(s) will be over the new limits; no resources will be deleted.", len(preview.SubscriptionImpacts)))
 		}
 	}
 	settings, err := getSettingsTx(ctx, tx)
@@ -327,8 +500,10 @@ FROM subscriptions WHERE plan_id=$1`, plan.ID).Scan(&preview.SyncedSubscriptions
 	if settings.OversellPolicy == OversellPolicyCap && (unlimited || (settings.ServerDiskCapacityMB > 0 && committed > settings.ServerDiskCapacityMB)) {
 		preview.Allowed = false
 		preview.Warning = "Current committed disk exceeds the configured server capacity."
+		preview.BlockingReasons = append(preview.BlockingReasons, preview.Warning)
 	} else if settings.ServerDiskCapacityMB > 0 && (unlimited || committed > settings.ServerDiskCapacityMB) {
 		preview.Warning = "Committed disk exceeds the configured server capacity."
+		preview.Warnings = append(preview.Warnings, preview.Warning)
 	}
 	if plan.ResellerID > 0 {
 		resellerCommitted, resellerCapacity, resellerUnlimited, err := projectedResellerDiskAllocationTx(ctx, tx, plan.ResellerID, plan.ID, plan.DiskMB)
@@ -344,9 +519,17 @@ FROM subscriptions WHERE plan_id=$1`, plan.ID).Scan(&preview.SyncedSubscriptions
 		if resellerCapacity >= 0 && (resellerUnlimited || resellerCommitted > resellerCapacity) {
 			preview.Allowed = false
 			preview.Warning = fmt.Sprintf("Synchronized subscriptions would exceed the reseller disk allocation of %d MB.", resellerCapacity)
+			preview.BlockingReasons = append(preview.BlockingReasons, preview.Warning)
 		}
 	}
 	return preview, nil
+}
+
+func preserveStoredPlanProvider(candidate, stored Plan) Plan {
+	if candidate.ID > 0 {
+		candidate.ResellerID = stored.ResellerID
+	}
+	return candidate
 }
 
 func projectedResellerDiskAllocationTx(ctx context.Context, q queryRower, resellerID, planID int64, diskMB int) (int, int, bool, error) {
@@ -560,16 +743,17 @@ func insertPlanTx(ctx context.Context, tx *sql.Tx, plan Plan) (Plan, error) {
     php_fpm_max_children, php_memory_mb, site_disk_quota_mb, max_backups,
 	    backup_storage_mb, is_active, reseller_id, overuse_policy, disk_warning_percent,
 	    traffic_warning_percent, max_subdomains, max_domain_aliases, max_ftp_accounts,
-	    validity_days, hosting_enabled, default_php_version, allow_tls, allow_backups, allow_php_settings
+	    validity_days, hosting_enabled, default_php_version, allow_tls, allow_backups, allow_php_settings,
+	    lifecycle_status
 	) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
-	          $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+	          $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32)
 RETURNING id, name, description, price_cents, disk_mb, max_sites, max_databases, bandwidth_mb,
        max_mailboxes, allow_ssh, allow_dns, backup_retention_days, php_allowlist,
        php_fpm_max_children, php_memory_mb, site_disk_quota_mb, max_backups,
        backup_storage_mb, is_active, created_at, updated_at, COALESCE(reseller_id, 0), revision,
        overuse_policy, disk_warning_percent, traffic_warning_percent, max_subdomains,
        max_domain_aliases, max_ftp_accounts, validity_days, hosting_enabled, default_php_version,
-       allow_tls, allow_backups, allow_php_settings`,
+       allow_tls, allow_backups, allow_php_settings, lifecycle_status, last_validated_at, readiness_error`,
 		strings.TrimSpace(plan.Name),
 		strings.TrimSpace(plan.Description),
 		nullInt64Value(plan.PriceCents),
@@ -601,6 +785,7 @@ RETURNING id, name, description, price_cents, disk_mb, max_sites, max_databases,
 		plan.AllowTLS,
 		plan.AllowBackups,
 		plan.AllowPHPSettings,
+		plan.LifecycleStatus,
 	)
 	return scanPlan(row)
 }
@@ -638,6 +823,7 @@ SET
 		    allow_tls = $29,
 		    allow_backups = $30,
 		    allow_php_settings = $31,
+		    lifecycle_status = $32,
 		 revision = revision + 1,
     updated_at = now()
 WHERE id = $1
@@ -647,7 +833,7 @@ RETURNING id, name, description, price_cents, disk_mb, max_sites, max_databases,
 	       backup_storage_mb, is_active, created_at, updated_at, COALESCE(reseller_id, 0), revision,
 	       overuse_policy, disk_warning_percent, traffic_warning_percent, max_subdomains,
 	       max_domain_aliases, max_ftp_accounts, validity_days, hosting_enabled, default_php_version,
-	       allow_tls, allow_backups, allow_php_settings`,
+	       allow_tls, allow_backups, allow_php_settings, lifecycle_status, last_validated_at, readiness_error`,
 		plan.ID,
 		strings.TrimSpace(plan.Name),
 		strings.TrimSpace(plan.Description),
@@ -679,6 +865,7 @@ RETURNING id, name, description, price_cents, disk_mb, max_sites, max_databases,
 		plan.AllowTLS,
 		plan.AllowBackups,
 		plan.AllowPHPSettings,
+		plan.LifecycleStatus,
 	)
 	return scanPlan(row)
 }
@@ -981,6 +1168,9 @@ func scanPlan(row planScanner) (Plan, error) {
 		&plan.AllowTLS,
 		&plan.AllowBackups,
 		&plan.AllowPHPSettings,
+		&plan.LifecycleStatus,
+		&plan.LastValidatedAt,
+		&plan.ReadinessError,
 	); err != nil {
 		return Plan{}, err
 	}
@@ -1000,7 +1190,8 @@ func scanPlanWithPresets(row planScanner) (Plan, error) {
 		&plan.DiskWarningPercent, &plan.TrafficWarningPercent, &plan.MaxSubdomains,
 		&plan.MaxDomainAliases, &plan.MaxFTPAccounts, &plan.ValidityDays,
 		&plan.HostingEnabled, &plan.DefaultPHPVersion, &plan.AllowTLS,
-		&plan.AllowBackups, &plan.AllowPHPSettings, &policyRaw, &presetsRaw,
+		&plan.AllowBackups, &plan.AllowPHPSettings, &policyRaw, &plan.LifecycleStatus,
+		&plan.LastValidatedAt, &plan.ReadinessError, &presetsRaw,
 	); err != nil {
 		return Plan{}, err
 	}
@@ -1018,8 +1209,26 @@ func hostingPolicyFromPlan(plan Plan) types.HostingPolicy {
 	return controlpolicy.DefaultFromEntitlements(e)
 }
 
+// EffectivePlanHostingPolicy expands legacy plan columns into the current
+// policy contract so all callers apply the same readiness checks.
+func EffectivePlanHostingPolicy(plan Plan) types.HostingPolicy {
+	if plan.HostingPolicy.SchemaVersion != 0 {
+		policy := plan.HostingPolicy
+		if policy.SchemaVersion < 5 && policy.Logs.StatisticsEngine == "" {
+			policy.Logs = plan.Presets.Logs
+		}
+		return controlpolicy.Upgrade(policy)
+	}
+	return hostingPolicyFromPlan(plan)
+}
+
 func normalizedPlanPresets(plan Plan) types.PlanServicePresets {
 	presets := plan.Presets
+	if plan.HostingPolicy.SchemaVersion >= 5 {
+		presets.Logs = controlpolicy.NormalizeLogs(plan.HostingPolicy.Logs)
+	} else {
+		presets.Logs = controlpolicy.NormalizeLogs(presets.Logs)
+	}
 	if presets.SchemaVersion <= 0 {
 		presets.SchemaVersion = 1
 	}
@@ -1043,6 +1252,17 @@ func normalizedPlanPresets(plan Plan) types.PlanServicePresets {
 }
 
 func normalizePlanDefaults(plan Plan) Plan {
+	if plan.LifecycleStatus == "" {
+		switch {
+		case plan.IsActive:
+			plan.LifecycleStatus = types.PlanLifecycleActive
+		case plan.ID > 0:
+			plan.LifecycleStatus = types.PlanLifecycleRetired
+		default:
+			plan.LifecycleStatus = types.PlanLifecycleDraft
+		}
+	}
+	plan.IsActive = plan.LifecycleStatus == types.PlanLifecycleActive
 	if plan.OverusePolicy == "" {
 		plan.OverusePolicy = types.PlanOveruseBlock
 	}
@@ -1057,6 +1277,33 @@ func normalizePlanDefaults(plan Plan) Plan {
 	}
 	plan.Presets = normalizedPlanPresets(plan)
 	return plan
+}
+
+func insertPlanRevisionTx(ctx context.Context, tx *sql.Tx, plan Plan) error {
+	definition, hash, err := CanonicalPlanDefinition(plan)
+	if err != nil {
+		return fmt.Errorf("encode plan revision: %w", err)
+	}
+	actorLabel := strings.TrimSpace(plan.RevisionActorLabel)
+	if plan.RevisionActorUserID == 0 && actorLabel == "" {
+		actorLabel = "system"
+	}
+	reason := strings.TrimSpace(plan.ChangeReason)
+	if reason == "" {
+		if plan.Revision <= 1 {
+			reason = "Plan created"
+		} else {
+			reason = "Plan updated"
+		}
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO plan_revisions(
+plan_id,revision,lifecycle_status,definition,definition_hash,actor_user_id,actor_label,change_reason)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, plan.ID, maxInt(plan.Revision, 1), plan.LifecycleStatus,
+		definition, hash, nullableInt64(plan.RevisionActorUserID), actorLabel, reason)
+	if err != nil {
+		return fmt.Errorf("write immutable plan revision: %w", err)
+	}
+	return nil
 }
 
 func upsertPlanPresetsTx(ctx context.Context, tx *sql.Tx, planID int64, presets types.PlanServicePresets) error {

@@ -19,8 +19,55 @@ var (
 	ErrProviderScope    = errors.New("provider scoped object not found")
 )
 
-func (s *SQLStore) SetPlanStatuses(ctx context.Context, planIDs []int64, resellerID int64, unrestricted bool, active bool) error {
-	return s.setProviderPlanStatuses(ctx, "plans", planIDs, resellerID, unrestricted, active)
+func (s *SQLStore) SetPlanStatuses(ctx context.Context, planIDs []int64, resellerID int64, unrestricted bool, active bool, actorUserID int64, actorLabel string) error {
+	if s == nil || s.db == nil {
+		return errors.New("plan database is not configured")
+	}
+	if len(planIDs) == 0 {
+		return errors.New("at least one plan is required")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	lifecycle := types.PlanLifecycleRetired
+	if active {
+		lifecycle = types.PlanLifecycleActive
+	}
+	seen := make(map[int64]struct{}, len(planIDs))
+	for _, id := range planIDs {
+		if id <= 0 {
+			return errors.New("plan ids must be positive")
+		}
+		if _, duplicate := seen[id]; duplicate {
+			continue
+		}
+		seen[id] = struct{}{}
+		plan, err := selectPlanForUpdateTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if !unrestricted && plan.ResellerID != resellerID {
+			return ErrProviderScope
+		}
+		if _, err = tx.ExecContext(ctx, `UPDATE plans SET lifecycle_status=$2,is_active=$3,revision=revision+1,
+last_validated_at=CASE WHEN $3 THEN now() ELSE last_validated_at END,
+readiness_error=CASE WHEN $3 THEN '' ELSE readiness_error END,updated_at=now() WHERE id=$1`, id, lifecycle, active); err != nil {
+			return err
+		}
+		saved, err := selectPlanForUpdateTx(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		saved.RevisionActorUserID = actorUserID
+		saved.RevisionActorLabel = actorLabel
+		saved.ChangeReason = "Bulk lifecycle changed to " + string(lifecycle)
+		if err = insertPlanRevisionTx(ctx, tx, saved); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func (s *SQLStore) SetAddonPlanStatuses(ctx context.Context, addonIDs []int64, resellerID int64, unrestricted bool, active bool) error {
@@ -153,11 +200,7 @@ func validatePlanWithinResellerTx(ctx context.Context, tx *sql.Tx, p Plan) error
 	} else {
 		rp.HostingPolicy = resellerHostingPolicyFromLegacy(rp)
 	}
-	child := p.HostingPolicy
-	if child.SchemaVersion == 0 {
-		child = hostingPolicyFromPlan(p)
-	}
-	if err := controlpolicy.ValidateWithin(controlpolicy.Upgrade(child), controlpolicy.Upgrade(rp.HostingPolicy)); err != nil {
+	if err := controlpolicy.ValidateWithin(EffectivePlanHostingPolicy(p), controlpolicy.Upgrade(rp.HostingPolicy)); err != nil {
 		return fmt.Errorf("%w: %v", ErrResellerCapacity, err)
 	}
 	return nil
@@ -243,13 +286,18 @@ func ComposeEntitlements(base types.SubscriptionEntitlements, addons []types.Add
 		return types.SubscriptionEntitlements{}, err
 	}
 	result := base
-	composedPolicy := base.HostingPolicy
+	composedPolicy := EffectivePlanHostingPolicy(planFromEntitlements(base))
+	result.ServicePresets.Logs.StatisticsEngine = composedPolicy.Logs.StatisticsEngine
+	result.ServicePresets.Logs = controlpolicy.NormalizeLogs(result.ServicePresets.Logs)
 	php := csvSet(base.PHPAllowlist)
 	for _, addon := range addons {
 		if err := ValidateEntitlements(addon.Entitlements); err != nil {
 			return types.SubscriptionEntitlements{}, fmt.Errorf("add-on %q: %w", addon.Name, err)
 		}
 		add := addon.Entitlements
+		addonPolicy := EffectivePlanHostingPolicy(planFromEntitlements(add))
+		add.ServicePresets.Logs.StatisticsEngine = addonPolicy.Logs.StatisticsEngine
+		add.ServicePresets.Logs = controlpolicy.NormalizeLogs(add.ServicePresets.Logs)
 		for _, limit := range []struct {
 			name    string
 			current *int
@@ -282,9 +330,9 @@ func ComposeEntitlements(base types.SubscriptionEntitlements, addons []types.Add
 		result.AllowBackups = result.AllowBackups || add.AllowBackups
 		result.AllowPHPSettings = result.AllowPHPSettings || add.AllowPHPSettings
 		result.ServicePresets = composePresetIncrements(result.ServicePresets, add.ServicePresets)
-		if add.HostingPolicy.SchemaVersion > 0 {
+		if add.HostingPolicy.SchemaVersion > 0 || controlpolicy.StatisticsEngine(addonPolicy.Logs) == "goaccess" {
 			var composeErr error
-			composedPolicy, composeErr = composeHostingPolicyAddon(composedPolicy, add.HostingPolicy)
+			composedPolicy, composeErr = composeHostingPolicyAddon(composedPolicy, addonPolicy)
 			if composeErr != nil {
 				return types.SubscriptionEntitlements{}, fmt.Errorf("add-on %q hosting policy: %w", addon.Name, composeErr)
 			}
@@ -311,6 +359,9 @@ func mergeLegacyEntitlementsPolicy(e types.SubscriptionEntitlements, previous ty
 		return resolved
 	}
 	preserved := controlpolicy.Upgrade(previous)
+	if previous.SchemaVersion < 5 && previous.Logs.StatisticsEngine == "" {
+		preserved.Logs = resolved.Logs
+	}
 	preserved.Resources.DiskMB = resolved.Resources.DiskMB
 	preserved.Resources.TrafficMB = resolved.Resources.TrafficMB
 	preserved.Resources.MaxSites = resolved.Resources.MaxSites
@@ -377,6 +428,7 @@ func composeHostingPolicyAddon(base, addon types.HostingPolicy) (types.HostingPo
 		{&base.Resources.ValkeyMemoryMB, addon.Resources.ValkeyMemoryMB},
 		{&base.Resources.MaxPHPWorkers, addon.Resources.MaxPHPWorkers},
 		{&base.Resources.MaxPHPReleases, addon.Resources.MaxPHPReleases},
+		{&base.Resources.MaxWordPressSites, addon.Resources.MaxWordPressSites},
 	} {
 		value, err := additiveLimit(*limit.current, limit.delta)
 		if err != nil {
@@ -394,6 +446,11 @@ func composeHostingPolicyAddon(base, addon types.HostingPolicy) (types.HostingPo
 	base.Permissions.SFTP = base.Permissions.SFTP || addon.Permissions.SFTP
 	base.Permissions.FTPS = base.Permissions.FTPS || addon.Permissions.FTPS
 	base.Permissions.Logs = base.Permissions.Logs || addon.Permissions.Logs
+	base.Permissions.WebStatistics = base.Permissions.WebStatistics || addon.Permissions.WebStatistics
+	if controlpolicy.StatisticsEngine(addon.Logs) == "goaccess" {
+		base.Logs.StatisticsEngine = "goaccess"
+		base.Logs.StatisticsEnabled = true
+	}
 	base.Permissions.Git = base.Permissions.Git || addon.Permissions.Git
 	base.Permissions.Staging = base.Permissions.Staging || addon.Permissions.Staging
 	base.Permissions.Valkey = base.Permissions.Valkey || addon.Permissions.Valkey
@@ -412,6 +469,7 @@ func composeHostingPolicyAddon(base, addon types.HostingPolicy) (types.HostingPo
 	base.Permissions.ComposerCodeExecution = base.Permissions.ComposerCodeExecution || addon.Permissions.ComposerCodeExecution
 	base.Permissions.ManagedPHPDeployments = base.Permissions.ManagedPHPDeployments || addon.Permissions.ManagedPHPDeployments
 	base.Permissions.PHPWorkers = base.Permissions.PHPWorkers || addon.Permissions.PHPWorkers
+	base.Permissions.WordPressToolkit = base.Permissions.WordPressToolkit || addon.Permissions.WordPressToolkit
 	base.Access.FTPSEnabled = base.Access.FTPSEnabled || addon.Access.FTPSEnabled
 	base.Web.RequestRatePerSecond = highestLimit(base.Web.RequestRatePerSecond, addon.Web.RequestRatePerSecond)
 	base.Web.RequestBurst = highestLimit(base.Web.RequestBurst, addon.Web.RequestBurst)
@@ -532,7 +590,11 @@ func composePresetIncrements(base, add types.PlanServicePresets) types.PlanServi
 	result.Performance.StaticFileCache = result.Performance.StaticFileCache || add.Performance.StaticFileCache
 	result.Logs.RotationEnabled = result.Logs.RotationEnabled || add.Logs.RotationEnabled
 	result.Logs.RetentionDays = maxInt(result.Logs.RetentionDays, add.Logs.RetentionDays)
-	result.Logs.StatisticsEnabled = result.Logs.StatisticsEnabled || add.Logs.StatisticsEnabled
+	result.Logs = controlpolicy.NormalizeLogs(result.Logs)
+	if controlpolicy.StatisticsEngine(add.Logs) == "goaccess" {
+		result.Logs.StatisticsEngine = "goaccess"
+		result.Logs.StatisticsEnabled = true
+	}
 	result.Applications.CatalogEnabled = result.Applications.CatalogEnabled || add.Applications.CatalogEnabled
 	applications := make(map[string]struct{})
 	for _, name := range append(append([]string{}, result.Applications.Allowed...), add.Applications.Allowed...) {
@@ -1262,7 +1324,7 @@ ORDER BY subscription.id`, resellerID, excludeSubscriptionID)
 	}
 	candidateValues := typedPolicyLimits(candidatePolicy)
 	ceilingValues := typedPolicyLimits(limits.HostingPolicy)
-	names := []string{"CPU", "memory", "read I/O", "write I/O", "processes", "database users", "mail aliases", "scheduled tasks", "applications", "container storage", "Valkey memory"}
+	names := []string{"CPU", "memory", "read I/O", "write I/O", "processes", "database users", "mail aliases", "scheduled tasks", "applications", "container storage", "Valkey memory", "WordPress sites"}
 	for index, ceiling := range ceilingValues {
 		if ceiling < 0 {
 			continue
@@ -1282,7 +1344,7 @@ func typedPolicyLimits(policy types.HostingPolicy) []int {
 		policy.Resources.MaxTasks, policy.Resources.MaxDatabaseUsers,
 		policy.Resources.MaxMailAliases, policy.Resources.MaxScheduledTasks,
 		policy.Resources.MaxApplications, policy.Resources.ContainerStorageMB,
-		policy.Resources.ValkeyMemoryMB,
+		policy.Resources.ValkeyMemoryMB, policy.Resources.MaxWordPressSites,
 	}
 }
 
@@ -1654,6 +1716,18 @@ FROM subscriptions s CROSS JOIN LATERAL (SELECT id FROM users WHERE role='admin'
 	return firstErr
 }
 
+func preserveCustomHostingPolicy(custom, current types.SubscriptionEntitlements) types.SubscriptionEntitlements {
+	currentPolicy := mergeLegacyEntitlementsPolicy(current, current.HostingPolicy)
+	custom.HostingPolicy = mergeLegacyEntitlementsPolicy(custom, currentPolicy)
+	if custom.StatisticsEdited {
+		custom.HostingPolicy.Logs = controlpolicy.NormalizeLogs(custom.ServicePresets.Logs)
+	} else {
+		custom.HostingPolicy.Logs = currentPolicy.Logs
+	}
+	custom.ServicePresets.Logs = custom.HostingPolicy.Logs
+	return custom
+}
+
 func (s *SQLStore) SetSubscriptionMode(ctx context.Context, subscriptionID int64, mode string, custom types.SubscriptionEntitlements) error {
 	if mode != "synced" && mode != "locked" && mode != "custom" {
 		return fmt.Errorf("unsupported sync mode %q", mode)
@@ -1672,6 +1746,13 @@ func (s *SQLStore) SetSubscriptionMode(ctx context.Context, subscriptionID int64
 		return err
 	}
 	if mode == "custom" {
+		if custom.PreserveHostingPolicy {
+			current, readErr := readSubscriptionEntitlementsTx(ctx, tx, subscriptionID)
+			if readErr != nil {
+				return readErr
+			}
+			custom = preserveCustomHostingPolicy(custom, current)
+		}
 		if err = ValidateEntitlements(custom); err != nil {
 			return err
 		}
@@ -1842,6 +1923,9 @@ func syncSubscriptionTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, f
 		}
 	}
 	if err = writeSubscriptionEntitlementsTx(ctx, tx, e); err != nil {
+		return err
+	}
+	if err = evaluateSubscriptionComplianceTx(ctx, tx, subscriptionID, e); err != nil {
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `UPDATE subscriptions SET sync_status='in_sync',plan_revision=$2,sync_error='',updated_at=now() WHERE id=$1`, subscriptionID, plan.Revision)

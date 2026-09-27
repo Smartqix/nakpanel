@@ -29,6 +29,18 @@ NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase29-verify.sh"
 # synthetic Phase 29 upgrade version, then proves Classic WordPress and native
 # managed PHP on the same server without rebuilding the VM.
 NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase30-verify.sh"
+# Phase 31 is the final gate. It validates production service-plan lifecycle,
+# runtime readiness, immutable revisions, impact previews, synchronization,
+# and non-destructive subscription compliance on the same live server.
+NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase31-verify.sh"
+# Phase 32 is the final product gate. It provisions a plan-backed Classic site
+# and exercises the routed WordPress Toolkit without manufacturing state.
+NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase32-verify.sh"
+# Phase 33 is the final safety gate. It proves backup-gated uninstall,
+# database provenance, non-destructive domain preservation, and reinstall.
+NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase33-verify.sh"
+# Phase 34 verifies protected domain GoAccess reports and privacy boundaries.
+NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase34-verify.sh"
 
 VM_IP="$(vm_ip)"
 if [[ -z "${VM_IP}" ]]; then

@@ -133,7 +133,7 @@ type ReconcileIntentRefresher interface {
 }
 
 type Phase6StatusStore interface {
-	MarkBackupActive(ctx context.Context, id int64, result types.CreateBackupResult) error
+	MarkBackupActive(ctx context.Context, id int64, result types.CreateBackupResult, databaseNames []string) error
 	MarkBackupFailed(ctx context.Context, id int64, message string) error
 	MarkRestoreActive(ctx context.Context, id int64, result types.RestoreBackupResult) error
 	MarkRestoreFailed(ctx context.Context, id int64, message string) error
@@ -189,7 +189,7 @@ func (w *CreateBackupWorker) Work(ctx context.Context, job *river.Job[CreateBack
 		return errors.Join(err, w.markBackupFailed(ctx, job.Args.BackupID, err.Error()), w.reportBackup(ctx, job.Args, err))
 	}
 	if w.store != nil {
-		if err := w.store.MarkBackupActive(ctx, job.Args.BackupID, result); err != nil {
+		if err := w.store.MarkBackupActive(ctx, job.Args.BackupID, result, append([]string(nil), job.Args.Databases...)); err != nil {
 			return err
 		}
 	}

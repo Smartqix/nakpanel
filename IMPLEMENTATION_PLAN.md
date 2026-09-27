@@ -305,7 +305,7 @@ Webmail hostnames (Roundcube autologin), Adminer SSO at `/db`, backups (correctn
 reconciliation/drift detection ("regenerate all configs"), additional PHP versions, MySQL 8 + Postgres adapters,
 reseller quotas/cgroups. Each is a repeat of the Phase 3 pattern.
 
-### Phase 30 — Production PHP hosting (implemented; live gate pending)
+### Phase 30 — Production PHP hosting (implemented and live-verified)
 
 Production PHP hosting now includes readiness-gated PHP 8.3/8.4/8.5, Classic
 PHP, Git-backed Managed PHP releases, Composer policy, encrypted write-only
@@ -318,8 +318,99 @@ Python application runtime.
   are implemented and pass repository verification.
 - [x] `deploy/multipass/phase30-verify.sh` is wired after the Phase 28,
   security, and Phase 29 gates on the canonical single VM.
-- [ ] The controller must run the destructive fresh Ubuntu 24.04 Multipass
-  chain and record live acceptance after review.
+- [x] The exact worktree build passed its Ubuntu 24.04 acceptance gate as part
+  of the Phase 31 canonical chain on `nakpanel-lab` at `192.168.252.68`.
+
+### Phase 31 — Production service plans (implemented and live-verified)
+
+Service plans are now explicit provider contracts. Plans have draft, active,
+and retired lifecycle states; only active, live-capability-ready plans are
+assignable. Every save records an immutable, actor-attributed definition hash
+and change reason. The editor separates resources, services, customer
+management permissions, inherited defaults, and advanced stored properties,
+and labels each control by its enforcement behavior.
+
+Plan preview reports structured field changes, affected synchronized
+subscriptions, reseller/server capacity, and live capability blockers.
+Synchronization never deletes resources when a limit is lowered. Affected
+subscriptions are marked `over_limit`, preserve their resources, and show the
+exact violation; fresh complete usage produces `compliant`, while incomplete
+measurement is reported honestly as `unknown`.
+
+- [x] Migration, capability registry, lifecycle, immutable revisions,
+  readiness validation, preview, compliance, UI, and static verifier contracts
+  are implemented.
+- [x] `deploy/multipass/phase31-verify.sh` is wired after Phase 30 as the final
+  canonical single-VM gate.
+- [x] The exact worktree build passed `phase31-verify.sh` on the Ubuntu 24.04
+  `nakpanel-lab` VM at `192.168.252.68`, followed by desktop and 390 px browser
+  QA of the live plan and subscription workspaces.
+
+### Phase 32 — WordPress Toolkit (implemented and live-verified)
+
+WordPress is now a first-class, domain-scoped product for entitled Classic PHP
+sites. The Toolkit installs or discovers WordPress through fixed WP-CLI
+operations, keeps retry-only credentials in the encrypted secret service until
+successful use and then retires them,
+tracks inventory and security findings, verifies checksums, manages maintenance
+mode and hardening, resets administrator passwords, and gates every update on a
+completed Nakpanel backup.
+
+- [x] Policy v4, schema, typed agent operations, identifier-only River jobs,
+  routed domain workspace, plan controls, audit/notification integration, and
+  static verifier contracts are implemented.
+- [x] Cross-tenant access is hidden, mutations are CSRF-protected, browser and
+  River payloads remain credential-free, and WordPress site limits are enforced
+  before provisioning.
+- [x] `deploy/multipass/phase32-verify.sh` is wired after Phase 31 as the
+  prerequisite Toolkit feature gate for Phase 33.
+- [x] The exact worktree build passed `phase32-verify.sh` on the Ubuntu 24.04
+  `nakpanel-lab` VM at `192.168.252.68`; desktop and 390 px browser acceptance
+  are recorded after the live functional gate.
+
+### Phase 33 — Safe WordPress Uninstall (implemented and live-verified)
+
+WordPress removal is now a convergent product workflow rather than a file
+delete. Detach remains non-destructive and removes Toolkit tracking only.
+Uninstall preserves the hosted domain and configuration, defaults to a normal
+recovery backup, and permits database deletion only when the database was
+created by the Toolkit and the completed same-site backup manifest contains
+that exact database.
+
+- [x] Schema, backup manifests, typed removal contracts, provenance checks,
+  tombstone reuse, and identifier-only River orchestration are implemented.
+- [x] The root agent validates the Classic site identity, quarantines files,
+  atomically activates the Nakpanel placeholder, rolls back pre-drop failures,
+  and cleans the quarantine idempotently after committed convergence.
+- [x] The domain WordPress workspace provides separate Detach and Uninstall
+  actions, exact-domain confirmation, backup/database dependencies, removed
+  recovery summaries, and reinstall from the retained tombstone.
+- [x] `deploy/multipass/phase33-verify.sh` is wired after Phase 32 as the final
+  canonical single-VM gate.
+- [x] The exact worktree build passed `phase33-verify.sh` on Ubuntu 24.04
+  `nakpanel-lab` at `192.168.252.68`, including backup-gated managed-database
+  deletion, detached discovery, external-database preservation, pre-drop
+  rollback, tombstone reinstall, and desktop/mobile browser acceptance.
+
+### Phase 34 — Domain Web Statistics (implemented and lab-verified)
+
+GoAccess extends the domain Statistics workspace with a native summary and
+protected detailed report. Subscription snapshots determine availability and
+site-override permission. Background generation follows a configurable daily
+UTC schedule, with rate-limited manual refresh and last-successful-report
+preservation. Server settings control retention and IP anonymization; request
+and referrer query parameters are removed before analysis.
+
+- [x] Agent report generation, isolated storage, privacy filtering, and bounds.
+- [x] Entitlement inheritance, scoped HTTP routes, scheduling, CSRF, and audit.
+- [x] Domain workspace, plan controls, and administrator server settings.
+- [x] Ubuntu installer and `deploy/multipass/phase34-verify.sh` final gate.
+- [x] Tests, independent review, desktop/mobile QA, and live Ubuntu acceptance.
+
+The Phase 34 product-route verifier passed on the upgraded Ubuntu 24.04 lab at
+`192.168.252.68`, including private report generation, privacy filtering,
+refresh throttling, CSRF, and customer isolation. The destructive fresh full
+phase chain was not rerun for this delivery.
 
 ---
 

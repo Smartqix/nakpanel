@@ -22,7 +22,7 @@ const (
 )
 
 var siteSections = map[string]struct{}{
-	"schema_version": {}, "permissions": {}, "web": {}, "php": {}, "mail": {}, "dns": {}, "applications": {}, "valkey": {},
+	"schema_version": {}, "permissions": {}, "web": {}, "php": {}, "mail": {}, "dns": {}, "applications": {}, "valkey": {}, "logs": {},
 }
 
 var phpVersionRE = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
@@ -56,6 +56,16 @@ func apply(base types.HostingPolicy, patch []byte, scope Scope) (types.HostingPo
 		return types.HostingPolicy{}, err
 	}
 	if scope == ScopeSite {
+		if logs, ok := patchValue["logs"].(map[string]any); ok {
+			for field := range logs {
+				if field != "statistics_engine" && field != "statistics_enabled" {
+					return types.HostingPolicy{}, fmt.Errorf("logs field %q cannot be overridden for a site", field)
+				}
+				if !base.Permissions.WebStatistics {
+					delete(logs, field)
+				}
+			}
+		}
 		for section := range patchValue {
 			if _, ok := siteSections[section]; !ok {
 				return types.HostingPolicy{}, fmt.Errorf("%q cannot be overridden for a site", section)
@@ -77,6 +87,12 @@ func apply(base types.HostingPolicy, patch []byte, scope Scope) (types.HostingPo
 	if err := json.Unmarshal(baseJSON, &baseValue); err != nil {
 		return types.HostingPolicy{}, err
 	}
+	// A legacy boolean patch is an explicit edit, not an inherited engine.
+	if logs, ok := patchValue["logs"].(map[string]any); ok {
+		if enabled, ok := logs["statistics_enabled"].(bool); ok && logs["statistics_engine"] == nil {
+			logs["statistics_engine"] = StatisticsEngine(types.LogsPreset{StatisticsEnabled: enabled})
+		}
+	}
 	merge(baseValue, patchValue)
 	merged, err := json.Marshal(baseValue)
 	if err != nil {
@@ -89,7 +105,29 @@ func apply(base types.HostingPolicy, patch []byte, scope Scope) (types.HostingPo
 	if err := Validate(result); err != nil {
 		return types.HostingPolicy{}, err
 	}
+	result.Logs = NormalizeLogs(result.Logs)
 	return result, nil
+}
+
+// ValidateSitePatchPermissions applies write-time permission checks to the
+// submitted patch, before merging previously saved overrides. Reads ignore
+// statistics overrides whose permission has since been revoked.
+func ValidateSitePatchPermissions(base types.HostingPolicy, patch []byte) error {
+	if len(bytes.TrimSpace(patch)) == 0 {
+		return nil
+	}
+	var value map[string]any
+	if err := decodeStrict(patch, &value); err != nil {
+		return err
+	}
+	if logs, ok := value["logs"].(map[string]any); ok && !base.Permissions.WebStatistics {
+		for field, setting := range logs {
+			if (field == "statistics_engine" || field == "statistics_enabled") && setting != nil {
+				return errors.New("web statistics overrides are not permitted")
+			}
+		}
+	}
+	return nil
 }
 
 func merge(dst, patch map[string]any) {
@@ -124,8 +162,11 @@ func decodeStrict(data []byte, target any) error {
 }
 
 func Validate(p types.HostingPolicy) error {
-	if p.SchemaVersion != 1 && p.SchemaVersion != 2 && p.SchemaVersion != 3 {
+	if p.SchemaVersion < 1 || p.SchemaVersion > 5 {
 		return fmt.Errorf("unsupported schema version %d", p.SchemaVersion)
+	}
+	if engine := StatisticsEngine(p.Logs); engine != "disabled" && engine != "goaccess" {
+		return fmt.Errorf("unsupported statistics engine %q", engine)
 	}
 	limits := map[string]int{
 		"disk_mb": p.Resources.DiskMB, "traffic_mb": p.Resources.TrafficMB,
@@ -139,7 +180,8 @@ func Validate(p types.HostingPolicy) error {
 		"max_applications": p.Resources.MaxApplications, "container_storage_mb": p.Resources.ContainerStorageMB,
 		"max_ftp_accounts": p.Resources.MaxFTPAccounts, "valkey_memory_mb": p.Resources.ValkeyMemoryMB,
 		"max_php_workers": p.Resources.MaxPHPWorkers, "max_php_releases": p.Resources.MaxPHPReleases,
-		"fpm_max_children": p.PHP.FPMMaxChildren, "fpm_max_requests": p.PHP.FPMMaxRequests,
+		"max_wordpress_sites": p.Resources.MaxWordPressSites,
+		"fpm_max_children":    p.PHP.FPMMaxChildren, "fpm_max_requests": p.PHP.FPMMaxRequests,
 		"php_memory_limit_mb": p.PHP.MemoryLimitMB, "mailbox_quota_mb": p.Mail.MailboxQuotaMB,
 		"backup_retention_days": p.Backups.RetentionDays, "opcache_memory_mb": p.PHP.OPcacheMemoryMB,
 		"valkey_policy_memory_mb": p.Valkey.MemoryMB,
@@ -221,11 +263,12 @@ func Validate(p types.HostingPolicy) error {
 
 // Upgrade preserves stored values while supplying versioned safe defaults.
 // Stored snapshots remain readable and are not rewritten until an operator
-// saves them. Phase 30 permissions and limits use their disabled zero values.
+// saves them. New permissions and limits use their disabled zero values.
 func Upgrade(p types.HostingPolicy) types.HostingPolicy {
-	if p.SchemaVersion != 1 && p.SchemaVersion != 2 {
+	if p.SchemaVersion < 1 || p.SchemaVersion > 5 {
 		return p
 	}
+	p.Logs = NormalizeLogs(p.Logs)
 	if p.SchemaVersion == 1 {
 		if p.PHP.FPMMode == "" {
 			p.PHP.FPMMode = "ondemand"
@@ -255,8 +298,25 @@ func Upgrade(p types.HostingPolicy) types.HostingPolicy {
 			p.Valkey.EvictionPolicy = "allkeys-lru"
 		}
 	}
-	p.SchemaVersion = 3
+	p.SchemaVersion = 5
 	return p
+}
+
+// StatisticsEngine reads both the current engine and legacy boolean snapshots.
+func StatisticsEngine(logs types.LogsPreset) string {
+	if logs.StatisticsEngine != "" {
+		return logs.StatisticsEngine
+	}
+	if logs.StatisticsEnabled {
+		return "goaccess"
+	}
+	return "disabled"
+}
+
+func NormalizeLogs(logs types.LogsPreset) types.LogsPreset {
+	logs.StatisticsEngine = StatisticsEngine(logs)
+	logs.StatisticsEnabled = logs.StatisticsEngine == "goaccess"
+	return logs
 }
 
 func DefaultFromEntitlements(e types.SubscriptionEntitlements) types.HostingPolicy {
@@ -273,7 +333,8 @@ func DefaultFromEntitlements(e types.SubscriptionEntitlements) types.HostingPoli
 		dnsMode = "external"
 	}
 	return types.HostingPolicy{
-		SchemaVersion: 3,
+		SchemaVersion: 5,
+		Logs:          NormalizeLogs(e.ServicePresets.Logs),
 		Resources: types.HostingResourcePolicy{
 			DiskMB: e.DiskMB, TrafficMB: e.BandwidthMB, MaxSites: e.MaxSites,
 			MaxDatabases: e.MaxDatabases, MaxMailboxes: e.MaxMailboxes,
@@ -319,6 +380,9 @@ func DefaultFromEntitlements(e types.SubscriptionEntitlements) types.HostingPoli
 // provider ceiling. An unlimited ceiling (-1) accepts every finite value;
 // an unlimited child requires an unlimited ceiling.
 func ValidateWithin(child, ceiling types.HostingPolicy) error {
+	if StatisticsEngine(child.Logs) == "goaccess" && StatisticsEngine(ceiling.Logs) != "goaccess" {
+		return errors.New("web statistics are not delegated by the provider")
+	}
 	childLimits := []int{
 		child.Resources.DiskMB, child.Resources.TrafficMB, child.Resources.CPUPercent,
 		child.Resources.MemoryMB, child.Resources.IOReadMBPS, child.Resources.IOWriteMBPS,
@@ -328,6 +392,7 @@ func ValidateWithin(child, ceiling types.HostingPolicy) error {
 		child.Resources.BackupStorageMB, child.Resources.MaxApplications, child.Resources.ContainerStorageMB,
 		child.Resources.MaxFTPAccounts, child.Resources.ValkeyMemoryMB,
 		child.Resources.MaxPHPWorkers, child.Resources.MaxPHPReleases,
+		child.Resources.MaxWordPressSites,
 	}
 	ceilingLimits := []int{
 		ceiling.Resources.DiskMB, ceiling.Resources.TrafficMB, ceiling.Resources.CPUPercent,
@@ -338,6 +403,7 @@ func ValidateWithin(child, ceiling types.HostingPolicy) error {
 		ceiling.Resources.BackupStorageMB, ceiling.Resources.MaxApplications, ceiling.Resources.ContainerStorageMB,
 		ceiling.Resources.MaxFTPAccounts, ceiling.Resources.ValkeyMemoryMB,
 		ceiling.Resources.MaxPHPWorkers, ceiling.Resources.MaxPHPReleases,
+		ceiling.Resources.MaxWordPressSites,
 	}
 	for i := range childLimits {
 		if !limitWithin(childLimits[i], ceilingLimits[i]) {
@@ -354,6 +420,8 @@ func ValidateWithin(child, ceiling types.HostingPolicy) error {
 		child.Permissions.Staging, child.Permissions.Valkey,
 		child.Permissions.Composer, child.Permissions.ComposerCodeExecution,
 		child.Permissions.ManagedPHPDeployments, child.Permissions.PHPWorkers,
+		child.Permissions.WordPressToolkit,
+		child.Permissions.WebStatistics,
 	}
 	ceilingPermissions := []bool{
 		ceiling.Permissions.Hosting, ceiling.Permissions.SSH, ceiling.Permissions.SFTP,
@@ -365,6 +433,8 @@ func ValidateWithin(child, ceiling types.HostingPolicy) error {
 		ceiling.Permissions.Staging, ceiling.Permissions.Valkey,
 		ceiling.Permissions.Composer, ceiling.Permissions.ComposerCodeExecution,
 		ceiling.Permissions.ManagedPHPDeployments, ceiling.Permissions.PHPWorkers,
+		ceiling.Permissions.WordPressToolkit,
+		ceiling.Permissions.WebStatistics,
 	}
 	for i := range childPermissions {
 		if childPermissions[i] && !ceilingPermissions[i] {

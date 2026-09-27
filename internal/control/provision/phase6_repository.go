@@ -17,6 +17,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -1116,9 +1117,28 @@ func retainCapturedReconcileIntent(args ReconcileSystemArgs, sites []types.Recon
 	return sites, databases
 }
 
-func (s *SQLPhase6StatusStore) MarkBackupActive(ctx context.Context, id int64, result types.CreateBackupResult) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE backups SET status = 'active', archive_path = $2, size_bytes = $3, checksum_sha256 = $4, last_error = '', updated_at = now() WHERE id = $1`, id, result.ArchivePath, result.SizeBytes, result.SHA256)
+func (s *SQLPhase6StatusStore) MarkBackupActive(ctx context.Context, id int64, result types.CreateBackupResult, databaseNames []string) error {
+	databaseNames = normalizedDatabaseNames(databaseNames)
+	_, err := s.db.ExecContext(ctx, `UPDATE backups SET status='active',archive_path=$2,size_bytes=$3,
+checksum_sha256=$4,database_names=$5,last_error='',updated_at=now() WHERE id=$1`,
+		id, result.ArchivePath, result.SizeBytes, result.SHA256, pq.Array(databaseNames))
 	return err
+}
+
+func normalizedDatabaseNames(databaseNames []string) []string {
+	unique := make(map[string]struct{}, len(databaseNames))
+	for _, name := range databaseNames {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			unique[name] = struct{}{}
+		}
+	}
+	result := make([]string, 0, len(unique))
+	for name := range unique {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func (s *SQLPhase6StatusStore) MarkBackupFailed(ctx context.Context, id int64, message string) error {

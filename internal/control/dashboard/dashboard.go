@@ -47,6 +47,11 @@ type ProviderReader interface {
 	ListAddonPlansForUser(ctx context.Context, userID int64) ([]types.AddonPlan, error)
 }
 
+type PlanRevisionReader interface {
+	ListPlanRevisions(ctx context.Context, limit int) ([]types.PlanRevision, error)
+	ListPlanRevisionsForUser(ctx context.Context, userID int64, limit int) ([]types.PlanRevision, error)
+}
+
 type ScopedReader interface {
 	ListSitesForUser(ctx context.Context, userID int64) ([]Site, error)
 	ListDatabasesForUser(ctx context.Context, userID int64) ([]Database, error)
@@ -90,12 +95,14 @@ type Data struct {
 	Quotas               []controlquota.Summary
 	QuotaLoadError       string
 	Plans                []controlquota.Plan
+	PlanRevisions        []types.PlanRevision
 	Customers            []types.Customer
 	Subscriptions        []types.SubscriptionSummary
 	Settings             controlquota.Settings
 	CommittedDiskMB      int
 	PlanLoadError        string
 	Notice               string
+	NoticeTone           string
 	AuditEvents          []types.AuditEvent
 	Resellers            []types.Reseller
 	ResellerPlans        []types.ResellerPlan
@@ -550,6 +557,14 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 		resellerPlans, _ = provider.ListResellerPlans(ctx)
 		addonPlans, _ = provider.ListAddonPlans(ctx)
 	}
+	planRevisions := []types.PlanRevision(nil)
+	if revisions, ok := s.quotas.(PlanRevisionReader); ok {
+		if user.Role == auth.RoleAdmin {
+			planRevisions, _ = revisions.ListPlanRevisions(ctx, 200)
+		} else if user.Role == auth.RoleReseller {
+			planRevisions, _ = revisions.ListPlanRevisionsForUser(ctx, user.ID, 200)
+		}
+	}
 
 	data := Data{
 		Sites:               make([]Site, 0, len(sites)),
@@ -561,6 +576,7 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 		Quotas:              quotas,
 		QuotaLoadError:      quotaLoadError,
 		Plans:               plans,
+		PlanRevisions:       planRevisions,
 		Customers:           customers,
 		Subscriptions:       subscriptions,
 		Settings:            settings,

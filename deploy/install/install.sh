@@ -43,6 +43,7 @@ FORCE=0
 ALLOW_DOWNGRADE=0
 ASSUME_YES=0
 ROLLBACK_SCHEMA="auto"
+APT_TIMERS_RESTART=()
 
 usage() {
   cat <<'USAGE'
@@ -156,6 +157,40 @@ maybe_fault() {
   return 0
 }
 
+# Ubuntu may start apt-daily between component installers. Pause its timers for
+# the whole transaction and let an already-running job finish before invoking
+# apt ourselves, so a normal background update cannot trigger rollback.
+pause_apt_background() {
+  local timer service state busy
+  for timer in apt-daily.timer apt-daily-upgrade.timer; do
+    if systemctl is-active --quiet "${timer}" 2>/dev/null; then
+      APT_TIMERS_RESTART+=("${timer}")
+      systemctl stop "${timer}"
+    fi
+  done
+  for _ in $(seq 1 300); do
+    busy=0
+    for service in apt-daily.service apt-daily-upgrade.service; do
+      state="$(systemctl show --property=ActiveState --value "${service}" 2>/dev/null || true)"
+      case "${state}" in
+        active|activating|reloading|deactivating) busy=1 ;;
+      esac
+    done
+    [[ "${busy}" == "0" ]] && return 0
+    sleep 2
+  done
+  echo "install.sh: timed out waiting for Ubuntu background package activity" >&2
+  return 1
+}
+
+resume_apt_timers() {
+  local timer
+  for timer in "${APT_TIMERS_RESTART[@]}"; do
+    systemctl start "${timer}" >/dev/null 2>&1 || true
+  done
+  APT_TIMERS_RESTART=()
+}
+
 ensure_build_prereqs() {
   # Migrations run via `make goose-up`/`river-up` (which shell out to `go
   # run`), so make must be present even for --bin-dir installs. curl is used
@@ -233,6 +268,8 @@ run_component_installers() {
   bash "${SCRIPT_DIR}/phase8-install.sh"
   bash "${SCRIPT_DIR}/phase21-25-install.sh"
   bash "${SCRIPT_DIR}/phase30-install.sh"
+  apt-get install -y goaccess
+  goaccess --version
 }
 
 # The mail installer adds `include "/etc/bind/nakpanel/named.conf"` to BIND's
@@ -390,6 +427,7 @@ run_restore() {
 }
 
 cleanup_stages() {
+  resume_apt_timers
   rm -rf "${stage_dir}"
   if [[ -n "${migration_stage}" ]]; then
     rm -rf "${migration_stage}"
@@ -402,6 +440,7 @@ cleanup_stages() {
 fresh_install() {
   trap 'status=$?; cleanup_stages; exit "${status}"' EXIT
 
+  pause_apt_background
   ensure_build_prereqs
   ensure_go_toolchain
   if [[ -n "${BIN_DIR}" ]]; then
@@ -634,6 +673,7 @@ cleanup_upgrade() {
 upgrade_install() {
   trap cleanup_upgrade EXIT
 
+  pause_apt_background
   ensure_build_prereqs
   ensure_go_toolchain
   if [[ -n "${BIN_DIR}" ]]; then
