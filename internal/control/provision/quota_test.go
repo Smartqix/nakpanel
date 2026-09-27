@@ -167,7 +167,7 @@ func TestManagerRejectsSiteCreationAtQuotaAndDoesNotCallRepository(t *testing.T)
 	quotas := &fakeQuotaStore{
 		hasLimits: true,
 		limits:    controlquota.Limits{MaxSites: 1, SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 3, PHPMemoryMB: 128},
-		usage:     controlquota.Usage{Sites: 1},
+		usage:     controlquota.Usage{Sites: 1, Domains: 1},
 	}
 	manager := NewManager(repo, WithQuotaStore(quotas))
 
@@ -184,12 +184,39 @@ func TestManagerRejectsSiteCreationAtQuotaAndDoesNotCallRepository(t *testing.T)
 	}
 }
 
+func TestManagerCreatesSubdomainUnderParentWithPlanPHP(t *testing.T) {
+	repo := &fakeSiteRepository{parent: SubdomainParent{ID: 9, SubscriptionID: 44, Domain: "example.test", Status: "active", DesiredStatus: "active"}}
+	quotas := &fakeQuotaStore{hasLimits: true, limits: controlquota.Limits{MaxSites: 1, MaxSubdomains: 2, DefaultPHPVersion: "8.4", PHPAllowlist: "8.4", SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 3, PHPMemoryMB: 128}, usage: controlquota.Usage{Sites: 1, Domains: 1}}
+	manager := NewManager(repo, WithQuotaStore(quotas))
+	_, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "blog")
+	if err != nil {
+		t.Fatalf("CreateSubdomainFor: %v", err)
+	}
+	if repo.req.Domain != "blog.example.test" || repo.req.ParentSiteID != 9 || repo.req.SubscriptionID != 44 || repo.req.PHPVersion != "8.4" {
+		t.Fatalf("site request = %+v", repo.req)
+	}
+	if quotas.lastLimitSubID != 44 || quotas.lastUsageSubID != 44 {
+		t.Fatalf("subscription quota not checked: limits=%d usage=%d", quotas.lastLimitSubID, quotas.lastUsageSubID)
+	}
+}
+
+func TestManagerRejectsNestedSubdomainWithoutWritingIntent(t *testing.T) {
+	repo := &fakeSiteRepository{parent: SubdomainParent{ID: 9, ParentSiteID: 2, SubscriptionID: 44, Domain: "blog.example.test", Status: "active", DesiredStatus: "active"}}
+	manager := NewManager(repo)
+	if _, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "news"); err == nil {
+		t.Fatal("nested subdomain was accepted")
+	}
+	if repo.req != (types.CreateSiteReq{}) {
+		t.Fatalf("repository was called: %+v", repo.req)
+	}
+}
+
 func TestManagerDerivesSiteResourceLimitsFromQuota(t *testing.T) {
 	repo := &fakeSiteRepository{}
 	quotas := &fakeQuotaStore{
 		hasLimits: true,
 		limits:    controlquota.Limits{MaxSites: 2, SiteDiskQuotaMB: 768, PHPFPMMaxChildren: 4, PHPMemoryMB: 192},
-		usage:     controlquota.Usage{Sites: 1},
+		usage:     controlquota.Usage{Sites: 1, Domains: 1},
 	}
 	manager := NewManager(repo, WithQuotaStore(quotas))
 

@@ -389,9 +389,9 @@ templ overviewStatus(data dashboard.Data) {
 						<li>
 							<div>
 								<strong>{ quota.Email }</strong>
-								<span>{ formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota) } sites</span>
+								<span>{ formatQuotaCount(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota) } domains</span>
 							</div>
-							@meter(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota)
+							@meter(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota)
 						</li>
 					}
 				</ul>
@@ -447,7 +447,7 @@ templ clientSubscriptionsSection(subscriptions []types.SubscriptionSummary) {
 							<tr>
 								<td data-label="Subscription"><span class="np-table-value">{ subscriptionSelectLabel(subscription) }</span></td>
 								<td data-label="Plan"><span class="np-table-value">{ subscription.PlanName }</span></td>
-								<td data-label="Sites"><span class="np-table-value">{ formatQuotaCompactCount(subscription.SitesUsed, subscription.MaxSites, true) }</span></td>
+								<td data-label="Domains"><span class="np-table-value">{ formatQuotaCompactCount(subscription.DomainsUsed, subscription.MaxSites, true) }</span></td>
 								<td data-label="Databases"><span class="np-table-value">{ formatQuotaCompactCount(subscription.DatabasesUsed, subscription.MaxDatabases, true) }</span></td>
 								<td data-label="Status"><span class={ "np-status-pill np-status-pill-" + statusPillClass(subscription.Status) }>{ subscription.Status }</span></td>
 							</tr>
@@ -1845,9 +1845,9 @@ templ subscriptionsTable(quotas []controlquota.Summary, subscriptions []types.Su
 						<td data-label="Resources">
 							<div class="np-resource-stack">
 								<div class="np-usage-cell">
-									<div><span>{ siteLimitLabel(quota) }</span><strong>{ formatQuotaCompactCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota) }</strong></div>
-									@tableMeter(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota)
-									<span class="np-sr-only">{ formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota) }</span>
+									<div><span>{ siteLimitLabel(quota) }</span><strong>{ formatQuotaCompactCount(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota) }</strong></div>
+									@tableMeter(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota)
+									<span class="np-sr-only">{ formatQuotaCount(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota) }</span>
 								</div>
 								<div class="np-usage-cell">
 									<div><span>disk</span><strong>{ formatQuotaCompactStorage(quota) }</strong></div>
@@ -1921,7 +1921,7 @@ templ customerSelect(quotas []controlquota.Summary) {
 					data-plan-name={ formatSummaryPlanName(quota) }
 					data-has-quota={ formatBool(quota.HasQuota) }
 					data-max-sites={ formatPlanLimitFormValue(quota.Limits.MaxSites) }
-					data-sites-used={ formatPlanLimitFormValue(quota.Usage.Sites) }
+					data-sites-used={ formatPlanLimitFormValue(quota.Usage.Domains) }
 					data-storage-mb={ formatPlanLimitFormValue(quota.Limits.StorageMB) }
 				>{ quota.Email } - { formatSummaryPlanName(quota) }</option>
 			}
@@ -1941,7 +1941,7 @@ templ subscriptionSelect(quotas []controlquota.Summary, subscriptions []types.Su
 					data-plan-name={ subscription.PlanName }
 					data-has-quota="true"
 					data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) }
-					data-sites-used={ formatPlanLimitFormValue(subscription.SitesUsed) }
+					data-sites-used={ formatPlanLimitFormValue(subscription.DomainsUsed) }
 					data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) }
 					data-php-versions={ subscription.PHPAllowlist }
 				>{ subscriptionSelectLabel(subscription) }</option>
@@ -2085,7 +2085,7 @@ templ quotaUsageTable(quotas []controlquota.Summary) {
 						<td data-label="Account"><span class="np-table-value">{ quota.Email }</span></td>
 						<td data-label="Role"><span class="np-table-value">{ quota.Role }</span></td>
 						<td data-label="Plan"><span class="np-table-value">{ formatSummaryPlanName(quota) }</span></td>
-						<td data-label="Sites"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota) }</span></td>
+						<td data-label="Domains"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota) }</span></td>
 						<td data-label="Databases"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Databases, quota.Limits.MaxDatabases, quota.HasQuota) }</span></td>
 						<td data-label="Backups"><span class="np-table-value">{ formatQuotaCount(quota.Usage.Backups, quota.Limits.MaxBackups, quota.HasQuota) }</span></td>
 						<td data-label="Backup storage"><span class="np-table-value">{ formatQuotaStorage(quota.Usage.BackupStorageBytes, quota.Limits.BackupStorageMB, quota.HasQuota) }</span></td>

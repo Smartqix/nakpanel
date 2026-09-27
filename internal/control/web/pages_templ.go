@@ -1275,19 +1275,19 @@ func overviewStatus(data dashboard.Data) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var55 string
-				templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota))
+				templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCount(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 392, Col: 90}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 392, Col: 92}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 106, " sites</span></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 106, " domains</span></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = meter(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = meter(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1506,14 +1506,14 @@ func clientSubscriptionsSection(subscriptions []types.SubscriptionSummary) templ
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, "</span></td><td data-label=\"Sites\"><span class=\"np-table-value\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 123, "</span></td><td data-label=\"Domains\"><span class=\"np-table-value\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var66 string
-				templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.SitesUsed, subscription.MaxSites, true))
+				templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.DomainsUsed, subscription.MaxSites, true))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 450, Col: 138}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 450, Col: 142}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 				if templ_7745c5c3_Err != nil {
@@ -6923,9 +6923,9 @@ func subscriptionsTable(quotas []controlquota.Summary, subscriptions []types.Sub
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var306 string
-			templ_7745c5c3_Var306, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota))
+			templ_7745c5c3_Var306, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1848, Col: 143}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1848, Col: 145}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var306))
 			if templ_7745c5c3_Err != nil {
@@ -6935,7 +6935,7 @@ func subscriptionsTable(quotas []controlquota.Summary, subscriptions []types.Sub
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = tableMeter(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = tableMeter(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -6944,9 +6944,9 @@ func subscriptionsTable(quotas []controlquota.Summary, subscriptions []types.Sub
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var307 string
-			templ_7745c5c3_Var307, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota))
+			templ_7745c5c3_Var307, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCount(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1850, Col: 110}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1850, Col: 112}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var307))
 			if templ_7745c5c3_Err != nil {
@@ -7491,9 +7491,9 @@ func customerSelect(quotas []controlquota.Summary) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var343 string
-				templ_7745c5c3_Var343, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(quota.Usage.Sites))
+				templ_7745c5c3_Var343, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(quota.Usage.Domains))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1924, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1924, Col: 68}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var343))
 				if templ_7745c5c3_Err != nil {
@@ -7662,9 +7662,9 @@ func subscriptionSelect(quotas []controlquota.Summary, subscriptions []types.Sub
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var354 string
-				templ_7745c5c3_Var354, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.SitesUsed))
+				templ_7745c5c3_Var354, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.DomainsUsed))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1944, Col: 71}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1944, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var354))
 				if templ_7745c5c3_Err != nil {
@@ -8169,14 +8169,14 @@ func quotaUsageTable(quotas []controlquota.Summary) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 774, "</span></td><td data-label=\"Sites\"><span class=\"np-table-value\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 774, "</span></td><td data-label=\"Domains\"><span class=\"np-table-value\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var380 string
-			templ_7745c5c3_Var380, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCount(quota.Usage.Sites, quota.Limits.MaxSites, quota.HasQuota))
+			templ_7745c5c3_Var380, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCount(quota.Usage.Domains, quota.Limits.MaxSites, quota.HasQuota))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 2088, Col: 134}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 2088, Col: 138}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var380))
 			if templ_7745c5c3_Err != nil {

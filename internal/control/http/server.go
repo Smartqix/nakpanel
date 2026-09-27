@@ -45,6 +45,10 @@ type SiteCreator interface {
 	CreateSiteFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateSiteReq) (int64, error)
 }
 
+type SubdomainCreator interface {
+	CreateSubdomainFor(ctx context.Context, owner auth.SessionUser, parentSiteID int64, label string) (int64, error)
+}
+
 type DatabaseCreator interface {
 	CreateDatabaseFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateDatabaseReq) (int64, error)
 }
@@ -340,6 +344,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /logout", s.handleLogout)
 	mux.HandleFunc("POST /tools-settings/reauthenticate", s.handleServerReauthenticate)
 	mux.HandleFunc("POST /sites", s.handleCreateSite)
+	mux.HandleFunc("POST /sites/{id}/subdomains", s.handleCreateSubdomain)
 	mux.HandleFunc("POST /websites", s.handleCreateWebsite)
 	mux.HandleFunc("POST /databases", s.handleCreateDatabase)
 	mux.HandleFunc("POST /certificates", s.handleIssueCertificate)
@@ -1489,6 +1494,53 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectAfterPost(w, r, "/", "/sites?notice=site-queued")
+}
+
+func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.currentUser(w, r)
+	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	creator, ok := s.sites.(SubdomainCreator)
+	if !ok || (user.Role != auth.RoleAdmin && user.Role != auth.RoleReseller && user.Role != auth.RoleClient) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	parentID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || parentID <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		if wantsSPAJSON(r) {
+			writeSPAError(w, http.StatusBadRequest, "Invalid subdomain form")
+		} else {
+			http.Error(w, "Invalid subdomain form", http.StatusBadRequest)
+		}
+		return
+	}
+	label := strings.ToLower(strings.TrimSpace(r.Form.Get("label")))
+	siteID, err := creator.CreateSubdomainFor(r.Context(), user, parentID, label)
+	if err != nil {
+		if errors.Is(err, provision.ErrForbidden) {
+			http.NotFound(w, r)
+			return
+		}
+		if wantsSPAJSON(r) {
+			writeSPAError(w, http.StatusBadRequest, "Could not create subdomain: "+err.Error())
+		} else {
+			http.Error(w, "Could not create subdomain: "+err.Error(), http.StatusBadRequest)
+		}
+		return
+	}
+	s.recordAudit(r.Context(), user, 0, 0, "site.subdomain_queued", "site", siteID, map[string]any{"parent_site_id": parentID, "label": label})
+	redirect := fmt.Sprintf("/sites/%d?tab=overview&notice=subdomain-queued", parentID)
+	if wantsSPAJSON(r) {
+		writeSPAJSON(w, http.StatusAccepted, map[string]any{"ok": true, "site_id": siteID, "redirect": redirect, "notice": "Subdomain provisioning queued."})
+		return
+	}
+	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
 
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {

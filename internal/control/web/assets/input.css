@@ -2,6 +2,27 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .np-list-table tr[data-subdomain] td:first-child { padding-left: 30px; }
+  .np-domain-block[data-subdomain] { margin-left: 18px; }
+  .np-subdomain-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px; }
+  .np-subdomain-parent { color: var(--np-muted); font-size: 13px; margin: 12px 16px 0; }
+  .np-subdomain-parent a { color: var(--np-primary); font-weight: 600; }
+  .np-subdomain-dns-note { margin: 0 16px 16px; }
+  .np-subdomain-steps > div { display: grid; gap: 8px; min-width: 0; }
+  .np-subdomain-steps strong { color: var(--np-ink); font-size: 13px; }
+  .np-subdomain-steps .np-status-pill { justify-self: start; }
+  .np-subdomain-setup > .np-callout, .np-subdomain-setup > .np-secondary-link { margin: 0 16px 16px; }
+  .np-subdomain-preview { background: var(--np-surface-2); border: 1px solid var(--np-border-soft); border-radius: 6px; color: var(--np-muted); grid-column: 1 / -1; margin: 0; padding: 10px 12px; overflow-wrap: anywhere; }
+  .np-subdomain-preview strong { color: var(--np-ink); }
+  .np-subdomain-dialog .np-form-help { grid-column: 1 / -1; margin: 0; }
+  @media (max-width: 640px) {
+    .np-subdomain-steps { grid-template-columns: 1fr; }
+    .np-list-table tr[data-subdomain] td:first-child { padding-left: 16px; }
+    .np-domain-block[data-subdomain] { margin-left: 0; }
+  }
+}
+
 .np-v2-create { display: grid; gap: 24px; max-width: 880px; }
 .np-v2-type-list { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
 .np-v2-type { align-items: flex-start; background: var(--np-surface); border: 1px solid var(--np-border); border-radius: 8px; color: var(--np-ink); display: flex; gap: 12px; min-height: 96px; padding: 18px; text-decoration: none; }

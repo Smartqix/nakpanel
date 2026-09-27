@@ -98,10 +98,10 @@ VALUES(20,$1,'update','pending')`, instanceID); err == nil {
 		t.Fatalf("Phase 32 Down: %v", err)
 	}
 	var instances, operations int
-	if err := db.QueryRow(`SELECT count(*) FROM information_schema.tables WHERE table_name='wordpress_instances'`).Scan(&instances); err != nil {
+	if err := db.QueryRow(`SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='wordpress_instances'`).Scan(&instances); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRow(`SELECT count(*) FROM information_schema.tables WHERE table_name='wordpress_operations'`).Scan(&operations); err != nil {
+	if err := db.QueryRow(`SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='wordpress_operations'`).Scan(&operations); err != nil {
 		t.Fatal(err)
 	}
 	if instances != 0 || operations != 0 {

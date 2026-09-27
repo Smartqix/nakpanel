@@ -196,7 +196,7 @@ func TestCustomerGateDataReflectsQuotaSummary(t *testing.T) {
 		PlanName:       "Starter",
 		SubscriptionID: 11,
 		Limits:         controlquota.Limits{MaxSites: 2, StorageMB: 5120},
-		Usage:          controlquota.Usage{Sites: 1},
+		Usage:          controlquota.Usage{Sites: 1, Domains: 1},
 	}
 
 	data := customerGateData(summary)
@@ -227,6 +227,7 @@ func TestReferenceSubscriptionFormatting(t *testing.T) {
 		},
 		Usage: controlquota.Usage{
 			Sites:              1,
+			Domains:            1,
 			BackupStorageBytes: 805 * 1024 * 1024,
 		},
 	}

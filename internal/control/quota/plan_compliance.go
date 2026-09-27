@@ -16,7 +16,8 @@ import (
 )
 
 type SubscriptionComplianceUsage struct {
-	Sites               int
+	Domains             int
+	Subdomains          int
 	Databases           int
 	Backups             int
 	Mailboxes           int
@@ -202,7 +203,8 @@ func EvaluateSubscriptionCompliance(entitlements types.SubscriptionEntitlements,
 			violations = append(violations, fmt.Sprintf("%s %d/%d", label, used, limit))
 		}
 	}
-	appendCountViolation("sites", usage.Sites, entitlements.MaxSites)
+	appendCountViolation("domains", usage.Domains, entitlements.MaxSites)
+	appendCountViolation("subdomains", usage.Subdomains, entitlements.MaxSubdomains)
 	appendCountViolation("databases", usage.Databases, entitlements.MaxDatabases)
 	appendCountViolation("backups", usage.Backups, entitlements.MaxBackups)
 	appendCountViolation("mailboxes", usage.Mailboxes, entitlements.MaxMailboxes)
@@ -244,7 +246,8 @@ func bytesToCeilingMB(bytes int64) int64 {
 func loadSubscriptionComplianceUsage(ctx context.Context, q queryRower, subscriptionID int64) (SubscriptionComplianceUsage, error) {
 	var usage SubscriptionComplianceUsage
 	err := q.QueryRowContext(ctx, `SELECT
-    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id=$1 AND status<>'failed'),0)::int,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id=$1 AND parent_site_id IS NULL AND status<>'failed'),0)::int,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id=$1 AND parent_site_id IS NOT NULL AND status<>'failed'),0)::int,
     COALESCE((SELECT COUNT(*) FROM databases WHERE subscription_id=$1 AND status<>'failed'),0)::int,
     COALESCE((SELECT COUNT(*) FROM backups WHERE subscription_id=$1 AND status<>'failed'),0)::int,
     COALESCE((SELECT COUNT(*) FROM mailboxes mailbox JOIN mail_domains domain ON domain.id=mailbox.mail_domain_id WHERE domain.subscription_id=$1 AND NOT domain.delete_requested),0)::int,
@@ -254,7 +257,7 @@ func loadSubscriptionComplianceUsage(ctx context.Context, q queryRower, subscrip
     COALESCE(usage.is_complete,false)
 FROM (SELECT $1::bigint AS subscription_id) selected
 LEFT JOIN subscription_usage_current usage ON usage.subscription_id=selected.subscription_id`, subscriptionID).Scan(
-		&usage.Sites, &usage.Databases, &usage.Backups, &usage.Mailboxes,
+		&usage.Domains, &usage.Subdomains, &usage.Databases, &usage.Backups, &usage.Mailboxes,
 		&usage.DiskBytes, &usage.TrafficBytes, &usage.BackupBytes, &usage.MeasurementComplete,
 	)
 	return usage, err
@@ -274,9 +277,10 @@ compliance_checked_at=now(),updated_at=now() WHERE id=$1`, subscriptionID, statu
 
 func refreshSubscriptionComplianceTx(ctx context.Context, tx *sql.Tx, subscriptionID int64) error {
 	var entitlements types.SubscriptionEntitlements
-	err := tx.QueryRowContext(ctx, `SELECT disk_mb,bandwidth_mb,max_sites,max_databases,max_backups,backup_storage_mb,max_mailboxes
+	err := tx.QueryRowContext(ctx, `SELECT disk_mb,bandwidth_mb,max_sites,max_subdomains,max_databases,max_backups,backup_storage_mb,max_mailboxes
 FROM subscription_entitlements WHERE subscription_id=$1`, subscriptionID).Scan(
 		&entitlements.DiskMB, &entitlements.BandwidthMB, &entitlements.MaxSites,
+		&entitlements.MaxSubdomains,
 		&entitlements.MaxDatabases, &entitlements.MaxBackups, &entitlements.BackupStorageMB,
 		&entitlements.MaxMailboxes,
 	)

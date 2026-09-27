@@ -23,6 +23,19 @@ type SiteRepository interface {
 	CreateSite(ctx context.Context, ownerID int64, req types.CreateSiteReq) (int64, error)
 }
 
+type SubdomainParent struct {
+	ID             int64
+	ParentSiteID   int64
+	SubscriptionID int64
+	Domain         string
+	Status         string
+	DesiredStatus  string
+}
+
+type SubdomainParentReader interface {
+	GetSubdomainParent(context.Context, int64) (SubdomainParent, error)
+}
+
 type DatabaseRepository interface {
 	CreateDatabase(ctx context.Context, ownerID int64, req types.CreateDatabaseReq) (int64, error)
 }
@@ -389,6 +402,46 @@ func (m *Manager) CreateSite(ctx context.Context, owner auth.SessionUser, req ty
 	return m.CreateSiteFor(ctx, owner, owner.ID, req)
 }
 
+func (m *Manager) CreateSubdomainFor(ctx context.Context, actor auth.SessionUser, parentSiteID int64, label string) (int64, error) {
+	reader, ok := m.siteRepo.(SubdomainParentReader)
+	if !ok {
+		return 0, errors.New("subdomain provisioning is not configured")
+	}
+	if parentSiteID <= 0 {
+		return 0, ErrForbidden
+	}
+	parent, err := reader.GetSubdomainParent(ctx, parentSiteID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrForbidden
+		}
+		return 0, err
+	}
+	if parent.ID != parentSiteID || parent.SubscriptionID <= 0 {
+		return 0, ErrForbidden
+	}
+	if parent.ParentSiteID > 0 {
+		return 0, errors.New("add subdomains from a root domain")
+	}
+	if err := m.canManageDomain(ctx, actor, parent.Domain); err != nil {
+		return 0, err
+	}
+	if err := m.canManageSubscription(ctx, actor, parent.SubscriptionID); err != nil {
+		return 0, err
+	}
+	if parent.Status != "active" || parent.DesiredStatus != "active" {
+		return 0, errors.New("parent domain must be active before adding a subdomain")
+	}
+	label = strings.ToLower(strings.TrimSpace(label))
+	if err := site.ValidateSubdomainLabel(label); err != nil {
+		return 0, err
+	}
+	return m.CreateSiteForSubscription(ctx, actor, parent.SubscriptionID, types.CreateSiteReq{
+		ParentSiteID: parent.ID,
+		Domain:       label + "." + parent.Domain,
+	})
+}
+
 func (m *Manager) CreateSiteFor(ctx context.Context, actor auth.SessionUser, resourceOwnerID int64, req types.CreateSiteReq) (int64, error) {
 	if req.SubscriptionID > 0 {
 		return m.CreateSiteForSubscription(ctx, actor, req.SubscriptionID, req)
@@ -446,7 +499,14 @@ func (m *Manager) CreateSiteForSubscription(ctx context.Context, actor auth.Sess
 	// The subscription account is authoritative. A browser-supplied username
 	// must neither select nor block the Linux identity used for this site.
 	normalized.Username = ""
-	limits, entitlement, err := controlquota.SiteLimitsForSubscription(ctx, m.quotaStore, subscriptionID)
+	var limits types.SiteResourceLimits
+	var entitlement controlquota.Limits
+	var err error
+	if normalized.ParentSiteID > 0 {
+		limits, entitlement, err = controlquota.SiteLimitsForSubdomain(ctx, m.quotaStore, subscriptionID)
+	} else {
+		limits, entitlement, err = controlquota.SiteLimitsForSubscription(ctx, m.quotaStore, subscriptionID)
+	}
 	if err != nil {
 		return 0, err
 	}

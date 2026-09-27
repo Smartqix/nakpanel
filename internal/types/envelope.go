@@ -276,6 +276,7 @@ type FileMutationResult struct {
 
 type CreateSiteReq struct {
 	SiteID         int64              `json:"site_id,omitempty"`
+	ParentSiteID   int64              `json:"parent_site_id,omitempty"`
 	SubscriptionID int64              `json:"subscription_id"`
 	Username       string             `json:"username"`
 	Domain         string             `json:"domain"`
@@ -964,6 +965,8 @@ type SubscriptionSummary struct {
 	MaxBackups            int                          `json:"max_backups"`
 	BackupStorageMB       int                          `json:"backup_storage_mb"`
 	SitesUsed             int                          `json:"sites_used"`
+	DomainsUsed           int                          `json:"domains_used"`
+	SubdomainsUsed        int                          `json:"subdomains_used"`
 	DatabasesUsed         int                          `json:"databases_used"`
 	BackupsUsed           int                          `json:"backups_used"`
 	BackupBytesUsed       int64                        `json:"backup_bytes_used"`

@@ -84,6 +84,7 @@ func TestGetLimitsForSubscriptionLoadsActivePlanBySubscription(t *testing.T) {
 			"plan_id",
 			"plan_name",
 			"max_sites",
+			"max_subdomains",
 			"max_databases",
 			"disk_mb",
 			"max_backups",
@@ -99,7 +100,7 @@ func TestGetLimitsForSubscriptionLoadsActivePlanBySubscription(t *testing.T) {
 			"allow_backups",
 			"created_at",
 			"updated_at",
-		}).AddRow(int64(7), int64(44), int64(10), "Starter", 1, 2, 5120, 7, 5120, 5120, 3, 128, -1, "block", "8.3", "8.3", true, true, now, now))
+		}).AddRow(int64(7), int64(44), int64(10), "Starter", 1, 3, 2, 5120, 7, 5120, 5120, 3, 128, -1, "block", "8.3", "8.3", true, true, now, now))
 
 	limits, ok, err := store.GetLimitsForSubscription(context.Background(), 44)
 	if err != nil {
@@ -150,8 +151,8 @@ func TestGetUsageForSubscriptionCountsOnlySelectedSubscription(t *testing.T) {
 	store := NewSQLStore(db)
 	mock.ExpectQuery("subscription_id = \\$1").
 		WithArgs(int64(44)).
-		WillReturnRows(sqlmock.NewRows([]string{"subscription_id", "sites", "databases", "backups", "backup_storage_bytes"}).
-			AddRow(int64(44), 1, 2, 3, int64(4096)))
+		WillReturnRows(sqlmock.NewRows([]string{"subscription_id", "sites", "domains", "subdomains", "databases", "backups", "backup_storage_bytes"}).
+			AddRow(int64(44), 1, 1, 0, 2, 3, int64(4096)))
 
 	usage, err := store.GetUsageForSubscription(context.Background(), 44)
 	if err != nil {

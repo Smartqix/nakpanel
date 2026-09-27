@@ -15,6 +15,7 @@ type fakeSiteRepository struct {
 	ownerID int64
 	req     types.CreateSiteReq
 	err     error
+	parent  SubdomainParent
 }
 
 type fakeRuntimeCapabilities struct {
@@ -78,6 +79,10 @@ func (r *fakeSiteRepository) CreateSite(ctx context.Context, ownerID int64, req 
 		return 0, r.err
 	}
 	return 7, nil
+}
+
+func (r *fakeSiteRepository) GetSubdomainParent(context.Context, int64) (SubdomainParent, error) {
+	return r.parent, nil
 }
 
 type fakeDatabaseRepository struct {

@@ -366,8 +366,33 @@
     if (!data || data.hasQuota !== "true") return { blocked: true, text: "Select an active subscription." };
     var max = parseInt(data.maxSites || "-1", 10);
     var used = parseInt(data.sitesUsed || "0", 10);
-    if (max >= 0 && used >= max) return { blocked: true, text: (data.planName || "This plan") + " has reached its website limit." };
-    return { blocked: false, text: (data.planName || "This plan") + " can provision another website." };
+    var overuse = data.overusePolicy === "normal" || data.overusePolicy === "notify";
+    if (!overuse && max >= 0 && used >= max) return { blocked: true, text: (data.planName || "This plan") + " has reached its domain limit." };
+    return { blocked: false, text: (data.planName || "This plan") + " can provision another domain." };
+  }
+
+  function updateSubdomainGate(scope) {
+    each("[data-np-create-subdomain-form]", scope || document, function (form) {
+      var input = form.querySelector('input[name="label"]');
+      var label = input ? input.value.trim().toLowerCase() : "";
+      var preview = form.querySelector("[data-np-subdomain-preview]");
+      if (preview) preview.textContent = (label || "blog") + "." + form.dataset.npParentDomain;
+      var max = parseInt(form.dataset.npMaxSubdomains || "-1", 10);
+      var used = parseInt(form.dataset.npSubdomainsUsed || "0", 10);
+      var overuse = form.dataset.npOverusePolicy === "normal" || form.dataset.npOverusePolicy === "notify";
+      var blocked = !overuse && max >= 0 && used >= max;
+      var message = form.querySelector("[data-np-subdomain-gate]");
+      if (form.dataset.npPhpReady !== "true") {
+        blocked = true;
+        if (message) message.textContent = "The subscription default PHP version is unavailable on this server.";
+      } else if (message) {
+        message.textContent = blocked ? "This subscription has reached its subdomain limit." : "";
+      }
+      if (message) message.classList.toggle("is-blocked", blocked);
+      var submit = form.querySelector("[data-np-create-submit]");
+      if (submit) submit.disabled = blocked;
+      form.dataset.npGateBlocked = blocked ? "true" : "false";
+    });
   }
 
   function updateCreateGate(scope) {
@@ -418,6 +443,7 @@
     dialog.showModal();
     document.body.classList.add("np-modal-open");
     updateCreateGate(dialog);
+    updateSubdomainGate(dialog);
     var focus = dialog.querySelector("input:not([type=hidden]), select, button");
     if (focus) focus.focus();
   }
@@ -1788,8 +1814,10 @@
   }
 
   function submitSite(form) {
+    if (form.dataset.npSubmitting === "true") return;
+    form.dataset.npSubmitting = "true";
     var submit = form.querySelector("[data-np-create-submit]");
-    var gate = form.querySelector("[data-np-customer-gate]");
+    var gate = form.querySelector("[data-np-customer-gate], [data-np-subdomain-gate]");
     if (submit) submit.disabled = true;
     fetch(form.action, {
       method: "POST",
@@ -1797,12 +1825,20 @@
       credentials: "same-origin",
       headers: { "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken() }
     }).then(function (response) {
-      return response.json().then(function (data) { if (!response.ok || !data.ok) throw new Error(data.error || "Request failed"); return data; });
+      return response.text().then(function (body) {
+        var data;
+        try { data = JSON.parse(body); } catch (_) { data = null; }
+        if (response.status === 401 || (response.redirected && response.url.indexOf("/login") !== -1)) throw new Error("Your session has expired. Sign in again and retry.");
+        if (response.status === 404) throw new Error("This domain is no longer available to your account. Refresh the page.");
+        if (!response.ok || !data || !data.ok) throw new Error(data && data.error ? data.error : "Website setup could not start. Refresh the page and retry.");
+        return data;
+      });
     }).then(function (data) {
       window.location.assign(data.redirect || "/sites");
     }).catch(function (error) {
       if (gate) { gate.textContent = error.message; gate.classList.add("is-blocked"); }
       if (submit) submit.disabled = false;
+      form.dataset.npSubmitting = "false";
     });
   }
 
@@ -2757,6 +2793,13 @@
 	  submitWebsiteV2(v2Form);
 	  return;
 	}
+	var subdomainForm = event.target.closest("[data-np-create-subdomain-form]");
+	if (subdomainForm) {
+	  updateSubdomainGate(subdomainForm.closest("dialog") || document);
+	  if (subdomainForm.dataset.npGateBlocked === "true") { event.preventDefault(); return; }
+	  if (window.fetch) { event.preventDefault(); submitSite(subdomainForm); }
+	  return;
+	}
 	var form = event.target.closest("[data-np-create-site-form]");
     if (!form) return;
     updateCreateGate(form);
@@ -2764,6 +2807,11 @@
     if (!window.fetch) return;
     event.preventDefault();
     submitSite(form);
+  });
+
+  document.addEventListener("input", function (event) {
+    var form = event.target.closest("[data-np-create-subdomain-form]");
+    if (form) updateSubdomainGate(form.closest("dialog") || document);
   });
 
   initSiteLogs();
@@ -2847,6 +2895,7 @@
     });
   });
   updateCreateGate(document);
+  updateSubdomainGate(document);
   each("[data-np-v2-create-site-form]", document, updateV2CreateGate);
   updateOnboarding();
   each("[data-np-bulk-form]", document, updateBulkForm);

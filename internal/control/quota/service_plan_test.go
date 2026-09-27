@@ -83,11 +83,11 @@ func TestCanonicalPlanDefinitionHashIgnoresRevisionAuditMetadata(t *testing.T) {
 
 func TestEvaluateSubscriptionComplianceIsNonDestructiveAndHonorsUnlimited(t *testing.T) {
 	entitlements := types.SubscriptionEntitlements{
-		DiskMB: 100, BandwidthMB: -1, MaxSites: 2, MaxDatabases: 1,
+		DiskMB: 100, BandwidthMB: -1, MaxSites: 2, MaxSubdomains: 1, MaxDatabases: 1,
 		MaxBackups: 1, BackupStorageMB: 20, MaxMailboxes: 0,
 	}
 	status, violations := EvaluateSubscriptionCompliance(entitlements, SubscriptionComplianceUsage{
-		Sites: 3, Databases: 1, Backups: 2, Mailboxes: 1,
+		Domains: 3, Subdomains: 2, Databases: 1, Backups: 2, Mailboxes: 1,
 		DiskBytes: 101 * 1024 * 1024, TrafficBytes: 1 << 50,
 		BackupBytes: 21 * 1024 * 1024, MeasurementComplete: true,
 	})
@@ -95,13 +95,25 @@ func TestEvaluateSubscriptionComplianceIsNonDestructiveAndHonorsUnlimited(t *tes
 		t.Fatalf("status = %q, want over_limit", status)
 	}
 	joined := strings.Join(violations, " | ")
-	for _, want := range []string{"sites 3/2", "backups 2/1", "mailboxes 1/0", "disk 101/100 MB", "backup storage 21/20 MB"} {
+	for _, want := range []string{"domains 3/2", "subdomains 2/1", "backups 2/1", "mailboxes 1/0", "disk 101/100 MB", "backup storage 21/20 MB"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("violations %q missing %q", joined, want)
 		}
 	}
 	if strings.Contains(joined, "traffic") {
 		t.Fatalf("unlimited traffic produced violation: %q", joined)
+	}
+}
+
+func TestEvaluateSubscriptionComplianceSeparatesDomainsAndSubdomains(t *testing.T) {
+	entitlements := types.SubscriptionEntitlements{MaxSites: 1, MaxSubdomains: 2, MaxDatabases: -1, MaxBackups: -1, MaxMailboxes: -1, DiskMB: -1, BandwidthMB: -1, BackupStorageMB: -1}
+	status, violations := EvaluateSubscriptionCompliance(entitlements, SubscriptionComplianceUsage{Domains: 1, Subdomains: 2, MeasurementComplete: true})
+	if status != types.SubscriptionComplianceCompliant || len(violations) != 0 {
+		t.Fatalf("within separate limits = %q %v", status, violations)
+	}
+	status, violations = EvaluateSubscriptionCompliance(entitlements, SubscriptionComplianceUsage{Domains: 1, Subdomains: 3, MeasurementComplete: true})
+	if status != types.SubscriptionComplianceOverLimit || len(violations) != 1 || violations[0] != "subdomains 3/2" {
+		t.Fatalf("subdomain overflow = %q %v", status, violations)
 	}
 }
 
@@ -244,14 +256,14 @@ func TestRefreshSubscriptionComplianceUsesFreshMeasuredUsage(t *testing.T) {
 	}
 	defer db.Close()
 	mock.ExpectBegin()
-	mock.ExpectQuery(`SELECT disk_mb,bandwidth_mb,max_sites,max_databases,max_backups,backup_storage_mb,max_mailboxes`).
+	mock.ExpectQuery(`SELECT disk_mb,bandwidth_mb,max_sites,max_subdomains,max_databases,max_backups,backup_storage_mb,max_mailboxes`).
 		WithArgs(int64(42)).
-		WillReturnRows(sqlmock.NewRows([]string{"disk_mb", "bandwidth_mb", "max_sites", "max_databases", "max_backups", "backup_storage_mb", "max_mailboxes"}).
-			AddRow(1, -1, 2, 2, 2, -1, 0))
+		WillReturnRows(sqlmock.NewRows([]string{"disk_mb", "bandwidth_mb", "max_sites", "max_subdomains", "max_databases", "max_backups", "backup_storage_mb", "max_mailboxes"}).
+			AddRow(1, -1, 2, 2, 2, 2, -1, 0))
 	mock.ExpectQuery(`COALESCE\(\(SELECT COUNT\(\*\) FROM sites`).
 		WithArgs(int64(42)).
-		WillReturnRows(sqlmock.NewRows([]string{"sites", "databases", "backups", "mailboxes", "disk_bytes", "traffic_bytes", "backup_bytes", "is_complete"}).
-			AddRow(1, 0, 0, 0, int64(2*1024*1024), int64(0), int64(0), true))
+		WillReturnRows(sqlmock.NewRows([]string{"domains", "subdomains", "databases", "backups", "mailboxes", "disk_bytes", "traffic_bytes", "backup_bytes", "is_complete"}).
+			AddRow(1, 0, 0, 0, 0, int64(2*1024*1024), int64(0), int64(0), true))
 	mock.ExpectExec(`UPDATE subscriptions SET compliance_status`).
 		WithArgs(int64(42), types.SubscriptionComplianceOverLimit, "disk 2/1 MB").
 		WillReturnResult(sqlmock.NewResult(0, 1))

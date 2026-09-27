@@ -60,6 +60,33 @@ func TestMissingActiveSubscriptionDeniesProvisioning(t *testing.T) {
 	}
 }
 
+func TestSiteLimitsDistinguishDomainsAndSubdomains(t *testing.T) {
+	store := fakeStore{
+		hasLimits: true,
+		limits: Limits{MaxSites: 1, MaxSubdomains: 2, SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 2, PHPMemoryMB: 128},
+		usage: Usage{Sites: 2, Domains: 1, Subdomains: 1},
+	}
+	if _, _, err := SiteLimitsForSubscription(context.Background(), store, 7); !errors.Is(err, ErrExceeded) {
+		t.Fatalf("root domain limit error = %v, want ErrExceeded", err)
+	}
+	if _, _, err := SiteLimitsForSubdomain(context.Background(), store, 7); err != nil {
+		t.Fatalf("subdomain within its separate allowance: %v", err)
+	}
+	store.usage.Subdomains = 2
+	if _, _, err := SiteLimitsForSubdomain(context.Background(), store, 7); !errors.Is(err, ErrExceeded) {
+		t.Fatalf("subdomain limit error = %v, want ErrExceeded", err)
+	}
+	store.limits.MaxSubdomains = -1
+	if _, _, err := SiteLimitsForSubdomain(context.Background(), store, 7); err != nil {
+		t.Fatalf("unlimited subdomains: %v", err)
+	}
+	store.limits.MaxSubdomains = 0
+	store.usage.Subdomains = 0
+	if _, _, err := SiteLimitsForSubdomain(context.Background(), store, 7); !errors.Is(err, ErrExceeded) {
+		t.Fatalf("zero subdomain allowance error = %v, want ErrExceeded", err)
+	}
+}
+
 func TestUnlimitedNegativeLimitsAllowProvisioningWithAgentDefaults(t *testing.T) {
 	store := fakeStore{
 		hasLimits: true,

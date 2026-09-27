@@ -85,12 +85,21 @@ type fakeSiteCreator struct {
 	resourceOwnerID int64
 	requests        []types.CreateSiteReq
 	err             error
+	parentSiteID    int64
+	label           string
 }
 
 func (c *fakeSiteCreator) CreateSiteFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateSiteReq) (int64, error) {
 	c.owner = owner
 	c.resourceOwnerID = resourceOwnerID
 	c.requests = append(c.requests, req)
+	return 7, c.err
+}
+
+func (c *fakeSiteCreator) CreateSubdomainFor(_ context.Context, owner auth.SessionUser, parentSiteID int64, label string) (int64, error) {
+	c.owner = owner
+	c.parentSiteID = parentSiteID
+	c.label = label
 	return 7, c.err
 }
 
@@ -1265,7 +1274,7 @@ func TestAdminDashboardRendersQuotaManagement(t *testing.T) {
 				PlanName:       "Starter",
 				SubscriptionID: 20,
 				Limits:         controlquota.Limits{UserID: 2, MaxSites: 2, MaxDatabases: 1, MaxBackups: 3, BackupStorageMB: 20, SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 3, PHPMemoryMB: 128},
-				Usage:          controlquota.Usage{UserID: 2, Sites: 1, Databases: 1, Backups: 2, BackupStorageBytes: 4096},
+				Usage:          controlquota.Usage{UserID: 2, Sites: 1, Domains: 1, Databases: 1, Backups: 2, BackupStorageBytes: 4096},
 			}},
 			Plans: []controlquota.Plan{{
 				ID:                  10,
@@ -1380,7 +1389,7 @@ func TestAdminDashboardRendersPrototypeShellAndCreateGateData(t *testing.T) {
 				PlanName:       "Starter",
 				SubscriptionID: 20,
 				Limits:         controlquota.Limits{UserID: 2, MaxSites: 2, StorageMB: 5120, SiteDiskQuotaMB: 5120, PHPFPMMaxChildren: 3, PHPMemoryMB: 128},
-				Usage:          controlquota.Usage{UserID: 2, Sites: 2},
+				Usage:          controlquota.Usage{UserID: 2, Sites: 2, Domains: 2},
 			}},
 			Plans: []controlquota.Plan{{
 				ID:                  10,
@@ -1416,6 +1425,7 @@ func TestAdminDashboardRendersPrototypeShellAndCreateGateData(t *testing.T) {
 				Status:           "active",
 				MaxSites:         2,
 				SitesUsed:        2,
+				DomainsUsed:      2,
 			}},
 			Settings:        controlquota.Settings{OversellPolicy: controlquota.OversellPolicyWarn, ServerDiskCapacityMB: 10000},
 			CommittedDiskMB: 5120,
@@ -1591,7 +1601,7 @@ func TestNonAdminDashboardRendersOwnQuotaReadOnly(t *testing.T) {
 				Role:     "client",
 				HasQuota: true,
 				Limits:   controlquota.Limits{UserID: 1, MaxSites: 2},
-				Usage:    controlquota.Usage{UserID: 1, Sites: 1},
+				Usage:    controlquota.Usage{UserID: 1, Sites: 1, Domains: 1},
 			}},
 		},
 	}
@@ -2118,6 +2128,40 @@ func TestAdminCanCreateSite(t *testing.T) {
 		creator.requests[0].Domain != want.Domain ||
 		creator.requests[0].PHPVersion != want.PHPVersion {
 		t.Fatalf("site requests = %#v, want %#v", creator.requests, []types.CreateSiteReq{want})
+	}
+}
+
+func TestAddSubdomainUsesParentAndLabelOnly(t *testing.T) {
+	creator := &fakeSiteCreator{}
+	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleAdmin, creator)
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	form := url.Values{"label": {"blog"}, "domain": {"evil.test"}, "subscription_id": {"999"}, "php_version": {"8.5"}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/9/subdomains", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusSeeOther || creator.parentSiteID != 9 || creator.label != "blog" {
+		t.Fatalf("subdomain status=%d parent=%d label=%q body=%q", rec.Code, creator.parentSiteID, creator.label, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/sites/9?tab=overview&notice=subdomain-queued" {
+		t.Fatalf("redirect = %q", got)
+	}
+}
+
+func TestAddSubdomainHidesForeignParent(t *testing.T) {
+	creator := &fakeSiteCreator{err: provision.ErrForbidden}
+	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleClient, creator)
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/9/subdomains", strings.NewReader(url.Values{"label": {"blog"}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("foreign parent status=%d, want 404", rec.Code)
 	}
 }
 

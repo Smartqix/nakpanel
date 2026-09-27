@@ -85,6 +85,7 @@ func ValidateSFTPRelativeRoot(value string) error {
 func NormalizeCreateSiteRequest(req types.CreateSiteReq) types.CreateSiteReq {
 	return types.CreateSiteReq{
 		SiteID:         req.SiteID,
+		ParentSiteID:   req.ParentSiteID,
 		SubscriptionID: req.SubscriptionID,
 		Username:       strings.ToLower(strings.TrimSpace(req.Username)),
 		Domain:         NormalizeDomain(req.Domain),
@@ -126,6 +127,13 @@ func validateCreateSiteRequest(req types.CreateSiteReq, validateUsername bool) e
 	}
 	if err := validateRuntimeLimits(req.Limits); err != nil {
 		return err
+	}
+	return nil
+}
+
+func ValidateSubdomainLabel(label string) error {
+	if !labelRE.MatchString(label) {
+		return errors.New("subdomain name must be one DNS label of 1-63 letters, digits, or hyphens")
 	}
 	return nil
 }

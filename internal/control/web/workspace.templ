@@ -282,10 +282,15 @@ templ siteRows(sites []dashboard.Site, view WorkspaceView) {
 		<p class="np-empty">No websites yet.</p>
 	} else {
 		<div class="np-object-list">
-			for _, item := range sites {
+			for _, item := range sitesInDomainOrder(sites) {
 				<a class="np-object-row" href={ templ.SafeURL(workspacePath(view, "/sites/" + formatJobID(item.ID))) }>
 					<span class="np-object-icon">@icon("globe")</span>
-					<span><strong>{ item.Domain }</strong><small>{ item.Username } · PHP { item.PHPVersion }</small></span>
+					<span><strong>{ item.Domain }</strong><small>
+						if parent := parentDomain(sites,item); parent != "" {
+							Subdomain of { parent } ·
+						}
+						PHP { item.PHPVersion }
+					</small></span>
 					<span class={ "np-status-pill " + customerStatusClass(item.Status) }>{ item.Status }</span>
 				</a>
 			}
@@ -301,8 +306,8 @@ templ subscriptionUsageRows(items []types.SubscriptionSummary, details bool, vie
 			for _, item := range items {
 				<a href={ templ.SafeURL(subscriptionUsagePath(item.ID, details, view)) }>
 					<span><strong>{ item.SubscriptionName }</strong><small>{ item.PlanName }</small></span>
-					<span>{ formatQuotaCompactCount(item.SitesUsed, item.MaxSites, true) } sites</span>
-					@tableMeter(item.SitesUsed, item.MaxSites, true)
+					<span>{ formatQuotaCompactCount(item.DomainsUsed, item.MaxSites, true) } domains</span>
+					@tableMeter(item.DomainsUsed, item.MaxSites, true)
 				</a>
 			}
 		</div>
@@ -310,7 +315,7 @@ templ subscriptionUsageRows(items []types.SubscriptionSummary, details bool, vie
 }
 
 templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
-	@pageHead("Hosting services", "Websites & Domains", "Manage hosting, PHP, certificates, DNS and backups from each website.") {
+	@pageHead("Hosting services", "Websites & Domains", "Manage hosting, PHP, certificates, DNS and backups from each website. Add subdomains from their parent domain.") {
 		if actions.CanCreateSite {
 			<a class="np-primary-link" href={ templ.SafeURL(siteCreateBasePath(view)) }>Add website</a>
 		}
@@ -322,7 +327,13 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 	if item, ok := siteByID(data.Sites, view.DetailID); ok {
 		if subscription, hasSubscription := subscriptionForSite(data.Subscriptions, item); hasSubscription {
 			@pageHead("Website", item.Domain, subscription.SubscriptionName + " · " + subscription.PlanName) {
+				if actions.CanCreateSite && subscription.Status == "active" && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
+					<button type="button" data-np-dialog-open={ "subdomain-dialog-"+formatJobID(item.ID) }>@icon("plus")<span>Add subdomain</span></button>
+				}
 				<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/subscriptions/" + formatJobID(item.SubscriptionID))) }>Back to subscription</a>
+			}
+			if actions.CanCreateSite && subscription.Status == "active" && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
+				@routedSubdomainDialog(item,subscription,data.Capabilities,view)
 			}
 			<div class="np-domain-commandbar">
 				<div><span class={ "np-status-pill " + customerStatusClass(item.Status) }>{ item.Status }</span><span>PHP { item.PHPVersion }</span><span>{ formatTLSStatus(item) }</span></div>
@@ -394,13 +405,17 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 
 templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
 	@domainOverviewPrimary(item, actions, view)
+	if item.ParentSiteID > 0 {
+		@subdomainSetupStatus(item,data,view)
+	}
 	<section class="np-panel np-domain-summary"><div class="np-panel-title"><div><h2>Hosting overview</h2><span class="np-muted">Desired and applied service state for this domain</span></div>@statusPill(item.SettingsStatus)</div>
-		<dl class="np-domain-overview-band"><div><dt>PHP</dt><dd>{ item.PHPVersion }</dd><small>dedicated FPM service</small></div><div><dt>TLS</dt><dd>{ formatTLSStatus(item) }</dd><small>HTTPS redirect { yesNo(item.HTTPSRedirect) }</small></div><div><dt>DNS</dt><dd>{ domainDNSState(data.Phase6,item.ID) }</dd><small>authoritative zone</small></div><div><dt>Databases</dt><dd>{ formatPlanLimit(len(databasesForSite(data.Databases,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) } subscription use</small></div><div><dt>Backups</dt><dd>{ formatPlanLimit(len(backupsForSite(data.Phase6.Backups,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.BackupsUsed,subscription.MaxBackups,true) } subscription use</small></div></dl>
+		<dl class="np-domain-overview-band"><div><dt>PHP</dt><dd>{ item.PHPVersion }</dd><small>dedicated FPM service</small></div><div><dt>TLS</dt><dd>{ formatTLSStatus(item) }</dd><small>HTTPS redirect { yesNo(item.HTTPSRedirect) }</small></div><div><dt>DNS</dt><dd>{ domainDNSStateForSite(data.Phase6,item) }</dd><small>{ dnsZoneDescription(item) }</small></div><div><dt>Databases</dt><dd>{ formatPlanLimit(len(databasesForSite(data.Databases,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) } subscription use</small></div><div><dt>Backups</dt><dd>{ formatPlanLimit(len(backupsForSite(data.Phase6.Backups,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.BackupsUsed,subscription.MaxBackups,true) } subscription use</small></div></dl>
 		if usage, ok := usageForSite(data.SubscriptionServices.SiteUsage,item.ID); ok {
 			<div class="np-domain-usage-row"><div><span>Site files</span><strong>{ formatBytes(usage.DocumentRootBytes) }</strong></div><div><span>Monthly traffic</span><strong>{ formatBytes(usage.TrafficBytes) }</strong></div><div><span>Subscription disk quota</span><strong>{ formatPlanLimitMB(subscription.DiskMB) }</strong></div></div>
 		}
 		<dl class="np-facts"><div><dt>System user</dt><dd>{ item.Username }</dd></div><div><dt>Document root</dt><dd><code>{ item.DocumentRoot }</code></dd></div></dl>
 	</section>
+	@ifDomainSubdomains(item,data.Sites,view)
 	<details class="np-v2-advanced-tools"><summary><span>Advanced tools</span>@icon("chevron-down")</summary><div class="np-domain-tool-groups">
 		@domainToolGroup("Hosting & DNS") {
 			@domainDeepTool(item.ID,"web-server","settings","Hosting & nginx","Typed web-server controls",view)
@@ -439,6 +454,41 @@ templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary
 			@domainTool(item.ID,"mail","mail","Mail settings","Mailboxes, aliases and webmail",view)
 		}
 	</div></details>
+}
+
+templ ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view WorkspaceView) {
+	if len(childSites(sites,parent.ID)) > 0 {
+		<section class="np-panel"><div class="np-panel-title"><h2>Subdomains</h2></div><div class="np-object-list">
+			for _, child := range childSites(sites,parent.ID) {
+				<a class="np-object-row" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(child.ID))) }><span class="np-object-icon">@icon("globe")</span><span><strong>{ child.Domain }</strong><small>Hosting { child.Status } · DNS { child.DNSZoneMode } · TLS { child.TLSStatus }</small></span><span class={ "np-status-pill "+customerStatusClass(child.Status) }>{ child.Status }</span></a>
+			}
+		</div></section>
+	}
+}
+
+templ subdomainSetupStatus(item dashboard.Site, data dashboard.Data, view WorkspaceView) {
+	{{ zone, hasZone := dnsZoneForSiteWorkspace(data.Phase6.DNSZones,data.Phase6.DNSRecords,item) }}
+	<section class="np-panel np-subdomain-setup"><div class="np-panel-title"><div><h2>Subdomain setup</h2><span class="np-muted">Hosting, DNS configuration, and HTTPS have separate states.</span></div></div>
+		if parent := parentDomain(data.Sites,item); parent != "" {
+			<p class="np-subdomain-parent">Parent domain: <a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ParentSiteID))) }>{ parent }</a></p>
+		}
+		<div class="np-subdomain-steps"><div><strong>Hosting</strong>@statusPill(item.Status)</div><div><strong>DNS configuration</strong>
+			if hasZone {
+				@statusPill(zone.Status)
+			} else {
+				<span class="np-status-pill">Not configured</span>
+			}
+		</div><div><strong>TLS</strong>@statusPill(item.TLSStatus)</div></div>
+		<p class="np-form-help np-subdomain-dns-note">DNS configuration status does not confirm public resolution or nameserver delegation.</p>
+		if hasZone && zone.Mode == "external" && zone.Address != "" {
+			<p class="np-callout">External DNS: create an A record for <code>{ item.Domain }</code> pointing to <code>{ zone.Address }</code>.</p>
+		} else if hasZone && zone.Mode == "external" {
+			<p class="np-callout">External DNS is selected. Point this subdomain to the server public IP at your DNS provider.</p>
+		}
+		if item.Status == "active" && item.TLSStatus != "active" {
+			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?tab=ssl")) }>Configure SSL/TLS</a>
+		}
+	</section>
 }
 
 templ domainToolGroup(title string) {
@@ -2097,7 +2147,7 @@ templ routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Works
 							<span class="np-subscription-subscriber"><strong>{ subscription.CustomerName }</strong><small>{ subscription.CustomerEmail }</small></span>
 						</td>
 						<td data-label="Plan" class="np-subscription-plan-cell"><span class="np-plan-pill">{ subscription.PlanName }</span></td>
-						<td data-label="Usage" class="np-subscription-usage-cell"><span><strong>{ formatQuotaCompactCount(subscription.SitesUsed,subscription.MaxSites,true) }</strong> domains</span><span><strong>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) }</strong> databases</span></td>
+						<td data-label="Usage" class="np-subscription-usage-cell"><span><strong>{ formatQuotaCompactCount(subscription.DomainsUsed,subscription.MaxSites,true) }</strong> domains</span><span><strong>{ formatQuotaCompactCount(subscription.SubdomainsUsed,subscription.MaxSubdomains,true) }</strong> subdomains</span><span><strong>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) }</strong> databases</span></td>
 						<td data-label="Status" class="np-subscription-status-cell">@statusPill(subscription.Status) @statusPill(subscriptionComplianceLabel(subscription))</td>
 						<td data-label="Action" class="np-subscription-action-cell"><a class="np-manage-button" href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(subscription.ID))) }>Manage</a></td>
 					</tr>
@@ -2112,7 +2162,7 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 			@pageHead("Subscription", subscription.SubscriptionName, subscription.CustomerName + " · " + subscription.PlanName) {
 			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/subscriptions")) }>Back to subscriptions</a>
 			}
-			<div class="np-subscription-overview"><div class="np-stat-grid np-routed-stats">@statCard("Domains", subscription.SitesUsed, "Limit " + formatPlanLimit(subscription.MaxSites))@statCard("Databases", subscription.DatabasesUsed, "Limit " + formatPlanLimit(subscription.MaxDatabases))@statCard("Backups", subscription.BackupsUsed, "Limit " + formatPlanLimit(subscription.MaxBackups))@statCard("Backup storage", int(subscription.BackupBytesUsed/1024/1024), "MB used")</div><aside class="np-subscription-account"><div><span>Subscriber</span><strong>{ subscription.CustomerName }</strong><small>{ subscription.CustomerEmail }</small></div><div><span>Service plan</span><strong>{ subscription.PlanName }</strong></div><div><span>Status</span>@statusPill(subscription.Status)</div><div><span>Compliance</span>@statusPill(subscriptionComplianceLabel(subscription))</div></aside></div>
+			<div class="np-subscription-overview"><div class="np-stat-grid np-routed-stats">@statCard("Domains", subscription.DomainsUsed, "Limit " + formatPlanLimit(subscription.MaxSites))@statCard("Subdomains", subscription.SubdomainsUsed, "Limit " + formatPlanLimit(subscription.MaxSubdomains))@statCard("Databases", subscription.DatabasesUsed, "Limit " + formatPlanLimit(subscription.MaxDatabases))@statCard("Backups", subscription.BackupsUsed, "Limit " + formatPlanLimit(subscription.MaxBackups))</div><aside class="np-subscription-account"><div><span>Subscriber</span><strong>{ subscription.CustomerName }</strong><small>{ subscription.CustomerEmail }</small></div><div><span>Service plan</span><strong>{ subscription.PlanName }</strong></div><div><span>Status</span>@statusPill(subscription.Status)</div><div><span>Compliance</span>@statusPill(subscriptionComplianceLabel(subscription))</div></aside></div>
 			<nav class="np-domain-tabs np-subscription-tabs" aria-label="Subscription workspace">
 				<a class={ subscriptionTabClass(view.Tab,"overview") } href={ subscriptionTabPath(view,subscription.ID,"overview") }>Websites &amp; Domains</a>
 				<a class={ subscriptionTabClass(view.Tab,"resources") } href={ subscriptionTabPath(view,subscription.ID,"resources") }>Resources<span class="np-sr-only"> Subscription settings</span></a>
@@ -2134,7 +2184,7 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 				<p class="np-empty">No domains are hosted by this subscription.</p>
 			} else {
 				<div class="np-domain-blocks">
-					for _,site:=range sitesForSubscription(data.Sites,subscription.ID) {
+					for _,site:=range sitesInDomainOrder(sitesForSubscription(data.Sites,subscription.ID)) {
 					@subscriptionDomainBlock(site,data,view)
 					}
 				</div>
@@ -2459,12 +2509,16 @@ templ customEntitlementEditor(subscription types.SubscriptionSummary, data dashb
 }
 
 templ subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view WorkspaceView) {
-	<article class="np-domain-block">
+	<article class="np-domain-block" data-subdomain?={ site.ParentSiteID > 0 }>
 		<div class="np-domain-block-main">
 			<span class="np-object-icon">@icon("globe")</span>
 			<div>
 				<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))) }><strong>{ site.Domain }</strong></a>
-				<span>{ site.Username } · PHP { site.PHPVersion }</span>
+				<span>{ site.Username } · PHP { site.PHPVersion }
+					if parent := parentDomain(data.Sites,site); parent != "" {
+						 · Subdomain of { parent }
+					}
+				</span>
 			</div>
 			@statusPill(site.Status)
 		</div>
@@ -2841,6 +2895,23 @@ templ statisticsEngineSelect(logs types.LogsPreset) {
 
 templ planPreviewDialog(plan controlquota.Plan, view WorkspaceView) { <dialog class="np-dialog np-plan-preview-dialog" id="plan-preview-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Contract review</span><h2>Review activation and synchronization</h2><p>Activation requires a deliverable runtime. Synced subscriptions receive a new immutable snapshot; locked and custom subscriptions retain their current contract.</p></div><dl class="np-preview-facts"><div><dt>Synced subscriptions</dt><dd data-np-preview-synced>-</dd></div><div><dt>Locked subscriptions</dt><dd data-np-preview-locked>-</dd></div><div><dt>Custom subscriptions</dt><dd data-np-preview-custom>-</dd></div><div><dt>Server committed disk</dt><dd data-np-preview-disk>-</dd></div><div data-np-preview-reseller-row hidden><dt>Reseller allocation</dt><dd data-np-preview-reseller>-</dd></div></dl><div class="np-preview-section"><h3>Contract changes</h3><div class="np-preview-list" data-np-preview-changes><p class="np-empty">No entitlement changes.</p></div></div><div class="np-preview-section"><h3>Affected subscriptions</h3><div class="np-preview-list" data-np-preview-impacts><p class="np-empty">No synchronized subscriptions are affected.</p></div></div><div class="np-preview-section"><h3>Server readiness</h3><div class="np-preview-list" data-np-preview-capabilities><p class="np-empty">Capability checks passed.</p></div></div><div class="np-preview-list is-blocked" data-np-preview-blockers hidden></div><div class="np-preview-list" data-np-preview-warnings hidden></div><p class="np-gate" data-np-preview-warning></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="button" data-np-plan-confirm-submit>{ planEditorSubmitLabel(plan,false) }</button></div></dialog> }
 
+templ routedSubdomainDialog(parent dashboard.Site, subscription types.SubscriptionSummary, capabilities types.RuntimeCapabilities, view WorkspaceView) {
+	<dialog class="np-dialog np-subdomain-dialog" id={ "subdomain-dialog-"+formatJobID(parent.ID) } data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">{ parent.Domain }</span><h2>Add subdomain</h2><p>Creates separate website files under this subscription.</p></div>
+		<form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(parent.ID)+"/subdomains") } data-np-create-subdomain-form data-np-parent-domain={ parent.Domain } data-np-max-subdomains={ formatPlanLimitFormValue(subscription.MaxSubdomains) } data-np-subdomains-used={ formatPlanLimitFormValue(subscription.SubdomainsUsed) } data-np-overuse-policy={ string(subscription.OverusePolicy) } data-np-php-ready={ formatBool(stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion))) }>
+			@csrfInput(view)
+			<label>Subdomain name<input name="label" pattern="[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?" maxlength="63" placeholder="blog" autocapitalize="none" autocomplete="off" spellcheck="false" required/></label>
+			<p class="np-subdomain-preview">Address: <strong data-np-subdomain-preview>blog.{ parent.Domain }</strong></p>
+			<p class="np-form-help">Subscription allowance: { formatQuotaCompactCount(subscription.SubdomainsUsed,subscription.MaxSubdomains,true) } subdomains. The document root is created automatically.</p>
+			<p class="np-form-help">PHP starts with { displayFallback(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion),"the subscription default") }. Change it on the new domain after creation.</p>
+			if !stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion)) {
+				<p class="np-gate is-blocked">The subscription default PHP version is not available on this server. Update the plan or PHP installation first.</p>
+			}
+			<p class="np-gate" data-np-subdomain-gate aria-live="polite"></p>
+			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit disabled?={ !stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion)) }>Create subdomain</button></div>
+		</form>
+	</dialog>
+}
+
 templ routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities, view WorkspaceView) {
 	<dialog class="np-dialog" id="site-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Hosting services</span><h2>Add website</h2><p>Limits are derived from the selected subscription.</p></div><form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>@csrfInput(view)@routedSubscriptionSelect(subscriptions,capabilities)<label>Domain<input name="domain" required/></label><input type="hidden" name="username" value="npsystem"/><label>PHP<select name="php_version" data-np-site-php>
 		for _, version := range subscriptionPHPVersions(subscriptions,capabilities) {
@@ -2852,7 +2923,7 @@ templ routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities t
 templ routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities) {
 	<label>Subscription <select name="subscription_id" required>
 		for _, subscription := range subscriptions {
-			<option value={ formatQuotaUserID(subscription.ID) } data-subscription-id={ formatQuotaUserID(subscription.ID) } data-customer-id={ formatQuotaUserID(subscription.CustomerID) } data-email={ subscription.CustomerEmail } data-plan-name={ subscription.PlanName } data-has-quota="true" data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.SitesUsed) } data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) } data-php-versions={ joinStrings(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist)) } data-default-php={ controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion) }>{ subscriptionSelectLabel(subscription) }</option>
+			<option value={ formatQuotaUserID(subscription.ID) } data-subscription-id={ formatQuotaUserID(subscription.ID) } data-customer-id={ formatQuotaUserID(subscription.CustomerID) } data-email={ subscription.CustomerEmail } data-plan-name={ subscription.PlanName } data-has-quota="true" data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.DomainsUsed) } data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) } data-php-versions={ joinStrings(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist)) } data-default-php={ controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion) }>{ subscriptionSelectLabel(subscription) }</option>
 		}
 	</select></label>
 }

@@ -20,6 +20,13 @@ type SQLSiteRepository struct {
 	river   *river.Client[*sql.Tx]
 }
 
+func (r *SQLSiteRepository) GetSubdomainParent(ctx context.Context, siteID int64) (SubdomainParent, error) {
+	var parent SubdomainParent
+	err := r.db.QueryRowContext(ctx, `SELECT id,COALESCE(parent_site_id,0),subscription_id,domain,status,desired_status FROM sites WHERE id=$1`, siteID).
+		Scan(&parent.ID, &parent.ParentSiteID, &parent.SubscriptionID, &parent.Domain, &parent.Status, &parent.DesiredStatus)
+	return parent, err
+}
+
 var ErrCertificateOperationInProgress = errors.New("certificate operation is already in progress")
 
 const activeCertificateJobSQL = `SELECT EXISTS (
@@ -54,7 +61,7 @@ func (r *SQLSiteRepository) CreateSite(ctx context.Context, ownerID int64, req t
 		return 0, fmt.Errorf("begin site transaction: %w", err)
 	}
 	defer tx.Rollback()
-	if err := guardSiteIntentTx(ctx, tx, req.SubscriptionID, req.Domain); err != nil {
+	if err := guardSiteIntentTx(ctx, tx, req.SubscriptionID, req.Domain, req.ParentSiteID); err != nil {
 		return 0, fmt.Errorf("guard site entitlement: %w", err)
 	}
 
