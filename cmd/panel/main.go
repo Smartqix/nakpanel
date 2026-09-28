@@ -224,10 +224,11 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	databaseAdminManager := databaseadmin.NewManager(db, agent, serverAdminStore, nil)
 	dnsTemplateManager := dnstemplate.NewManager(db, nil)
 	siteStatus := provision.NewSQLSiteStatusStore(queries)
+	autoSubdomainDNS := provision.NewSQLPhase6Repository(db, nil)
 	databaseStatus := provision.NewSQLDatabaseStatusStore(db, queries, serverAdminStore)
 	phase6Status := provision.NewSQLPhase6StatusStore(db)
 	maintenanceService := controlmaintenance.NewService(db, nil, agent, serverAdminStore)
-	river.AddWorker(workers, provision.NewCreateSiteWorker(agent, siteStatus))
+	river.AddWorker(workers, provision.NewCreateSiteWorker(agent, siteStatus, autoSubdomainDNS))
 	river.AddWorker(workers, provision.NewCreateDatabaseWorker(agent, databaseStatus, serverAdminStore))
 	river.AddWorker(workers, provision.NewIssueCertWorker(agent, siteStatus, maintenanceService))
 	river.AddWorker(workers, provision.NewInstallCustomCertWorker(agent, siteStatus))
@@ -387,6 +388,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	usageWorker.SetRiverClient(client)
+	autoSubdomainDNS.SetRiverClient(client)
 	phpApplicationStore.SetRiverClient(client)
 	wordpressStore.SetRiverClient(client)
 	statisticsService.SetRiverClient(client)

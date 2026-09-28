@@ -22,6 +22,35 @@ type fakeAgentSiteClient struct {
 	err  error
 }
 
+type recordingSubdomainDNS struct {
+	siteID int64
+	err    error
+	onCall func()
+}
+
+func (d *recordingSubdomainDNS) AutoConfigureSubdomainDNS(_ context.Context, siteID int64) error {
+	if d.onCall != nil {
+		d.onCall()
+	}
+	d.siteID = siteID
+	return d.err
+}
+
+type recordingSiteStatusStore struct {
+	activeID int64
+	failedID int64
+}
+
+func (s *recordingSiteStatusStore) MarkSiteActive(_ context.Context, id int64) error {
+	s.activeID = id
+	return nil
+}
+
+func (s *recordingSiteStatusStore) MarkSiteFailed(_ context.Context, id int64, _ string) error {
+	s.failedID = id
+	return nil
+}
+
 func (c *fakeAgentSiteClient) CreateSite(ctx context.Context, req types.CreateSiteReq) (types.Response, error) {
 	c.req = req
 	return c.resp, c.err
@@ -171,6 +200,34 @@ func TestCreateSiteWorkerCallsAgent(t *testing.T) {
 	}
 	if client.req != want {
 		t.Fatalf("CreateSite request = %#v, want %#v", client.req, want)
+	}
+}
+
+func TestCreateSiteWorkerConfiguresDNSAfterHostingIsActive(t *testing.T) {
+	status := &recordingSiteStatusStore{}
+	dns := &recordingSubdomainDNS{onCall: func() {
+		if status.activeID != 42 {
+			t.Fatalf("DNS ran before site 42 was active: %+v", status)
+		}
+	}}
+	worker := NewCreateSiteWorker(&fakeAgentSiteClient{resp: types.Response{OK: true}}, status, dns)
+	if err := worker.Work(context.Background(), &river.Job[CreateSiteArgs]{Args: CreateSiteArgs{SiteID: 42}}); err != nil {
+		t.Fatal(err)
+	}
+	if status.activeID != 42 || dns.siteID != 42 || status.failedID != 0 {
+		t.Fatalf("status=%+v DNS=%+v", status, dns)
+	}
+}
+
+func TestCreateSiteWorkerRetriesDNSFailureWithoutMarkingHostingFailed(t *testing.T) {
+	status := &recordingSiteStatusStore{}
+	dns := &recordingSubdomainDNS{err: errors.New("DNS conflict")}
+	worker := NewCreateSiteWorker(&fakeAgentSiteClient{resp: types.Response{OK: true}}, status, dns)
+	if err := worker.Work(context.Background(), &river.Job[CreateSiteArgs]{Args: CreateSiteArgs{SiteID: 42}}); err == nil {
+		t.Fatal("DNS failure did not trigger a retry")
+	}
+	if status.activeID != 42 || status.failedID != 0 {
+		t.Fatalf("hosting status = %+v", status)
 	}
 }
 

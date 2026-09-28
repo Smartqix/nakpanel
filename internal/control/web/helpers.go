@@ -500,6 +500,35 @@ func dnsZoneForSiteWorkspace(zones []dashboard.DNSZone, records []types.DNSRecor
 	return dashboard.DNSZone{}, false
 }
 
+func subdomainDNSState(site dashboard.Site, zone dashboard.DNSZone, hasZone bool, records []types.DNSRecord) string {
+	if !hasZone || zone.Mode != "primary" {
+		return "external"
+	}
+	if zone.Status == "failed" {
+		return "failed"
+	}
+	host := "@"
+	if zone.Domain != site.Domain {
+		host = strings.TrimSuffix(site.Domain, "."+zone.Domain)
+		if host == site.Domain || host == "" {
+			return "missing"
+		}
+	}
+	for _, record := range records {
+		if record.ZoneID == zone.ID && record.Host == host && record.Type == "A" && record.Value == zone.Address {
+			return zone.Status
+		}
+	}
+	return "missing"
+}
+
+func subdomainParentDNSAddress(zones []dashboard.DNSZone, site dashboard.Site) string {
+	if zone, ok := dnsZoneForSite(zones, site.ParentSiteID); ok {
+		return zone.Address
+	}
+	return ""
+}
+
 func dnsRecordsForZone(items []types.DNSRecord, zoneID int64) []types.DNSRecord {
 	result := make([]types.DNSRecord, 0)
 	for _, item := range items {

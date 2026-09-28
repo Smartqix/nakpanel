@@ -374,9 +374,14 @@
   function updateSubdomainGate(scope) {
     each("[data-np-create-subdomain-form]", scope || document, function (form) {
       var input = form.querySelector('input[name="label"]');
-      var label = input ? input.value.trim().toLowerCase() : "";
+      var label = input ? input.value.trim().toLowerCase().replace(/\.$/, "") : "";
+      var parent = (form.dataset.npParentDomain || "").toLowerCase();
+      var suffix = "." + parent;
+      var fullName = label.endsWith(suffix);
+      var shortName = fullName ? label.slice(0, -suffix.length) : label;
+      var invalidName = label && (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(shortName) || (label.includes(".") && !fullName));
       var preview = form.querySelector("[data-np-subdomain-preview]");
-      if (preview) preview.textContent = (label || "blog") + "." + form.dataset.npParentDomain;
+      if (preview) preview.textContent = (shortName || "blog") + suffix;
       var max = parseInt(form.dataset.npMaxSubdomains || "-1", 10);
       var used = parseInt(form.dataset.npSubdomainsUsed || "0", 10);
       var overuse = form.dataset.npOverusePolicy === "normal" || form.dataset.npOverusePolicy === "notify";
@@ -387,6 +392,10 @@
         if (message) message.textContent = "The subscription default PHP version is unavailable on this server.";
       } else if (message) {
         message.textContent = blocked ? "This subscription has reached its subdomain limit." : "";
+      }
+      if (!blocked && invalidName) {
+        blocked = true;
+        if (message) message.textContent = "Enter one name under " + parent + ", such as blog or blog." + parent + ".";
       }
       if (message) message.classList.toggle("is-blocked", blocked);
       var submit = form.querySelector("[data-np-create-submit]");

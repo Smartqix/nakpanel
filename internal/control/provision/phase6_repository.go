@@ -364,6 +364,10 @@ func NewSQLPhase6Repository(db *sql.DB, riverClient *river.Client[*sql.Tx]) *SQL
 	return &SQLPhase6Repository{db: db, river: riverClient, now: time.Now}
 }
 
+func (r *SQLPhase6Repository) SetRiverClient(client *river.Client[*sql.Tx]) {
+	r.river = client
+}
+
 func (r *SQLPhase6Repository) CreateBackup(ctx context.Context, ownerID int64, req types.CreateBackupReq) (int64, error) {
 	if r.db == nil {
 		return 0, errors.New("database is not configured")

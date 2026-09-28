@@ -123,6 +123,10 @@ type SiteStatusStore interface {
 	MarkSiteFailed(ctx context.Context, id int64, message string) error
 }
 
+type SubdomainDNSConfigurer interface {
+	AutoConfigureSubdomainDNS(ctx context.Context, siteID int64) error
+}
+
 type DatabaseStatusStore interface {
 	MarkDatabaseActive(ctx context.Context, id int64) error
 	MarkDatabaseFailed(ctx context.Context, id int64, message string) error
@@ -144,13 +148,18 @@ type CreateSiteWorker struct {
 
 	agent AgentSiteClient
 	sites SiteStatusStore
+	dns   SubdomainDNSConfigurer
 }
 
-func NewCreateSiteWorker(agent AgentSiteClient, sites SiteStatusStore) *CreateSiteWorker {
-	return &CreateSiteWorker{
+func NewCreateSiteWorker(agent AgentSiteClient, sites SiteStatusStore, dns ...SubdomainDNSConfigurer) *CreateSiteWorker {
+	worker := &CreateSiteWorker{
 		agent: agent,
 		sites: sites,
 	}
+	if len(dns) > 0 {
+		worker.dns = dns[0]
+	}
+	return worker
 }
 
 func (w *CreateSiteWorker) Work(ctx context.Context, job *river.Job[CreateSiteArgs]) error {
@@ -178,6 +187,11 @@ func (w *CreateSiteWorker) Work(ctx context.Context, job *river.Job[CreateSiteAr
 	if w.sites != nil {
 		if err := w.sites.MarkSiteActive(ctx, job.Args.SiteID); err != nil {
 			return fmt.Errorf("mark site active: %w", err)
+		}
+	}
+	if w.dns != nil {
+		if err := w.dns.AutoConfigureSubdomainDNS(ctx, job.Args.SiteID); err != nil {
+			return fmt.Errorf("configure subdomain DNS: %w", err)
 		}
 	}
 	return nil

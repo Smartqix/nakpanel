@@ -138,6 +138,23 @@ func ValidateSubdomainLabel(label string) error {
 	return nil
 }
 
+// ParseSubdomainLabel accepts either the label or the full name beneath the
+// selected parent. The parent still determines ownership and cannot be
+// changed by browser input.
+func ParseSubdomainLabel(input, parent string) (string, error) {
+	name := NormalizeDomain(input)
+	parent = NormalizeDomain(parent)
+	if strings.HasSuffix(name, "."+parent) {
+		name = strings.TrimSuffix(name, "."+parent)
+	} else if strings.Contains(name, ".") {
+		return "", fmt.Errorf("subdomain must be under %s", parent)
+	}
+	if err := ValidateSubdomainLabel(name); err != nil {
+		return "", fmt.Errorf("enter one name such as blog for blog.%s: %w", parent, err)
+	}
+	return name, nil
+}
+
 func validateRuntimeLimits(limits types.SiteResourceLimits) error {
 	switch limits.PreferredDomain {
 	case "", "none", "www", "root", "non-www":

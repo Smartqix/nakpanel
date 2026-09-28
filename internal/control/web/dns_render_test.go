@@ -126,6 +126,20 @@ func TestDomainDNSFindsParentZoneWithoutOwnedRecords(t *testing.T) {
 	}
 }
 
+func TestSubdomainOverviewDoesNotMistakeParentZoneForItsAddressRecord(t *testing.T) {
+	parent := dashboard.Site{ID: 1, Domain: "example.test", Status: "active"}
+	child := dashboard.Site{ID: 2, Domain: "blog.example.test", ParentSiteID: 1, DNSZoneMode: "parent", Status: "active", SubscriptionID: 5}
+	data := dashboard.Data{
+		Sites: []dashboard.Site{parent, child},
+		Subscriptions: []types.SubscriptionSummary{{ID: 5, SubscriptionName: "Hosting", Status: "active"}},
+		Phase6: dashboard.Phase6Data{DNSZones: []dashboard.DNSZone{{ID: 9, SiteID: 1, Domain: "example.test", Mode: "primary", Status: "active", Address: "192.0.2.10"}}},
+	}
+	body := renderDNSPage(t, data, WorkspaceView{Route: "site-detail", DetailID: 2, Tab: "overview", CSRFToken: "csrf"})
+	if !strings.Contains(body, "No address record points this subdomain") {
+		t.Fatalf("subdomain without an address record appeared configured:\n%s", body)
+	}
+}
+
 func renderDNSPage(t *testing.T, data dashboard.Data, view WorkspaceView) string {
 	t.Helper()
 	var body bytes.Buffer

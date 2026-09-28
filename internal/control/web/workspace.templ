@@ -468,22 +468,22 @@ templ ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view Wor
 
 templ subdomainSetupStatus(item dashboard.Site, data dashboard.Data, view WorkspaceView) {
 	{{ zone, hasZone := dnsZoneForSiteWorkspace(data.Phase6.DNSZones,data.Phase6.DNSRecords,item) }}
+	{{ dnsState := subdomainDNSState(item,zone,hasZone,data.Phase6.DNSRecords) }}
+	{{ parentAddress := subdomainParentDNSAddress(data.Phase6.DNSZones,item) }}
 	<section class="np-panel np-subdomain-setup"><div class="np-panel-title"><div><h2>Subdomain setup</h2><span class="np-muted">Hosting, DNS configuration, and HTTPS have separate states.</span></div></div>
 		if parent := parentDomain(data.Sites,item); parent != "" {
 			<p class="np-subdomain-parent">Parent domain: <a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ParentSiteID))) }>{ parent }</a></p>
 		}
-		<div class="np-subdomain-steps"><div><strong>Hosting</strong>@statusPill(item.Status)</div><div><strong>DNS configuration</strong>
-			if hasZone {
-				@statusPill(zone.Status)
-			} else {
-				<span class="np-status-pill">Not configured</span>
-			}
-		</div><div><strong>TLS</strong>@statusPill(item.TLSStatus)</div></div>
+		<div class="np-subdomain-steps"><div><strong>Hosting</strong>@statusPill(item.Status)</div><div><strong>DNS configuration</strong>@statusPill(dnsState)</div><div><strong>TLS</strong>@statusPill(item.TLSStatus)</div></div>
 		<p class="np-form-help np-subdomain-dns-note">DNS configuration status does not confirm public resolution or nameserver delegation.</p>
-		if hasZone && zone.Mode == "external" && zone.Address != "" {
-			<p class="np-callout">External DNS: create an A record for <code>{ item.Domain }</code> pointing to <code>{ zone.Address }</code>.</p>
-		} else if hasZone && zone.Mode == "external" {
-			<p class="np-callout">External DNS is selected. Point this subdomain to the server public IP at your DNS provider.</p>
+		if dnsState == "external" && parentAddress != "" {
+			<p class="np-callout">DNS is managed elsewhere. Create an A record for <code>{ item.Domain }</code> pointing to <code>{ parentAddress }</code> at the authoritative DNS provider.</p>
+		} else if dnsState == "external" {
+			<p class="np-callout">DNS is managed elsewhere. Create an A record for this subdomain at the authoritative DNS provider using this server's public IPv4 address.</p>
+		} else if dnsState == "missing" && item.Status == "active" {
+			<p class="np-callout">No address record points this subdomain to the server yet. Check Activity for a DNS conflict, then review the parent zone's records.</p>
+		} else if dnsState == "failed" {
+			<p class="np-callout">The DNS zone did not converge. Review the DNS job in Activity before requesting HTTPS.</p>
 		}
 		if item.Status == "active" && item.TLSStatus != "active" {
 			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?tab=ssl")) }>Configure SSL/TLS</a>
@@ -2899,8 +2899,9 @@ templ routedSubdomainDialog(parent dashboard.Site, subscription types.Subscripti
 	<dialog class="np-dialog np-subdomain-dialog" id={ "subdomain-dialog-"+formatJobID(parent.ID) } data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">{ parent.Domain }</span><h2>Add subdomain</h2><p>Creates separate website files under this subscription.</p></div>
 		<form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(parent.ID)+"/subdomains") } data-np-create-subdomain-form data-np-parent-domain={ parent.Domain } data-np-max-subdomains={ formatPlanLimitFormValue(subscription.MaxSubdomains) } data-np-subdomains-used={ formatPlanLimitFormValue(subscription.SubdomainsUsed) } data-np-overuse-policy={ string(subscription.OverusePolicy) } data-np-php-ready={ formatBool(stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion))) }>
 			@csrfInput(view)
-			<label>Subdomain name<input name="label" pattern="[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?" maxlength="63" placeholder="blog" autocapitalize="none" autocomplete="off" spellcheck="false" required/></label>
+			<label>Subdomain name<input name="label" maxlength="253" placeholder="blog" autocapitalize="none" autocomplete="off" spellcheck="false" required/></label>
 			<p class="np-subdomain-preview">Address: <strong data-np-subdomain-preview>blog.{ parent.Domain }</strong></p>
+			<p class="np-form-help">Enter <strong>blog</strong> to create blog.{ parent.Domain }. The matching full address also works.</p>
 			<p class="np-form-help">Subscription allowance: { formatQuotaCompactCount(subscription.SubdomainsUsed,subscription.MaxSubdomains,true) } subdomains. The document root is created automatically.</p>
 			<p class="np-form-help">PHP starts with { displayFallback(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion),"the subscription default") }. Change it on the new domain after creation.</p>
 			if !stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion)) {

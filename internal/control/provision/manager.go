@@ -432,8 +432,8 @@ func (m *Manager) CreateSubdomainFor(ctx context.Context, actor auth.SessionUser
 	if parent.Status != "active" || parent.DesiredStatus != "active" {
 		return 0, errors.New("parent domain must be active before adding a subdomain")
 	}
-	label = strings.ToLower(strings.TrimSpace(label))
-	if err := site.ValidateSubdomainLabel(label); err != nil {
+	label, err = site.ParseSubdomainLabel(label, parent.Domain)
+	if err != nil {
 		return 0, err
 	}
 	return m.CreateSiteForSubscription(ctx, actor, parent.SubscriptionID, types.CreateSiteReq{

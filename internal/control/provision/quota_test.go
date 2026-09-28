@@ -188,7 +188,7 @@ func TestManagerCreatesSubdomainUnderParentWithPlanPHP(t *testing.T) {
 	repo := &fakeSiteRepository{parent: SubdomainParent{ID: 9, SubscriptionID: 44, Domain: "example.test", Status: "active", DesiredStatus: "active"}}
 	quotas := &fakeQuotaStore{hasLimits: true, limits: controlquota.Limits{MaxSites: 1, MaxSubdomains: 2, DefaultPHPVersion: "8.4", PHPAllowlist: "8.4", SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 3, PHPMemoryMB: 128}, usage: controlquota.Usage{Sites: 1, Domains: 1}}
 	manager := NewManager(repo, WithQuotaStore(quotas))
-	_, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "blog")
+	_, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "Blog.Example.Test")
 	if err != nil {
 		t.Fatalf("CreateSubdomainFor: %v", err)
 	}
