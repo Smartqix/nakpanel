@@ -2150,6 +2150,30 @@ func TestAddSubdomainUsesParentAndLabelOnly(t *testing.T) {
 	}
 }
 
+func TestAddSubdomainAcceptsBrowserMultipartForm(t *testing.T) {
+	creator := &fakeSiteCreator{}
+	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleAdmin, creator)
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	if err := form.WriteField("label", "kpfi"); err != nil {
+		t.Fatal(err)
+	}
+	if err := form.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/9/subdomains", &body)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	req.Header.Set("X-Nakpanel-SPA", "true")
+	addAuthenticatedCookie(req, cookie)
+	req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusAccepted || creator.parentSiteID != 9 || creator.label != "kpfi" {
+		t.Fatalf("multipart subdomain status=%d parent=%d label=%q body=%q", rec.Code, creator.parentSiteID, creator.label, rec.Body.String())
+	}
+}
+
 func TestAddSubdomainHidesForeignParent(t *testing.T) {
 	creator := &fakeSiteCreator{err: provision.ErrForbidden}
 	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleClient, creator)

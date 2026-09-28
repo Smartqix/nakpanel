@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -1512,7 +1513,16 @@ func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := r.ParseForm(); err != nil {
+	mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if mediaType == "multipart/form-data" {
+		err = r.ParseMultipartForm(32 << 10)
+		if r.MultipartForm != nil {
+			defer r.MultipartForm.RemoveAll()
+		}
+	} else {
+		err = r.ParseForm()
+	}
+	if err != nil {
 		if wantsSPAJSON(r) {
 			writeSPAError(w, http.StatusBadRequest, "Invalid subdomain form")
 		} else {
