@@ -2060,7 +2060,17 @@ func (s *Server) handlePreviewPlan(w http.ResponseWriter, r *http.Request) {
 		writeSPAError(w, http.StatusServiceUnavailable, "Plan preview is not configured")
 		return
 	}
-	if err := r.ParseForm(); err != nil {
+	mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	var err error
+	if mediaType == "multipart/form-data" {
+		err = r.ParseMultipartForm(32 << 10)
+		if r.MultipartForm != nil {
+			defer r.MultipartForm.RemoveAll()
+		}
+	} else {
+		err = r.ParseForm()
+	}
+	if err != nil {
 		writeSPAError(w, http.StatusBadRequest, "Invalid plan form")
 		return
 	}

@@ -222,6 +222,7 @@ type fakeQuotaManager struct {
 	err                  error
 	called               bool
 	planCalled           bool
+	previewCalled        bool
 	statusCalled         bool
 	customerCalled       bool
 	customerLoginCalled  bool
@@ -242,6 +243,13 @@ func (m *fakeQuotaManager) UpsertPlan(ctx context.Context, owner auth.SessionUse
 	m.plan = plan
 	m.planCalled = true
 	return plan, m.err
+}
+
+func (m *fakeQuotaManager) PreviewPlan(_ context.Context, owner auth.SessionUser, plan controlquota.Plan) (types.PlanPreview, error) {
+	m.owner = owner
+	m.plan = plan
+	m.previewCalled = true
+	return types.PlanPreview{Allowed: true}, m.err
 }
 
 func (m *fakeQuotaManager) SetPlanActive(ctx context.Context, owner auth.SessionUser, planID int64, active bool) error {
@@ -1715,6 +1723,32 @@ func TestAdminCanUpsertPlan(t *testing.T) {
 	}
 	if manager.plan.DiskMB != -1 || manager.plan.MaxSites != 3 || !manager.plan.AllowSSH || !manager.plan.AllowDNS || !manager.plan.IsActive {
 		t.Fatalf("plan limits/options = %#v", manager.plan)
+	}
+}
+
+func TestPlanPreviewAcceptsBrowserMultipartForm(t *testing.T) {
+	manager := &fakeQuotaManager{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{QuotaManager: manager})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	for name, value := range map[string]string{"plan_id": "5", "name": "Pro", "lifecycle_status": "active"} {
+		if err := form.WriteField(name, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := form.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/plans/preview", &body)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+	req.Header.Set("X-Nakpanel-SPA", "true")
+	addAuthenticatedCookie(req, cookie)
+	req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK || !manager.previewCalled || manager.plan.ID != 5 || manager.plan.Name != "Pro" {
+		t.Fatalf("multipart preview status=%d called=%v plan=%+v body=%q", rec.Code, manager.previewCalled, manager.plan, rec.Body.String())
 	}
 }
 
