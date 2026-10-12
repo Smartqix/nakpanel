@@ -1,6 +1,7 @@
 package panelhttp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -336,25 +337,37 @@ func (s *Server) handleValkey(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGitRepository(w http.ResponseWriter, r *http.Request) {
-	user, ok := s.currentUser(w, r)
+	if r.ParseForm() != nil {
+		writeSPAError(w, 400, "Invalid Git repository form.")
+		return
+	}
+	user, site, _, ok := s.gitWorkspaceTarget(w, r)
 	if !ok {
 		return
 	}
-	services, ok := s.subscriptionServices(w)
+	services, ok := s.domains.(interface {
+		UpsertGitRepository(context.Context, auth.SessionUser, int64, int64, types.GitRepositoryInput) (int64, error)
+	})
 	if !ok {
+		writeSPAError(w, 503, "Git repository management is unavailable.")
 		return
 	}
-	siteID, err := parsePositivePathID(r, "id")
-	if err != nil || r.ParseForm() != nil {
-		http.Error(w, "Invalid Git repository form", http.StatusBadRequest)
-		return
-	}
-	subscriptionID := parseFormInt64Default(r, "subscription_id", 0)
+	siteID, subscriptionID := site.ID, site.SubscriptionID
 	input := types.GitRepositoryInput{
+		Connect: r.Form.Get("connect") == "yes",
 		ID: parseFormInt64Default(r, "resource_id", 0), Mode: formStringDefault(r, "mode", "remote"),
 		RemoteURL: strings.TrimSpace(r.Form.Get("remote_url")), Branch: formStringDefault(r, "branch", "main"),
 		DeployTarget: formStringDefault(r, "deploy_target", "."), Automatic: formBoolDefault(r, "automatic", false),
-		KnownHostKey: strings.TrimSpace(r.Form.Get("known_host_key")),
+		KnownHostKey:   strings.TrimSpace(r.Form.Get("known_host_key")),
+		DeploymentMode: strings.TrimSpace(r.Form.Get("deployment_mode")),
+	}
+	if raw := r.Form.Get("expected_revision"); raw != "" {
+		var err error
+		input.ExpectedRevision, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || input.ExpectedRevision < 0 {
+			writeSPAError(w, 400, "Refresh the Git workspace before saving.")
+			return
+		}
 	}
 	id, err := services.UpsertGitRepository(r.Context(), user, subscriptionID, siteID, input)
 	if err != nil {
@@ -362,6 +375,10 @@ func (s *Server) handleGitRepository(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, subscriptionID, "git_repository.saved", "git_repository", id, map[string]any{"site_id": siteID, "mode": input.Mode})
+	if wantsSPAJSON(r) {
+		writeSPAJSON(w, 202, map[string]any{"ok": true, "repository_id": id, "notice": "Repository saved. Preparing connection credentials; no files have been published."})
+		return
+	}
 	http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"/git?notice=service-saved"), http.StatusSeeOther)
 }
 
@@ -374,6 +391,10 @@ func (s *Server) gitDeploymentServices(w http.ResponseWriter) (GitDeploymentServ
 }
 
 func (s *Server) handleGitDeploy(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.domains.(gitWorkspaceOperations); ok {
+		s.handleGitWorkspaceAction("deploy")(w, r)
+		return
+	}
 	user, ok := s.currentUser(w, r)
 	if !ok {
 		return
@@ -398,7 +419,7 @@ func (s *Server) handleGitDeploy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGitWebhookRotate(w http.ResponseWriter, r *http.Request) {
-	user, ok := s.currentUser(w, r)
+	user, site, _, ok := s.gitWorkspaceTarget(w, r)
 	if !ok {
 		return
 	}
@@ -411,7 +432,7 @@ func (s *Server) handleGitWebhookRotate(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Invalid Git webhook request", http.StatusBadRequest)
 		return
 	}
-	subscriptionID := parseFormInt64Default(r, "subscription_id", 0)
+	subscriptionID := site.SubscriptionID
 	token, err := services.RotateGitWebhook(r.Context(), user, subscriptionID, siteID)
 	if err != nil {
 		writeQuotaError(w, r, "Could not rotate Git webhook", err)
@@ -420,6 +441,10 @@ func (s *Server) handleGitWebhookRotate(w http.ResponseWriter, r *http.Request) 
 	s.recordAudit(r.Context(), user, 0, subscriptionID, "git.webhook_rotated", "site", siteID, nil)
 	continuePath := supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"/git")
 	w.Header().Set("Cache-Control", "no-store")
+	if wantsSPAJSON(r) {
+		writeSPAJSON(w, http.StatusCreated, map[string]any{"ok": true, "webhook_path": "/git/hooks/" + strconv.FormatInt(siteID, 10) + "/" + token, "notice": "Webhook credential rotated. Copy it now; it is shown only once. Configure push events with a unique delivery ID."})
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
 	_, _ = w.Write([]byte("<!doctype html><meta name=\"robots\" content=\"noindex\"><title>Git webhook</title><h1>Webhook credential rotated</h1><p>This URL is shown once.</p><pre>/git/hooks/" + strconv.FormatInt(siteID, 10) + "/" + html.EscapeString(token) + "</pre><p><a href=\"" + html.EscapeString(continuePath) + "\">Continue</a></p>"))
@@ -434,6 +459,32 @@ func (s *Server) handleGitWebhook(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.PathValue("token"))
 	if err != nil || len(token) != 64 {
 		http.NotFound(w, r)
+		return
+	}
+	if scoped, ok := s.domains.(interface {
+		TriggerGitWorkspaceWebhook(context.Context, int64, string, string, string) error
+	}); ok {
+		var event struct {
+			Ref string `json:"ref"`
+		}
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&event) != nil {
+			http.NotFound(w, r)
+			return
+		}
+		delivery := r.Header.Get("X-GitHub-Delivery")
+		if delivery == "" {
+			delivery = r.Header.Get("X-Gitlab-Event-UUID")
+		}
+		if kind := r.Header.Get("X-GitHub-Event"); kind != "" && kind != "push" {
+			http.NotFound(w, r)
+			return
+		}
+		if err := scoped.TriggerGitWorkspaceWebhook(r.Context(), siteID, token, delivery, event.Ref); err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Cache-Control", "no-store")
+		w.WriteHeader(http.StatusAccepted)
 		return
 	}
 	if err := services.TriggerGitWebhook(r.Context(), siteID, token); err != nil {

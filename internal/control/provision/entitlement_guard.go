@@ -12,6 +12,7 @@ import (
 
 type lockedSubscriptionLimits struct {
 	MaxSites        int
+	MaxSubdomains   int
 	MaxDatabases    int
 	MaxBackups      int
 	BackupStorageMB int
@@ -25,7 +26,7 @@ func lockActiveSubscriptionLimits(ctx context.Context, tx *sql.Tx, subscriptionI
 	if err := controlquota.LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
 		return limits, err
 	}
-	err := tx.QueryRowContext(ctx, `SELECT e.max_sites,e.max_databases,e.max_backups,e.backup_storage_mb,e.overuse_policy,e.hosting_enabled,e.allow_backups
+	err := tx.QueryRowContext(ctx, `SELECT e.max_sites,e.max_subdomains,e.max_databases,e.max_backups,e.backup_storage_mb,e.overuse_policy,e.hosting_enabled,e.allow_backups
 FROM subscriptions s
 JOIN subscription_entitlements e ON e.subscription_id=s.id
 JOIN customers c ON c.id=s.customer_id
@@ -33,14 +34,16 @@ LEFT JOIN reseller_accounts r ON r.id=c.reseller_id
 LEFT JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active'
 WHERE s.id=$1 AND s.status='active' AND c.status='active'
   AND (c.reseller_id IS NULL OR (r.status='active' AND rs.id IS NOT NULL))
-FOR UPDATE OF s,c`, subscriptionID).Scan(&limits.MaxSites, &limits.MaxDatabases, &limits.MaxBackups, &limits.BackupStorageMB, &limits.OverusePolicy, &limits.HostingEnabled, &limits.AllowBackups)
+FOR UPDATE OF s,c`, subscriptionID).Scan(&limits.MaxSites, &limits.MaxSubdomains, &limits.MaxDatabases, &limits.MaxBackups, &limits.BackupStorageMB, &limits.OverusePolicy, &limits.HostingEnabled, &limits.AllowBackups)
 	if errors.Is(err, sql.ErrNoRows) {
 		return lockedSubscriptionLimits{}, controlquota.ErrNoActiveSubscription
 	}
 	return limits, err
 }
 
-func guardSiteIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, domain string) error {
+var ErrSubdomainRequired = errors.New("use Add Subdomain from the parent domain")
+
+func guardSiteIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, domain string, parentSiteID int64) error {
 	limits, err := lockActiveSubscriptionLimits(ctx, tx, subscriptionID)
 	if err != nil {
 		return err
@@ -59,7 +62,34 @@ func guardSiteIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, do
 	if !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
-	return enforceCountLimitTx(ctx, tx, "sites", subscriptionID, limits.MaxSites, limits.OverusePolicy)
+	var parentID int64
+	var parentSubscriptionID int64
+	var parentStatus, desiredStatus string
+	err = tx.QueryRowContext(ctx, `SELECT id,subscription_id,status,desired_status FROM sites
+WHERE $1 LIKE '%.' || domain
+ORDER BY length(domain) DESC,id LIMIT 1`, domain).Scan(&parentID, &parentSubscriptionID, &parentStatus, &desiredStatus)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return err
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		if parentSiteID > 0 {
+			return ErrForbidden
+		}
+		return enforceCountLimitTx(ctx, tx, "domains", subscriptionID, limits.MaxSites, limits.OverusePolicy)
+	}
+	if parentSubscriptionID != subscriptionID {
+		return ErrForbidden
+	}
+	if parentSiteID == 0 {
+		return ErrSubdomainRequired
+	}
+	if parentID != parentSiteID {
+		return ErrForbidden
+	}
+	if parentStatus != "active" || desiredStatus != "active" {
+		return errors.New("parent domain must be active before adding a subdomain")
+	}
+	return enforceCountLimitTx(ctx, tx, "subdomains", subscriptionID, limits.MaxSubdomains, limits.OverusePolicy)
 }
 
 func guardDatabaseIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, name string) error {
@@ -124,9 +154,11 @@ func enforceCountLimitTx(ctx context.Context, tx *sql.Tx, table string, subscrip
 		return nil
 	}
 	query := map[string]string{
-		"sites":     `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND status<>'failed'`,
-		"databases": `SELECT COUNT(*)::int FROM databases WHERE subscription_id=$1 AND status<>'failed'`,
-		"backups":   `SELECT COUNT(*)::int FROM backups WHERE subscription_id=$1 AND status<>'failed'`,
+		"sites":      `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND status<>'failed'`,
+		"domains":    `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND parent_site_id IS NULL AND status<>'failed'`,
+		"subdomains": `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND parent_site_id IS NOT NULL AND status<>'failed'`,
+		"databases":  `SELECT COUNT(*)::int FROM databases WHERE subscription_id=$1 AND status<>'failed'`,
+		"backups":    `SELECT COUNT(*)::int FROM backups WHERE subscription_id=$1 AND status<>'failed'`,
 	}[table]
 	if query == "" {
 		return errors.New("unsupported entitlement resource")

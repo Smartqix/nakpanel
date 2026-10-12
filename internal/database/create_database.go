@@ -34,8 +34,19 @@ func ValidateCreateDatabaseRequest(req types.CreateDatabaseReq) error {
 	if !identifierPattern.MatchString(req.DBUser) {
 		return errors.New("database user must start with a lowercase letter and contain only lowercase letters, digits, and underscores")
 	}
+	if reservedDatabaseName(req.DBName) || reservedDatabaseName(req.DBUser) {
+		return errors.New("database name or user is reserved for system services")
+	}
 	if !passwordPattern.MatchString(req.Password) {
 		return errors.New("database password must be 12-256 URL-safe characters")
 	}
 	return nil
+}
+
+func reservedDatabaseName(name string) bool {
+	switch name {
+	case "root", "mysql", "mariadb", "information_schema", "performance_schema", "sys", "postgres", "template0", "template1", "nakpanel", "phpmyadmin", "debian_sys_maint", "replication", "backup":
+		return true
+	}
+	return strings.HasPrefix(name, "mysql_") || strings.HasPrefix(name, "mariadb_") || strings.HasPrefix(name, "nakpanel_")
 }

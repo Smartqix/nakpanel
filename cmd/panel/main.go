@@ -120,6 +120,11 @@ func main() {
 	}
 	go sweepCustomTLSStaging(ctx, db)
 	jobRetrier := provision.NewSQLJobRetrier(db)
+	databaseManager, closeDatabaseManager, err := startDatabaseManager(ctx, db, serverAdminManager.Store())
+	if err != nil {
+		log.Fatalf("start database manager bridge: %v", err)
+	}
+	defer closeDatabaseManager()
 	uiHandler := panelhttp.NewServer(authStore, sessionManager, panelhttp.ServerOptions{
 		SiteCreator:                siteManager,
 		DatabaseCreator:            siteManager,
@@ -135,6 +140,7 @@ func main() {
 		MailManager:                siteManager,
 		ServerAdmin:                serverAdminManager,
 		DatabaseAdmin:              databaseAdminManager,
+		DatabaseManager:            databaseManager,
 		DNSTemplates:               dnsTemplateManager,
 		ApplicationLogs:            agentCapabilities,
 		SMTPConfigured:             cfg.SMTPHost != "" && cfg.SMTPFrom != "",

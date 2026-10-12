@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/url"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -800,6 +801,79 @@ func subscriptionByID(subscriptions []types.SubscriptionSummary, id int64) (type
 	return types.SubscriptionSummary{}, false
 }
 
+func sitesInDomainOrder(sites []dashboard.Site) []dashboard.Site {
+	byID := make(map[int64]dashboard.Site, len(sites))
+	children := make(map[int64][]dashboard.Site)
+	var roots []dashboard.Site
+	for _, item := range sites {
+		byID[item.ID] = item
+	}
+	for _, item := range sites {
+		if item.ParentSiteID == 0 || item.ParentSiteID == item.ID {
+			roots = append(roots, item)
+		} else if _, ok := byID[item.ParentSiteID]; ok {
+			children[item.ParentSiteID] = append(children[item.ParentSiteID], item)
+		} else {
+			roots = append(roots, item)
+		}
+	}
+	less := func(items []dashboard.Site) {
+		sort.SliceStable(items, func(i, j int) bool { return items[i].Domain < items[j].Domain })
+	}
+	less(roots)
+	for _, items := range children {
+		less(items)
+	}
+	ordered := make([]dashboard.Site, 0, len(sites))
+	visited := make(map[int64]bool, len(sites))
+	var visit func(dashboard.Site)
+	visit = func(item dashboard.Site) {
+		if visited[item.ID] {
+			return
+		}
+		visited[item.ID] = true
+		ordered = append(ordered, item)
+		for _, child := range children[item.ID] {
+			visit(child)
+		}
+	}
+	for _, item := range roots {
+		visit(item)
+	}
+	for _, item := range sites {
+		visit(item)
+	}
+	return ordered
+}
+
+func parentDomain(sites []dashboard.Site, item dashboard.Site) string {
+	if item.ParentSiteID == 0 {
+		return ""
+	}
+	for _, candidate := range sites {
+		if candidate.ID == item.ParentSiteID {
+			return candidate.Domain
+		}
+	}
+	return ""
+}
+
+func childSites(sites []dashboard.Site, parentID int64) []dashboard.Site {
+	children := make([]dashboard.Site, 0)
+	for _, item := range sites {
+		if item.ParentSiteID == parentID {
+			children = append(children, item)
+		}
+	}
+	sort.SliceStable(children, func(i, j int) bool { return children[i].Domain < children[j].Domain })
+	return children
+}
+
+func activeSubscriptionForSite(subscriptions []types.SubscriptionSummary, site dashboard.Site) bool {
+	subscription, ok := subscriptionForSite(subscriptions, site)
+	return ok && subscription.Status == "active"
+}
+
 func siteByID(sites []dashboard.Site, id int64) (dashboard.Site, bool) {
 	for _, item := range sites {
 		if item.ID == id {
@@ -1130,6 +1204,20 @@ func domainDNSState(data dashboard.Phase6Data, siteID int64) string {
 		return displayFallback(zone.Status, "configured")
 	}
 	return "Not configured"
+}
+
+func domainDNSStateForSite(data dashboard.Phase6Data, site dashboard.Site) string {
+	if zone, ok := dnsZoneForSiteWorkspace(data.DNSZones, data.DNSRecords, site); ok {
+		return displayFallback(zone.Status, "configured")
+	}
+	return "Not configured"
+}
+
+func dnsZoneDescription(site dashboard.Site) string {
+	if site.ParentSiteID > 0 && site.DNSZoneMode == "parent" {
+		return "parent zone configuration"
+	}
+	return "domain zone configuration"
 }
 
 func stagingTargets(items []dashboard.Site, site dashboard.Site) []dashboard.Site {
@@ -1829,7 +1917,7 @@ func planPillClass(planName string) string {
 }
 
 func siteLimitLabel(summary controlquota.Summary) string {
-	if summary.HasQuota && summary.Limits.MaxSites >= 0 && summary.Usage.Sites >= summary.Limits.MaxSites {
+	if summary.HasQuota && summary.Limits.MaxSites >= 0 && summary.Usage.Domains >= summary.Limits.MaxSites {
 		return "full"
 	}
 	return "sites"
@@ -1915,7 +2003,7 @@ func customerGateData(summary controlquota.Summary) map[string]string {
 		"plan-name":       formatSummaryPlanName(summary),
 		"has-quota":       formatBool(summary.HasQuota),
 		"max-sites":       strconv.Itoa(summary.Limits.MaxSites),
-		"sites-used":      strconv.Itoa(summary.Usage.Sites),
+		"sites-used":      strconv.Itoa(summary.Usage.Domains),
 		"storage-mb":      strconv.Itoa(summary.Limits.StorageMB),
 	}
 }

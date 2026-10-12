@@ -1,0 +1,26 @@
+package web
+
+import "github.com/nakroteck/nakpanel/internal/control/dashboard"
+
+templ databasePasswordInput() {
+ <label>Password<input type="password" name="password" minlength="16" maxlength="128" pattern="[A-Za-z0-9_-]{16,128}" title="16-128 letters, digits, underscores or hyphens" autocomplete="new-password" required data-np-db-password/></label>
+ <div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-db-generate>Generate password</button><button type="button" class="np-icon-button" data-np-db-reveal aria-label="Show password" title="Show password">@icon("eye")</button><button type="button" class="np-icon-button" data-np-db-copy aria-label="Copy password" title="Copy password">@icon("copy")</button></div>
+ <p class="np-form-help" data-np-db-password-help>Use 16-128 letters, digits, underscores or hyphens. Save the password before submitting; it cannot be viewed again.</p>
+}
+
+templ databaseRowActions(database dashboard.Database, actions DashboardActions, view WorkspaceView) {
+ <div class="np-domain-db-actions">
+  if database.Status == "active" {
+   if actions.CanCreateDatabase {
+    <form method="post" action={templ.SafeURL("/databases/"+formatJobID(database.ID)+"/manager")} target="_blank" rel="noopener">@csrfInput(view)<button type="submit" class="np-secondary-button">@icon("external-link")<span>Open phpMyAdmin</span></button></form>
+   }
+   <button type="button" class="np-secondary-button" data-np-db-connection={formatJobID(database.ID)}>Connection details</button>
+   if actions.CanCreateDatabase {
+    <button type="button" class="np-secondary-button" data-np-dialog-open={"database-password-"+formatJobID(database.ID)}>Reset password</button>
+    <dialog class="np-dialog" id={"database-password-"+formatJobID(database.ID)} data-np-dialog aria-labelledby={"database-password-title-"+formatJobID(database.ID)}><div class="np-dialog-head"><h2 id={"database-password-title-"+formatJobID(database.ID)}>Reset database password</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action={templ.SafeURL("/databases/"+formatJobID(database.ID)+"/password")} data-np-domain-db-form>@csrfInput(view)<p class="np-gate">Applications using this database will stop connecting until their configuration is updated with the new password.</p>@databasePasswordInput()<label class="np-check"><input type="checkbox" name="confirm" value="yes" required/>I will update the application password.</label><p class="np-error" data-np-db-form-error role="alert" hidden></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Reset password</button></div></form></dialog>
+   }
+  } else if database.Status == "failed" && actions.CanCreateDatabase {
+   <form method="post" action={templ.SafeURL("/databases/"+formatJobID(database.ID)+"/retry")} data-np-domain-db-form>@csrfInput(view)<p class="np-error" data-np-db-form-error role="alert" hidden></p><button type="submit" class="np-secondary-button">Retry</button></form>
+  }
+ </div>
+}

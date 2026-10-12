@@ -26,6 +26,7 @@ type Limits struct {
 	PlanID            int64
 	PlanName          string
 	MaxSites          int
+	MaxSubdomains     int
 	MaxDatabases      int
 	StorageMB         int
 	MaxBackups        int
@@ -48,6 +49,8 @@ type Usage struct {
 	CustomerID         int64
 	SubscriptionID     int64
 	Sites              int
+	Domains            int
+	Subdomains         int
 	Databases          int
 	Backups            int
 	BackupStorageBytes int64
@@ -149,8 +152,8 @@ func SiteLimits(ctx context.Context, store Store, userID int64) (types.SiteResou
 	if err != nil {
 		return types.SiteResourceLimits{}, err
 	}
-	if countLimitReached(usage.Sites, limits.MaxSites, limits.OverusePolicy) {
-		return types.SiteResourceLimits{}, fmt.Errorf("%w: sites %d / %d", ErrExceeded, usage.Sites, limits.MaxSites)
+	if countLimitReached(usage.Domains, limits.MaxSites, limits.OverusePolicy) {
+		return types.SiteResourceLimits{}, fmt.Errorf("%w: domains %d / %d", ErrExceeded, usage.Domains, limits.MaxSites)
 	}
 	if limits.SiteDiskQuotaMB == 0 {
 		return types.SiteResourceLimits{}, fmt.Errorf("%w: site disk quota is 0 MB", ErrExceeded)
@@ -169,6 +172,14 @@ func SiteLimits(ctx context.Context, store Store, userID int64) (types.SiteResou
 }
 
 func SiteLimitsForSubscription(ctx context.Context, store Store, subscriptionID int64) (types.SiteResourceLimits, Limits, error) {
+	return siteLimitsForSubscription(ctx, store, subscriptionID, false)
+}
+
+func SiteLimitsForSubdomain(ctx context.Context, store Store, subscriptionID int64) (types.SiteResourceLimits, Limits, error) {
+	return siteLimitsForSubscription(ctx, store, subscriptionID, true)
+}
+
+func siteLimitsForSubscription(ctx context.Context, store Store, subscriptionID int64, subdomain bool) (types.SiteResourceLimits, Limits, error) {
 	if store == nil {
 		return types.SiteResourceLimits{}, Limits{}, nil
 	}
@@ -186,8 +197,12 @@ func SiteLimitsForSubscription(ctx context.Context, store Store, subscriptionID 
 	if !limits.HostingEnabled && limits.OverusePolicy != "" {
 		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: hosting is disabled by the subscription", ErrExceeded)
 	}
-	if countLimitReached(usage.Sites, limits.MaxSites, limits.OverusePolicy) {
-		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: sites %d / %d", ErrExceeded, usage.Sites, limits.MaxSites)
+	used, allowed, resource := usage.Domains, limits.MaxSites, "domains"
+	if subdomain {
+		used, allowed, resource = usage.Subdomains, limits.MaxSubdomains, "subdomains"
+	}
+	if countLimitReached(used, allowed, limits.OverusePolicy) {
+		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: %s %d / %d", ErrExceeded, resource, used, allowed)
 	}
 	if limits.SiteDiskQuotaMB == 0 {
 		return types.SiteResourceLimits{}, Limits{}, fmt.Errorf("%w: site disk quota is 0 MB", ErrExceeded)
@@ -419,7 +434,7 @@ func (s *SQLStore) GetLimits(ctx context.Context, userID int64) (Limits, bool, e
 	}
 	var limits Limits
 	err := s.db.QueryRowContext(ctx, `SELECT s.customer_user_id, s.id, COALESCE(s.plan_id, 0), e.plan_name,
-	       e.max_sites, e.max_databases, e.disk_mb, e.max_backups, e.backup_storage_mb,
+	       e.max_sites, e.max_subdomains, e.max_databases, e.disk_mb, e.max_backups, e.backup_storage_mb,
 	       e.site_disk_quota_mb, e.php_fpm_max_children, e.php_memory_mb, e.bandwidth_mb,
 	       e.overuse_policy, e.php_allowlist, e.default_php_version, e.hosting_enabled,
 	       e.allow_backups, e.updated_at, e.updated_at
@@ -438,6 +453,7 @@ ORDER BY s.id LIMIT 1`, userID).Scan(
 		&limits.PlanID,
 		&limits.PlanName,
 		&limits.MaxSites,
+		&limits.MaxSubdomains,
 		&limits.MaxDatabases,
 		&limits.StorageMB,
 		&limits.MaxBackups,
@@ -469,7 +485,7 @@ func (s *SQLStore) GetLimitsForSubscription(ctx context.Context, subscriptionID 
 	}
 	var limits Limits
 	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(s.customer_id, 0), s.id, COALESCE(s.plan_id, 0), e.plan_name,
-	       e.max_sites, e.max_databases, e.disk_mb, e.max_backups, e.backup_storage_mb,
+	       e.max_sites, e.max_subdomains, e.max_databases, e.disk_mb, e.max_backups, e.backup_storage_mb,
 	       e.site_disk_quota_mb, e.php_fpm_max_children, e.php_memory_mb, e.bandwidth_mb,
 	       e.overuse_policy, e.php_allowlist, e.default_php_version, e.hosting_enabled,
 	       e.allow_backups, e.updated_at, e.updated_at
@@ -487,6 +503,7 @@ WHERE s.id = $1
 		&limits.PlanID,
 		&limits.PlanName,
 		&limits.MaxSites,
+		&limits.MaxSubdomains,
 		&limits.MaxDatabases,
 		&limits.StorageMB,
 		&limits.MaxBackups,
@@ -519,11 +536,15 @@ func (s *SQLStore) GetUsage(ctx context.Context, userID int64) (Usage, error) {
 	var usage Usage
 	err := s.db.QueryRowContext(ctx, `SELECT $1::bigint AS user_id,
     COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND status <> 'failed'), 0)::int AS sites,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND parent_site_id IS NULL AND status <> 'failed'), 0)::int AS domains,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND parent_site_id IS NOT NULL AND status <> 'failed'), 0)::int AS subdomains,
     COALESCE((SELECT COUNT(*) FROM databases WHERE owner_user_id = $1 AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE owner_user_id = $1 AND status <> 'failed'), 0)::int AS backups,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = $1 AND status = 'active'), 0)::bigint AS backup_storage_bytes`, userID).Scan(
 		&usage.UserID,
 		&usage.Sites,
+		&usage.Domains,
+		&usage.Subdomains,
 		&usage.Databases,
 		&usage.Backups,
 		&usage.BackupStorageBytes,
@@ -538,11 +559,15 @@ func (s *SQLStore) GetUsageForSubscription(ctx context.Context, subscriptionID i
 	var usage Usage
 	err := s.db.QueryRowContext(ctx, `SELECT $1::bigint AS subscription_id,
     COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS sites,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND parent_site_id IS NULL AND status <> 'failed'), 0)::int AS domains,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND parent_site_id IS NOT NULL AND status <> 'failed'), 0)::int AS subdomains,
     COALESCE((SELECT COUNT(*) FROM databases WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS backups,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id = $1 AND status = 'active'), 0)::bigint AS backup_storage_bytes`, subscriptionID).Scan(
 		&usage.SubscriptionID,
 		&usage.Sites,
+		&usage.Domains,
+		&usage.Subdomains,
 		&usage.Databases,
 		&usage.Backups,
 		&usage.BackupStorageBytes,
@@ -644,6 +669,8 @@ const accountQuotaSummarySQL = `SELECT u.id, u.email, u.role,
     COALESCE(e.max_backups, 0), COALESCE(e.backup_storage_mb, 0),
     COALESCE(e.site_disk_quota_mb, 0), COALESCE(e.php_fpm_max_children, 0), COALESCE(e.php_memory_mb, 0),
     COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS sites,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND parent_site_id IS NULL AND status <> 'failed'), 0)::int AS domains,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND parent_site_id IS NOT NULL AND status <> 'failed'), 0)::int AS subdomains,
     COALESCE((SELECT COUNT(*) FROM databases WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS backups,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = u.id AND status = 'active'), 0)::bigint AS backup_storage_bytes
@@ -674,6 +701,8 @@ func scanSummary(row summaryScanner) (Summary, error) {
 		&summary.Limits.PHPFPMMaxChildren,
 		&summary.Limits.PHPMemoryMB,
 		&summary.Usage.Sites,
+		&summary.Usage.Domains,
+		&summary.Usage.Subdomains,
 		&summary.Usage.Databases,
 		&summary.Usage.Backups,
 		&summary.Usage.BackupStorageBytes,

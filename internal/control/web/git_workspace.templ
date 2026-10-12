@@ -1,0 +1,102 @@
+package web
+
+import (
+ "github.com/nakroteck/nakpanel/internal/control/dashboard"
+ "github.com/nakroteck/nakpanel/internal/types"
+ "github.com/nakroteck/nakpanel/internal/gitremote"
+ "strings"
+)
+
+templ gitWorkspace(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+ <div class="np-git" data-np-git data-status-url={ workspacePath(view,"/sites/"+formatJobID(item.ID)+"/git/status") }>
+  <div class="np-git-heading"><div><h2>Git</h2><p>Repository and website deployment</p></div></div>
+  if policy, found := policyForSite(data.SubscriptionServices.SitePolicies,item.ID); !found {
+   <p class="np-gate is-blocked">Git policy is unavailable.</p>
+  } else if !policy.Permissions.Git {
+   <p class="np-gate">Git deployment is disabled by this subscription policy.</p>
+  } else {
+   <p class="np-git-message" data-git-message role="status" aria-live="polite"></p><button type="button" class="np-secondary-button" data-git-refresh>Refresh status</button>
+   <nav class="np-git-tabs" aria-label="Git workspace" data-git-tabs><a href="#git-overview">Overview</a><a href="#git-deployments">Deployments</a><a href="#git-history">Commit History</a><a href="#git-settings">Settings</a></nav>
+   if repository, found := gitForSite(data.SubscriptionServices.Git,item.ID); found && gitConnectionVisible(repository) {
+    @gitConnected(item,subscription,repository,data,view)
+   } else {
+    <section id="git-overview" data-git-panel><div class="np-git-empty">@icon("git-branch")<h3>No repository connected</h3><p>Published website files are kept when a repository is removed.</p><button type="button" data-np-dialog-open="git-connect">Add Repository</button></div></section>
+    <section id="git-deployments" data-git-panel><h3>Deployments</h3><p>No deployments yet.</p></section>
+    <section id="git-history" data-git-panel><h3>Commit History</h3><p>Connect and fetch a repository to view commits.</p></section>
+    <section id="git-settings" data-git-panel><h3>Settings</h3><p>No repository connected.</p><noscript>@gitSettingsForm(item,subscription,gitNewRepository(data.SubscriptionServices.Git,item.ID),view)</noscript></section>
+    <dialog id="git-connect" class="np-dialog np-dialog-wide" data-np-dialog aria-labelledby="git-connect-title"><div class="np-dialog-head"><h2 id="git-connect-title">Add Repository</h2><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div>@gitSettingsForm(item,subscription,gitNewRepository(data.SubscriptionServices.Git,item.ID),view)</dialog>
+   }
+  }
+ </div>
+}
+
+templ gitConnected(item dashboard.Site, subscription types.SubscriptionSummary, repository types.GitRepository, data dashboard.Data, view WorkspaceView) {
+ <section id="git-overview" data-git-panel>
+  <div class="np-git-summary"><h3 data-git-remote>{ gitDisplay(repository.RemoteURL,"Existing hosted repository") }</h3><span data-git-status>@statusPill(repository.ConvergenceStatus)</span></div>
+  if repository.Mode == "hosted" {
+   <p class="np-gate">Existing hosted repository. New hosted repositories are not available here.</p>
+  }
+  <dl class="np-git-facts"><div><dt>Branch</dt><dd data-git-branch>{ repository.Branch }</dd></div><div><dt>Destination</dt><dd data-git-destination>{ gitDestination(repository.DeployTarget) }</dd></div><div><dt>Fetched commit</dt><dd><code data-git-fetched>{ gitDisplay(repository.FetchedRevision,"Not fetched") }</code></dd></div><div><dt>Published commit</dt><dd><code data-git-deployed>{ gitDisplay(repository.DeployedRevision,"Not deployed") }</code></dd></div></dl>
+  <p data-git-error class="np-error">{ gitSafeOutput(repository.LastError) }</p>
+  <div class="np-git-actions">@gitAction(item,subscription,repository,view,"fetch","Pull updates",false) @gitAction(item,subscription,repository,view,"deploy","Deploy",gitActionDisabled(repository,"deploy"))<a href="#git-settings" class="np-secondary-button">Repository settings</a></div>
+  <p data-git-conflicts></p>
+ </section>
+ <section id="git-deployments" data-git-panel><h3>Deployments</h3><div class="np-table-wrap"><table class="np-table"><thead><tr><th>Operation</th><th>Action</th><th>Commit</th><th>Status</th><th>Finished</th><th>Log</th></tr></thead><tbody data-git-deployments>
+  for _, deployment := range gitDeploymentsForRepository(data.SubscriptionServices.GitDeployments,repository.ID) {
+   if deployment.Action=="deploy" || deployment.Action=="rollback" {
+   <tr><td>#{ formatJobID(deployment.ID) }</td><td>{ gitDisplay(deployment.Action,"deploy") }</td><td><code>{ deployment.Revision }</code></td><td>{ deployment.Status }</td><td>{ formatTime(deployment.FinishedAt) }</td><td><details><summary>View log</summary><pre>{ gitLogOutput(deployment.Output,deployment.Status) }</pre></details></td></tr>
+   }
+  }
+ </tbody></table></div><p data-git-deployments-empty>No additional deployment history.</p>@gitAction(item,subscription,repository,view,"rollback","Roll back",gitActionDisabled(repository,"rollback"))</section>
+ <section id="git-history" data-git-panel><h3>Commit History</h3><div class="np-table-wrap"><table class="np-table"><thead><tr><th>Commit</th><th>Message</th><th>Author</th><th>Date</th></tr></thead><tbody data-git-commits>
+ for _, commit := range repository.Commits {
+  <tr><td><code>{ commit.Revision }</code></td><td>{ commit.Subject }</td><td>{ commit.Author }</td><td>{ commit.AuthoredAt }</td></tr>
+ }
+ </tbody></table></div><p data-git-commits-empty>Pull updates to retrieve commit history.</p></section>
+ <section id="git-settings" data-git-panel><h3>Repository settings</h3>@gitSettingsForm(item,subscription,repository,view)<div class="np-git-key" hidden?={ strings.HasPrefix(repository.RemoteURL,"https://") }><h3>SSH deploy key</h3><p>Add this public key as a read-only deploy key in your repository settings, then test the connection.</p><h4>Key title</h4><code data-git-key-title>{ gitremote.KeyTitle(item.Domain,repository.RemoteURL,item.ID) }</code><button type="button" class="np-secondary-button" data-git-copy-title>@icon("copy") Copy title</button><h4>Public key</h4><pre data-git-key>{ gitDisplay(repository.DeployPublicKey,"Preparing deploy key...") }</pre><button type="button" class="np-secondary-button" data-git-copy disabled?={ repository.DeployPublicKey=="" }>@icon("copy") Copy public key</button><h4>Deploy-key fingerprint</h4><code data-git-key-fingerprint>{ gitremote.PublicKeyFingerprint(repository.DeployPublicKey) }</code></div>
+  <button type="button" class="np-secondary-button" data-git-download hidden?={ strings.HasPrefix(repository.RemoteURL,"https://") } disabled?={ repository.DeployPublicKey=="" }>@icon("download") Download public key</button>
+  <div class="np-git-key" hidden?={ strings.HasPrefix(repository.RemoteURL,"https://") }><h3>Git server host fingerprint</h3><code>{ gitHostFingerprint(repository.KnownHostKey) }</code></div>
+  if repository.Automatic || repository.DeploymentMode == "automatic" {
+   <div class="np-git-key"><h3>Automatic deployment webhook</h3><p>Configured: { yesNo(repository.WebhookConfigured) }. Rotating invalidates the previous URL.</p>@gitAction(item,subscription,repository,view,"webhook","Rotate webhook URL",false)<pre data-git-webhook></pre></div>
+  }
+  <details><summary>Destination checks</summary>@gitAction(item,subscription,repository,view,"preview","Check destination",gitActionDisabled(repository,"preview"))</details>
+  <div class="np-git-danger"><h3>Remove Repository</h3><p>Published files stay in place. Website files, uploads, databases, and the remote repository will not be deleted. Local Git access and the webhook are removed. Remove the deploy key from your Git provider separately.</p>@gitAction(item,subscription,repository,view,"disconnect","Remove Repository",false)</div>
+ </section>
+}
+
+templ gitAction(item dashboard.Site, subscription types.SubscriptionSummary, repository types.GitRepository, view WorkspaceView, action string, label string, disabled bool) {
+ <form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/git/"+action) } data-git-form data-git-action={ action }>@csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><input type="hidden" name="return_to" value="site-git"/><input type="hidden" name="expected_revision" value={ formatJobID(repository.OperationRevision) }/><input type="hidden" name="revision" value={ gitActionRevision(repository,action) }/>
+ if action == "deploy" || action == "rollback" || action == "disconnect" {
+  <noscript><label><input type="checkbox" name="confirm" value="yes" required/>Confirm this operation, including replacement of conflicting files for deployment or rollback. Disconnect preserves published files.</label></noscript>
+ }
+ <button type="submit" class="np-secondary-button" disabled?={ disabled }>{ label }</button></form>
+}
+
+templ gitSettingsForm(item dashboard.Site, subscription types.SubscriptionSummary, repository types.GitRepository, view WorkspaceView) {
+ <form class="np-form np-git-settings" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/git") } data-git-form data-git-action="save">
+  @csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><input type="hidden" name="resource_id" value={ formatJobID(repository.ID) }/><input type="hidden" name="expected_revision" value={ formatJobID(repository.OperationRevision) }/><input type="hidden" name="mode" value={ repository.Mode }/><input type="hidden" name="return_to" value="site-git"/>
+  <input type="hidden" name="connect" value="yes"/>
+  <label>Repository URL<input name="remote_url" type="text" value={ repository.RemoteURL } placeholder="git@github.com:team/website.git" required?={ repository.Mode!="hosted" } autocomplete="off"/></label>
+  <div data-git-ssh-field class="np-git-auth">
+   <div data-git-prepared hidden><h4>SSH deploy key</h4><p>Add this public key to your Git provider with read-only access.</p><div class="np-git-key-line"><code data-git-prepared-title></code><button type="button" class="np-secondary-button" data-git-copy-prepared-title>@icon("copy") Copy title</button></div><pre data-git-prepared-key></pre><button type="button" class="np-secondary-button" data-git-copy-prepared>@icon("copy") Copy public key</button></div>
+   <button type="button" class="np-secondary-button" data-git-prepare>Prepare SSH key</button>
+   <details data-git-host-details><summary>SSH server verification</summary><label>Verified SSH host key<textarea name="known_host_key" rows="2" placeholder="github.com ssh-ed25519 AAAA..." spellcheck="false">{ repository.KnownHostKey }</textarea></label><p>Compare with your provider's published fingerprint before trusting it.</p><label class="np-check"><input type="checkbox" name="trust_host" value="yes" checked?={ repository.KnownHostKey!="" }/>I verified this host key with my Git provider</label></details>
+  </div>
+  <details open?={ repository.RemoteURL!="" }><summary>Deployment options</summary><div class="np-form-grid"><label>Branch<input name="branch" value={ repository.Branch } list="git-branches" required/><datalist id="git-branches" data-git-branches></datalist></label><label>Directory under public_html<input name="deploy_target" value={ repository.DeployTarget } required/></label></div><label>Deployment mode<select name="deployment_mode"><option value="manual" selected?={ repository.DeploymentMode=="manual" || repository.DeploymentMode=="" && !repository.Automatic }>Manual</option><option value="automatic" selected?={ repository.DeploymentMode=="automatic" || repository.Automatic }>Automatic</option><option value="disabled" selected?={ repository.DeploymentMode=="disabled" }>No deployment</option></select></label><p>Default: main branch, public_html, manual deployment. Connecting does not publish files. Automatic updates require a webhook.</p></details>
+  <p class="np-git-message" data-git-message role="status" aria-live="polite"></p>
+  <div class="np-git-actions"><button type="submit">
+   if repository.RemoteURL=="" {
+    Add Repository
+   } else {
+    Save &amp; Connect
+   }
+  </button>
+  if repository.RemoteURL=="" {
+   <button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button>
+  }
+  </div>
+  if repository.RemoteURL!="" {
+   <button type="button" class="np-secondary-button" data-git-test>Test connection</button>
+  }
+ </form>
+}

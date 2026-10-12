@@ -26,10 +26,11 @@ type databaseAdminDB interface {
 type databaseAdminOpener func(context.Context) (databaseAdminDB, error)
 
 type MariaDBAdministration struct {
-	dsn    string
-	db     databaseAdminDB
-	opener databaseAdminOpener
-	now    func() time.Time
+	dsn              string
+	db               databaseAdminDB
+	opener           databaseAdminOpener
+	now              func() time.Time
+	verifyCredential func(context.Context, types.CreateDatabaseReq) error
 }
 
 func NewMariaDBAdministration(dsn string) *MariaDBAdministration {
@@ -37,7 +38,8 @@ func NewMariaDBAdministration(dsn string) *MariaDBAdministration {
 		dsn = DefaultMariaDBDSN()
 	}
 	return &MariaDBAdministration{
-		dsn: dsn,
+		dsn:              dsn,
+		verifyCredential: (&MariaDBEngine{dsn: dsn}).verifyDatabaseLogin,
 		opener: func(ctx context.Context) (databaseAdminDB, error) {
 			db, err := sql.Open("mysql", dsn)
 			if err != nil {
@@ -164,7 +166,14 @@ func (m *MariaDBAdministration) ManageDatabaseAdmin(ctx context.Context, req typ
 			"ALTER USER %s IDENTIFIED BY PASSWORD %s",
 			quoteMariaDBAccount(req.Target.Principal), hash,
 		)); err != nil {
-			return types.ManageDatabaseAdminResult{}, fmt.Errorf("rotate tracked MariaDB principal password: %w", err)
+			return types.ManageDatabaseAdminResult{}, errors.New("rotate tracked MariaDB principal password failed")
+		}
+		if m.verifyCredential == nil {
+			return types.ManageDatabaseAdminResult{}, errors.New("database credential verification is not configured")
+		}
+		if err := m.verifyCredential(ctx, types.CreateDatabaseReq{Engine: types.EngineMariaDB,
+			DBName: req.Target.Name, DBUser: req.Target.Principal, Password: req.Password}); err != nil {
+			return types.ManageDatabaseAdminResult{}, errors.New("rotated database credential verification failed")
 		}
 		result.Changed = true
 	case types.DatabaseAdminSetRole:
@@ -246,7 +255,7 @@ func applyDatabaseAdminRole(ctx context.Context, db databaseAdminDB, target type
 	default:
 		return errors.New("database role is not allowed")
 	}
-	database := quoteMariaDBIdentifier(target.Name)
+	database := quoteMariaDBGrantDatabase(target.Name)
 	principal := quoteMariaDBAccount(target.Principal)
 	previous, err := readMariaDBGrants(ctx, db, principal)
 	if err != nil {

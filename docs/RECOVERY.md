@@ -410,6 +410,22 @@ The binaries on the fresh host must carry the same migration set as the
 archive; on mismatch the restore aborts with instructions
 (`--allow-schema-mismatch` proceeds and expects `make goose-up` afterwards).
 
+Database provisioning ownership is held in the root-only
+`/var/lib/nakpanel-agent/database-ownership` directory. Full-server backups
+include its parent directory so both markers and private permissions survive
+fresh-host recovery. Keep this state with the matching panel database; do not
+copy individual markers between database intents or make it panel-writable.
+
+For older archives without markers, the root restore process adopts only
+schemas successfully imported from the authenticated archive and matched to
+the restored active database inventory. Adoption happens before services
+restart and requires the corresponding MariaDB principal to be absent.
+An existing unowned principal, mismatched marker, or reserved system name
+stops recovery for operator review. This is intentional: legacy same-host
+recovery and retries of pre-marker partial creations cannot automatically
+prove account ownership. Review those resources explicitly or restore to a
+fresh host; there is no browser or agent-request override for this check.
+
 `deploy/multipass/phase29-verify.sh` automates this exact drill (populate,
 upgrade with rollback drills, reboot, destroy-and-restore onto a second VM)
 and `docs/SOAK.md` describes the 30–60 day soak window.

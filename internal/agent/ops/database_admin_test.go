@@ -66,7 +66,7 @@ func TestMariaDBAdministrationAppliesOnlyAllowlistedRole(t *testing.T) {
 			AddRow("GRANT ALL PRIVILEGES ON `np_demo`.* TO `np_demo_user`@`localhost`"))
 	mock.ExpectExec(regexp.QuoteMeta("REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'np_demo_user'@'localhost'")).
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(regexp.QuoteMeta("GRANT SELECT, SHOW VIEW ON `np_demo`.* TO 'np_demo_user'@'localhost'")).
+	mock.ExpectExec(regexp.QuoteMeta("GRANT SELECT, SHOW VIEW ON `np\\_demo`.* TO 'np_demo_user'@'localhost'")).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	result, err := admin.ManageDatabaseAdmin(context.Background(), types.ManageDatabaseAdminReq{
@@ -100,7 +100,7 @@ func TestMariaDBAdministrationRestoresGrantsWhenRoleApplyFails(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"grant"}).AddRow(previous))
 	mock.ExpectExec(regexp.QuoteMeta("REVOKE ALL PRIVILEGES, GRANT OPTION FROM 'np_demo_user'@'localhost'")).
 		WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectExec(regexp.QuoteMeta("GRANT SELECT, SHOW VIEW ON `np_demo`.* TO 'np_demo_user'@'localhost'")).
+	mock.ExpectExec(regexp.QuoteMeta("GRANT SELECT, SHOW VIEW ON `np\\_demo`.* TO 'np_demo_user'@'localhost'")).
 		WillReturnError(errors.New("grant rejected"))
 	mock.ExpectExec(regexp.QuoteMeta(previous)).
 		WillReturnResult(sqlmock.NewResult(0, 0))

@@ -20,6 +20,13 @@ type SQLSiteRepository struct {
 	river   *river.Client[*sql.Tx]
 }
 
+func (r *SQLSiteRepository) GetSubdomainParent(ctx context.Context, siteID int64) (SubdomainParent, error) {
+	var parent SubdomainParent
+	err := r.db.QueryRowContext(ctx, `SELECT id,subscription_id,domain,username,status,desired_status FROM sites WHERE id=$1`, siteID).
+		Scan(&parent.ID, &parent.SubscriptionID, &parent.Domain, &parent.Username, &parent.Status, &parent.DesiredStatus)
+	return parent, err
+}
+
 var ErrCertificateOperationInProgress = errors.New("certificate operation is already in progress")
 
 const activeCertificateJobSQL = `SELECT EXISTS (
@@ -54,7 +61,7 @@ func (r *SQLSiteRepository) CreateSite(ctx context.Context, ownerID int64, req t
 		return 0, fmt.Errorf("begin site transaction: %w", err)
 	}
 	defer tx.Rollback()
-	if err := guardSiteIntentTx(ctx, tx, req.SubscriptionID, req.Domain); err != nil {
+	if err := guardSiteIntentTx(ctx, tx, req.SubscriptionID, req.Domain, req.ParentSiteID); err != nil {
 		return 0, fmt.Errorf("guard site entitlement: %w", err)
 	}
 
@@ -303,8 +310,39 @@ func (r *SQLDatabaseRepository) CreateDatabase(ctx context.Context, ownerID int6
 		return 0, fmt.Errorf("begin database transaction: %w", err)
 	}
 	defer tx.Rollback()
+	if req.IdempotencyKey != "" {
+		if _, err = lockActiveSubscriptionLimits(ctx, tx, req.SubscriptionID); err != nil {
+			return 0, err
+		}
+		id, lookupErr := lookupDatabaseCreateTx(ctx, tx, req)
+		if lookupErr != nil {
+			return 0, lookupErr
+		}
+		if id > 0 {
+			return id, nil
+		}
+	}
 	if err := guardDatabaseIntentTx(ctx, tx, req.SubscriptionID, req.DBName); err != nil {
 		return 0, fmt.Errorf("guard database entitlement: %w", err)
+	}
+	// An existing name is never a password-update operation. The subscription
+	// mutation lock serializes concurrent creates before this check.
+	var existingID int64
+	err = tx.QueryRowContext(ctx, `SELECT id FROM databases WHERE db_name=$1 FOR UPDATE`, req.DBName).Scan(&existingID)
+	if err == nil {
+		return 0, ErrDatabaseExists
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return 0, err
+	}
+	if req.SiteID > 0 {
+		var siteSubscription int64
+		if err = tx.QueryRowContext(ctx, `SELECT subscription_id FROM sites WHERE id=$1 FOR SHARE`, req.SiteID).Scan(&siteSubscription); err != nil {
+			return 0, ErrForbidden
+		}
+		if siteSubscription != req.SubscriptionID {
+			return 0, ErrForbidden
+		}
 	}
 
 	database, err := r.queries.WithTx(tx).UpsertDatabaseIntent(ctx, store.UpsertDatabaseIntentParams{
@@ -322,6 +360,11 @@ func (r *SQLDatabaseRepository) CreateDatabase(ctx context.Context, ownerID int6
 	credentialName, err := databaseCredentialName(database.ID)
 	if err != nil {
 		return 0, err
+	}
+	if req.IdempotencyKey != "" {
+		if _, err = tx.ExecContext(ctx, `INSERT INTO database_create_requests(scope_hash,request_key,payload_hash,database_id) VALUES($1,$2,$3,$4)`, req.IdempotencyScope, req.IdempotencyKey, req.IdempotencyFingerprint, database.ID); err != nil {
+			return 0, err
+		}
 	}
 	if _, err := r.secrets.PutSecretTx(ctx, tx, serveradmin.PutSecretParams{
 		Scope:       databaseCredentialScope,

@@ -15,11 +15,65 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/agent/ops"
 	"github.com/nakroteck/nakpanel/internal/backup"
 	"github.com/nakroteck/nakpanel/internal/config"
 	"github.com/nakroteck/nakpanel/internal/control/operator"
 	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
+	"github.com/nakroteck/nakpanel/internal/types"
 )
+
+func restoreDatabaseOwnership(ctx context.Context, imported []string) error {
+	if os.Geteuid() != 0 {
+		return errors.New("database ownership restore requires root")
+	}
+	if len(imported) == 0 {
+		return nil
+	}
+	if len(imported) > 10000 {
+		return errors.New("restored database inventory exceeds limit")
+	}
+	query := `SELECT COALESCE(json_agg(json_build_object('database_id',id,'name',db_name,'principal',db_user)), '[]'::json) FROM (SELECT id,db_name,db_user FROM databases WHERE engine='mariadb' AND status='active' ORDER BY id LIMIT 10001) d`
+	command := exec.CommandContext(ctx, "runuser", "-u", "postgres", "--", "psql", "-Atq", "-d", "nakpanel", "-c", query)
+	payload, err := command.Output()
+	if err != nil {
+		return errors.New("read restored database ownership inventory failed")
+	}
+	var targets []types.DatabaseAdminTarget
+	if len(payload) > 4<<20 || json.Unmarshal(payload, &targets) != nil {
+		return errors.New("invalid restored database ownership inventory")
+	}
+	return adoptImportedDatabaseOwnership(ctx, imported, targets, ops.AdoptRestoredDatabaseOwnership)
+}
+
+func adoptImportedDatabaseOwnership(ctx context.Context, imported []string, targets []types.DatabaseAdminTarget, adopt func(context.Context, types.DatabaseAdminTarget) error) error {
+	if len(imported) > 10000 || len(targets) > 10000 {
+		return errors.New("restored database inventory exceeds limit")
+	}
+	byName := make(map[string]types.DatabaseAdminTarget, len(targets))
+	for _, target := range targets {
+		if _, exists := byName[target.Name]; exists {
+			return errors.New("restored database inventory contains duplicate names")
+		}
+		byName[target.Name] = target
+	}
+	seen := make(map[string]bool, len(imported))
+	for _, name := range imported {
+		if seen[name] {
+			return errors.New("archive contains duplicate database imports")
+		}
+		seen[name] = true
+		if _, exists := byName[name]; !exists {
+			return errors.New("imported database is missing from restored active inventory")
+		}
+	}
+	for _, name := range imported {
+		if err := adopt(ctx, byName[name]); err != nil {
+			return fmt.Errorf("restored database ownership requires operator review: %w", err)
+		}
+	}
+	return nil
+}
 
 func runBackupServer(ctx context.Context, service *operator.Service, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
@@ -271,9 +325,10 @@ func runRestoreServer(ctx context.Context, actor string, args []string, stdin io
 	}
 
 	summary, err := backup.RunRestore(ctx, backup.RestoreOptions{
-		OpenArchive:         openArchive,
-		Key:                 key,
-		AllowSchemaMismatch: *allowSchemaMismatch,
+		OpenArchive:            openArchive,
+		Key:                    key,
+		AllowSchemaMismatch:    *allowSchemaMismatch,
+		AfterDatabasesRestored: restoreDatabaseOwnership,
 		Log: func(format string, args ...any) {
 			fmt.Fprintf(stderr, format+"\n", args...)
 		},

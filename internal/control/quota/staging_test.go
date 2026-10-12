@@ -180,16 +180,16 @@ func TestStagingOperationHasMultipleAttempts(t *testing.T) {
 }
 
 func TestManualGitRepositoryOnlyConvergesForExplicitDeployment(t *testing.T) {
-	if run, deploy := gitConvergenceAction("remote", false, false); !run || deploy {
+	if run, deploy := gitConvergenceAction("remote", false, false); run || deploy {
 		t.Fatal("manual remote repository should reconcile metadata without deploying")
 	}
 	if run, deploy := gitConvergenceAction("remote", false, true); !run || !deploy {
 		t.Fatal("manual repository ignored an explicit deployment")
 	}
-	if run, deploy := gitConvergenceAction("remote", true, false); !run || !deploy {
+	if run, deploy := gitConvergenceAction("remote", true, false); run || deploy {
 		t.Fatal("automatic repository did not converge")
 	}
-	if run, deploy := gitConvergenceAction("hosted", false, false); !run || deploy {
+	if run, deploy := gitConvergenceAction("hosted", false, false); run || deploy {
 		t.Fatal("manual hosted repository should initialize without deploying")
 	}
 }

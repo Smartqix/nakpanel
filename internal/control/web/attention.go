@@ -526,7 +526,8 @@ func capacityPressure(subscriptions []types.SubscriptionSummary) CapacityPressur
 			worst.Severity = severity
 			worst.Label = fmt.Sprintf("%d/%d %s", used, limit, unit)
 		}
-		consider(subscription.SitesUsed, subscription.MaxSites, "sites")
+		consider(subscription.DomainsUsed, subscription.MaxSites, "domains")
+		consider(subscription.SubdomainsUsed, subscription.MaxSubdomains, "subdomains")
 		consider(subscription.DatabasesUsed, subscription.MaxDatabases, "databases")
 		consider(subscription.BackupsUsed, subscription.MaxBackups, "backups")
 

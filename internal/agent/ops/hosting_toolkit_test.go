@@ -263,7 +263,7 @@ func TestRollbackGitDeploymentRemovesNewFilesAndRestoresPriorRevision(t *testing
 	}
 	joined := strings.Join(runner.calls, "\n")
 	if !strings.Contains(joined, "diff --no-renames --name-only --diff-filter=A") ||
-		!strings.Contains(joined, "rm -rf -- /site/new-only.txt") ||
+		!strings.Contains(joined, "rm -f -- /site/new-only.txt") ||
 		!strings.Contains(joined, "checkout -f "+previous+" -- .") {
 		t.Fatalf("Git rollback did not restore the complete prior tree:\n%s", joined)
 	}
@@ -280,7 +280,7 @@ func (r *gitPreDeleteFailureRunner) Run(_ context.Context, name string, args ...
 	if strings.Contains(call, "diff --no-renames --name-only --diff-filter=D") {
 		return []byte("first.txt\x00second.txt\x00"), nil
 	}
-	if strings.Contains(call, " rm -rf -- ") {
+	if strings.Contains(call, " rm -f -- ") {
 		r.removes++
 		if r.removes == 2 {
 			return []byte("forced failure"), errors.New("forced failure")

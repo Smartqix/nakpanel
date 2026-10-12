@@ -111,24 +111,34 @@ LEFT JOIN sites site ON site.id=item.site_id LEFT JOIN reseller_accounts reselle
 			data.FTP = append(data.FTP, item)
 			return nil
 		}},
-		{`SELECT item.id,item.site_id,item.mode,item.remote_url,item.branch,item.deploy_target,item.automatic,item.convergence_status,item.last_revision,item.last_error,item.known_host_key,item.deploy_public_key,item.webhook_secret_hash<>'',item.created_at
+		{`SELECT item.id,item.site_id,item.mode,item.remote_url,item.branch,item.deploy_target,item.automatic,item.convergence_status,item.last_revision,item.last_error,item.known_host_key,item.deploy_public_key,item.webhook_secret_hash<>'',item.created_at,item.deployment_mode,item.connection_status,item.fetched_revision,item.deployed_revision,item.previous_revision,item.branches,item.commits,item.conflicts,item.operation_revision
 FROM git_repositories item JOIN sites site ON site.id=item.site_id JOIN subscriptions sub ON sub.id=site.subscription_id
 JOIN customers customer ON customer.id=sub.customer_id LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id WHERE ` + where + ` ORDER BY item.id`, func(rows *sql.Rows) error {
 			var item types.GitRepository
-			if err := rows.Scan(&item.ID, &item.SiteID, &item.Mode, &item.RemoteURL, &item.Branch, &item.DeployTarget, &item.Automatic, &item.ConvergenceStatus, &item.LastRevision, &item.LastError, &item.KnownHostKey, &item.DeployPublicKey, &item.WebhookConfigured, &item.CreatedAt); err != nil {
+			var branches, commits, conflicts []byte
+			if err := rows.Scan(&item.ID, &item.SiteID, &item.Mode, &item.RemoteURL, &item.Branch, &item.DeployTarget, &item.Automatic, &item.ConvergenceStatus, &item.LastRevision, &item.LastError, &item.KnownHostKey, &item.DeployPublicKey, &item.WebhookConfigured, &item.CreatedAt, &item.DeploymentMode, &item.ConnectionStatus, &item.FetchedRevision, &item.DeployedRevision, &item.PreviousRevision, &branches, &commits, &conflicts, &item.OperationRevision); err != nil {
+				return err
+			}
+			if err := json.Unmarshal(branches, &item.Branches); err != nil {
+				return err
+			}
+			if err := json.Unmarshal(commits, &item.Commits); err != nil {
+				return err
+			}
+			if err := json.Unmarshal(conflicts, &item.Conflicts); err != nil {
 				return err
 			}
 			data.Git = append(data.Git, item)
 			return nil
 		}},
-		{`SELECT deployment.id,deployment.repository_id,deployment.revision,deployment.status,deployment.output,deployment.rollback_revision,deployment.created_at,deployment.finished_at
+		{`SELECT deployment.id,deployment.repository_id,deployment.revision,deployment.status,deployment.output,deployment.rollback_revision,deployment.created_at,deployment.finished_at,deployment.action,deployment.operation_revision
 FROM git_deployments deployment JOIN git_repositories repository ON repository.id=deployment.repository_id
 JOIN sites site ON site.id=repository.site_id JOIN subscriptions sub ON sub.id=site.subscription_id
 JOIN customers customer ON customer.id=sub.customer_id LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
 WHERE ` + where + ` ORDER BY deployment.created_at DESC LIMIT 250`, func(rows *sql.Rows) error {
 			var item types.GitDeployment
 			var finished sql.NullTime
-			if err := rows.Scan(&item.ID, &item.RepositoryID, &item.Revision, &item.Status, &item.Output, &item.RollbackRevision, &item.CreatedAt, &finished); err != nil {
+			if err := rows.Scan(&item.ID, &item.RepositoryID, &item.Revision, &item.Status, &item.Output, &item.RollbackRevision, &item.CreatedAt, &finished, &item.Action, &item.OperationRevision); err != nil {
 				return err
 			}
 			if finished.Valid {

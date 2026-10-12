@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/gitremote"
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -273,19 +274,19 @@ func (p *HostingToolkitProvisioner) EnsureProtectedDirectories(ctx context.Conte
 	return types.EnsureProtectedDirectoriesResult{ConfigPath: filepath.Join(target, "locations.conf"), Changed: true}, nil
 }
 
-func (p *HostingToolkitProvisioner) EnsureGitRepository(ctx context.Context, req types.EnsureGitRepositoryReq) (types.EnsureGitRepositoryResult, error) {
+func (p *HostingToolkitProvisioner) ensureGitRepositoryLegacy(ctx context.Context, req types.EnsureGitRepositoryReq) (types.EnsureGitRepositoryResult, error) {
 	if err := validateGitRepositoryRequest(req); err != nil {
 		return types.EnsureGitRepositoryResult{}, err
 	}
-	unlock := lockSiteContentMutations(req.SiteID)
-	defer unlock()
 	siteRoot := filepath.Join(p.homeRoot, req.Username, "domains", req.Domain, "public_html")
 	target := filepath.Join(siteRoot, filepath.Clean(req.DeployTarget))
-	if err := ensureNoSymlinkComponents(siteRoot, target); err != nil {
+	if err := ensureNoSymlinkComponents(p.homeRoot, target); err != nil {
 		return types.EnsureGitRepositoryResult{}, err
 	}
-	if err := ensureManagedDirectory(siteRoot, target, 0o750); err != nil {
-		return types.EnsureGitRepositoryResult{}, err
+	if req.Action == "" {
+		if err := ensureManagedDirectory(siteRoot, target, 0o750); err != nil {
+			return types.EnsureGitRepositoryResult{}, err
+		}
 	}
 	if err := os.MkdirAll(p.gitRoot, 0o711); err != nil {
 		return types.EnsureGitRepositoryResult{}, err
@@ -320,7 +321,7 @@ func (p *HostingToolkitProvisioner) EnsureGitRepository(ctx context.Context, req
 		if !req.Deploy {
 			return types.EnsureGitRepositoryResult{RepositoryPath: bare, Changed: true}, nil
 		}
-		revisionOutput, revisionErr := p.runner.Run(ctx, "runuser", "-u", req.Username, "--", "git", "--git-dir", bare, "rev-parse", "refs/heads/"+req.Branch)
+		revisionOutput, revisionErr := p.runBoundedGit(ctx, "runuser", "-u", req.Username, "--", "git", "--git-dir", bare, "rev-parse", "refs/heads/"+req.Branch)
 		if revisionErr != nil {
 			empty, inspectErr := p.gitRepositoryIsEmpty(ctx, req.Username, bare)
 			if inspectErr != nil {
@@ -341,6 +342,9 @@ func (p *HostingToolkitProvisioner) EnsureGitRepository(ctx context.Context, req
 			return types.EnsureGitRepositoryResult{}, errors.New("hosted Git repository returned an invalid revision")
 		}
 		previous := readDeployedRevision(deployedRevisionPath)
+		if req.Action == "fetch" {
+			return p.gitFetchedResult(ctx, req, bare, revision, "")
+		}
 		if err := p.prepareGitDeployment(ctx, req.Username, bare, target, previous, revision); err != nil {
 			return types.EnsureGitRepositoryResult{}, err
 		}
@@ -355,10 +359,19 @@ func (p *HostingToolkitProvisioner) EnsureGitRepository(ctx context.Context, req
 	}
 
 	knownHosts := filepath.Join(repositoryRoot, "known_hosts")
-	if err := writeFileAtomic(knownHosts, []byte(strings.TrimSpace(req.KnownHostKey)+"\n"), 0o600); err != nil {
-		return types.EnsureGitRepositoryResult{}, err
+	if req.Action != "key" {
+		if err := writeFileAtomic(knownHosts, []byte(strings.TrimSpace(req.KnownHostKey)+"\n"), 0o600); err != nil {
+			return types.EnsureGitRepositoryResult{}, err
+		}
 	}
 	deployKey := filepath.Join(repositoryRoot, "deploy_key")
+	for _, keyPath := range []string{deployKey, deployKey + ".pub"} {
+		if info, err := os.Lstat(keyPath); err == nil && (!info.Mode().IsRegular() || info.Size() > 16384) {
+			return types.EnsureGitRepositoryResult{}, errors.New("unsafe Git deploy key file")
+		} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+			return types.EnsureGitRepositoryResult{}, err
+		}
+	}
 	if _, err := os.Stat(deployKey); errors.Is(err, os.ErrNotExist) {
 		if output, runErr := p.runner.Run(ctx, "ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "nakpanel-site-"+strconv.FormatInt(req.SiteID, 10), "-f", deployKey); runErr != nil {
 			return types.EnsureGitRepositoryResult{}, fmt.Errorf("generate Git deploy key: %w: %s", runErr, strings.TrimSpace(string(output)))
@@ -368,7 +381,7 @@ func (p *HostingToolkitProvisioner) EnsureGitRepository(ctx context.Context, req
 		return types.EnsureGitRepositoryResult{}, fmt.Errorf("secure Git repository: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	mirror := filepath.Join(repositoryRoot, "remote.git")
-	publicKey, err := os.ReadFile(deployKey + ".pub")
+	publicKey, err := p.runBoundedGit(ctx, "runuser", "-u", req.Username, "--", "cat", "--", deployKey+".pub")
 	if err != nil {
 		return types.EnsureGitRepositoryResult{}, err
 	}
@@ -377,20 +390,44 @@ func (p *HostingToolkitProvisioner) EnsureGitRepository(ctx context.Context, req
 			RepositoryPath: mirror, DeployPublicKey: strings.TrimSpace(string(publicKey)), Changed: true,
 		}, nil
 	}
-	sshCommand := fmt.Sprintf("ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%s", deployKey, knownHosts)
+	sshCommand := fmt.Sprintf("ssh -F /dev/null -i %s -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o GlobalKnownHostsFile=/dev/null -o UserKnownHostsFile=%s", deployKey, knownHosts)
+	networkConfig := []string{"-c", "http.followRedirects=false", "-c", "http.proxy=", "-c", "protocol.file.allow=never", "-c", "protocol.ext.allow=never"}
+	{
+		address, err := gitRemoteAddress(ctx, req.RemoteURL)
+		if err != nil {
+			return types.EnsureGitRepositoryResult{}, err
+		}
+		remote, _ := url.Parse(req.RemoteURL)
+		if remote.Scheme == "ssh" {
+			sshCommand += fmt.Sprintf(" -o Hostname=%s -o HostKeyAlias=%s", address, remote.Hostname())
+		} else {
+			port := remote.Port()
+			if port == "" {
+				port = "443"
+			}
+			if strings.Contains(address, ":") {
+				address = "[" + address + "]"
+			}
+			networkConfig = append(networkConfig, "-c", "http.curloptResolve="+remote.Hostname()+":"+port+":"+address)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(mirror, "HEAD")); errors.Is(err, os.ErrNotExist) {
-		if output, runErr := p.runner.Run(ctx, "runuser", "-u", req.Username, "--", "env", "GIT_SSH_COMMAND="+sshCommand, "git", "clone", "--mirror", req.RemoteURL, mirror); runErr != nil {
+		args := append([]string{"-u", req.Username, "--", "env", "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_SSH_COMMAND=" + sshCommand, "git"}, networkConfig...)
+		args = append(args, "clone", "--bare", "--no-tags", "--depth=50", "--no-single-branch", "--branch", req.Branch, "--", req.RemoteURL, mirror)
+		if output, runErr := p.runGitTransport(ctx, args...); runErr != nil {
 			return types.EnsureGitRepositoryResult{}, fmt.Errorf("clone Git repository: %w: %s", runErr, strings.TrimSpace(string(output)))
 		}
 	} else {
 		if output, runErr := p.runner.Run(ctx, "runuser", "-u", req.Username, "--", "git", "--git-dir", mirror, "remote", "set-url", "origin", req.RemoteURL); runErr != nil {
 			return types.EnsureGitRepositoryResult{}, fmt.Errorf("update Git remote: %w: %s", runErr, strings.TrimSpace(string(output)))
 		}
-		if output, runErr := p.runner.Run(ctx, "runuser", "-u", req.Username, "--", "env", "GIT_SSH_COMMAND="+sshCommand, "git", "--git-dir", mirror, "fetch", "--prune", "origin"); runErr != nil {
+		args := append([]string{"-u", req.Username, "--", "env", "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_SSH_COMMAND=" + sshCommand, "git"}, networkConfig...)
+		args = append(args, "--git-dir", mirror, "fetch", "--prune", "--no-tags", "--depth=50", "origin", "+refs/heads/*:refs/heads/*")
+		if output, runErr := p.runGitTransport(ctx, args...); runErr != nil {
 			return types.EnsureGitRepositoryResult{}, fmt.Errorf("fetch Git repository: %w: %s", runErr, strings.TrimSpace(string(output)))
 		}
 	}
-	revisionOutput, err := p.runner.Run(ctx, "runuser", "-u", req.Username, "--", "git", "--git-dir", mirror, "rev-parse", "refs/heads/"+req.Branch)
+	revisionOutput, err := p.runBoundedGit(ctx, "runuser", "-u", req.Username, "--", "git", "--git-dir", mirror, "rev-parse", "refs/heads/"+req.Branch)
 	if err != nil {
 		empty, inspectErr := p.gitRepositoryIsEmpty(ctx, req.Username, mirror)
 		if inspectErr != nil {
@@ -411,6 +448,9 @@ func (p *HostingToolkitProvisioner) EnsureGitRepository(ctx context.Context, req
 		return types.EnsureGitRepositoryResult{}, errors.New("Git returned an invalid revision")
 	}
 	previous := readDeployedRevision(deployedRevisionPath)
+	if req.Action == "fetch" {
+		return p.gitFetchedResult(ctx, req, mirror, revision, strings.TrimSpace(string(publicKey)))
+	}
 	if err := p.prepareGitDeployment(ctx, req.Username, mirror, target, previous, revision); err != nil {
 		return types.EnsureGitRepositoryResult{}, err
 	}
@@ -427,7 +467,7 @@ func (p *HostingToolkitProvisioner) EnsureGitRepository(ctx context.Context, req
 }
 
 func (p *HostingToolkitProvisioner) gitRepositoryIsEmpty(ctx context.Context, username, repository string) (bool, error) {
-	output, err := p.runner.Run(ctx, "runuser", "-u", username, "--", "git", "--git-dir", repository,
+	output, err := p.runBoundedGit(ctx, "runuser", "-u", username, "--", "git", "--git-dir", repository,
 		"for-each-ref", "--format=%(refname)", "refs/heads", "refs/tags")
 	if err != nil {
 		return false, fmt.Errorf("inspect Git repository refs: %w: %s", err, strings.TrimSpace(string(output)))
@@ -435,10 +475,10 @@ func (p *HostingToolkitProvisioner) gitRepositoryIsEmpty(ctx context.Context, us
 	return strings.TrimSpace(string(output)) == "", nil
 }
 
-var gitRevisionRE = regexp.MustCompile(`^[a-f0-9]{40,64}$`)
+var gitRevisionRE = regexp.MustCompile(`^(?:[a-f0-9]{40}|[a-f0-9]{64})$`)
 
 func readDeployedRevision(path string) string {
-	raw, err := os.ReadFile(path)
+	raw, err := readGitState(path, 128)
 	if err != nil {
 		return ""
 	}
@@ -453,7 +493,7 @@ func (p *HostingToolkitProvisioner) removeDeletedGitPaths(ctx context.Context, u
 	if !gitRevisionRE.MatchString(previous) || previous == revision {
 		return nil
 	}
-	output, err := p.runner.Run(ctx, "runuser", "-u", username, "--", "git", "--git-dir", repository,
+	output, err := p.runBoundedGit(ctx, "runuser", "-u", username, "--", "git", "--git-dir", repository,
 		"diff", "--no-renames", "--name-only", "--diff-filter=D", "-z", previous, revision, "--")
 	if err != nil {
 		return fmt.Errorf("list files removed by Git revision: %w: %s", err, strings.TrimSpace(string(output)))
@@ -468,7 +508,10 @@ func (p *HostingToolkitProvisioner) removeDeletedGitPaths(ctx context.Context, u
 			strings.HasPrefix(relative, ".."+string(filepath.Separator)) || !site.PathWithinDir(target, destination) {
 			return errors.New("Git returned an unsafe deleted path")
 		}
-		removeOutput, removeErr := p.runner.Run(ctx, "runuser", "-u", username, "--", "rm", "-rf", "--", destination)
+		if err := ensureNoSymlinkComponents(target, filepath.Dir(destination)); err != nil {
+			return err
+		}
+		removeOutput, removeErr := p.runner.Run(ctx, "runuser", "-u", username, "--", "rm", "-f", "--", destination)
 		if removeErr != nil {
 			return fmt.Errorf("remove file deleted by Git revision: %w: %s", removeErr, strings.TrimSpace(string(removeOutput)))
 		}
@@ -517,7 +560,7 @@ func (p *HostingToolkitProvisioner) removeGitPathsAddedByRevision(ctx context.Co
 	} else {
 		args = append(args, "ls-tree", "-r", "--name-only", "-z", revision, "--")
 	}
-	output, err := p.runner.Run(ctx, "runuser", args...)
+	output, err := p.runBoundedGit(ctx, "runuser", args...)
 	if err != nil {
 		return fmt.Errorf("list files added by Git revision: %w: %s", err, strings.TrimSpace(string(output)))
 	}
@@ -531,7 +574,10 @@ func (p *HostingToolkitProvisioner) removeGitPathsAddedByRevision(ctx context.Co
 			strings.HasPrefix(relative, ".."+string(filepath.Separator)) || !site.PathWithinDir(target, destination) {
 			return errors.New("Git returned an unsafe added path")
 		}
-		removeOutput, removeErr := p.runner.Run(ctx, "runuser", "-u", username, "--", "rm", "-rf", "--", destination)
+		if err := ensureNoSymlinkComponents(target, filepath.Dir(destination)); err != nil {
+			return err
+		}
+		removeOutput, removeErr := p.runner.Run(ctx, "runuser", "-u", username, "--", "rm", "-f", "--", destination)
 		if removeErr != nil {
 			return fmt.Errorf("remove file added by failed Git revision: %w: %s", removeErr, strings.TrimSpace(string(removeOutput)))
 		}
@@ -540,7 +586,7 @@ func (p *HostingToolkitProvisioner) removeGitPathsAddedByRevision(ctx context.Co
 }
 
 func validateGitRepositoryRequest(req types.EnsureGitRepositoryReq) error {
-	if req.RepositoryID <= 0 || req.SiteID <= 0 || site.ValidateUsername(req.Username) != nil || site.ValidateDomain(req.Domain) != nil {
+	if (req.RepositoryID <= 0 && req.Action != "key") || req.SiteID <= 0 || site.ValidateUsername(req.Username) != nil || site.ValidateDomain(req.Domain) != nil {
 		return errors.New("validated Git site identity is required")
 	}
 	if req.Mode != "remote" && req.Mode != "hosted" {
@@ -557,13 +603,12 @@ func validateGitRepositoryRequest(req types.EnsureGitRepositoryReq) error {
 		return errors.New("Git deployment target escapes the site")
 	}
 	if req.Mode == "remote" {
-		parsed, err := url.Parse(req.RemoteURL)
-		if err != nil || urlContainsSecret(parsed) ||
-			(parsed != nil && parsed.Scheme == "https" && parsed.User != nil) ||
-			(parsed.Scheme != "ssh" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+		normalized, err := gitremote.Normalize(req.RemoteURL)
+		if err != nil {
 			return errors.New("Git remote must be a credential-free ssh or https URL")
 		}
-		if parsed.Scheme == "ssh" {
+		parsed, _ := url.Parse(normalized)
+		if parsed.Scheme == "ssh" && req.Action != "prepare" && req.Action != "key" {
 			parts := strings.Fields(req.KnownHostKey)
 			if len(parts) < 3 || strings.ContainsAny(req.KnownHostKey, "\r\n") || parts[0] != parsed.Hostname() {
 				return errors.New("the SSH remote requires a verified host key for its hostname")

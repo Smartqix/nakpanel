@@ -107,9 +107,9 @@ func TestBuildAttentionIgnoresResolvedAndInfoAlerts(t *testing.T) {
 
 func TestCapacityPressureShowsOnlyStrainedSubscriptions(t *testing.T) {
 	pressure := capacityPressure([]types.SubscriptionSummary{
-		{ID: 1, SubscriptionName: "Idle", MaxSites: 5, SitesUsed: 0},
-		{ID: 2, SubscriptionName: "At limit", MaxSites: 1, SitesUsed: 1},
-		{ID: 3, SubscriptionName: "Unlimited", MaxSites: 0, SitesUsed: 900},
+		{ID: 1, SubscriptionName: "Idle", MaxSites: 5, SitesUsed: 0, DomainsUsed: 0},
+		{ID: 2, SubscriptionName: "At limit", MaxSites: 1, SitesUsed: 1, DomainsUsed: 1},
+		{ID: 3, SubscriptionName: "Unlimited", MaxSites: 0, SitesUsed: 900, DomainsUsed: 900},
 	})
 	if len(pressure.Items) != 1 {
 		t.Fatalf("items = %+v, want only the subscription at its limit", pressure.Items)

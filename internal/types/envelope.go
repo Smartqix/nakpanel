@@ -263,6 +263,7 @@ type FileMutationResult struct {
 
 type CreateSiteReq struct {
 	SiteID         int64              `json:"site_id,omitempty"`
+	ParentSiteID   int64              `json:"parent_site_id,omitempty"`
 	SubscriptionID int64              `json:"subscription_id"`
 	Username       string             `json:"username"`
 	Domain         string             `json:"domain"`
@@ -321,12 +322,16 @@ const (
 )
 
 type CreateDatabaseReq struct {
-	SubscriptionID int64    `json:"subscription_id"`
-	SiteID         int64    `json:"site_id,omitempty"`
-	Engine         DBEngine `json:"engine"`
-	DBName         string   `json:"db_name"`
-	DBUser         string   `json:"db_user"`
-	Password       string   `json:"password"`
+	DatabaseID             int64    `json:"database_id,omitempty"`
+	IdempotencyScope       string   `json:"-"`
+	IdempotencyKey         string   `json:"-"`
+	IdempotencyFingerprint string   `json:"-"`
+	SubscriptionID         int64    `json:"subscription_id"`
+	SiteID                 int64    `json:"site_id,omitempty"`
+	Engine                 DBEngine `json:"engine"`
+	DBName                 string   `json:"db_name"`
+	DBUser                 string   `json:"db_user"`
+	Password               string   `json:"password"`
 }
 
 type CertIssuer string
@@ -856,6 +861,8 @@ type SubscriptionSummary struct {
 	MaxBackups            int                `json:"max_backups"`
 	BackupStorageMB       int                `json:"backup_storage_mb"`
 	SitesUsed             int                `json:"sites_used"`
+	DomainsUsed           int                `json:"domains_used"`
+	SubdomainsUsed        int                `json:"subdomains_used"`
 	DatabasesUsed         int                `json:"databases_used"`
 	BackupsUsed           int                `json:"backups_used"`
 	BackupBytesUsed       int64              `json:"backup_bytes_used"`

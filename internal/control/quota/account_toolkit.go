@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	controlpolicy "github.com/nakroteck/nakpanel/internal/control/policy"
+	"github.com/nakroteck/nakpanel/internal/gitremote"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
@@ -61,6 +62,19 @@ func (s *SQLStore) DeleteFTPAccount(ctx context.Context, subscriptionID, id int6
 func (s *SQLStore) UpsertGitRepository(ctx context.Context, subscriptionID, actorID, siteID int64, input types.GitRepositoryInput) (int64, error) {
 	input.Mode = strings.ToLower(strings.TrimSpace(input.Mode))
 	input.Branch = strings.TrimSpace(input.Branch)
+	if input.Mode == "" {
+		input.Mode = "remote"
+	}
+	if input.DeploymentMode == "" {
+		input.DeploymentMode = "manual"
+		if input.Automatic {
+			input.DeploymentMode = "automatic"
+		}
+	}
+	if input.DeploymentMode != "manual" && input.DeploymentMode != "automatic" && input.DeploymentMode != "disabled" {
+		return 0, errors.New("invalid deployment mode")
+	}
+	input.Automatic = input.DeploymentMode == "automatic"
 	target := filepath.Clean(strings.TrimSpace(input.DeployTarget))
 	if target == "" {
 		target = "."
@@ -74,11 +88,24 @@ func (s *SQLStore) UpsertGitRepository(ctx context.Context, subscriptionID, acto
 		return 0, errors.New("a remote URL is required")
 	}
 	if input.Mode == "remote" {
+		var normalizeErr error
+		input.RemoteURL, normalizeErr = gitremote.Normalize(input.RemoteURL)
+		if normalizeErr != nil {
+			return 0, normalizeErr
+		}
 		parsed, err := url.Parse(input.RemoteURL)
-		if err != nil || parsed.User != nil || (parsed.Scheme != "ssh" && parsed.Scheme != "https") || parsed.Hostname() == "" {
+		if err != nil || (parsed.Scheme != "ssh" && parsed.Scheme != "https") || parsed.Hostname() == "" {
 			return 0, errors.New("remote URL must be credential-free ssh or https")
 		}
-		if parsed.Scheme == "ssh" {
+		if input.Connect {
+			if pinned := gitremote.TrustedHostKey(input.RemoteURL); pinned != "" {
+				input.KnownHostKey = pinned
+			}
+			if parsed.Scheme == "ssh" && input.KnownHostKey == "" {
+				return 0, errors.New("verify the SSH server key before connecting")
+			}
+		}
+		if parsed.Scheme == "ssh" && input.KnownHostKey != "" {
 			fields := strings.Fields(input.KnownHostKey)
 			if len(fields) < 3 || strings.ContainsAny(input.KnownHostKey, "\r\n") || fields[0] != parsed.Hostname() {
 				return 0, errors.New("SSH repositories require a verified host key for the remote hostname")
@@ -92,47 +119,93 @@ func (s *SQLStore) UpsertGitRepository(ctx context.Context, subscriptionID, acto
 		if err := ensureSiteBelongsTx(ctx, tx, subscriptionID, siteID); err != nil {
 			return 0, err
 		}
+		var currentRevision int64
+		var existingRemote, existingTarget, existingMode, existingConnection, existingDeployed string
+		revisionErr := tx.QueryRowContext(ctx, `SELECT operation_revision,remote_url,deploy_target,mode,connection_status,deployed_revision FROM git_repositories WHERE site_id=$1 FOR UPDATE`, siteID).Scan(&currentRevision, &existingRemote, &existingTarget, &existingMode, &existingConnection, &existingDeployed)
+		if revisionErr != nil && !errors.Is(revisionErr, sql.ErrNoRows) {
+			return 0, revisionErr
+		}
+		if currentRevision != input.ExpectedRevision {
+			return 0, errors.New("Git workspace changed; refresh before saving")
+		}
+		if existingDeployed != "" && existingConnection != "disconnected" && (existingRemote != input.RemoteURL || existingTarget != target || existingMode != input.Mode) {
+			return 0, errors.New("disconnect the published repository before changing its source or deployment target")
+		}
+		var active bool
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM git_deployments d JOIN git_repositories r ON r.id=d.repository_id WHERE r.site_id=$1 AND d.status IN ('pending','running'))`, siteID).Scan(&active); err != nil {
+			return 0, err
+		}
+		if active {
+			return 0, errors.New("a Git workspace operation is already pending")
+		}
+		if input.Mode == "hosted" {
+			var existing bool
+			if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM git_repositories WHERE site_id=$1 AND mode='hosted')`, siteID).Scan(&existing); err != nil {
+				return 0, err
+			}
+			if !existing {
+				return 0, errors.New("new repositories must use a remote repository")
+			}
+		}
 		var id int64
-		err := tx.QueryRowContext(ctx, `INSERT INTO git_repositories(site_id,mode,remote_url,branch,deploy_target,automatic,known_host_key)
-VALUES($1,$2,$3,$4,$5,$6,$7)
+		err := tx.QueryRowContext(ctx, `INSERT INTO git_repositories(site_id,mode,remote_url,branch,deploy_target,automatic,known_host_key,deployment_mode)
+VALUES($1,$2,$3,$4,$5,$6,$7,$8)
 ON CONFLICT(site_id) DO UPDATE SET mode=EXCLUDED.mode,remote_url=EXCLUDED.remote_url,branch=EXCLUDED.branch,
 deploy_target=EXCLUDED.deploy_target,automatic=EXCLUDED.automatic,known_host_key=EXCLUDED.known_host_key,
+deployment_mode=EXCLUDED.deployment_mode,operation_revision=git_repositories.operation_revision+1,
+connection_status='not_connected',
+deployed_revision=CASE WHEN git_repositories.remote_url<>EXCLUDED.remote_url OR git_repositories.deploy_target<>EXCLUDED.deploy_target OR git_repositories.mode<>EXCLUDED.mode THEN '' ELSE git_repositories.deployed_revision END,
+last_revision=CASE WHEN git_repositories.remote_url<>EXCLUDED.remote_url OR git_repositories.deploy_target<>EXCLUDED.deploy_target OR git_repositories.mode<>EXCLUDED.mode THEN '' ELSE git_repositories.last_revision END,
+previous_revision=CASE WHEN git_repositories.connection_status='disconnected' THEN '' ELSE git_repositories.previous_revision END,
+webhook_secret_hash=CASE WHEN EXCLUDED.deployment_mode='disabled' OR git_repositories.remote_url<>EXCLUDED.remote_url THEN '' ELSE git_repositories.webhook_secret_hash END,
+fetched_revision='',branches='[]',commits='[]',conflicts='[]',
 convergence_status='pending',last_error='',updated_at=now()
-RETURNING id`, siteID, input.Mode, strings.TrimSpace(input.RemoteURL), input.Branch, target, input.Automatic, strings.TrimSpace(input.KnownHostKey)).Scan(&id)
+RETURNING id`, siteID, input.Mode, strings.TrimSpace(input.RemoteURL), input.Branch, target, input.Automatic, strings.TrimSpace(input.KnownHostKey), input.DeploymentMode).Scan(&id)
+		if err != nil {
+			return 0, err
+		}
+		action := "prepare"
+		if input.Connect {
+			action = "test"
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO git_deployments(repository_id,revision,status,action,operation_revision) SELECT id,'','pending',$2,operation_revision FROM git_repositories WHERE id=$1`, id, action)
 		return id, err
 	})
 }
 
-func (s *SQLStore) QueueGitDeployment(ctx context.Context, subscriptionID, siteID int64) (int64, error) {
+// GitKeyRequest loads identity and permission without creating repository intent.
+func (s *SQLStore) GitKeyRequest(ctx context.Context, subscriptionID, siteID int64) (types.EnsureGitRepositoryReq, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return 0, err
+		return types.EnsureGitRepositoryReq{}, err
 	}
 	defer tx.Rollback()
 	if err = lockActiveSubscriptionTx(ctx, tx, subscriptionID); err != nil {
-		return 0, err
+		return types.EnsureGitRepositoryReq{}, err
 	}
-	if err = requireGitPermissionTx(ctx, tx, subscriptionID); err != nil {
-		return 0, err
+	if err = ensureSiteBelongsTx(ctx, tx, subscriptionID, siteID); err != nil {
+		return types.EnsureGitRepositoryReq{}, err
 	}
-	var repositoryID int64
-	if err = tx.QueryRowContext(ctx, `SELECT repository.id FROM git_repositories repository
-JOIN sites site ON site.id=repository.site_id
-WHERE repository.site_id=$1 AND site.subscription_id=$2 FOR UPDATE`, siteID, subscriptionID).Scan(&repositoryID); err != nil {
-		return 0, err
+	policy, err := EffectiveSitePolicyTx(ctx, tx, siteID)
+	if err != nil {
+		return types.EnsureGitRepositoryReq{}, err
 	}
-	var deploymentID int64
-	if err = tx.QueryRowContext(ctx, `INSERT INTO git_deployments(repository_id,revision,status)
-VALUES($1,'','pending') RETURNING id`, repositoryID).Scan(&deploymentID); err != nil {
-		return 0, err
+	if !policy.Permissions.Git {
+		return types.EnsureGitRepositoryReq{}, errors.New("Git is disabled by the subscription policy")
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE git_repositories SET convergence_status='pending',last_error='',updated_at=now() WHERE id=$1`, repositoryID); err != nil {
-		return 0, err
+	req := types.EnsureGitRepositoryReq{SiteID: siteID, Action: "key", Mode: "remote", Branch: "main", DeployTarget: "."}
+	err = tx.QueryRowContext(ctx, `SELECT username,domain,status FROM sites WHERE id=$1`, siteID).Scan(&req.Username, &req.Domain, &req.State)
+	if err != nil {
+		return req, err
 	}
-	if err = s.markSubscriptionPendingTx(ctx, tx, subscriptionID); err != nil {
-		return 0, err
+	if req.State != "active" {
+		return req, errors.New("key preparation requires an active site")
 	}
-	return deploymentID, tx.Commit()
+	return req, tx.Commit()
+}
+
+func (s *SQLStore) QueueGitDeployment(ctx context.Context, subscriptionID, siteID int64) (int64, error) {
+	return 0, errors.New("select an immutable fetched commit and confirm deployment")
 }
 
 func (s *SQLStore) SetGitWebhook(ctx context.Context, subscriptionID, siteID int64, tokenHash string) error {
@@ -162,7 +235,11 @@ FROM sites site WHERE repository.site_id=$1 AND site.id=repository.site_id AND s
 }
 
 func (s *SQLStore) TriggerGitWebhook(ctx context.Context, siteID int64, tokenHash string) error {
-	if siteID <= 0 || !gitWebhookHashRE.MatchString(tokenHash) {
+	return errors.New("webhook delivery ID and branch ref are required")
+}
+
+func (s *SQLStore) TriggerGitWorkspaceWebhook(ctx context.Context, siteID int64, tokenHash, deliveryID, ref string) error {
+	if siteID <= 0 || !gitWebhookHashRE.MatchString(tokenHash) || deliveryID == "" || len(deliveryID) > 128 || strings.ContainsAny(deliveryID, "\x00\r\n") {
 		return sql.ErrNoRows
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
@@ -200,10 +277,31 @@ WHERE repository.site_id=$1 FOR UPDATE`, siteID).Scan(&lockedSubscriptionID, &re
 	if storedHash == "" || subtle.ConstantTimeCompare([]byte(storedHash), []byte(tokenHash)) != 1 || !automatic {
 		return sql.ErrNoRows
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO git_deployments(repository_id,revision,status) VALUES($1,'','pending')`, repositoryID); err != nil {
+	var branch, mode, state string
+	if err = tx.QueryRowContext(ctx, `SELECT r.branch,r.deployment_mode,s.desired_status FROM git_repositories r JOIN sites s ON s.id=r.site_id WHERE r.id=$1`, repositoryID).Scan(&branch, &mode, &state); err != nil {
 		return err
 	}
-	if _, err = tx.ExecContext(ctx, `UPDATE git_repositories SET convergence_status='pending',last_error='',updated_at=now() WHERE id=$1`, repositoryID); err != nil {
+	if mode != "automatic" || state != "active" || ref != "refs/heads/"+branch {
+		return sql.ErrNoRows
+	}
+	inserted, err := tx.ExecContext(ctx, `INSERT INTO git_webhook_deliveries(repository_id,delivery_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, repositoryID, deliveryID)
+	if err != nil {
+		return err
+	}
+	if n, _ := inserted.RowsAffected(); n == 0 {
+		return tx.Commit()
+	}
+	var active bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM git_deployments WHERE repository_id=$1 AND status IN ('pending','running'))`, repositoryID).Scan(&active); err != nil {
+		return err
+	}
+	if active {
+		return errors.New("Git workspace busy; retry webhook delivery")
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO git_deployments(repository_id,revision,status,action,operation_revision,idempotency_key) SELECT id,'','pending','fetch',operation_revision+1,$2 FROM git_repositories WHERE id=$1`, repositoryID, "webhook:"+deliveryID); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE git_repositories SET operation_revision=operation_revision+1,convergence_status='pending',last_error='',updated_at=now() WHERE id=$1`, repositoryID); err != nil {
 		return err
 	}
 	if err = s.markSubscriptionPendingTx(ctx, tx, subscriptionID); err != nil {

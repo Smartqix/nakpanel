@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"github.com/DATA-DOG/go-sqlmock"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -12,8 +15,13 @@ import (
 )
 
 type recordingSQLExecutor struct {
+	db    *sql.DB
 	calls []sqlExecCall
 	err   error
+}
+
+func (e *recordingSQLExecutor) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	return e.db.QueryRowContext(ctx, query, args...)
 }
 
 type sqlExecCall struct {
@@ -90,14 +98,27 @@ func TestDatabaseProvisionerRejectsUnconfiguredFutureEngines(t *testing.T) {
 }
 
 func TestMariaDBEngineUsesScopedGrantAndPasswordHash(t *testing.T) {
-	exec := &recordingSQLExecutor{}
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectQuery("SELECT COUNT").WithArgs("np_demo").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	mock.ExpectQuery("SELECT COUNT").WithArgs("np_demo_user").WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(0))
+	exec := &recordingSQLExecutor{db: db}
 	engine := NewMariaDBEngine(exec)
+	engine.ownershipDir = filepath.Join(t.TempDir(), "ownership")
+	if err := os.Chmod(filepath.Dir(engine.ownershipDir), 0700); err != nil {
+		t.Fatal(err)
+	}
+	engine.ownerUID = uint32(os.Getuid())
 
 	req := types.CreateDatabaseReq{
-		Engine:   types.EngineMariaDB,
-		DBName:   "np_demo",
-		DBUser:   "np_demo_user",
-		Password: "super-secret-password",
+		DatabaseID: 7,
+		Engine:     types.EngineMariaDB,
+		DBName:     "np_demo",
+		DBUser:     "np_demo_user",
+		Password:   "super-secret-password",
 	}
 	if err := engine.CreateDatabase(context.Background(), req); err != nil {
 		t.Fatalf("CreateDatabase returned error: %v", err)
@@ -108,7 +129,7 @@ func TestMariaDBEngineUsesScopedGrantAndPasswordHash(t *testing.T) {
 		"CREATE USER IF NOT EXISTS 'np_demo_user'@'localhost' ACCOUNT LOCK",
 		"ALTER USER 'np_demo_user'@'localhost' IDENTIFIED BY PASSWORD '*AB71DDEC03C2ABA51CA5E1A0A91DEAE2216590E3'",
 		"ALTER USER 'np_demo_user'@'localhost' ACCOUNT UNLOCK",
-		"GRANT ALL PRIVILEGES ON `np_demo`.* TO 'np_demo_user'@'localhost'",
+		"GRANT ALL PRIVILEGES ON `np\\_demo`.* TO 'np_demo_user'@'localhost'",
 	}
 	if len(exec.calls) != len(wantQueries) {
 		t.Fatalf("ExecContext call count = %d, want %d: %#v", len(exec.calls), len(wantQueries), exec.calls)
