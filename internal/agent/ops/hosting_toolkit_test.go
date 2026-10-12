@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/rsa"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
@@ -672,6 +673,22 @@ func TestProFTPDKeyDirectiveNamesFollowCertificateAlgorithm(t *testing.T) {
 	certName, keyName, err = proFTPDKeyDirectiveNames(&rsa.PublicKey{})
 	if err != nil || certName != "TLSRSACertificateFile" || keyName != "TLSRSACertificateKeyFile" {
 		t.Fatalf("RSA directives = %q, %q, %v", certName, keyName, err)
+	}
+}
+
+func TestProFTPDIncludesFullCertificateChain(t *testing.T) {
+	bundle, _, _ := trustedCustomBundle(t, "example.test")
+	chain := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: testCertificateDER(t, "ca.test", time.Now().Add(time.Hour))})
+	path := filepath.Join(t.TempDir(), "fullchain.pem")
+	if err := os.WriteFile(path, append(bundle.CertificatePEM, chain...), 0600); err != nil {
+		t.Fatal(err)
+	}
+	config, err := proFTPDKeyDirectives(path, "/private/key.pem")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(config, "TLSCertificateChainFile "+path) {
+		t.Fatalf("intermediate chain omitted: %s", config)
 	}
 }
 

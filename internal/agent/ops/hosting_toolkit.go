@@ -1164,7 +1164,7 @@ func proFTPDKeyDirectives(certPath, keyPath string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read FTPS certificate: %w", err)
 	}
-	block, _ := pem.Decode(certificatePEM)
+	block, rest := pem.Decode(certificatePEM)
 	if block == nil || block.Type != "CERTIFICATE" {
 		return "", errors.New("FTPS certificate is not valid PEM")
 	}
@@ -1176,7 +1176,11 @@ func proFTPDKeyDirectives(certPath, keyPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s %s\n%s %s", certificateDirective, certPath, keyDirective, keyPath), nil
+	directives := fmt.Sprintf("%s %s\n%s %s", certificateDirective, certPath, keyDirective, keyPath)
+	if intermediate, _ := pem.Decode(rest); intermediate != nil && intermediate.Type == "CERTIFICATE" {
+		directives += "\nTLSCertificateChainFile " + certPath
+	}
+	return directives, nil
 }
 
 func proFTPDKeyDirectiveNames(publicKey any) (string, string, error) {
