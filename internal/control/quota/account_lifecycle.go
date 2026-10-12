@@ -1077,7 +1077,10 @@ WHERE e.subscription_id=$1`, subscriptionID).Scan(&storedPolicy, &subscriptionPa
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT site.id,site.domain,site.document_root,
 CASE WHEN $2='active' AND site.desired_status='active' THEN 'active' ELSE 'suspended' END,
-COALESCE(o.policy_patch,'{}'::jsonb)
+COALESCE(o.policy_patch,'{}'::jsonb),
+CASE WHEN site.tls_status='active' THEN site.tls_cert_path ELSE '' END,
+CASE WHEN site.tls_status='active' THEN site.tls_key_path ELSE '' END,
+(site.tls_status='active' AND site.desired_https_redirect)
 FROM sites site LEFT JOIN site_policy_overrides o ON o.site_id=site.id
 WHERE site.subscription_id=$1 ORDER BY site.id`, subscriptionID, desiredState)
 	if err != nil {
@@ -1086,7 +1089,7 @@ WHERE site.subscription_id=$1 ORDER BY site.id`, subscriptionID, desiredState)
 	for rows.Next() {
 		var domain types.SubscriptionDomain
 		var sitePatch []byte
-		if err := rows.Scan(&domain.SiteID, &domain.Domain, &domain.DocumentRoot, &domain.State, &sitePatch); err != nil {
+		if err := rows.Scan(&domain.SiteID, &domain.Domain, &domain.DocumentRoot, &domain.State, &sitePatch, &domain.TLSCertPath, &domain.TLSKeyPath, &domain.HTTPSRedirect); err != nil {
 			rows.Close()
 			return convergenceSnapshot{}, err
 		}

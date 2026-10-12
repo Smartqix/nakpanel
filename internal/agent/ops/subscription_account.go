@@ -608,10 +608,10 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 			if phpVersion == "" {
 				phpVersion = "8.3"
 			}
-			if err := p.sites.CreateSite(ctx, types.CreateSiteReq{
+			if err := p.sites.createSite(ctx, types.CreateSiteReq{
 				SiteID: domain.SiteID, SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain.Domain,
 				PHPVersion: phpVersion, SharedAccount: true, Limits: siteLimitsFromPolicy(domain.Policy),
-			}); err != nil {
+			}, domain.TLSCertPath, domain.TLSKeyPath, domain.HTTPSRedirect); err != nil {
 				return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("converge domain %q: %w", domain.Domain, err)
 			}
 			if req.State == "suspended" || domain.State == "suspended" {

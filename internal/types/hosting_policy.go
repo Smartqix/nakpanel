@@ -203,11 +203,14 @@ type EnsureSubscriptionAccountReq struct {
 }
 
 type SubscriptionDomain struct {
-	SiteID       int64         `json:"site_id"`
-	Domain       string        `json:"domain"`
-	DocumentRoot string        `json:"document_root"`
-	State        string        `json:"state"`
-	Policy       HostingPolicy `json:"policy"`
+	SiteID        int64         `json:"site_id"`
+	Domain        string        `json:"domain"`
+	DocumentRoot  string        `json:"document_root"`
+	State         string        `json:"state"`
+	Policy        HostingPolicy `json:"policy"`
+	TLSCertPath   string        `json:"tls_cert_path,omitempty"`
+	TLSKeyPath    string        `json:"tls_key_path,omitempty"`
+	HTTPSRedirect bool          `json:"https_redirect"`
 }
 
 type SFTPAccessIdentity struct {

@@ -2,6 +2,7 @@ package ops
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -52,6 +53,59 @@ func validAccountPolicy() types.HostingPolicy {
 		Mail:          types.HostingMailPolicy{DMARCPolicy: "none"},
 		DNS:           types.HostingDNSPolicy{Mode: "authoritative", DefaultTTL: 3600},
 		Access:        types.HostingAccessPolicy{ShellMode: "sftp", SFTPOnly: true},
+	}
+}
+
+func TestSubscriptionConvergencePreservesDomainTLSAndRedirect(t *testing.T) {
+	for _, redirect := range []bool{false, true} {
+		t.Run(map[bool]string{false: "https", true: "redirect"}[redirect], func(t *testing.T) {
+			root := t.TempDir()
+			homeRoot := filepath.Join(root, "home")
+			home := filepath.Join(homeRoot, "npaccount")
+			paths := SitePathConfig{HomeRoot: homeRoot, NginxAvailableDir: filepath.Join(root, "nginx", "available"), NginxEnabledDir: filepath.Join(root, "nginx", "enabled"), NginxLogDir: filepath.Join(root, "logs"), PHPRunDir: filepath.Join(root, "run"), PHPFPMLogDir: filepath.Join(root, "php-logs"), PHPTmpDir: filepath.Join(root, "tmp")}
+			sites := NewSiteProvisioner(SiteProvisionerOptions{Paths: paths, UserManager: &recordingUserManager{}, Reloader: &recordingReloader{}, DiskQuotaManager: &accountTestQuota{}})
+			provisioner := NewSubscriptionAccountProvisioner(SubscriptionAccountProvisionerOptions{HomeRoot: homeRoot, SystemdUnitDir: filepath.Join(root, "units"), UserManager: &accountTestUsers{}, Ownership: accountTestOwnership{}, DiskQuota: &accountTestQuota{}, Runner: &accountTestRunner{}, SiteProvisioner: sites})
+			domain := types.SubscriptionDomain{SiteID: 7, Domain: "example.test", DocumentRoot: filepath.Join(home, "domains", "example.test", "public_html"), State: "active", Policy: validAccountPolicy()}
+			data, err := json.Marshal(map[string]any{"tls_cert_path": "/certs/example.test/fullchain.pem", "tls_key_path": "/certs/example.test/privkey.pem", "https_redirect": redirect})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = json.Unmarshal(data, &domain); err != nil {
+				t.Fatal(err)
+			}
+			req := types.EnsureSubscriptionAccountReq{SubscriptionID: 42, Username: "npaccount", HomePath: home, State: "active", Policy: validAccountPolicy(), Domains: []types.SubscriptionDomain{domain}}
+			for pass := 0; pass < 2; pass++ {
+				if _, err = provisioner.EnsureSubscriptionAccount(context.Background(), req); err != nil {
+					t.Fatal(err)
+				}
+				config, err := os.ReadFile(filepath.Join(paths.NginxAvailableDir, "example.test.conf"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, directive := range []string{"listen 443 ssl;", "ssl_certificate /certs/example.test/fullchain.pem;", "ssl_certificate_key /certs/example.test/privkey.pem;"} {
+					if !strings.Contains(string(config), directive) {
+						t.Fatalf("convergence pass %d dropped %q:\n%s", pass, directive, config)
+					}
+				}
+				if strings.Contains(string(config), "return 301 https://") != redirect {
+					t.Fatalf("HTTPS redirect was not preserved: %s", config)
+				}
+			}
+			path := filepath.Join(paths.NginxAvailableDir, "example.test.conf")
+			previous, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			sites.nginxTest = &fakeNginxTester{err: errors.New("invalid candidate")}
+			req.Domains[0].Policy.Web.RequestBodyLimitMB = 12
+			if _, err = provisioner.EnsureSubscriptionAccount(context.Background(), req); err == nil {
+				t.Fatal("invalid nginx candidate was accepted")
+			}
+			restored, err := os.ReadFile(path)
+			if err != nil || string(restored) != string(previous) {
+				t.Fatalf("failed convergence did not retain the previous TLS configuration: %v", err)
+			}
+		})
 	}
 }
 

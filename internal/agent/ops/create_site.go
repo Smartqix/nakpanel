@@ -988,9 +988,19 @@ func onOff(value bool) string {
 	return "off"
 }
 
-func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteReq) (err error) {
+func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteReq) error {
+	return p.createSite(ctx, req, "", "", false)
+}
+
+func (p *SiteProvisioner) createSite(ctx context.Context, req types.CreateSiteReq, certPath, keyPath string, redirectHTTPS bool) (err error) {
 	siteConfigMutationMu.Lock()
 	defer siteConfigMutationMu.Unlock()
+	if (certPath == "") != (keyPath == "") {
+		return errors.New("certificate and key must be provided together")
+	}
+	if redirectHTTPS && certPath == "" {
+		return errors.New("https redirect requires an active certificate")
+	}
 
 	plan, err := NewSitePlan(req, p.paths)
 	if err != nil {
@@ -1089,7 +1099,7 @@ func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteRe
 			return fmt.Errorf("write placeholder index: %w", err)
 		}
 	}
-	if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxVHost(plan)), sitePrivateRuntimeFileMode); err != nil {
+	if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxRuntimeVHost(plan, certPath, keyPath, redirectHTTPS)), sitePrivateRuntimeFileMode); err != nil {
 		return fmt.Errorf("write nginx site config: %w", err)
 	}
 	if zones := RenderNginxPolicyZones(plan); zones != "" {
