@@ -3858,7 +3858,7 @@ func parsePlanLimit(r *http.Request, name string) (int, error) {
 	}
 	factor := 1
 	switch strings.ToUpper(strings.TrimSpace(r.Form.Get(name + "_unit"))) {
-	case "", "MB", "COUNT", "DAYS":
+	case "", "MB", "COUNT", "DAYS", "PERCENT", "MBPS":
 	case "GB":
 		factor = 1024
 	case "TB":

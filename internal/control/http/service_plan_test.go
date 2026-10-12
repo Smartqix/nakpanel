@@ -26,6 +26,9 @@ func TestParsePlanAcceptsPleskStyleGroupedProperties(t *testing.T) {
 		"allow_dns": {"true"}, "allow_tls": {"true"}, "allow_backups": {"true"},
 		"hosting_web_server": {"nginx"}, "preferred_domain": {"www"},
 		"dns_mode": {"primary"}, "dns_default_ttl": {"3600"}, "logs_retention_days": {"14"},
+		"cpu_percent": {"200"}, "cpu_percent_unit": {"percent"},
+		"io_read_mbps": {"50"}, "io_read_mbps_unit": {"MBps"},
+		"io_write_mbps": {"25"}, "io_write_mbps_unit": {"MBps"},
 	}
 	req := httptest.NewRequest("POST", "https://panel.test/plans", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -44,6 +47,9 @@ func TestParsePlanAcceptsPleskStyleGroupedProperties(t *testing.T) {
 	}
 	if plan.Presets.Hosting.PreferredDomain != "www" || plan.Presets.DNS.DefaultTTL != 3600 {
 		t.Fatalf("parsed presets = %#v", plan.Presets)
+	}
+	if resources := plan.HostingPolicy.Resources; resources.CPUPercent != 200 || resources.IOReadMBPS != 50 || resources.IOWriteMBPS != 25 {
+		t.Fatalf("parsed account resources = %#v", resources)
 	}
 }
 
@@ -88,6 +94,25 @@ func TestParsePlanLimitRejectsUnitConversionOverflow(t *testing.T) {
 	}
 	if _, err := parsePlanLimit(req, "disk_mb"); err == nil || !strings.Contains(err.Error(), "too large") {
 		t.Fatalf("parsePlanLimit error = %v, want too large", err)
+	}
+}
+
+func TestParsePlanLimitAcceptsEditorResourceUnits(t *testing.T) {
+	for _, field := range []struct{ name, unit string }{
+		{"cpu_percent", "percent"},
+		{"io_read_mbps", "MBps"},
+		{"io_write_mbps", "MBps"},
+	} {
+		for _, value := range []int{0, 25, -1} {
+			t.Run(field.name+"/"+strconv.Itoa(value), func(t *testing.T) {
+				req := httptest.NewRequest("POST", "/plans/preview", nil)
+				req.Form = url.Values{field.name: {strconv.Itoa(value)}, field.name + "_unit": {field.unit}}
+				got, err := parsePlanLimit(req, field.name)
+				if err != nil || got != value {
+					t.Fatalf("parsePlanLimit = %d, %v; want %d", got, err, value)
+				}
+			})
+		}
 	}
 }
 
