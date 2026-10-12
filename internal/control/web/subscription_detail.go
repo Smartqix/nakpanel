@@ -446,14 +446,50 @@ func accountShellDetail(mode string) string {
 	case "full", "shell":
 		return "Interactive login is permitted"
 	case "none", "nologin", "disabled":
-		return "No interactive or file access"
+		return "Interactive shell login is disabled"
 	default:
 		return ""
 	}
 }
 
 func accountSettled(account types.SubscriptionSystemAccount) bool {
-	return account.LastError == "" && strings.EqualFold(strings.TrimSpace(account.DesiredState), strings.TrimSpace(account.AppliedState))
+	return account.LastError == "" && account.MigrationError == "" && account.ConvergenceStatus == "in_sync" &&
+		(account.MigrationStatus == "" || account.MigrationStatus == "pending" || account.MigrationStatus == "complete") &&
+		strings.EqualFold(strings.TrimSpace(account.DesiredState), strings.TrimSpace(account.AppliedState))
+}
+
+func accountMigrationWord(status string) string {
+	switch status {
+	case "pending":
+		return "Not required"
+	case "complete":
+		return "Complete"
+	case "legacy":
+		return "Awaiting migration"
+	case "preflight":
+		return "Checking migration"
+	case "copying":
+		return "Copying files"
+	case "cutover":
+		return "Switching account"
+	case "failed":
+		return "Migration failed"
+	default:
+		return "Not recorded"
+	}
+}
+
+func accountMigrationTone(status string) string {
+	switch status {
+	case "pending", "complete":
+		return "ok"
+	case "failed":
+		return "fail"
+	case "legacy", "preflight", "copying", "cutover":
+		return "pend"
+	default:
+		return "susp"
+	}
 }
 
 func displayState(value string) string {

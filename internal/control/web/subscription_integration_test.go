@@ -170,3 +170,40 @@ func TestSubscriptionOveruseCopyDoesNotPromiseUniversalRefusal(t *testing.T) {
 		}
 	}
 }
+
+func TestDisabledInteractiveShellDoesNotClaimSFTPIsForbidden(t *testing.T) {
+	if got := accountShellDetail("disabled"); got != "Interactive shell login is disabled" {
+		t.Fatalf("shell description conflated interactive login with scoped file access: %q", got)
+	}
+}
+
+func TestFreshSubscriptionDoesNotClaimMigrationIsPending(t *testing.T) {
+	data := detailFixture()
+	data.SubscriptionServices.Accounts[0].MigrationStatus = "pending"
+	html := renderIntegratedSubscription(t, data, auth.RoleAdmin, "activity", 0)
+	if !strings.Contains(html, ">Not required</span>") {
+		t.Fatal("new account was confused with a queued legacy migration")
+	}
+}
+
+func TestSubscriptionActivityReportsFailedMigration(t *testing.T) {
+	data := detailFixture()
+	data.SubscriptionServices.Accounts[0].MigrationStatus = "failed"
+	data.SubscriptionServices.Accounts[0].MigrationError = "Legacy migration could not complete"
+	html := renderIntegratedSubscription(t, data, auth.RoleAdmin, "activity", 0)
+	if !strings.Contains(html, "Legacy migration could not complete") || strings.Contains(html, "Nothing is pending") {
+		t.Fatal("failed migration was hidden behind settled account state")
+	}
+}
+
+func TestSubscriptionTimelineIconsCannotStretchInMobileGrid(t *testing.T) {
+	css := string(appCSS)
+	start := strings.Index(css, ".np-timeline-dot{")
+	if start < 0 {
+		t.Fatal("timeline styling missing")
+	}
+	rule := css[start : start+strings.Index(css[start:], "}")]
+	if !strings.Contains(rule, "width:24px") {
+		t.Fatal("timeline icons have no fixed width and stretch across the mobile grid")
+	}
+}

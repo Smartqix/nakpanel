@@ -33,20 +33,25 @@
 
 ### Task 2: Fresh Installation Without a New Backup
 **Interfaces:** Existing unified `deploy/install/install.sh --fresh --force --yes` installer; operator-only reset orchestration.
-- [ ] Inventory managed resources, units and paths; record only non-secret validation metadata.
-- [ ] Stage verified binaries and migrations before stopping services.
-- [ ] Remove tenant runtimes/data and recreate PostgreSQL intent without changing Ubuntu or SSH.
-- [ ] Run the fresh installer, provision the real administrator and disable migration-seeded test logins.
-- [ ] Preserve and reconcile trusted hostname/service TLS and notification infrastructure.
+- [x] Inventory managed resources, units and paths; record only non-secret validation metadata.
+- [x] Stage verified binaries and migrations before stopping services.
+- [x] Remove tenant runtimes/data and recreate PostgreSQL intent without changing Ubuntu or SSH.
+- [x] Run the fresh installer, provision the real administrator and disable migration-seeded test logins.
+- [x] Preserve and reconcile trusted hostname/service TLS and notification infrastructure.
 
 ### Task 3: Verify the Fresh System
-- [ ] Test authentication, plan/customer/subscription onboarding, domains, PHP, database manager, DNS, TLS, backups, mail and FTPS.
+- [x] Test authentication, plan/customer/subscription onboarding, domains, PHP, database manager, DNS, TLS, backups (read-only), mail and FTPS.
 - [ ] Verify new subscription tabs and desktop/mobile navigation against real data.
-- [ ] Remove only temporary verification resources and confirm final service health.
-- [ ] Commit/push the reviewed fixes and report the usable URL, reset scope and remaining external prerequisites.
+- [x] Remove only temporary verification resources and confirm final service health.
+- [ ] Commit the reviewed fixes and report the usable URL, reset scope and remaining external prerequisites.
 
 ## Execution Notes
 - Confirmed and fixed retained inventory hiding, client-only forbidden retry, support navigation/redirects, incomplete measurement handling, aggregate disk/traffic usage, FTP/mail counts, backup totals and overuse copy. Regression tests failed before fixes and passed afterward; full tests, vet, build, diff and shell checks pass.
-- Ruling: keep the current main checkout, following the user's earlier request to merge work into main and remove other branches.
+- Ruling: preserve the existing UI branch `ricky/subscription-detail-redesign`. Inspection confirmed the redesign is on that branch, while main remains on the earlier production release. Deployment uses a verified immutable release, not a mutable working checkout; no unrelated branch is changed or removed by this reset.
 - Ruling: no new backup of the current installation. Existing unrelated historic archives remain untouched. Fresh backup/restore screens are verified read-only rather than creating a new archive during the reset.
-- Ruling: preserve DNS/TLS infrastructure independently of tenant content; rebuild an empty hostname subscription and system mail identities by default to preserve the user's previously requested own-server notification email. No prior site content or messages are retained.
+- User confirmed: rebuild an empty hostname subscription and system mail identities. No prior site content or messages are retained.
+- Fresh migrations passed on an isolated empty local database, which was then removed. Live reset removed the three prior domains, tenant database, mail messages, customer/subscription intent and existing plans without a backup. Historic unrelated recovery archives, Ubuntu, SSH and trusted certificates were preserved.
+- Unified fresh installer completed; bootstrap password file was privately made readable by the service identity for the administrator-ensure step. Known migration test users and their seeded customers/subscriptions were removed before panel startup.
+- Live verification passed for trusted panel/site HTTPS, administrator login, CSRF, active plan and customer/subscription onboarding, per-domain PHP 8.4/8.5 convergence, DNS and both hostname nameservers, all subscription tabs, domain settings pages, temporary database creation and scoped phpMyAdmin, mailboxes/aliases/webmail, authenticated own-server SMTP with delivery to the fresh local administrator mailbox, trusted IMAPS, encrypted passive FTPS and plaintext FTP rejection.
+- The disposable database and its encrypted credential were removed after verification. Final intent is one empty hostname site, one customer/subscription, two system mailboxes, default plans plus the hostname infrastructure plan, zero tenant databases and zero backups. nginx, BIND and OpenSSH configuration checks pass; no failed systemd services or pending/retryable River jobs remain.
+- External inbox delivery and the complete historical Multipass verification chain were not rerun as part of this fresh-host UI reset. Previous external delivery was confirmed by the user; the external PTR still needs to be set to `mail.nakpanel.com` in the hosting provider console.

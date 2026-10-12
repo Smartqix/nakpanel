@@ -49,6 +49,18 @@
     });
   }
 
+  function initializeSubscriptionTabs() {
+    each(".np-subscription-tabs", document, function (nav) {
+      var active = nav.querySelector('[aria-current="page"]');
+      if (!active || nav.scrollWidth <= nav.clientWidth) return;
+      var tab = active.getBoundingClientRect();
+      var bounds = nav.getBoundingClientRect();
+      if (tab.left < bounds.left || tab.right > bounds.right) {
+        nav.scrollLeft += tab.left - bounds.left - (nav.clientWidth - tab.width) / 2;
+      }
+    });
+  }
+
   function initializePHPApplicationWorkspace() {
     each("[data-np-php-environment-form]", document, function (form) {
       var toggle = form.querySelector("[data-np-php-secret-toggle]");
@@ -3170,6 +3182,7 @@
   each("[data-np-file-manager]", document, updateFileSelection);
   filterSettings("");
   initializeDirtyForms();
+  initializeSubscriptionTabs();
   initializeDNSFilters();
   initializeDNSSettingsTabs();
   initializeDNSRecordForms();

@@ -6456,7 +6456,7 @@
   .np-timeline { list-style: none; margin: 0; padding: 4px 0; }
   .np-timeline li { display: flex; gap: var(--np-space-3); padding: 9px 14px; }
   .np-timeline li + li { border-top: 1px solid var(--np-border-soft); }
-  .np-timeline-dot { align-items: center; border-radius: 50%; display: flex; flex: 0 0 24px; height: 24px; justify-content: center; margin-top: 2px; }
+  .np-timeline-dot { align-items: center; border-radius: 50%; display: flex; flex: 0 0 24px; height: 24px; width: 24px; justify-content: center; margin-top: 2px; }
   .np-timeline-dot .np-icon { height: 13px; width: 13px; }
   .np-timeline-dot.is-ok { background: #ebf8ef; color: #146c39; }
   .np-timeline-dot.is-run { background: #eff6ff; color: var(--np-primary-dark); }
@@ -6510,8 +6510,9 @@
     .np-attention-actions form,
     .np-attention-actions button { flex: 1 1 auto; width: 100%; }
     .np-mode-choice { flex: 1 1 100%; }
-    .np-timeline li { display: grid; gap: 4px; }
-    .np-timeline-when { text-align: left; }
+    .np-timeline li { display: grid; grid-template-columns: 24px minmax(0,1fr); gap: 4px 12px; }
+    .np-timeline-dot { grid-row: 1 / span 2; }
+    .np-timeline-when { grid-column: 2; text-align: left; }
     .np-domain-card-actions { padding-left: 0; }
   }
 }

@@ -2872,10 +2872,12 @@ templ subscriptionActivityPanel(subscription types.SubscriptionSummary, data das
 					}
 				</dd></div>
 				<div><dt>Convergence</dt><dd>@tonePill(subscriptionSyncStatusWord(account.ConvergenceStatus), statusPillClass(account.ConvergenceStatus))</dd></div>
-				<div><dt>Migration</dt><dd>@tonePill(subscriptionSyncStatusWord(account.MigrationStatus), statusPillClass(account.MigrationStatus))</dd></div>
+				<div><dt>Migration</dt><dd>@tonePill(accountMigrationWord(account.MigrationStatus), accountMigrationTone(account.MigrationStatus))</dd></div>
 			</dl>
 			if account.LastError != "" {
 				<p class="np-error">{ account.LastError }</p>
+			} else if account.MigrationError != "" {
+				<p class="np-error">{ account.MigrationError }</p>
 			} else if accountSettled(account) {
 				<p class="np-empty-inline">The system account is in the state the panel asked for. Nothing is pending.</p>
 			}
