@@ -261,6 +261,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	syncAddonWorker := controlquota.NewSyncAddonWorker(db)
 	river.AddWorker(workers, syncAddonWorker)
 	convergenceWorker := controlquota.NewConvergeSubscriptionWorker(db, agent)
+	convergenceWorker.SetApplicationReconciler(phpApplicationStore)
 	river.AddWorker(workers, convergenceWorker)
 	configureMailWorker := provision.NewConfigureMailWorker(db, agent, serverAdminStore)
 	river.AddWorker(workers, configureMailWorker)

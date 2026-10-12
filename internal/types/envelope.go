@@ -428,6 +428,7 @@ type CreateCustomerReq struct {
 type CreateSubscriptionReq struct {
 	ID               int64                    `json:"id,omitempty"`
 	CustomerID       int64                    `json:"customer_id"`
+	NewCustomer      *CreateCustomerReq       `json:"new_customer,omitempty"`
 	PlanID           int64                    `json:"plan_id"`
 	SubscriptionName string                   `json:"subscription_name"`
 	SystemUsername   string                   `json:"system_username,omitempty"`
@@ -1076,28 +1077,29 @@ type ConfigureDNSZoneResult struct {
 }
 
 type ReconcileSiteReq struct {
-	SiteID            int64                `json:"site_id,omitempty"`
-	CustomerID        int64                `json:"customer_id,omitempty"`
-	SubscriptionID    int64                `json:"subscription_id,omitempty"`
-	Username          string               `json:"username"`
-	Domain            string               `json:"domain"`
-	SharedAccount     bool                 `json:"shared_account,omitempty"`
-	PHPVersion        string               `json:"php_version"`
-	DesiredPHPVersion string               `json:"desired_php_version,omitempty"`
-	EnableWebmail     bool                 `json:"enable_webmail"`
-	EnableDNS         bool                 `json:"enable_dns"`
-	DNSZoneID         int64                `json:"dns_zone_id,omitempty"`
-	DNSSerial         int64                `json:"dns_serial,omitempty"`
-	Address           string               `json:"address"`
-	State             string               `json:"state,omitempty"`
-	HTTPSRedirect     bool                 `json:"https_redirect,omitempty"`
-	TLSCertPath       string               `json:"tls_cert_path,omitempty"`
-	TLSKeyPath        string               `json:"tls_key_path,omitempty"`
-	Limits            SiteResourceLimits   `json:"limits,omitempty"`
-	DNSRecords        []DNSRecord          `json:"dns_records,omitempty"`
-	DNSZone           *ConfigureDNSZoneReq `json:"dns_zone,omitempty"`
-	HostingMode       HostingMode          `json:"hosting_mode,omitempty"`
-	Application       *PHPApplicationSpec  `json:"php_application,omitempty"`
+	ActiveDeploymentID int64                `json:"active_deployment_id,omitempty"`
+	SiteID             int64                `json:"site_id,omitempty"`
+	CustomerID         int64                `json:"customer_id,omitempty"`
+	SubscriptionID     int64                `json:"subscription_id,omitempty"`
+	Username           string               `json:"username"`
+	Domain             string               `json:"domain"`
+	SharedAccount      bool                 `json:"shared_account,omitempty"`
+	PHPVersion         string               `json:"php_version"`
+	DesiredPHPVersion  string               `json:"desired_php_version,omitempty"`
+	EnableWebmail      bool                 `json:"enable_webmail"`
+	EnableDNS          bool                 `json:"enable_dns"`
+	DNSZoneID          int64                `json:"dns_zone_id,omitempty"`
+	DNSSerial          int64                `json:"dns_serial,omitempty"`
+	Address            string               `json:"address"`
+	State              string               `json:"state,omitempty"`
+	HTTPSRedirect      bool                 `json:"https_redirect,omitempty"`
+	TLSCertPath        string               `json:"tls_cert_path,omitempty"`
+	TLSKeyPath         string               `json:"tls_key_path,omitempty"`
+	Limits             SiteResourceLimits   `json:"limits,omitempty"`
+	DNSRecords         []DNSRecord          `json:"dns_records,omitempty"`
+	DNSZone            *ConfigureDNSZoneReq `json:"dns_zone,omitempty"`
+	HostingMode        HostingMode          `json:"hosting_mode,omitempty"`
+	Application        *PHPApplicationSpec  `json:"php_application,omitempty"`
 }
 
 type ReconcileDatabaseReq struct {

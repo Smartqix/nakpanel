@@ -1463,7 +1463,7 @@ func TestAdminDashboardRendersPrototypeShellAndCreateGateData(t *testing.T) {
 	body := rec.Body.String()
 	for _, want := range []string{
 		`class="np-layout"`,
-		`ns1.nakroteck.com`,
+		`panel.test`,
 		`data-np-view="dashboard"`,
 		`data-np-view="sites"`,
 		`data-np-view="subscriptions"`,
@@ -1790,6 +1790,25 @@ func TestAdminCanAssignSubscriptionAndUpdateOversellSettings(t *testing.T) {
 	}
 }
 
+func TestNewCustomerSubscriptionMalformedPlanDoesNotCreateCustomer(t *testing.T) {
+	for _, route := range []string{"/subscriptions", "/subscriptions/onboard"} {
+		t.Run(route, func(t *testing.T) {
+			manager := &fakeQuotaManager{}
+			handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{QuotaManager: manager})
+			cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+			form := url.Values{"customer_mode": {"new"}, "customer_email": {"owner@example.test"}, "plan_id": {"invalid"}}
+			req := httptest.NewRequest(http.MethodPost, "https://panel.test"+route, strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			addAuthenticatedCookie(req, cookie)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if (rec.Code != http.StatusBadRequest && rec.Code != http.StatusSeeOther) || manager.customerCalled || manager.subCalled {
+				t.Fatalf("status=%d customerCreated=%v subscriptionCreated=%v", rec.Code, manager.customerCalled, manager.subCalled)
+			}
+		})
+	}
+}
+
 func TestAdminCanCreateContactCustomerAndSubscriptionTogether(t *testing.T) {
 	manager := &fakeQuotaManager{customerID: 99}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{QuotaManager: manager})
@@ -1813,13 +1832,14 @@ func TestAdminCanCreateContactCustomerAndSubscriptionTogether(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("POST /subscriptions status = %d, want 303; body:\n%s", rec.Code, rec.Body.String())
 	}
-	if !manager.customerCalled {
-		t.Fatal("subscription flow did not create customer")
+	if manager.customerCalled || manager.subscriptionReq.NewCustomer == nil {
+		t.Fatal("subscription flow must create customer atomically through subscription request")
 	}
-	if manager.customerReq.Email != "owner@example.test" || manager.customerReq.DisplayName != "Example Owner" || manager.customerReq.Company != "Example Co" || manager.customerReq.EnableLogin {
-		t.Fatalf("customer request = %#v", manager.customerReq)
+	customerReq := manager.subscriptionReq.NewCustomer
+	if customerReq.Email != "owner@example.test" || customerReq.DisplayName != "Example Owner" || customerReq.Company != "Example Co" || customerReq.EnableLogin {
+		t.Fatalf("customer request = %#v", customerReq)
 	}
-	if !manager.subCalled || manager.subscriptionReq.CustomerID != 99 || manager.subscriptionReq.PlanID != 10 || manager.subscriptionReq.SubscriptionName != "example.test" {
+	if !manager.subCalled || manager.subscriptionReq.CustomerID != 0 || manager.subscriptionReq.PlanID != 10 || manager.subscriptionReq.SubscriptionName != "example.test" {
 		t.Fatalf("subscription request = called:%v req:%#v", manager.subCalled, manager.subscriptionReq)
 	}
 }
@@ -2547,6 +2567,9 @@ func newTestHandlerWithCreators(t *testing.T, role auth.Role, siteCreator *fakeS
 
 func newTestHandlerWithOptions(t *testing.T, role auth.Role, options ServerOptions) (http.Handler, *fakeSessionStore) {
 	t.Helper()
+	if options.SecurityDB == nil {
+		options.SecurityDB = loginSecurityDB(t, loginSecurityConnector{})
+	}
 	password := "NakpanelAdmin!2026"
 	email := "admin@nakpanel.test"
 	switch role {

@@ -2,8 +2,11 @@ package phpapp
 
 import (
 	"context"
+	"database/sql/driver"
+	"encoding/json"
 	"errors"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +16,220 @@ import (
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
 )
+
+func workerLoadRows(values ...driver.Value) *sqlmock.Rows {
+	columns := make([]string, len(values))
+	for i := range columns {
+		columns[i] = "column" + strconv.Itoa(i)
+	}
+	return sqlmock.NewRows(columns).AddRow(values...)
+}
+
+func expectWorkerPolicyLoad(t *testing.T, mock sqlmock.Sqlmock, policy types.HostingPolicy, siteState string, desiredWorkerState ...string) {
+	t.Helper()
+	expectWorkerPolicyLoadBeforeRuntime(t, mock, policy, siteState, desiredWorkerState...)
+	mock.ExpectQuery(`SELECT binding.name`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"name", "value", "scope", "secret"}))
+	mock.ExpectCommit()
+}
+
+func expectWorkerPolicyLoadBeforeRuntime(t *testing.T, mock sqlmock.Sqlmock, policy types.HostingPolicy, siteState string, desiredWorkerState ...string) {
+	t.Helper()
+	workerState := "running"
+	processes := 2
+	if len(desiredWorkerState) > 0 {
+		workerState = desiredWorkerState[0]
+	}
+	if workerState == "stopped" {
+		processes = 0
+	}
+	raw, err := json.Marshal(policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT application.id`).WithArgs(int64(7)).WillReturnRows(workerLoadRows(
+		7, 4, 9, 5, "nps4", "example.test", "managed", "8.4", 3, "main", "plain", "", "/", "[]", false, false, false, 3,
+		"active", "healthy", 0, 0, 2, 1, "pending", "", "", "active", "active", siteState, true,
+	))
+	mock.ExpectQuery(`SELECT site.subscription_id`).WithArgs(int64(9)).WillReturnRows(workerLoadRows(4, "{}"))
+	mock.ExpectQuery(`SELECT subscription_id,plan_name`).WithArgs(int64(4)).WillReturnRows(workerLoadRows(
+		4, "test", 1024, 2, 2, 1024, 2, false, true, 7, "8.4", 5, 128, 1024, 2, 1024, 1, "warn", 80, 80, 2, 2, 2, 0, true, "8.4", true, true, true, "{}", raw,
+	))
+	mock.ExpectQuery(`SELECT e.hosting_policy`).WithArgs(int64(4)).WillReturnRows(workerLoadRows(raw, "{}"))
+	mock.ExpectQuery(`SELECT id,subscription_id,application_id,name,script,arguments,processes`).WithArgs(int64(7)).WillReturnRows(workerLoadRows(
+		11, 4, 7, "queue", "artisan", "[]", 2, workerState, "running", 2, 1, "pending", "", time.Now(),
+	))
+	mock.ExpectQuery(`SELECT COALESCE\(SUM\(processes\),0\)::int FROM php_workers`).WithArgs(int64(4), int64(0)).WillReturnRows(workerLoadRows(processes))
+}
+
+func TestWorkerStopOnlyLoadingDoesNotBypassStartOrDeployReadiness(t *testing.T) {
+	for _, workersOnly := range []bool{false, true} {
+		t.Run(strconv.FormatBool(workersOnly), func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			state := "stopped"
+			if workersOnly {
+				state = "running"
+			}
+			expectWorkerPolicyLoadBeforeRuntime(t, mock, managedPolicy(), "active", state)
+			mock.ExpectRollback()
+			_, stale, err := (&SQLStore{db: db}).loadForWorkerOperation(context.Background(), 7, 2, nil, workersOnly)
+			if stale || !errors.Is(err, ErrRuntimeUnavailable) {
+				t.Fatalf("start/deploy bypassed readiness: stale=%v err=%v", stale, err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestWorkerStopDoesNotRequireRuntimeOrManagedPermission(t *testing.T) {
+	for _, revoked := range []bool{false, true} {
+		t.Run(strconv.FormatBool(revoked), func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			policy := managedPolicy()
+			policy.Permissions.ManagedPHPDeployments = !revoked
+			expectWorkerPolicyLoad(t, mock, policy, "active", "stopped")
+			mock.ExpectBegin()
+			mock.ExpectQuery(`SELECT id,subscription_id,application_id,name,script,arguments,processes`).WithArgs(int64(7)).WillReturnRows(workerLoadRows(
+				11, 4, 7, "queue", "artisan", "[]", 2, "stopped", "running", 2, 1, "pending", "", time.Now(),
+			))
+			mock.ExpectCommit()
+			mock.ExpectBegin()
+			mock.ExpectQuery(`SELECT desired_revision FROM php_applications`).WithArgs(int64(7)).WillReturnRows(workerLoadRows(2))
+			mock.ExpectExec(`UPDATE php_workers SET observed_state`).WithArgs(int64(11), int64(7), "stopped").WillReturnResult(sqlmock.NewResult(0, 1))
+			mock.ExpectExec(`UPDATE php_applications SET convergence_status='pending'`).WithArgs(int64(7), int64(2)).WillReturnResult(sqlmock.NewResult(0, 1))
+			mock.ExpectExec(`UPDATE notifications`).WithArgs(workerFailureKey(7)).WillReturnResult(sqlmock.NewResult(0, 0))
+			mock.ExpectCommit()
+			agent := &revokedWorkerShutdownAgent{t: t}
+			w := NewReconcilePHPWorkersWorker(&SQLStore{db: db}, agent, nil)
+			err = w.Work(context.Background(), &river.Job[ReconcilePHPWorkersArgs]{Args: ReconcilePHPWorkersArgs{ApplicationID: 7, DesiredRevision: 2}})
+			if err != nil || !agent.stopped {
+				t.Fatalf("stop-only reconciliation failed: stopped=%v err=%v", agent.stopped, err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestWorkerPolicyRevocationDoesNotPreventLifecycleLoad(t *testing.T) {
+	for _, siteState := range []string{"active", "suspended"} {
+		for _, revoked := range []bool{true, false} {
+			t.Run(siteState+strconv.FormatBool(revoked), func(t *testing.T) {
+				db, mock, err := sqlmock.New()
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer db.Close()
+				policy := managedPolicy()
+				policy.Permissions.PHPWorkers = !revoked
+				policy.Resources.MaxPHPWorkers = 1
+				expectWorkerPolicyLoad(t, mock, policy, siteState)
+				loaded, stale, err := (&SQLStore{db: db}).loadForWorker(context.Background(), 7, 2, nil)
+				if err != nil || stale {
+					t.Fatalf("cleanup load failed: stale=%v err=%v", stale, err)
+				}
+				if loaded.record.spec.DesiredState != siteState {
+					t.Fatalf("website state = %q, want %q", loaded.record.spec.DesiredState, siteState)
+				}
+				if len(loaded.record.spec.Workers) != 0 {
+					t.Fatal("restricted workers remain in the start specification")
+				}
+				if err := mock.ExpectationsWereMet(); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
+}
+
+func TestWorkerRuntimeSpecStopsRevokedWorkersAndReactivates(t *testing.T) {
+	loaded := loadedApplication{record: applicationRecord{spec: types.PHPApplicationSpec{
+		HostingMode: types.PHPHostingModeManaged, DesiredState: "active", Policy: managedPolicy(),
+		Workers: []types.PHPWorkerSpec{{WorkerID: 11, DesiredState: "running", Processes: 1}, {WorkerID: 12, DesiredState: "stopped", Processes: 64}},
+	}}}
+	if got := workerRuntimeSpec(loaded); len(got.Workers) != 1 || got.Workers[0].WorkerID != 11 {
+		t.Fatalf("stopped worker remains in runtime budget: %#v", got.Workers)
+	}
+	loaded.record.spec.Policy.Permissions.PHPWorkers = false
+	if got := workerRuntimeSpec(loaded); got.DesiredState != "suspended" {
+		t.Fatal("revoked workers may start")
+	}
+	if !shouldCallWorkerAgent(loaded) {
+		t.Fatal("revoked workers bypass cleanup without a release")
+	}
+	loaded.record.spec.Policy.Permissions.PHPWorkers = true
+	if got := workerRuntimeSpec(loaded); got.DesiredState != "active" {
+		t.Fatal("restored permission did not reactivate workers")
+	}
+	if loaded.record.spec.DesiredState != "active" || len(loaded.record.spec.Workers) != 2 {
+		t.Fatal("worker cleanup mutated desired intent")
+	}
+}
+
+type revokedWorkerShutdownAgent struct {
+	t       *testing.T
+	stopped bool
+}
+
+func (a *revokedWorkerShutdownAgent) DeployPHPRelease(context.Context, types.DeployPHPReleaseReq) (types.DeployPHPReleaseResult, error) {
+	a.t.Fatal("unexpected deploy")
+	return types.DeployPHPReleaseResult{}, nil
+}
+func (a *revokedWorkerShutdownAgent) RollbackPHPRelease(context.Context, types.RollbackPHPReleaseReq) (types.RollbackPHPReleaseResult, error) {
+	a.t.Fatal("unexpected rollback")
+	return types.RollbackPHPReleaseResult{}, nil
+}
+func (a *revokedWorkerShutdownAgent) ReconcilePHPWorkers(_ context.Context, req types.ReconcilePHPWorkersReq) (types.ReconcilePHPWorkersResult, error) {
+	if req.Application.DesiredState != "suspended" {
+		a.t.Fatal("worker shutdown attempted a start")
+	}
+	a.stopped = true
+	return types.ReconcilePHPWorkersResult{ApplicationID: 7}, nil
+}
+func (a *revokedWorkerShutdownAgent) ReconcilePHPApplication(_ context.Context, req types.ReconcilePHPApplicationReq) (types.ReconcilePHPApplicationResult, error) {
+	if !a.stopped {
+		a.t.Fatal("website reconciliation ran before worker shutdown")
+	}
+	if req.Application.DesiredState != "active" {
+		a.t.Fatal("worker revocation suspended the website")
+	}
+	return types.ReconcilePHPApplicationResult{}, errors.New("temporary web runtime failure")
+}
+
+func TestRevokedWorkerShutdownPrecedesFailedWebsiteReconcile(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	policy := managedPolicy()
+	policy.Permissions.PHPWorkers = false
+	expectWorkerPolicyLoad(t, mock, policy, "active")
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT application.subscription_id,site.customer_id,application.desired_revision`).WithArgs(int64(7)).WillReturnRows(workerLoadRows(4, 5, 2))
+	mock.ExpectExec(`UPDATE php_applications SET convergence_status='pending'`).WithArgs(int64(7), int64(2), "temporary web runtime failure").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
+	agent := &revokedWorkerShutdownAgent{t: t}
+	w := NewReconcilePHPApplicationWorker(&SQLStore{db: db}, agent, nil)
+	err = w.Work(context.Background(), &river.Job[ReconcilePHPApplicationArgs]{Args: ReconcilePHPApplicationArgs{ApplicationID: 7, DesiredRevision: 2}})
+	if err == nil || !agent.stopped {
+		t.Fatalf("shutdown not performed before web failure: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestRedactedPHPFailureNeverPersistsEnvironmentValues(t *testing.T) {
 	environment := []types.PHPEnvironmentPayload{

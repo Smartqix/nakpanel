@@ -1,10 +1,12 @@
 package web
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
+	"net"
 	"net/url"
 	"path"
 	"sort"
@@ -21,6 +23,24 @@ import (
 	controlwordpress "github.com/nakroteck/nakpanel/internal/control/wordpress"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
+
+type panelHostnameKey struct{}
+
+func WithPanelHostname(ctx context.Context, host string) context.Context {
+	host = strings.ToLower(strings.TrimSpace(host))
+	if hostname, _, err := net.SplitHostPort(host); err == nil {
+		host = hostname
+	}
+	host = strings.Trim(host, "[]")
+	return context.WithValue(ctx, panelHostnameKey{}, host)
+}
+
+func panelHostname(ctx context.Context) string {
+	if host, ok := ctx.Value(panelHostnameKey{}).(string); ok && host != "" {
+		return host
+	}
+	return "Control panel"
+}
 
 type DashboardActions struct {
 	CanCreateSite       bool

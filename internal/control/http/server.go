@@ -517,6 +517,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /tools-utilities", s.handleWorkspace("tools-utilities"))
 	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}", s.handleSupportObject("sites", ""))
 	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}/{tool}", s.handleSupportObject("sites", "tool"))
+	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}/git/status", s.handleGitStatus)
 	mux.HandleFunc("GET /support/customers/{customerID}/subscriptions/{id}", s.handleSupportObject("subscriptions", ""))
 	mux.HandleFunc("GET /support/customers/{customerID}/{page}", s.handleSupportWorkspace)
 	mux.HandleFunc("GET /", s.handleRoot)
@@ -1249,25 +1250,23 @@ func (s *Server) handleOnboardSubscription(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	req := types.OnboardSubscriptionReq{CustomerMode: strings.TrimSpace(r.Form.Get("customer_mode")), Customer: parseCustomerRequest(r), PlanID: parseFormInt64Default(r, "plan_id", 0), SubscriptionName: strings.TrimSpace(r.Form.Get("subscription_name")), CreateSite: parseFormBool(r, "create_site"), Site: types.CreateSiteReq{Username: strings.ToLower(strings.TrimSpace(firstNonEmpty(r.Form.Get("system_username"), r.Form.Get("username")))), Domain: strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))), PHPVersion: strings.TrimSpace(r.Form.Get("php_version"))}}
+	subscriptionReq := types.CreateSubscriptionReq{PlanID: req.PlanID, SubscriptionName: req.SubscriptionName, SystemUsername: req.Site.Username, Status: "active"}
 	if req.CustomerMode == "new" {
-		customer, err := s.quotas.CreateCustomer(r.Context(), user, req.Customer)
-		if err != nil {
-			writeQuotaError(w, r, "Could not create customer", err)
-			return
-		}
-		req.CustomerID = customer.ID
+		subscriptionReq.NewCustomer = &req.Customer
 	} else {
 		req.CustomerID = parseFormInt64Default(r, "customer_id", 0)
+		subscriptionReq.CustomerID = req.CustomerID
 	}
-	if req.CustomerID <= 0 || req.PlanID <= 0 {
+	if (req.CustomerMode != "new" && req.CustomerID <= 0) || req.PlanID <= 0 {
 		http.Error(w, "Customer and plan are required", http.StatusBadRequest)
 		return
 	}
-	sub, err := s.quotas.CreateSubscription(r.Context(), user, types.CreateSubscriptionReq{CustomerID: req.CustomerID, PlanID: req.PlanID, SubscriptionName: req.SubscriptionName, SystemUsername: req.Site.Username, Status: "active"})
+	sub, err := s.quotas.CreateSubscription(r.Context(), user, subscriptionReq)
 	if err != nil {
 		writeQuotaError(w, r, "Could not create subscription", err)
 		return
 	}
+	req.CustomerID = sub.CustomerID
 	s.recordAudit(r.Context(), user, req.CustomerID, sub.ID, "subscription.created", "subscription", sub.ID, nil)
 	notice := "subscription-saved"
 	if req.CreateSite {
@@ -3584,7 +3583,7 @@ func dashboardTitle(role auth.Role) string {
 
 func renderPage(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	var body bytes.Buffer
-	if err := component.Render(r.Context(), &body); err != nil {
+	if err := component.Render(web.WithPanelHostname(r.Context(), r.Host), &body); err != nil {
 		formFailure(w, r, "Could not render page")
 		return
 	}
@@ -3903,13 +3902,11 @@ func normalizeFormList(values []string) []string {
 
 func (s *Server) parseCreateSubscriptionRequest(r *http.Request, owner auth.SessionUser) (types.CreateSubscriptionReq, error) {
 	var customerID int64
+	var newCustomer *types.CreateCustomerReq
 	var err error
 	if strings.TrimSpace(r.Form.Get("customer_mode")) == "new" {
-		customer, err := s.quotas.CreateCustomer(r.Context(), owner, parseCustomerRequest(r))
-		if err != nil {
-			return types.CreateSubscriptionReq{}, err
-		}
-		customerID = customer.ID
+		customer := parseCustomerRequest(r)
+		newCustomer = &customer
 	} else {
 		customerID, err = parseFormInt64(r, "customer_id")
 		if err != nil {
@@ -3931,6 +3928,7 @@ func (s *Server) parseCreateSubscriptionRequest(r *http.Request, owner auth.Sess
 	return types.CreateSubscriptionReq{
 		ID:               subscriptionID,
 		CustomerID:       customerID,
+		NewCustomer:      newCustomer,
 		PlanID:           planID,
 		SubscriptionName: strings.TrimSpace(r.Form.Get("subscription_name")),
 		SystemUsername:   strings.ToLower(strings.TrimSpace(r.Form.Get("system_username"))),

@@ -2,6 +2,8 @@ package types
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 )
 
@@ -203,14 +205,45 @@ type EnsureSubscriptionAccountReq struct {
 }
 
 type SubscriptionDomain struct {
-	SiteID        int64         `json:"site_id"`
-	Domain        string        `json:"domain"`
-	DocumentRoot  string        `json:"document_root"`
-	State         string        `json:"state"`
-	Policy        HostingPolicy `json:"policy"`
-	TLSCertPath   string        `json:"tls_cert_path,omitempty"`
-	TLSKeyPath    string        `json:"tls_key_path,omitempty"`
-	HTTPSRedirect bool          `json:"https_redirect"`
+	HostingMode        PHPHostingMode `json:"hosting_mode,omitempty"`
+	ActiveDeploymentID int64          `json:"active_deployment_id,omitempty"`
+	CurrentPHPVersion  string         `json:"current_php_version,omitempty"`
+	DesiredPHPVersion  string         `json:"desired_php_version,omitempty"`
+	SiteID             int64          `json:"site_id"`
+	Domain             string         `json:"domain"`
+	DocumentRoot       string         `json:"document_root"`
+	State              string         `json:"state"`
+	Policy             HostingPolicy  `json:"policy"`
+	TLSCertPath        string         `json:"tls_cert_path,omitempty"`
+	TLSKeyPath         string         `json:"tls_key_path,omitempty"`
+	HTTPSRedirect      bool           `json:"https_redirect"`
+}
+
+// RuntimePHPVersion preserves an explicit site selection rather than treating
+// the plan default as an instruction to reset an existing site.
+func (domain SubscriptionDomain) RuntimePHPVersion() (string, error) {
+	version := "8.3"
+	versions := []string{domain.DesiredPHPVersion, domain.CurrentPHPVersion, domain.Policy.PHP.DefaultVersion}
+	if domain.State == "suspended" {
+		versions[0], versions[1] = versions[1], versions[0]
+	}
+	for _, candidate := range versions {
+		if candidate = strings.TrimSpace(candidate); candidate != "" {
+			version = candidate
+			break
+		}
+	}
+	// Revoking a version must prevent activation, not prevent stopping the
+	// currently installed executable. The agent still validates its syntax.
+	if domain.State == "suspended" {
+		return version, nil
+	}
+	for _, allowed := range domain.Policy.PHP.AllowedVersions {
+		if allowed == version {
+			return version, nil
+		}
+	}
+	return "", fmt.Errorf("PHP %s is not allowed for domain %q", version, domain.Domain)
 }
 
 type SFTPAccessIdentity struct {

@@ -157,9 +157,6 @@ func validateEnvironment(input EnvironmentInput) (EnvironmentInput, error) {
 
 func validateWorker(input WorkerInput, policy types.HostingPolicy, otherProcesses int) (WorkerInput, error) {
 	input.Name = strings.ToLower(strings.TrimSpace(input.Name))
-	if !policy.Permissions.PHPWorkers {
-		return input, fmt.Errorf("%w: PHP workers are disabled", controlquota.ErrExceeded)
-	}
 	if !workerNamePattern.MatchString(input.Name) || validateRelativePath(input.Script, false) != nil {
 		return input, errors.New("worker name or script is invalid")
 	}
@@ -171,6 +168,9 @@ func validateWorker(input WorkerInput, policy types.HostingPolicy, otherProcesse
 	}
 	if input.DesiredState != "running" && input.DesiredState != "stopped" {
 		return input, errors.New("worker state must be running or stopped")
+	}
+	if input.DesiredState == "running" && !policy.Permissions.PHPWorkers {
+		return input, fmt.Errorf("%w: PHP workers are disabled", controlquota.ErrExceeded)
 	}
 	if len(input.Arguments) > 64 {
 		return input, errors.New("at most 64 worker arguments are supported")
@@ -185,7 +185,7 @@ func validateWorker(input WorkerInput, policy types.HostingPolicy, otherProcesse
 	if argumentBytes > 32<<10 {
 		return input, errors.New("worker arguments exceed 32 KiB")
 	}
-	if policy.Resources.MaxPHPWorkers >= 0 && otherProcesses+input.Processes > policy.Resources.MaxPHPWorkers {
+	if input.DesiredState == "running" && policy.Resources.MaxPHPWorkers >= 0 && otherProcesses+input.Processes > policy.Resources.MaxPHPWorkers {
 		return input, fmt.Errorf("%w: PHP worker processes %d / %d", controlquota.ErrExceeded, otherProcesses+input.Processes, policy.Resources.MaxPHPWorkers)
 	}
 	return input, nil

@@ -186,7 +186,7 @@ func totpAAD(userID int64) []byte {
 func (s *Server) getUserTOTP(ctx context.Context, userID int64) (userTOTPRecord, bool, error) {
 	var record userTOTPRecord
 	if s.securityDB == nil {
-		return record, false, nil
+		return record, false, errors.New("TOTP storage is unavailable")
 	}
 	var envelope []byte
 	var confirmedAt sql.NullTime
@@ -578,6 +578,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	record, exists, err := s.getUserTOTP(r.Context(), user.ID)
 	if err != nil {
 		log.Printf("load totp state: %v", err)
+		http.Error(w, "Verification is unavailable", http.StatusServiceUnavailable)
+		return
 	}
 	if exists && record.Confirmed {
 		token, err := s.createLoginChallenge(r.Context(), user.ID, ip, userAgent)

@@ -1621,6 +1621,11 @@ func (p *HostingToolkitProvisioner) valkeyUnitState(ctx context.Context, unitNam
 }
 
 func renderValkeyUnit(req types.EnsureValkeyReq, uid, gid, base, runtimeDir, image string) string {
+	containerMemoryMB := max(req.MemoryMB+32, req.MemoryMB*5/4)
+	// Podman and its stop command need controller headroom independently of
+	// the workload, which Podman places in a separate container cgroup.
+	controllerMemoryMB := containerMemoryMB + 64
+	controllerTasks := max(128, req.ProcessLimit+64)
 	return fmt.Sprintf(`[Unit]
 Description=Nakpanel cache for subscription %d
 After=podman.service
@@ -1631,8 +1636,8 @@ NotifyAccess=all
 Group=%s
 RuntimeDirectory=nakpanel/valkey/sub-%d
 RuntimeDirectoryMode=0770
-ExecStart=/usr/bin/podman run --pull=never --rm --replace --sdnotify=conmon --name nakpanel-valkey-sub-%d --network=none --user %s:%s --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m -v %s:/etc/valkey:ro,Z -v %s:/run/valkey:rw,Z %s valkey-server /etc/valkey/valkey.conf
-ExecStop=/usr/bin/podman stop -t 10 nakpanel-valkey-sub-%d
+ExecStart=/usr/bin/podman run --pull=never --rm --replace --sdnotify=conmon --name nakpanel-valkey-sub-%d --network=none --user %s:%s --pids-limit %d --memory %dm --cpus %.2f --read-only --tmpfs /tmp:rw,noexec,nosuid,size=16m -v %s:/etc/valkey:ro,Z -v %s:/run/valkey:rw,Z %s valkey-server /etc/valkey/valkey.conf
+ExecStop=/usr/bin/podman stop --ignore --time 10 nakpanel-valkey-sub-%d
 Restart=on-failure
 NoNewPrivileges=yes
 PrivateTmp=yes
@@ -1645,7 +1650,7 @@ TasksMax=%d
 
 [Install]
 WantedBy=multi-user.target
-`, req.SubscriptionID, gid, req.SubscriptionID, req.SubscriptionID, uid, gid, base, runtimeDir, image, req.SubscriptionID, runtimeDir, max(req.MemoryMB+32, req.MemoryMB*5/4), req.CPUPercent, req.ProcessLimit)
+`, req.SubscriptionID, gid, req.SubscriptionID, req.SubscriptionID, uid, gid, req.ProcessLimit, containerMemoryMB, float64(req.CPUPercent)/100, base, runtimeDir, image, req.SubscriptionID, runtimeDir, controllerMemoryMB, req.CPUPercent, controllerTasks)
 }
 
 func renderValkeyACL(hash string) string {

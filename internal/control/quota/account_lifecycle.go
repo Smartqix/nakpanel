@@ -200,12 +200,43 @@ type ApplicationInspectionAgent interface {
 
 type ConvergeSubscriptionWorker struct {
 	river.WorkerDefaults[ConvergeSubscriptionArgs]
-	db    *sql.DB
-	agent SubscriptionConvergenceAgent
-	river *river.Client[*sql.Tx]
+	db                    *sql.DB
+	agent                 SubscriptionConvergenceAgent
+	river                 *river.Client[*sql.Tx]
+	applicationReconciler SiteApplicationReconciler
 }
 
 func (w *ConvergeSubscriptionWorker) SetRiverClient(client *river.Client[*sql.Tx]) { w.river = client }
+
+func (w *ConvergeSubscriptionWorker) SetApplicationReconciler(reconciler SiteApplicationReconciler) {
+	w.applicationReconciler = reconciler
+}
+
+func (w *ConvergeSubscriptionWorker) reconcileManagedDomains(ctx context.Context, domains []types.SubscriptionDomain) error {
+	var handoffErr error
+	for _, domain := range domains {
+		if domain.HostingMode != types.PHPHostingModeManaged {
+			continue
+		}
+		if w.applicationReconciler == nil {
+			return errors.New("managed PHP application reconciliation is not configured")
+		}
+		if err := w.applicationReconciler.ReconcileSiteApplication(ctx, domain.SiteID); err != nil {
+			handoffErr = errors.Join(handoffErr, fmt.Errorf("reconcile managed domain %q: %w", domain.Domain, err))
+		}
+	}
+	return handoffErr
+}
+
+func (w *ConvergeSubscriptionWorker) reconcileSuspendedManagedDomains(ctx context.Context, account types.EnsureSubscriptionAccountReq) error {
+	var domains []types.SubscriptionDomain
+	for _, domain := range account.Domains {
+		if account.State == "suspended" || domain.State == "suspended" {
+			domains = append(domains, domain)
+		}
+	}
+	return w.reconcileManagedDomains(ctx, domains)
+}
 
 type ConvergeApplicationWorker struct {
 	river.WorkerDefaults[ConvergeApplicationArgs]
@@ -774,26 +805,49 @@ func (w *ConvergeSubscriptionWorker) Work(ctx context.Context, job *river.Job[Co
 	if err != nil {
 		return err
 	}
+	// Shutdown is independent of provisioning: account, PHP, cron, or FTPS
+	// failures must not leave a revoked/suspended cache running.
+	if snapshot.Valkey != nil && snapshot.Valkey.State != "enabled" {
+		if err := convergeValkeyAllocation(ctx, w.db, w.agent, *snapshot.Valkey, snapshot.DesiredRevision, snapshot.ValkeyAllocationError); err != nil {
+			if snapshot.Account.State == "suspended" {
+				// Both shutdowns are independent. The suspended agent path
+				// stops FPM before setup and never publishes active hosting.
+				response, hostingErr := w.agent.EnsureSubscriptionAccount(ctx, snapshot.Account)
+				if hostingErr == nil && !response.OK {
+					hostingErr = fmt.Errorf("agent suspended hosting convergence failed: %s", response.Error)
+				}
+				err = errors.Join(err, hostingErr, w.reconcileSuspendedManagedDomains(ctx, snapshot.Account))
+			}
+			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0, snapshot.Account.State))
+		}
+		snapshot.Valkey = nil
+	}
 	runtimeCandidates, err := prepareRuntimeGenerations(ctx, w.db, snapshot.Account.Domains)
 	if err != nil {
 		return err
 	}
 	resp, err := w.agent.EnsureSubscriptionAccount(ctx, snapshot.Account)
 	if err != nil {
+		err = errors.Join(err, w.reconcileSuspendedManagedDomains(ctx, snapshot.Account))
 		_ = failRuntimeGenerations(ctx, w.db, runtimeCandidates, err.Error())
-		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0))
+		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0, snapshot.Account.State))
 	}
 	if !resp.OK {
 		err = fmt.Errorf("agent account convergence failed: %s", resp.Error)
+		err = errors.Join(err, w.reconcileSuspendedManagedDomains(ctx, snapshot.Account))
 		_ = failRuntimeGenerations(ctx, w.db, runtimeCandidates, err.Error())
-		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0))
+		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0, snapshot.Account.State))
+	}
+	if err = w.reconcileManagedDomains(ctx, snapshot.Account.Domains); err != nil {
+		_ = failRuntimeGenerations(ctx, w.db, runtimeCandidates, err.Error())
+		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0, snapshot.Account.State))
 	}
 	if err = activateRuntimeGenerations(ctx, w.db, runtimeCandidates); err != nil {
-		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0))
+		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0, snapshot.Account.State))
 	}
 	var result types.EnsureSubscriptionAccountResult
 	if err = json.Unmarshal(resp.Data, &result); err != nil {
-		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0))
+		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), 0, snapshot.Account.State))
 	}
 	resp, err = w.agent.ApplyScheduledTasks(ctx, types.ApplyScheduledTasksReq{
 		SubscriptionID: job.Args.SubscriptionID, Username: snapshot.Account.Username,
@@ -804,43 +858,30 @@ func (w *ConvergeSubscriptionWorker) Work(ctx context.Context, job *river.Job[Co
 			err = errors.New(resp.Error)
 		}
 		_, _ = w.db.ExecContext(ctx, `UPDATE scheduled_tasks SET convergence_status='failed',last_error=$2,updated_at=now() WHERE subscription_id=$1`, job.Args.SubscriptionID, err.Error())
-		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID))
+		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 	}
 	if _, err = w.db.ExecContext(ctx, `UPDATE scheduled_tasks SET convergence_status='in_sync',last_error='',updated_at=now() WHERE subscription_id=$1`, job.Args.SubscriptionID); err != nil {
-		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID))
+		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 	}
 	if snapshot.FTPS != nil {
 		if _, err = w.agent.EnsureFTPS(ctx, *snapshot.FTPS); err != nil {
 			_, _ = w.db.ExecContext(ctx, `UPDATE ftp_accounts SET convergence_status='failed',last_error=$1,updated_at=now()`, err.Error())
-			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID))
+			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 		}
 		if _, err = w.db.ExecContext(ctx, `UPDATE ftp_accounts SET convergence_status='in_sync',last_error='',updated_at=now()`); err != nil {
 			return err
 		}
 	}
 	if snapshot.Valkey != nil {
-		valkeyResult, valkeyErr := w.agent.EnsureValkey(ctx, *snapshot.Valkey)
-		if valkeyErr != nil {
-			_, _ = w.db.ExecContext(ctx, `UPDATE valkey_instances SET applied_state='failed',convergence_status='failed',last_error=$2,updated_at=now() WHERE subscription_id=$1`, job.Args.SubscriptionID, valkeyErr.Error())
-			return errors.Join(valkeyErr, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", valkeyErr.Error(), result.LinuxUID))
-		}
-		applied := "stopped"
-		if valkeyResult.Running {
-			applied = "running"
-		}
-		if snapshot.Valkey.Flush && !valkeyResult.Flushed {
-			err = errors.New("Valkey flush was not acknowledged by the agent")
-			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID))
-		}
-		if _, err = w.db.ExecContext(ctx, `UPDATE valkey_instances SET applied_state=$2,socket_path=$3,flush_requested=false,convergence_status='in_sync',last_error='',updated_at=now() WHERE subscription_id=$1`, job.Args.SubscriptionID, applied, valkeyResult.SocketPath); err != nil {
-			return err
+		if valkeyErr := convergeValkeyAllocation(ctx, w.db, w.agent, *snapshot.Valkey, snapshot.DesiredRevision, snapshot.ValkeyAllocationError); valkeyErr != nil {
+			return errors.Join(valkeyErr, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", valkeyErr.Error(), result.LinuxUID, snapshot.Account.State))
 		}
 	}
 	if len(snapshot.Git) > 0 {
 		gitAgent, ok := w.agent.(GitConvergenceAgent)
 		if !ok {
 			err = errors.New("Git convergence is not configured")
-			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID))
+			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 		}
 		for _, repository := range snapshot.Git {
 			var deploymentID sql.NullInt64
@@ -905,7 +946,7 @@ RETURNING deployment.id,deployment.action,deployment.revision,deployment.confirm
 				if deploymentID.Valid {
 					_, _ = w.db.ExecContext(ctx, `UPDATE git_deployments SET status='failed',output=$2,finished_at=now() WHERE id=$1`, deploymentID.Int64, truncateConvergenceOutput(gitErr.Error()))
 				}
-				return errors.Join(gitErr, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", gitErr.Error(), result.LinuxUID))
+				return errors.Join(gitErr, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", gitErr.Error(), result.LinuxUID, snapshot.Account.State))
 			}
 			conflicts, _ := json.Marshal(gitResult.Conflicts)
 			if err = persistGitWorkspaceResult(ctx, w.db, repository, gitResult); err != nil {
@@ -926,11 +967,11 @@ RETURNING deployment.id,deployment.action,deployment.revision,deployment.confirm
 		protectedAgent, ok := w.agent.(ProtectedDirectoryConvergenceAgent)
 		if !ok {
 			err = errors.New("protected-directory convergence is not configured")
-			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID))
+			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 		}
 		for _, siteConfig := range snapshot.ProtectedDirectories {
 			if _, protectedErr := protectedAgent.EnsureProtectedDirectories(ctx, siteConfig); protectedErr != nil {
-				return errors.Join(protectedErr, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", protectedErr.Error(), result.LinuxUID))
+				return errors.Join(protectedErr, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", protectedErr.Error(), result.LinuxUID, snapshot.Account.State))
 			}
 		}
 	}
@@ -938,7 +979,7 @@ RETURNING deployment.id,deployment.action,deployment.revision,deployment.confirm
 		// Mail is reconciled node-wide (one Stalwart config covers every
 		// hosted domain), so hand off to the configure_mail singleton.
 		if _, err = w.river.Insert(ctx, NewConfigureMailArgs(), nil); err != nil {
-			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID))
+			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 		}
 	}
 	for _, application := range snapshot.Applications {
@@ -947,10 +988,10 @@ RETURNING deployment.id,deployment.action,deployment.revision,deployment.confirm
 			Revision:             application.Revision,
 			SubscriptionRevision: snapshot.DesiredRevision,
 		}, nil); err != nil {
-			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID))
+			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 		}
 	}
-	return w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "in_sync", "", result.LinuxUID)
+	return w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "in_sync", "", result.LinuxUID, snapshot.Account.State)
 }
 
 func gitConvergenceAction(mode string, automatic, hasPendingDeployment bool) (runAgent, deploy bool) {
@@ -967,14 +1008,15 @@ func truncateConvergenceOutput(value string) string {
 }
 
 type convergenceSnapshot struct {
-	DesiredRevision      int64
-	Account              types.EnsureSubscriptionAccountReq
-	MailDomainCount      int
-	Applications         []applicationConvergence
-	FTPS                 *types.EnsureFTPSReq
-	Valkey               *types.EnsureValkeyReq
-	Git                  []types.EnsureGitRepositoryReq
-	ProtectedDirectories []types.EnsureProtectedDirectoriesReq
+	DesiredRevision       int64
+	Account               types.EnsureSubscriptionAccountReq
+	MailDomainCount       int
+	Applications          []applicationConvergence
+	FTPS                  *types.EnsureFTPSReq
+	Valkey                *types.EnsureValkeyReq
+	ValkeyAllocationError error
+	Git                   []types.EnsureGitRepositoryReq
+	ProtectedDirectories  []types.EnsureProtectedDirectoriesReq
 }
 
 type applicationConvergence struct {
@@ -990,7 +1032,7 @@ func effectiveApplicationState(accountState, desiredState string, permitted bool
 }
 
 func effectiveValkeyState(accountState, desiredState string, policy types.HostingPolicy) string {
-	if !policy.Permissions.Valkey || !policy.Valkey.Enabled {
+	if valkeyDisabledByPolicy(policy) {
 		return "disabled"
 	}
 	if desiredState != "enabled" {
@@ -1080,8 +1122,10 @@ CASE WHEN $2='active' AND site.desired_status='active' THEN 'active' ELSE 'suspe
 COALESCE(o.policy_patch,'{}'::jsonb),
 CASE WHEN site.tls_status='active' THEN site.tls_cert_path ELSE '' END,
 CASE WHEN site.tls_status='active' THEN site.tls_key_path ELSE '' END,
-(site.tls_status='active' AND site.desired_https_redirect)
+(site.tls_status='active' AND site.desired_https_redirect),site.php_version,site.desired_php_version,
+COALESCE(application.hosting_mode,'classic'),COALESCE(application.active_deployment_id,0)
 FROM sites site LEFT JOIN site_policy_overrides o ON o.site_id=site.id
+LEFT JOIN php_applications application ON application.site_id=site.id AND application.subscription_id=site.subscription_id
 WHERE site.subscription_id=$1 ORDER BY site.id`, subscriptionID, desiredState)
 	if err != nil {
 		return convergenceSnapshot{}, err
@@ -1089,7 +1133,7 @@ WHERE site.subscription_id=$1 ORDER BY site.id`, subscriptionID, desiredState)
 	for rows.Next() {
 		var domain types.SubscriptionDomain
 		var sitePatch []byte
-		if err := rows.Scan(&domain.SiteID, &domain.Domain, &domain.DocumentRoot, &domain.State, &sitePatch, &domain.TLSCertPath, &domain.TLSKeyPath, &domain.HTTPSRedirect); err != nil {
+		if err := rows.Scan(&domain.SiteID, &domain.Domain, &domain.DocumentRoot, &domain.State, &sitePatch, &domain.TLSCertPath, &domain.TLSKeyPath, &domain.HTTPSRedirect, &domain.CurrentPHPVersion, &domain.DesiredPHPVersion, &domain.HostingMode, &domain.ActiveDeploymentID); err != nil {
 			rows.Close()
 			return convergenceSnapshot{}, err
 		}
@@ -1194,7 +1238,18 @@ WHERE instance.subscription_id=$1`, subscriptionID).Scan(
 		&valkey.IdleTimeout, &valkey.CPUPercent, &valkey.ProcessLimit, &valkey.ACLHash, &valkey.Flush,
 	)
 	if err == nil {
-		valkey.State = effectiveValkeyState(desiredState, valkey.State, account.Policy)
+		var capacity, committed int
+		if err = tx.QueryRowContext(ctx, `SELECT valkey_capacity_mb FROM settings WHERE id`).Scan(&capacity); err != nil {
+			return convergenceSnapshot{}, err
+		}
+		headroom := -1
+		if capacity > 0 {
+			if err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(memory_mb),0) FROM valkey_instances WHERE desired_state='enabled' AND subscription_id<>$1`, subscriptionID).Scan(&committed); err != nil {
+				return convergenceSnapshot{}, err
+			}
+			headroom = max(0, capacity-committed)
+		}
+		valkey, snapshot.ValkeyAllocationError = boundedValkeyRequest(desiredState, valkey, account.Policy, headroom)
 		snapshot.Valkey = &valkey
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return convergenceSnapshot{}, err
@@ -1322,13 +1377,13 @@ func hasConfiguredPolicy(raw []byte) bool {
 	return json.Unmarshal(raw, &value) == nil && (len(value) > 1 || value["resources"] != nil)
 }
 
-func (w *ConvergeSubscriptionWorker) markAccountConvergence(ctx context.Context, subscriptionID, desiredRevision int64, status, message string, uid int) error {
+func (w *ConvergeSubscriptionWorker) markAccountConvergence(ctx context.Context, subscriptionID, desiredRevision int64, status, message string, uid int, effectiveState string) error {
 	tx, err := w.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	applied, err := updateAccountConvergenceTx(ctx, tx, subscriptionID, desiredRevision, status, message, uid)
+	applied, err := updateAccountConvergenceTx(ctx, tx, subscriptionID, desiredRevision, status, message, uid, effectiveState)
 	if err != nil {
 		return err
 	}
@@ -1347,10 +1402,13 @@ func (w *ConvergeSubscriptionWorker) markAccountConvergence(ctx context.Context,
 	return tx.Commit()
 }
 
-func updateAccountConvergenceTx(ctx context.Context, tx *sql.Tx, subscriptionID, desiredRevision int64, status, message string, uid int) (bool, error) {
+func updateAccountConvergenceTx(ctx context.Context, tx *sql.Tx, subscriptionID, desiredRevision int64, status, message string, uid int, effectiveState string) (bool, error) {
 	appliedState := "failed"
 	if status == "in_sync" {
-		appliedState = "active"
+		if effectiveState != "active" && effectiveState != "suspended" {
+			return false, fmt.Errorf("unsupported applied account state %q", effectiveState)
+		}
+		appliedState = effectiveState
 	}
 	result, err := tx.ExecContext(ctx, `UPDATE subscription_system_accounts
 SET linux_uid=CASE WHEN $5>0 THEN $5 ELSE linux_uid END,applied_state=$3,convergence_status=$4,
@@ -1395,7 +1453,16 @@ func prepareRuntimeGenerations(ctx context.Context, db *sql.DB, domains []types.
 	defer tx.Rollback()
 	candidates := make([]int64, 0, len(domains))
 	for _, domain := range domains {
-		policyJSON, marshalErr := json.Marshal(domain.Policy)
+		if domain.HostingMode == types.PHPHostingModeManaged {
+			continue
+		}
+		version, versionErr := domain.RuntimePHPVersion()
+		if versionErr != nil {
+			return nil, versionErr
+		}
+		runtimePolicy := domain.Policy
+		runtimePolicy.PHP.DefaultVersion = version
+		policyJSON, marshalErr := json.Marshal(runtimePolicy)
 		if marshalErr != nil {
 			return nil, marshalErr
 		}
@@ -1403,7 +1470,7 @@ func prepareRuntimeGenerations(ctx context.Context, db *sql.DB, domains []types.
 		if marshalErr != nil {
 			return nil, marshalErr
 		}
-		phpJSON, marshalErr := json.Marshal(domain.Policy.PHP)
+		phpJSON, marshalErr := json.Marshal(runtimePolicy.PHP)
 		if marshalErr != nil {
 			return nil, marshalErr
 		}
@@ -1420,7 +1487,7 @@ ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END,id DESC LIMIT 1`,
 site_id,generation,php_version,policy,nginx_sha256,php_sha256,status)
 SELECT $1,COALESCE(MAX(generation),0)+1,$2,$3,$4,$5,'candidate'
 FROM site_runtime_generations WHERE site_id=$1
-RETURNING id`, domain.SiteID, domain.Policy.PHP.DefaultVersion, policyJSON, nginxHash, phpHash).Scan(&id)
+RETURNING id`, domain.SiteID, version, policyJSON, nginxHash, phpHash).Scan(&id)
 		}
 		if err != nil {
 			return nil, err

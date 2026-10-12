@@ -138,7 +138,8 @@ func TestRevokedToolkitPermissionsConvergeServicesOff(t *testing.T) {
 	policy.Permissions.FTPS = true
 	policy.Access.FTPSEnabled = true
 	policy.Permissions.Valkey = true
-	policy.Valkey.Enabled = true
+	policy.Valkey = runnableValkeyPolicy().Valkey
+	policy.Resources = runnableValkeyPolicy().Resources
 	if !effectiveFTPSAccountEnabled(true, policy) {
 		t.Fatal("permitted active FTPS account was disabled")
 	}

@@ -227,7 +227,7 @@ func (p *BackupProvisioner) writeBackupArchive(ctx context.Context, writer *tar.
 		if walkErr != nil {
 			return walkErr
 		}
-		if entry.IsDir() {
+		if path == req.Docroot {
 			return nil
 		}
 		info, err := entry.Info()
@@ -241,6 +241,9 @@ func (p *BackupProvisioner) writeBackupArchive(ctx context.Context, writer *tar.
 		rel = filepath.ToSlash(filepath.Clean(rel))
 		if rel == "." || strings.HasPrefix(rel, "../") {
 			return fmt.Errorf("invalid backup path %q", path)
+		}
+		if entry.IsDir() {
+			return writer.WriteHeader(&tar.Header{Name: "files/" + rel + "/", Typeflag: tar.TypeDir, Mode: int64(info.Mode().Perm()), ModTime: time.Unix(0, 0).UTC()})
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -336,14 +339,11 @@ func (p *RestoreProvisioner) RestoreBackup(ctx context.Context, req types.Restor
 
 	parent := filepath.Dir(normalized.Docroot)
 	stamp := p.now().UTC().Format("20060102T150405Z")
-	tempDocroot := filepath.Join(parent, ".nakpanel-restore-"+stamp)
-	previousDocroot := filepath.Join(parent, ".nakpanel-before-restore-"+stamp)
-	if err := os.RemoveAll(tempDocroot); err != nil {
-		return types.RestoreBackupResult{}, fmt.Errorf("remove stale restore temp: %w", err)
-	}
-	if err := os.MkdirAll(tempDocroot, 0o755); err != nil {
+	tempDocroot, err := os.MkdirTemp(parent, ".nakpanel-restore-"+stamp+"-")
+	if err != nil {
 		return types.RestoreBackupResult{}, fmt.Errorf("create restore temp docroot: %w", err)
 	}
+	previousDocroot := filepath.Join(parent, strings.Replace(filepath.Base(tempDocroot), ".nakpanel-restore-", ".nakpanel-before-restore-", 1))
 	cleanupTemp := true
 	defer func() {
 		if cleanupTemp {
@@ -356,34 +356,56 @@ func (p *RestoreProvisioner) RestoreBackup(ctx context.Context, req types.Restor
 		return types.RestoreBackupResult{}, err
 	}
 
-	if _, err := os.Stat(normalized.Docroot); err == nil {
-		if err := os.Rename(normalized.Docroot, previousDocroot); err != nil {
-			return types.RestoreBackupResult{}, fmt.Errorf("move existing docroot aside: %w", err)
+	for _, database := range normalized.Databases {
+		if _, ok := dumps[database]; !ok {
+			return types.RestoreBackupResult{}, fmt.Errorf("backup archive is missing requested database dump %q", database)
 		}
-	} else if !os.IsNotExist(err) {
-		return types.RestoreBackupResult{}, fmt.Errorf("stat existing docroot: %w", err)
 	}
-	if err := os.Rename(tempDocroot, normalized.Docroot); err != nil {
-		return types.RestoreBackupResult{}, fmt.Errorf("publish restored docroot: %w", err)
+	if len(dumps) > 0 && p.restorer == nil {
+		return types.RestoreBackupResult{}, errors.New("database restorer is not configured")
 	}
-	cleanupTemp = false
-
 	if p.ownership != nil {
-		if err := p.ownership.ChownRecursive(ctx, normalized.Docroot, normalized.Username); err != nil {
+		if err := p.ownership.ChownRecursive(ctx, tempDocroot, normalized.Username); err != nil {
 			return types.RestoreBackupResult{}, fmt.Errorf("chown restored docroot: %w", err)
 		}
 	}
+	if err := secureHostedDocumentTree(tempDocroot); err != nil {
+		return types.RestoreBackupResult{}, fmt.Errorf("secure restored docroot: %w", err)
+	}
+	if os.Geteuid() != 0 {
+		if err := os.Chmod(tempDocroot, 0o750); err != nil {
+			return types.RestoreBackupResult{}, fmt.Errorf("chmod restored docroot: %w", err)
+		}
+	}
 
+	// SQL imports can partially commit. Never replace live files on an import
+	// failure, and explicitly report that the database may require recovery.
 	restoredDatabases := make([]string, 0, len(dumps))
 	for _, database := range sortedMapKeys(dumps) {
-		if p.restorer == nil {
-			return types.RestoreBackupResult{}, errors.New("database restorer is not configured")
-		}
 		if err := p.restorer.RestoreDatabase(ctx, database, dumps[database]); err != nil {
-			return types.RestoreBackupResult{}, fmt.Errorf("restore database %q: %w", database, err)
+			return types.RestoreBackupResult{}, fmt.Errorf("restore database %q (original files retained; database imports may have partially committed): %w", database, err)
 		}
 		restoredDatabases = append(restoredDatabases, database)
 	}
+
+	movedOriginal := false
+	if _, err := os.Lstat(normalized.Docroot); err == nil {
+		if err := os.Rename(normalized.Docroot, previousDocroot); err != nil {
+			return types.RestoreBackupResult{}, fmt.Errorf("move existing docroot aside (database imports already completed): %w", err)
+		}
+		movedOriginal = true
+	} else if !os.IsNotExist(err) {
+		return types.RestoreBackupResult{}, fmt.Errorf("stat existing docroot (database imports already completed): %w", err)
+	}
+	if err := os.Rename(tempDocroot, normalized.Docroot); err != nil {
+		if movedOriginal {
+			if rollbackErr := os.Rename(previousDocroot, normalized.Docroot); rollbackErr != nil {
+				return types.RestoreBackupResult{}, fmt.Errorf("publish restored docroot (database imports already completed; original files retained at %q): %w", previousDocroot, errors.Join(err, rollbackErr))
+			}
+		}
+		return types.RestoreBackupResult{}, fmt.Errorf("publish restored docroot (original files retained; database imports already completed): %w", err)
+	}
+	cleanupTemp = false
 
 	return types.RestoreBackupResult{
 		Domain:            normalized.Domain,
@@ -464,7 +486,7 @@ func extractRestoreArchive(archivePath string, docroot string, requestedDatabase
 			}
 			return 0, nil, fmt.Errorf("read backup tar: %w", err)
 		}
-		if header.Typeflag != tar.TypeReg {
+		if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeDir {
 			continue
 		}
 		cleanName := path.Clean(header.Name)
@@ -474,6 +496,16 @@ func extractRestoreArchive(archivePath string, docroot string, requestedDatabase
 			target, err := safeRestorePath(docroot, rel)
 			if err != nil {
 				return 0, nil, err
+			}
+			if header.Typeflag == tar.TypeDir {
+				mode := os.FileMode(header.Mode).Perm()
+				if mode == 0 {
+					mode = 0o755
+				}
+				if err := os.MkdirAll(target, mode); err != nil {
+					return 0, nil, fmt.Errorf("create restore directory %q: %w", target, err)
+				}
+				continue
 			}
 			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 				return 0, nil, fmt.Errorf("create restore file directory: %w", err)
@@ -494,7 +526,7 @@ func extractRestoreArchive(archivePath string, docroot string, requestedDatabase
 				return 0, nil, fmt.Errorf("close restore file %q: %w", target, err)
 			}
 			fileCount++
-		case strings.HasPrefix(cleanName, "databases/") && strings.HasSuffix(cleanName, ".sql"):
+		case header.Typeflag == tar.TypeReg && strings.HasPrefix(cleanName, "databases/") && strings.HasSuffix(cleanName, ".sql"):
 			name := strings.TrimSuffix(strings.TrimPrefix(cleanName, "databases/"), ".sql")
 			if !phase6DBIdentifierRE.MatchString(name) {
 				return 0, nil, fmt.Errorf("invalid database dump name %q", name)
@@ -1362,7 +1394,26 @@ func (p *ReconciliationProvisioner) ReconcileSystem(ctx context.Context, req typ
 	for _, siteReq := range req.Sites {
 		item := types.ReconcileResourceResult{ResourceType: "site", ResourceID: siteReq.SiteID, CustomerID: siteReq.CustomerID, SubscriptionID: siteReq.SubscriptionID, Name: siteReq.Domain, Outcome: "unchanged"}
 		var itemErr error
-		if siteReq.State != "" && p.runtime != nil {
+		if siteReq.HostingMode == types.PHPHostingModeManaged {
+			// Active managed runtime belongs to the PHP application reconciler.
+			if siteReq.State == "suspended" {
+				suspender, ok := p.sites.(interface {
+					suspendExistingSiteRuntime(context.Context, types.CreateSiteReq, string, string) error
+				})
+				if !ok {
+					itemErr = errors.New("managed PHP suspension is not configured")
+				} else {
+					item.Outcome = "repaired"
+					itemErr = suspender.suspendExistingSiteRuntime(ctx, types.CreateSiteReq{
+						SiteID: siteReq.SiteID, SubscriptionID: siteReq.SubscriptionID, Username: siteReq.Username,
+						Domain: siteReq.Domain, PHPVersion: siteReq.PHPVersion, SharedAccount: siteReq.SharedAccount,
+						Limits: siteReq.Limits,
+					}, siteReq.TLSCertPath, siteReq.TLSKeyPath)
+				}
+			} else if siteReq.State != "active" && siteReq.State != "" {
+				itemErr = errors.New("managed PHP reconciliation state is invalid")
+			}
+		} else if siteReq.State != "" && p.runtime != nil {
 			desiredPHP := siteReq.DesiredPHPVersion
 			if desiredPHP == "" {
 				desiredPHP = siteReq.PHPVersion

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -14,6 +15,46 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
+
+func TestPlanPreviewIgnoresPHPAllowedVersionOrderOnly(t *testing.T) {
+	for _, schema := range []int{1, 2, 3, 5} {
+		current := Plan{ID: 8, Name: "Business", LifecycleStatus: types.PlanLifecycleActive,
+			DefaultPHPVersion: "8.4", PHPAllowlist: "8.3,8.4,8.5",
+			HostingPolicy: types.HostingPolicy{SchemaVersion: schema,
+				PHP: types.HostingPHPPolicy{DefaultVersion: "8.4", AllowedVersions: []string{"8.3", "8.4", "8.5"}},
+			}}
+		candidate := current
+		candidate.PHPAllowlist = "8.5,8.4,8.3"
+		candidate.HostingPolicy.PHP.AllowedVersions = []string{"8.5", "8.4", "8.3"}
+		before, _ := json.Marshal(current)
+		candidateBefore, _ := json.Marshal(candidate)
+		changes, err := DiffPlanDefinitions(current, candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(changes) != 0 {
+			t.Errorf("schema %d unchanged version set produced changes: %+v", schema, changes)
+		}
+		after, _ := json.Marshal(current)
+		candidateAfter, _ := json.Marshal(candidate)
+		if string(before) != string(after) || string(candidateBefore) != string(candidateAfter) {
+			t.Fatal("preview modified stored policy snapshots")
+		}
+		candidate.HostingPolicy.PHP.AllowedVersions = []string{"8.4", "8.3"}
+		candidate.PHPAllowlist = "8.4,8.3"
+		candidate.HostingPolicy.Permissions.Mail = true
+		candidate.LifecycleStatus = types.PlanLifecycleRetired
+		changes, err = DiffPlanDefinitions(current, candidate)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range []string{"php.allowed_versions", "permissions.mail", "lifecycle_status"} {
+			if !slices.ContainsFunc(changes, func(change types.PlanFieldChange) bool { return change.Path == path }) {
+				t.Errorf("schema %d real change %q missing: %+v", schema, path, changes)
+			}
+		}
+	}
+}
 
 func TestListPlanRevisionsForUserIsProviderScoped(t *testing.T) {
 	db, mock, err := sqlmock.New()

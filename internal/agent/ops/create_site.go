@@ -409,16 +409,24 @@ func renderNginxPHPControls(plan SitePlan) string {
 }
 
 func RenderSuspendedNginxVHost(plan SitePlan) string {
+	return renderSuspendedNginxRuntimeVHost(plan, "", "")
+}
+
+func renderSuspendedNginxRuntimeVHost(plan SitePlan, certPath, keyPath string) string {
+	tls := ""
+	if certPath != "" && keyPath != "" {
+		tls = fmt.Sprintf("    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate %s;\n    ssl_certificate_key %s;\n", certPath, keyPath)
+	}
 	return fmt.Sprintf(`server {
     listen 80;
     listen [::]:80;
-    server_name %s;
+%s    server_name %s;
     location / {
         add_header Retry-After "3600" always;
         return 503;
 	    }
 }
-`, plan.Domain)
+`, tls, nginxServerNames(plan))
 }
 
 func RenderNginxRuntimeVHost(plan SitePlan, certPath, keyPath string, redirectHTTPS bool) string {
@@ -492,6 +500,20 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 	if err != nil {
 		return err
 	}
+	suspendedPublished := false
+	if state == "suspended" {
+		defer func() {
+			if err != nil {
+				_ = p.stopSitePHP(context.Background(), current)
+				if suspendedPublished {
+					_ = p.reloader.ReloadService(context.Background(), "nginx")
+				}
+			}
+		}()
+		if err = p.stopSitePHP(ctx, current); err != nil {
+			return err
+		}
+	}
 	if err := ensureSiteAuxiliaryIncludes(desired); err != nil {
 		return err
 	}
@@ -514,6 +536,9 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 		return err
 	}
 	defer func() {
+		if state == "suspended" {
+			return
+		}
 		if err == nil {
 			return
 		}
@@ -533,9 +558,10 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 	}
 
 	if state == "suspended" {
-		if err = writeFileAtomic(desired.NginxConfig, []byte(RenderSuspendedNginxVHost(desired)), sitePrivateRuntimeFileMode); err != nil {
+		if err = writeFileAtomic(desired.NginxConfig, []byte(renderSuspendedNginxRuntimeVHost(desired, req.TLSCertPath, req.TLSKeyPath)), sitePrivateRuntimeFileMode); err != nil {
 			return err
 		}
+		suspendedPublished = true
 		if err = p.reloader.ReloadService(ctx, "nginx"); err != nil {
 			return err
 		}
@@ -605,7 +631,7 @@ func (p *SiteProvisioner) SiteRuntimeDrift(_ context.Context, req types.ApplySit
 	phpPath := desired.PHPFPMConfig
 	absentPath := desired.PHPFPMConfig + ".suspended"
 	if state == "suspended" {
-		nginx = []byte(RenderSuspendedNginxVHost(desired))
+		nginx = []byte(renderSuspendedNginxRuntimeVHost(desired, req.TLSCertPath, req.TLSKeyPath))
 		phpPath, absentPath = absentPath, phpPath
 	}
 	nginxCurrent, err := os.ReadFile(desired.NginxConfig)
@@ -993,8 +1019,15 @@ func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteRe
 }
 
 func (p *SiteProvisioner) createSite(ctx context.Context, req types.CreateSiteReq, certPath, keyPath string, redirectHTTPS bool) (err error) {
+	return p.createSiteRuntime(ctx, req, certPath, keyPath, redirectHTTPS, "active")
+}
+
+func (p *SiteProvisioner) createSiteRuntime(ctx context.Context, req types.CreateSiteReq, certPath, keyPath string, redirectHTTPS bool, state string) (err error) {
 	siteConfigMutationMu.Lock()
 	defer siteConfigMutationMu.Unlock()
+	if state != "active" && state != "suspended" {
+		return errors.New("site runtime state must be active or suspended")
+	}
 	if (certPath == "") != (keyPath == "") {
 		return errors.New("certificate and key must be provided together")
 	}
@@ -1006,11 +1039,25 @@ func (p *SiteProvisioner) createSite(ctx context.Context, req types.CreateSiteRe
 	if err != nil {
 		return err
 	}
-	if p.users == nil {
-		return errors.New("system user manager is not configured")
-	}
 	if p.reloader == nil {
 		return errors.New("service reloader is not configured")
+	}
+	suspendedPublished := false
+	if state == "suspended" {
+		defer func() {
+			if err != nil {
+				_ = p.stopSitePHP(context.Background(), plan)
+				if suspendedPublished {
+					_ = p.reloader.ReloadService(context.Background(), "nginx")
+				}
+			}
+		}()
+		if err = p.stopSitePHP(ctx, plan); err != nil {
+			return err
+		}
+	}
+	if p.users == nil {
+		return errors.New("system user manager is not configured")
 	}
 
 	if err := p.users.EnsureUser(ctx, plan.Username); err != nil {
@@ -1076,7 +1123,7 @@ func (p *SiteProvisioner) createSite(ctx context.Context, req types.CreateSiteRe
 			}
 		}
 	}
-	snapshotPaths := []string{plan.NginxConfig, plan.NginxEnabled, plan.NginxPolicyConfig, plan.PHPFPMConfig}
+	snapshotPaths := []string{plan.NginxConfig, plan.NginxEnabled, plan.NginxPolicyConfig, plan.PHPFPMConfig, plan.PHPFPMConfig + ".suspended"}
 	if plan.PHPServiceUnit != "" {
 		snapshotPaths = append(snapshotPaths, plan.PHPServiceUnit)
 	}
@@ -1085,6 +1132,13 @@ func (p *SiteProvisioner) createSite(ctx context.Context, req types.CreateSiteRe
 		return err
 	}
 	defer func() {
+		if state == "suspended" {
+			// Suspension is fail-closed: never restore or restart an active runtime.
+			if err != nil {
+				_ = p.stopSitePHP(context.Background(), plan)
+			}
+			return
+		}
 		if err == nil {
 			return
 		}
@@ -1099,9 +1153,14 @@ func (p *SiteProvisioner) createSite(ctx context.Context, req types.CreateSiteRe
 			return fmt.Errorf("write placeholder index: %w", err)
 		}
 	}
-	if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxRuntimeVHost(plan, certPath, keyPath, redirectHTTPS)), sitePrivateRuntimeFileMode); err != nil {
+	nginxConfig := RenderNginxRuntimeVHost(plan, certPath, keyPath, redirectHTTPS)
+	if state == "suspended" {
+		nginxConfig = renderSuspendedNginxRuntimeVHost(plan, certPath, keyPath)
+	}
+	if err := writeFileAtomic(plan.NginxConfig, []byte(nginxConfig), sitePrivateRuntimeFileMode); err != nil {
 		return fmt.Errorf("write nginx site config: %w", err)
 	}
+	suspendedPublished = state == "suspended"
 	if zones := RenderNginxPolicyZones(plan); zones != "" {
 		if err := writeFileAtomic(plan.NginxPolicyConfig, []byte(zones), sitePrivateRuntimeFileMode); err != nil {
 			return fmt.Errorf("write nginx policy zones: %w", err)
@@ -1112,15 +1171,26 @@ func (p *SiteProvisioner) createSite(ctx context.Context, req types.CreateSiteRe
 	if err := ensureSymlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
 		return fmt.Errorf("enable nginx site: %w", err)
 	}
-	if err := writeFileAtomic(plan.PHPFPMConfig, []byte(RenderPHPFPMPool(plan)), sitePrivateRuntimeFileMode); err != nil {
+	phpConfigPath := plan.PHPFPMConfig
+	if state == "suspended" {
+		phpConfigPath += ".suspended"
+	}
+	if err := writeFileAtomic(phpConfigPath, []byte(RenderPHPFPMPool(plan)), sitePrivateRuntimeFileMode); err != nil {
 		return fmt.Errorf("write php-fpm pool config: %w", err)
+	}
+	if state == "suspended" {
+		if err := os.Remove(plan.PHPFPMConfig); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	} else if err := os.Remove(plan.PHPFPMConfig + ".suspended"); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 	if plan.PHPServiceUnit != "" {
 		if err := writeFileAtomic(plan.PHPServiceUnit, []byte(RenderPHPFPMUnit(plan)), 0o644); err != nil {
 			return fmt.Errorf("write dedicated php-fpm unit: %w", err)
 		}
 	}
-	if err := p.validateSiteConfig(ctx, plan, true); err != nil {
+	if err := p.validateSiteConfig(ctx, plan, state == "active"); err != nil {
 		return err
 	}
 	if p.ownership != nil {
@@ -1147,6 +1217,15 @@ func (p *SiteProvisioner) createSite(ctx context.Context, req types.CreateSiteRe
 		}
 	}
 
+	if state == "suspended" {
+		if err := p.reloader.ReloadService(ctx, "nginx"); err != nil {
+			return err
+		}
+		if err := p.stopSitePHP(ctx, plan); err != nil {
+			return err
+		}
+		return p.reloader.ReloadService(ctx, "nginx")
+	}
 	if err := p.reloader.ReloadService(ctx, plan.PHPServiceName); err != nil {
 		return err
 	}
@@ -1159,6 +1238,80 @@ func (p *SiteProvisioner) createSite(ctx context.Context, req types.CreateSiteRe
 		return err
 	}
 	return nil
+}
+
+func (p *SiteProvisioner) stopSitePHP(ctx context.Context, plan SitePlan) error {
+	if plan.SiteID <= 0 {
+		return p.reloader.ReloadService(ctx, plan.PHPServiceName)
+	}
+	controller, ok := p.reloader.(interface {
+		StopService(context.Context, string) error
+	})
+	if !ok {
+		return errors.New("dedicated PHP service controller is not configured")
+	}
+	return controller.StopService(ctx, plan.PHPServiceName)
+}
+
+func (p *SiteProvisioner) stopHostingPHP(ctx context.Context, req types.CreateSiteReq) error {
+	siteConfigMutationMu.Lock()
+	defer siteConfigMutationMu.Unlock()
+	plan, err := NewSitePlan(req, p.paths)
+	if err != nil {
+		return err
+	}
+	if p.reloader == nil {
+		return errors.New("service reloader is not configured")
+	}
+	return p.stopSitePHP(ctx, plan)
+}
+
+func (p *SiteProvisioner) suspendExistingSiteRuntime(ctx context.Context, req types.CreateSiteReq, certPath, keyPath string) (err error) {
+	siteConfigMutationMu.Lock()
+	defer siteConfigMutationMu.Unlock()
+	plan, err := NewSitePlan(req, p.paths)
+	if err != nil {
+		return err
+	}
+	if p.reloader == nil {
+		return errors.New("service reloader is not configured")
+	}
+	published := false
+	defer func() {
+		if err != nil {
+			_ = p.stopSitePHP(context.Background(), plan)
+			if published {
+				_ = p.reloader.ReloadService(context.Background(), "nginx")
+			}
+		}
+	}()
+	if err = p.stopSitePHP(ctx, plan); err != nil {
+		return err
+	}
+	if (certPath == "") != (keyPath == "") {
+		return errors.New("certificate and key must be provided together")
+	}
+	for _, dir := range []string{filepath.Dir(plan.NginxConfig), filepath.Dir(plan.NginxEnabled)} {
+		if err = os.MkdirAll(dir, 0o755); err != nil {
+			return err
+		}
+	}
+	// Managed PHP owns its pool, environment, and unit. Suspension only
+	// stops the service and publishes maintenance, leaving those intact.
+	if err = writeFileAtomic(plan.NginxConfig, []byte(renderSuspendedNginxRuntimeVHost(plan, certPath, keyPath)), sitePrivateRuntimeFileMode); err != nil {
+		return err
+	}
+	published = true
+	if err = ensureSymlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
+		return err
+	}
+	if err = p.validateSiteConfig(ctx, plan, false); err != nil {
+		return err
+	}
+	if err = p.reloader.ReloadService(ctx, "nginx"); err != nil {
+		return err
+	}
+	return p.reloader.ReloadService(ctx, "nginx")
 }
 
 func ensureSiteAuxiliaryIncludes(plan SitePlan) error {

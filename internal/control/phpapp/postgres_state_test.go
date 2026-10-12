@@ -91,6 +91,23 @@ UPDATE php_applications SET applied_revision=desired_revision,convergence_status
 	if processes != 4 {
 		t.Fatalf("two-site subscription processes = %d, want 4", processes)
 	}
+	if _, err = db.Exec(`UPDATE php_workers SET desired_state='stopped' WHERE id=16`); err != nil {
+		t.Fatal(err)
+	}
+	tx, err = db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	running, err := runningSubscriptionWorkerProcessesTx(context.Background(), tx, 4, 0)
+	_ = tx.Rollback()
+	if err != nil || running != 2 {
+		t.Fatalf("desired-running budget = %d err=%v, want 2", running, err)
+	}
+	startPolicy := managedPolicy()
+	startPolicy.Resources.MaxPHPWorkers = 3
+	if _, err = validateWorker(WorkerInput{Name: "new", Script: "artisan", Processes: 1, DesiredState: "running"}, startPolicy, running); err != nil {
+		t.Fatalf("stopped worker blocked a valid new start: %v", err)
+	}
 	if _, err = db.Exec(`INSERT INTO river_job VALUES('reconcile_php_application','running','{"application_id":9,"desired_revision":2}')`); err != nil {
 		t.Fatal(err)
 	}

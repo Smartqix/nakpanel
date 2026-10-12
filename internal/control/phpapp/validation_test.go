@@ -20,6 +20,20 @@ func managedPolicy() types.HostingPolicy {
 	}
 }
 
+func TestValidateWorkerAllowsStoppingAfterPolicyRevocation(t *testing.T) {
+	policy := managedPolicy()
+	policy.Permissions.PHPWorkers = false
+	policy.Resources.MaxPHPWorkers = 0
+	input := WorkerInput{Name: "queue", Script: "artisan", Processes: 2, DesiredState: "stopped"}
+	if _, err := validateWorker(input, policy, 10); err != nil {
+		t.Fatalf("stop rejected after revocation: %v", err)
+	}
+	input.DesiredState = "running"
+	if _, err := validateWorker(input, policy, 0); !errors.Is(err, quota.ErrExceeded) {
+		t.Fatalf("start with revoked permission = %v", err)
+	}
+}
+
 func TestValidateManagedConfigurationRejectsUnsafeOrUnentitledInput(t *testing.T) {
 	base := ConfigureApplicationInput{
 		HostingMode: types.PHPHostingModeManaged, PHPVersion: "8.4", RepositoryID: 9,

@@ -1285,14 +1285,28 @@ func (m *Manager) CreateSubscription(ctx context.Context, owner auth.SessionUser
 	if m.quotaAdmin == nil {
 		return types.SubscriptionSummary{}, errors.New("subscription store is not configured")
 	}
+	if req.NewCustomer != nil {
+		customer := *req.NewCustomer
+		customer.ResellerID = 0
+		if owner.Role == auth.RoleReseller {
+			scope, err := m.quotaAdmin.ProviderScopeForUser(ctx, owner)
+			if err != nil {
+				return types.SubscriptionSummary{}, err
+			}
+			customer.ResellerID = scope.ResellerID
+		}
+		req.NewCustomer = &customer
+	}
 	if owner.Role == auth.RoleReseller {
 		if req.ID > 0 {
 			if err := m.canManageSubscription(ctx, owner, req.ID); err != nil {
 				return types.SubscriptionSummary{}, err
 			}
 		}
-		if err := m.canManageCustomer(ctx, owner, req.CustomerID); err != nil {
-			return types.SubscriptionSummary{}, err
+		if req.NewCustomer == nil {
+			if err := m.canManageCustomer(ctx, owner, req.CustomerID); err != nil {
+				return types.SubscriptionSummary{}, err
+			}
 		}
 		if req.PlanID > 0 {
 			if err := m.canManagePlan(ctx, owner, req.PlanID); err != nil {

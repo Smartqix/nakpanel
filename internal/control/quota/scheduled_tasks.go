@@ -59,12 +59,14 @@ func (w *SweepScheduledTasksWorker) Work(ctx context.Context, _ *river.Job[Sweep
 	}
 	rows, err := w.db.QueryContext(ctx, `SELECT task.id,task.subscription_id,task.schedule,task.timezone
 FROM scheduled_tasks task
+JOIN sites site ON site.id=task.site_id AND site.subscription_id=task.subscription_id
 JOIN subscriptions subscription ON subscription.id=task.subscription_id
 JOIN customers customer ON customer.id=subscription.customer_id
 LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
 LEFT JOIN reseller_subscriptions reseller_subscription
   ON reseller_subscription.reseller_id=reseller.id AND reseller_subscription.status='active'
 WHERE task.enabled AND task.site_id IS NOT NULL
+	AND site.desired_status='active'
   AND subscription.status='active' AND customer.status='active'
   AND (customer.reseller_id IS NULL OR (reseller.status='active' AND reseller_subscription.id IS NOT NULL))
 ORDER BY task.id`)
@@ -186,6 +188,12 @@ func (w *RunScheduledTaskWorker) Work(ctx context.Context, job *river.Job[RunSch
 	}
 	req, subscriptionID, taskName, scheduledFor, err := loadScheduledTaskRun(ctx, w.db, job.Args.RunID)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			_, updateErr := w.db.ExecContext(ctx, `UPDATE scheduled_task_runs
+SET status='failed',output='Scheduled task is no longer eligible to run.',finished_at=now()
+WHERE id=$1 AND status IN ('pending','running')`, job.Args.RunID)
+			return updateErr
+		}
 		if errors.Is(err, ErrExceeded) {
 			_, updateErr := w.db.ExecContext(ctx, `UPDATE scheduled_task_runs
 SET status='failed',output='Scheduled tasks are disabled by the subscription policy.',finished_at=now()
@@ -233,6 +241,7 @@ JOIN subscription_system_accounts account ON account.subscription_id=task.subscr
 JOIN subscriptions subscription ON subscription.id=task.subscription_id
 JOIN customers customer ON customer.id=subscription.customer_id
 WHERE run.id=$1 AND run.status IN ('pending','running') AND task.enabled
+	AND site.desired_status='active'
   AND subscription.status='active' AND customer.status='active'
   AND (customer.reseller_id IS NULL OR EXISTS (
       SELECT 1 FROM reseller_accounts reseller

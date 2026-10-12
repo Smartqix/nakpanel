@@ -12,6 +12,48 @@ import (
 	"testing"
 )
 
+func TestSupportGitStatusRequiresAdminAndMatchingCustomer(t *testing.T) {
+	data := dashboard.Data{Sites: []dashboard.Site{{ID: 58, SubscriptionID: 39, CustomerID: 36}}, SubscriptionServices: dashboard.SubscriptionServicesData{Git: []types.GitRepository{{ID: 4, SiteID: 58}}}}
+	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleClient, auth.RoleReseller} {
+		handler, _ := newTestHandlerWithOptions(t, role, ServerOptions{DashboardReader: &fakeDashboardReader{data: data}})
+		email, password := "admin@nakpanel.test", "NakpanelAdmin!2026"
+		if role == auth.RoleClient {
+			email, password = "client@nakpanel.test", "NakpanelClient!2026"
+		}
+		if role == auth.RoleReseller {
+			email, password = "reseller@nakpanel.test", "NakpanelReseller!2026"
+		}
+		cookie := login(t, handler, email, password)
+		for _, customer := range []string{"36", "37", "0", "bad"} {
+			path := "/support/customers/" + customer + "/sites/58/git/status?support_customer_id=36"
+			r := httptest.NewRequest("GET", path, nil)
+			r.AddCookie(cookie)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, r)
+			want := 404
+			if role == auth.RoleAdmin && customer == "36" {
+				want = 200
+			}
+			if w.Code != want {
+				t.Errorf("%s %s status=%d, want %d", role, path, w.Code, want)
+				continue
+			}
+			if want == 200 {
+				var body struct {
+					SiteID     int64 `json:"site_id"`
+					Repository types.GitRepository
+				}
+				if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
+					t.Fatal(err)
+				}
+				if body.SiteID != 58 || body.Repository.ID != 4 {
+					t.Fatalf("unexpected JSON: %s", w.Body.String())
+				}
+			}
+		}
+	}
+}
+
 type fakeGitWorkspace struct {
 	fakeDomainManager
 	calls              int

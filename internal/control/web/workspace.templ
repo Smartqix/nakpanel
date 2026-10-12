@@ -61,7 +61,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 	<aside class="np-routed-side" data-np-sidebar>
 		<div class="np-side-brand">
 			<span class="np-brand-mark" aria-hidden="true">n</span>
-			<span class="np-side-brand-text"><strong>nakpanel</strong><small>ns1.nakroteck.com</small></span>
+			<span class="np-side-brand-text"><strong>nakpanel</strong><small>{ panelHostname(ctx) }</small></span>
 			<span class={ "np-side-health " + attentionHealthClass(attention) } title={ attentionHealthLabel(attention) }>
 				<span class="np-side-health-dot" aria-hidden="true"></span>
 				<span class="np-sr-only">{ attentionHealthLabel(attention) }</span>

@@ -977,8 +977,10 @@ func selectReconcileSites(ctx context.Context, tx *sql.Tx) ([]types.ReconcileSit
 	     AND (customer.reseller_id IS NULL OR (reseller.status='active' AND reseller_sub.id IS NOT NULL)) THEN 'active' ELSE 'suspended' END,
 	   CASE WHEN s.tls_status='active' THEN s.desired_https_redirect ELSE false END,
 	   CASE WHEN s.tls_status='active' THEN s.tls_cert_path ELSE '' END,
-	   CASE WHEN s.tls_status='active' THEN s.tls_key_path ELSE '' END
+	   CASE WHEN s.tls_status='active' THEN s.tls_key_path ELSE '' END,
+	   COALESCE(application.hosting_mode,'classic'),COALESCE(application.active_deployment_id,0)
 FROM sites s JOIN subscriptions sub ON sub.id=s.subscription_id JOIN customers customer ON customer.id=sub.customer_id
+LEFT JOIN php_applications application ON application.site_id=s.id AND application.subscription_id=s.subscription_id
 LEFT JOIN webmail_hosts w ON w.site_id = s.id
 LEFT JOIN dns_zones d ON d.site_id = s.id
 LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
@@ -992,7 +994,7 @@ ORDER BY s.domain`)
 	for rows.Next() {
 		var site types.ReconcileSiteReq
 		var documentRoot string
-		if err := rows.Scan(&site.SiteID, &site.CustomerID, &site.SubscriptionID, &site.Username, &site.Domain, &documentRoot, &site.PHPVersion, &site.DesiredPHPVersion, &site.EnableWebmail, &site.EnableDNS, &site.DNSZoneID, &site.DNSSerial, &site.Address, &site.State, &site.HTTPSRedirect, &site.TLSCertPath, &site.TLSKeyPath); err != nil {
+		if err := rows.Scan(&site.SiteID, &site.CustomerID, &site.SubscriptionID, &site.Username, &site.Domain, &documentRoot, &site.PHPVersion, &site.DesiredPHPVersion, &site.EnableWebmail, &site.EnableDNS, &site.DNSZoneID, &site.DNSSerial, &site.Address, &site.State, &site.HTTPSRedirect, &site.TLSCertPath, &site.TLSKeyPath, &site.HostingMode, &site.ActiveDeploymentID); err != nil {
 			return nil, err
 		}
 		site.SharedAccount = controlquota.IsSharedSiteDocumentRoot(site.Username, site.Domain, documentRoot)

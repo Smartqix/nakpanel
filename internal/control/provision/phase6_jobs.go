@@ -390,9 +390,13 @@ func (w *ReconcileSystemWorker) Work(ctx context.Context, job *river.Job[Reconci
 	if err := decodeAgentResult(resp, &result); err != nil {
 		return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, nil, err))
 	}
-	if result.Failed > 0 {
-		err := fmt.Errorf("reconciliation reported %d failed resources", result.Failed)
-		return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, &result, err))
+	if w.applicationReconciler == nil {
+		for _, site := range args.Sites {
+			if site.HostingMode == types.PHPHostingModeManaged {
+				err := errors.New("managed PHP application reconciliation is not configured")
+				return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, &result, err))
+			}
+		}
 	}
 	if w.applicationReconciler != nil {
 		for _, site := range args.Sites {
@@ -401,6 +405,10 @@ func (w *ReconcileSystemWorker) Work(ctx context.Context, job *river.Job[Reconci
 				return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, &result, err))
 			}
 		}
+	}
+	if result.Failed > 0 {
+		err := fmt.Errorf("reconciliation reported %d failed resources", result.Failed)
+		return errors.Join(err, w.markReconcileFailed(ctx, args.RunID, err.Error()), w.reportReconcile(ctx, args, &result, err))
 	}
 	if w.store != nil {
 		if err := w.store.MarkReconcileActive(ctx, args.RunID, result); err != nil {

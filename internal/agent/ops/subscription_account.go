@@ -553,6 +553,25 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 	if err := ValidateSubscriptionAccountRequest(req, p.homeRoot); err != nil {
 		return types.EnsureSubscriptionAccountResult{}, err
 	}
+	if p.sites != nil {
+		var shutdownErr error
+		for _, domain := range req.Domains {
+			if req.State != "suspended" && domain.State != "suspended" {
+				continue
+			}
+			domain.State = "suspended"
+			version, err := domain.RuntimePHPVersion()
+			if err != nil {
+				return types.EnsureSubscriptionAccountResult{}, err
+			}
+			if err := p.sites.stopHostingPHP(ctx, types.CreateSiteReq{SiteID: domain.SiteID, Username: req.Username, Domain: domain.Domain, PHPVersion: version, SharedAccount: true}); err != nil {
+				shutdownErr = errors.Join(shutdownErr, fmt.Errorf("stop domain %q before account setup: %w", domain.Domain, err))
+			}
+		}
+		if shutdownErr != nil {
+			return types.EnsureSubscriptionAccountResult{}, shutdownErr
+		}
+	}
 	if p.users == nil {
 		return types.EnsureSubscriptionAccountResult{}, errors.New("system user manager is not configured")
 	}
@@ -571,7 +590,11 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 		}
 	}
 	for _, domain := range req.Domains {
-		if err := ensureManagedDirectory(p.homeRoot, domain.DocumentRoot, 0o750); err != nil {
+		path, mode := domain.DocumentRoot, os.FileMode(0o750)
+		if domain.HostingMode == types.PHPHostingModeManaged {
+			path, mode = filepath.Dir(domain.DocumentRoot), 0o711
+		}
+		if err := ensureManagedDirectory(p.homeRoot, path, mode); err != nil {
 			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("create document root %q: %w", domain.DocumentRoot, err)
 		}
 	}
@@ -579,8 +602,32 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 		return types.EnsureSubscriptionAccountResult{}, err
 	}
 	if p.ownership != nil {
-		if err := p.ownership.ChownRecursive(ctx, req.HomePath, req.Username); err != nil {
-			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("set account ownership: %w", err)
+		writable := []string{filepath.Join(req.HomePath, ".wp-cli", "cache"), filepath.Join(req.HomePath, ".cache", "composer"), filepath.Join(req.HomePath, ".config", "composer")}
+		for _, domain := range req.Domains {
+			if domain.HostingMode != types.PHPHostingModeManaged {
+				writable = append(writable, domain.DocumentRoot)
+				continue
+			}
+			shared := filepath.Join(filepath.Dir(domain.DocumentRoot), ".nakpanel", "shared")
+			if _, err := os.Lstat(shared); errors.Is(err, os.ErrNotExist) {
+				continue
+			} else if err != nil {
+				return types.EnsureSubscriptionAccountResult{}, err
+			}
+			writable = append(writable, shared)
+		}
+		for _, path := range writable {
+			if err := ensureNoSymlinkComponents(p.homeRoot, path); err != nil {
+				return types.EnsureSubscriptionAccountResult{}, err
+			}
+			if err := p.ownership.ChownRecursive(ctx, path, req.Username); err != nil {
+				return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("set writable tree ownership: %w", err)
+			}
+		}
+	}
+	for _, parent := range []string{filepath.Join(req.HomePath, ".wp-cli"), filepath.Join(req.HomePath, ".cache"), filepath.Join(req.HomePath, ".config")} {
+		if err := secureDirectoryAnchor(parent, 0, 0, 0o711); err != nil {
+			return types.EnsureSubscriptionAccountResult{}, err
 		}
 	}
 	for _, anchor := range []string{req.HomePath, filepath.Join(req.HomePath, "domains")} {
@@ -604,24 +651,36 @@ func (p *SubscriptionAccountProvisioner) EnsureSubscriptionAccount(ctx context.C
 	}
 	if p.sites != nil {
 		for _, domain := range req.Domains {
-			phpVersion := domain.Policy.PHP.DefaultVersion
-			if phpVersion == "" {
-				phpVersion = "8.3"
+			state := domain.State
+			if req.State == "suspended" {
+				state = "suspended"
 			}
-			if err := p.sites.createSite(ctx, types.CreateSiteReq{
+			domain.State = state
+			if domain.HostingMode == types.PHPHostingModeManaged && state == "active" {
+				continue
+			}
+			phpVersion, err := domain.RuntimePHPVersion()
+			if err != nil {
+				return types.EnsureSubscriptionAccountResult{}, err
+			}
+			if domain.HostingMode == types.PHPHostingModeManaged {
+				if err := p.sites.suspendExistingSiteRuntime(ctx, types.CreateSiteReq{SiteID: domain.SiteID, Username: req.Username, Domain: domain.Domain, PHPVersion: phpVersion, SharedAccount: true}, domain.TLSCertPath, domain.TLSKeyPath); err != nil {
+					return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("suspend managed domain %q: %w", domain.Domain, err)
+				}
+				continue
+			}
+			if err := p.sites.createSiteRuntime(ctx, types.CreateSiteReq{
 				SiteID: domain.SiteID, SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain.Domain,
 				PHPVersion: phpVersion, SharedAccount: true, Limits: siteLimitsFromPolicy(domain.Policy),
-			}, domain.TLSCertPath, domain.TLSKeyPath, domain.HTTPSRedirect); err != nil {
+			}, domain.TLSCertPath, domain.TLSKeyPath, domain.HTTPSRedirect, state); err != nil {
 				return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("converge domain %q: %w", domain.Domain, err)
-			}
-			if req.State == "suspended" || domain.State == "suspended" {
-				if err := p.sites.SetHostingState(ctx, types.SetHostingStateReq{SiteID: domain.SiteID, Username: req.Username, Domain: domain.Domain, PHPVersion: phpVersion, State: "suspended"}); err != nil {
-					return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("suspend domain %q: %w", domain.Domain, err)
-				}
 			}
 		}
 	}
 	for _, domain := range req.Domains {
+		if domain.HostingMode == types.PHPHostingModeManaged {
+			continue
+		}
 		if err := secureHostedDocumentTree(domain.DocumentRoot); err != nil {
 			return types.EnsureSubscriptionAccountResult{}, fmt.Errorf("secure document root %q: %w", domain.DocumentRoot, err)
 		}
@@ -715,6 +774,26 @@ func ValidateSubscriptionAccountRequest(req types.EnsureSubscriptionAccountReq, 
 		return fmt.Errorf("hosting policy: %w", err)
 	}
 	for _, domain := range req.Domains {
+		if domain.HostingMode != "" && domain.HostingMode != types.PHPHostingModeClassic && domain.HostingMode != types.PHPHostingModeManaged {
+			return fmt.Errorf("unsupported hosting mode %q", domain.HostingMode)
+		}
+		if domain.ActiveDeploymentID < 0 {
+			return errors.New("active deployment id cannot be negative")
+		}
+		if domain.State != "active" && domain.State != "suspended" {
+			return fmt.Errorf("unsupported domain state %q", domain.State)
+		}
+		if err := policy.Validate(domain.Policy); err != nil {
+			return fmt.Errorf("domain %q policy: %w", domain.Domain, err)
+		}
+		if req.State == "suspended" {
+			domain.State = "suspended"
+		}
+		if domain.HostingMode != types.PHPHostingModeManaged || domain.State == "suspended" {
+			if _, err := domain.RuntimePHPVersion(); err != nil {
+				return err
+			}
+		}
 		if site.ValidateDomain(domain.Domain) != nil {
 			return fmt.Errorf("unsafe domain %q", domain.Domain)
 		}

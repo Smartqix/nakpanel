@@ -40,12 +40,17 @@ func TestEnqueueSubscriptionConvergenceAdvancesDurableRevision(t *testing.T) {
 
 func TestAccountConvergenceOnlyAcknowledgesLoadedRevision(t *testing.T) {
 	for _, test := range []struct {
-		name     string
-		affected int64
-		want     bool
+		name         string
+		affected     int64
+		want         bool
+		state        string
+		status       string
+		appliedState string
 	}{
-		{name: "exact snapshot", affected: 1, want: true},
-		{name: "newer desired state", affected: 0, want: false},
+		{name: "exact suspended snapshot", affected: 1, want: true, state: "suspended", status: "in_sync", appliedState: "suspended"},
+		{name: "exact active snapshot", affected: 1, want: true, state: "active", status: "in_sync", appliedState: "active"},
+		{name: "failed suspended snapshot", affected: 1, want: true, state: "suspended", status: "failed", appliedState: "failed"},
+		{name: "newer desired state", affected: 0, want: false, state: "suspended", status: "in_sync", appliedState: "suspended"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			db, mock, err := sqlmock.New()
@@ -60,9 +65,9 @@ func TestAccountConvergenceOnlyAcknowledgesLoadedRevision(t *testing.T) {
 				t.Fatal(err)
 			}
 			mock.ExpectExec(`UPDATE subscription_system_accounts\s+SET linux_uid=.*desired_revision=\$2`).
-				WithArgs(int64(42), int64(7), "active", "in_sync", 1001, "").
+				WithArgs(int64(42), int64(7), test.appliedState, test.status, 1001, "").
 				WillReturnResult(sqlmock.NewResult(0, test.affected))
-			applied, err := updateAccountConvergenceTx(context.Background(), tx, 42, 7, "in_sync", "", 1001)
+			applied, err := updateAccountConvergenceTx(context.Background(), tx, 42, 7, test.status, "", 1001, test.state)
 			if err != nil {
 				t.Fatal(err)
 			}

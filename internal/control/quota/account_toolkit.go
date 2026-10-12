@@ -411,6 +411,7 @@ JOIN subscriptions subscription ON subscription.id=task.subscription_id
 JOIN customers customer ON customer.id=subscription.customer_id
 LEFT JOIN sites site ON site.id=task.site_id
 WHERE task.id=$1 AND task.subscription_id=$2 AND task.enabled
+	AND site.desired_status='active'
   AND subscription.status='active' AND customer.status='active'
   AND (customer.reseller_id IS NULL OR EXISTS (
       SELECT 1 FROM reseller_accounts reseller

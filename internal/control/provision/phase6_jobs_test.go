@@ -100,6 +100,16 @@ func TestReconcileWorkerRefreshesCurrentIntentBeforeAgentDispatch(t *testing.T) 
 	}
 }
 
+func TestManagedSystemReconciliationRequiresOwnerBeforeAcknowledgement(t *testing.T) {
+	agent := &recordingReconcileAgent{}
+	store := &refreshingPhase6StatusStore{refreshed: ReconcileSystemArgs{Sites: []types.ReconcileSiteReq{{SiteID: 7, State: "active", HostingMode: types.PHPHostingModeManaged}}}}
+	w := NewReconcileSystemWorker(agent, store)
+	err := w.Work(context.Background(), &river.Job[ReconcileSystemArgs]{Args: ReconcileSystemArgs{RunID: 42}})
+	if err == nil || store.activeID != 0 {
+		t.Fatalf("managed run acknowledged without owner: active=%d err=%v", store.activeID, err)
+	}
+}
+
 type successfulBackupAgent struct{}
 
 func (successfulBackupAgent) CreateBackup(context.Context, types.CreateBackupReq) (types.Response, error) {

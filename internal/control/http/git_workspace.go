@@ -49,6 +49,15 @@ func (s *Server) gitWorkspaceTarget(w http.ResponseWriter, r *http.Request) (aut
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
 		return user, dashboard.Site{}, dashboard.Data{}, false
 	}
+	var supportCustomerID int64
+	if raw := r.PathValue("customerID"); raw != "" {
+		var err error
+		supportCustomerID, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil || supportCustomerID <= 0 || user.Role != auth.RoleAdmin {
+			http.NotFound(w, r)
+			return user, dashboard.Site{}, dashboard.Data{}, false
+		}
+	}
 	id, err := parsePositivePathID(r, "id")
 	if err != nil {
 		http.NotFound(w, r)
@@ -61,6 +70,9 @@ func (s *Server) gitWorkspaceTarget(w http.ResponseWriter, r *http.Request) (aut
 	}
 	for _, site := range data.Sites {
 		if site.ID == id {
+			if supportCustomerID > 0 && site.CustomerID != supportCustomerID {
+				break
+			}
 			if !databaseSupportScopeAllowed(r, user, site.CustomerID) {
 				break
 			}

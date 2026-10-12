@@ -115,6 +115,9 @@ func DiffPlanDefinitions(current, candidate Plan) ([]types.PlanFieldChange, erro
 	appendChange("resources.disk_warning_percent", "Disk warning threshold", strconv.Itoa(current.DiskWarningPercent), strconv.Itoa(candidate.DiskWarningPercent), types.PlanEnforcementMeasuredLimit)
 	appendChange("resources.traffic_warning_percent", "Traffic warning threshold", strconv.Itoa(current.TrafficWarningPercent), strconv.Itoa(candidate.TrafficWarningPercent), types.PlanEnforcementMeasuredLimit)
 	for path, field := range contract {
+		if path == "php.allowed_versions" && samePHPVersionSet(current.HostingPolicy.PHP.AllowedVersions, candidate.HostingPolicy.PHP.AllowedVersions) {
+			continue
+		}
 		oldValue := formatPlanContractValue(oldValues[path])
 		newValue := formatPlanContractValue(newValues[path])
 		if oldValue == newValue {
@@ -126,6 +129,25 @@ func DiffPlanDefinitions(current, candidate Plan) ([]types.PlanFieldChange, erro
 	}
 	sort.Slice(changes, func(i, j int) bool { return changes[i].Path < changes[j].Path })
 	return changes, nil
+}
+
+func samePHPVersionSet(current, candidate []string) bool {
+	versions := make(map[string]bool, len(current))
+	for _, version := range current {
+		versions[version] = false
+	}
+	for _, version := range candidate {
+		if _, exists := versions[version]; !exists {
+			return false
+		}
+		versions[version] = true
+	}
+	for _, present := range versions {
+		if !present {
+			return false
+		}
+	}
+	return true
 }
 
 func formatNullablePrice(value sql.NullInt64) string {

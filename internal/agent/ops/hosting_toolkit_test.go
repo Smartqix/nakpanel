@@ -708,7 +708,7 @@ func TestRenderValkeyUnitAllowsOnlyPodmanStateAndSocketWrites(t *testing.T) {
 		"PrivateTmp=yes",
 		"ProtectSystem=strict",
 		"ReadWritePaths=/var/lib/containers -/run/containers -/run/libpod -/run/lock -/run/crun /run/nakpanel/valkey/sub-12",
-		"MemoryMax=96M",
+		"MemoryMax=160M",
 	} {
 		if !strings.Contains(rendered, marker) {
 			t.Fatalf("Valkey unit missing %q:\n%s", marker, rendered)
@@ -716,6 +716,36 @@ func TestRenderValkeyUnitAllowsOnlyPodmanStateAndSocketWrites(t *testing.T) {
 	}
 	if strings.Contains(rendered, "ExecStartPre=") {
 		t.Fatalf("Valkey unit must not rely on ownership changes that systemd reapplies before ExecStart:\n%s", rendered)
+	}
+}
+
+func TestRenderValkeyUnitStopIgnoresOnlyMissingContainer(t *testing.T) {
+	rendered := renderValkeyUnit(types.EnsureValkeyReq{SubscriptionID: 12, MemoryMB: 64, CPUPercent: 25, ProcessLimit: 64}, "1200", "1200", "/etc/nakpanel/valkey/sub-12", "/run/nakpanel/valkey/sub-12", "valkey@example")
+	if !strings.Contains(rendered, "ExecStop=/usr/bin/podman stop --ignore --time 10 nakpanel-valkey-sub-12\n") {
+		t.Fatalf("Valkey stop must tolerate only an already removed container:\n%s", rendered)
+	}
+	for _, masked := range []string{"ExecStop=-", "SuccessExitStatus=", "RestartPreventExitStatus="} {
+		if strings.Contains(rendered, masked) {
+			t.Fatalf("Valkey unit must preserve genuine Podman failures, found %q", masked)
+		}
+	}
+	if !strings.Contains(rendered, "Restart=on-failure\n") {
+		t.Fatal("Valkey failed starts must remain restartable")
+	}
+}
+
+func TestRenderValkeyUnitBoundsContainerSeparatelyFromController(t *testing.T) {
+	for _, processes := range []int{16, 128} {
+		rendered := renderValkeyUnit(types.EnsureValkeyReq{SubscriptionID: 12, MemoryMB: 64, CPUPercent: 10, ProcessLimit: processes}, "1200", "1200", "/etc/nakpanel/valkey/sub-12", "/run/nakpanel/valkey/sub-12", "valkey@example")
+		for _, marker := range []string{
+			fmt.Sprintf("--pids-limit %d", processes),
+			"--memory 96m", "--cpus 0.10", "MemoryMax=160M", "CPUQuota=10%",
+			fmt.Sprintf("TasksMax=%d\n", max(128, processes+64)),
+		} {
+			if !strings.Contains(rendered, marker) {
+				t.Fatalf("Valkey unit missing isolated workload limit or bounded controller overhead %q:\n%s", marker, rendered)
+			}
+		}
 	}
 }
 

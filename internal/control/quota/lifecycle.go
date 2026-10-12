@@ -179,11 +179,31 @@ func (w *SetHostingStateWorker) Work(ctx context.Context, job *river.Job[SetHost
 		if err != nil {
 			return err
 		}
+		managedActive := false
+		if state == "active" && w.db != nil {
+			var hostingMode string
+			if err := w.db.QueryRowContext(ctx, `SELECT COALESCE((SELECT hosting_mode FROM php_applications WHERE site_id=$1),'classic')`, job.Args.SiteID).Scan(&hostingMode); err != nil {
+				return err
+			}
+			managedActive = hostingMode == string(types.PHPHostingModeManaged)
+		}
 		var resp types.Response
 		var agentErr error
 		runtimeReq := types.ApplySiteRuntimeReq{}
 		runtimeAgent, useRuntime := w.agent.(SiteRuntimeAgent)
-		if useRuntime && w.db != nil {
+		if managedActive {
+			// The managed owner preserves release, environment, and FPM unit state.
+			useRuntime = false
+			if w.applicationReconciler == nil {
+				agentErr = errors.New("managed PHP application reconciliation is not configured")
+			} else {
+				_, agentErr = w.db.ExecContext(ctx, `UPDATE sites SET settings_status='pending',settings_error='',last_error='',updated_at=now() WHERE id=$1`, job.Args.SiteID)
+				if agentErr == nil {
+					agentErr = w.applicationReconciler.ReconcileSiteApplication(ctx, job.Args.SiteID)
+				}
+			}
+			resp.OK = agentErr == nil
+		} else if useRuntime && w.db != nil {
 			runtimeReq, agentErr = w.siteRuntimeRequest(ctx, job.Args.SiteID, state)
 			if agentErr == nil {
 				state = runtimeReq.State
@@ -213,6 +233,16 @@ func (w *SetHostingStateWorker) Work(ctx context.Context, job *river.Job[SetHost
 			state = latest
 			continue
 		}
+		if managedActive {
+			metadata, err := json.Marshal(map[string]string{"state": state})
+			if err != nil {
+				return err
+			}
+			_, err = w.db.ExecContext(ctx, `INSERT INTO audit_events(actor_user_id,customer_id,subscription_id,action,target_type,target_id,metadata)
+SELECT u.id,s.customer_id,s.subscription_id,'hosting.managed_reconcile_queued','site',s.id,$2::jsonb
+FROM sites s CROSS JOIN LATERAL (SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1) u WHERE s.id=$1`, job.Args.SiteID, string(metadata))
+			return err
+		}
 		if useRuntime {
 			_, err = w.db.ExecContext(ctx, `UPDATE sites SET status=$2,php_version=$3,https_redirect=$4,settings_status='in_sync',settings_error='',last_error='',updated_at=now() WHERE id=$1`, job.Args.SiteID, state, runtimeReq.DesiredPHPVersion, runtimeReq.HTTPSRedirect)
 		} else {
@@ -230,7 +260,7 @@ SELECT u.id,s.customer_id,s.subscription_id,'hosting.state_converged','site',s.i
 FROM sites s CROSS JOIN LATERAL (SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1) u WHERE s.id=$1`, job.Args.SiteID, string(metadata)); auditErr != nil {
 			return fmt.Errorf("record hosting convergence audit: %w", auditErr)
 		}
-		if w.applicationReconciler != nil {
+		if w.applicationReconciler != nil && !managedActive {
 			if err := w.applicationReconciler.ReconcileSiteApplication(ctx, job.Args.SiteID); err != nil {
 				return fmt.Errorf("reconcile site PHP application: %w", err)
 			}

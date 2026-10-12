@@ -18,15 +18,26 @@ func (s *SQLStore) CreateCustomer(ctx context.Context, req types.CreateCustomerR
 	if s == nil || s.db == nil {
 		return types.Customer{}, errors.New("quota database is not configured")
 	}
-	email := normalizeEmail(req.Email)
-	if email == "" {
-		return types.Customer{}, errors.New("customer email is required")
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return types.Customer{}, err
 	}
 	defer tx.Rollback()
+	customer, err := createCustomerTx(ctx, tx, req)
+	if err != nil {
+		return types.Customer{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return types.Customer{}, err
+	}
+	return customer, nil
+}
+
+func createCustomerTx(ctx context.Context, tx *sql.Tx, req types.CreateCustomerReq) (types.Customer, error) {
+	email := normalizeEmail(req.Email)
+	if email == "" {
+		return types.Customer{}, errors.New("customer email is required")
+	}
 	if req.ResellerID > 0 {
 		if err := validateNewResellerCustomerTx(ctx, tx, req.ResellerID); err != nil {
 			return types.Customer{}, err
@@ -45,20 +56,13 @@ func (s *SQLStore) CreateCustomer(ctx context.Context, req types.CreateCustomerR
 		loginUserID = sql.NullInt64{Int64: userID, Valid: true}
 	}
 
-	customer, err := insertCustomerTx(ctx, tx, loginUserID, types.CreateCustomerReq{
+	return insertCustomerTx(ctx, tx, loginUserID, types.CreateCustomerReq{
 		Email:       email,
 		DisplayName: strings.TrimSpace(req.DisplayName),
 		Company:     strings.TrimSpace(req.Company),
 		Notes:       strings.TrimSpace(req.Notes),
 		ResellerID:  req.ResellerID,
 	})
-	if err != nil {
-		return types.Customer{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return types.Customer{}, err
-	}
-	return customer, nil
 }
 
 func (s *SQLStore) EnableCustomerLogin(ctx context.Context, customerID int64, email string, password string) (types.Customer, error) {
@@ -263,7 +267,10 @@ func (s *SQLStore) CreateSubscription(ctx context.Context, req types.CreateSubsc
 	if s == nil || s.db == nil {
 		return types.SubscriptionSummary{}, errors.New("quota database is not configured")
 	}
-	if req.CustomerID <= 0 {
+	if req.NewCustomer != nil && (req.ID != 0 || req.CustomerID != 0) {
+		return types.SubscriptionSummary{}, errors.New("new customer requires a new subscription without an existing customer id")
+	}
+	if req.CustomerID <= 0 && req.NewCustomer == nil {
 		return types.SubscriptionSummary{}, errors.New("customer id is required")
 	}
 	requestedUsername := strings.ToLower(strings.TrimSpace(req.SystemUsername))
@@ -324,7 +331,12 @@ func (s *SQLStore) CreateSubscription(ctx context.Context, req types.CreateSubsc
 		}
 	}
 
-	customer, err := selectCustomerTx(ctx, tx, req.CustomerID)
+	var customer types.Customer
+	if req.NewCustomer != nil {
+		customer, err = createCustomerTx(ctx, tx, *req.NewCustomer)
+	} else {
+		customer, err = selectCustomerTx(ctx, tx, req.CustomerID)
+	}
 	if err != nil {
 		return types.SubscriptionSummary{}, err
 	}

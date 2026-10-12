@@ -38,10 +38,12 @@ type PHPApplicationAgent interface {
 }
 
 type loadedApplication struct {
-	record      applicationRecord
-	environment []types.PHPEnvironmentPayload
-	active      *types.PHPDeployment
-	previous    *types.PHPDeployment
+	record            applicationRecord
+	environment       []types.PHPEnvironmentPayload
+	active            *types.PHPDeployment
+	previous          *types.PHPDeployment
+	workerPolicyError error
+	stopWorkersOnly   bool
 }
 
 type environmentDescriptor struct {
@@ -49,6 +51,10 @@ type environmentDescriptor struct {
 }
 
 func (s *SQLStore) loadForWorker(ctx context.Context, applicationID, revision int64, capabilities CapabilityReader) (loadedApplication, bool, error) {
+	return s.loadForWorkerOperation(ctx, applicationID, revision, capabilities, false)
+}
+
+func (s *SQLStore) loadForWorkerOperation(ctx context.Context, applicationID, revision int64, capabilities CapabilityReader, workersOnly bool) (loadedApplication, bool, error) {
 	var loaded loadedApplication
 	if s == nil || s.db == nil {
 		return loaded, false, errors.New("PHP application database is unavailable")
@@ -76,17 +82,21 @@ func (s *SQLStore) loadForWorker(ctx context.Context, applicationID, revision in
 	if err != nil {
 		return loaded, false, err
 	}
-	totalWorkerProcesses, err := configuredSubscriptionWorkerProcessesTx(ctx, tx, loaded.record.spec.SubscriptionID, 0)
-	if err != nil {
-		return loaded, false, err
-	}
-	if err = validateSubscriptionWorkerProcesses(loaded.record.spec.Policy, totalWorkerProcesses); err != nil {
-		return loaded, false, err
-	}
 	if requireActive(loaded.record) != nil {
 		loaded.record.spec.DesiredState = "suspended"
 	}
-	if loaded.record.spec.HostingMode == types.PHPHostingModeManaged && loaded.record.spec.DesiredState == "active" {
+	totalWorkerProcesses, err := runningSubscriptionWorkerProcessesTx(ctx, tx, loaded.record.spec.SubscriptionID, 0)
+	if err != nil {
+		return loaded, false, err
+	}
+	loaded.workerPolicyError = validateSubscriptionWorkerProcesses(loaded.record.spec.Policy, totalWorkerProcesses)
+	if loaded.workerPolicyError != nil {
+		// Keep the website serving while the worker-only shutdown bypasses start validation.
+		loaded.record.spec.Workers = nil
+	}
+	loaded.record.spec.Workers = workerRuntimeSpec(loaded).Workers
+	loaded.stopWorkersOnly = workersOnly && len(loaded.record.spec.Workers) == 0
+	if loaded.record.spec.HostingMode == types.PHPHostingModeManaged && loaded.record.spec.DesiredState == "active" && loaded.workerPolicyError == nil && !loaded.stopWorkersOnly {
 		input := ConfigureApplicationInput{HostingMode: loaded.record.spec.HostingMode, PHPVersion: loaded.record.spec.PHPVersion,
 			RepositoryID: loaded.record.spec.RepositoryID, RepositoryRef: loaded.record.spec.RepositoryRef,
 			FrameworkProfile: loaded.record.spec.FrameworkProfile, PublicPath: loaded.record.spec.PublicPath,
@@ -207,6 +217,9 @@ func (w *DeployPHPReleaseWorker) Work(ctx context.Context, job *river.Job[Deploy
 	if err = requireActive(loaded.record); err != nil {
 		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
+	if loaded.workerPolicyError != nil {
+		return w.fail(ctx, job.Args, loaded.environment, loaded.workerPolicyError, finalAttempt)
+	}
 	if w.agent == nil {
 		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"), finalAttempt)
 	}
@@ -286,6 +299,9 @@ func (w *RollbackPHPReleaseWorker) Work(ctx context.Context, job *river.Job[Roll
 	defer clearEnvironment(loaded.environment)
 	if err = requireActive(loaded.record); err != nil {
 		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
+	}
+	if loaded.workerPolicyError != nil {
+		return w.fail(ctx, job.Args, loaded.environment, loaded.workerPolicyError, finalAttempt)
 	}
 	intent, err := w.store.deployment(ctx, job.Args.DeploymentID)
 	if err != nil || intent.ApplicationID != job.Args.ApplicationID {
@@ -370,6 +386,15 @@ func (w *ReconcilePHPApplicationWorker) Work(ctx context.Context, job *river.Job
 	if w.agent == nil {
 		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"), finalAttempt)
 	}
+	if loaded.workerPolicyError != nil {
+		result, err := w.agent.ReconcilePHPWorkers(ctx, types.ReconcilePHPWorkersReq{Application: workerRuntimeSpec(loaded), Environment: loaded.environment})
+		if err != nil {
+			return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
+		}
+		if len(result.Errors) > 0 {
+			return w.fail(ctx, job.Args, loaded.environment, errors.New(strings.Join(result.Errors, "; ")), finalAttempt)
+		}
+	}
 	result, err := w.agent.ReconcilePHPApplication(ctx, types.ReconcilePHPApplicationReq{Application: loaded.record.spec, ActiveDeployment: loaded.active, PreviousDeployment: loaded.previous, Environment: loaded.environment})
 	if err != nil {
 		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
@@ -377,8 +402,8 @@ func (w *ReconcilePHPApplicationWorker) Work(ctx context.Context, job *river.Job
 	if result.ApplicationID != loaded.record.spec.ApplicationID {
 		return w.fail(ctx, job.Args, loaded.environment, errors.New("agent returned an invalid PHP reconciliation result"), finalAttempt)
 	}
-	if loaded.record.spec.HostingMode == types.PHPHostingModeManaged && loaded.record.spec.DesiredState == "active" && loaded.active != nil {
-		workerResult, workerErr := w.agent.ReconcilePHPWorkers(ctx, types.ReconcilePHPWorkersReq{Application: loaded.record.spec, Workers: workersFromSpecs(loaded.record.spec), Environment: loaded.environment})
+	if loaded.record.spec.HostingMode == types.PHPHostingModeManaged && loaded.record.spec.DesiredState == "active" && loaded.active != nil && loaded.workerPolicyError == nil {
+		workerResult, workerErr := w.agent.ReconcilePHPWorkers(ctx, types.ReconcilePHPWorkersReq{Application: workerRuntimeSpec(loaded), Workers: workersFromSpecs(loaded.record.spec), Environment: loaded.environment})
 		if workerErr != nil {
 			return w.fail(ctx, job.Args, loaded.environment, workerErr, finalAttempt)
 		}
@@ -424,7 +449,7 @@ func (w *ReconcilePHPWorkersWorker) Work(ctx context.Context, job *river.Job[Rec
 	unlock := lockPHPApplicationWorker(job.Args.ApplicationID)
 	defer unlock()
 	finalAttempt := finalPHPJobAttempt(job)
-	loaded, stale, err := w.store.loadForWorker(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities)
+	loaded, stale, err := w.store.loadForWorkerOperation(ctx, job.Args.ApplicationID, job.Args.DesiredRevision, w.capabilities, true)
 	if stale {
 		return nil
 	}
@@ -437,14 +462,14 @@ func (w *ReconcilePHPWorkersWorker) Work(ctx context.Context, job *river.Job[Rec
 		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
 	runningAllowed := loaded.record.spec.HostingMode == types.PHPHostingModeManaged &&
-		loaded.record.spec.DesiredState == "active" && loaded.active != nil
+		loaded.record.spec.DesiredState == "active" && loaded.active != nil && loaded.workerPolicyError == nil && loaded.record.spec.Policy.Permissions.PHPWorkers && !loaded.stopWorkersOnly
 	if !shouldCallWorkerAgent(loaded) {
 		return w.store.completeWorkers(ctx, loaded, job.Args.DesiredRevision, workers, false)
 	}
 	if w.agent == nil {
 		return w.fail(ctx, job.Args, loaded.environment, errors.New("PHP application agent is unavailable"), finalAttempt)
 	}
-	result, err := w.agent.ReconcilePHPWorkers(ctx, types.ReconcilePHPWorkersReq{Application: loaded.record.spec, Workers: workers, Environment: loaded.environment})
+	result, err := w.agent.ReconcilePHPWorkers(ctx, types.ReconcilePHPWorkersReq{Application: workerRuntimeSpec(loaded), Workers: workersFromSpecs(workerRuntimeSpec(loaded)), Environment: loaded.environment})
 	if err != nil {
 		return w.fail(ctx, job.Args, loaded.environment, err, finalAttempt)
 	}
@@ -456,7 +481,21 @@ func (w *ReconcilePHPWorkersWorker) Work(ctx context.Context, job *river.Job[Rec
 
 func shouldCallWorkerAgent(loaded loadedApplication) bool {
 	return loaded.record.spec.HostingMode != types.PHPHostingModeManaged ||
-		loaded.record.spec.DesiredState != "active" || loaded.active != nil
+		loaded.record.spec.DesiredState != "active" || loaded.active != nil || loaded.workerPolicyError != nil || loaded.stopWorkersOnly || (!loaded.record.spec.Policy.Permissions.PHPWorkers && len(loaded.record.spec.Workers) > 0)
+}
+
+func workerRuntimeSpec(loaded loadedApplication) types.PHPApplicationSpec {
+	spec := loaded.record.spec
+	spec.Workers = nil
+	for _, worker := range loaded.record.spec.Workers {
+		if worker.DesiredState == "running" {
+			spec.Workers = append(spec.Workers, worker)
+		}
+	}
+	if loaded.workerPolicyError != nil || !spec.Policy.Permissions.PHPWorkers || loaded.stopWorkersOnly {
+		spec.DesiredState = "suspended"
+	}
+	return spec
 }
 
 func (w *ReconcilePHPWorkersWorker) fail(ctx context.Context, args ReconcilePHPWorkersArgs, environment []types.PHPEnvironmentPayload, cause error, finalAttempt bool) error {
@@ -666,6 +705,9 @@ WHERE id=$1 AND desired_revision=$5`, args.ApplicationID, args.DeploymentID, old
 	if err = markWorkersAppliedTx(ctx, tx, args.ApplicationID, true); err != nil {
 		return err
 	}
+	if err = acknowledgeManagedSiteTx(ctx, tx, loaded, args.DesiredRevision, "healthy"); err != nil {
+		return err
+	}
 	if err = resolveNotificationTx(ctx, tx, deploymentFailureKey(args.ApplicationID)); err != nil {
 		return err
 	}
@@ -722,6 +764,9 @@ observed_message=$4,applied_revision=$5,convergence_status='in_sync',last_error=
 		return err
 	}
 	if err = markWorkersAppliedTx(ctx, tx, args.ApplicationID, true); err != nil {
+		return err
+	}
+	if err = acknowledgeManagedSiteTx(ctx, tx, loaded, args.DesiredRevision, "healthy"); err != nil {
 		return err
 	}
 	if err = resolveNotificationTx(ctx, tx, deploymentFailureKey(args.ApplicationID)); err != nil {
@@ -812,7 +857,10 @@ WHERE id=$1 AND desired_revision=$2`, args.ApplicationID, args.DesiredRevision, 
 		return err
 	}
 	if apply {
-		if err = markWorkersAppliedTx(ctx, tx, args.ApplicationID, result.ObservedState == "healthy"); err != nil {
+		if err = markWorkersAppliedTx(ctx, tx, args.ApplicationID, result.ObservedState == "healthy" && loaded.workerPolicyError == nil && loaded.record.spec.Policy.Permissions.PHPWorkers); err != nil {
+			return err
+		}
+		if err = acknowledgeManagedSiteTx(ctx, tx, loaded, args.DesiredRevision, result.ObservedState); err != nil {
 			return err
 		}
 	}
@@ -820,6 +868,29 @@ WHERE id=$1 AND desired_revision=$2`, args.ApplicationID, args.DesiredRevision, 
 		return err
 	}
 	return tx.Commit()
+}
+
+func acknowledgeManagedSiteTx(ctx context.Context, tx *sql.Tx, loaded loadedApplication, revision int64, observed string) error {
+	if loaded.record.spec.HostingMode != types.PHPHostingModeManaged || observed != "healthy" {
+		return nil
+	}
+	// Queued work is not convergence; only the current healthy runtime owner can acknowledge the site.
+	_, err := tx.ExecContext(ctx, `UPDATE sites site SET status='active',settings_status='in_sync',
+settings_error='',last_error='',php_version=application.php_version,
+https_redirect=(site.tls_status='active' AND site.desired_https_redirect),updated_at=now()
+FROM php_applications application
+JOIN subscriptions subscription ON subscription.id=application.subscription_id
+JOIN customers customer ON customer.id=subscription.customer_id
+WHERE application.id=$1 AND application.desired_revision=$2 AND application.applied_revision=$2
+ AND application.hosting_mode='managed' AND application.desired_state='active'
+ AND application.observed_state='healthy' AND application.convergence_status='in_sync' AND application.active_deployment_id IS NOT NULL
+ AND site.id=application.site_id AND site.subscription_id=application.subscription_id AND site.desired_status='active'
+ AND subscription.status='active' AND customer.status='active'
+ AND (customer.reseller_id IS NULL OR EXISTS (
+  SELECT 1 FROM reseller_accounts reseller JOIN reseller_subscriptions allocation
+  ON allocation.reseller_id=reseller.id AND allocation.status='active'
+  WHERE reseller.id=customer.reseller_id AND reseller.status='active'))`, loaded.record.spec.ApplicationID, revision)
+	return err
 }
 
 func (s *SQLStore) completeWorkers(ctx context.Context, loaded loadedApplication, revision int64, workers []types.PHPWorker, runningAllowed bool) error {

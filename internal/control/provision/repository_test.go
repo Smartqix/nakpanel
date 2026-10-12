@@ -15,6 +15,30 @@ import (
 	"github.com/riverqueue/river"
 )
 
+func TestSystemReconciliationLoadsManagedRuntimeOwnerFromDatabase(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := errors.New("owner metadata query")
+	mock.ExpectQuery(`(?s)SELECT.*application.hosting_mode.*application.active_deployment_id.*LEFT JOIN php_applications application`).WillReturnError(want)
+	_, err = selectReconcileSites(context.Background(), tx)
+	if !errors.Is(err, want) {
+		t.Fatalf("reconciliation snapshot omitted authoritative owner: %v", err)
+	}
+	mock.ExpectRollback()
+	_ = tx.Rollback()
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestNormalizeDNSRecordSupportsSRVAndRejectsTypedFieldOverflow(t *testing.T) {
 	record, err := normalizeDNSRecord("example.test", types.DNSRecord{
 		Host: "_sip._tcp", Type: "SRV", Value: "SIP.EXAMPLE.TEST.",
