@@ -10,6 +10,7 @@ INSERT INTO sites (
     parent_site_id,
     dns_zone_mode,
     php_version,
+    desired_php_version,
     status,
     last_error
 ) SELECT
@@ -25,6 +26,7 @@ INSERT INTO sites (
         WHEN parent.id IS NULL THEN 'separate'
         ELSE template_revision.subdomain_policy
     END,
+    sqlc.arg(php_version),
     sqlc.arg(php_version),
     'pending',
     ''
@@ -54,6 +56,7 @@ SET
     document_root = EXCLUDED.document_root,
     parent_site_id = EXCLUDED.parent_site_id,
     php_version = EXCLUDED.php_version,
+    desired_php_version = EXCLUDED.desired_php_version,
     status = 'pending',
     last_error = '',
     updated_at = now()
