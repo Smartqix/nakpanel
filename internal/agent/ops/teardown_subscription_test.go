@@ -24,6 +24,13 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 			"nakpanel-php-worker@51-3.service loaded active running managed worker\n"),
 	}}
 	stateRoot := t.TempDir()
+	containerStateRoot := filepath.Join(stateRoot, "containers")
+	containerRuntimeRoot := filepath.Join(stateRoot, "container-run")
+	for _, path := range []string{filepath.Join(containerStateRoot, "sub-4"), filepath.Join(containerRuntimeRoot, "sub-4")} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
 	systemdRoot := filepath.Join(stateRoot, "systemd")
 	if err := os.MkdirAll(systemdRoot, 0o755); err != nil {
 		t.Fatal(err)
@@ -59,7 +66,8 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 		HomeRoot: root, SystemdUnitDir: systemdRoot, TaskStateDir: filepath.Join(stateRoot, "tasks"),
 		ValkeyConfigRoot: filepath.Join(stateRoot, "valkey-config"), ValkeyRuntimeRoot: filepath.Join(stateRoot, "valkey-runtime"),
 		PHPApplicationStateRoot: phpStateRoot,
-		GitRoot:                 filepath.Join(stateRoot, "git"), StagingRoot: filepath.Join(stateRoot, "staging"), PodmanBinary: "/usr/bin/podman",
+		ContainerStateRoot:      containerStateRoot, ContainerRuntimeRoot: containerRuntimeRoot,
+		GitRoot: filepath.Join(stateRoot, "git"), StagingRoot: filepath.Join(stateRoot, "staging"), PodmanBinary: "/usr/bin/podman",
 		Paths:  SitePathConfig{HomeRoot: root, NginxAvailableDir: t.TempDir(), NginxEnabledDir: t.TempDir(), NginxConfDir: nginxCandidateRoot, PHPFPMPoolDir: t.TempDir(), PHPFPMDedicatedRunDir: phpRunRoot},
 		Runner: runner,
 	})
@@ -112,12 +120,15 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 			t.Fatalf("managed PHP teardown artifact remains at %s: %v", path, statErr)
 		}
 	}
-	if !runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-app-29") ||
-		!runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-app-29-candidate") ||
-		!runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-app-29-previous") ||
-		!runner.saw("runuser", "-u", "npaccount", "--", "/usr/bin/podman", "rm", "--force", "--ignore", "nakpanel-29-wordpress") ||
-		!runner.saw("systemctl", "disable", "--now", "nakpanel-valkey@4.service") {
-		t.Fatalf("application or Valkey state was not removed: %#v", runner.calls)
+	for _, container := range []string{"nakpanel-app-29", "nakpanel-app-29-candidate", "nakpanel-app-29-previous", "nakpanel-29-wordpress"} {
+		base := filepath.Join(p.containerStateRoot, "sub-4")
+		runtime := filepath.Join(p.containerRuntimeRoot, "sub-4")
+		if !runner.saw("runuser", "-u", "npaccount", "--", "env", "HOME="+filepath.Join(base, "home"), "XDG_DATA_HOME="+filepath.Join(base, "data"), "XDG_CONFIG_HOME="+filepath.Join(base, "config"), "XDG_RUNTIME_DIR="+runtime, "TMPDIR="+runtime, "/usr/bin/podman", "rm", "--force", "--ignore", container) {
+			t.Fatalf("dedicated rootless container cleanup missing %s: %#v", container, runner.calls)
+		}
+	}
+	if !runner.saw("systemctl", "disable", "--now", "nakpanel-valkey@4.service") {
+		t.Fatalf("Valkey state was not removed: %#v", runner.calls)
 	}
 	if !runner.saw("systemctl", "disable", "--now", "nakpanel-task-23.timer") {
 		t.Fatalf("scheduled task service was not removed: %#v", runner.calls)
@@ -212,6 +223,9 @@ func (r *teardownRunner) Run(_ context.Context, name string, args ...string) ([]
 	}
 	if output, exists := r.outputs[strings.Join(append([]string{name}, args...), " ")]; exists {
 		return output, nil
+	}
+	if name == "id" {
+		return []byte("1201\n"), nil
 	}
 	return r.outputs[name], nil
 }

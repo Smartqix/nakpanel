@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -18,6 +19,7 @@ import (
 var (
 	databaseIdentifierRE  = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
 	phpVersionDirectoryRE = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
+	teardownOCIUnitRE     = regexp.MustCompile(`^(nakpanel-app-[1-9][0-9]*(-g[1-9][0-9]*|-candidate|-previous)?|nakpanel-[1-9][0-9]*-[a-z][a-z0-9-]{1,47})\.service$`)
 )
 
 type SubscriptionTeardownOptions struct {
@@ -33,6 +35,8 @@ type SubscriptionTeardownOptions struct {
 	StagingRoot             string
 	PHPApplicationStateRoot string
 	PodmanBinary            string
+	ContainerStateRoot      string
+	ContainerRuntimeRoot    string
 	Runner                  CommandRunner
 }
 type SubscriptionTeardownProvisioner struct {
@@ -48,6 +52,8 @@ type SubscriptionTeardownProvisioner struct {
 	stagingRoot             string
 	phpApplicationStateRoot string
 	podmanBinary            string
+	containerStateRoot      string
+	containerRuntimeRoot    string
 	runner                  CommandRunner
 }
 
@@ -84,6 +90,12 @@ func NewSubscriptionTeardownProvisioner(opts SubscriptionTeardownOptions) *Subsc
 		if opts.AuthorizedKeysDir == "" {
 			authorizedKeysDir = filepath.Join(filepath.Dir(root), "ssh", "authorized_keys")
 		}
+		if opts.ContainerStateRoot == "" {
+			opts.ContainerStateRoot = filepath.Join(filepath.Dir(root), "containers")
+		}
+		if opts.ContainerRuntimeRoot == "" {
+			opts.ContainerRuntimeRoot = filepath.Join(filepath.Dir(root), "container-run")
+		}
 	}
 	return &SubscriptionTeardownProvisioner{
 		homeRoot: root, paths: paths, systemdUnitDir: systemdUnitDir,
@@ -95,6 +107,8 @@ func NewSubscriptionTeardownProvisioner(opts SubscriptionTeardownOptions) *Subsc
 		stagingRoot:             defaultPath(opts.StagingRoot, "/var/lib/nakpanel/staging"),
 		phpApplicationStateRoot: defaultPath(opts.PHPApplicationStateRoot, "/var/lib/nakpanel/php-applications"),
 		podmanBinary:            defaultPath(opts.PodmanBinary, "/usr/bin/podman"), runner: runner,
+		containerStateRoot:   defaultPath(opts.ContainerStateRoot, "/var/lib/nakpanel/containers"),
+		containerRuntimeRoot: defaultPath(opts.ContainerRuntimeRoot, "/run/nakpanel-containers"),
 	}
 }
 
@@ -109,6 +123,14 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 	var result types.TeardownSubscriptionResult
 	if req.SubscriptionID <= 0 || !accountUsernameRE.MatchString(req.Username) {
 		return result, errors.New("invalid subscription account identity")
+	}
+	for _, root := range []string{p.systemdUnitDir, p.containerStateRoot, p.containerRuntimeRoot} {
+		if !filepath.IsAbs(root) || root == string(filepath.Separator) {
+			return result, errors.New("teardown state roots must be absolute non-root directories")
+		}
+		if err := ensureNoSymlinkComponents(root, root); err != nil {
+			return result, err
+		}
 	}
 	home := filepath.Clean(req.HomePath)
 	if home != filepath.Join(p.homeRoot, req.Username) || filepath.Dir(home) != p.homeRoot {
@@ -165,20 +187,84 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 		return result, err
 	}
 	needsDaemonReload := false
-	_, userLookupErr := p.runner.Run(ctx, "id", "-u", req.Username)
+	uidOutput, userLookupErr := p.runner.Run(ctx, "id", "-u", req.Username)
 	userExists := userLookupErr == nil
+	var userUID uint64
+	if userExists {
+		userUID, err = strconv.ParseUint(strings.TrimSpace(string(uidOutput)), 10, 32)
+		if err != nil || userUID == 0 || userUID == 1<<32-1 {
+			return result, errors.New("subscription teardown requires a validated non-root UID")
+		}
+	} else {
+		output, lookupErr := p.runner.Run(ctx, "getent", "passwd", req.Username)
+		if !commandExitedWith(lookupErr, 2) || len(strings.TrimSpace(string(output))) != 0 {
+			return result, fmt.Errorf("confirm missing subscription user: %w", userLookupErr)
+		}
+	}
+	ociUnits, err := p.accountOCIUnits(ctx, req.Username)
+	if err != nil {
+		return result, err
+	}
+	for _, unit := range ociUnits {
+		if output, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", unit); stopErr != nil {
+			return result, fmt.Errorf("stop subscription OCI unit %s: %w: %s", unit, stopErr, strings.TrimSpace(string(output)))
+		}
+		if err = os.Remove(filepath.Join(p.systemdUnitDir, unit)); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return result, fmt.Errorf("remove subscription OCI unit %s: %w", unit, err)
+		}
+		result.Removed = append(result.Removed, "oci-unit:"+unit)
+	}
+	if len(ociUnits) > 0 {
+		if _, err = p.runner.Run(ctx, "systemctl", "daemon-reload"); err != nil {
+			return result, fmt.Errorf("reload removed OCI units: %w", err)
+		}
+	}
+	base := filepath.Join(p.containerStateRoot, "sub-"+strconv.FormatInt(req.SubscriptionID, 10))
+	identity := applicationIdentity{
+		stateHome: filepath.Join(base, "home"), dataHome: filepath.Join(base, "data"),
+		configHome:  filepath.Join(base, "config"),
+		runtimeHome: filepath.Join(p.containerRuntimeRoot, "sub-"+strconv.FormatInt(req.SubscriptionID, 10)),
+	}
+	for _, path := range []string{identity.stateHome, identity.dataHome, identity.configHome} {
+		if err = ensureNoSymlinkComponents(p.containerStateRoot, path); err != nil {
+			return result, fmt.Errorf("validate rootless container state: %w", err)
+		}
+	}
+	if err = ensureNoSymlinkComponents(p.containerRuntimeRoot, identity.runtimeHome); err != nil {
+		return result, fmt.Errorf("validate rootless container runtime: %w", err)
+	}
+	podman := (&PodmanProvisioner{binary: p.podmanBinary, runner: p.runner}).rootlessRunner(req.Username, identity)
+	rootlessStateExists := true
+	for _, path := range []string{base, identity.runtimeHome} {
+		if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {
+			rootlessStateExists = false
+		} else if statErr != nil {
+			return result, statErr
+		}
+	}
 	for _, application := range req.Applications {
-		if !userExists {
+		if !userExists || !rootlessStateExists {
 			continue
 		}
 		stableContainer := applicationContainerName(application.ID)
-		for _, container := range []string{
+		output, inspectErr := podman(ctx, "ps", "-a", "--filter", "label=io.nakpanel.application-id="+strconv.FormatInt(application.ID, 10), "--format", "{{.Names}}")
+		if inspectErr != nil {
+			return result, fmt.Errorf("inspect application containers %s: %w: %s", application.Name, inspectErr, strings.TrimSpace(string(output)))
+		}
+		containers := []string{
 			stableContainer,
 			stableContainer + "-candidate",
 			stableContainer + "-previous",
 			fmt.Sprintf("nakpanel-%d-%s", application.ID, application.Name),
-		} {
-			output, runErr := p.runner.Run(ctx, "runuser", "-u", req.Username, "--", p.podmanBinary, "rm", "--force", "--ignore", container)
+		}
+		for _, container := range applicationContainerNames(output, application.ID) {
+			if _, revisionErr := applicationContainerRevision(container, application.ID); revisionErr != nil {
+				return result, revisionErr
+			}
+			containers = append(containers, container)
+		}
+		for _, container := range containers {
+			output, runErr := podman(ctx, "rm", "--force", "--ignore", container)
 			if runErr != nil {
 				return result, fmt.Errorf("remove application %s: %w: %s", application.Name, runErr, strings.TrimSpace(string(output)))
 			}
@@ -421,6 +507,26 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 			return result, fmt.Errorf("reload SSH after subscription cleanup: %w: %s", reloadErr, strings.TrimSpace(string(output)))
 		}
 	}
+	if userExists {
+		if err = p.stopAccountProcesses(ctx, req.Username, userUID, 3*time.Second); err != nil {
+			return result, err
+		}
+	}
+	for _, root := range []string{p.containerStateRoot, p.containerRuntimeRoot} {
+		path := filepath.Join(root, "sub-"+strconv.FormatInt(req.SubscriptionID, 10))
+		if _, statErr := os.Lstat(path); errors.Is(statErr, os.ErrNotExist) {
+			continue
+		} else if statErr != nil {
+			return result, statErr
+		}
+		if err = ensureNoSymlinkComponents(root, path); err != nil {
+			return result, fmt.Errorf("validate rootless account state: %w", err)
+		}
+		if err = os.RemoveAll(path); err != nil {
+			return result, fmt.Errorf("remove rootless account state: %w", err)
+		}
+		result.Removed = append(result.Removed, "rootless-state:"+path)
+	}
 	if homeExists {
 		if err = os.RemoveAll(home); err != nil {
 			return result, fmt.Errorf("remove account home: %w", err)
@@ -444,6 +550,136 @@ func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Conte
 	}
 	result.Removed = append(result.Removed, "user:"+req.Username)
 	return result, nil
+}
+
+// Inventory systemd as well as files: removed application records can leave loaded
+// generation units behind, and their Restart policy must not survive UID shutdown.
+func (p *SubscriptionTeardownProvisioner) accountOCIUnits(ctx context.Context, username string) ([]string, error) {
+	names := map[string]struct{}{}
+	for _, pattern := range []string{"nakpanel-app-*.service", "nakpanel-*.service"} {
+		files, err := filepath.Glob(filepath.Join(p.systemdUnitDir, pattern))
+		if err != nil {
+			return nil, err
+		}
+		for _, path := range files {
+			unit := filepath.Base(path)
+			if teardownOCIUnitRE.MatchString(unit) {
+				info, statErr := os.Lstat(path)
+				if statErr != nil {
+					return nil, statErr
+				}
+				if !info.Mode().IsRegular() {
+					return nil, fmt.Errorf("OCI unit %s is not a regular file", unit)
+				}
+				names[unit] = struct{}{}
+			}
+		}
+		output, err := p.runner.Run(ctx, "systemctl", "list-units", "--all", "--type=service", "--no-legend", "--plain", "--no-pager", pattern)
+		if err != nil {
+			return nil, fmt.Errorf("inventory subscription OCI units: %w: %s", err, strings.TrimSpace(string(output)))
+		}
+		for _, line := range strings.Split(string(output), "\n") {
+			fields := strings.Fields(line)
+			if len(fields) > 0 && teardownOCIUnitRE.MatchString(fields[0]) {
+				names[fields[0]] = struct{}{}
+			}
+		}
+	}
+	var units []string
+	for unit := range names {
+		output, err := p.runner.Run(ctx, "systemctl", "show", "--property=User", "--value", "--no-pager", unit)
+		if err != nil {
+			return nil, fmt.Errorf("inspect OCI unit ownership %s: %w: %s", unit, err, strings.TrimSpace(string(output)))
+		}
+		if strings.TrimSpace(string(output)) == username {
+			units = append(units, unit)
+		}
+	}
+	sort.Strings(units)
+	return units, nil
+}
+
+func commandExitedWith(err error, code int) bool {
+	var exit interface{ ExitCode() int }
+	return errors.As(err, &exit) && exit.ExitCode() == code
+}
+
+var errAccountProcessesRemain = errors.New("subscription account processes remain")
+
+func (p *SubscriptionTeardownProvisioner) accountProcessesRemain(ctx context.Context, uid string) (bool, error) {
+	output, err := p.runner.Run(ctx, "pgrep", "--uid", uid, "--")
+	if commandExitedWith(err, 1) && len(strings.TrimSpace(string(output))) == 0 {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("inspect subscription UID processes: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	for _, pid := range strings.Fields(string(output)) {
+		value, parseErr := strconv.ParseUint(pid, 10, 32)
+		if parseErr != nil || value == 0 {
+			return false, errors.New("unexpected subscription process inventory")
+		}
+	}
+	return len(strings.Fields(string(output))) > 0, nil
+}
+
+func (p *SubscriptionTeardownProvisioner) waitAccountProcesses(ctx context.Context, uid string, grace time.Duration) error {
+	timer := time.NewTimer(grace)
+	defer timer.Stop()
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		remaining, err := p.accountProcessesRemain(ctx, uid)
+		if err != nil {
+			return err
+		}
+		if !remaining {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return errAccountProcessesRemain
+		case <-ticker.C:
+		}
+	}
+}
+
+func (p *SubscriptionTeardownProvisioner) stopAccountProcesses(ctx context.Context, username string, uid uint64, grace time.Duration) error {
+	if uid == 0 || uid >= 1<<32-1 {
+		return errors.New("invalid subscription process shutdown UID")
+	}
+	output, err := p.runner.Run(ctx, "id", "-u", username)
+	current, parseErr := strconv.ParseUint(strings.TrimSpace(string(output)), 10, 32)
+	if err != nil || parseErr != nil || current != uid {
+		return errors.New("subscription UID changed before process shutdown")
+	}
+	value := strconv.FormatUint(uid, 10)
+	// A rootless pause may outlive its recorded containers and may not be
+	// registered with logind. Session shutdown is followed by UID verification.
+	_, _ = p.runner.Run(ctx, "loginctl", "disable-linger", value)
+	_, _ = p.runner.Run(ctx, "loginctl", "terminate-user", value)
+	_, _ = p.runner.Run(ctx, "systemctl", "stop", "user@"+value+".service")
+	for _, signal := range []string{"TERM", "KILL"} {
+		remaining, err := p.accountProcessesRemain(ctx, value)
+		if err != nil {
+			return err
+		}
+		if !remaining {
+			return nil
+		}
+		output, err := p.runner.Run(ctx, "pkill", "--signal", signal, "--uid", value, "--")
+		if err != nil && !commandExitedWith(err, 1) {
+			return fmt.Errorf("terminate subscription UID processes: %w: %s", err, strings.TrimSpace(string(output)))
+		}
+		if err = p.waitAccountProcesses(ctx, value, grace); err == nil {
+			return nil
+		} else if !errors.Is(err, errAccountProcessesRemain) {
+			return err
+		}
+	}
+	return errAccountProcessesRemain
 }
 
 func (p *SubscriptionTeardownProvisioner) systemdUnitLoaded(ctx context.Context, unit string) (bool, error) {
