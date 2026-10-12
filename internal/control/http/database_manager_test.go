@@ -184,3 +184,62 @@ func TestDatabaseManagerProxyStripsAuthorityAndScopesCookies(t *testing.T) {
 		t.Fatal("revoked panel session accepted")
 	}
 }
+
+func TestDatabaseManagerAssetBurstWaitsForCapacityBeforeRedeemingGrant(t *testing.T) {
+	service := &fakeManagerService{}
+	proxy := NewDatabaseManagerProxy(service, strings.Repeat("k", 32))
+	for i := 0; i < cap(proxy.slots); i++ {
+		proxy.slots <- struct{}{}
+	}
+	proxy.transport = managerRoundTripper(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("var CommonParams = {};"))}, nil
+	})
+	store := &fakeSessionStore{tokenHash: auth.TokenHash("session"), user: auth.SessionUser{ID: 1, Role: auth.RoleClient}, expiresAt: time.Now().Add(time.Hour)}
+	server := &Server{sessions: auth.NewSessionManager(store, auth.SessionOptions{})}
+	request := httptest.NewRequest(http.MethodGet, "https://panel.test/database-manager/"+strings.Repeat("a", 43)+"/js/dist/common.js", nil)
+	request.SetPathValue("grantID", strings.Repeat("a", 43))
+	request.SetPathValue("path", "js/dist/common.js")
+	request.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "session"})
+	ctx, cancel := context.WithTimeout(request.Context(), time.Second)
+	defer cancel()
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		server.serveDatabaseManager(proxy, response, request.WithContext(ctx))
+		close(done)
+	}()
+	select {
+	case <-done:
+		t.Fatalf("asset request was rejected instead of waiting: status=%d grant reads=%d", response.Code, service.calls)
+	case <-time.After(30 * time.Millisecond):
+	}
+	<-proxy.slots
+	select {
+	case <-done:
+	case <-ctx.Done():
+		t.Fatal("asset did not resume when capacity became available")
+	}
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "CommonParams") || service.calls != 1 {
+		t.Fatalf("resumed asset status=%d grant reads=%d body=%s", response.Code, service.calls, response.Body.String())
+	}
+}
+
+func TestDatabaseManagerCancelledQueueDoesNotRedeemGrant(t *testing.T) {
+	service := &fakeManagerService{}
+	proxy := NewDatabaseManagerProxy(service, strings.Repeat("k", 32))
+	for i := 0; i < cap(proxy.slots); i++ {
+		proxy.slots <- struct{}{}
+	}
+	store := &fakeSessionStore{tokenHash: auth.TokenHash("session"), user: auth.SessionUser{ID: 1, Role: auth.RoleClient}, expiresAt: time.Now().Add(time.Hour)}
+	server := &Server{sessions: auth.NewSessionManager(store, auth.SessionOptions{})}
+	request := httptest.NewRequest(http.MethodGet, "https://panel.test/database-manager/"+strings.Repeat("a", 43)+"/", nil)
+	request.SetPathValue("grantID", strings.Repeat("a", 43))
+	request.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "session"})
+	ctx, cancel := context.WithCancel(request.Context())
+	cancel()
+	response := httptest.NewRecorder()
+	server.serveDatabaseManager(proxy, response, request.WithContext(ctx))
+	if response.Code != http.StatusServiceUnavailable || service.calls != 0 {
+		t.Fatalf("cancelled queue status=%d consumed grant reads=%d", response.Code, service.calls)
+	}
+}

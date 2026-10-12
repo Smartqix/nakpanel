@@ -134,6 +134,18 @@ func (s *Server) serveDatabaseManager(p *DatabaseManagerProxy, w http.ResponseWr
 		http.NotFound(w, r)
 		return
 	}
+	// A browser loads many assets at once. Queue that burst without exceeding
+	// the runtime limit, and do not consume a bootstrap grant while waiting.
+	waitCtx, cancelWait := context.WithTimeout(r.Context(), 10*time.Second)
+	select {
+	case p.slots <- struct{}{}:
+		cancelWait()
+		defer func() { <-p.slots }()
+	case <-waitCtx.Done():
+		cancelWait()
+		http.Error(w, "Database manager is busy", http.StatusServiceUnavailable)
+		return
+	}
 	access, err := p.service.Access(r.Context(), actor, cookie.Value, token)
 	if err != nil {
 		http.NotFound(w, r)
@@ -151,13 +163,6 @@ func (s *Server) serveDatabaseManager(p *DatabaseManagerProxy, w http.ResponseWr
 		}
 		s.recordAudit(r.Context(), actor, 0, 0, "database.manager_logged_out", "database", access.DatabaseID, nil)
 		http.Redirect(w, r, "/databases", 303)
-		return
-	}
-	select {
-	case p.slots <- struct{}{}:
-		defer func() { <-p.slots }()
-	default:
-		http.Error(w, "Database manager is busy", 503)
 		return
 	}
 	capability := ""
