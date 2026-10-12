@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/certificates"
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"golang.org/x/sys/unix"
@@ -634,6 +636,9 @@ type WebmailProvisionerOptions struct {
 	PHPGroup            string
 	Reloader            SiteServiceReloader
 	MailTLSHostname     string
+	TLSHostname         string
+	TLSCertPath         string
+	TLSKeyPath          string
 }
 
 type WebmailProvisioner struct {
@@ -645,6 +650,9 @@ type WebmailProvisioner struct {
 	phpGroup            string
 	reloader            SiteServiceReloader
 	mailTLSHostname     string
+	tlsHostname         string
+	tlsCertPath         string
+	tlsKeyPath          string
 }
 
 func NewWebmailProvisioner(opts WebmailProvisionerOptions) *WebmailProvisioner {
@@ -676,6 +684,7 @@ func NewWebmailProvisioner(opts WebmailProvisionerOptions) *WebmailProvisioner {
 		availableDir: availableDir, enabledDir: enabledDir, roundcubeRoot: root,
 		roundcubeConfigPath: roundcubeConfigPath, desKeyPath: desKeyPath, phpGroup: phpGroup,
 		reloader: opts.Reloader, mailTLSHostname: strings.TrimSpace(opts.MailTLSHostname),
+		tlsHostname: site.NormalizeDomain(opts.TLSHostname), tlsCertPath: opts.TLSCertPath, tlsKeyPath: opts.TLSKeyPath,
 	}
 }
 
@@ -687,9 +696,39 @@ func (p *WebmailProvisioner) ConfigureWebmail(ctx context.Context, req types.Con
 	if err != nil {
 		return types.ConfigureWebmailResult{}, err
 	}
+	rendered := RenderWebmailNginxConfig(normalized)
+	if p.tlsHostname != "" {
+		if site.ValidateDomain(p.tlsHostname) != nil {
+			return types.ConfigureWebmailResult{}, errors.New("invalid webmail TLS hostname")
+		}
+		if normalized.Hostname == p.tlsHostname {
+			for _, path := range []string{p.tlsCertPath, p.tlsKeyPath} {
+				if !filepath.IsAbs(path) || strings.ContainsAny(path, "\x00\r\n\t ;{}") {
+					return types.ConfigureWebmailResult{}, errors.New("invalid webmail TLS certificate path")
+				}
+			}
+			cert, err := os.ReadFile(p.tlsCertPath)
+			if err != nil {
+				return types.ConfigureWebmailResult{}, errors.New("webmail TLS certificate is unavailable")
+			}
+			key, err := os.ReadFile(p.tlsKeyPath)
+			if err != nil {
+				return types.ConfigureWebmailResult{}, errors.New("webmail TLS key is unavailable")
+			}
+			defer clear(key)
+			leaf, chain := pem.Decode(cert)
+			if leaf == nil {
+				return types.ConfigureWebmailResult{}, errors.New("invalid webmail TLS certificate")
+			}
+			if _, err = certificates.Validate(normalized.Hostname, certificates.Bundle{CertificatePEM: pem.EncodeToMemory(leaf), ChainPEM: chain, PrivateKeyPEM: key}); err != nil {
+				return types.ConfigureWebmailResult{}, fmt.Errorf("validate webmail TLS: %w", err)
+			}
+			rendered = renderWebmailTLSNginxConfig(normalized, p.tlsCertPath, p.tlsKeyPath)
+		}
+	}
 	configPath := filepath.Join(p.availableDir, normalized.Hostname+".conf")
 	enabledPath := filepath.Join(p.enabledDir, normalized.Hostname+".conf")
-	if err := writeFileAtomic(configPath, []byte(RenderWebmailNginxConfig(normalized)), 0o644); err != nil {
+	if err := writeFileAtomic(configPath, []byte(rendered), 0o644); err != nil {
 		return types.ConfigureWebmailResult{}, fmt.Errorf("write webmail nginx config: %w", err)
 	}
 	if err := ensureSymlink(configPath, enabledPath); err != nil {
@@ -793,6 +832,33 @@ func RenderWebmailNginxConfig(req types.ConfigureWebmailReq) string {
     }
 }
 `, req.Hostname, req.RoundcubeRoot)
+}
+
+func renderWebmailTLSNginxConfig(req types.ConfigureWebmailReq, certPath, keyPath string) string {
+	return fmt.Sprintf(`server {
+    listen 80;
+    listen [::]:80;
+    server_name %[1]s;
+    return 301 https://%[1]s$request_uri;
+}
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name %[1]s;
+    ssl_certificate %[3]s;
+    ssl_certificate_key %[4]s;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    root %[2]s;
+    index index.php index.html;
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+    }
+}
+`, req.Hostname, req.RoundcubeRoot, certPath, keyPath)
 }
 
 func normalizeWebmailRequest(req types.ConfigureWebmailReq, defaultRoot string) (types.ConfigureWebmailReq, error) {

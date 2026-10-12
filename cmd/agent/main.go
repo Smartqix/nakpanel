@@ -43,7 +43,10 @@ func main() {
 		NginxTester:      ops.NewCommandNginxConfigTester(nil),
 		PHPTester:        ops.NewCommandPHPConfigTester(nil),
 	})
-	webmailProvisioner := ops.NewWebmailProvisioner(ops.WebmailProvisionerOptions{Reloader: reloader, MailTLSHostname: os.Getenv("NAKPANEL_MAIL_TLS_HOSTNAME")})
+	webmailProvisioner := ops.NewWebmailProvisioner(ops.WebmailProvisionerOptions{
+		Reloader: reloader, MailTLSHostname: os.Getenv("NAKPANEL_MAIL_TLS_HOSTNAME"),
+		TLSHostname: os.Getenv("NAKPANEL_WEBMAIL_TLS_HOSTNAME"), TLSCertPath: os.Getenv("NAKPANEL_WEBMAIL_TLS_CERT"), TLSKeyPath: os.Getenv("NAKPANEL_WEBMAIL_TLS_KEY"),
+	})
 	dnsProvisioner := ops.NewDNSProvisioner(ops.DNSProvisionerOptions{Reloader: reloader})
 	usageCollector := ops.NewUsageCollector("/home", "/var/log/nginx", os.Getenv("NAKPANEL_MARIADB_DSN"))
 	fileManager := ops.NewFileManager(ops.FileManagerOptions{TransferDir: config.FileTransferDir, PanelUser: config.PanelUser})

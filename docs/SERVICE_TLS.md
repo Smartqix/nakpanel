@@ -59,11 +59,20 @@ NAKPANEL_FTPS_PUBLIC_ADDRESS=<server-public-IP>
 NAKPANEL_FTPS_TLS_CERT=/etc/nakpanel/service-tls/mail.example.com/fullchain.pem
 NAKPANEL_FTPS_TLS_KEY=/etc/nakpanel/service-tls/mail.example.com/privkey.pem
 NAKPANEL_MAIL_TLS_HOSTNAME=mail.example.com
+NAKPANEL_WEBMAIL_TLS_HOSTNAME=webmail.example.com
+NAKPANEL_WEBMAIL_TLS_CERT=/etc/letsencrypt/live/nakpanel-webmail/fullchain.pem
+NAKPANEL_WEBMAIL_TLS_KEY=/etc/letsencrypt/live/nakpanel-webmail/privkey.pem
 ```
 
 The mail TLS hostname enables system-trust and hostname verification for
 Roundcube's loopback IMAP/SMTP connections. Without it, the development bootstrap
 configuration still accepts the local self-signed certificate.
+The optional webmail TLS settings apply to that exact webmail hostname: the
+agent validates its certificate chain/key/domain before generating HTTPS and an
+HTTP redirect. Other hosted webmail hostnames retain their existing behavior.
+Obtain this separate certificate with Certbot's nginx authenticator and a
+validated nginx reload deployment hook; test its renewal as well. Include
+`/etc/letsencrypt` in operator recovery backups.
 
 FTPS requires its plan permission, `ftps_enabled`, and an account allowance.
 Create a primary subscription account or domain-scoped account through the
