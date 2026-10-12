@@ -633,6 +633,7 @@ type WebmailProvisionerOptions struct {
 	DESKeyPath          string
 	PHPGroup            string
 	Reloader            SiteServiceReloader
+	MailTLSHostname     string
 }
 
 type WebmailProvisioner struct {
@@ -643,6 +644,7 @@ type WebmailProvisioner struct {
 	desKeyPath          string
 	phpGroup            string
 	reloader            SiteServiceReloader
+	mailTLSHostname     string
 }
 
 func NewWebmailProvisioner(opts WebmailProvisionerOptions) *WebmailProvisioner {
@@ -673,11 +675,14 @@ func NewWebmailProvisioner(opts WebmailProvisionerOptions) *WebmailProvisioner {
 	return &WebmailProvisioner{
 		availableDir: availableDir, enabledDir: enabledDir, roundcubeRoot: root,
 		roundcubeConfigPath: roundcubeConfigPath, desKeyPath: desKeyPath, phpGroup: phpGroup,
-		reloader: opts.Reloader,
+		reloader: opts.Reloader, mailTLSHostname: strings.TrimSpace(opts.MailTLSHostname),
 	}
 }
 
 func (p *WebmailProvisioner) ConfigureWebmail(ctx context.Context, req types.ConfigureWebmailReq) (types.ConfigureWebmailResult, error) {
+	if p.mailTLSHostname != "" && site.ValidateDomain(p.mailTLSHostname) != nil {
+		return types.ConfigureWebmailResult{}, errors.New("invalid mail TLS hostname")
+	}
 	normalized, err := normalizeWebmailRequest(req, p.roundcubeRoot)
 	if err != nil {
 		return types.ConfigureWebmailResult{}, err
@@ -706,11 +711,14 @@ func (p *WebmailProvisioner) ConfigureWebmail(ctx context.Context, req types.Con
 // session key is generated once and reused; the rendered file is readable by
 // the PHP pool group only.
 func (p *WebmailProvisioner) writeRoundcubeConfig() error {
+	if p.mailTLSHostname != "" && site.ValidateDomain(p.mailTLSHostname) != nil {
+		return errors.New("invalid mail TLS hostname")
+	}
 	desKey, err := p.ensureDESKey()
 	if err != nil {
 		return err
 	}
-	rendered := RenderRoundcubeConfig(desKey)
+	rendered := RenderRoundcubeConfig(desKey, p.mailTLSHostname)
 	if current, readErr := os.ReadFile(p.roundcubeConfigPath); readErr == nil && string(current) == rendered {
 		return nil
 	}
@@ -746,7 +754,11 @@ func (p *WebmailProvisioner) ensureDESKey() (string, error) {
 	return key, nil
 }
 
-func RenderRoundcubeConfig(desKey string) string {
+func RenderRoundcubeConfig(desKey string, tlsHostname ...string) string {
+	sslOptions := "['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]]"
+	if len(tlsHostname) > 0 && tlsHostname[0] != "" && site.ValidateDomain(tlsHostname[0]) == nil {
+		sslOptions = fmt.Sprintf("['ssl' => ['verify_peer' => true, 'verify_peer_name' => true, 'allow_self_signed' => false, 'peer_name' => '%s']]", tlsHostname[0])
+	}
 	return fmt.Sprintf(`<?php
 // Managed by nakpanel (configure_webmail). Do not edit: regenerated from panel intent.
 include_once("/etc/roundcube/debian-db-roundcube.php");
@@ -758,9 +770,9 @@ $config['des_key'] = '%s';
 $config['product_name'] = 'Nakpanel Webmail';
 $config['plugins'] = [];
 $config['support_url'] = '';
-$config['imap_conn_options'] = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
-$config['smtp_conn_options'] = ['ssl' => ['verify_peer' => false, 'verify_peer_name' => false, 'allow_self_signed' => true]];
-`, desKey)
+$config['imap_conn_options'] = %s;
+$config['smtp_conn_options'] = %s;
+`, desKey, sslOptions, sslOptions)
 }
 
 func RenderWebmailNginxConfig(req types.ConfigureWebmailReq) string {

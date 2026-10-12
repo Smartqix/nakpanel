@@ -96,6 +96,7 @@ type HostingToolkitProvisioner struct {
 	nginxLogRoot       string
 	ftpsConfigDir      string
 	ftpsService        string
+	ftpsLogDir         string
 	systemdUnitDir     string
 	valkeyConfigRoot   string
 	valkeyRuntimeRoot  string
@@ -151,6 +152,7 @@ func NewHostingToolkitProvisioner(opts HostingToolkitOptions) *HostingToolkitPro
 	return &HostingToolkitProvisioner{
 		homeRoot: filepath.Clean(opts.HomeRoot), nginxLogRoot: filepath.Clean(opts.NginxLogRoot),
 		ftpsConfigDir: filepath.Clean(opts.FTPSConfigDir), ftpsService: opts.FTPSService,
+		ftpsLogDir:     "/var/log/proftpd",
 		systemdUnitDir: filepath.Clean(opts.SystemdUnitDir), valkeyConfigRoot: filepath.Clean(opts.ValkeyConfigRoot),
 		valkeyRuntimeRoot: filepath.Clean(opts.ValkeyRuntimeRoot),
 		gitRoot:           filepath.Clean(opts.GitRoot), stagingRoot: filepath.Clean(opts.StagingRoot),
@@ -942,7 +944,7 @@ func (p *HostingToolkitProvisioner) EnsureFTPS(ctx context.Context, req types.En
 		hadUnit := false
 		if _, err := os.Stat(unitPath); err == nil {
 			hadUnit = true
-			output, stopErr := p.runner.Run(ctx, "systemctl", "stop", p.ftpsService)
+			output, stopErr := p.runner.Run(ctx, "systemctl", "disable", "--now", p.ftpsService)
 			if stopErr != nil {
 				return types.EnsureFTPSResult{}, fmt.Errorf("stop disabled FTPS service: %w: %s", stopErr, strings.TrimSpace(string(output)))
 			}
@@ -1012,13 +1014,29 @@ func (p *HostingToolkitProvisioner) EnsureFTPS(ctx context.Context, req types.En
 			break
 		}
 	}
+	wasEnabled := false
+	if hadUnit {
+		output, _ := p.runner.Run(ctx, "systemctl", "is-enabled", p.ftpsService)
+		wasEnabled = strings.TrimSpace(string(output)) == "enabled"
+	}
 	rollback := func(cause error) (types.EnsureFTPSResult, error) {
 		var rollbackErrors []error
+		// Remove a candidate's boot link before restoring an absent unit.
+		if !wasEnabled {
+			if _, disableErr := p.runner.Run(context.Background(), "systemctl", "disable", p.ftpsService); disableErr != nil {
+				rollbackErrors = append(rollbackErrors, disableErr)
+			}
+		}
 		if restoreErr := restoreSnapshots(snapshots); restoreErr != nil {
 			rollbackErrors = append(rollbackErrors, restoreErr)
 		}
 		if _, reloadErr := p.runner.Run(context.Background(), "systemctl", "daemon-reload"); reloadErr != nil {
 			rollbackErrors = append(rollbackErrors, reloadErr)
+		}
+		if wasEnabled {
+			if _, enableErr := p.runner.Run(context.Background(), "systemctl", "enable", p.ftpsService); enableErr != nil {
+				rollbackErrors = append(rollbackErrors, enableErr)
+			}
 		}
 		action := "stop"
 		if hadUnit {
@@ -1029,7 +1047,7 @@ func (p *HostingToolkitProvisioner) EnsureFTPS(ctx context.Context, req types.En
 		}
 		return types.EnsureFTPSResult{}, errors.Join(append([]error{cause}, rollbackErrors...)...)
 	}
-	if err := os.MkdirAll("/var/log/proftpd", 0o755); err != nil {
+	if err := os.MkdirAll(p.ftpsLogDir, 0o755); err != nil {
 		return rollback(err)
 	}
 	if err := writeFileAtomic(authPath, []byte(auth.String()), 0o600); err != nil {
@@ -1053,8 +1071,11 @@ func (p *HostingToolkitProvisioner) EnsureFTPS(ctx context.Context, req types.En
 		return rollback(fmt.Errorf("reload FTPS unit: %w: %s", err, strings.TrimSpace(string(output))))
 	}
 	if req.State == "suspended" || activeFTPSAccounts(req.Accounts) == 0 {
-		output, err = p.runner.Run(ctx, "systemctl", "stop", p.ftpsService)
+		output, err = p.runner.Run(ctx, "systemctl", "disable", "--now", p.ftpsService)
 	} else {
+		if output, err = p.runner.Run(ctx, "systemctl", "enable", p.ftpsService); err != nil {
+			return rollback(fmt.Errorf("enable FTPS at boot: %w: %s", err, strings.TrimSpace(string(output))))
+		}
 		output, err = p.runner.Run(ctx, "systemctl", "reload-or-restart", p.ftpsService)
 	}
 	if err != nil {

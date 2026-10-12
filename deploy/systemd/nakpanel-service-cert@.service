@@ -1,0 +1,9 @@
+[Unit]
+Description=Synchronize trusted mail and FTPS certificates for %I
+After=network-online.target stalwart-mail.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/nakpanel/sync-service-certificates %I
+TimeoutStartSec=180

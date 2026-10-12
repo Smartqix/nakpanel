@@ -804,3 +804,43 @@ func TestEnsureFTPSDisabledDoesNotRequireProFTPD(t *testing.T) {
 		}
 	}
 }
+
+func TestEnsureFTPSPersistsBootState(t *testing.T) {
+	for _, state := range []string{"active", "suspended"} {
+		t.Run(state, func(t *testing.T) {
+			root := t.TempDir()
+			home := filepath.Join(root, "home")
+			if err := os.MkdirAll(filepath.Join(home, "npalpha"), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			bundle, _, _ := trustedCustomBundle(t, "example.test")
+			cert, key := filepath.Join(root, "cert.pem"), filepath.Join(root, "key.pem")
+			if err := os.WriteFile(cert, bundle.CertificatePEM, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(key, bundle.PrivateKeyPEM, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			runner := &toolkitRunner{}
+			p := NewHostingToolkitProvisioner(HostingToolkitOptions{
+				HomeRoot: home, FTPSConfigDir: filepath.Join(root, "config"), SystemdUnitDir: filepath.Join(root, "units"), Runner: runner,
+			})
+			p.lookupUser = func(string) (*user.User, error) { return &user.User{Uid: "1001", Gid: "1001"}, nil }
+			p.ftpsLogDir = filepath.Join(root, "logs")
+			_, err := p.EnsureFTPS(context.Background(), types.EnsureFTPSReq{
+				Revision: 1, State: state, TLSCertPath: cert, TLSKeyPath: key,
+				Accounts: []types.EnsureFTPSAccount{{ID: 1, Username: "npalpha", Name: "npalpha", PasswordHash: "$6$saltsalt$" + strings.Repeat("a", 86), Enabled: true}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "systemctl enable nakpanel-proftpd.service"
+			if state == "suspended" {
+				want = "systemctl disable --now nakpanel-proftpd.service"
+			}
+			if !slices.Contains(runner.calls, want) {
+				t.Fatalf("boot state not persisted: want %q, calls %v", want, runner.calls)
+			}
+		})
+	}
+}

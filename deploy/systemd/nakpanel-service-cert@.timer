@@ -1,0 +1,10 @@
+[Unit]
+Description=Check Nakpanel mail and FTPS certificates for %I
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=15min
+Unit=nakpanel-service-cert@%i.service
+
+[Install]
+WantedBy=timers.target
