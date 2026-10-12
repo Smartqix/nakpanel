@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/lib/pq"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -30,6 +31,21 @@ func TestStagingAuditUsesTypedPostgreSQLParameters(t *testing.T) {
 	var metadata string
 	if err := db.QueryRow(`SELECT metadata->>'direction' FROM audit_events`).Scan(&metadata); err != nil || metadata != "copy_to_staging" {
 		t.Fatalf("staging audit lost typed metadata: direction=%q error=%v", metadata, err)
+	}
+}
+
+func TestStagingFileOnlyCompletionPersistsEmptyDatabaseSnapshots(t *testing.T) {
+	db := taskLogPostgres(t)
+	if _, err := db.Exec(`CREATE TEMP TABLE staging_operations(id bigint,status text,snapshot_path text,database_snapshot_paths text[] NOT NULL DEFAULT '{}',copied_bytes bigint,last_error text,finished_at timestamptz);
+INSERT INTO staging_operations(id,status) VALUES(9,'running');`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(completeStagingSQL, int64(9), "/snapshot", pq.Array([]string(nil)), int64(10)); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT cardinality(database_snapshot_paths) FROM staging_operations WHERE status='succeeded'`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("file-only staging result did not converge: count=%d error=%v", count, err)
 	}
 }
 

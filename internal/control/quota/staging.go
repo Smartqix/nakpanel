@@ -161,6 +161,10 @@ type StagingOperationAgent interface {
 	RunStagingOperation(context.Context, types.RunStagingOperationReq) (types.RunStagingOperationResult, error)
 }
 
+const completeStagingSQL = `UPDATE staging_operations
+SET status='succeeded',snapshot_path=$2,database_snapshot_paths=COALESCE($3,'{}'::text[]),copied_bytes=$4,last_error='',finished_at=now()
+WHERE id=$1 AND status='running'`
+
 type StagingOperationWorker struct {
 	river.WorkerDefaults[StagingOperationArgs]
 	db    *sql.DB
@@ -193,9 +197,7 @@ WHERE id=$1 AND (status='pending' OR (status='running' AND $2>1))`,
 	if runErr != nil {
 		return errors.Join(runErr, w.markAttemptFailure(ctx, job, runErr))
 	}
-	updated, err := w.db.ExecContext(ctx, `UPDATE staging_operations
-SET status='succeeded',snapshot_path=$2,database_snapshot_paths=$3,copied_bytes=$4,last_error='',finished_at=now()
-WHERE id=$1 AND status='running'`, job.Args.OperationID, result.SnapshotPath, pq.Array(result.DatabaseSnapshots), result.CopiedBytes)
+	updated, err := w.db.ExecContext(ctx, completeStagingSQL, job.Args.OperationID, result.SnapshotPath, pq.Array(result.DatabaseSnapshots), result.CopiedBytes)
 	if err != nil {
 		return err
 	}
