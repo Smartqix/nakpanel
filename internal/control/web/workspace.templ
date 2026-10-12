@@ -3061,18 +3061,16 @@ templ subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashb
 
 templ subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView, siteID int64) {
 	{{ unavailable := subscriptionValkeyUnavailable(data.SubscriptionServices.Accounts, subscription.ID) }}
+	{{ account, _ := accountForSubscription(data.SubscriptionServices.Accounts, subscription.ID) }}
 	{{ instance, configured := valkeyForSubscription(data.SubscriptionServices.Valkey, subscription.ID) }}
 	<section class="np-panel">
 		<div class="np-panel-title">
 			<div><h2>Valkey cache</h2><span class="np-muted">Socket-only · no persistence · allkeys-lru</span></div>
-			if !unavailable && configured {
+			if configured {
 				@tonePill(valkeyStateWord(instance), valkeyStateTone(instance))
 			}
 		</div>
-		if unavailable {
-			<p class="np-gate is-policy">Valkey is disabled by this subscription policy. A provider must grant cache permission and memory before it can be enabled.</p>
-		} else {
-			if configured {
+		if configured {
 				<dl class="np-facts">
 					<div><dt>Memory granted</dt><dd>{ formatPlanLimitMB(instance.MemoryMB) }<small class="np-muted">Eviction drops the least recently used keys at this ceiling</small></dd></div>
 					<div><dt>Maximum clients</dt><dd>{ formatPlanLimit(instance.MaxClients) }</dd></div>
@@ -3084,19 +3082,23 @@ templ subscriptionCachePanel(subscription types.SubscriptionSummary, data dashbo
 				if instance.LastError != "" {
 					<p class="np-error">{ instance.LastError }</p>
 				}
-				<details class="np-disclosure"><summary>Cache configuration</summary>
-					@valkeyConfigurationForms(subscription,view,siteID,instance,true)
-				</details>
-			} else {
+				if !unavailable {
+					<details class="np-disclosure"><summary>Cache configuration</summary>
+						@valkeyConfigurationForms(subscription,view,siteID,instance,true)
+					</details>
+				}
+		} else if !unavailable {
 				<div class="np-empty-block">
 					<span class="np-empty-icon">@icon("layers")</span>
 					<strong>No cache is running for this subscription</strong>
 					<p>A Valkey instance gives the subscription a private in-memory cache on a Unix socket, with no persistence and no network listener.</p>
 				</div>
 				<details class="np-disclosure" open><summary>Cache configuration</summary>
-					@valkeyConfigurationForms(subscription,view,siteID,defaultValkeyInstance(),false)
+					@valkeyConfigurationForms(subscription,view,siteID,defaultValkeyInstance(account.EffectivePolicy),false)
 				</details>
-			}
+		}
+		if unavailable {
+			<p class="np-gate is-policy">Cache configuration is unavailable under the current subscription policy. A provider must grant cache permission and sufficient resources before it can be enabled.</p>
 		}
 	</section>
 }
@@ -3107,7 +3109,13 @@ templ valkeyConfigurationForms(subscription types.SubscriptionSummary, view Work
 			<input type="hidden" name="site_id" value={ formatJobID(siteID) }/>
 			<input type="hidden" name="return_to" value="site-redis"/>
 		}
-		<div class="np-form-grid"><label>Desired state<select name="desired_state"><option value="enabled" selected?={ instance.DesiredState=="enabled" }>Enabled</option><option value="disabled" selected?={ instance.DesiredState=="disabled" }>Disabled</option></select></label><label>Memory, MB<input type="number" min="16" name="memory_mb" value={ formatPlanLimitFormValue(instance.MemoryMB) } required/></label><label>Maximum clients<input type="number" min="1" max="10000" name="max_clients" value={ formatPlanLimitFormValue(instance.MaxClients) } required/></label><label>Idle timeout, seconds<input type="number" min="0" max="86400" name="idle_timeout_seconds" value={ formatPlanLimitFormValue(instance.IdleTimeoutSeconds) } required/></label><label>CPU quota, %<input type="number" min="1" max="1000" name="cpu_percent" value={ formatPlanLimitFormValue(instance.CPUPercent) } required/></label><label>Process limit<input type="number" min="8" max="4096" name="process_limit" value={ formatPlanLimitFormValue(instance.ProcessLimit) } required/></label><label class="np-check"><input type="checkbox" name="rotate_credential" value="true"/>Rotate application credential</label></div><p class="np-form-help">Use user <code>app</code> and the displayed one-time credential. The Unix socket is accessible only to the subscription system account.</p><button type="submit">Apply cache configuration</button>
+		<div class="np-form-grid"><label>Desired state<select name="desired_state"><option value="enabled" selected?={ instance.DesiredState=="enabled" }>Enabled</option><option value="disabled" selected?={ instance.DesiredState=="disabled" }>Disabled</option></select></label><label>Memory, MB<input type="number" min="16" name="memory_mb" value={ formatPlanLimitFormValue(instance.MemoryMB) } required/></label><label>Maximum clients<input type="number" min="1" max="10000" name="max_clients" value={ formatPlanLimitFormValue(instance.MaxClients) } required/></label><label>Idle timeout, seconds<input type="number" min="0" max="86400" name="idle_timeout_seconds" value={ formatPlanLimitFormValue(instance.IdleTimeoutSeconds) } required/></label><label>CPU quota, %<input type="number" min="1" max="1000" name="cpu_percent" value={ formatPlanLimitFormValue(instance.CPUPercent) } required/></label><label>Process limit<input type="number" min="8" max="4096" name="process_limit" value={ formatPlanLimitFormValue(instance.ProcessLimit) } required/></label>
+			if configured {
+				<label class="np-check"><input type="checkbox" name="rotate_credential" value="true"/>Rotate application credential</label>
+			} else {
+				<input type="hidden" name="rotate_credential" value="true"/>
+			}
+		</div><p class="np-form-help">Use user <code>app</code> and the displayed one-time credential. The Unix socket is accessible only to the subscription system account.</p><button type="submit">Apply cache configuration</button>
 	</form>
 	if configured && instance.DesiredState=="enabled" {
 		<form class="np-form np-inline-confirm-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/valkey") }>@csrfInput(view)

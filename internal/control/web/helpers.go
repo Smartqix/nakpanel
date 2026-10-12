@@ -1641,7 +1641,15 @@ func accountForSubscription(items []types.SubscriptionSystemAccount, subscriptio
 
 func subscriptionValkeyUnavailable(items []types.SubscriptionSystemAccount, subscriptionID int64) bool {
 	account, found := accountForSubscription(items, subscriptionID)
-	return !found || !account.EffectivePolicy.Permissions.Valkey || !account.EffectivePolicy.Valkey.Enabled
+	policy := account.EffectivePolicy
+	return !found || !policy.Permissions.Valkey || !policy.Valkey.Enabled ||
+		(policy.Resources.ValkeyMemoryMB != -1 && policy.Resources.ValkeyMemoryMB < 16) ||
+		(policy.Valkey.MemoryMB != -1 && policy.Valkey.MemoryMB < 16) ||
+		(policy.Valkey.MaxClients != -1 && policy.Valkey.MaxClients < 1) ||
+		(policy.Valkey.CPUPercent != -1 && policy.Valkey.CPUPercent < 1) ||
+		(policy.Resources.CPUPercent != -1 && policy.Resources.CPUPercent < 1) ||
+		(policy.Valkey.ProcessLimit != -1 && policy.Valkey.ProcessLimit < 8) ||
+		(policy.Resources.MaxTasks != -1 && policy.Resources.MaxTasks < 8)
 }
 
 func sftpForSubscription(items []dashboard.SFTPIdentity, subscriptionID int64) []dashboard.SFTPIdentity {
@@ -2825,14 +2833,22 @@ func siteBoundedSettingMaximum(ceiling int) string {
 	return strconv.Itoa(ceiling)
 }
 
-func defaultValkeyInstance() types.ValkeyInstance {
+func defaultValkeyInstance(policy types.HostingPolicy) types.ValkeyInstance {
+	bounded := func(value int, limits ...int) int {
+		for _, limit := range limits {
+			if limit >= 0 && value > limit {
+				value = limit
+			}
+		}
+		return value
+	}
 	return types.ValkeyInstance{
 		DesiredState:       "enabled",
-		MemoryMB:           64,
-		MaxClients:         64,
-		IdleTimeoutSeconds: 300,
-		CPUPercent:         25,
-		ProcessLimit:       64,
+		MemoryMB:           bounded(64, policy.Resources.ValkeyMemoryMB, policy.Valkey.MemoryMB),
+		MaxClients:         bounded(64, policy.Valkey.MaxClients),
+		IdleTimeoutSeconds: bounded(300, policy.Valkey.IdleTimeoutSeconds),
+		CPUPercent:         bounded(25, policy.Valkey.CPUPercent, policy.Resources.CPUPercent),
+		ProcessLimit:       bounded(64, policy.Valkey.ProcessLimit, policy.Resources.MaxTasks),
 	}
 }
 

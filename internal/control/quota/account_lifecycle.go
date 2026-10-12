@@ -865,10 +865,10 @@ func (w *ConvergeSubscriptionWorker) Work(ctx context.Context, job *river.Job[Co
 	}
 	if snapshot.FTPS != nil {
 		if _, err = w.agent.EnsureFTPS(ctx, *snapshot.FTPS); err != nil {
-			_, _ = w.db.ExecContext(ctx, `UPDATE ftp_accounts SET convergence_status='failed',last_error=$1,updated_at=now()`, err.Error())
-			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
+			ackErr := acknowledgeFTPSConvergence(ctx, w.db, *snapshot.FTPS, "failed", err.Error())
+			return errors.Join(err, ackErr, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 		}
-		if _, err = w.db.ExecContext(ctx, `UPDATE ftp_accounts SET convergence_status='in_sync',last_error='',updated_at=now()`); err != nil {
+		if err = acknowledgeFTPSConvergence(ctx, w.db, *snapshot.FTPS, "in_sync", ""); err != nil {
 			return err
 		}
 	}

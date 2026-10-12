@@ -206,6 +206,24 @@ NAKPANEL_MULTIPASS_VM=nakpanel-lab deploy/multipass/phase25-verify.sh
 
 ## Phase 26 Upgrade Recovery
 
+### Development Resets and Database Ownership
+
+The database agent keeps root-private intent markers in
+`/var/lib/nakpanel-agent/database-ownership`. Replacing only PostgreSQL during
+a development reset can recycle database IDs while leaving these markers or
+old MariaDB principals behind. New provisioning will correctly refuse an
+ownership mismatch instead of taking over a database or account.
+
+Do not remove markers or weaken ownership checks during ordinary upgrades.
+For an explicitly authorized destructive development reset, reconcile the
+markers with the schemas and principals being removed. For a stale marker,
+stop the agent, verify its schema is absent and neither its schema name nor
+principal is referenced by current PostgreSQL intent, review any orphaned
+principal, and remove only that verified stale entry. Preserve untracked
+schemas, service databases such as Roundcube, and all current tenant objects.
+Restart the agent and retry failed provisioning before retrying the dependent
+WordPress installation. Never clear the directory blindly on a live server.
+
 `deploy/install/phase26-install.sh` creates a timestamped recovery set before
 changing binaries or schema:
 
