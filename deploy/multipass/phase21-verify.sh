@@ -84,6 +84,26 @@ multipass exec "${VM_NAME}" -- sudo grep -Fq 'DisableForwarding yes' "${sshd_pol
 multipass exec "${VM_NAME}" -- sudo grep -Fq 'PermitTTY no' "${sshd_policy}" || fail "SFTP TTY access is not disabled"
 multipass exec "${VM_NAME}" -- bash -c "test \"\$(sudo stat -c '%U:%G:%a' '${authorized_keys}')\" = root:root:600" || fail "SFTP authorized keys are not root-owned 0600"
 multipass exec "${VM_NAME}" -- sudo grep -Fq "restrict,command=\"internal-sftp -d /domains/${domain}/public_html\"" "${authorized_keys}" || fail "SFTP domain start directory is not confined"
+multipass exec "${VM_NAME}" -- sudo grep -Fq 'AuthorizedKeysFile none' "${sshd_policy}" || fail "SFTP can use an unmanaged key file"
+multipass exec "${VM_NAME}" -- sudo grep -Fq 'AuthorizedKeysCommandUser root' "${sshd_policy}" || fail "SFTP cannot read its root-only key store"
+multipass exec "${VM_NAME}" -- bash -se -- "${system_username}" "${domain}" <<'REMOTE'
+set -euo pipefail
+user=$1
+domain=$2
+known_hosts=$(mktemp)
+trap 'rm -f "$known_hosts" /tmp/phase21-sftp /tmp/phase21-sftp.pub' EXIT
+printf '127.0.0.1 %s\n' "$(cat /etc/ssh/ssh_host_ed25519_key.pub)" > "$known_hosts"
+output=$(printf 'pwd\nls\n' | sftp -q -oBatchMode=yes -oStrictHostKeyChecking=yes \
+  -oUserKnownHostsFile="$known_hosts" -oHostKeyAlgorithms=ssh-ed25519 \
+  -oConnectTimeout=15 -i /tmp/phase21-sftp -b - "$user@127.0.0.1")
+grep -Fq "/domains/$domain/public_html" <<< "$output"
+if printf 'get /etc/shadow /dev/null\n' | sftp -q -oBatchMode=yes -oStrictHostKeyChecking=yes \
+  -oUserKnownHostsFile="$known_hosts" -oHostKeyAlgorithms=ssh-ed25519 \
+  -oConnectTimeout=15 -i /tmp/phase21-sftp -b - "$user@127.0.0.1"; then
+  echo 'SFTP escaped the subscription chroot' >&2
+  exit 1
+fi
+REMOTE
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}/access" -o "${tmpdir}/access.html"
 grep -Fq 'Password-protected directories' "${tmpdir}/access.html" || fail "domain Access workspace is incomplete"
 
