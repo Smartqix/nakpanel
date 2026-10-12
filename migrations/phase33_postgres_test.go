@@ -56,7 +56,7 @@ FROM wordpress_instances WHERE database_id IS NOT NULL`); err != nil {
 	}
 	var databaseManagedColumn int
 	if err := db.QueryRow(`SELECT count(*) FROM information_schema.columns
-WHERE table_name='wordpress_instances' AND column_name='database_managed'`).Scan(&databaseManagedColumn); err != nil {
+WHERE table_schema=current_schema() AND table_name='wordpress_instances' AND column_name='database_managed'`).Scan(&databaseManagedColumn); err != nil {
 		t.Fatal(err)
 	}
 	if databaseManagedColumn != 0 {

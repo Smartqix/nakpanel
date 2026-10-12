@@ -161,7 +161,7 @@ AND hosting_mode='classic' AND php_version='8.4' AND applied_revision=1`).Scan(&
 	var phase30ParentConstraints int
 	if err := db.QueryRow(`SELECT count(*) FROM pg_constraint WHERE conname IN (
         'sites_phase30_identity_key','git_repositories_phase30_identity_key','service_secrets_phase30_identity_key'
-    )`).Scan(&phase30ParentConstraints); err != nil {
+    ) AND connamespace=current_schema()::regnamespace`).Scan(&phase30ParentConstraints); err != nil {
 		t.Fatal(err)
 	}
 	if phase30ParentConstraints != 0 {

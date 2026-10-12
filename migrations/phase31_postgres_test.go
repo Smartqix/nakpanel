@@ -138,10 +138,10 @@ VALUES(1,4,'active','{}',repeat('a',64),11,'admin@example.test','actor retention
 		t.Fatalf("Phase 31 Down: %v", err)
 	}
 	var lifecycleColumnCount, revisionsTableCount int
-	if err := db.QueryRow(`SELECT count(*) FROM information_schema.columns WHERE table_name='plans' AND column_name='lifecycle_status'`).Scan(&lifecycleColumnCount); err != nil {
+	if err := db.QueryRow(`SELECT count(*) FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='plans' AND column_name='lifecycle_status'`).Scan(&lifecycleColumnCount); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.QueryRow(`SELECT count(*) FROM information_schema.tables WHERE table_name='plan_revisions'`).Scan(&revisionsTableCount); err != nil {
+	if err := db.QueryRow(`SELECT count(*) FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='plan_revisions'`).Scan(&revisionsTableCount); err != nil {
 		t.Fatal(err)
 	}
 	if lifecycleColumnCount != 0 || revisionsTableCount != 0 {
