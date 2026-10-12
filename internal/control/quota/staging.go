@@ -39,6 +39,10 @@ type StagingStore interface {
 	QueueStagingOperation(context.Context, int64, types.StagingOperationInput) (int64, error)
 }
 
+const queueStagingAuditSQL = `INSERT INTO audit_events(actor_user_id,subscription_id,action,target_type,target_id,metadata)
+VALUES(NULLIF($1,0),$2,'staging.queued','staging_operation',$3,
+jsonb_build_object('source_site_id',$4::bigint,'target_site_id',$5::bigint,'direction',$6::text,'include_database',$7::boolean))`
+
 func (s *SQLStore) QueueStagingOperation(ctx context.Context, actorID int64, input types.StagingOperationInput) (int64, error) {
 	if s == nil || s.db == nil || s.river == nil {
 		return 0, errors.New("staging jobs are not configured")
@@ -142,9 +146,7 @@ VALUES($1,$2,$3,$4) RETURNING id`,
 	if _, err = s.river.InsertTx(ctx, tx, StagingOperationArgs{OperationID: operationID}, nil); err != nil {
 		return 0, err
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO audit_events(actor_user_id,subscription_id,action,target_type,target_id,metadata)
-VALUES(NULLIF($1,0),$2,'staging.queued','staging_operation',$3,
-jsonb_build_object('source_site_id',$4,'target_site_id',$5,'direction',$6,'include_database',$7))`,
+	if _, err = tx.ExecContext(ctx, queueStagingAuditSQL,
 		actorID, subscriptionID, operationID, input.SourceSiteID, input.TargetSiteID, input.Direction, input.IncludeDatabase,
 	); err != nil {
 		return 0, err

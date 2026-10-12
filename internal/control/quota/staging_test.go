@@ -19,6 +19,20 @@ type stagingAgentStub struct {
 	calls  int
 }
 
+func TestStagingAuditUsesTypedPostgreSQLParameters(t *testing.T) {
+	db := taskLogPostgres(t)
+	if _, err := db.Exec(`CREATE TEMP TABLE audit_events(actor_user_id bigint,subscription_id bigint,action text,target_type text,target_id bigint,metadata jsonb)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(queueStagingAuditSQL, int64(1), int64(42), int64(9), int64(10), int64(11), "copy_to_staging", false); err != nil {
+		t.Fatal(err)
+	}
+	var metadata string
+	if err := db.QueryRow(`SELECT metadata->>'direction' FROM audit_events`).Scan(&metadata); err != nil || metadata != "copy_to_staging" {
+		t.Fatalf("staging audit lost typed metadata: direction=%q error=%v", metadata, err)
+	}
+}
+
 func (a *stagingAgentStub) RunStagingOperation(_ context.Context, _ types.RunStagingOperationReq) (types.RunStagingOperationResult, error) {
 	a.calls++
 	return a.result, a.err
