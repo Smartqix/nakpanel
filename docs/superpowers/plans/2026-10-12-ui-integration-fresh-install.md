@@ -41,9 +41,9 @@
 
 ### Task 3: Verify the Fresh System
 - [x] Test authentication, plan/customer/subscription onboarding, domains, PHP, database manager, DNS, TLS, backups (read-only), mail and FTPS.
-- [ ] Verify new subscription tabs and desktop/mobile navigation against real data.
+- [x] Verify new subscription tabs and desktop/mobile navigation against real data.
 - [x] Remove only temporary verification resources and confirm final service health.
-- [ ] Commit the reviewed fixes and report the usable URL, reset scope and remaining external prerequisites.
+- [x] Commit the reviewed fixes and report the usable URL, reset scope and remaining external prerequisites.
 
 ## Execution Notes
 - Confirmed and fixed retained inventory hiding, client-only forbidden retry, support navigation/redirects, incomplete measurement handling, aggregate disk/traffic usage, FTP/mail counts, backup totals and overuse copy. Regression tests failed before fixes and passed afterward; full tests, vet, build, diff and shell checks pass.
@@ -55,3 +55,6 @@
 - Live verification passed for trusted panel/site HTTPS, administrator login, CSRF, active plan and customer/subscription onboarding, per-domain PHP 8.4/8.5 convergence, DNS and both hostname nameservers, all subscription tabs, domain settings pages, temporary database creation and scoped phpMyAdmin, mailboxes/aliases/webmail, authenticated own-server SMTP with delivery to the fresh local administrator mailbox, trusted IMAPS, encrypted passive FTPS and plaintext FTP rejection.
 - The disposable database and its encrypted credential were removed after verification. Final intent is one empty hostname site, one customer/subscription, two system mailboxes, default plans plus the hostname infrastructure plan, zero tenant databases and zero backups. nginx, BIND and OpenSSH configuration checks pass; no failed systemd services or pending/retryable River jobs remain.
 - External inbox delivery and the complete historical Multipass verification chain were not rerun as part of this fresh-host UI reset. Previous external delivery was confirmed by the user; the external PTR still needs to be set to `mail.nakpanel.com` in the hosting provider console.
+- Final UI validation exposed and fixed mobile active-tab clipping, stretched activity icons, misleading interactive-shell copy, and the incorrect migration warning on newly provisioned accounts. Go and JavaScript regression tests passed after failing first. Live mobile checks confirm the active tab is onscreen, activity icons are 24px, and new accounts show migration as not required.
+- Final code release is `29.0.0+f4c1be0`. After a service restart, trusted HTTPS, agent ping, SMTP/local delivery, IMAPS and TLS-only passive FTPS passed again. No failed services, disabled-seed-login exposure, backups, temporary databases or retryable/discarded jobs remain. Generated HTTP verification sessions and private temporary cookie/response files were removed.
+- Screenshots: `/tmp/nakpanel-ui-reset-20261012/desktop-subscription.jpg` and `/tmp/nakpanel-ui-reset-20261012/mobile-subscription.jpg`. Temporary viewport overrides were reset. The reviewed code is committed on the existing UI branch; merging or publishing the branch remains a separate user choice.
