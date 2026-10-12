@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
@@ -466,6 +467,9 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			var err error
 			data.SubscriptionServices, err = services.ListSubscriptionServices(ctx, user)
 			if err != nil {
+				// The message shown in the panel stays generic; the detail says
+				// which query lost its data and belongs in the server log.
+				log.Printf("dashboard: %v", err)
 				data.ServiceLoadError = "hosting service policy unavailable"
 			}
 		}
@@ -606,6 +610,7 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 	if services, ok := s.scoped.(SubscriptionServiceReader); ok {
 		data.SubscriptionServices, err = services.ListSubscriptionServices(ctx, user)
 		if err != nil {
+			log.Printf("dashboard: %v", err)
 			data.ServiceLoadError = "hosting service policy unavailable"
 		}
 	}

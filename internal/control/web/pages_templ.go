@@ -1536,7 +1536,7 @@ func clientSubscriptionsSection(subscriptions []types.SubscriptionSummary) templ
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var68 = []any{"np-status-pill np-status-pill-" + statusPillClass(subscription.Status)}
+				var templ_7745c5c3_Var68 = []any{"np-status-pill " + statusPillFullClass(subscription.Status)}
 				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var68...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
@@ -1561,7 +1561,7 @@ func clientSubscriptionsSection(subscriptions []types.SubscriptionSummary) templ
 				var templ_7745c5c3_Var70 string
 				templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.Status)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 454, Col: 141}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 454, Col: 130}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 				if templ_7745c5c3_Err != nil {

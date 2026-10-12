@@ -1860,9 +1860,41 @@ func subscriptionTabPath(view WorkspaceView, subscriptionID int64, tab string) t
 
 func subscriptionTabClass(active, tab string) string {
 	if active == tab {
-		return "active"
+		return "is-active"
 	}
 	return ""
+}
+
+// tonePillClass returns the whole class name rather than a fragment, because
+// Tailwind only keeps rules whose class appears as a complete literal in a
+// scanned file. Building "np-status-pill-" + tone in markup silently purged
+// all five tone rules.
+func tonePillClass(tone string) string {
+	switch tone {
+	case "ok":
+		return "np-status-pill-ok"
+	case "pend":
+		return "np-status-pill-pend"
+	case "run":
+		return "np-status-pill-run"
+	case "fail":
+		return "np-status-pill-fail"
+	default:
+		return "np-status-pill-susp"
+	}
+}
+
+func statusPillFullClass(state string) string { return tonePillClass(statusPillClass(state)) }
+
+func timelineDotClass(tone string) string {
+	switch tone {
+	case "ok":
+		return "np-timeline-dot is-ok"
+	case "fail":
+		return "np-timeline-dot is-fail"
+	default:
+		return "np-timeline-dot is-run"
+	}
 }
 
 func databasesForSubscription(items []dashboard.Database, subscriptionID int64) []dashboard.Database {

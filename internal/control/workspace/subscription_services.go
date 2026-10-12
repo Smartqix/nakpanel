@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
@@ -296,19 +297,27 @@ LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id WHERE `
 			return nil
 		}},
 	}
+	// One failing query must not blank every feature listed after it, so each
+	// is run and reported independently and the partial data is kept.
+	var failures []string
 	for _, item := range queries {
+		label := queryLabel(item.query)
 		rows, err := s.db.QueryContext(ctx, item.query, args...)
 		if err != nil {
-			return data, err
+			failures = append(failures, label+": "+err.Error())
+			continue
 		}
 		for rows.Next() {
 			if err := item.scan(rows); err != nil {
-				rows.Close()
-				return data, err
+				failures = append(failures, label+": "+err.Error())
+				break
 			}
 		}
+		if err := rows.Err(); err != nil {
+			failures = append(failures, label+": "+err.Error())
+		}
 		if err := rows.Close(); err != nil {
-			return data, err
+			failures = append(failures, label+": "+err.Error())
 		}
 	}
 	presetQuery := `SELECT preset.id,COALESCE(preset.reseller_id,0),preset.slug,preset.name,preset.runtime,preset.image_ref,preset.active,preset.created_at
@@ -331,20 +340,39 @@ ORDER BY preset.name`
 	}
 	presetRows, err := s.db.QueryContext(ctx, presetQuery, presetArgs...)
 	if err != nil {
-		return data, err
+		return data, fmt.Errorf("subscription services: application_presets: %w", err)
 	}
 	defer presetRows.Close()
 	for presetRows.Next() {
 		var item types.ApplicationPreset
 		if err := presetRows.Scan(&item.ID, &item.ResellerID, &item.Slug, &item.Name, &item.Runtime, &item.ImageRef, &item.Active, &item.CreatedAt); err != nil {
-			return data, err
+			failures = append(failures, "application_presets: "+err.Error())
+			break
 		}
 		data.ApplicationPresets = append(data.ApplicationPresets, item)
 	}
 	if err := presetRows.Err(); err != nil {
-		return data, err
+		failures = append(failures, "application_presets: "+err.Error())
+	}
+	if len(failures) > 0 {
+		return data, fmt.Errorf("subscription services: %s", strings.Join(failures, "; "))
 	}
 	return data, nil
+}
+
+// queryLabel names a query by the first table it reads, so a failure says which
+// feature lost its data instead of failing anonymously.
+func queryLabel(query string) string {
+	marker := "FROM "
+	index := strings.Index(query, marker)
+	if index < 0 {
+		return "query"
+	}
+	rest := strings.TrimSpace(query[index+len(marker):])
+	if cut := strings.IndexAny(rest, " \t\n"); cut > 0 {
+		return rest[:cut]
+	}
+	return rest
 }
 
 type rowScanner interface {

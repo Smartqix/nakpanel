@@ -747,7 +747,7 @@ func (s *Server) handleApplicationAction(w http.ResponseWriter, r *http.Request)
 			"/containers/"+strconv.FormatInt(applicationID, 10)+"?notice=service-saved"), http.StatusSeeOther)
 		return
 	}
-	s.redirectSubscriptionService(w, r, user, subscriptionID, "containers")
+	s.redirectSubscriptionService(w, r, user, subscriptionID, "applications")
 }
 
 func (s *Server) handleApplicationPreset(w http.ResponseWriter, r *http.Request) {
@@ -854,7 +854,7 @@ func (s *Server) handleDeleteSubscriptionService(w http.ResponseWriter, r *http.
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, subscriptionID, kind+".deleted", kind, resourceID, nil)
-	tab := map[string]string{"sftp": "access", "ftp": "access", "protected": "access", "task": "tasks", "mail": "mail", "mailbox": "mail", "mail_alias": "mail", "application": "containers"}[kind]
+	tab := map[string]string{"sftp": "access", "ftp": "access", "protected": "access", "task": "tasks", "mail": "mail", "mailbox": "mail", "mail_alias": "mail", "application": "applications"}[kind]
 	s.redirectSubscriptionService(w, r, user, subscriptionID, tab)
 }
 
