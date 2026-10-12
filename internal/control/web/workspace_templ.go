@@ -19735,12 +19735,18 @@ func routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, action
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = subscriptionAttention(subscription, data, view).Render(ctx, templ_7745c5c3_Buffer)
+			if data.ServiceLoadError != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1751, "<p class=\"np-gate is-blocked\" role=\"alert\">Some hosting service data is unavailable. Resource lists and counts may be incomplete. Refresh the page or contact your provider.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = subscriptionAttention(user, subscription, data, view).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if view.Tab == "resources" {
-				if user.Role == auth.RoleClient {
+				if user.Role == auth.RoleClient || view.SupportCustomerID > 0 {
 					templ_7745c5c3_Err = subscriptionClientLimits(subscription, data).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -19791,7 +19797,7 @@ func routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, action
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1751, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1752, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -19800,7 +19806,7 @@ func routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, action
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1752, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1753, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -19808,12 +19814,12 @@ func routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, action
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1753, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1754, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1754, "<p class=\"np-empty\">Subscription not found.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1755, "<p class=\"np-empty\">Subscription not found.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -19845,22 +19851,22 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			templ_7745c5c3_Var932 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		provider := user.Role != auth.RoleClient
+		provider := user.Role != auth.RoleClient && view.SupportCustomerID == 0
 		breaches := subscriptionBreaches(subscription, data)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1755, "<header class=\"np-object-head\"><div class=\"np-object-head-main\"><div class=\"np-object-head-identity\"><span class=\"np-object-kicker\">Subscription</span><div class=\"np-object-title-row\"><h1>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1756, "<header class=\"np-object-head\"><div class=\"np-object-head-main\"><div class=\"np-object-head-identity\"><span class=\"np-object-kicker\">Subscription</span><div class=\"np-object-title-row\"><h1>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var933 string
 		templ_7745c5c3_Var933, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2443, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2446, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var933))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1756, "</h1>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1757, "</h1>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -19869,7 +19875,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			return templ_7745c5c3_Err
 		}
 		if len(breaches) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1757, "<span class=\"np-status-pill np-status-pill-fail np-pill-icon\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1758, "<span class=\"np-status-pill np-status-pill-fail np-pill-icon\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -19877,43 +19883,43 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1758, "<span>Over its limits</span></span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1759, "<span>Over its limits</span></span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1759, "</div><p class=\"np-object-meta\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1760, "</div><p class=\"np-object-meta\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if provider {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1760, "<a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1761, "<a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var934 templ.SafeURL
 			templ_7745c5c3_Var934, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/customers/"+formatJobID(subscription.CustomerID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2451, Col: 101}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2455, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var934))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1761, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1762, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var935 string
 			templ_7745c5c3_Var935, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2451, Col: 131}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2455, Col: 132}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var935))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1762, "</a> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1763, "</a> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -19921,142 +19927,142 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var936 string
 			templ_7745c5c3_Var936, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2453, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2457, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var936))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1763, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1764, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1764, "<span class=\"np-object-sep\">·</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1765, "<span class=\"np-object-sep\">·</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if provider {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1765, "plan <a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1766, "plan <a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var937 templ.SafeURL
 			templ_7745c5c3_Var937, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatJobID(subscription.PlanID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2457, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2461, Col: 88}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var937))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1766, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1767, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var938 string
 			templ_7745c5c3_Var938, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2457, Col: 112}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2461, Col: 114}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var938))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1767, "</a> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1768, "</a> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1768, "plan ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1769, "plan ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var939 string
 			templ_7745c5c3_Var939, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2459, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2463, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var939))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1769, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1770, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if account, found := accountForSubscription(data.SubscriptionServices.Accounts, subscription.ID); found {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1770, "<span class=\"np-object-sep\">·</span> account <code>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1771, "<span class=\"np-object-sep\">·</span> account <code>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var940 string
 			templ_7745c5c3_Var940, templ_7745c5c3_Err = templ.JoinStringErrs(account.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2463, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2467, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var940))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1771, "</code> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1772, "</code> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if !subscription.CreatedAt.IsZero() {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1772, "<span class=\"np-object-sep\">·</span> created ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1773, "<span class=\"np-object-sep\">·</span> created ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var941 string
 			templ_7745c5c3_Var941, templ_7745c5c3_Err = templ.JoinStringErrs(formatDateLabel(subscription.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2467, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2471, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var941))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1773, "</p></div><div class=\"np-object-head-actions\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1774, "</p></div><div class=\"np-object-head-actions\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if provider {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1774, "<a class=\"np-secondary-button\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1775, "<a class=\"np-secondary-button\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var942 templ.SafeURL
 			templ_7745c5c3_Var942, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2473, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2477, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var942))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1775, "\">Change plan</a> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1776, "\">Change plan</a> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if subscription.SyncMode != "custom" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1776, "<form method=\"post\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1777, "<form method=\"post\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var943 templ.SafeURL
 				templ_7745c5c3_Var943, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2475, Col: 108}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2479, Col: 108}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var943))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1777, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1778, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -20064,27 +20070,27 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1778, "<button type=\"submit\" class=\"np-secondary-button\">Synchronize now</button></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1779, "<button type=\"submit\" class=\"np-secondary-button\">Synchronize now</button></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
 		if actions.CanCreateSite {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1779, "<a class=\"np-primary-link\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1780, "<a class=\"np-primary-link\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var944 templ.SafeURL
 			templ_7745c5c3_Var944, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2482, Col: 174}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2486, Col: 178}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var944))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1780, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1781, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -20092,12 +20098,12 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1781, "<span>Add Domain</span></a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1782, "<span>Add Domain</span></a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1782, "</div></div><nav class=\"np-domain-tabs np-subscription-tabs\" aria-label=\"Subscription workspace\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1783, "</div></div><nav class=\"np-domain-tabs np-subscription-tabs\" aria-label=\"Subscription workspace\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -20106,38 +20112,38 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			return templ_7745c5c3_Err
 		}
 		if view.Tab == "resources" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1783, "<a class=\"is-active\" aria-current=\"page\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1784, "<a class=\"is-active\" aria-current=\"page\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var945 templ.SafeURL
 			templ_7745c5c3_Var945, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2489, Col: 105}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2494, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var945))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1784, "\">Resources<span class=\"np-sr-only\">Subscription settings</span></a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1785, "\">Resources<span class=\"np-sr-only\">Subscription settings</span></a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1785, "<a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1786, "<a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var946 templ.SafeURL
 			templ_7745c5c3_Var946, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2491, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2496, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var946))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1786, "\">Resources<span class=\"np-sr-only\">Subscription settings</span></a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1787, "\">Resources<span class=\"np-sr-only\">Subscription settings</span></a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -20170,7 +20176,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1787, "</nav></header>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1788, "</nav></header>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -20200,27 +20206,27 @@ func subscriptionTabLink(view WorkspaceView, subscriptionID int64, tab string, l
 		}
 		ctx = templ.ClearChildren(ctx)
 		if view.Tab == tab {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1788, "<a class=\"is-active\" aria-current=\"page\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1789, "<a class=\"is-active\" aria-current=\"page\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var948 templ.SafeURL
 			templ_7745c5c3_Var948, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscriptionID, tab))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2506, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2511, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var948))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1789, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1790, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var949 string
 			templ_7745c5c3_Var949, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2506, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2511, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var949))
 			if templ_7745c5c3_Err != nil {
@@ -20230,32 +20236,32 @@ func subscriptionTabLink(view WorkspaceView, subscriptionID int64, tab string, l
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1790, "</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1791, "</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1791, "<a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1792, "<a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var950 templ.SafeURL
 			templ_7745c5c3_Var950, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscriptionID, tab))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2508, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2513, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var950))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1792, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1793, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var951 string
 			templ_7745c5c3_Var951, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2508, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2513, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var951))
 			if templ_7745c5c3_Err != nil {
@@ -20265,7 +20271,7 @@ func subscriptionTabLink(view WorkspaceView, subscriptionID int64, tab string, l
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1793, "</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1794, "</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -20297,38 +20303,38 @@ func subscriptionTabBadge(badge string, alert bool) templ.Component {
 		ctx = templ.ClearChildren(ctx)
 		if badge != "" && badge != "0" {
 			if alert {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1794, "<span class=\"np-tab-badge np-tab-badge-alert\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1795, "<span class=\"np-tab-badge np-tab-badge-alert\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var953 string
 				templ_7745c5c3_Var953, templ_7745c5c3_Err = templ.JoinStringErrs(badge)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2515, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2520, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var953))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1795, "</span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1796, "</span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1796, "<span class=\"np-tab-badge\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1797, "<span class=\"np-tab-badge\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var954 string
 				templ_7745c5c3_Var954, templ_7745c5c3_Err = templ.JoinStringErrs(badge)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2517, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2522, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var954))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1797, "</span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1798, "</span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -20340,7 +20346,7 @@ func subscriptionTabBadge(badge string, alert bool) templ.Component {
 
 // subscriptionAttention states the one condition that matters, once, with the
 // ways out. It renders on every tab so the condition cannot be tabbed away.
-func subscriptionAttention(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) templ.Component {
+func subscriptionAttention(user auth.SessionUser, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -20363,7 +20369,7 @@ func subscriptionAttention(subscription types.SubscriptionSummary, data dashboar
 		ctx = templ.ClearChildren(ctx)
 		breaches := subscriptionBreaches(subscription, data)
 		if len(breaches) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1798, "<section class=\"np-attention\" aria-labelledby=\"np-subscription-breach\"><div class=\"np-attention-head\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1799, "<section class=\"np-attention\" aria-labelledby=\"np-subscription-breach\"><div class=\"np-attention-head\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -20371,75 +20377,75 @@ func subscriptionAttention(subscription types.SubscriptionSummary, data dashboar
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1799, "<h2 id=\"np-subscription-breach\">This subscription holds more than its plan allows</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1800, "<h2 id=\"np-subscription-breach\">This subscription holds more than its plan allows</h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if !subscription.ComplianceCheckedAt.IsZero() {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1800, "<time datetime=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1801, "<time datetime=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var956 string
 				templ_7745c5c3_Var956, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(subscription.ComplianceCheckedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2532, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2537, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var956))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1801, "\">checked ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1802, "\">checked ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var957 string
 				templ_7745c5c3_Var957, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(subscription.ComplianceCheckedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2532, Col: 132}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2537, Col: 132}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var957))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1802, "</time>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1803, "</time>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1803, "</div><div class=\"np-attention-body\"><p><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1804, "</div><div class=\"np-attention-body\"><p><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var958 string
 			templ_7745c5c3_Var958, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionBreachSentence(breaches))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2536, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2541, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var958))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1804, ".</strong> Existing resources were preserved, but new provisioning is checked against the plan, so the next request will be refused.</p><div class=\"np-attention-actions\"><a class=\"np-secondary-button\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1805, ".</strong> Existing resources were preserved. New requests follow the subscription's overuse policy, provider allocation, and server capacity limits.</p><div class=\"np-attention-actions\"><a class=\"np-secondary-button\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var959 templ.SafeURL
 			templ_7745c5c3_Var959, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2538, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2543, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var959))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1805, "\">Review the limits</a></div></div></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1806, "\">Review the limits</a></div></div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if subscription.SyncError != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1806, "<section class=\"np-attention\" aria-labelledby=\"np-subscription-syncerror\"><div class=\"np-attention-head\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1807, "<section class=\"np-attention\" aria-labelledby=\"np-subscription-syncerror\"><div class=\"np-attention-head\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -20447,41 +20453,56 @@ func subscriptionAttention(subscription types.SubscriptionSummary, data dashboar
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1807, "<h2 id=\"np-subscription-syncerror\">The last synchronization failed</h2></div><div class=\"np-attention-body\"><p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1808, "<h2 id=\"np-subscription-syncerror\">The last synchronization failed</h2></div><div class=\"np-attention-body\"><p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var960 string
 			templ_7745c5c3_Var960, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SyncError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2550, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2555, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var960))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1808, "</p><div class=\"np-attention-actions\"><form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1809, "</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var961 templ.SafeURL
-			templ_7745c5c3_Var961, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2552, Col: 107}
+			if user.Role != auth.RoleClient && view.SupportCustomerID == 0 {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1810, "<div class=\"np-attention-actions\"><form method=\"post\" action=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var961 templ.SafeURL
+				templ_7745c5c3_Var961, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync"))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2558, Col: 108}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var961))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1811, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = csrfInput(view).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1812, "<button type=\"submit\" class=\"np-secondary-button\">Try again</button></form></div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1813, "<p>Contact your provider to retry synchronization.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var961))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1809, "\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = csrfInput(view).Render(ctx, templ_7745c5c3_Buffer)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1810, "<button type=\"submit\" class=\"np-secondary-button\">Try again</button></form></div></div></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1814, "</div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -20514,210 +20535,210 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			templ_7745c5c3_Var962 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		provider := user.Role != auth.RoleClient
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1811, "<aside class=\"np-detail-rail\" aria-label=\"Subscription properties\"><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Subscription</h2></div><dl class=\"np-prop-list\"><div><dt>Subscriber</dt><dd>")
+		provider := user.Role != auth.RoleClient && view.SupportCustomerID == 0
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1815, "<aside class=\"np-detail-rail\" aria-label=\"Subscription properties\"><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Subscription</h2></div><dl class=\"np-prop-list\"><div><dt>Subscriber</dt><dd>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if provider {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1812, "<a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1816, "<a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var963 templ.SafeURL
 			templ_7745c5c3_Var963, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/customers/"+formatJobID(subscription.CustomerID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2575, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2584, Col: 103}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var963))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1813, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1817, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var964 string
 			templ_7745c5c3_Var964, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2575, Col: 132}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2584, Col: 133}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var964))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1814, "</a> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1818, "</a> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1815, "<strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1819, "<strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var965 string
 			templ_7745c5c3_Var965, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2577, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2586, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var965))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1816, "</strong> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1820, "</strong> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if subscription.CustomerEmail != "" && subscription.CustomerEmail != subscription.CustomerName {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1817, "<small>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1821, "<small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var966 string
 			templ_7745c5c3_Var966, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerEmail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2580, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2589, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var966))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1818, "</small>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1822, "</small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1819, "</dd></div><div class=\"np-prop-row\"><div><dt>Service plan</dt><dd>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1823, "</dd></div><div class=\"np-prop-row\"><div><dt>Service plan</dt><dd>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if provider {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1820, "<a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1824, "<a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var967 templ.SafeURL
 			templ_7745c5c3_Var967, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatJobID(subscription.PlanID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2589, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2598, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var967))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1821, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1825, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var968 string
 			templ_7745c5c3_Var968, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2589, Col: 109}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2598, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var968))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1822, "</a> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1826, "</a> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1823, "<strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1827, "<strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var969 string
 			templ_7745c5c3_Var969, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2591, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2600, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var969))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1824, "</strong> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1828, "</strong> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1825, "<small>Revision ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1829, "<small>Revision ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var970 string
 		templ_7745c5c3_Var970, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.PlanRevision))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2593, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2602, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var970))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1826, " · ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1830, " · ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var971 string
 		templ_7745c5c3_Var971, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionProviderLabel(subscription))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2593, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2602, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var971))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1827, "</small></dd></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1831, "</small></dd></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if provider {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1828, "<a class=\"np-secondary-button\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1832, "<a class=\"np-secondary-button\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var972 templ.SafeURL
 			templ_7745c5c3_Var972, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2597, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2606, Col: 99}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var972))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1829, "\">Change</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1833, "\">Change</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1830, "</div><div><dt>Entitlements</dt><dd><strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1834, "</div><div><dt>Entitlements</dt><dd><strong>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var973 string
 		templ_7745c5c3_Var973, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSyncModeLabel(subscription.SyncMode))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2602, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2611, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var973))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1831, "</strong><small>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1835, "</strong><small>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var974 string
 		templ_7745c5c3_Var974, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSyncModeDetail(subscription.SyncMode))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2602, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2611, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var974))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1832, "</small></dd></div><div><dt>Synchronization</dt><dd class=\"np-prop-inline\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1836, "</small></dd></div><div><dt>Synchronization</dt><dd class=\"np-prop-inline\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -20726,25 +20747,25 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			return templ_7745c5c3_Err
 		}
 		if !subscription.UpdatedAt.IsZero() {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1833, "<small>applied ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1837, "<small>applied ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var975 string
 			templ_7745c5c3_Var975, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(subscription.UpdatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2609, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2618, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var975))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1834, "</small>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1838, "</small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1835, "</dd></div><div><dt>Compliance</dt><dd class=\"np-prop-inline\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1839, "</dd></div><div><dt>Compliance</dt><dd class=\"np-prop-inline\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -20753,134 +20774,134 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			return templ_7745c5c3_Err
 		}
 		if !subscription.ComplianceCheckedAt.IsZero() {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1836, "<small>checked ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1840, "<small>checked ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var976 string
 			templ_7745c5c3_Var976, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(subscription.ComplianceCheckedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2618, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2627, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var976))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1837, "</small>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1841, "</small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1838, "</dd></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1842, "</dd></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if account, found := accountForSubscription(data.SubscriptionServices.Accounts, subscription.ID); found {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1839, "<div><dt>System account</dt><dd><strong><code>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1843, "<div><dt>System account</dt><dd><strong><code>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var977 string
 			templ_7745c5c3_Var977, templ_7745c5c3_Err = templ.JoinStringErrs(account.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2625, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2634, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var977))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1840, "</code></strong><small>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1844, "</code></strong><small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var978 string
 			templ_7745c5c3_Var978, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellWord(account.ShellMode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2625, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2634, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var978))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1841, " · ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1845, " · ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var979 string
 			templ_7745c5c3_Var979, templ_7745c5c3_Err = templ.JoinStringErrs(account.HomePath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2625, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2634, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var979))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1842, "</small></dd></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1846, "</small></dd></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if !subscription.CreatedAt.IsZero() {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1843, "<div><dt>Created</dt><dd><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1847, "<div><dt>Created</dt><dd><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var980 string
 			templ_7745c5c3_Var980, templ_7745c5c3_Err = templ.JoinStringErrs(formatDateLabel(subscription.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2631, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2641, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var980))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1844, "</strong> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1848, "</strong> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if !subscription.UpdatedAt.IsZero() {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1845, "<small>Last changed ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1849, "<small>Last changed ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var981 string
 				templ_7745c5c3_Var981, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(subscription.UpdatedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2633, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2643, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var981))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1846, "</small>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1850, "</small>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1847, "</dd></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1851, "</dd></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1848, "</dl>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1852, "</dl>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if user.Role == auth.RoleAdmin {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1849, "<div class=\"np-prop-actions\"><form method=\"post\" action=\"")
+		if user.Role == auth.RoleAdmin && view.SupportCustomerID == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1853, "<div class=\"np-prop-actions\"><form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var982 templ.SafeURL
 			templ_7745c5c3_Var982, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/support/customers/" + formatJobID(subscription.CustomerID) + "/enter"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2641, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2651, Col: 120}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var982))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1850, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1854, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -20888,25 +20909,25 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1851, "<button type=\"submit\" class=\"np-secondary-button\">Open support view</button></form></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1855, "<button type=\"submit\" class=\"np-secondary-button\">Open support view</button></form></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1852, "</section><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Against the plan</h2><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1856, "</section><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Against the plan</h2><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var983 templ.SafeURL
 		templ_7745c5c3_Var983, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2649, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2659, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var983))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1853, "\">All limits</a></div><div class=\"np-usage-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1857, "\">All limits</a></div><div class=\"np-usage-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -20916,7 +20937,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1854, "</div></section></aside>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1858, "</div></section></aside>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -20952,7 +20973,7 @@ func limitRowBlock(row limitRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1855, "<div class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1859, "<div class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -20965,46 +20986,46 @@ func limitRowBlock(row limitRow) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1856, "\"><div class=\"np-usage-head\"><span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1860, "\"><div class=\"np-usage-head\"><span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var987 string
 		templ_7745c5c3_Var987, templ_7745c5c3_Err = templ.JoinStringErrs(row.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2663, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2673, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var987))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1857, "</span><strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1861, "</span><strong>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var988 string
 		templ_7745c5c3_Var988, templ_7745c5c3_Err = templ.JoinStringErrs(row.Used)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2663, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2673, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var988))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1858, " of ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1862, " of ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var989 string
 		templ_7745c5c3_Var989, templ_7745c5c3_Err = templ.JoinStringErrs(row.Limit)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2663, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2673, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var989))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1859, "</strong></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1863, "</strong></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21014,7 +21035,7 @@ func limitRowBlock(row limitRow) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1860, "<div class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1864, "<div class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21027,57 +21048,57 @@ func limitRowBlock(row limitRow) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1861, "\" role=\"img\" aria-label=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1865, "\" role=\"img\" aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var992 string
 			templ_7745c5c3_Var992, templ_7745c5c3_Err = templ.JoinStringErrs(limitRowMeterLabel(row))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2665, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2675, Col: 84}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var992))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1862, "\"><span style=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1866, "\"><span style=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var993 string
 			templ_7745c5c3_Var993, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("width:" + row.Percent + "%")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2665, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2675, Col: 129}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var993))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1863, "\"></span></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1867, "\"></span></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if row.Note != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1864, "<p class=\"np-usage-note\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1868, "<p class=\"np-usage-note\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var994 string
 			templ_7745c5c3_Var994, templ_7745c5c3_Err = templ.JoinStringErrs(row.Note)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2668, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2678, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var994))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1865, "</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1869, "</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1866, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1870, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21107,32 +21128,32 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 		}
 		ctx = templ.ClearChildren(ctx)
 		group := ""
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1867, "<div class=\"np-table-wrap\"><table class=\"np-table np-limit-table\"><caption class=\"np-sr-only\">Plan limits, current usage and enforcement for this subscription</caption> <thead><tr><th>Resource</th><th>Used</th><th>Limit</th><th>Standing</th><th>Enforcement</th></tr></thead> <tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1871, "<div class=\"np-table-wrap\"><table class=\"np-table np-limit-table\"><caption class=\"np-sr-only\">Plan limits, current usage and enforcement for this subscription</caption> <thead><tr><th>Resource</th><th>Used</th><th>Limit</th><th>Standing</th><th>Enforcement</th></tr></thead> <tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, row := range subscriptionLimitRows(subscription, data) {
 			if row.Group != group {
 				group = row.Group
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1868, "<tr class=\"np-limit-group\"><th colspan=\"5\" scope=\"colgroup\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1872, "<tr class=\"np-limit-group\"><th colspan=\"5\" scope=\"colgroup\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var996 string
 				templ_7745c5c3_Var996, templ_7745c5c3_Err = templ.JoinStringErrs(row.Group)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2682, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2692, Col: 76}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var996))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1869, "</th></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1873, "</th></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1870, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1874, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21141,7 +21162,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1871, "<tr class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1875, "<tr class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21154,46 +21175,46 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1872, "\"><td data-label=\"Resource\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1876, "\"><td data-label=\"Resource\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var999 string
 			templ_7745c5c3_Var999, templ_7745c5c3_Err = templ.JoinStringErrs(row.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2685, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2695, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var999))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1873, "</td><td data-label=\"Used\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1877, "</td><td data-label=\"Used\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1000 string
 			templ_7745c5c3_Var1000, templ_7745c5c3_Err = templ.JoinStringErrs(row.Used)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2686, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2696, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1000))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1874, "</td><td data-label=\"Limit\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1878, "</td><td data-label=\"Limit\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1001 string
 			templ_7745c5c3_Var1001, templ_7745c5c3_Err = templ.JoinStringErrs(row.Limit)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2687, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2697, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1001))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1875, "</td><td data-label=\"Standing\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1879, "</td><td data-label=\"Standing\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21203,7 +21224,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1876, "<div class=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1880, "<div class=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -21216,75 +21237,75 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1877, "\" role=\"img\" aria-label=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1881, "\" role=\"img\" aria-label=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1004 string
 				templ_7745c5c3_Var1004, templ_7745c5c3_Err = templ.JoinStringErrs(limitRowMeterLabel(row))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2690, Col: 88}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2700, Col: 88}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1004))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1878, "\"><span style=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1882, "\"><span style=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1005 string
 				templ_7745c5c3_Var1005, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("width:" + row.Percent + "%")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2690, Col: 133}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2700, Col: 133}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1005))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1879, "\"></span></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1883, "\"></span></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			if row.Note != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1880, "<p class=\"np-usage-note\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1884, "<p class=\"np-usage-note\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1006 string
 				templ_7745c5c3_Var1006, templ_7745c5c3_Err = templ.JoinStringErrs(row.Note)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2693, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2703, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1006))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1881, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1885, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1882, "</td><td data-label=\"Enforcement\"><span class=\"np-contract-badge\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1886, "</td><td data-label=\"Enforcement\"><span class=\"np-contract-badge\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1007 string
 			templ_7745c5c3_Var1007, templ_7745c5c3_Err = templ.JoinStringErrs(row.Enforcement)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2696, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2706, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1007))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1883, "</span></td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1887, "</span></td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1884, "</tbody></table></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1888, "</tbody></table></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21313,7 +21334,7 @@ func subscriptionClientLimits(subscription types.SubscriptionSummary, data dashb
 			templ_7745c5c3_Var1008 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1885, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Subscription settings</h2><span class=\"np-muted\">Limits set by your hosting provider</span></div></div><p class=\"np-gate is-role\">Your limits are set by your hosting provider. You can see what you are using, but only the provider can change these values.</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1889, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Subscription settings</h2><span class=\"np-muted\">Limits set by your hosting provider</span></div></div><p class=\"np-gate is-role\">Your limits are set by your hosting provider. You can see what you are using, but only the provider can change these values.</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21321,7 +21342,7 @@ func subscriptionClientLimits(subscription types.SubscriptionSummary, data dashb
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1886, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1890, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21353,7 +21374,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			templ_7745c5c3_Var1009 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1887, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Subscription settings</h2><span class=\"np-muted\">Where these limits come from, and what they are</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1891, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Subscription settings</h2><span class=\"np-muted\">Where these limits come from, and what they are</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21361,7 +21382,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1888, "</div><div class=\"np-mode-choices\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1892, "</div><div class=\"np-mode-choices\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21370,7 +21391,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1889, "<span class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1893, "<span class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21383,7 +21404,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1890, "\"><span><strong>Follows the plan</strong><small>Plan edits reach this subscription automatically.</small></span></span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1894, "\"><span><strong>Follows the plan</strong><small>Plan edits reach this subscription automatically.</small></span></span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21392,7 +21413,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1891, "<span class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1895, "<span class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21405,7 +21426,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1892, "\"><span><strong>Locked</strong><small>Keeps today's values. Plan edits are held until it is released.</small></span></span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1896, "\"><span><strong>Locked</strong><small>Keeps today's values. Plan edits are held until it is released.</small></span></span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21414,7 +21435,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1893, "<span class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1897, "<span class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21427,25 +21448,25 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1894, "\"><span><strong>Custom snapshot</strong><small>Its own saved limits. Plan edits never reach it.</small></span></span></div><div class=\"np-panel-actions\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1898, "\"><span><strong>Custom snapshot</strong><small>Its own saved limits. Plan edits never reach it.</small></span></span></div><div class=\"np-panel-actions\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if subscription.SyncMode != "custom" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1895, "<form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1899, "<form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1016 templ.SafeURL
 			templ_7745c5c3_Var1016, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2730, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2740, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1016))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1896, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1900, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21453,26 +21474,26 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1897, "<button type=\"submit\" class=\"np-secondary-button\">Synchronize now</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1901, "<button type=\"submit\" class=\"np-secondary-button\">Synchronize now</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if subscription.SyncMode == "synced" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1898, "<form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1902, "<form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1017 templ.SafeURL
 			templ_7745c5c3_Var1017, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/mode"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2736, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2746, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1017))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1899, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1903, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21480,25 +21501,25 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1900, "<input type=\"hidden\" name=\"sync_mode\" value=\"locked\"> <button type=\"submit\" class=\"np-secondary-button\" data-np-confirm=\"Hold plan changes for this subscription?\">Lock customization</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1904, "<input type=\"hidden\" name=\"sync_mode\" value=\"locked\"> <button type=\"submit\" class=\"np-secondary-button\" data-np-confirm=\"Hold plan changes for this subscription?\">Lock customization</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else if subscription.SyncMode == "locked" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1901, "<form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1905, "<form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1018 templ.SafeURL
 			templ_7745c5c3_Var1018, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/mode"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2742, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2752, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1018))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1902, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1906, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21506,30 +21527,30 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1903, "<input type=\"hidden\" name=\"sync_mode\" value=\"synced\"> <button type=\"submit\">Return to plan sync</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1907, "<input type=\"hidden\" name=\"sync_mode\" value=\"synced\"> <button type=\"submit\">Return to plan sync</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1904, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1908, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if subscription.ComplianceError != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1905, "<p class=\"np-gate is-blocked\">Plan compliance: ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1909, "<p class=\"np-gate is-blocked\">Plan compliance: ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1019 string
 			templ_7745c5c3_Var1019, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ComplianceError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2750, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2760, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1019))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1906, ". Existing resources were preserved; new provisioning remains subject to the active snapshot.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1910, ". Existing resources were preserved; new provisioning remains subject to the active snapshot.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21538,20 +21559,20 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1907, "<div class=\"np-form-split\"><form class=\"np-form np-action-form\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1911, "<div class=\"np-form-split\"><form class=\"np-form np-action-form\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1020 templ.SafeURL
 		templ_7745c5c3_Var1020, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2754, Col: 138}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2764, Col: 138}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1020))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1908, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1912, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21559,120 +21580,120 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1909, "<input type=\"hidden\" name=\"customer_id\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1913, "<input type=\"hidden\" name=\"customer_id\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1021 string
 		templ_7745c5c3_Var1021, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(subscription.CustomerID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2756, Col: 88}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2766, Col: 88}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1021))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1910, "\"><input type=\"hidden\" name=\"subscription_name\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1914, "\"><input type=\"hidden\" name=\"subscription_name\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1022 string
 		templ_7745c5c3_Var1022, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2756, Col: 175}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2766, Col: 175}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1022))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1911, "\"><input type=\"hidden\" name=\"sync_mode\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1915, "\"><input type=\"hidden\" name=\"sync_mode\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1023 string
 		templ_7745c5c3_Var1023, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SyncMode)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2756, Col: 246}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2766, Col: 246}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1023))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1912, "\"><input type=\"hidden\" name=\"status\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1916, "\"><input type=\"hidden\" name=\"status\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1024 string
 		templ_7745c5c3_Var1024, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.Status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2756, Col: 312}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2766, Col: 312}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1024))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1913, "\"> <label>Service plan<select name=\"plan_id\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1917, "\"> <label>Service plan<select name=\"plan_id\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, plan := range data.Plans {
 			if plan.IsActive || plan.ID == subscription.PlanID {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1914, "<option value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1918, "<option value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1025 string
 				templ_7745c5c3_Var1025, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2760, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2770, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1025))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1915, "\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1919, "\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if plan.ID == subscription.PlanID {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1916, " selected")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1920, " selected")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1917, ">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1921, ">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1026 string
 				templ_7745c5c3_Var1026, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2760, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2770, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1026))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1918, "</option>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1922, "</option>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1919, "</select></label><p class=\"np-form-help\">Moving plans replaces every limit above.</p><button type=\"submit\" data-np-confirm=\"Move this subscription onto the selected plan?\">Change plan</button></form><form class=\"np-form np-action-form\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1923, "</select></label><p class=\"np-form-help\">Moving plans replaces every limit above.</p><button type=\"submit\" data-np-confirm=\"Move this subscription onto the selected plan?\">Change plan</button></form><form class=\"np-form np-action-form\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1027 templ.SafeURL
 		templ_7745c5c3_Var1027, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2767, Col: 138}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2777, Col: 138}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1027))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1920, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1924, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21680,120 +21701,120 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1921, "<input type=\"hidden\" name=\"customer_id\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1925, "<input type=\"hidden\" name=\"customer_id\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1028 string
 		templ_7745c5c3_Var1028, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(subscription.CustomerID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2769, Col: 88}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2779, Col: 88}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1028))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1922, "\"><input type=\"hidden\" name=\"subscription_name\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1926, "\"><input type=\"hidden\" name=\"subscription_name\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1029 string
 		templ_7745c5c3_Var1029, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2769, Col: 175}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2779, Col: 175}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1029))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1923, "\"><input type=\"hidden\" name=\"sync_mode\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1927, "\"><input type=\"hidden\" name=\"sync_mode\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1030 string
 		templ_7745c5c3_Var1030, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SyncMode)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2769, Col: 246}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2779, Col: 246}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1030))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1924, "\"><input type=\"hidden\" name=\"plan_id\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1928, "\"><input type=\"hidden\" name=\"plan_id\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1031 string
 		templ_7745c5c3_Var1031, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(subscription.PlanID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2769, Col: 327}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2779, Col: 327}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1031))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1925, "\"> <label>Status<select name=\"status\"><option value=\"active\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1929, "\"> <label>Status<select name=\"status\"><option value=\"active\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if subscription.Status == "active" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1926, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1927, ">Active</option><option value=\"suspended\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if subscription.Status == "suspended" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1928, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1929, ">Suspended — websites stop serving</option><option value=\"cancelled\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if subscription.Status == "cancelled" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1930, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1931, ">Cancelled — websites stop, data kept</option></select></label><p class=\"np-form-help\">Suspending takes ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1931, ">Active</option><option value=\"suspended\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if subscription.Status == "suspended" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1932, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1933, ">Suspended — websites stop serving</option><option value=\"cancelled\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if subscription.Status == "cancelled" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1934, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1935, ">Cancelled — websites stop, data kept</option></select></label><p class=\"np-form-help\">Suspending takes ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1032 string
 		templ_7745c5c3_Var1032, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(sitesForSubscription(data.Sites, subscription.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2771, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2781, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1032))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1932, " website(s) offline immediately.</p><button type=\"submit\" data-np-confirm=\"Apply this status change to the subscription and its websites?\">Apply status</button></form></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1936, " website(s) offline immediately.</p><button type=\"submit\" data-np-confirm=\"Apply this status change to the subscription and its websites?\">Apply status</button></form></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if subscription.SyncMode != "custom" && len(addonsForProvider(data.AddonPlans, subscription.ResellerID)) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1933, "<form class=\"np-form np-action-form\" method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1937, "<form class=\"np-form np-action-form\" method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1033 templ.SafeURL
 			templ_7745c5c3_Var1033, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/addons"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2776, Col: 138}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2786, Col: 138}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1033))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1934, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1938, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21801,48 +21822,48 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1935, "<fieldset><legend>Add-on plans</legend> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1939, "<fieldset><legend>Add-on plans</legend> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, addon := range addonsForProvider(data.AddonPlans, subscription.ResellerID) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1936, "<label class=\"np-check\"><input type=\"checkbox\" name=\"addon_id\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1940, "<label class=\"np-check\"><input type=\"checkbox\" name=\"addon_id\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1034 string
 				templ_7745c5c3_Var1034, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(addon.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2780, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2790, Col: 98}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1034))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1937, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1941, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1035 string
 				templ_7745c5c3_Var1035, templ_7745c5c3_Err = templ.JoinStringErrs(addon.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2780, Col: 114}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2790, Col: 114}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1035))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1938, "</label>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1942, "</label>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1939, "</fieldset><button type=\"submit\">Apply add-ons</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1943, "</fieldset><button type=\"submit\">Apply add-ons</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else if subscription.SyncMode == "custom" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1940, "<p class=\"np-muted\">Custom subscriptions use their saved entitlement snapshot and cannot attach add-ons.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1944, "<p class=\"np-muted\">Custom subscriptions use their saved entitlement snapshot and cannot attach add-ons.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21856,25 +21877,25 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			return templ_7745c5c3_Err
 		}
 		if isSiteRetryNotice(data.Notice) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1941, "<div class=\"np-panel-actions\"><a class=\"np-primary-link\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1945, "<div class=\"np-panel-actions\"><a class=\"np-primary-link\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1036 templ.SafeURL
 			templ_7745c5c3_Var1036, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2791, Col: 202}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2801, Col: 202}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1036))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1942, "\">Retry website setup</a></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1946, "\">Retry website setup</a></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1943, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1947, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -21904,38 +21925,38 @@ func subscriptionDomainsPanel(subscription types.SubscriptionSummary, data dashb
 		}
 		ctx = templ.ClearChildren(ctx)
 		sites := sitesForSubscription(data.Sites, subscription.ID)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1944, "<section class=\"np-panel np-subscription-domains\"><div class=\"np-panel-title\"><div><h2>Websites &amp; Domains</h2><span class=\"np-muted\">Everything hosted under this subscription · ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1948, "<section class=\"np-panel np-subscription-domains\"><div class=\"np-panel-title\"><div><h2>Websites &amp; Domains</h2><span class=\"np-muted\">Everything hosted under this subscription · ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1038 string
 		templ_7745c5c3_Var1038, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.DomainsUsed, subscription.MaxSites, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2800, Col: 187}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2810, Col: 187}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1038))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1945, " domains used</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1949, " domains used</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if actions.CanCreateSite {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1946, "<a class=\"np-primary-link\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1950, "<a class=\"np-primary-link\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1039 templ.SafeURL
 			templ_7745c5c3_Var1039, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2802, Col: 173}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2812, Col: 173}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1039))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1947, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1951, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21943,17 +21964,17 @@ func subscriptionDomainsPanel(subscription types.SubscriptionSummary, data dashb
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1948, "<span>Add Domain</span></a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1952, "<span>Add Domain</span></a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1949, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1953, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(sites) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1950, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1954, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21961,35 +21982,35 @@ func subscriptionDomainsPanel(subscription types.SubscriptionSummary, data dashb
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1951, "</span> <strong>No domains are hosted by this subscription.</strong><p>A website gives this subscription its document root, PHP pool, DNS zone and certificate.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1955, "</span> <strong>No domains are hosted by this subscription.</strong><p>A website gives this subscription its document root, PHP pool, DNS zone and certificate.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if actions.CanCreateSite {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1952, "<a class=\"np-primary-link\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1956, "<a class=\"np-primary-link\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1040 templ.SafeURL
 				templ_7745c5c3_Var1040, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2811, Col: 174}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2821, Col: 174}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1040))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1953, "\">Add the first domain</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1957, "\">Add the first domain</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1954, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1958, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1955, "<div class=\"np-domain-blocks\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1959, "<div class=\"np-domain-blocks\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -21999,31 +22020,31 @@ func subscriptionDomainsPanel(subscription types.SubscriptionSummary, data dashb
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1956, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1960, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if subscription.MaxSites >= 0 && subscription.DomainsUsed >= subscription.MaxSites {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1957, "<p class=\"np-detail-footnote\">The domain limit is reached. Raise it on the plan, or on this subscription, before adding another.<a href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1961, "<p class=\"np-detail-footnote\">The domain limit is reached. Raise it on the plan, or on this subscription, before adding another.<a href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1041 templ.SafeURL
 				templ_7745c5c3_Var1041, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2821, Col: 195}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2831, Col: 195}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1041))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1958, "\">Edit limits</a></p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1962, "\">Edit limits</a></p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1959, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1963, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -22054,20 +22075,20 @@ func subscriptionRecentPanel(subscription types.SubscriptionSummary, data dashbo
 		ctx = templ.ClearChildren(ctx)
 		events := subscriptionAuditEvents(data, subscription.ID, 4)
 		if len(events) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1960, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Recent activity on this subscription</h2><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1964, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Recent activity on this subscription</h2><a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1043 templ.SafeURL
 			templ_7745c5c3_Var1043, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "activity"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2831, Col: 138}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2841, Col: 138}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1043))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1961, "\">All activity</a></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1965, "\">All activity</a></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22075,7 +22096,7 @@ func subscriptionRecentPanel(subscription types.SubscriptionSummary, data dashbo
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1962, "</section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1966, "</section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22105,12 +22126,12 @@ func subscriptionTimeline(events []types.AuditEvent) templ.Component {
 			templ_7745c5c3_Var1044 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1963, "<ol class=\"np-timeline\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1967, "<ol class=\"np-timeline\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, event := range events {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1964, "<li>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1968, "<li>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22119,7 +22140,7 @@ func subscriptionTimeline(events []types.AuditEvent) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1965, "<span class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1969, "<span class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22132,7 +22153,7 @@ func subscriptionTimeline(events []types.AuditEvent) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1966, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1970, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22140,77 +22161,77 @@ func subscriptionTimeline(events []types.AuditEvent) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1967, "</span> <span class=\"np-timeline-body\"><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1971, "</span> <span class=\"np-timeline-body\"><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1047 string
 			templ_7745c5c3_Var1047, templ_7745c5c3_Err = templ.JoinStringErrs(auditActionLabel(event.Action))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2842, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2852, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1047))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1968, "</strong><small>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1972, "</strong><small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1048 string
 			templ_7745c5c3_Var1048, templ_7745c5c3_Err = templ.JoinStringErrs(event.TargetType)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2842, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2852, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1048))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1969, " · ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1973, " · ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1049 string
 			templ_7745c5c3_Var1049, templ_7745c5c3_Err = templ.JoinStringErrs(auditActor(event))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2842, Col: 136}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2852, Col: 136}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1049))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1970, "</small></span> <span class=\"np-timeline-when\"><span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1974, "</small></span> <span class=\"np-timeline-when\"><span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1050 string
 			templ_7745c5c3_Var1050, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(event.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2843, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2853, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1050))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1971, "</span><span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1975, "</span><span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1051 string
 			templ_7745c5c3_Var1051, templ_7745c5c3_Err = templ.JoinStringErrs(formatStampLabel(event.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2843, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2853, Col: 129}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1051))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1972, "</span></span></li>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1976, "</span></span></li>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1973, "</ol>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1977, "</ol>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -22242,100 +22263,100 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 		}
 		ctx = templ.ClearChildren(ctx)
 		events := subscriptionAuditEvents(data, subscription.ID, 40)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1974, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Convergence &amp; activity</h2><span class=\"np-muted\">This subscription's share of the server's recent activity</span></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1978, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Convergence &amp; activity</h2><span class=\"np-muted\">This subscription's share of the server's recent activity</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if account, found := accountForSubscription(data.SubscriptionServices.Accounts, subscription.ID); found {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1975, "<dl class=\"np-facts\"><div><dt>Asked for</dt><dd data-np-desired-state=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1979, "<dl class=\"np-facts\"><div><dt>Asked for</dt><dd data-np-desired-state=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1053 string
 			templ_7745c5c3_Var1053, templ_7745c5c3_Err = templ.JoinStringErrs(account.DesiredState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2857, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2867, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1053))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1976, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1980, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1054 string
 			templ_7745c5c3_Var1054, templ_7745c5c3_Err = templ.JoinStringErrs(accountStateWord(account.DesiredState))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2857, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2867, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1054))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1977, "</dd></div><div><dt>Actually applied</dt><dd data-np-applied-state=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1981, "</dd></div><div><dt>Actually applied</dt><dd data-np-applied-state=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1055 string
 			templ_7745c5c3_Var1055, templ_7745c5c3_Err = templ.JoinStringErrs(account.AppliedState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2858, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2868, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1055))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1978, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1982, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1056 string
 			templ_7745c5c3_Var1056, templ_7745c5c3_Err = templ.JoinStringErrs(accountStateWord(account.AppliedState))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2858, Col: 125}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2868, Col: 125}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1056))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1979, "</dd></div><div><dt>Shell</dt><dd>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1983, "</dd></div><div><dt>Shell</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1057 string
 			templ_7745c5c3_Var1057, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellWord(account.ShellMode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2859, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2869, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1057))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1980, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1984, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if accountShellDetail(account.ShellMode) != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1981, "<small class=\"np-muted\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1985, "<small class=\"np-muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1058 string
 				templ_7745c5c3_Var1058, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellDetail(account.ShellMode))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2861, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2871, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1058))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1982, "</small>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1986, "</small>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1983, "</dd></div><div><dt>Convergence</dt><dd>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1987, "</dd></div><div><dt>Convergence</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22343,7 +22364,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1984, "</dd></div><div><dt>Migration</dt><dd>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1988, "</dd></div><div><dt>Migration</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22351,42 +22372,42 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1985, "</dd></div></dl>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1989, "</dd></div></dl>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if account.LastError != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1986, "<p class=\"np-error\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1990, "<p class=\"np-error\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1059 string
 				templ_7745c5c3_Var1059, templ_7745c5c3_Err = templ.JoinStringErrs(account.LastError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2868, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2878, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1059))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1987, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1991, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else if accountSettled(account) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1988, "<p class=\"np-empty-inline\">The system account is in the state the panel asked for. Nothing is pending.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1992, "<p class=\"np-empty-inline\">The system account is in the state the panel asked for. Nothing is pending.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1989, "<p class=\"np-empty\">No system account has converged for this subscription yet.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1993, "<p class=\"np-empty\">No system account has converged for this subscription yet.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if len(events) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1990, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1994, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22394,20 +22415,20 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1991, "</span> <strong>Nothing from this subscription in the recent window</strong><p>Plan changes, synchronizations, access and cache edits appear here with who made them, as long as they are still among the server's most recent events.</p><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1995, "</span> <strong>Nothing from this subscription in the recent window</strong><p>Plan changes, synchronizations, access and cache edits appear here with who made them, as long as they are still among the server's most recent events.</p><a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1060 templ.SafeURL
 			templ_7745c5c3_Var1060, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/activity")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2880, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2890, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1060))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1992, "\">Open the full activity log</a></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1996, "\">Open the full activity log</a></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22417,7 +22438,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1993, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1997, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -22447,71 +22468,70 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 		}
 		ctx = templ.ClearChildren(ctx)
 		backups := subscriptionBackupsForID(data.Phase6.Backups, subscription.ID)
-		beyond := subscriptionBackupBeyondPlan(backups, subscription.MaxBackups)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1994, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Subscription backups</h2><span class=\"np-muted\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1998, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Subscription backups</h2><span class=\"np-muted\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1062 string
-		templ_7745c5c3_Var1062, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(subscriptionBackupBytes(backups)))
+		templ_7745c5c3_Var1062, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(subscription.BackupBytesUsed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2892, Col: 134}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2901, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1062))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1995, " stored · ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1999, " stored · ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1063 string
-		templ_7745c5c3_Var1063, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(len(backups), subscription.MaxBackups, true))
+		templ_7745c5c3_Var1063, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.BackupsUsed, subscription.MaxBackups, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2892, Col: 217}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2901, Col: 225}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1063))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1996, " kept</span></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2000, " counted</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if len(beyond) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1997, "<p class=\"np-gate is-blocked\">")
+		if subscription.MaxBackups >= 0 && subscription.BackupsUsed > subscription.MaxBackups {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2001, "<p class=\"np-gate is-blocked\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1064 string
-			templ_7745c5c3_Var1064, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(beyond)))
+			templ_7745c5c3_Var1064, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.BackupsUsed - subscription.MaxBackups))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2894, Col: 63}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2903, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1064))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1998, " of these backups are beyond the plan limit of ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2002, " backups are beyond the plan limit of ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1065 string
 			templ_7745c5c3_Var1065, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.MaxBackups))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2894, Col: 154}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2903, Col: 182}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1065))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1999, ". They are still restorable, but the next backup will be refused until the count is back within the plan.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2003, ". Existing recovery points are preserved. New requests follow the subscription's overuse policy and storage limits.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if len(backups) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2000, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2004, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22519,84 +22539,84 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2001, "</span> <strong>No backups have been taken</strong><p>A backup captures the document root and databases of one website, and can be restored to the same subscription.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2005, "</span> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if subscription.BackupsUsed > 0 {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2006, "<strong>No recent backups are loaded</strong><p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1066 string
+				templ_7745c5c3_Var1066, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.BackupsUsed))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2911, Col: 51}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1066))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2007, " backups are recorded for this subscription. Open a domain's Backups tool to view its recovery points.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2008, "<strong>No backups have been taken</strong><p>A backup captures the document root and databases of one website, and can be restored to the same subscription.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2009, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2002, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Taken</th><th>Target</th><th>Size</th><th>Status</th></tr></thead><tbody>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2010, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Taken</th><th>Target</th><th>Size</th><th>Status</th></tr></thead> <tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, item := range backups {
-				var templ_7745c5c3_Var1066 = []any{backupRowClass(beyond[item.ID])}
-				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1066...)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2003, "<tr class=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2011, "<tr><td data-label=\"Taken\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1067 string
-				templ_7745c5c3_Var1067, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1066).String())
+				templ_7745c5c3_Var1067, templ_7745c5c3_Err = templ.JoinStringErrs(formatStampLabel(item.CreatedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2925, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1067))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2004, "\"><td data-label=\"Taken\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2012, "</td><td data-label=\"Target\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1068 string
-				templ_7745c5c3_Var1068, templ_7745c5c3_Err = templ.JoinStringErrs(formatStampLabel(item.CreatedAt))
+				templ_7745c5c3_Var1068, templ_7745c5c3_Err = templ.JoinStringErrs(item.TargetName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2906, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2927, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1068))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2005, " ")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				if beyond[item.ID] {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2006, "<small class=\"np-usage-note\">beyond the plan limit</small>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2007, "</td><td data-label=\"Target\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2013, "</td><td data-label=\"Size\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1069 string
-				templ_7745c5c3_Var1069, templ_7745c5c3_Err = templ.JoinStringErrs(item.TargetName)
+				templ_7745c5c3_Var1069, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(item.SizeBytes))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2911, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2928, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1069))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2008, "</td><td data-label=\"Size\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1070 string
-				templ_7745c5c3_Var1070, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(item.SizeBytes))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2912, Col: 57}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1070))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2009, "</td><td data-label=\"Status\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2014, "</td><td data-label=\"Status\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -22605,35 +22625,35 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 					return templ_7745c5c3_Err
 				}
 				if item.LastError != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2010, "<small class=\"np-usage-note\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2015, "<small class=\"np-usage-note\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1071 string
-					templ_7745c5c3_Var1071, templ_7745c5c3_Err = templ.JoinStringErrs(item.LastError)
+					var templ_7745c5c3_Var1070 string
+					templ_7745c5c3_Var1070, templ_7745c5c3_Err = templ.JoinStringErrs(item.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2915, Col: 53}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2932, Col: 55}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1071))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1070))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2011, "</small>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2016, "</small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2012, "</td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2017, "</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2013, "</tbody></table></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2018, "</tbody></table></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2014, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2019, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -22657,26 +22677,26 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1072 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1072 == nil {
-			templ_7745c5c3_Var1072 = templ.NopComponent
+		templ_7745c5c3_Var1071 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1071 == nil {
+			templ_7745c5c3_Var1071 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if account, found := accountForSubscription(data.SubscriptionServices.Accounts, subscription.ID); found {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2015, "<details class=\"np-disclosure\" open><summary>Hosting policy overrides</summary><form class=\"np-form np-action-form\" method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2020, "<details class=\"np-disclosure\" open><summary>Hosting policy overrides</summary><form class=\"np-form np-action-form\" method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1073 templ.SafeURL
-			templ_7745c5c3_Var1073, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/policy"))
+			var templ_7745c5c3_Var1072 templ.SafeURL
+			templ_7745c5c3_Var1072, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/policy"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2928, Col: 134}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2947, Col: 134}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1073))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1072))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2016, "\" data-np-policy-builder>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2021, "\" data-np-policy-builder>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22684,111 +22704,111 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2017, "<input type=\"hidden\" name=\"policy_patch\" value=\"{}\" data-np-policy-patch><div class=\"np-plan-field-grid\"><label>CPU quota %<input type=\"number\" min=\"-1\" name=\"policy_cpu_percent\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2022, "<input type=\"hidden\" name=\"policy_patch\" value=\"{}\" data-np-policy-patch><div class=\"np-plan-field-grid\"><label>CPU quota %<input type=\"number\" min=\"-1\" name=\"policy_cpu_percent\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1073 string
+			templ_7745c5c3_Var1073, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.CPUPercent)))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2951, Col: 151}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1073))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2023, "\"></label> <label>Memory MB<input type=\"number\" min=\"-1\" name=\"policy_memory_mb\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1074 string
-			templ_7745c5c3_Var1074, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.CPUPercent)))
+			templ_7745c5c3_Var1074, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MemoryMB)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2932, Col: 151}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2952, Col: 145}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1074))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2018, "\"></label> <label>Memory MB<input type=\"number\" min=\"-1\" name=\"policy_memory_mb\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2024, "\"></label> <label>I/O read MB/s<input type=\"number\" min=\"-1\" name=\"policy_io_read_mbps\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1075 string
-			templ_7745c5c3_Var1075, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MemoryMB)))
+			templ_7745c5c3_Var1075, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.IOReadMBPS)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2933, Col: 145}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2953, Col: 154}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1075))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2019, "\"></label> <label>I/O read MB/s<input type=\"number\" min=\"-1\" name=\"policy_io_read_mbps\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2025, "\"></label> <label>I/O write MB/s<input type=\"number\" min=\"-1\" name=\"policy_io_write_mbps\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1076 string
-			templ_7745c5c3_Var1076, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.IOReadMBPS)))
+			templ_7745c5c3_Var1076, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.IOWriteMBPS)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2934, Col: 154}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2954, Col: 157}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1076))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2020, "\"></label> <label>I/O write MB/s<input type=\"number\" min=\"-1\" name=\"policy_io_write_mbps\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2026, "\"></label> <label>Process limit<input type=\"number\" min=\"-1\" name=\"policy_max_tasks\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1077 string
-			templ_7745c5c3_Var1077, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.IOWriteMBPS)))
+			templ_7745c5c3_Var1077, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MaxTasks)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2935, Col: 157}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2955, Col: 149}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1077))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2021, "\"></label> <label>Process limit<input type=\"number\" min=\"-1\" name=\"policy_max_tasks\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2027, "\"></label> <label>Scheduled tasks<input type=\"number\" min=\"-1\" name=\"policy_max_scheduled_tasks\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1078 string
-			templ_7745c5c3_Var1078, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MaxTasks)))
+			templ_7745c5c3_Var1078, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MaxScheduledTasks)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2936, Col: 149}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2956, Col: 170}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1078))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2022, "\"></label> <label>Scheduled tasks<input type=\"number\" min=\"-1\" name=\"policy_max_scheduled_tasks\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2028, "\"></label> <label>Applications<input type=\"number\" min=\"-1\" name=\"policy_max_applications\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1079 string
-			templ_7745c5c3_Var1079, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MaxScheduledTasks)))
+			templ_7745c5c3_Var1079, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MaxApplications)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2937, Col: 170}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2957, Col: 162}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1079))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2023, "\"></label> <label>Applications<input type=\"number\" min=\"-1\" name=\"policy_max_applications\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2029, "\"></label> <label>Container storage MB<input type=\"number\" min=\"-1\" name=\"policy_container_storage_mb\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1080 string
-			templ_7745c5c3_Var1080, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MaxApplications)))
+			templ_7745c5c3_Var1080, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.ContainerStorageMB)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2938, Col: 162}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2958, Col: 177}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1080))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2024, "\"></label> <label>Container storage MB<input type=\"number\" min=\"-1\" name=\"policy_container_storage_mb\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1081 string
-			templ_7745c5c3_Var1081, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.ContainerStorageMB)))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2939, Col: 177}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1081))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2025, "\"></label></div><fieldset><legend>Provisioned capabilities</legend><div class=\"np-permission-list\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2030, "\"></label></div><fieldset><legend>Provisioned capabilities</legend><div class=\"np-permission-list\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22812,20 +22832,20 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2026, "</div></fieldset><label>Allowed OCI registries<input name=\"policy_registries\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2031, "</div></fieldset><label>Allowed OCI registries<input name=\"policy_registries\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1082 string
-			templ_7745c5c3_Var1082, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(account.EffectivePolicy.Applications.AllowedRegistries))
+			var templ_7745c5c3_Var1081 string
+			templ_7745c5c3_Var1081, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(account.EffectivePolicy.Applications.AllowedRegistries))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2948, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2967, Col: 140}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1082))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1081))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2027, "\" placeholder=\"registry.example.com\"></label> <button type=\"submit\">Apply hosting policy</button></form></details>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2032, "\" placeholder=\"registry.example.com\"></label> <button type=\"submit\">Apply hosting policy</button></form></details>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22850,80 +22870,80 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1083 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1083 == nil {
-			templ_7745c5c3_Var1083 = templ.NopComponent
+		templ_7745c5c3_Var1082 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1082 == nil {
+			templ_7745c5c3_Var1082 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		identities := sftpForSubscription(data.SubscriptionServices.SFTP, subscription.ID)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2028, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Account Access</h2><span class=\"np-muted\">Shared Linux account and scoped SFTP identities</span></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2033, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Account Access</h2><span class=\"np-muted\">Shared Linux account and scoped SFTP identities</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if account, found := accountForSubscription(data.SubscriptionServices.Accounts, subscription.ID); found {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2029, "<dl class=\"np-facts\"><div><dt>System user</dt><dd><code>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2034, "<dl class=\"np-facts\"><div><dt>System user</dt><dd><code>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1083 string
+			templ_7745c5c3_Var1083, templ_7745c5c3_Err = templ.JoinStringErrs(account.Username)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2980, Col: 57}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1083))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2035, "</code></dd></div><div><dt>Home</dt><dd><code>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1084 string
-			templ_7745c5c3_Var1084, templ_7745c5c3_Err = templ.JoinStringErrs(account.Username)
+			templ_7745c5c3_Var1084, templ_7745c5c3_Err = templ.JoinStringErrs(account.HomePath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2960, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2981, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1084))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2030, "</code></dd></div><div><dt>Home</dt><dd><code>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2036, "</code></dd></div><div><dt>Shell</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1085 string
-			templ_7745c5c3_Var1085, templ_7745c5c3_Err = templ.JoinStringErrs(account.HomePath)
+			templ_7745c5c3_Var1085, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellWord(account.ShellMode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2961, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2985, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1085))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2031, "</code></dd></div><div><dt>Shell</dt><dd>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1086 string
-			templ_7745c5c3_Var1086, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellWord(account.ShellMode))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2962, Col: 64}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1086))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2032, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2037, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if accountShellDetail(account.ShellMode) != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2033, "<small class=\"np-muted\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2038, "<small class=\"np-muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1087 string
-				templ_7745c5c3_Var1087, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellDetail(account.ShellMode))
+				var templ_7745c5c3_Var1086 string
+				templ_7745c5c3_Var1086, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellDetail(account.ShellMode))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2964, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2987, Col: 70}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1087))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1086))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2034, "</small>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2039, "</small>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2035, "</dd></div><div><dt>Convergence</dt><dd>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2040, "</dd></div><div><dt>Convergence</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -22931,107 +22951,108 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2036, "</dd></div></dl>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2041, "</dd></div></dl>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2037, "<p class=\"np-empty\">No system account has converged for this subscription yet.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2042, "<p class=\"np-empty\">No system account has converged for this subscription yet.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if subscriptionSFTPBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2038, "<p class=\"np-gate is-policy\">SFTP is disabled by the subscription hosting policy. A provider must enable and synchronize SFTP before identities can be created.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2043, "<p class=\"np-gate is-policy\">SFTP is disabled by the subscription hosting policy. A provider must enable and synchronize SFTP before identities can be created.</p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		if len(identities) == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2044, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = icon("folder-up").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2045, "</span> <strong>No SFTP identities yet</strong><p>An identity is a named public key confined to one directory under the subscription home, so a deploy pipeline or an agency never needs the account password.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			if len(identities) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2039, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = icon("folder-up").Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2040, "</span> <strong>No SFTP identities yet</strong><p>An identity is a named public key confined to one directory under the subscription home, so a deploy pipeline or an agency never needs the account password.</p></div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2041, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Identity</th><th>Directory</th><th>Status</th><th></th></tr></thead><tbody>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				for _, item := range identities {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2042, "<tr><td data-label=\"Identity\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1088 string
-					templ_7745c5c3_Var1088, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2984, Col: 47}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1088))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2043, "</td><td data-label=\"Directory\"><code>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1089 string
-					templ_7745c5c3_Var1089, templ_7745c5c3_Err = templ.JoinStringErrs(item.RelativeRoot)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2984, Col: 106}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1089))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2044, "</code></td><td data-label=\"Status\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = tonePill(formatEnabled(item.Enabled), enabledTone(item.Enabled)).Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2045, "</td><td data-label=\"Action\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = subscriptionServiceDelete(subscription.ID, "sftp", item.ID, view).Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2046, "</td></tr>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2047, "</tbody></table></div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2048, " <form class=\"np-form np-action-form\" method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2046, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Identity</th><th>Directory</th><th>Status</th><th></th></tr></thead> <tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1090 templ.SafeURL
-			templ_7745c5c3_Var1090, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sftp"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2988, Col: 132}
+			for _, item := range identities {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2047, "<tr><td data-label=\"Identity\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1087 string
+				templ_7745c5c3_Var1087, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3013, Col: 48}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1087))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2048, "</td><td data-label=\"Directory\"><code>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1088 string
+				templ_7745c5c3_Var1088, templ_7745c5c3_Err = templ.JoinStringErrs(item.RelativeRoot)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3013, Col: 107}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1088))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2049, "</code></td><td data-label=\"Status\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = tonePill(formatEnabled(item.Enabled), enabledTone(item.Enabled)).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2050, "</td><td data-label=\"Action\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = subscriptionServiceDelete(subscription.ID, "sftp", item.ID, view).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2051, "</td></tr>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1090))
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2052, "</tbody></table></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2049, "\">")
+		}
+		if !subscriptionSFTPBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2053, "<form class=\"np-form np-action-form\" method=\"post\" action=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1089 templ.SafeURL
+			templ_7745c5c3_Var1089, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sftp"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3022, Col: 136}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1089))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2054, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -23039,94 +23060,95 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2050, "<div class=\"np-form-grid\"><label>Name<input name=\"name\" required></label><label>Directory<input name=\"relative_root\" value=\".\" required></label><label class=\"np-wide-field\">SSH public key<textarea name=\"public_key\" rows=\"3\" required></textarea></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enabled\" value=\"true\" checked>Enabled</label></div><button type=\"submit\">Add SFTP identity</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2055, "<div class=\"np-form-grid\"><label>Name<input name=\"name\" required></label><label>Directory<input name=\"relative_root\" value=\".\" required></label><label class=\"np-wide-field\">SSH public key<textarea name=\"public_key\" rows=\"3\" required></textarea></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enabled\" value=\"true\" checked>Enabled</label></div><button type=\"submit\">Add SFTP identity</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2051, "</section><section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Primary FTPS account</h2><span class=\"np-muted\">Explicit TLS and subscription-root confinement · one account only</span></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2056, "</section><section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Primary FTPS account</h2><span class=\"np-muted\">Explicit TLS and subscription-root confinement · one account only</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if subscriptionFTPSBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2052, "<p class=\"np-gate is-policy\">FTPS is disabled by the subscription hosting policy. A provider must enable and synchronize FTPS before accounts can be created.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2057, "<p class=\"np-gate is-policy\">FTPS is disabled by the subscription hosting policy. A provider must enable and synchronize FTPS before accounts can be created.</p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		accounts := subscriptionPrimaryFTP(data.SubscriptionServices.FTP, subscription.ID)
+		if len(accounts) == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2058, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = icon("upload").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2059, "</span> <strong>No FTPS account yet</strong><p>One account may exist, confined to the subscription home. Its password is shown once and never stored in plaintext.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			accounts := subscriptionPrimaryFTP(data.SubscriptionServices.FTP, subscription.ID)
-			if len(accounts) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2053, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = icon("upload").Render(ctx, templ_7745c5c3_Buffer)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2054, "</span> <strong>No FTPS account yet</strong><p>One account may exist, confined to the subscription home. Its password is shown once and never stored in plaintext.</p></div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2055, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Login</th><th>Root</th><th>Status</th><th></th></tr></thead><tbody>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				for _, item := range accounts {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2056, "<tr><td data-label=\"Login\"><code>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1091 string
-					templ_7745c5c3_Var1091, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3005, Col: 50}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1091))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2057, "</code></td><td data-label=\"Root\">Subscription home</td><td data-label=\"Status\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = statusPill(item.ConvergenceStatus).Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2058, "</td><td data-label=\"Action\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = subscriptionServiceDelete(subscription.ID, "ftp", item.ID, view).Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2059, "</td></tr>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2060, "</tbody></table></div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2061, " <form class=\"np-form np-action-form\" method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2060, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Login</th><th>Root</th><th>Status</th><th></th></tr></thead> <tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1092 templ.SafeURL
-			templ_7745c5c3_Var1092, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/ftp"))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3009, Col: 131}
+			for _, item := range accounts {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2061, "<tr><td data-label=\"Login\"><code>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1090 string
+				templ_7745c5c3_Var1090, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3045, Col: 51}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1090))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2062, "</code></td><td data-label=\"Root\">Subscription home</td><td data-label=\"Status\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = statusPill(item.ConvergenceStatus).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2063, "</td><td data-label=\"Action\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = subscriptionServiceDelete(subscription.ID, "ftp", item.ID, view).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2064, "</td></tr>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1092))
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2065, "</tbody></table></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2062, "\">")
+		}
+		if !subscriptionFTPSBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2066, "<form class=\"np-form np-action-form\" method=\"post\" action=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1091 templ.SafeURL
+			templ_7745c5c3_Var1091, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/ftp"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3054, Col: 135}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1091))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2067, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -23134,12 +23156,12 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2063, "<div class=\"np-form-grid\"><label>Login name<input name=\"name\" pattern=\"[a-z][a-z0-9._-]{2,31}\" required></label><label>Password<input type=\"password\" name=\"password\" autocomplete=\"new-password\" placeholder=\"Generate when blank\"></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enabled\" value=\"true\" checked>Enabled</label></div><p class=\"np-form-help\">Only one primary account is allowed. Passwords are shown once and never stored in plaintext.</p><button type=\"submit\">Create or reset FTPS account</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2068, "<div class=\"np-form-grid\"><label>Login name<input name=\"name\" pattern=\"[a-z][a-z0-9._-]{2,31}\" required></label><label>Password<input type=\"password\" name=\"password\" autocomplete=\"new-password\" placeholder=\"Generate when blank\"></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enabled\" value=\"true\" checked>Enabled</label></div><p class=\"np-form-help\">Only one primary account is allowed. Passwords are shown once and never stored in plaintext.</p><button type=\"submit\">Create or reset FTPS account</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2064, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2069, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -23163,14 +23185,14 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1093 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1093 == nil {
-			templ_7745c5c3_Var1093 = templ.NopComponent
+		templ_7745c5c3_Var1092 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1092 == nil {
+			templ_7745c5c3_Var1092 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		unavailable := subscriptionValkeyUnavailable(data.SubscriptionServices.Accounts, subscription.ID)
 		instance, configured := valkeyForSubscription(data.SubscriptionServices.Valkey, subscription.ID)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2065, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Valkey cache</h2><span class=\"np-muted\">Socket-only · no persistence · allkeys-lru</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2070, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Valkey cache</h2><span class=\"np-muted\">Socket-only · no persistence · allkeys-lru</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -23180,119 +23202,119 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2066, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2071, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if unavailable {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2067, "<p class=\"np-gate is-policy\">Valkey is disabled by this subscription policy. A provider must grant cache permission and memory before it can be enabled.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2072, "<p class=\"np-gate is-policy\">Valkey is disabled by this subscription policy. A provider must grant cache permission and memory before it can be enabled.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
 			if configured {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2068, "<dl class=\"np-facts\"><div><dt>Memory granted</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2073, "<dl class=\"np-facts\"><div><dt>Memory granted</dt><dd>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1093 string
+				templ_7745c5c3_Var1093, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(instance.MemoryMB))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3075, Col: 75}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1093))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2074, "<small class=\"np-muted\">Eviction drops the least recently used keys at this ceiling</small></dd></div><div><dt>Maximum clients</dt><dd>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1094 string
-				templ_7745c5c3_Var1094, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(instance.MemoryMB))
+				templ_7745c5c3_Var1094, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(instance.MaxClients))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3029, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3076, Col: 76}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1094))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2069, "<small class=\"np-muted\">Eviction drops the least recently used keys at this ceiling</small></dd></div><div><dt>Maximum clients</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2075, "</dd></div><div><dt>Idle timeout</dt><dd>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1095 string
-				templ_7745c5c3_Var1095, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(instance.MaxClients))
+				templ_7745c5c3_Var1095, templ_7745c5c3_Err = templ.JoinStringErrs(formatSeconds(instance.IdleTimeoutSeconds))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3030, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3077, Col: 79}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1095))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2070, "</dd></div><div><dt>Idle timeout</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2076, "</dd></div><div><dt>CPU quota</dt><dd>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1096 string
-				templ_7745c5c3_Var1096, templ_7745c5c3_Err = templ.JoinStringErrs(formatSeconds(instance.IdleTimeoutSeconds))
+				templ_7745c5c3_Var1096, templ_7745c5c3_Err = templ.JoinStringErrs(formatPercent(instance.CPUPercent))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3031, Col: 79}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3078, Col: 68}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1096))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2071, "</dd></div><div><dt>CPU quota</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2077, "</dd></div><div><dt>Application credential</dt><dd>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1097 string
-				templ_7745c5c3_Var1097, templ_7745c5c3_Err = templ.JoinStringErrs(formatPercent(instance.CPUPercent))
+				templ_7745c5c3_Var1097, templ_7745c5c3_Err = templ.JoinStringErrs(credentialWord(instance.CredentialSet))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3032, Col: 68}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3079, Col: 85}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1097))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2072, "</dd></div><div><dt>Application credential</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2078, "<small class=\"np-muted\">Connect as user <code>app</code> over the socket</small></dd></div><div><dt>Socket</dt><dd><code>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1098 string
-				templ_7745c5c3_Var1098, templ_7745c5c3_Err = templ.JoinStringErrs(credentialWord(instance.CredentialSet))
+				templ_7745c5c3_Var1098, templ_7745c5c3_Err = templ.JoinStringErrs(instance.SocketPath)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3033, Col: 85}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3080, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1098))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2073, "<small class=\"np-muted\">Connect as user <code>app</code> over the socket</small></dd></div><div><dt>Socket</dt><dd><code>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1099 string
-				templ_7745c5c3_Var1099, templ_7745c5c3_Err = templ.JoinStringErrs(instance.SocketPath)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3034, Col: 56}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1099))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2074, "</code></dd></div></dl>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2079, "</code></dd></div></dl>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if instance.LastError != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2075, "<p class=\"np-error\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2080, "<p class=\"np-error\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1100 string
-					templ_7745c5c3_Var1100, templ_7745c5c3_Err = templ.JoinStringErrs(instance.LastError)
+					var templ_7745c5c3_Var1099 string
+					templ_7745c5c3_Var1099, templ_7745c5c3_Err = templ.JoinStringErrs(instance.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3037, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3083, Col: 45}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1100))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1099))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2076, "</p>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2081, "</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2077, " <details class=\"np-disclosure\"><summary>Cache configuration</summary>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2082, " <details class=\"np-disclosure\"><summary>Cache configuration</summary>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -23300,12 +23322,12 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2078, "</details>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2083, "</details>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2079, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2084, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -23313,7 +23335,7 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2080, "</span> <strong>No cache is running for this subscription</strong><p>A Valkey instance gives the subscription a private in-memory cache on a Unix socket, with no persistence and no network listener.</p></div><details class=\"np-disclosure\" open><summary>Cache configuration</summary>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2085, "</span> <strong>No cache is running for this subscription</strong><p>A Valkey instance gives the subscription a private in-memory cache on a Unix socket, with no persistence and no network listener.</p></div><details class=\"np-disclosure\" open><summary>Cache configuration</summary>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -23321,13 +23343,13 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2081, "</details>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2086, "</details>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2082, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2087, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -23351,25 +23373,25 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1101 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1101 == nil {
-			templ_7745c5c3_Var1101 = templ.NopComponent
+		templ_7745c5c3_Var1100 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1100 == nil {
+			templ_7745c5c3_Var1100 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2083, "<form class=\"np-form np-action-form\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2088, "<form class=\"np-form np-action-form\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1102 templ.SafeURL
-		templ_7745c5c3_Var1102, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/valkey"))
+		var templ_7745c5c3_Var1101 templ.SafeURL
+		templ_7745c5c3_Var1101, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/valkey"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3057, Col: 132}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3103, Col: 132}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1102))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1101))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2084, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2089, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -23378,128 +23400,128 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			return templ_7745c5c3_Err
 		}
 		if siteID > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2085, "<input type=\"hidden\" name=\"site_id\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2090, "<input type=\"hidden\" name=\"site_id\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1103 string
-			templ_7745c5c3_Var1103, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
+			var templ_7745c5c3_Var1102 string
+			templ_7745c5c3_Var1102, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3059, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3105, Col: 66}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1103))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1102))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2086, "\"> <input type=\"hidden\" name=\"return_to\" value=\"site-redis\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2091, "\"> <input type=\"hidden\" name=\"return_to\" value=\"site-redis\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2087, "<div class=\"np-form-grid\"><label>Desired state<select name=\"desired_state\"><option value=\"enabled\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2092, "<div class=\"np-form-grid\"><label>Desired state<select name=\"desired_state\"><option value=\"enabled\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if instance.DesiredState == "enabled" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2088, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2093, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2089, ">Enabled</option><option value=\"disabled\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2094, ">Enabled</option><option value=\"disabled\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if instance.DesiredState == "disabled" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2090, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2095, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2091, ">Disabled</option></select></label><label>Memory, MB<input type=\"number\" min=\"16\" name=\"memory_mb\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2096, ">Disabled</option></select></label><label>Memory, MB<input type=\"number\" min=\"16\" name=\"memory_mb\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1103 string
+		templ_7745c5c3_Var1103, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MemoryMB))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3108, Col: 386}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1103))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2097, "\" required></label><label>Maximum clients<input type=\"number\" min=\"1\" max=\"10000\" name=\"max_clients\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1104 string
-		templ_7745c5c3_Var1104, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MemoryMB))
+		templ_7745c5c3_Var1104, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MaxClients))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3062, Col: 386}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3108, Col: 542}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1104))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2092, "\" required></label><label>Maximum clients<input type=\"number\" min=\"1\" max=\"10000\" name=\"max_clients\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2098, "\" required></label><label>Idle timeout, seconds<input type=\"number\" min=\"0\" max=\"86400\" name=\"idle_timeout_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1105 string
-		templ_7745c5c3_Var1105, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MaxClients))
+		templ_7745c5c3_Var1105, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.IdleTimeoutSeconds))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3062, Col: 542}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3108, Col: 721}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1105))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2093, "\" required></label><label>Idle timeout, seconds<input type=\"number\" min=\"0\" max=\"86400\" name=\"idle_timeout_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2099, "\" required></label><label>CPU quota, %<input type=\"number\" min=\"1\" max=\"1000\" name=\"cpu_percent\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1106 string
-		templ_7745c5c3_Var1106, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.IdleTimeoutSeconds))
+		templ_7745c5c3_Var1106, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.CPUPercent))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3062, Col: 721}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3108, Col: 873}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1106))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2094, "\" required></label><label>CPU quota, %<input type=\"number\" min=\"1\" max=\"1000\" name=\"cpu_percent\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2100, "\" required></label><label>Process limit<input type=\"number\" min=\"8\" max=\"4096\" name=\"process_limit\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1107 string
-		templ_7745c5c3_Var1107, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.CPUPercent))
+		templ_7745c5c3_Var1107, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.ProcessLimit))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3062, Col: 873}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3108, Col: 1030}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1107))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2095, "\" required></label><label>Process limit<input type=\"number\" min=\"8\" max=\"4096\" name=\"process_limit\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1108 string
-		templ_7745c5c3_Var1108, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.ProcessLimit))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3062, Col: 1030}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1108))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2096, "\" required></label><label class=\"np-check\"><input type=\"checkbox\" name=\"rotate_credential\" value=\"true\">Rotate application credential</label></div><p class=\"np-form-help\">Use user <code>app</code> and the displayed one-time credential. The Unix socket is accessible only to the subscription system account.</p><button type=\"submit\">Apply cache configuration</button></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2101, "\" required></label><label class=\"np-check\"><input type=\"checkbox\" name=\"rotate_credential\" value=\"true\">Rotate application credential</label></div><p class=\"np-form-help\">Use user <code>app</code> and the displayed one-time credential. The Unix socket is accessible only to the subscription system account.</p><button type=\"submit\">Apply cache configuration</button></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if configured && instance.DesiredState == "enabled" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2097, "<form class=\"np-form np-inline-confirm-form\" method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2102, "<form class=\"np-form np-inline-confirm-form\" method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1109 templ.SafeURL
-			templ_7745c5c3_Var1109, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/valkey"))
+			var templ_7745c5c3_Var1108 templ.SafeURL
+			templ_7745c5c3_Var1108, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/valkey"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3065, Col: 141}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3111, Col: 141}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1109))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1108))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2098, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2103, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -23508,103 +23530,103 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 				return templ_7745c5c3_Err
 			}
 			if siteID > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2099, "<input type=\"hidden\" name=\"site_id\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2104, "<input type=\"hidden\" name=\"site_id\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1110 string
-				templ_7745c5c3_Var1110, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
+				var templ_7745c5c3_Var1109 string
+				templ_7745c5c3_Var1109, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3067, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3113, Col: 67}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1110))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1109))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2100, "\"> <input type=\"hidden\" name=\"return_to\" value=\"site-redis\"> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2105, "\"> <input type=\"hidden\" name=\"return_to\" value=\"site-redis\"> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2101, "<input type=\"hidden\" name=\"desired_state\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2106, "<input type=\"hidden\" name=\"desired_state\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1110 string
+			templ_7745c5c3_Var1110, templ_7745c5c3_Err = templ.JoinStringErrs(instance.DesiredState)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3116, Col: 74}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1110))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2107, "\"><input type=\"hidden\" name=\"memory_mb\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1111 string
-			templ_7745c5c3_Var1111, templ_7745c5c3_Err = templ.JoinStringErrs(instance.DesiredState)
+			templ_7745c5c3_Var1111, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MemoryMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3070, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3116, Col: 167}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1111))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2102, "\"><input type=\"hidden\" name=\"memory_mb\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2108, "\"><input type=\"hidden\" name=\"max_clients\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1112 string
-			templ_7745c5c3_Var1112, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MemoryMB))
+			templ_7745c5c3_Var1112, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MaxClients))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3070, Col: 167}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3116, Col: 264}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1112))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2103, "\"><input type=\"hidden\" name=\"max_clients\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2109, "\"><input type=\"hidden\" name=\"idle_timeout_seconds\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1113 string
-			templ_7745c5c3_Var1113, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MaxClients))
+			templ_7745c5c3_Var1113, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.IdleTimeoutSeconds))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3070, Col: 264}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3116, Col: 378}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1113))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2104, "\"><input type=\"hidden\" name=\"idle_timeout_seconds\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2110, "\"><input type=\"hidden\" name=\"cpu_percent\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1114 string
-			templ_7745c5c3_Var1114, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.IdleTimeoutSeconds))
+			templ_7745c5c3_Var1114, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.CPUPercent))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3070, Col: 378}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3116, Col: 475}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1114))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2105, "\"><input type=\"hidden\" name=\"cpu_percent\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2111, "\"><input type=\"hidden\" name=\"process_limit\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1115 string
-			templ_7745c5c3_Var1115, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.CPUPercent))
+			templ_7745c5c3_Var1115, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.ProcessLimit))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3070, Col: 475}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3116, Col: 576}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1115))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2106, "\"><input type=\"hidden\" name=\"process_limit\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1116 string
-			templ_7745c5c3_Var1116, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.ProcessLimit))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3070, Col: 576}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1116))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2107, "\"><input type=\"hidden\" name=\"flush\" value=\"true\"><label>Type <strong>flush</strong> to clear this disposable cache<input name=\"confirm\" autocomplete=\"off\" required></label><button type=\"submit\" class=\"np-danger-button\">Flush cache</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2112, "\"><input type=\"hidden\" name=\"flush\" value=\"true\"><label>Type <strong>flush</strong> to clear this disposable cache<input name=\"confirm\" autocomplete=\"off\" required></label><button type=\"submit\" class=\"np-danger-button\">Flush cache</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -23629,158 +23651,163 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1117 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1117 == nil {
-			templ_7745c5c3_Var1117 = templ.NopComponent
+		templ_7745c5c3_Var1116 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1116 == nil {
+			templ_7745c5c3_Var1116 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		tasks := tasksForSubscription(data.SubscriptionServices.Tasks, subscription.ID)
 		sites := sitesForSubscription(data.Sites, subscription.ID)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2108, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Scheduled Tasks</h2><span class=\"np-muted\">Commands run as the subscription account</span></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2113, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Scheduled Tasks</h2><span class=\"np-muted\">Commands run as the subscription account</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if subscriptionTasksBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2109, "<p class=\"np-gate is-policy\">Scheduled tasks are disabled by the subscription hosting policy. A provider must enable and synchronize them before tasks can be created.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2114, "<p class=\"np-gate is-policy\">Scheduled tasks are disabled by the subscription hosting policy. A provider must enable and synchronize them before tasks can be created.</p>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		if len(tasks) == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2115, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = icon("activity").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2116, "</span> <strong>No scheduled tasks yet</strong><p>A task runs a shell command as the subscription account on a schedule you set — imports, cache warming, cleanups.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			if len(tasks) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2110, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2117, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Task</th><th>Schedule</th><th>Command</th><th>Status</th><th></th></tr></thead> <tbody>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, item := range tasks {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2118, "<tr><td data-label=\"Task\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = icon("activity").Render(ctx, templ_7745c5c3_Buffer)
+				var templ_7745c5c3_Var1117 string
+				templ_7745c5c3_Var1117, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3144, Col: 20}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1117))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2111, "</span> <strong>No scheduled tasks yet</strong><p>A task runs a shell command as the subscription account on a schedule you set — imports, cache warming, cleanups.</p></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2119, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2112, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Task</th><th>Schedule</th><th>Command</th><th>Status</th><th></th></tr></thead><tbody>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				for _, item := range tasks {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2113, "<tr><td data-label=\"Task\">")
+				if domain := siteDomain(data.Sites, item.SiteID); domain != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2120, "<small class=\"np-muted\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var1118 string
-					templ_7745c5c3_Var1118, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
+					templ_7745c5c3_Var1118, templ_7745c5c3_Err = templ.JoinStringErrs(domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3092, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3146, Col: 42}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1118))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2114, " ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2121, " · timeout ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if domain := siteDomain(data.Sites, item.SiteID); domain != "" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2115, "<small class=\"np-muted\">")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var1119 string
-						templ_7745c5c3_Var1119, templ_7745c5c3_Err = templ.JoinStringErrs(domain)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3094, Col: 41}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1119))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2116, " · timeout ")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var1120 string
-						templ_7745c5c3_Var1120, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(item.TimeoutSeconds))
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3094, Col: 93}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1120))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2117, "s</small>")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
+					var templ_7745c5c3_Var1119 string
+					templ_7745c5c3_Var1119, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(item.TimeoutSeconds))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3146, Col: 94}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2118, "</td><td data-label=\"Schedule\"><code>")
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1119))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1121 string
-					templ_7745c5c3_Var1121, templ_7745c5c3_Err = templ.JoinStringErrs(item.Schedule)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3097, Col: 54}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1121))
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2122, "s</small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2119, "</code></td><td data-label=\"Command\"><code>")
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2123, "</td><td data-label=\"Schedule\"><code>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1120 string
+				templ_7745c5c3_Var1120, templ_7745c5c3_Err = templ.JoinStringErrs(item.Schedule)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3149, Col: 55}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1120))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2124, "</code></td><td data-label=\"Command\"><code>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1121 string
+				templ_7745c5c3_Var1121, templ_7745c5c3_Err = templ.JoinStringErrs(item.Command)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3150, Col: 53}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1121))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2125, "</code></td><td data-label=\"Status\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = tonePill(formatEnabled(item.Enabled), enabledTone(item.Enabled)).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if item.LastError != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2126, "<small class=\"np-usage-note\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var1122 string
-					templ_7745c5c3_Var1122, templ_7745c5c3_Err = templ.JoinStringErrs(item.Command)
+					templ_7745c5c3_Var1122, templ_7745c5c3_Err = templ.JoinStringErrs(item.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3098, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3154, Col: 55}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1122))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2120, "</code></td><td data-label=\"Status\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2127, "</small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = tonePill(formatEnabled(item.Enabled), enabledTone(item.Enabled)).Render(ctx, templ_7745c5c3_Buffer)
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2128, "</td><td data-label=\"Action\"><div class=\"np-row-actions\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if !subscriptionTasksBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2129, "<form class=\"np-inline-form\" method=\"post\" action=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if item.LastError != "" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2121, "<small class=\"np-usage-note\">")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						var templ_7745c5c3_Var1123 string
-						templ_7745c5c3_Var1123, templ_7745c5c3_Err = templ.JoinStringErrs(item.LastError)
-						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3101, Col: 54}
-						}
-						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1123))
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2122, "</small>")
-						if templ_7745c5c3_Err != nil {
-							return templ_7745c5c3_Err
-						}
+					var templ_7745c5c3_Var1123 templ.SafeURL
+					templ_7745c5c3_Var1123, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks/" + formatJobID(item.ID) + "/run"))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3160, Col: 180}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2123, "</td><td data-label=\"Action\"><div class=\"np-row-actions\"><form class=\"np-inline-form\" method=\"post\" action=\"")
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1123))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1124 templ.SafeURL
-					templ_7745c5c3_Var1124, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks/" + formatJobID(item.ID) + "/run"))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3105, Col: 169}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1124))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2124, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2130, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -23788,43 +23815,41 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2125, "<button type=\"submit\" class=\"np-secondary-button\">Run now</button></form>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = subscriptionServiceDelete(subscription.ID, "task", item.ID, view).Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2126, "</div></td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2131, "<button type=\"submit\" class=\"np-secondary-button\">Run now</button></form>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2127, "</tbody></table></div>")
+				templ_7745c5c3_Err = subscriptionServiceDelete(subscription.ID, "task", item.ID, view).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2132, "</div></td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2128, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2133, "</tbody></table></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+		}
+		if !subscriptionTasksBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
 			if len(sites) > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2129, "<form class=\"np-form np-action-form\" method=\"post\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2134, "<form class=\"np-form np-action-form\" method=\"post\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1125 templ.SafeURL
-				templ_7745c5c3_Var1125, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks"))
+				var templ_7745c5c3_Var1124 templ.SafeURL
+				templ_7745c5c3_Var1124, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3113, Col: 144}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3174, Col: 148}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1125))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1124))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2130, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2135, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -23832,54 +23857,54 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2131, "<div class=\"np-form-grid\"><label>Domain<select name=\"site_id\" required>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2136, "<div class=\"np-form-grid\"><label>Domain <select name=\"site_id\" required>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, site := range sites {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2132, "<option value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2137, "<option value=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var1125 string
+					templ_7745c5c3_Var1125, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(site.ID))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3181, Col: 45}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1125))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2138, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var1126 string
-					templ_7745c5c3_Var1126, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(site.ID))
+					templ_7745c5c3_Var1126, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3115, Col: 42}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3181, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1126))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2133, "\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1127 string
-					templ_7745c5c3_Var1127, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3115, Col: 58}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1127))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2134, "</option>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2139, "</option>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2135, "</select></label><label>Name<input name=\"name\" required></label><label>Schedule<input name=\"schedule\" placeholder=\"0 2 * * *\" required></label><label>Working directory<input name=\"working_directory\" value=\".\" required></label><label>Timeout seconds<input type=\"number\" min=\"1\" max=\"86400\" name=\"timeout_seconds\" value=\"300\" required></label><label class=\"np-wide-field\">Command<input name=\"command\" required></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enabled\" value=\"true\" checked>Enabled</label></div><button type=\"submit\">Add scheduled task</button></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2140, "</select></label><label>Name<input name=\"name\" required></label><label>Schedule<input name=\"schedule\" placeholder=\"0 2 * * *\" required></label><label>Working directory<input name=\"working_directory\" value=\".\" required></label><label>Timeout seconds<input type=\"number\" min=\"1\" max=\"86400\" name=\"timeout_seconds\" value=\"300\" required></label><label class=\"np-wide-field\">Command<input name=\"command\" required></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enabled\" value=\"true\" checked>Enabled</label></div><button type=\"submit\">Add scheduled task</button></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2136, "<p class=\"np-empty\">Add a hosted domain before creating a scheduled task.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2141, "<p class=\"np-empty\">Add a hosted domain before creating a scheduled task.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2137, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2142, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -23903,14 +23928,16 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1128 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1128 == nil {
-			templ_7745c5c3_Var1128 = templ.NopComponent
+		templ_7745c5c3_Var1127 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1127 == nil {
+			templ_7745c5c3_Var1127 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		sites := sitesForSubscription(data.Sites, subscription.ID)
-		if !subscriptionMailAllowed(subscription) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2138, "<section class=\"np-attention is-warn\" aria-labelledby=\"np-mail-gate\"><div class=\"np-attention-head\">")
+		mailAllowed := subscriptionMailAllowed(subscription, data.SubscriptionServices.Accounts)
+		mailboxLimit := subscriptionMailboxLimit(subscription, data.SubscriptionServices.Accounts)
+		if !mailAllowed {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2143, "<section class=\"np-attention is-warn\" aria-labelledby=\"np-mail-gate\"><div class=\"np-attention-head\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -23918,177 +23945,106 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2139, "<h2 id=\"np-mail-gate\">Mail is not included in this plan</h2></div><div class=\"np-attention-body\"><p><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2144, "<h2 id=\"np-mail-gate\">Mail is not included in this plan</h2></div><div class=\"np-attention-body\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1129 string
-			templ_7745c5c3_Var1129, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
+			if mailboxLimit == 0 {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2145, "<p><strong>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1128 string
+				templ_7745c5c3_Var1128, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3204, Col: 39}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1128))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2146, " allows no mailboxes</strong>, so no mailbox, alias or forwarder can be created for these domains. DNS for each domain is unaffected and still editable.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2147, "<p>Mail is disabled by the effective subscription hosting policy. Contact your provider to enable and synchronize mail service. Existing mail resources and DNS are preserved.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2148, "<div class=\"np-attention-actions\"><a class=\"np-secondary-button\" href=\"")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3131, Col: 38}
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1129 templ.SafeURL
+			templ_7745c5c3_Var1129, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3209, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1129))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2140, " allows no mailboxes</strong>, so no mailbox, alias or forwarder can be created for these domains. DNS for each domain is unaffected and still editable.</p><div class=\"np-attention-actions\"><a class=\"np-secondary-button\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2149, "\">Raise the mailbox limit</a></div></div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1130 templ.SafeURL
-			templ_7745c5c3_Var1130, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2150, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Mail domains</h2><span class=\"np-muted\">Mail is managed from each hosted domain</span></div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if mailAllowed {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2151, "<span class=\"np-muted\">")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3133, Col: 96}
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1130 string
+			templ_7745c5c3_Var1130, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscriptionMailboxesUsed(subscription, data), mailboxLimit, true))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3218, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1130))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2141, "\">Raise the mailbox limit</a></div></div></section>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2142, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Mail domains</h2><span class=\"np-muted\">Mail is managed from each hosted domain</span></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if subscriptionMailAllowed(subscription) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2143, "<span class=\"np-muted\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1131 string
-			templ_7745c5c3_Var1131, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscriptionMailboxesUsed(subscription, data), subscription.MaxMailboxes, true))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3139, Col: 130}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1131))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2144, " mailboxes</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2152, " mailboxes</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2145, "<span class=\"np-muted\">No mailboxes allowed</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2153, "<span class=\"np-muted\">No mailboxes allowed</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2146, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2154, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(sites) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2147, "<p class=\"np-empty\">No domains are hosted by this subscription.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2155, "<p class=\"np-empty\">No domains are hosted by this subscription.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2148, "<div class=\"np-object-list\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2156, "<div class=\"np-object-list\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, site := range sites {
 				if domain, found := mailDomainForSite(data.SubscriptionServices.MailDomains, site); found {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2149, "<a class=\"np-object-row\" href=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1132 templ.SafeURL
-					templ_7745c5c3_Var1132, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=mail"))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3149, Col: 115}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1132))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2150, "\"><span class=\"np-object-icon\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = icon("mail").Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2151, "</span><span><strong>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1133 string
-					templ_7745c5c3_Var1133, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3149, Col: 194}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1133))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2152, "</strong><small>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1134 string
-					templ_7745c5c3_Var1134, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(mailboxesForWorkspace(data.SubscriptionServices.Mailboxes, []dashboard.MailDomain{domain}))))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3149, Col: 325}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1134))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2153, " mailboxes · DKIM ")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1135 string
-					templ_7745c5c3_Var1135, templ_7745c5c3_Err = templ.JoinStringErrs(formatEnabled(domain.DKIM))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3149, Col: 374}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1135))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2154, " · DMARC ")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1136 string
-					templ_7745c5c3_Var1136, templ_7745c5c3_Err = templ.JoinStringErrs(domain.DMARCPolicy)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3149, Col: 406}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1136))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2155, "</small></span>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = statusPill(domain.Status).Render(ctx, templ_7745c5c3_Buffer)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2156, "<span class=\"np-secondary-button\">Manage Mail</span></a>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				} else if subscriptionMailAllowed(subscription) {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2157, "<a class=\"np-object-row\" href=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1137 templ.SafeURL
-					templ_7745c5c3_Var1137, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=mail"))
+					var templ_7745c5c3_Var1131 templ.SafeURL
+					templ_7745c5c3_Var1131, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=mail"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3151, Col: 115}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3229, Col: 118}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1137))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1131))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -24104,42 +24060,81 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1138 string
-					templ_7745c5c3_Var1138, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
+					var templ_7745c5c3_Var1132 string
+					templ_7745c5c3_Var1132, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3151, Col: 194}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3230, Col: 34}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1138))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2160, "</strong><small>Mail service is not configured</small></span>")
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1132))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = tonePill("Not configured", "susp").Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2160, "</strong><small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2161, "<span class=\"np-secondary-button\">Configure Mail</span></a>")
+					var templ_7745c5c3_Var1133 string
+					templ_7745c5c3_Var1133, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(mailboxesForWorkspace(data.SubscriptionServices.Mailboxes, []dashboard.MailDomain{domain}))))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3230, Col: 165}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1133))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2162, "<a class=\"np-object-row\" href=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2161, " mailboxes · DKIM ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1139 templ.SafeURL
-					templ_7745c5c3_Var1139, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=dns"))
+					var templ_7745c5c3_Var1134 string
+					templ_7745c5c3_Var1134, templ_7745c5c3_Err = templ.JoinStringErrs(formatEnabled(domain.DKIM))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3153, Col: 114}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3230, Col: 214}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1139))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1134))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2163, "\"><span class=\"np-object-icon\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2162, " · DMARC ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var1135 string
+					templ_7745c5c3_Var1135, templ_7745c5c3_Err = templ.JoinStringErrs(domain.DMARCPolicy)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3230, Col: 246}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1135))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2163, "</small></span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = statusPill(domain.Status).Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2164, "<span class=\"np-secondary-button\">Manage Mail</span></a>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else if mailAllowed {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2165, "<a class=\"np-object-row\" href=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var1136 templ.SafeURL
+					templ_7745c5c3_Var1136, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=mail"))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3233, Col: 118}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1136))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2166, "\"><span class=\"np-object-icon\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -24147,20 +24142,67 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2164, "</span><span><strong>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2167, "</span><span><strong>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1140 string
-					templ_7745c5c3_Var1140, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
+					var templ_7745c5c3_Var1137 string
+					templ_7745c5c3_Var1137, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3153, Col: 193}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3234, Col: 34}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1140))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1137))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2165, "</strong><small>MX, SPF and DKIM are not set</small></span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2168, "</strong><small>Mail service is not configured</small></span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = tonePill("Not configured", "susp").Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2169, "<span class=\"np-secondary-button\">Configure Mail</span></a>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2170, "<a class=\"np-object-row\" href=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var1138 templ.SafeURL
+					templ_7745c5c3_Var1138, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=dns"))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3237, Col: 117}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1138))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2171, "\"><span class=\"np-object-icon\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = icon("mail").Render(ctx, templ_7745c5c3_Buffer)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2172, "</span><span><strong>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var1139 string
+					templ_7745c5c3_Var1139, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3238, Col: 34}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1139))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2173, "</strong><small>MX, SPF and DKIM are not set</small></span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -24168,18 +24210,18 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2166, "<span class=\"np-secondary-button\">Open DNS</span></a>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2174, "<span class=\"np-secondary-button\">Open DNS</span></a>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2167, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2175, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2168, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2176, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24203,37 +24245,38 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1141 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1141 == nil {
-			templ_7745c5c3_Var1141 = templ.NopComponent
+		templ_7745c5c3_Var1140 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1140 == nil {
+			templ_7745c5c3_Var1140 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		instances := applicationsForSubscription(data.SubscriptionServices.Applications, subscription.ID)
 		sites := sitesForSubscription(data.Sites, subscription.ID)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2169, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Applications</h2><span class=\"np-muted\">Rootless application instances · ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2177, "<section class=\"np-panel\"><div class=\"np-panel-title\"><div><h2>Applications</h2><span class=\"np-muted\">Rootless application instances · ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1142 string
-		templ_7745c5c3_Var1142, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(len(instances), subscriptionApplicationLimit(data.SubscriptionServices.Accounts, subscription.ID), true))
+		var templ_7745c5c3_Var1141 string
+		templ_7745c5c3_Var1141, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(len(instances), subscriptionApplicationLimit(data.SubscriptionServices.Accounts, subscription.ID), true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3164, Col: 267}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3251, Col: 242}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1142))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1141))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2170, " allowed</span></div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2178, " allowed</span></div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if subscriptionApplicationsBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2171, "<p class=\"np-gate is-policy\">Applications are disabled by the subscription hosting policy. A provider must grant the application permission and an instance allowance before one can be installed.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2179, "<p class=\"np-gate is-policy\">Applications are disabled by the subscription hosting policy. A provider must grant the application permission and an instance allowance before one can be installed.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		} else if len(instances) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2172, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
+		}
+		if len(instances) == 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2180, "<div class=\"np-empty-block\"><span class=\"np-empty-icon\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -24241,79 +24284,79 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2173, "</span> <strong>No applications installed</strong><p>An application runs as its own rootless service under the subscription account, with its own port, logs and start, stop and restart controls. Choose the domain to install it in.</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2181, "</span> <strong>No applications installed</strong><p>An application runs as its own rootless service under the subscription account, with its own port, logs and start, stop and restart controls. Choose the domain to install it in.</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2174, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Application</th><th>Runtime</th><th>Image</th><th>State</th><th></th></tr></thead><tbody>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2182, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Application</th><th>Runtime</th><th>Image</th><th>State</th><th></th></tr></thead> <tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, item := range instances {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2175, "<tr><td data-label=\"Application\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2183, "<tr><td data-label=\"Application\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1143 string
-				templ_7745c5c3_Var1143, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
+				var templ_7745c5c3_Var1142 string
+				templ_7745c5c3_Var1142, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3177, Col: 46}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3270, Col: 20}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1143))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1142))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2176, " ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2184, " ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if domain := siteDomain(data.Sites, item.SiteID); domain != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2177, "<small class=\"np-muted\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2185, "<small class=\"np-muted\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1144 string
-					templ_7745c5c3_Var1144, templ_7745c5c3_Err = templ.JoinStringErrs(domain)
+					var templ_7745c5c3_Var1143 string
+					templ_7745c5c3_Var1143, templ_7745c5c3_Err = templ.JoinStringErrs(domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3179, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3272, Col: 42}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1144))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1143))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2178, "</small>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2186, "</small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2179, "</td><td data-label=\"Runtime\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2187, "</td><td data-label=\"Runtime\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1144 string
+				templ_7745c5c3_Var1144, templ_7745c5c3_Err = templ.JoinStringErrs(item.Runtime)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3275, Col: 47}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1144))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2188, "</td><td data-label=\"Image\"><code>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1145 string
-				templ_7745c5c3_Var1145, templ_7745c5c3_Err = templ.JoinStringErrs(item.Runtime)
+				templ_7745c5c3_Var1145, templ_7745c5c3_Err = templ.JoinStringErrs(item.ImageRef)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3182, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3276, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1145))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2180, "</td><td data-label=\"Image\"><code>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1146 string
-				templ_7745c5c3_Var1146, templ_7745c5c3_Err = templ.JoinStringErrs(item.ImageRef)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3183, Col: 50}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1146))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2181, "</code></td><td data-label=\"State\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2189, "</code></td><td data-label=\"State\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -24322,25 +24365,25 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 					return templ_7745c5c3_Err
 				}
 				if item.LastError != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2182, "<small class=\"np-usage-note\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2190, "<small class=\"np-usage-note\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1147 string
-					templ_7745c5c3_Var1147, templ_7745c5c3_Err = templ.JoinStringErrs(item.LastError)
+					var templ_7745c5c3_Var1146 string
+					templ_7745c5c3_Var1146, templ_7745c5c3_Err = templ.JoinStringErrs(item.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3186, Col: 53}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3280, Col: 55}
 					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1147))
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1146))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2183, "</small>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2191, "</small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2184, "</td><td data-label=\"Action\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2192, "</td><td data-label=\"Action\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -24348,59 +24391,59 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2185, "</td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2193, "</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2186, "</tbody></table></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2194, "</tbody></table></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if len(sites) > 0 && !subscriptionApplicationsBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2187, "<div class=\"np-object-list\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2195, "<div class=\"np-object-list\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, site := range sites {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2188, "<a class=\"np-object-row\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2196, "<a class=\"np-object-row\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1148 templ.SafeURL
-				templ_7745c5c3_Var1148, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(site.ID) + "/applications"))
+				var templ_7745c5c3_Var1147 templ.SafeURL
+				templ_7745c5c3_Var1147, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)+"/applications")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3197, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3294, Col: 119}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1147))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2197, "\"><span><strong>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1148 string
+				templ_7745c5c3_Var1148, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3294, Col: 149}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1148))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2189, "\"><span><strong>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1149 string
-				templ_7745c5c3_Var1149, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3197, Col: 128}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1149))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2190, "</strong><small>Deploy and manage applications in this domain context.</small></span><span class=\"np-secondary-button\">Manage applications</span></a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2198, "</strong><small>Deploy and manage applications in this domain context.</small></span><span class=\"np-secondary-button\">Manage applications</span></a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2191, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2199, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2192, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2200, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24424,25 +24467,25 @@ func subscriptionServiceDelete(subscriptionID int64, kind string, id int64, view
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1150 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1150 == nil {
-			templ_7745c5c3_Var1150 = templ.NopComponent
+		templ_7745c5c3_Var1149 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1149 == nil {
+			templ_7745c5c3_Var1149 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2193, "<form class=\"np-inline-form\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2201, "<form class=\"np-inline-form\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1151 templ.SafeURL
-		templ_7745c5c3_Var1151, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscriptionID) + "/services/" + kind + "/" + formatJobID(id) + "/delete"))
+		var templ_7745c5c3_Var1150 templ.SafeURL
+		templ_7745c5c3_Var1150, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscriptionID) + "/services/" + kind + "/" + formatJobID(id) + "/delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3205, Col: 161}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3302, Col: 161}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1151))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1150))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2194, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2202, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24450,7 +24493,7 @@ func subscriptionServiceDelete(subscriptionID int64, kind string, id int64, view
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2195, "<button type=\"submit\" class=\"np-icon-button np-danger-button\" title=\"Delete\" data-np-confirm=\"Delete this service configuration?\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2203, "<button type=\"submit\" class=\"np-icon-button np-danger-button\" title=\"Delete\" data-np-confirm=\"Delete this service configuration?\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24458,7 +24501,7 @@ func subscriptionServiceDelete(subscriptionID int64, kind string, id int64, view
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2196, "</button></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2204, "</button></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24482,25 +24525,25 @@ func siteSubscriptionServiceDelete(subscriptionID int64, kind string, id int64, 
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1152 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1152 == nil {
-			templ_7745c5c3_Var1152 = templ.NopComponent
+		templ_7745c5c3_Var1151 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1151 == nil {
+			templ_7745c5c3_Var1151 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2197, "<form class=\"np-inline-form\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2205, "<form class=\"np-inline-form\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1153 templ.SafeURL
-		templ_7745c5c3_Var1153, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscriptionID) + "/services/" + kind + "/" + formatJobID(id) + "/delete"))
+		var templ_7745c5c3_Var1152 templ.SafeURL
+		templ_7745c5c3_Var1152, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscriptionID) + "/services/" + kind + "/" + formatJobID(id) + "/delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3209, Col: 161}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3306, Col: 161}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1153))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1152))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2198, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2206, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24508,33 +24551,33 @@ func siteSubscriptionServiceDelete(subscriptionID int64, kind string, id int64, 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2199, "<input type=\"hidden\" name=\"site_id\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2207, "<input type=\"hidden\" name=\"site_id\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1153 string
+		templ_7745c5c3_Var1153, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3306, Col: 243}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1153))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2208, "\"><input type=\"hidden\" name=\"return_to\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1154 string
-		templ_7745c5c3_Var1154, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
+		templ_7745c5c3_Var1154, templ_7745c5c3_Err = templ.JoinStringErrs(returnTo)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3209, Col: 243}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3306, Col: 301}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1154))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2200, "\"><input type=\"hidden\" name=\"return_to\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1155 string
-		templ_7745c5c3_Var1155, templ_7745c5c3_Err = templ.JoinStringErrs(returnTo)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3209, Col: 301}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1155))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2201, "\"><button type=\"submit\" class=\"np-icon-button np-danger-button\" title=\"Delete\" data-np-confirm=\"Delete this service configuration?\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2209, "\"><button type=\"submit\" class=\"np-icon-button np-danger-button\" title=\"Delete\" data-np-confirm=\"Delete this service configuration?\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24542,7 +24585,7 @@ func siteSubscriptionServiceDelete(subscriptionID int64, kind string, id int64, 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2202, "</button></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2210, "</button></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24566,31 +24609,31 @@ func subscriptionBackupRows(items []dashboard.Backup, subscriptionID int64) temp
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1156 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1156 == nil {
-			templ_7745c5c3_Var1156 = templ.NopComponent
+		templ_7745c5c3_Var1155 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1155 == nil {
+			templ_7745c5c3_Var1155 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2203, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Target</th><th>Status</th><th>Size</th><th>Created</th></tr></thead><tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2211, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Target</th><th>Status</th><th>Size</th><th>Created</th></tr></thead><tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, item := range items {
 			if item.SubscriptionID == subscriptionID {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2204, "<tr><td data-label=\"Target\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2212, "<tr><td data-label=\"Target\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1157 string
-				templ_7745c5c3_Var1157, templ_7745c5c3_Err = templ.JoinStringErrs(item.TargetName)
+				var templ_7745c5c3_Var1156 string
+				templ_7745c5c3_Var1156, templ_7745c5c3_Err = templ.JoinStringErrs(item.TargetName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3216, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3313, Col: 49}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1157))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1156))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2205, "</td><td data-label=\"Status\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2213, "</td><td data-label=\"Status\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -24598,39 +24641,39 @@ func subscriptionBackupRows(items []dashboard.Backup, subscriptionID int64) temp
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2206, "</td><td data-label=\"Size\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2214, "</td><td data-label=\"Size\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1157 string
+				templ_7745c5c3_Var1157, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(item.SizeBytes))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3313, Col: 160}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1157))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2215, "</td><td data-label=\"Created\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1158 string
-				templ_7745c5c3_Var1158, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(item.SizeBytes))
+				templ_7745c5c3_Var1158, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(item.CreatedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3216, Col: 160}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3313, Col: 220}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1158))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2207, "</td><td data-label=\"Created\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1159 string
-				templ_7745c5c3_Var1159, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(item.CreatedAt))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3216, Col: 220}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1159))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2208, "</td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2216, "</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2209, "</tbody></table></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2217, "</tbody></table></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24654,25 +24697,25 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1160 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1160 == nil {
-			templ_7745c5c3_Var1160 = templ.NopComponent
+		templ_7745c5c3_Var1159 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1159 == nil {
+			templ_7745c5c3_Var1159 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2210, "<details class=\"np-disclosure\"><summary>Custom entitlement snapshot</summary><form class=\"np-form np-action-form np-custom-entitlements\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2218, "<details class=\"np-disclosure\"><summary>Custom entitlement snapshot</summary><form class=\"np-form np-action-form np-custom-entitlements\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1161 templ.SafeURL
-		templ_7745c5c3_Var1161, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/mode"))
+		var templ_7745c5c3_Var1160 templ.SafeURL
+		templ_7745c5c3_Var1160, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/mode"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3224, Col: 154}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3321, Col: 154}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1161))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1160))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2211, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2219, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24680,7 +24723,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2212, "<input type=\"hidden\" name=\"sync_mode\" value=\"custom\"><div class=\"np-plan-field-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2220, "<input type=\"hidden\" name=\"sync_mode\" value=\"custom\"><div class=\"np-plan-field-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24744,83 +24787,83 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2213, "</div><div class=\"np-plan-field-grid np-threshold-grid\"><label>Overuse policy<select name=\"overuse_policy\"><option value=\"block\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2221, "</div><div class=\"np-plan-field-grid np-threshold-grid\"><label>Overuse policy<select name=\"overuse_policy\"><option value=\"block\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if subscription.OverusePolicy == types.PlanOveruseBlock {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2214, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2215, ">Block</option><option value=\"normal\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if subscription.OverusePolicy == types.PlanOveruseNormal {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2216, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2217, ">Allow</option><option value=\"notify\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if subscription.OverusePolicy == types.PlanOveruseNotify {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2218, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2219, ">Allow and notify</option><option value=\"not_suspend\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if subscription.OverusePolicy == types.PlanOveruseNotSuspend {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2220, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2221, ">Disk and traffic only</option><option value=\"not_suspend_notify\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if subscription.OverusePolicy == types.PlanOveruseNotSuspendNotify {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2222, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2223, ">Disk and traffic with notifications</option></select></label> <label>Disk warning %<input type=\"number\" min=\"1\" max=\"100\" name=\"disk_warning_percent\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2223, ">Block</option><option value=\"normal\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if subscription.OverusePolicy == types.PlanOveruseNormal {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2224, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2225, ">Allow</option><option value=\"notify\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if subscription.OverusePolicy == types.PlanOveruseNotify {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2226, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2227, ">Allow and notify</option><option value=\"not_suspend\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if subscription.OverusePolicy == types.PlanOveruseNotSuspend {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2228, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2229, ">Disk and traffic only</option><option value=\"not_suspend_notify\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if subscription.OverusePolicy == types.PlanOveruseNotSuspendNotify {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2230, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2231, ">Disk and traffic with notifications</option></select></label> <label>Disk warning %<input type=\"number\" min=\"1\" max=\"100\" name=\"disk_warning_percent\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1161 string
+		templ_7745c5c3_Var1161, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.DiskWarningPercent)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3343, Col: 151}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1161))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2232, "\"></label> <label>Traffic warning %<input type=\"number\" min=\"1\" max=\"100\" name=\"traffic_warning_percent\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1162 string
-		templ_7745c5c3_Var1162, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.DiskWarningPercent)))
+		templ_7745c5c3_Var1162, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.TrafficWarningPercent)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3246, Col: 151}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3344, Col: 160}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1162))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2224, "\"></label> <label>Traffic warning %<input type=\"number\" min=\"1\" max=\"100\" name=\"traffic_warning_percent\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1163 string
-		templ_7745c5c3_Var1163, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.TrafficWarningPercent)))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3247, Col: 160}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1163))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2225, "\"></label></div><fieldset><legend>Permissions</legend><div class=\"np-permission-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2233, "\"></label></div><fieldset><legend>Permissions</legend><div class=\"np-permission-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -24848,395 +24891,395 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2226, "</div></fieldset><fieldset><legend>PHP runtimes</legend><div class=\"np-checkbox-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2234, "</div></fieldset><fieldset><legend>PHP runtimes</legend><div class=\"np-checkbox-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, version := range customSubscriptionPHPVersions(subscription, data.Capabilities) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2227, "<label class=\"np-check\"><input type=\"checkbox\" name=\"php_versions\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2235, "<label class=\"np-check\"><input type=\"checkbox\" name=\"php_versions\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1163 string
+			templ_7745c5c3_Var1163, templ_7745c5c3_Err = templ.JoinStringErrs(version)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3349, Col: 87}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1163))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2236, "\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if containsCSV(subscription.PHPAllowlist, version) {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2237, " checked")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2238, ">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1164 string
 			templ_7745c5c3_Var1164, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3252, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3349, Col: 160}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1164))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2228, "\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2239, "</label>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if containsCSV(subscription.PHPAllowlist, version) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2229, " checked")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2230, ">")
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2240, "</div><label>Default PHP version<select name=\"default_php_version\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		for _, version := range customSubscriptionPHPVersions(subscription, data.Capabilities) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2241, "<option value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1165 string
 			templ_7745c5c3_Var1165, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3252, Col: 160}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3353, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1165))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2231, "</label>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2242, "\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2232, "</div><label>Default PHP version<select name=\"default_php_version\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		for _, version := range customSubscriptionPHPVersions(subscription, data.Capabilities) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2233, "<option value=\"")
+			if version == subscription.DefaultPHPVersion {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2243, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2244, ">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1166 string
 			templ_7745c5c3_Var1166, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3256, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3353, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1166))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2234, "\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if version == subscription.DefaultPHPVersion {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2235, " selected")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2236, ">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1167 string
-			templ_7745c5c3_Var1167, templ_7745c5c3_Err = templ.JoinStringErrs(version)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3256, Col: 96}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1167))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2237, "</option>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2245, "</option>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2238, "</select></label></fieldset><input type=\"hidden\" name=\"hosting_web_server\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2246, "</select></label></fieldset><input type=\"hidden\" name=\"hosting_web_server\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1167 string
+		templ_7745c5c3_Var1167, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.Hosting.WebServer)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3356, Col: 103}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1167))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2247, "\"> <input type=\"hidden\" name=\"preferred_domain\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1168 string
-		templ_7745c5c3_Var1168, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.Hosting.WebServer)
+		templ_7745c5c3_Var1168, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.Hosting.PreferredDomain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3259, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3357, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1168))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2239, "\"> <input type=\"hidden\" name=\"preferred_domain\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2248, "\"> <input type=\"hidden\" name=\"php_max_execution_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1169 string
-		templ_7745c5c3_Var1169, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.Hosting.PreferredDomain)
+		templ_7745c5c3_Var1169, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.MaxExecutionSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3260, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3358, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1169))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2240, "\"> <input type=\"hidden\" name=\"php_max_execution_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2249, "\"> <input type=\"hidden\" name=\"php_max_input_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1170 string
-		templ_7745c5c3_Var1170, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.MaxExecutionSeconds)))
+		templ_7745c5c3_Var1170, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.MaxInputSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3261, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3359, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1170))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2241, "\"> <input type=\"hidden\" name=\"php_max_input_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2250, "\"> <input type=\"hidden\" name=\"php_post_max_mb\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1171 string
-		templ_7745c5c3_Var1171, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.MaxInputSeconds)))
+		templ_7745c5c3_Var1171, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.PostMaxMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3262, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3360, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1171))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2242, "\"> <input type=\"hidden\" name=\"php_post_max_mb\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2251, "\"> <input type=\"hidden\" name=\"php_upload_max_mb\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1172 string
-		templ_7745c5c3_Var1172, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.PostMaxMB)))
+		templ_7745c5c3_Var1172, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.UploadMaxMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3263, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3361, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1172))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2243, "\"> <input type=\"hidden\" name=\"php_upload_max_mb\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2252, "\"> <input type=\"hidden\" name=\"php_fpm_max_requests\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1173 string
-		templ_7745c5c3_Var1173, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.UploadMaxMB)))
+		templ_7745c5c3_Var1173, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.FPMMaxRequests)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3264, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3362, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1173))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2244, "\"> <input type=\"hidden\" name=\"php_fpm_max_requests\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2253, "\"> <input type=\"hidden\" name=\"php_display_errors\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1174 string
-		templ_7745c5c3_Var1174, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.FPMMaxRequests)))
+		templ_7745c5c3_Var1174, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.PHP.DisplayErrors))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3265, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3363, Col: 115}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1174))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2245, "\"> <input type=\"hidden\" name=\"php_display_errors\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2254, "\"> <input type=\"hidden\" name=\"php_log_errors\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1175 string
-		templ_7745c5c3_Var1175, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.PHP.DisplayErrors))
+		templ_7745c5c3_Var1175, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.PHP.LogErrors))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3266, Col: 115}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3364, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1175))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2246, "\"> <input type=\"hidden\" name=\"php_log_errors\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2255, "\"> <input type=\"hidden\" name=\"php_allow_url_fopen\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1176 string
-		templ_7745c5c3_Var1176, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.PHP.LogErrors))
+		templ_7745c5c3_Var1176, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.PHP.AllowURLFOpen))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3267, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3365, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1176))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2247, "\"> <input type=\"hidden\" name=\"php_allow_url_fopen\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2256, "\"> <input type=\"hidden\" name=\"mail_webmail_enabled\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1177 string
-		templ_7745c5c3_Var1177, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.PHP.AllowURLFOpen))
+		templ_7745c5c3_Var1177, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Mail.WebmailEnabled))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3268, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3366, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1177))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2248, "\"> <input type=\"hidden\" name=\"mail_webmail_enabled\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2257, "\"> <input type=\"hidden\" name=\"mail_spam_filter\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1178 string
-		templ_7745c5c3_Var1178, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Mail.WebmailEnabled))
+		templ_7745c5c3_Var1178, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Mail.SpamFilter))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3269, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3367, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1178))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2249, "\"> <input type=\"hidden\" name=\"mail_spam_filter\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2258, "\"> <input type=\"hidden\" name=\"mail_dkim\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1179 string
-		templ_7745c5c3_Var1179, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Mail.SpamFilter))
+		templ_7745c5c3_Var1179, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Mail.DKIM))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3270, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3368, Col: 98}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1179))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2250, "\"> <input type=\"hidden\" name=\"mail_dkim\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2259, "\"> <input type=\"hidden\" name=\"mail_dmarc_policy\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1180 string
-		templ_7745c5c3_Var1180, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Mail.DKIM))
+		templ_7745c5c3_Var1180, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.Mail.DMARCPolicy)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3271, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3369, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1180))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2251, "\"> <input type=\"hidden\" name=\"mail_dmarc_policy\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2260, "\"> <input type=\"hidden\" name=\"dns_mode\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1181 string
-		templ_7745c5c3_Var1181, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.Mail.DMARCPolicy)
+		templ_7745c5c3_Var1181, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.DNS.Mode)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3272, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3370, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1181))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2252, "\"> <input type=\"hidden\" name=\"dns_mode\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2261, "\"> <input type=\"hidden\" name=\"dns_default_ttl\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1182 string
-		templ_7745c5c3_Var1182, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.DNS.Mode)
+		templ_7745c5c3_Var1182, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.DNS.DefaultTTL)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3273, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3371, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1182))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2253, "\"> <input type=\"hidden\" name=\"dns_default_ttl\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2262, "\"> <input type=\"hidden\" name=\"performance_max_connections\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1183 string
-		templ_7745c5c3_Var1183, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.DNS.DefaultTTL)))
+		templ_7745c5c3_Var1183, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.Performance.MaxConnections)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3274, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3372, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1183))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2254, "\"> <input type=\"hidden\" name=\"performance_max_connections\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2263, "\"> <input type=\"hidden\" name=\"performance_static_cache\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1184 string
-		templ_7745c5c3_Var1184, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.Performance.MaxConnections)))
+		templ_7745c5c3_Var1184, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Performance.StaticFileCache))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3275, Col: 141}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3373, Col: 131}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1184))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2255, "\"> <input type=\"hidden\" name=\"performance_static_cache\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2264, "\"> <input type=\"hidden\" name=\"logs_rotation_enabled\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1185 string
-		templ_7745c5c3_Var1185, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Performance.StaticFileCache))
+		templ_7745c5c3_Var1185, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Logs.RotationEnabled))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3276, Col: 131}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3374, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1185))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2256, "\"> <input type=\"hidden\" name=\"logs_rotation_enabled\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2265, "\"> <input type=\"hidden\" name=\"logs_retention_days\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1186 string
-		templ_7745c5c3_Var1186, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Logs.RotationEnabled))
+		templ_7745c5c3_Var1186, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.Logs.RetentionDays)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3277, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3375, Col: 125}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1186))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2257, "\"> <input type=\"hidden\" name=\"logs_retention_days\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2266, "\"> <input type=\"hidden\" name=\"applications_catalog_enabled\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1187 string
-		templ_7745c5c3_Var1187, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.Logs.RetentionDays)))
+		templ_7745c5c3_Var1187, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Applications.CatalogEnabled))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3278, Col: 125}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3376, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1187))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2258, "\"> <input type=\"hidden\" name=\"applications_catalog_enabled\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1188 string
-		templ_7745c5c3_Var1188, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Applications.CatalogEnabled))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3279, Col: 135}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1188))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2259, "\"> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2267, "\"> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, application := range subscription.ServicePresets.Applications.Allowed {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2260, "<input type=\"hidden\" name=\"applications_allowed\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2268, "<input type=\"hidden\" name=\"applications_allowed\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1189 string
-			templ_7745c5c3_Var1189, templ_7745c5c3_Err = templ.JoinStringErrs(application)
+			var templ_7745c5c3_Var1188 string
+			templ_7745c5c3_Var1188, templ_7745c5c3_Err = templ.JoinStringErrs(application)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3281, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3378, Col: 72}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1189))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1188))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2261, "\"> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2269, "\"> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2262, "<button type=\"submit\" data-np-confirm=\"Detach this subscription from automatic plan synchronization?\">Save custom snapshot</button></form></details>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2270, "<button type=\"submit\" data-np-confirm=\"Detach this subscription from automatic plan synchronization?\">Save custom snapshot</button></form></details>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25260,22 +25303,22 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1190 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1190 == nil {
-			templ_7745c5c3_Var1190 = templ.NopComponent
+		templ_7745c5c3_Var1189 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1189 == nil {
+			templ_7745c5c3_Var1189 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2263, "<article class=\"np-domain-block\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2271, "<article class=\"np-domain-block\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if site.ParentSiteID > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2264, " data-subdomain")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2272, " data-subdomain")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2265, "><div class=\"np-domain-block-main\"><span class=\"np-object-icon\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2273, "><div class=\"np-domain-block-main\"><span class=\"np-object-icon\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25283,92 +25326,92 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2266, "</span><div><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2274, "</span><div><a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1191 templ.SafeURL
-		templ_7745c5c3_Var1191, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID))))
+		var templ_7745c5c3_Var1190 templ.SafeURL
+		templ_7745c5c3_Var1190, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3293, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3390, Col: 79}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1190))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2275, "\"><strong>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1191 string
+		templ_7745c5c3_Var1191, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3390, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1191))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2267, "\"><strong>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1192 string
-		templ_7745c5c3_Var1192, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3293, Col: 103}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1192))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2268, "</strong></a> <span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2276, "</strong></a> <span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if parent := parentDomain(data.Sites, site); parent != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2269, "Subdomain of ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2277, "Subdomain of ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1193 string
-			templ_7745c5c3_Var1193, templ_7745c5c3_Err = templ.JoinStringErrs(parent)
+			var templ_7745c5c3_Var1192 string
+			templ_7745c5c3_Var1192, templ_7745c5c3_Err = templ.JoinStringErrs(parent)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3296, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3393, Col: 27}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1193))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1192))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2270, " · ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2278, " · ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2271, "PHP ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2279, "PHP ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1194 string
-		templ_7745c5c3_Var1194, templ_7745c5c3_Err = templ.JoinStringErrs(site.PHPVersion)
+		var templ_7745c5c3_Var1193 string
+		templ_7745c5c3_Var1193, templ_7745c5c3_Err = templ.JoinStringErrs(site.PHPVersion)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3298, Col: 26}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3395, Col: 26}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1194))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1193))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2272, " ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2280, " ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if disk := siteDiskLabel(data, site.ID); disk != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2273, "· ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2281, "· ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1195 string
-			templ_7745c5c3_Var1195, templ_7745c5c3_Err = templ.JoinStringErrs(disk)
+			var templ_7745c5c3_Var1194 string
+			templ_7745c5c3_Var1194, templ_7745c5c3_Err = templ.JoinStringErrs(disk)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3300, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3397, Col: 15}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1195))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1194))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2274, " on disk")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2282, " on disk")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2275, "</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2283, "</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25376,7 +25419,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2276, "</div><div class=\"np-domain-service-state\"><span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2284, "</div><div class=\"np-domain-service-state\"><span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25384,20 +25427,20 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2277, "<b>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2285, "<b>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1196 string
-		templ_7745c5c3_Var1196, templ_7745c5c3_Err = templ.JoinStringErrs(formatTLSState(site))
+		var templ_7745c5c3_Var1195 string
+		templ_7745c5c3_Var1195, templ_7745c5c3_Err = templ.JoinStringErrs(formatTLSState(site))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3307, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3404, Col: 49}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1196))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1195))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2278, "</b> TLS</span> <span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2286, "</b> TLS</span> <span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25405,20 +25448,20 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2279, "<b>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2287, "<b>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1197 string
-		templ_7745c5c3_Var1197, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(databasesForSite(data.Databases, site.ID))))
+		var templ_7745c5c3_Var1196 string
+		templ_7745c5c3_Var1196, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(databasesForSite(data.Databases, site.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3308, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3405, Col: 93}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1197))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1196))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2280, "</b> databases</span> <span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2288, "</b> databases</span> <span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25426,134 +25469,134 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2281, "<b>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2289, "<b>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1198 string
-		templ_7745c5c3_Var1198, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(siteBackupCount(data.Phase6.Backups, site.ID)))
+		var templ_7745c5c3_Var1197 string
+		templ_7745c5c3_Var1197, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(siteBackupCount(data.Phase6.Backups, site.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3309, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3406, Col: 91}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1197))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2290, "</b> backups</span></div><nav><a href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1198 templ.SafeURL
+		templ_7745c5c3_Var1198, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=hosting"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3409, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1198))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2282, "</b> backups</span></div><nav><a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2291, "\">Hosting</a> <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1199 templ.SafeURL
-		templ_7745c5c3_Var1199, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=hosting"))
+		templ_7745c5c3_Var1199, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=php"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3312, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3410, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1199))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2283, "\">Hosting</a> <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2292, "\">PHP</a> <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1200 templ.SafeURL
-		templ_7745c5c3_Var1200, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=php"))
+		templ_7745c5c3_Var1200, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=dns"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3313, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1200))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2284, "\">PHP</a> <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2293, "\">DNS</a> <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1201 templ.SafeURL
-		templ_7745c5c3_Var1201, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=dns"))
+		templ_7745c5c3_Var1201, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=ssl"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3314, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1201))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2285, "\">DNS</a> <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2294, "\">SSL/TLS</a> <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1202 templ.SafeURL
-		templ_7745c5c3_Var1202, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=ssl"))
+		templ_7745c5c3_Var1202, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=databases"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3315, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3413, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1202))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2286, "\">SSL/TLS</a> <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2295, "\">Databases</a> <a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1203 templ.SafeURL
-		templ_7745c5c3_Var1203, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=databases"))
+		templ_7745c5c3_Var1203, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=backups"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3316, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3414, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1203))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2287, "\">Databases</a> <a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2296, "\">Backups</a></nav><div class=\"np-domain-card-actions\"><a class=\"np-secondary-button\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1204 templ.SafeURL
-		templ_7745c5c3_Var1204, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=backups"))
+		templ_7745c5c3_Var1204, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3317, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3417, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1204))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2288, "\">Backups</a></nav><div class=\"np-domain-card-actions\"><a class=\"np-secondary-button\" href=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1205 templ.SafeURL
-		templ_7745c5c3_Var1205, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID))))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3320, Col: 106}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1205))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2289, "\">Manage</a> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2297, "\">Manage</a> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if formatTLSState(site) == "none" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2290, "<a class=\"np-secondary-button\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2298, "<a class=\"np-secondary-button\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1206 templ.SafeURL
-			templ_7745c5c3_Var1206, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=ssl"))
+			var templ_7745c5c3_Var1205 templ.SafeURL
+			templ_7745c5c3_Var1205, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=ssl"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3322, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3419, Col: 118}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1206))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1205))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2291, "\">Issue certificate</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2299, "\">Issue certificate</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2292, "</div></article>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2300, "</div></article>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25577,12 +25620,12 @@ func routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) templ
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1207 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1207 == nil {
-			templ_7745c5c3_Var1207 = templ.NopComponent
+		templ_7745c5c3_Var1206 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1206 == nil {
+			templ_7745c5c3_Var1206 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var1208 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var1207 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -25594,17 +25637,17 @@ func routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) templ
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2293, "<a class=\"np-secondary-link\" href=\"/subscriptions\">Cancel</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2301, "<a class=\"np-secondary-link\" href=\"/subscriptions\">Cancel</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = pageHead("Account management", "Add Subscription", "Create the customer, entitlement and optional first website in one guided workflow.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1208), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = pageHead("Account management", "Add Subscription", "Create the customer, entitlement and optional first website in one guided workflow.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1207), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2294, "<form class=\"np-onboarding\" method=\"post\" action=\"/subscriptions/onboard\" data-np-onboarding>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2302, "<form class=\"np-onboarding\" method=\"post\" action=\"/subscriptions/onboard\" data-np-onboarding>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25612,117 +25655,117 @@ func routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) templ
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2295, "<section class=\"np-panel\"><div class=\"np-step-head\"><span>1</span><div><h2>Customer</h2><p>Choose an existing customer or create a new profile.</p></div></div><div class=\"np-segmented\"><label><input type=\"radio\" name=\"customer_mode\" value=\"existing\" checked>Existing customer</label><label><input type=\"radio\" name=\"customer_mode\" value=\"new\">New customer</label></div><div data-np-customer-mode=\"existing\"><label>Customer<select name=\"customer_id\"><option value=\"\">Select customer</option> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2303, "<section class=\"np-panel\"><div class=\"np-step-head\"><span>1</span><div><h2>Customer</h2><p>Choose an existing customer or create a new profile.</p></div></div><div class=\"np-segmented\"><label><input type=\"radio\" name=\"customer_mode\" value=\"existing\" checked>Existing customer</label><label><input type=\"radio\" name=\"customer_mode\" value=\"new\">New customer</label></div><div data-np-customer-mode=\"existing\"><label>Customer<select name=\"customer_id\"><option value=\"\">Select customer</option> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, customer := range data.Customers {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2296, "<option value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2304, "<option value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1208 string
+			templ_7745c5c3_Var1208, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3435, Col: 45}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1208))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2305, "\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if customer.ID == view.DetailID {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2306, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2307, ">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1209 string
-			templ_7745c5c3_Var1209, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
+			templ_7745c5c3_Var1209, templ_7745c5c3_Err = templ.JoinStringErrs(displayCustomer(customer))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3338, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3435, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1209))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2297, "\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if customer.ID == view.DetailID {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2298, " selected")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2299, ">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2308, " · ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1210 string
-			templ_7745c5c3_Var1210, templ_7745c5c3_Err = templ.JoinStringErrs(displayCustomer(customer))
+			templ_7745c5c3_Var1210, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3338, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3435, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1210))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2300, " · ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1211 string
-			templ_7745c5c3_Var1211, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Email)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3338, Col: 140}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1211))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2301, "</option>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2309, "</option>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2302, "</select></label></div><div class=\"np-form-grid\" data-np-customer-mode=\"new\" hidden><label>Email<input type=\"email\" name=\"customer_email\"></label><label>Name<input name=\"customer_name\"></label><label>Company<input name=\"company\"></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enable_login\" value=\"true\">Enable panel login</label><label>Password<input type=\"password\" name=\"password\" autocomplete=\"new-password\"></label></div></section><section class=\"np-panel\"><div class=\"np-step-head\"><span>2</span><div><h2>Service plan</h2><p>The plan remains the source of every entitlement.</p></div></div><div class=\"np-form-grid\"><label>Plan<select name=\"plan_id\" data-np-onboarding-plan required>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2310, "</select></label></div><div class=\"np-form-grid\" data-np-customer-mode=\"new\" hidden><label>Email<input type=\"email\" name=\"customer_email\"></label><label>Name<input name=\"customer_name\"></label><label>Company<input name=\"company\"></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enable_login\" value=\"true\">Enable panel login</label><label>Password<input type=\"password\" name=\"password\" autocomplete=\"new-password\"></label></div></section><section class=\"np-panel\"><div class=\"np-step-head\"><span>2</span><div><h2>Service plan</h2><p>The plan remains the source of every entitlement.</p></div></div><div class=\"np-form-grid\"><label>Plan<select name=\"plan_id\" data-np-onboarding-plan required>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, plan := range data.Plans {
 			if plan.IsActive {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2303, "<option value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2311, "<option value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1211 string
+				templ_7745c5c3_Var1211, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3443, Col: 42}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1211))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2312, "\" data-php-versions=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1212 string
-				templ_7745c5c3_Var1212, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
+				templ_7745c5c3_Var1212, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(planPHPVersions(plan, data.Capabilities)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3346, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3443, Col: 117}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1212))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2304, "\" data-php-versions=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2313, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1213 string
-				templ_7745c5c3_Var1213, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(planPHPVersions(plan, data.Capabilities)))
+				templ_7745c5c3_Var1213, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3346, Col: 117}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3443, Col: 131}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1213))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2305, "\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1214 string
-				templ_7745c5c3_Var1214, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3346, Col: 131}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1214))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2306, "</option>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2314, "</option>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2307, "</select></label><label>Subscription name<input name=\"subscription_name\" required></label><label>System username<input name=\"system_username\" pattern=\"[a-z][a-z0-9]{2,31}\" placeholder=\"Generated if empty\"></label></div></section><section class=\"np-panel\"><div class=\"np-step-head\"><span>3</span><div><h2>First website</h2><p>Optional. Nakpanel will queue provisioning after the subscription is saved.</p></div></div><label class=\"np-check\"><input type=\"checkbox\" name=\"create_site\" value=\"true\" data-np-create-first-site>Create the first website now</label><div class=\"np-form-grid\" data-np-first-site hidden><label>Domain<input name=\"domain\"></label><label>PHP<select name=\"php_version\" data-np-onboarding-php></select></label><p class=\"np-gate is-blocked\" data-np-onboarding-php-gate hidden>No installed PHP-FPM version is allowed by this plan.</p></div></section><div class=\"np-onboarding-actions\"><a class=\"np-secondary-link\" href=\"/subscriptions\">Cancel</a><button type=\"submit\">Create subscription</button></div></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2315, "</select></label><label>Subscription name<input name=\"subscription_name\" required></label><label>System username<input name=\"system_username\" pattern=\"[a-z][a-z0-9]{2,31}\" placeholder=\"Generated if empty\"></label></div></section><section class=\"np-panel\"><div class=\"np-step-head\"><span>3</span><div><h2>First website</h2><p>Optional. Nakpanel will queue provisioning after the subscription is saved.</p></div></div><label class=\"np-check\"><input type=\"checkbox\" name=\"create_site\" value=\"true\" data-np-create-first-site>Create the first website now</label><div class=\"np-form-grid\" data-np-first-site hidden><label>Domain<input name=\"domain\"></label><label>PHP<select name=\"php_version\" data-np-onboarding-php></select></label><p class=\"np-gate is-blocked\" data-np-onboarding-php-gate hidden>No installed PHP-FPM version is allowed by this plan.</p></div></section><div class=\"np-onboarding-actions\"><a class=\"np-secondary-link\" href=\"/subscriptions\">Cancel</a><button type=\"submit\">Create subscription</button></div></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25746,12 +25789,12 @@ func routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView)
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1215 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1215 == nil {
-			templ_7745c5c3_Var1215 = templ.NopComponent
+		templ_7745c5c3_Var1214 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1214 == nil {
+			templ_7745c5c3_Var1214 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var1216 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var1215 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -25764,123 +25807,123 @@ func routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView)
 			}
 			ctx = templ.InitializeContext(ctx)
 			if planListType(view) == "hosting" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2308, "<a class=\"np-primary-link\" href=\"/service-plans/new\">Create plan</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2316, "<a class=\"np-primary-link\" href=\"/service-plans/new\">Create plan</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2309, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2317, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if planListType(view) == "addon" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2310, "<a class=\"np-primary-link\" href=\"/service-plans/addons/new\">Add an Add-on</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2318, "<a class=\"np-primary-link\" href=\"/service-plans/addons/new\">Add an Add-on</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2311, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2319, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if user.Role == auth.RoleAdmin && planListType(view) == "reseller" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2312, "<a class=\"np-primary-link\" href=\"/service-plans/resellers/new\">Add Reseller Plan</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2320, "<a class=\"np-primary-link\" href=\"/service-plans/resellers/new\">Add Reseller Plan</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = pageHead("Account management", "Service Plans", "Define reusable hosting resources, permissions and service presets.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1216), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = pageHead("Account management", "Service Plans", "Define reusable hosting resources, permissions and service presets.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1215), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2313, "<nav class=\"np-plan-type-tabs\" aria-label=\"Plan type\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2321, "<nav class=\"np-plan-type-tabs\" aria-label=\"Plan type\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1217 = []any{planTypeClass(planListType(view), "hosting")}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1217...)
+		var templ_7745c5c3_Var1216 = []any{planTypeClass(planListType(view), "hosting")}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1216...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2314, "<a class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2322, "<a class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1218 string
-		templ_7745c5c3_Var1218, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1217).String())
+		var templ_7745c5c3_Var1217 string
+		templ_7745c5c3_Var1217, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1216).String())
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1218))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1217))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2315, "\" href=\"/service-plans?type=hosting\">Hosting Plans</a> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2323, "\" href=\"/service-plans?type=hosting\">Hosting Plans</a> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1219 = []any{planTypeClass(planListType(view), "addon")}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1219...)
+		var templ_7745c5c3_Var1218 = []any{planTypeClass(planListType(view), "addon")}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1218...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2316, "<a class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2324, "<a class=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1220 string
-		templ_7745c5c3_Var1220, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1219).String())
+		var templ_7745c5c3_Var1219 string
+		templ_7745c5c3_Var1219, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1218).String())
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1220))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1219))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2317, "\" href=\"/service-plans?type=addon\">Add-on Plans</a> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2325, "\" href=\"/service-plans?type=addon\">Add-on Plans</a> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if user.Role == auth.RoleAdmin {
-			var templ_7745c5c3_Var1221 = []any{planTypeClass(planListType(view), "reseller")}
-			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1221...)
+			var templ_7745c5c3_Var1220 = []any{planTypeClass(planListType(view), "reseller")}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1220...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2318, "<a class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2326, "<a class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1222 string
-			templ_7745c5c3_Var1222, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1221).String())
+			var templ_7745c5c3_Var1221 string
+			templ_7745c5c3_Var1221, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1220).String())
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1222))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1221))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2319, "\" href=\"/service-plans?type=reseller\">Reseller Plans</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2327, "\" href=\"/service-plans?type=reseller\">Reseller Plans</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2320, "</nav><section class=\"np-plan-toolbar\"><form method=\"get\" action=\"/service-plans\" class=\"np-plan-filters\"><input type=\"hidden\" name=\"type\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2328, "</nav><section class=\"np-plan-toolbar\"><form method=\"get\" action=\"/service-plans\" class=\"np-plan-filters\"><input type=\"hidden\" name=\"type\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1223 string
-		templ_7745c5c3_Var1223, templ_7745c5c3_Err = templ.JoinStringErrs(planListType(view))
+		var templ_7745c5c3_Var1222 string
+		templ_7745c5c3_Var1222, templ_7745c5c3_Err = templ.JoinStringErrs(planListType(view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3375, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3472, Col: 128}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1223))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1222))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2321, "\"><label class=\"np-filter-search\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2329, "\"><label class=\"np-filter-search\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -25888,106 +25931,106 @@ func routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2322, "<input type=\"search\" name=\"q\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2330, "<input type=\"search\" name=\"q\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1224 string
-		templ_7745c5c3_Var1224, templ_7745c5c3_Err = templ.JoinStringErrs(view.SearchQuery)
+		var templ_7745c5c3_Var1223 string
+		templ_7745c5c3_Var1223, templ_7745c5c3_Err = templ.JoinStringErrs(view.SearchQuery)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3375, Col: 233}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3472, Col: 233}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1224))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1223))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2323, "\" placeholder=\"Search plans\"></label><label><span class=\"np-sr-only\">Provider</span><select name=\"provider\"><option value=\"\">All providers</option><option value=\"admin\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2331, "\" placeholder=\"Search plans\"></label><label><span class=\"np-sr-only\">Provider</span><select name=\"provider\"><option value=\"\">All providers</option><option value=\"admin\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if view.ProviderFilter == "admin" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2324, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2325, ">Administrator</option> ")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		for _, reseller := range data.Resellers {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2326, "<option value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1225 string
-			templ_7745c5c3_Var1225, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(reseller.ID))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3377, Col: 45}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1225))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2327, "\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if view.ProviderFilter == formatPlanID(reseller.ID) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2328, " selected")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2329, ">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1226 string
-			templ_7745c5c3_Var1226, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.DisplayName)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3377, Col: 133}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1226))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2330, "</option>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2331, "</select></label><label><span class=\"np-sr-only\">Status</span><select name=\"status\"><option value=\"\">All statuses</option><option value=\"draft\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if view.StatusFilter == "draft" {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2332, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2333, ">Draft</option><option value=\"active\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2333, ">Administrator</option> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		for _, reseller := range data.Resellers {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2334, "<option value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1224 string
+			templ_7745c5c3_Var1224, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(reseller.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3474, Col: 45}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1224))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2335, "\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if view.ProviderFilter == formatPlanID(reseller.ID) {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2336, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2337, ">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1225 string
+			templ_7745c5c3_Var1225, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.DisplayName)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3474, Col: 133}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1225))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2338, "</option>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2339, "</select></label><label><span class=\"np-sr-only\">Status</span><select name=\"status\"><option value=\"\">All statuses</option><option value=\"draft\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if view.StatusFilter == "draft" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2340, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2341, ">Draft</option><option value=\"active\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if view.StatusFilter == "active" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2334, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2342, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2335, ">Active</option><option value=\"retired\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2343, ">Active</option><option value=\"retired\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if view.StatusFilter == "retired" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2336, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2344, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2337, ">Retired</option></select></label><button class=\"np-secondary-button\" type=\"submit\">Filter</button></form></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2345, ">Retired</option></select></label><button class=\"np-secondary-button\" type=\"submit\">Filter</button></form></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26029,12 +26072,12 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1227 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1227 == nil {
-			templ_7745c5c3_Var1227 = templ.NopComponent
+		templ_7745c5c3_Var1226 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1226 == nil {
+			templ_7745c5c3_Var1226 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2338, "<section class=\"np-panel np-plan-list-panel\"><form method=\"post\" action=\"/plans/bulk-status\" data-np-bulk-form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2346, "<section class=\"np-panel np-plan-list-panel\"><form method=\"post\" action=\"/plans/bulk-status\" data-np-bulk-form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26042,182 +26085,182 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2339, "<div class=\"np-bulk-bar\"><label class=\"np-check\"><input type=\"checkbox\" data-np-bulk-all>Select all</label><span data-np-bulk-count>0 selected</span><div><button type=\"submit\" name=\"lifecycle_status\" value=\"active\" class=\"np-secondary-button\">Activate</button><button type=\"submit\" name=\"lifecycle_status\" value=\"retired\" class=\"np-secondary-button\">Retire</button></div></div><div class=\"np-table-wrap\"><table class=\"np-table np-plan-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Plan name</th><th>Provider</th><th>Subscriptions</th><th>Resources</th><th>Price</th><th>Sync</th><th>Status</th></tr></thead><tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2347, "<div class=\"np-bulk-bar\"><label class=\"np-check\"><input type=\"checkbox\" data-np-bulk-all>Select all</label><span data-np-bulk-count>0 selected</span><div><button type=\"submit\" name=\"lifecycle_status\" value=\"active\" class=\"np-secondary-button\">Activate</button><button type=\"submit\" name=\"lifecycle_status\" value=\"retired\" class=\"np-secondary-button\">Retire</button></div></div><div class=\"np-table-wrap\"><table class=\"np-table np-plan-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Plan name</th><th>Provider</th><th>Subscriptions</th><th>Resources</th><th>Price</th><th>Sync</th><th>Status</th></tr></thead><tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, plan := range data.Plans {
 			if planMatchesFilter(plan, view) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2340, "<tr><td data-label=\"Select\" class=\"np-select-cell\"><input type=\"checkbox\" name=\"plan_id\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2348, "<tr><td data-label=\"Select\" class=\"np-select-cell\"><input type=\"checkbox\" name=\"plan_id\" value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1227 string
+				templ_7745c5c3_Var1227, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 122}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1227))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2349, "\" data-np-bulk-check aria-label=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1228 string
-				templ_7745c5c3_Var1228, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
+				templ_7745c5c3_Var1228, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 122}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 178}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1228))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2341, "\" data-np-bulk-check aria-label=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2350, "\"></td><td data-label=\"Plan\"><a class=\"np-plan-name\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1229 string
-				templ_7745c5c3_Var1229, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + plan.Name)
+				var templ_7745c5c3_Var1229 templ.SafeURL
+				templ_7745c5c3_Var1229, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 178}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 296}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1229))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2342, "\"></td><td data-label=\"Plan\"><a class=\"np-plan-name\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2351, "\"><strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1230 templ.SafeURL
-				templ_7745c5c3_Var1230, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)))
+				var templ_7745c5c3_Var1230 string
+				templ_7745c5c3_Var1230, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 296}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 318}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1230))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2343, "\"><strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2352, "</strong><small>Revision ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1231 string
-				templ_7745c5c3_Var1231, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
+				templ_7745c5c3_Var1231, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Revision)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 318}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 381}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1231))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2344, "</strong><small>Revision ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2353, " · ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1232 string
-				templ_7745c5c3_Var1232, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Revision)))
+				templ_7745c5c3_Var1232, templ_7745c5c3_Err = templ.JoinStringErrs(planReadinessLabel(plan))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 381}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 413}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1232))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2345, " · ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2354, "</small></a></td><td data-label=\"Provider\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1233 string
-				templ_7745c5c3_Var1233, templ_7745c5c3_Err = templ.JoinStringErrs(planReadinessLabel(plan))
+				templ_7745c5c3_Var1233, templ_7745c5c3_Err = templ.JoinStringErrs(planProvider(plan, data.Resellers))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 413}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 494}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1233))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2346, "</small></a></td><td data-label=\"Provider\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2355, "</td><td data-label=\"Subscriptions\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1234 string
-				templ_7745c5c3_Var1234, templ_7745c5c3_Err = templ.JoinStringErrs(planProvider(plan, data.Resellers))
+				templ_7745c5c3_Var1234, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 494}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 605}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1234))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2347, "</td><td data-label=\"Subscriptions\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2356, "</td><td data-label=\"Resources\"><span class=\"np-resource-summary\"><strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1235 string
-				templ_7745c5c3_Var1235, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))))
+				templ_7745c5c3_Var1235, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 605}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 713}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1235))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2348, "</td><td data-label=\"Resources\"><span class=\"np-resource-summary\"><strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2357, "</strong><small>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1236 string
-				templ_7745c5c3_Var1236, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
+				templ_7745c5c3_Var1236, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 713}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 763}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1236))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2349, "</strong><small>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2358, " sites · ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1237 string
-				templ_7745c5c3_Var1237, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
+				templ_7745c5c3_Var1237, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxDatabases))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 763}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 811}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1237))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2350, " sites · ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2359, " databases · ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1238 string
-				templ_7745c5c3_Var1238, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxDatabases))
+				templ_7745c5c3_Var1238, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.BandwidthMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 811}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 864}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1238))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2351, " databases · ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2360, " traffic</small></span></td><td data-label=\"Price\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1239 string
-				templ_7745c5c3_Var1239, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.BandwidthMB))
+				templ_7745c5c3_Var1239, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanPrice(plan.PriceCents))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 864}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 951}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1239))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2352, " traffic</small></span></td><td data-label=\"Price\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1240 string
-				templ_7745c5c3_Var1240, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanPrice(plan.PriceCents))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3398, Col: 951}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1240))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2353, "</td><td data-label=\"Sync\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2361, "</td><td data-label=\"Sync\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -26225,7 +26268,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2354, "</td><td data-label=\"Status\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2362, "</td><td data-label=\"Status\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -26233,13 +26276,13 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2355, "</td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2363, "</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2356, "</tbody></table></div></form></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2364, "</tbody></table></div></form></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26263,12 +26306,12 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1241 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1241 == nil {
-			templ_7745c5c3_Var1241 = templ.NopComponent
+		templ_7745c5c3_Var1240 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1240 == nil {
+			templ_7745c5c3_Var1240 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2357, "<section class=\"np-panel np-plan-list-panel\"><form method=\"post\" action=\"/addons/bulk-status\" data-np-bulk-form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2365, "<section class=\"np-panel np-plan-list-panel\"><form method=\"post\" action=\"/addons/bulk-status\" data-np-bulk-form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26276,143 +26319,143 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2358, "<div class=\"np-bulk-bar\"><label class=\"np-check\"><input type=\"checkbox\" data-np-bulk-all>Select all</label><span data-np-bulk-count>0 selected</span><div><button type=\"submit\" name=\"is_active\" value=\"true\" class=\"np-secondary-button\">Activate</button><button type=\"submit\" name=\"is_active\" value=\"false\" class=\"np-secondary-button\">Deactivate</button></div></div><div class=\"np-table-wrap\"><table class=\"np-table np-plan-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Add-on</th><th>Provider</th><th>Resources added</th><th>Revision</th><th>Status</th></tr></thead><tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2366, "<div class=\"np-bulk-bar\"><label class=\"np-check\"><input type=\"checkbox\" data-np-bulk-all>Select all</label><span data-np-bulk-count>0 selected</span><div><button type=\"submit\" name=\"is_active\" value=\"true\" class=\"np-secondary-button\">Activate</button><button type=\"submit\" name=\"is_active\" value=\"false\" class=\"np-secondary-button\">Deactivate</button></div></div><div class=\"np-table-wrap\"><table class=\"np-table np-plan-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Add-on</th><th>Provider</th><th>Resources added</th><th>Revision</th><th>Status</th></tr></thead><tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, addon := range data.AddonPlans {
 			if addonMatchesFilter(addon, view) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2359, "<tr><td data-label=\"Select\" class=\"np-select-cell\"><input type=\"checkbox\" name=\"addon_id\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2367, "<tr><td data-label=\"Select\" class=\"np-select-cell\"><input type=\"checkbox\" name=\"addon_id\" value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1241 string
+				templ_7745c5c3_Var1241, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(addon.ID))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 124}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1241))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2368, "\" data-np-bulk-check aria-label=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1242 string
-				templ_7745c5c3_Var1242, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(addon.ID))
+				templ_7745c5c3_Var1242, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + addon.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 124}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 181}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1242))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2360, "\" data-np-bulk-check aria-label=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2369, "\"></td><td data-label=\"Add-on\"><a class=\"np-plan-name\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1243 string
-				templ_7745c5c3_Var1243, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + addon.Name)
+				var templ_7745c5c3_Var1243 templ.SafeURL
+				templ_7745c5c3_Var1243, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/addons/" + formatPlanID(addon.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 181}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 309}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1243))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2361, "\"></td><td data-label=\"Add-on\"><a class=\"np-plan-name\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2370, "\"><strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1244 templ.SafeURL
-				templ_7745c5c3_Var1244, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/addons/" + formatPlanID(addon.ID)))
+				var templ_7745c5c3_Var1244 string
+				templ_7745c5c3_Var1244, templ_7745c5c3_Err = templ.JoinStringErrs(addon.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 309}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 332}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1244))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2362, "\"><strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2371, "</strong><small>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1245 string
-				templ_7745c5c3_Var1245, templ_7745c5c3_Err = templ.JoinStringErrs(addon.Name)
+				templ_7745c5c3_Var1245, templ_7745c5c3_Err = templ.JoinStringErrs(addon.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 332}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 369}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1245))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2363, "</strong><small>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2372, "</small></a></td><td data-label=\"Provider\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1246 string
-				templ_7745c5c3_Var1246, templ_7745c5c3_Err = templ.JoinStringErrs(addon.Description)
+				templ_7745c5c3_Var1246, templ_7745c5c3_Err = templ.JoinStringErrs(addonProvider(addon, data.Resellers))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 369}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 452}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1246))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2364, "</small></a></td><td data-label=\"Provider\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2373, "</td><td data-label=\"Resources\"><span class=\"np-resource-summary\"><strong>+")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1247 string
-				templ_7745c5c3_Var1247, templ_7745c5c3_Err = templ.JoinStringErrs(addonProvider(addon, data.Resellers))
+				templ_7745c5c3_Var1247, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(addon.Entitlements.DiskMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 452}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 575}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1247))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2365, "</td><td data-label=\"Resources\"><span class=\"np-resource-summary\"><strong>+")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2374, "</strong><small>+")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1248 string
-				templ_7745c5c3_Var1248, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(addon.Entitlements.DiskMB))
+				templ_7745c5c3_Var1248, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(addon.Entitlements.MaxSites))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 575}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 640}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1248))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2366, "</strong><small>+")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2375, " domains · +")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1249 string
-				templ_7745c5c3_Var1249, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(addon.Entitlements.MaxSites))
+				templ_7745c5c3_Var1249, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(addon.Entitlements.MaxSubdomains))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 640}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 706}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1249))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2367, " domains · +")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2376, " subdomains</small></span></td><td data-label=\"Revision\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1250 string
-				templ_7745c5c3_Var1250, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(addon.Entitlements.MaxSubdomains))
+				templ_7745c5c3_Var1250, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(addon.Revision)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 706}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3508, Col: 802}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1250))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2368, " subdomains</small></span></td><td data-label=\"Revision\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1251 string
-				templ_7745c5c3_Var1251, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(addon.Revision)))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 802}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1251))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2369, "</td><td data-label=\"Status\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2377, "</td><td data-label=\"Status\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -26420,13 +26463,13 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2370, "</td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2378, "</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2371, "</tbody></table></div></form></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2379, "</tbody></table></div></form></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26450,12 +26493,12 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1252 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1252 == nil {
-			templ_7745c5c3_Var1252 = templ.NopComponent
+		templ_7745c5c3_Var1251 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1251 == nil {
+			templ_7745c5c3_Var1251 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2372, "<section class=\"np-panel np-plan-list-panel\"><form method=\"post\" action=\"/reseller-plans/bulk-status\" data-np-bulk-form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2380, "<section class=\"np-panel np-plan-list-panel\"><form method=\"post\" action=\"/reseller-plans/bulk-status\" data-np-bulk-form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26463,129 +26506,129 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2373, "<div class=\"np-bulk-bar\"><label class=\"np-check\"><input type=\"checkbox\" data-np-bulk-all>Select all</label><span data-np-bulk-count>0 selected</span><div><button type=\"submit\" name=\"is_active\" value=\"true\" class=\"np-secondary-button\">Activate</button><button type=\"submit\" name=\"is_active\" value=\"false\" class=\"np-secondary-button\">Deactivate</button></div></div><div class=\"np-table-wrap\"><table class=\"np-table np-plan-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Plan</th><th>Customers</th><th>Subscriptions</th><th>Disk</th><th>Sites</th><th>Status</th></tr></thead><tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2381, "<div class=\"np-bulk-bar\"><label class=\"np-check\"><input type=\"checkbox\" data-np-bulk-all>Select all</label><span data-np-bulk-count>0 selected</span><div><button type=\"submit\" name=\"is_active\" value=\"true\" class=\"np-secondary-button\">Activate</button><button type=\"submit\" name=\"is_active\" value=\"false\" class=\"np-secondary-button\">Deactivate</button></div></div><div class=\"np-table-wrap\"><table class=\"np-table np-plan-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Plan</th><th>Customers</th><th>Subscriptions</th><th>Disk</th><th>Sites</th><th>Status</th></tr></thead><tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, plan := range data.ResellerPlans {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2374, "<tr><td data-label=\"Select\" class=\"np-select-cell\"><input type=\"checkbox\" name=\"reseller_plan_id\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2382, "<tr><td data-label=\"Select\" class=\"np-select-cell\"><input type=\"checkbox\" name=\"reseller_plan_id\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1252 string
+			templ_7745c5c3_Var1252, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3519, Col: 130}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1252))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2383, "\" data-np-bulk-check aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1253 string
-			templ_7745c5c3_Var1253, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
+			templ_7745c5c3_Var1253, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + plan.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 130}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3519, Col: 186}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1253))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2375, "\" data-np-bulk-check aria-label=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2384, "\"></td><td data-label=\"Plan\"><a class=\"np-plan-name\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1254 string
-			templ_7745c5c3_Var1254, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + plan.Name)
+			var templ_7745c5c3_Var1254 templ.SafeURL
+			templ_7745c5c3_Var1254, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/resellers/" + formatPlanID(plan.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 186}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3519, Col: 314}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1254))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2376, "\"></td><td data-label=\"Plan\"><a class=\"np-plan-name\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2385, "\"><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1255 templ.SafeURL
-			templ_7745c5c3_Var1255, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/resellers/" + formatPlanID(plan.ID)))
+			var templ_7745c5c3_Var1255 string
+			templ_7745c5c3_Var1255, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 314}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3519, Col: 336}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1255))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2377, "\"><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2386, "</strong><small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1256 string
-			templ_7745c5c3_Var1256, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
+			templ_7745c5c3_Var1256, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 336}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3519, Col: 372}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1256))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2378, "</strong><small>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2387, "</small></a></td><td data-label=\"Customers\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1257 string
-			templ_7745c5c3_Var1257, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
+			templ_7745c5c3_Var1257, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxCustomers))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 372}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3519, Col: 454}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1257))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2379, "</small></a></td><td data-label=\"Customers\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2388, "</td><td data-label=\"Subscriptions\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1258 string
-			templ_7745c5c3_Var1258, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxCustomers))
+			templ_7745c5c3_Var1258, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSubscriptions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 454}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3519, Col: 532}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1258))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2380, "</td><td data-label=\"Subscriptions\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2389, "</td><td data-label=\"Disk\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1259 string
-			templ_7745c5c3_Var1259, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSubscriptions))
+			templ_7745c5c3_Var1259, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 532}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3519, Col: 593}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1259))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2381, "</td><td data-label=\"Disk\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2390, "</td><td data-label=\"Sites\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1260 string
-			templ_7745c5c3_Var1260, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
+			templ_7745c5c3_Var1260, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 593}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3519, Col: 655}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1260))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2382, "</td><td data-label=\"Sites\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1261 string
-			templ_7745c5c3_Var1261, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 655}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1261))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2383, "</td><td data-label=\"Status\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2391, "</td><td data-label=\"Status\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -26593,12 +26636,12 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2384, "</td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2392, "</td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2385, "</tbody></table></div></form></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2393, "</tbody></table></div></form></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26622,12 +26665,12 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1262 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1262 == nil {
-			templ_7745c5c3_Var1262 = templ.NopComponent
+		templ_7745c5c3_Var1261 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1261 == nil {
+			templ_7745c5c3_Var1261 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var1263 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var1262 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -26639,30 +26682,30 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2386, "<a class=\"np-primary-link\" href=\"#reseller-create\">Add reseller</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2394, "<a class=\"np-primary-link\" href=\"#reseller-create\">Add reseller</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = pageHead("Account management", "Resellers", "Allocate server resources to providers who manage their own plans, customers and subscriptions.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1263), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = pageHead("Account management", "Resellers", "Allocate server resources to providers who manage their own plans, customers and subscriptions.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1262), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2387, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Provider accounts</h2><span class=\"np-muted\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2395, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Provider accounts</h2><span class=\"np-muted\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1264 string
-		templ_7745c5c3_Var1264, templ_7745c5c3_Err = templ.JoinStringErrs(formatBadgeCount(len(data.Resellers)))
+		var templ_7745c5c3_Var1263 string
+		templ_7745c5c3_Var1263, templ_7745c5c3_Err = templ.JoinStringErrs(formatBadgeCount(len(data.Resellers)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3432, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3529, Col: 118}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1264))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1263))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2388, " total</span></div><form method=\"post\" action=\"/resellers/bulk-status\" data-np-bulk-form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2396, " total</span></div><form method=\"post\" action=\"/resellers/bulk-status\" data-np-bulk-form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26670,116 +26713,116 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2389, "<div class=\"np-bulk-bar\"><label class=\"np-check\"><input type=\"checkbox\" data-np-bulk-all>Select all</label><span data-np-bulk-count>0 selected</span><div><button type=\"submit\" name=\"status\" value=\"active\" class=\"np-secondary-button\">Activate</button><button type=\"submit\" name=\"status\" value=\"suspended\" class=\"np-danger-button\" data-np-confirm=\"Suspend the selected resellers and all downstream websites?\">Suspend</button></div></div><div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Reseller</th><th>Plan</th><th>Customers</th><th>Subscriptions</th><th>Status</th></tr></thead><tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2397, "<div class=\"np-bulk-bar\"><label class=\"np-check\"><input type=\"checkbox\" data-np-bulk-all>Select all</label><span data-np-bulk-count>0 selected</span><div><button type=\"submit\" name=\"status\" value=\"active\" class=\"np-secondary-button\">Activate</button><button type=\"submit\" name=\"status\" value=\"suspended\" class=\"np-danger-button\" data-np-confirm=\"Suspend the selected resellers and all downstream websites?\">Suspend</button></div></div><div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Reseller</th><th>Plan</th><th>Customers</th><th>Subscriptions</th><th>Status</th></tr></thead><tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, reseller := range data.Resellers {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2390, "<tr><td class=\"np-select-cell\" data-label=\"Select\"><input type=\"checkbox\" name=\"reseller_id\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2398, "<tr><td class=\"np-select-cell\" data-label=\"Select\"><input type=\"checkbox\" name=\"reseller_id\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1264 string
+			templ_7745c5c3_Var1264, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(reseller.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3535, Col: 129}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1264))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2399, "\" aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1265 string
-			templ_7745c5c3_Var1265, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(reseller.ID))
+			templ_7745c5c3_Var1265, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + reseller.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3535, Col: 177}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1265))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2391, "\" aria-label=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2400, "\" data-np-bulk-check></td><td data-label=\"Reseller\"><a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1266 string
-			templ_7745c5c3_Var1266, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + reseller.DisplayName)
+			var templ_7745c5c3_Var1266 templ.SafeURL
+			templ_7745c5c3_Var1266, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/resellers/" + formatJobID(reseller.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 177}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3535, Col: 296}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1266))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2392, "\" data-np-bulk-check></td><td data-label=\"Reseller\"><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2401, "\"><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1267 templ.SafeURL
-			templ_7745c5c3_Var1267, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/resellers/" + formatJobID(reseller.ID)))
+			var templ_7745c5c3_Var1267 string
+			templ_7745c5c3_Var1267, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 296}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3535, Col: 329}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1267))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2393, "\"><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2402, "</strong><small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1268 string
-			templ_7745c5c3_Var1268, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.DisplayName)
+			templ_7745c5c3_Var1268, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 329}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3535, Col: 363}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1268))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2394, "</strong><small>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2403, "</small></a></td><td data-label=\"Plan\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1269 string
-			templ_7745c5c3_Var1269, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.Email)
+			templ_7745c5c3_Var1269, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 363}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3535, Col: 423}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1269))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2395, "</small></a></td><td data-label=\"Plan\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2404, "</td><td data-label=\"Customers\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1270 string
-			templ_7745c5c3_Var1270, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.PlanName)
+			templ_7745c5c3_Var1270, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(customersForReseller(data.Customers, reseller.ID)))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 423}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3535, Col: 532}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1270))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2396, "</td><td data-label=\"Customers\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2405, "</td><td data-label=\"Subscriptions\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1271 string
-			templ_7745c5c3_Var1271, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(customersForReseller(data.Customers, reseller.ID)))))
+			templ_7745c5c3_Var1271, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(subscriptionsForReseller(data.Subscriptions, reseller.ID)))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 532}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3535, Col: 653}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1271))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2397, "</td><td data-label=\"Subscriptions\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1272 string
-			templ_7745c5c3_Var1272, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(subscriptionsForReseller(data.Subscriptions, reseller.ID)))))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 653}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1272))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2398, "</td><td data-label=\"Status\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2406, "</td><td data-label=\"Status\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -26787,12 +26830,12 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2399, "</td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2407, "</td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2400, "</tbody></table></div></form></section><section class=\"np-panel\" id=\"reseller-create\"><div class=\"np-panel-title\"><h2>Add reseller</h2><span class=\"np-muted\">bounded provider account</span></div><form class=\"np-form np-action-form\" method=\"post\" action=\"/resellers\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2408, "</tbody></table></div></form></section><section class=\"np-panel\" id=\"reseller-create\"><div class=\"np-panel-title\"><h2>Add reseller</h2><span class=\"np-muted\">bounded provider account</span></div><form class=\"np-form np-action-form\" method=\"post\" action=\"/resellers\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26800,45 +26843,45 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2401, "<label>Name<input name=\"customer_name\" required></label><label>Company<input name=\"company\"></label><label>Email<input type=\"email\" name=\"customer_email\" required></label><label>Temporary password<input type=\"password\" name=\"password\" autocomplete=\"new-password\" required></label> <label>Reseller plan<select name=\"reseller_plan_id\" required><option value=\"\">Select plan</option> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2409, "<label>Name<input name=\"customer_name\" required></label><label>Company<input name=\"company\"></label><label>Email<input type=\"email\" name=\"customer_email\" required></label><label>Temporary password<input type=\"password\" name=\"password\" autocomplete=\"new-password\" required></label> <label>Reseller plan<select name=\"reseller_plan_id\" required><option value=\"\">Select plan</option> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, plan := range data.ResellerPlans {
 			if plan.IsActive {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2402, "<option value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2410, "<option value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1272 string
+				templ_7745c5c3_Var1272, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(plan.ID))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3545, Col: 42}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1272))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2411, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1273 string
-				templ_7745c5c3_Var1273, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(plan.ID))
+				templ_7745c5c3_Var1273, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3448, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3545, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1273))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2403, "\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1274 string
-				templ_7745c5c3_Var1274, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3448, Col: 56}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1274))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2404, "</option>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2412, "</option>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2405, "</select></label><label>Internal notes<input name=\"notes\"></label><button type=\"submit\">Create reseller</button></form></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2413, "</select></label><label>Internal notes<input name=\"notes\"></label><button type=\"submit\">Create reseller</button></form></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -26862,13 +26905,13 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1275 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1275 == nil {
-			templ_7745c5c3_Var1275 = templ.NopComponent
+		templ_7745c5c3_Var1274 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1274 == nil {
+			templ_7745c5c3_Var1274 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if reseller, ok := resellerByID(data.Resellers, view.DetailID); ok {
-			templ_7745c5c3_Var1276 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+			templ_7745c5c3_Var1275 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 				templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 				templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 				if !templ_7745c5c3_IsBuffer {
@@ -26880,17 +26923,17 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 					}()
 				}
 				ctx = templ.InitializeContext(ctx)
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2406, "<a class=\"np-secondary-button\" href=\"/resellers\">Back to resellers</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2414, "<a class=\"np-secondary-button\" href=\"/resellers\">Back to resellers</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				return nil
 			})
-			templ_7745c5c3_Err = pageHead("Resellers", reseller.DisplayName, "Provider account, allocated resources and downstream ownership.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1276), templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = pageHead("Resellers", reseller.DisplayName, "Provider account, allocated resources and downstream ownership.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1275), templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2407, " <div class=\"np-routed-grid\"><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Account</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2415, " <div class=\"np-routed-grid\"><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Account</h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -26898,59 +26941,59 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2408, "</div><dl class=\"np-facts\"><div><dt>Email</dt><dd>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2416, "</div><dl class=\"np-facts\"><div><dt>Email</dt><dd>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1276 string
+			templ_7745c5c3_Var1276, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.Email)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3556, Col: 194}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1276))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2417, "</dd></div><div><dt>Company</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1277 string
-			templ_7745c5c3_Var1277, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.Email)
+			templ_7745c5c3_Var1277, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.Company)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 194}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3556, Col: 250}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1277))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2409, "</dd></div><div><dt>Company</dt><dd>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2418, "</dd></div><div><dt>Reseller plan</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1278 string
-			templ_7745c5c3_Var1278, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.Company)
+			templ_7745c5c3_Var1278, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 250}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3556, Col: 313}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1278))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2410, "</dd></div><div><dt>Reseller plan</dt><dd>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2419, "</dd></div><div><dt>Customers</dt><dd>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1279 string
-			templ_7745c5c3_Var1279, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.PlanName)
+			templ_7745c5c3_Var1279, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(customersForReseller(data.Customers, reseller.ID)))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 313}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3556, Col: 428}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1279))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2411, "</dd></div><div><dt>Customers</dt><dd>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1280 string
-			templ_7745c5c3_Var1280, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(customersForReseller(data.Customers, reseller.ID)))))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 428}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1280))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2412, "</dd></div></dl><form method=\"post\" action=\"/resellers/status\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2420, "</dd></div></dl><form method=\"post\" action=\"/resellers/status\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -26958,46 +27001,46 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2413, "<input type=\"hidden\" name=\"reseller_id\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2421, "<input type=\"hidden\" name=\"reseller_id\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1280 string
+			templ_7745c5c3_Var1280, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(reseller.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3556, Col: 581}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1280))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2422, "\"><input type=\"hidden\" name=\"status\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1281 string
-			templ_7745c5c3_Var1281, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(reseller.ID))
+			templ_7745c5c3_Var1281, templ_7745c5c3_Err = templ.JoinStringErrs(oppositeCustomerStatus(types.Customer{Status: reseller.Status}))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 581}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3556, Col: 690}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1281))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2414, "\"><input type=\"hidden\" name=\"status\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2423, "\"><button type=\"submit\" class=\"np-secondary-button\" data-np-confirm=\"This changes service availability for every downstream customer.\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1282 string
-			templ_7745c5c3_Var1282, templ_7745c5c3_Err = templ.JoinStringErrs(oppositeCustomerStatus(types.Customer{Status: reseller.Status}))
+			templ_7745c5c3_Var1282, templ_7745c5c3_Err = templ.JoinStringErrs(customerStatusAction(types.Customer{Status: reseller.Status}))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 690}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3556, Col: 889}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1282))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2415, "\"><button type=\"submit\" class=\"np-secondary-button\" data-np-confirm=\"This changes service availability for every downstream customer.\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1283 string
-			templ_7745c5c3_Var1283, templ_7745c5c3_Err = templ.JoinStringErrs(customerStatusAction(types.Customer{Status: reseller.Status}))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 889}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1283))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2416, " reseller</button></form></section><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Owned service plans</h2></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2424, " reseller</button></form></section><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Owned service plans</h2></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -27005,7 +27048,7 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2417, "</section></div><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Customers</h2></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2425, "</section></div><section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Customers</h2></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -27013,7 +27056,7 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2418, "</section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2426, "</section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -27038,12 +27081,12 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1284 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1284 == nil {
-			templ_7745c5c3_Var1284 = templ.NopComponent
+		templ_7745c5c3_Var1283 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1283 == nil {
+			templ_7745c5c3_Var1283 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var1285 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var1284 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -27055,114 +27098,114 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2419, "<a class=\"np-primary-link\" href=\"/service-plans/resellers/new\">Add Reseller Plan</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2427, "<a class=\"np-primary-link\" href=\"/service-plans/resellers/new\">Add Reseller Plan</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = pageHead("Service plans", "Reseller Plans", "Define the hard resource and permission boundary available to each reseller.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1285), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = pageHead("Service plans", "Reseller Plans", "Define the hard resource and permission boundary available to each reseller.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1284), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2420, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Allocations</h2></div><div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Plan</th><th>Customers</th><th>Subscriptions</th><th>Disk</th><th>Sites</th><th>Status</th></tr></thead><tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2428, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h2>Allocations</h2></div><div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th>Plan</th><th>Customers</th><th>Subscriptions</th><th>Disk</th><th>Sites</th><th>Status</th></tr></thead><tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, plan := range data.ResellerPlans {
 			if resellerPlanMatchesFilter(plan, view) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2421, "<tr><td data-label=\"Plan\"><a class=\"np-plan-name\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2429, "<tr><td data-label=\"Plan\"><a class=\"np-plan-name\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1286 templ.SafeURL
-				templ_7745c5c3_Var1286, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/resellers/" + formatPlanID(plan.ID)))
+				var templ_7745c5c3_Var1285 templ.SafeURL
+				templ_7745c5c3_Var1285, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/resellers/" + formatPlanID(plan.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3470, Col: 127}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3567, Col: 127}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1285))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2430, "\"><strong>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1286 string
+				templ_7745c5c3_Var1286, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3567, Col: 149}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1286))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2422, "\"><strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2431, "</strong><small>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1287 string
-				templ_7745c5c3_Var1287, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
+				templ_7745c5c3_Var1287, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3470, Col: 149}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3567, Col: 185}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1287))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2423, "</strong><small>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2432, "</small></a></td><td data-label=\"Customers\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1288 string
-				templ_7745c5c3_Var1288, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
+				templ_7745c5c3_Var1288, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxCustomers))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3470, Col: 185}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3567, Col: 267}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1288))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2424, "</small></a></td><td data-label=\"Customers\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2433, "</td><td data-label=\"Subscriptions\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1289 string
-				templ_7745c5c3_Var1289, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxCustomers))
+				templ_7745c5c3_Var1289, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSubscriptions))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3470, Col: 267}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3567, Col: 345}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1289))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2425, "</td><td data-label=\"Subscriptions\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2434, "</td><td data-label=\"Disk\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1290 string
-				templ_7745c5c3_Var1290, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSubscriptions))
+				templ_7745c5c3_Var1290, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3470, Col: 345}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3567, Col: 406}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1290))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2426, "</td><td data-label=\"Disk\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2435, "</td><td data-label=\"Sites\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1291 string
-				templ_7745c5c3_Var1291, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
+				templ_7745c5c3_Var1291, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3470, Col: 406}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3567, Col: 468}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1291))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2427, "</td><td data-label=\"Sites\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1292 string
-				templ_7745c5c3_Var1292, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3470, Col: 468}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1292))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2428, "</td><td data-label=\"Status\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2436, "</td><td data-label=\"Status\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -27170,13 +27213,13 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2429, "</td></tr>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2437, "</td></tr>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2430, "</tbody></table></div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2438, "</tbody></table></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -27200,12 +27243,12 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1293 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1293 == nil {
-			templ_7745c5c3_Var1293 = templ.NopComponent
+		templ_7745c5c3_Var1292 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1292 == nil {
+			templ_7745c5c3_Var1292 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var1294 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var1293 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -27217,17 +27260,17 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2431, "<a class=\"np-secondary-button\" href=\"/service-plans?type=reseller\">Back to plans</a>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2439, "<a class=\"np-secondary-button\" href=\"/service-plans?type=reseller\">Back to plans</a>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = pageHead("Service plans", resellerPlanEditorTitle(plan), "Set the maximum resources and permissions a reseller may commit to downstream subscriptions.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1294), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = pageHead("Service plans", resellerPlanEditorTitle(plan), "Set the maximum resources and permissions a reseller may commit to downstream subscriptions.").Render(templ.WithChildren(ctx, templ_7745c5c3_Var1293), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2432, "<form class=\"np-plan-editor\" method=\"post\" action=\"/reseller-plans\" data-np-plan-editor data-np-dirty-guard>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2440, "<form class=\"np-plan-editor\" method=\"post\" action=\"/reseller-plans\" data-np-plan-editor data-np-dirty-guard>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -27236,141 +27279,141 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 			return templ_7745c5c3_Err
 		}
 		if plan.ID > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2433, "<input type=\"hidden\" name=\"reseller_plan_id\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2441, "<input type=\"hidden\" name=\"reseller_plan_id\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1295 string
-			templ_7745c5c3_Var1295, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
+			var templ_7745c5c3_Var1294 string
+			templ_7745c5c3_Var1294, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3481, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3578, Col: 77}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1295))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1294))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2434, "\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2442, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2435, "<section class=\"np-plan-general\"><div class=\"np-plan-general-grid\"><label>Plan name<input name=\"name\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2443, "<section class=\"np-plan-general\"><div class=\"np-plan-general-grid\"><label>Plan name<input name=\"name\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1295 string
+		templ_7745c5c3_Var1295, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3580, Col: 121}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1295))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2444, "\" required maxlength=\"120\"></label><label class=\"np-plan-description\">Description<textarea name=\"description\" rows=\"2\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1296 string
-		templ_7745c5c3_Var1296, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
+		templ_7745c5c3_Var1296, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3483, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3580, Col: 260}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1296))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2436, "\" required maxlength=\"120\"></label><label class=\"np-plan-description\">Description<textarea name=\"description\" rows=\"2\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1297 string
-		templ_7745c5c3_Var1297, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3483, Col: 260}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1297))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2437, "</textarea></label><label class=\"np-switch\"><input type=\"hidden\" name=\"is_active\" value=\"false\"><input type=\"checkbox\" name=\"is_active\" value=\"true\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2445, "</textarea></label><label class=\"np-switch\"><input type=\"hidden\" name=\"is_active\" value=\"false\"><input type=\"checkbox\" name=\"is_active\" value=\"true\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.IsActive {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2438, " checked")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2446, " checked")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2439, "><span>Available for new resellers</span></label></div></section><nav class=\"np-plan-editor-tabs\" aria-label=\"Reseller plan properties\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2447, "><span>Available for new resellers</span></label></div></section><nav class=\"np-plan-editor-tabs\" aria-label=\"Reseller plan properties\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1298 = []any{resellerPlanTabClass(view, "resources")}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1298...)
+		var templ_7745c5c3_Var1297 = []any{resellerPlanTabClass(view, "resources")}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1297...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2440, "<a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2448, "<a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1299 templ.SafeURL
-		templ_7745c5c3_Var1299, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planTabURL(view, "resources")))
+		var templ_7745c5c3_Var1298 templ.SafeURL
+		templ_7745c5c3_Var1298, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planTabURL(view, "resources")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3484, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3581, Col: 126}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1298))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2449, "\" class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1299 string
+		templ_7745c5c3_Var1299, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1297).String())
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1299))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2441, "\" class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2450, "\" data-np-plan-tab=\"resources\">Resources</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1300 string
-		templ_7745c5c3_Var1300, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1298).String())
+		var templ_7745c5c3_Var1300 = []any{resellerPlanTabClass(view, "permissions")}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1300...)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2451, "<a href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1301 templ.SafeURL
+		templ_7745c5c3_Var1301, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planTabURL(view, "permissions")))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3581, Col: 275}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1301))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2452, "\" class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1302 string
+		templ_7745c5c3_Var1302, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1300).String())
 		if templ_7745c5c3_Err != nil {
 			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1300))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2442, "\" data-np-plan-tab=\"resources\">Resources</a>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1301 = []any{resellerPlanTabClass(view, "permissions")}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1301...)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2443, "<a href=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1302 templ.SafeURL
-		templ_7745c5c3_Var1302, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planTabURL(view, "permissions")))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3484, Col: 275}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1302))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2444, "\" class=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1303 string
-		templ_7745c5c3_Var1303, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1301).String())
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1303))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2445, "\" data-np-plan-tab=\"permissions\">Permissions</a></nav><section class=\"np-plan-property-panel\" data-np-plan-panel=\"resources\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2453, "\" data-np-plan-tab=\"permissions\">Permissions</a></nav><section class=\"np-plan-property-panel\" data-np-plan-panel=\"resources\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if resellerPlanEditorTab(view) != "resources" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2446, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2454, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2447, "><div class=\"np-property-head\"><h2>Resources</h2><p>These are provider-wide allocation ceilings across every downstream customer. Zero disables a resource; Unlimited removes the numeric ceiling.</p></div><div class=\"np-plan-field-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2455, "><div class=\"np-property-head\"><h2>Resources</h2><p>These are provider-wide allocation ceilings across every downstream customer. Zero disables a resource; Unlimited removes the numeric ceiling.</p></div><div class=\"np-plan-field-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -27478,17 +27521,17 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2448, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"permissions\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2456, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"permissions\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if resellerPlanEditorTab(view) != "permissions" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2449, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2457, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2450, "><div class=\"np-property-head\"><h2>Permissions</h2><p>Resellers may grant only capabilities included in this allocation.</p></div><div class=\"np-permission-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2458, "><div class=\"np-property-head\"><h2>Permissions</h2><p>Resellers may grant only capabilities included in this allocation.</p></div><div class=\"np-permission-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -27576,86 +27619,86 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2451, "</div><p class=\"np-form-help\">Zero disables workers, releases, or WordPress sites. Unlimited may be delegated only when the provider ceiling is also unlimited.</p><fieldset class=\"np-field-group\"><legend>Allowed PHP versions</legend><div class=\"np-checkbox-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2459, "</div><p class=\"np-form-help\">Zero disables workers, releases, or WordPress sites. Unlimited may be delegated only when the provider ceiling is also unlimited.</p><fieldset class=\"np-field-group\"><legend>Allowed PHP versions</legend><div class=\"np-checkbox-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, version := range capabilities.PHPVersions {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2452, "<label class=\"np-check\"><input type=\"checkbox\" name=\"php_versions\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2460, "<label class=\"np-check\"><input type=\"checkbox\" name=\"php_versions\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1303 string
+			templ_7745c5c3_Var1303, templ_7745c5c3_Err = templ.JoinStringErrs(version)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3585, Col: 86}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1303))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2461, "\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if stringInSlice(plan.HostingPolicy.PHP.AllowedVersions, version) {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2462, " checked")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2463, ">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1304 string
 			templ_7745c5c3_Var1304, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3488, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3585, Col: 174}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1304))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2453, "\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if stringInSlice(plan.HostingPolicy.PHP.AllowedVersions, version) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2454, " checked")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2455, ">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1305 string
-			templ_7745c5c3_Var1305, templ_7745c5c3_Err = templ.JoinStringErrs(version)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3488, Col: 174}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1305))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2456, "</label>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2464, "</label>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2457, "</div></fieldset><fieldset class=\"np-field-group\"><legend>Operational container runtime</legend><div class=\"np-checkbox-grid\"><label class=\"np-check\"><input type=\"checkbox\" name=\"allowed_runtimes\" value=\"oci\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2465, "</div></fieldset><fieldset class=\"np-field-group\"><legend>Operational container runtime</legend><div class=\"np-checkbox-grid\"><label class=\"np-check\"><input type=\"checkbox\" name=\"allowed_runtimes\" value=\"oci\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes, "oci") {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2458, " checked")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2466, " checked")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2459, ">OCI containers</label></div><p class=\"np-form-help\">OCI remains a separate Containers product. Classic and Managed PHP are operational; WordPress Toolkit may be delegated within its explicit count and provider ceilings. Node.js and Python adapters remain unavailable.</p></fieldset><label>Allowed registries<input name=\"allowed_registries\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2467, ">OCI containers</label></div><p class=\"np-form-help\">OCI remains a separate Containers product. Classic and Managed PHP are operational; WordPress Toolkit may be delegated within its explicit count and provider ceilings. Node.js and Python adapters remain unavailable.</p></fieldset><label>Allowed registries<input name=\"allowed_registries\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1306 string
-		templ_7745c5c3_Var1306, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(plan.HostingPolicy.Applications.AllowedRegistries))
+		var templ_7745c5c3_Var1305 string
+		templ_7745c5c3_Var1305, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(plan.HostingPolicy.Applications.AllowedRegistries))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3490, Col: 704}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3587, Col: 704}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1306))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1305))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2460, "\" placeholder=\"docker.io,ghcr.io\"></label></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"permissions\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2468, "\" placeholder=\"docker.io,ghcr.io\"></label></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"permissions\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if resellerPlanEditorTab(view) != "permissions" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2461, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2469, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2462, "><h2>Web Statistics</h2><div class=\"np-plan-field-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2470, "><h2>Web Statistics</h2><div class=\"np-plan-field-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -27667,33 +27710,33 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2463, "</div></section><div class=\"np-plan-action-bar\"><div><strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2471, "</div></section><div class=\"np-plan-action-bar\"><div><strong>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1306 string
+		templ_7745c5c3_Var1306, templ_7745c5c3_Err = templ.JoinStringErrs(resellerPlanEditorSaveTitle(plan))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3592, Col: 82}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1306))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2472, "</strong><span>Existing reseller allocations are validated before this change is committed.</span></div><div><a class=\"np-secondary-button\" href=\"/service-plans?type=reseller\">Cancel</a><button type=\"submit\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1307 string
-		templ_7745c5c3_Var1307, templ_7745c5c3_Err = templ.JoinStringErrs(resellerPlanEditorSaveTitle(plan))
+		templ_7745c5c3_Var1307, templ_7745c5c3_Err = templ.JoinStringErrs(resellerPlanEditorSubmitLabel(plan))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3592, Col: 329}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1307))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2464, "</strong><span>Existing reseller allocations are validated before this change is committed.</span></div><div><a class=\"np-secondary-button\" href=\"/service-plans?type=reseller\">Cancel</a><button type=\"submit\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1308 string
-		templ_7745c5c3_Var1308, templ_7745c5c3_Err = templ.JoinStringErrs(resellerPlanEditorSubmitLabel(plan))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 329}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1308))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2465, "</button></div></div></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2473, "</button></div></div></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -27717,9 +27760,9 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1309 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1309 == nil {
-			templ_7745c5c3_Var1309 = templ.NopComponent
+		templ_7745c5c3_Var1308 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1308 == nil {
+			templ_7745c5c3_Var1308 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		templ_7745c5c3_Err = pageHead("Account", "My Resources", "Your provider allocation and the committed customer resources inside it.").Render(ctx, templ_7745c5c3_Buffer)
@@ -27727,26 +27770,26 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 			return templ_7745c5c3_Err
 		}
 		if len(data.ResellerPlans) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2466, "<section class=\"np-panel\"><p class=\"np-empty\">No active reseller allocation.</p></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2474, "<section class=\"np-panel\"><p class=\"np-empty\">No active reseller allocation.</p></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
 			for _, plan := range data.ResellerPlans {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2467, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h2>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2475, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h2>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1310 string
-				templ_7745c5c3_Var1310, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
+				var templ_7745c5c3_Var1309 string
+				templ_7745c5c3_Var1309, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3505, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3602, Col: 72}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1310))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1309))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2468, "</h2>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2476, "</h2>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -27754,85 +27797,85 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2469, "</div><dl class=\"np-facts\"><div><dt>Customers</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2477, "</div><dl class=\"np-facts\"><div><dt>Customers</dt><dd>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1310 string
+				templ_7745c5c3_Var1310, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxCustomers))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3602, Col: 213}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1310))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2478, "</dd></div><div><dt>Subscriptions</dt><dd>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1311 string
-				templ_7745c5c3_Var1311, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxCustomers))
+				templ_7745c5c3_Var1311, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSubscriptions))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3505, Col: 213}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3602, Col: 297}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1311))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2470, "</dd></div><div><dt>Subscriptions</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2479, "</dd></div><div><dt>Disk</dt><dd>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1312 string
-				templ_7745c5c3_Var1312, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSubscriptions))
+				templ_7745c5c3_Var1312, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3505, Col: 297}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3602, Col: 364}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1312))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2471, "</dd></div><div><dt>Disk</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2480, "</dd></div><div><dt>Sites</dt><dd>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1313 string
-				templ_7745c5c3_Var1313, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
+				templ_7745c5c3_Var1313, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3505, Col: 364}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3602, Col: 432}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1313))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2472, "</dd></div><div><dt>Sites</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2481, "</dd></div><div><dt>Databases</dt><dd>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1314 string
-				templ_7745c5c3_Var1314, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
+				templ_7745c5c3_Var1314, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxDatabases))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3505, Col: 432}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3602, Col: 508}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1314))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2473, "</dd></div><div><dt>Databases</dt><dd>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2482, "</dd></div><div><dt>Custom plans</dt><dd>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1315 string
-				templ_7745c5c3_Var1315, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxDatabases))
+				templ_7745c5c3_Var1315, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(plan.AllowCustomPlans))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3505, Col: 508}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3602, Col: 581}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1315))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2474, "</dd></div><div><dt>Custom plans</dt><dd>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1316 string
-				templ_7745c5c3_Var1316, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(plan.AllowCustomPlans))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3505, Col: 581}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1316))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2475, "</dd></div></dl></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2483, "</dd></div></dl></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -27858,108 +27901,108 @@ func customerRows(customers []types.Customer, subscriptions []types.Subscription
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1317 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1317 == nil {
-			templ_7745c5c3_Var1317 = templ.NopComponent
+		templ_7745c5c3_Var1316 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1316 == nil {
+			templ_7745c5c3_Var1316 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2476, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Customer</th><th>Provider</th><th>Subscriptions</th><th>Status</th></tr></thead><tbody>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2484, "<div class=\"np-table-wrap\"><table class=\"np-table\"><thead><tr><th><span class=\"np-sr-only\">Select</span></th><th>Customer</th><th>Provider</th><th>Subscriptions</th><th>Status</th></tr></thead><tbody>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, customer := range customers {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2477, "<tr><td class=\"np-select-cell\" data-label=\"Select\"><input type=\"checkbox\" name=\"customer_id\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2485, "<tr><td class=\"np-select-cell\" data-label=\"Select\"><input type=\"checkbox\" name=\"customer_id\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1317 string
+			templ_7745c5c3_Var1317, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3610, Col: 128}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1317))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2486, "\" aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1318 string
-			templ_7745c5c3_Var1318, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
+			templ_7745c5c3_Var1318, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + customer.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3610, Col: 176}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1318))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2478, "\" aria-label=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2487, "\" data-np-bulk-check></td><td data-label=\"Customer\"><a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1319 string
-			templ_7745c5c3_Var1319, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + customer.DisplayName)
+			var templ_7745c5c3_Var1319 templ.SafeURL
+			templ_7745c5c3_Var1319, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/customers/" + formatJobID(customer.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 176}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3610, Col: 295}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1319))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2479, "\" data-np-bulk-check></td><td data-label=\"Customer\"><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2488, "\"><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1320 templ.SafeURL
-			templ_7745c5c3_Var1320, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/customers/" + formatJobID(customer.ID)))
+			var templ_7745c5c3_Var1320 string
+			templ_7745c5c3_Var1320, templ_7745c5c3_Err = templ.JoinStringErrs(customer.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 295}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3610, Col: 328}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1320))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2480, "\"><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2489, "</strong><small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1321 string
-			templ_7745c5c3_Var1321, templ_7745c5c3_Err = templ.JoinStringErrs(customer.DisplayName)
+			templ_7745c5c3_Var1321, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 328}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3610, Col: 362}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1321))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2481, "</strong><small>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2490, "</small></a></td><td data-label=\"Provider\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1322 string
-			templ_7745c5c3_Var1322, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Email)
+			templ_7745c5c3_Var1322, templ_7745c5c3_Err = templ.JoinStringErrs(providerName(customer, resellers))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 362}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3610, Col: 441}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1322))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2482, "</small></a></td><td data-label=\"Provider\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2491, "</td><td data-label=\"Subscriptions\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1323 string
-			templ_7745c5c3_Var1323, templ_7745c5c3_Err = templ.JoinStringErrs(providerName(customer, resellers))
+			templ_7745c5c3_Var1323, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(subscriptionsForCustomer(subscriptions, customer.ID)))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 441}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3610, Col: 557}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1323))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2483, "</td><td data-label=\"Subscriptions\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1324 string
-			templ_7745c5c3_Var1324, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(subscriptionsForCustomer(subscriptions, customer.ID)))))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 557}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1324))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2484, "</td><td data-label=\"Status\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2492, "</td><td data-label=\"Status\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -27967,12 +28010,12 @@ func customerRows(customers []types.Customer, subscriptions []types.Subscription
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2485, "</td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2493, "</td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2486, "</tbody></table></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2494, "</tbody></table></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -27996,62 +28039,62 @@ func planRows(plans []controlquota.Plan) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1325 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1325 == nil {
-			templ_7745c5c3_Var1325 = templ.NopComponent
+		templ_7745c5c3_Var1324 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1324 == nil {
+			templ_7745c5c3_Var1324 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if len(plans) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2487, "<p class=\"np-empty\">No service plans.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2495, "<p class=\"np-empty\">No service plans.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2488, "<div class=\"np-object-list\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2496, "<div class=\"np-object-list\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, plan := range plans {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2489, "<a class=\"np-object-row\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2497, "<a class=\"np-object-row\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1326 templ.SafeURL
-				templ_7745c5c3_Var1326, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)))
+				var templ_7745c5c3_Var1325 templ.SafeURL
+				templ_7745c5c3_Var1325, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3524, Col: 92}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3621, Col: 92}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1325))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2498, "\"><span><strong>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1326 string
+				templ_7745c5c3_Var1326, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3621, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1326))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2490, "\"><span><strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2499, "</strong><small>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1327 string
-				templ_7745c5c3_Var1327, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
+				templ_7745c5c3_Var1327, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3524, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3621, Col: 156}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1327))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2491, "</strong><small>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1328 string
-				templ_7745c5c3_Var1328, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3524, Col: 156}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1328))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2492, "</small></span>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2500, "</small></span>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -28059,12 +28102,12 @@ func planRows(plans []controlquota.Plan) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2493, "</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2501, "</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2494, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2502, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -28089,9 +28132,9 @@ func routedPlanDetail(data dashboard.Data, view WorkspaceView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1329 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1329 == nil {
-			templ_7745c5c3_Var1329 = templ.NopComponent
+		templ_7745c5c3_Var1328 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1328 == nil {
+			templ_7745c5c3_Var1328 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if plan, ok := planByID(data.Plans, view.DetailID); ok {
@@ -28100,7 +28143,7 @@ func routedPlanDetail(data dashboard.Data, view WorkspaceView) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2495, "<p class=\"np-empty\">Plan not found.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2503, "<p class=\"np-empty\">Plan not found.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -28125,9 +28168,9 @@ func routedAddonDetail(data dashboard.Data, view WorkspaceView) templ.Component 
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1330 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1330 == nil {
-			templ_7745c5c3_Var1330 = templ.NopComponent
+		templ_7745c5c3_Var1329 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1329 == nil {
+			templ_7745c5c3_Var1329 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if addon, ok := addonByID(data.AddonPlans, view.DetailID); ok {
@@ -28136,7 +28179,7 @@ func routedAddonDetail(data dashboard.Data, view WorkspaceView) templ.Component 
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2496, "<p class=\"np-empty\">Add-on plan not found.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2504, "<p class=\"np-empty\">Add-on plan not found.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -28161,12 +28204,12 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1331 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1331 == nil {
-			templ_7745c5c3_Var1331 = templ.NopComponent
+		templ_7745c5c3_Var1330 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1330 == nil {
+			templ_7745c5c3_Var1330 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Var1332 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_Var1331 := templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 			templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 			templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
 			if !templ_7745c5c3_IsBuffer {
@@ -28178,38 +28221,38 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2497, "<div class=\"np-plan-head-actions\"><a class=\"np-secondary-button\" href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2505, "<div class=\"np-plan-head-actions\"><a class=\"np-secondary-button\" href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1333 templ.SafeURL
-			templ_7745c5c3_Var1333, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planListBackURL(addon)))
+			var templ_7745c5c3_Var1332 templ.SafeURL
+			templ_7745c5c3_Var1332, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planListBackURL(addon)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3548, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3645, Col: 111}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1333))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1332))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2498, "\">Back to plans</a> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2506, "\">Back to plans</a> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if !addon && plan.ID > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2499, "<a class=\"np-secondary-button\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2507, "<a class=\"np-secondary-button\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1334 templ.SafeURL
-				templ_7745c5c3_Var1334, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/new?clone_from=" + formatPlanID(plan.ID)))
+				var templ_7745c5c3_Var1333 templ.SafeURL
+				templ_7745c5c3_Var1333, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/new?clone_from=" + formatPlanID(plan.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3550, Col: 112}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3647, Col: 112}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1334))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1333))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2500, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2508, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -28217,23 +28260,23 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2501, "Clone</a>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2509, "Clone</a>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2502, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2510, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = pageHead("Service plans", planEditorTitle(plan, addon), planEditorDescription(plan, addon)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var1332), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = pageHead("Service plans", planEditorTitle(plan, addon), planEditorDescription(plan, addon)).Render(templ.WithChildren(ctx, templ_7745c5c3_Var1331), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.ID > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2503, "<section class=\"np-plan-summary\"><div><span>Lifecycle</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2511, "<section class=\"np-plan-summary\"><div><span>Lifecycle</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -28241,103 +28284,103 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2504, "</div><div><span>Readiness</span><strong data-np-plan-readiness>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2512, "</div><div><span>Readiness</span><strong data-np-plan-readiness>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1334 string
+			templ_7745c5c3_Var1334, templ_7745c5c3_Err = templ.JoinStringErrs(planReadinessLabel(plan))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3652, Col: 190}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1334))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2513, "</strong></div><div><span>Revision</span><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1335 string
-			templ_7745c5c3_Var1335, templ_7745c5c3_Err = templ.JoinStringErrs(planReadinessLabel(plan))
+			templ_7745c5c3_Var1335, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Revision)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3555, Col: 190}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3652, Col: 277}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1335))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2505, "</strong></div><div><span>Revision</span><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2514, "</strong></div><div><span>Subscriptions</span><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1336 string
-			templ_7745c5c3_Var1336, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Revision)))
+			templ_7745c5c3_Var1336, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3555, Col: 277}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3652, Col: 406}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1336))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2506, "</strong></div><div><span>Subscriptions</span><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2515, "</strong></div><div><span>Synchronization</span><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1337 string
-			templ_7745c5c3_Var1337, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))))
+			templ_7745c5c3_Var1337, templ_7745c5c3_Err = templ.JoinStringErrs(planSyncLabel(plan.ID, data.Subscriptions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3555, Col: 406}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3652, Col: 508}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1337))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2507, "</strong></div><div><span>Synchronization</span><strong>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2516, "</strong></div><div><span>Provider</span><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1338 string
-			templ_7745c5c3_Var1338, templ_7745c5c3_Err = templ.JoinStringErrs(planSyncLabel(plan.ID, data.Subscriptions))
+			templ_7745c5c3_Var1338, templ_7745c5c3_Err = templ.JoinStringErrs(planProvider(plan, data.Resellers))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3555, Col: 508}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3652, Col: 595}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1338))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2508, "</strong></div><div><span>Provider</span><strong>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1339 string
-			templ_7745c5c3_Var1339, templ_7745c5c3_Err = templ.JoinStringErrs(planProvider(plan, data.Resellers))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3555, Col: 595}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1339))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2509, "</strong></div></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2517, "</strong></div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2510, "<form class=\"np-plan-editor\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2518, "<form class=\"np-plan-editor\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1340 templ.SafeURL
-		templ_7745c5c3_Var1340, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planEditorAction(addon)))
+		var templ_7745c5c3_Var1339 templ.SafeURL
+		templ_7745c5c3_Var1339, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planEditorAction(addon)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3557, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3654, Col: 91}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1339))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2519, "\" data-np-plan-editor data-np-plan-id=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1340 string
+		templ_7745c5c3_Var1340, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3654, Col: 153}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1340))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2511, "\" data-np-plan-editor data-np-plan-id=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1341 string
-		templ_7745c5c3_Var1341, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3557, Col: 153}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1341))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2512, "\" data-np-dirty-guard>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2520, "\" data-np-dirty-guard>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -28347,44 +28390,44 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		}
 		if plan.ID > 0 {
 			if addon {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2513, "<input type=\"hidden\" name=\"addon_id\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2521, "<input type=\"hidden\" name=\"addon_id\" value=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1341 string
+				templ_7745c5c3_Var1341, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3658, Col: 70}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1341))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2522, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			} else {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2523, "<input type=\"hidden\" name=\"plan_id\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1342 string
 				templ_7745c5c3_Var1342, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3561, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3660, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1342))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2514, "\">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2515, "<input type=\"hidden\" name=\"plan_id\" value=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1343 string
-				templ_7745c5c3_Var1343, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3563, Col: 69}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1343))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2516, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2524, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2517, "<nav class=\"np-plan-editor-tabs\" aria-label=\"Plan properties\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2525, "<nav class=\"np-plan-editor-tabs\" aria-label=\"Plan properties\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -28412,218 +28455,218 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2518, "</nav><section class=\"np-plan-property-panel\" data-np-plan-panel=\"overview\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2526, "</nav><section class=\"np-plan-property-panel\" data-np-plan-panel=\"overview\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "overview" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2519, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2527, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2520, "><div class=\"np-property-head\"><div><h2>Plan contract</h2><p>Name the offer, control assignment availability, and record why this revision exists.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"service_permission\">Lifecycle controlled</span></div><div class=\"np-plan-general-grid\"><label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2528, "><div class=\"np-property-head\"><div><h2>Plan contract</h2><p>Name the offer, control assignment availability, and record why this revision exists.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"service_permission\">Lifecycle controlled</span></div><div class=\"np-plan-general-grid\"><label>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1343 string
+		templ_7745c5c3_Var1343, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorNameLabel(addon))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 448}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1343))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2529, "<input name=\"name\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1344 string
-		templ_7745c5c3_Var1344, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorNameLabel(addon))
+		templ_7745c5c3_Var1344, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3569, Col: 448}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 486}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1344))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2521, "<input name=\"name\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1345 string
-		templ_7745c5c3_Var1345, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3569, Col: 486}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1345))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2522, "\" required maxlength=\"120\"></label> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2530, "\" required maxlength=\"120\"></label> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !addon {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2523, "<label>Reference price, cents<input type=\"number\" min=\"0\" name=\"price_cents\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2531, "<label>Reference price, cents<input type=\"number\" min=\"0\" name=\"price_cents\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1346 string
-			templ_7745c5c3_Var1346, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanPriceCents(plan.PriceCents))
+			var templ_7745c5c3_Var1345 string
+			templ_7745c5c3_Var1345, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanPriceCents(plan.PriceCents))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3571, Col: 126}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 126}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1346))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1345))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2524, "\"><small>Catalog reference only. Billing is not connected.</small></label> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2532, "\"><small>Catalog reference only. Billing is not connected.</small></label> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2525, "<label class=\"np-plan-description\">Description<textarea name=\"description\" rows=\"3\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2533, "<label class=\"np-plan-description\">Description<textarea name=\"description\" rows=\"3\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1347 string
-		templ_7745c5c3_Var1347, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
+		var templ_7745c5c3_Var1346 string
+		templ_7745c5c3_Var1346, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3573, Col: 105}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3670, Col: 105}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1347))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1346))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2526, "</textarea></label> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2534, "</textarea></label> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if addon {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2527, "<label class=\"np-switch\"><input type=\"hidden\" name=\"is_active\" value=\"false\"><input type=\"checkbox\" name=\"is_active\" value=\"true\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2535, "<label class=\"np-switch\"><input type=\"hidden\" name=\"is_active\" value=\"false\"><input type=\"checkbox\" name=\"is_active\" value=\"true\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if plan.IsActive {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2528, " checked")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2536, " checked")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2529, "><span>Available for subscriptions</span></label>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2537, "><span>Available for subscriptions</span></label>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2530, "<label>Lifecycle<select name=\"lifecycle_status\" required><option value=\"draft\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2538, "<label>Lifecycle<select name=\"lifecycle_status\" required><option value=\"draft\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if planLifecycleStatus(plan) == "draft" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2531, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2539, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2532, ">Draft</option><option value=\"active\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2540, ">Draft</option><option value=\"active\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if planLifecycleStatus(plan) == "active" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2533, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2541, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2534, ">Active</option><option value=\"retired\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2542, ">Active</option><option value=\"retired\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if planLifecycleStatus(plan) == "retired" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2535, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2543, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2536, ">Retired</option></select><small>Only active plans can be assigned. Activation validates live server capabilities.</small></label> <label class=\"np-plan-description\">Revision reason<input name=\"change_reason\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2544, ">Retired</option></select><small>Only active plans can be assigned. Activation validates live server capabilities.</small></label> <label class=\"np-plan-description\">Revision reason<input name=\"change_reason\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1347 string
+			templ_7745c5c3_Var1347, templ_7745c5c3_Err = templ.JoinStringErrs(plan.ChangeReason)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3675, Col: 107}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1347))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2545, "\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if plan.ID > 0 {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2546, " required")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2547, " placeholder=\"Why this contract is changing\"><small>Stored with the immutable revision history.</small></label>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2548, "</div>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if !addon {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2549, "<div class=\"np-plan-readiness\" data-np-plan-readiness><div><strong>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1348 string
-			templ_7745c5c3_Var1348, templ_7745c5c3_Err = templ.JoinStringErrs(plan.ChangeReason)
+			templ_7745c5c3_Var1348, templ_7745c5c3_Err = templ.JoinStringErrs(planReadinessLabel(plan))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3578, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3679, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1348))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2537, "\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if plan.ID > 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2538, " required")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2539, " placeholder=\"Why this contract is changing\"><small>Stored with the immutable revision history.</small></label>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2540, "</div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if !addon {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2541, "<div class=\"np-plan-readiness\" data-np-plan-readiness><div><strong>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1349 string
-			templ_7745c5c3_Var1349, templ_7745c5c3_Err = templ.JoinStringErrs(planReadinessLabel(plan))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3582, Col: 96}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1349))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2542, "</strong><span>Runtime readiness</span></div><p>Drafts may describe future products. Active plans must be deliverable by this server before they can be assigned.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2550, "</strong><span>Runtime readiness</span></div><p>Drafts may describe future products. Active plans must be deliverable by this server before they can be assigned.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if plan.ReadinessError != "" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2543, "<p class=\"np-gate is-blocked\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2551, "<p class=\"np-gate is-blocked\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1350 string
-				templ_7745c5c3_Var1350, templ_7745c5c3_Err = templ.JoinStringErrs(plan.ReadinessError)
+				var templ_7745c5c3_Var1349 string
+				templ_7745c5c3_Var1349, templ_7745c5c3_Err = templ.JoinStringErrs(plan.ReadinessError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3584, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3681, Col: 55}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1350))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1349))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2544, "</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2552, "</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2545, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2553, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2546, "</section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"resources\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2554, "</section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"resources\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "resources" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2547, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2555, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2548, "><div class=\"np-property-head\"><div><h2>Resources</h2><p>Set hard allocations, measured thresholds, and provisioning defaults. Zero disables a resource; Unlimited removes its numeric ceiling.</p></div></div><div class=\"np-contract-legend\"><span data-np-enforcement=\"hard_limit\">Hard limit</span><span data-np-enforcement=\"measured_limit\">Measured usage</span><span data-np-enforcement=\"creation_default\">Provisioning default</span><span data-np-enforcement=\"stored_only\">Stored setting</span></div><p class=\"np-plan-caveat\">Disk and traffic enforcement requires a fresh complete usage scan. Subscription disk usage currently includes site homes, databases, and backups; system mail and journal storage are reported separately until attribution is complete.</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2556, "><div class=\"np-property-head\"><div><h2>Resources</h2><p>Set hard allocations, measured thresholds, and provisioning defaults. Zero disables a resource; Unlimited removes its numeric ceiling.</p></div></div><div class=\"np-contract-legend\"><span data-np-enforcement=\"hard_limit\">Hard limit</span><span data-np-enforcement=\"measured_limit\">Measured usage</span><span data-np-enforcement=\"creation_default\">Provisioning default</span><span data-np-enforcement=\"stored_only\">Stored setting</span></div><p class=\"np-plan-caveat\">Disk and traffic enforcement requires a fresh complete usage scan. Subscription disk usage currently includes site homes, databases, and backups; system mail and journal storage are reported separately until attribution is complete.</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !addon {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2549, "<fieldset class=\"np-field-group\"><legend>Overuse policy</legend><div class=\"np-overuse-options\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2557, "<fieldset class=\"np-field-group\"><legend>Overuse policy</legend><div class=\"np-overuse-options\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -28647,12 +28690,12 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2550, "</div></fieldset>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2558, "</div></fieldset>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2551, "<div class=\"np-plan-field-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2559, "<div class=\"np-plan-field-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -28710,12 +28753,12 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2552, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2560, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !addon {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2553, "<div class=\"np-property-head\"><h3>Enforced account resources</h3></div><div class=\"np-plan-field-grid\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2561, "<div class=\"np-property-head\"><h3>Enforced account resources</h3></div><div class=\"np-plan-field-grid\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -28763,54 +28806,54 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2554, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2562, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
 		if !addon {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2555, "<div class=\"np-plan-field-grid np-threshold-grid\"><label>Disk warning threshold<div class=\"np-input-suffix\"><input type=\"number\" name=\"disk_warning_percent\" min=\"1\" max=\"100\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2563, "<div class=\"np-plan-field-grid np-threshold-grid\"><label>Disk warning threshold<div class=\"np-input-suffix\"><input type=\"number\" name=\"disk_warning_percent\" min=\"1\" max=\"100\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1350 string
+			templ_7745c5c3_Var1350, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.DiskWarningPercent)))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3699, Col: 231}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1350))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2564, "\" required><span>%</span></div></label><label>Traffic warning threshold<div class=\"np-input-suffix\"><input type=\"number\" name=\"traffic_warning_percent\" min=\"1\" max=\"100\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1351 string
-			templ_7745c5c3_Var1351, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.DiskWarningPercent)))
+			templ_7745c5c3_Var1351, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.TrafficWarningPercent)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3602, Col: 231}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3699, Col: 458}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1351))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2556, "\" required><span>%</span></div></label><label>Traffic warning threshold<div class=\"np-input-suffix\"><input type=\"number\" name=\"traffic_warning_percent\" min=\"1\" max=\"100\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1352 string
-			templ_7745c5c3_Var1352, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.TrafficWarningPercent)))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3602, Col: 458}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1352))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2557, "\" required><span>%</span></div></label></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2565, "\" required><span>%</span></div></label></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2558, "</section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"services\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2566, "</section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"services\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "services" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2559, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2567, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2560, "><div class=\"np-property-head\"><div><h2>Services</h2><p>Choose which hosted services this subscription may provision.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"service_permission\">Provisioning gates</span></div><div class=\"np-permission-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2568, "><div class=\"np-property-head\"><div><h2>Services</h2><p>Choose which hosted services this subscription may provision.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"service_permission\">Provisioning gates</span></div><div class=\"np-permission-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -28890,17 +28933,17 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2561, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"customer-permissions\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2569, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"customer-permissions\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "customer-permissions" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2562, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2570, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2563, "><div class=\"np-property-head\"><div><h2>Customer Permissions</h2><p>Control which security-sensitive settings customers may change themselves.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"management_permission\">Management authority</span></div><div class=\"np-permission-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2571, "><div class=\"np-property-head\"><div><h2>Customer Permissions</h2><p>Control which security-sensitive settings customers may change themselves.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"management_permission\">Management authority</span></div><div class=\"np-permission-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -28920,118 +28963,118 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2564, "</div><div class=\"np-plan-field-grid\"><label>Shell mode<select name=\"shell_mode\"><option value=\"disabled\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2572, "</div><div class=\"np-plan-field-grid\"><label>Shell mode<select name=\"shell_mode\"><option value=\"disabled\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.HostingPolicy.Access.ShellMode == "disabled" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2565, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2573, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2566, ">Disabled</option><option value=\"sftp\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2574, ">Disabled</option><option value=\"sftp\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.HostingPolicy.Access.ShellMode == "sftp" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2567, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2575, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2568, ">SFTP only</option><option value=\"nspawn\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2576, ">SFTP only</option><option value=\"nspawn\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.HostingPolicy.Access.ShellMode == "nspawn" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2569, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2577, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2570, ">Isolated shell</option></select></label><label>nspawn image<input name=\"nspawn_image\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2578, ">Isolated shell</option></select></label><label>nspawn image<input name=\"nspawn_image\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1352 string
+		templ_7745c5c3_Var1352, templ_7745c5c3_Err = templ.JoinStringErrs(plan.HostingPolicy.Access.NspawnImage)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3703, Col: 1333}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1352))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2579, "\"><small>Stored for a future isolated-shell runtime; not currently enforced.</small></label><label>SSH idle timeout<input type=\"number\" min=\"0\" name=\"ssh_idle_timeout_minutes\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1353 string
-		templ_7745c5c3_Var1353, templ_7745c5c3_Err = templ.JoinStringErrs(plan.HostingPolicy.Access.NspawnImage)
+		templ_7745c5c3_Var1353, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Access.SSHIdleTimeoutMins)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3606, Col: 1333}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3703, Col: 1584}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1353))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2571, "\"><small>Stored for a future isolated-shell runtime; not currently enforced.</small></label><label>SSH idle timeout<input type=\"number\" min=\"0\" name=\"ssh_idle_timeout_minutes\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1354 string
-		templ_7745c5c3_Var1354, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Access.SSHIdleTimeoutMins)))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3606, Col: 1584}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1354))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2572, "\"></label></div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"defaults\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2580, "\"></label></div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"defaults\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "defaults" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2573, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2581, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2574, "><div class=\"np-property-head\"><div><h2>Hosting defaults</h2><p>Values copied into new domain configuration. Customers may override only where the plan grants permission.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"creation_default\">Inherited defaults</span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2582, "><div class=\"np-property-head\"><div><h2>Hosting defaults</h2><p>Values copied into new domain configuration. Customers may override only where the plan grants permission.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"creation_default\">Inherited defaults</span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !addon && len(data.Capabilities.PHPVersions) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2575, "<p class=\"np-gate is-blocked\">No PHP-FPM runtime was reported by the agent. Install PHP-FPM before enabling web hosting in this plan.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2583, "<p class=\"np-gate is-blocked\">No PHP-FPM runtime was reported by the agent. Install PHP-FPM before enabling web hosting in this plan.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2576, "<div class=\"np-plan-field-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2584, "<div class=\"np-plan-field-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !addon {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2577, "<label>Web server<select name=\"hosting_web_server\"><option value=\"nginx\" selected>Nginx</option></select></label><label>Preferred domain<select name=\"preferred_domain\"><option value=\"none\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2585, "<label>Web server<select name=\"hosting_web_server\"><option value=\"nginx\" selected>Nginx</option></select></label><label>Preferred domain<select name=\"preferred_domain\"><option value=\"none\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if plan.Presets.Hosting.PreferredDomain == "none" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2578, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2586, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2579, ">No preference</option><option value=\"www\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2587, ">No preference</option><option value=\"www\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if plan.Presets.Hosting.PreferredDomain == "www" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2580, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2588, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2581, ">www</option><option value=\"non-www\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2589, ">www</option><option value=\"non-www\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if plan.Presets.Hosting.PreferredDomain == "non-www" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2582, " selected")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2590, " selected")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2583, ">non-www</option></select></label><label>Default PHP version<select name=\"default_php_version\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2591, ">non-www</option></select></label><label>Default PHP version<select name=\"default_php_version\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -29039,7 +29082,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2584, "</select></label>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2592, "</select></label>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -29048,17 +29091,17 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2585, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"defaults\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2593, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"defaults\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "defaults" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2586, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2594, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2587, "><div class=\"np-property-head\"><div><h2>PHP defaults</h2><p>Set allowed runtimes, dedicated PHP-FPM defaults, and inherited directives.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"creation_default\">Inherited defaults</span></div><fieldset class=\"np-field-group\"><legend>Allowed PHP versions</legend><div class=\"np-checkbox-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2595, "><div class=\"np-property-head\"><div><h2>PHP defaults</h2><p>Set allowed runtimes, dedicated PHP-FPM defaults, and inherited directives.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"creation_default\">Inherited defaults</span></div><fieldset class=\"np-field-group\"><legend>Allowed PHP versions</legend><div class=\"np-checkbox-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -29066,7 +29109,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2588, "</div></fieldset><div class=\"np-plan-field-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2596, "</div></fieldset><div class=\"np-plan-field-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -29086,131 +29129,131 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2589, "<label>FPM mode<select name=\"php_fpm_mode\"><option value=\"ondemand\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2597, "<label>FPM mode<select name=\"php_fpm_mode\"><option value=\"ondemand\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.HostingPolicy.PHP.FPMMode == "ondemand" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2590, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2598, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2591, ">On demand</option><option value=\"dynamic\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2599, ">On demand</option><option value=\"dynamic\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.HostingPolicy.PHP.FPMMode == "dynamic" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2592, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2600, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2593, ">Dynamic</option></select></label><label>Max execution time<input type=\"number\" min=\"0\" name=\"php_max_execution_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2601, ">Dynamic</option></select></label><label>Max execution time<input type=\"number\" min=\"0\" name=\"php_max_execution_seconds\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1354 string
+		templ_7745c5c3_Var1354, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3714, Col: 1332}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1354))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2602, "\"></label><label>Max input time<input type=\"number\" min=\"0\" name=\"php_max_input_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1355 string
-		templ_7745c5c3_Var1355, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)))
+		templ_7745c5c3_Var1355, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3617, Col: 1332}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3714, Col: 1484}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1355))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2594, "\"></label><label>Max input time<input type=\"number\" min=\"0\" name=\"php_max_input_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2603, "\"></label><label>POST max size, MB<input type=\"number\" min=\"0\" name=\"php_post_max_mb\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1356 string
-		templ_7745c5c3_Var1356, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)))
+		templ_7745c5c3_Var1356, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.PostMaxMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3617, Col: 1484}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3714, Col: 1627}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1356))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2595, "\"></label><label>POST max size, MB<input type=\"number\" min=\"0\" name=\"php_post_max_mb\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2604, "\"></label><label>Upload max size, MB<input type=\"number\" min=\"0\" name=\"php_upload_max_mb\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1357 string
-		templ_7745c5c3_Var1357, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.PostMaxMB)))
+		templ_7745c5c3_Var1357, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3617, Col: 1627}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3714, Col: 1776}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1357))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2596, "\"></label><label>Upload max size, MB<input type=\"number\" min=\"0\" name=\"php_upload_max_mb\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2605, "\"></label><label>FPM max requests<input type=\"number\" min=\"0\" name=\"php_fpm_max_requests\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1358 string
-		templ_7745c5c3_Var1358, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)))
+		templ_7745c5c3_Var1358, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3617, Col: 1776}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3714, Col: 1928}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1358))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2597, "\"></label><label>FPM max requests<input type=\"number\" min=\"0\" name=\"php_fpm_max_requests\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2606, "\"></label><label>FPM idle timeout<input type=\"number\" min=\"0\" name=\"php_fpm_idle_timeout_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1359 string
-		templ_7745c5c3_Var1359, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)))
+		templ_7745c5c3_Var1359, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.PHP.FPMIdleTimeoutSecs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3617, Col: 1928}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3714, Col: 2098}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1359))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2598, "\"></label><label>FPM idle timeout<input type=\"number\" min=\"0\" name=\"php_fpm_idle_timeout_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2607, "\"></label><label>Request termination timeout<input type=\"number\" min=\"0\" name=\"php_request_terminate_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1360 string
-		templ_7745c5c3_Var1360, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.PHP.FPMIdleTimeoutSecs)))
+		templ_7745c5c3_Var1360, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.PHP.RequestTerminateSecs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3617, Col: 2098}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3714, Col: 2282}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1360))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2599, "\"></label><label>Request termination timeout<input type=\"number\" min=\"0\" name=\"php_request_terminate_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2608, "\"></label><label>OPcache memory, MB<input type=\"number\" min=\"0\" name=\"php_opcache_memory_mb\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1361 string
-		templ_7745c5c3_Var1361, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.PHP.RequestTerminateSecs)))
+		templ_7745c5c3_Var1361, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.PHP.OPcacheMemoryMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3617, Col: 2282}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3714, Col: 2444}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1361))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2600, "\"></label><label>OPcache memory, MB<input type=\"number\" min=\"0\" name=\"php_opcache_memory_mb\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1362 string
-		templ_7745c5c3_Var1362, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.PHP.OPcacheMemoryMB)))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3617, Col: 2444}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1362))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2601, "\"></label></div><div class=\"np-permission-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2609, "\"></label></div><div class=\"np-permission-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -29234,7 +29277,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2602, "</div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2610, "</div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -29242,59 +29285,59 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2603, "<div class=\"np-plan-action-bar\"><div><strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2611, "<div class=\"np-plan-action-bar\"><div><strong>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1362 string
+		templ_7745c5c3_Var1362, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSaveTitle(plan, addon))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3716, Col: 80}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1362))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2612, "</strong><span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1363 string
-		templ_7745c5c3_Var1363, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSaveTitle(plan, addon))
+		templ_7745c5c3_Var1363, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSaveHint(plan, addon))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3716, Col: 129}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1363))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2604, "</strong><span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2613, "</span></div><div><a class=\"np-secondary-button\" href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1364 string
-		templ_7745c5c3_Var1364, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSaveHint(plan, addon))
+		var templ_7745c5c3_Var1364 templ.SafeURL
+		templ_7745c5c3_Var1364, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planListBackURL(addon)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 129}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3716, Col: 224}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1364))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2605, "</span></div><div><a class=\"np-secondary-button\" href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2614, "\">Cancel</a><button type=\"submit\" data-np-plan-submit>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1365 templ.SafeURL
-		templ_7745c5c3_Var1365, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planListBackURL(addon)))
+		var templ_7745c5c3_Var1365 string
+		templ_7745c5c3_Var1365, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSubmitLabel(plan, addon))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 224}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3716, Col: 314}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1365))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2606, "\">Cancel</a><button type=\"submit\" data-np-plan-submit>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1366 string
-		templ_7745c5c3_Var1366, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSubmitLabel(plan, addon))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 314}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1366))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2607, "</button></div></div></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2615, "</button></div></div></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -29305,71 +29348,71 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			}
 		}
 		if !addon && plan.ID > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2608, "<section class=\"np-panel np-plan-revision-history\"><div class=\"np-panel-title\"><div><h2>Revision history</h2><span class=\"np-muted\">Immutable plan contract records</span></div></div><div class=\"np-object-list\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2616, "<section class=\"np-panel np-plan-revision-history\"><div class=\"np-panel-title\"><div><h2>Revision history</h2><span class=\"np-muted\">Immutable plan contract records</span></div></div><div class=\"np-object-list\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if planRevisionCount(data.PlanRevisions, plan.ID) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2609, "<p class=\"np-empty\">No revision history is available yet.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2617, "<p class=\"np-empty\">No revision history is available yet.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			for _, revision := range data.PlanRevisions {
 				if revision.PlanID == plan.ID {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2610, "<div class=\"np-object-row np-plan-revision-row\"><span><strong>Revision ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2618, "<div class=\"np-object-row np-plan-revision-row\"><span><strong>Revision ")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var1366 string
+					templ_7745c5c3_Var1366, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(revision.Revision)))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3728, Col: 116}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1366))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2619, "</strong><small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var1367 string
-					templ_7745c5c3_Var1367, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(revision.Revision)))
+					templ_7745c5c3_Var1367, templ_7745c5c3_Err = templ.JoinStringErrs(revision.ChangeReason)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3631, Col: 116}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3728, Col: 157}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1367))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2611, "</strong><small>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2620, "</small></span><span><strong>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var1368 string
-					templ_7745c5c3_Var1368, templ_7745c5c3_Err = templ.JoinStringErrs(revision.ChangeReason)
+					templ_7745c5c3_Var1368, templ_7745c5c3_Err = templ.JoinStringErrs(planRevisionActor(revision))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3631, Col: 157}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3728, Col: 217}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1368))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2612, "</small></span><span><strong>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2621, "</strong><small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var1369 string
-					templ_7745c5c3_Var1369, templ_7745c5c3_Err = templ.JoinStringErrs(planRevisionActor(revision))
+					templ_7745c5c3_Var1369, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(revision.CreatedAt))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3631, Col: 217}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3728, Col: 267}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1369))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2613, "</strong><small>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1370 string
-					templ_7745c5c3_Var1370, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(revision.CreatedAt))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3631, Col: 267}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1370))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2614, "</small></span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2622, "</small></span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -29377,13 +29420,13 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2615, "</div>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2623, "</div>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2616, "</div></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2624, "</div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -29408,69 +29451,69 @@ func planEditorTabLink(view WorkspaceView, tab string, label string) templ.Compo
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1371 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1371 == nil {
-			templ_7745c5c3_Var1371 = templ.NopComponent
+		templ_7745c5c3_Var1370 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1370 == nil {
+			templ_7745c5c3_Var1370 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var1372 = []any{planTabClass(view, tab)}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1372...)
+		var templ_7745c5c3_Var1371 = []any{planTabClass(view, tab)}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1371...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2617, "<a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2625, "<a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1373 templ.SafeURL
-		templ_7745c5c3_Var1373, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planTabURL(view, tab)))
+		var templ_7745c5c3_Var1372 templ.SafeURL
+		templ_7745c5c3_Var1372, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planTabURL(view, tab)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3638, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3735, Col: 117}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1372))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2626, "\" class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1373 string
+		templ_7745c5c3_Var1373, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1371).String())
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1373))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2618, "\" class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2627, "\" data-np-plan-tab=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1374 string
-		templ_7745c5c3_Var1374, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1372).String())
+		templ_7745c5c3_Var1374, templ_7745c5c3_Err = templ.JoinStringErrs(tab)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3735, Col: 175}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1374))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2619, "\" data-np-plan-tab=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2628, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1375 string
-		templ_7745c5c3_Var1375, templ_7745c5c3_Err = templ.JoinStringErrs(tab)
+		templ_7745c5c3_Var1375, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3638, Col: 175}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3735, Col: 185}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1375))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2620, "\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1376 string
-		templ_7745c5c3_Var1376, templ_7745c5c3_Err = templ.JoinStringErrs(label)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3638, Col: 185}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1376))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2621, "</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2629, "</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -29494,223 +29537,223 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1377 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1377 == nil {
-			templ_7745c5c3_Var1377 = templ.NopComponent
+		templ_7745c5c3_Var1376 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1376 == nil {
+			templ_7745c5c3_Var1376 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2622, "<div class=\"np-limit-field\" data-np-enforcement=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2630, "<div class=\"np-limit-field\" data-np-enforcement=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1377 string
+		templ_7745c5c3_Var1377, templ_7745c5c3_Err = templ.JoinStringErrs(planInputEnforcement(name))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3737, Col: 150}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1377))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2631, "\"><span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1378 string
-		templ_7745c5c3_Var1378, templ_7745c5c3_Err = templ.JoinStringErrs(planInputEnforcement(name))
+		templ_7745c5c3_Var1378, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 150}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3737, Col: 166}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1378))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2623, "\"><span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2632, "<small class=\"np-contract-badge\" data-np-enforcement=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1379 string
-		templ_7745c5c3_Var1379, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		templ_7745c5c3_Var1379, templ_7745c5c3_Err = templ.JoinStringErrs(planInputEnforcement(name))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 166}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3737, Col: 249}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1379))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2624, "<small class=\"np-contract-badge\" data-np-enforcement=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2633, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1380 string
-		templ_7745c5c3_Var1380, templ_7745c5c3_Err = templ.JoinStringErrs(planInputEnforcement(name))
+		templ_7745c5c3_Var1380, templ_7745c5c3_Err = templ.JoinStringErrs(planEnforcementLabel(name))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 249}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3737, Col: 280}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1380))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2625, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2634, "</small></span><span class=\"np-limit-controls\"><input type=\"number\" min=\"0\" name=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1381 string
-		templ_7745c5c3_Var1381, templ_7745c5c3_Err = templ.JoinStringErrs(planEnforcementLabel(name))
+		templ_7745c5c3_Var1381, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 280}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3737, Col: 369}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1381))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2626, "</small></span><span class=\"np-limit-controls\"><input type=\"number\" min=\"0\" name=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2635, "\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1382 string
-		templ_7745c5c3_Var1382, templ_7745c5c3_Err = templ.JoinStringErrs(name)
+		templ_7745c5c3_Var1382, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorLimitDisplayValue(value, unit))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 369}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3737, Col: 419}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1382))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2627, "\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2636, "\" aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1383 string
-		templ_7745c5c3_Var1383, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorLimitDisplayValue(value, unit))
+		templ_7745c5c3_Var1383, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 419}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3737, Col: 440}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1383))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2628, "\" aria-label=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1384 string
-		templ_7745c5c3_Var1384, templ_7745c5c3_Err = templ.JoinStringErrs(label)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 440}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1384))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2629, "\" required> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2637, "\" required> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if unit == "MB" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2630, "<select name=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2638, "<select name=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1384 string
+			templ_7745c5c3_Var1384, templ_7745c5c3_Err = templ.JoinStringErrs(name + "_unit")
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 31}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1384))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2639, "\" aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1385 string
-			templ_7745c5c3_Var1385, templ_7745c5c3_Err = templ.JoinStringErrs(name + "_unit")
+			templ_7745c5c3_Var1385, templ_7745c5c3_Err = templ.JoinStringErrs(label + " unit")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3642, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1385))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2631, "\" aria-label=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2640, "\"><option value=\"MB\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if planEditorLimitUnit(value) == "MB" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2641, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2642, ">MB</option><option value=\"GB\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if planEditorLimitUnit(value) == "GB" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2643, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2644, ">GB</option><option value=\"TB\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if planEditorLimitUnit(value) == "TB" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2645, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2646, ">TB</option></select> ")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		} else {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2647, "<input type=\"hidden\" name=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1386 string
-			templ_7745c5c3_Var1386, templ_7745c5c3_Err = templ.JoinStringErrs(label + " unit")
+			templ_7745c5c3_Var1386, templ_7745c5c3_Err = templ.JoinStringErrs(name + "_unit")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3642, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3741, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1386))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2632, "\"><option value=\"MB\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if planEditorLimitUnit(value) == "MB" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2633, " selected")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2634, ">MB</option><option value=\"GB\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if planEditorLimitUnit(value) == "GB" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2635, " selected")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2636, ">GB</option><option value=\"TB\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if planEditorLimitUnit(value) == "TB" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2637, " selected")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2638, ">TB</option></select> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2639, "<input type=\"hidden\" name=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2648, "\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1387 string
-			templ_7745c5c3_Var1387, templ_7745c5c3_Err = templ.JoinStringErrs(name + "_unit")
+			templ_7745c5c3_Var1387, templ_7745c5c3_Err = templ.JoinStringErrs(unit)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3644, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3741, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1387))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2640, "\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1388 string
-			templ_7745c5c3_Var1388, templ_7745c5c3_Err = templ.JoinStringErrs(unit)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3644, Col: 59}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1388))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2641, "\"> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2649, "\"> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2642, "<label class=\"np-unlimited\"><input type=\"checkbox\" name=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2650, "<label class=\"np-unlimited\"><input type=\"checkbox\" name=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1389 string
-		templ_7745c5c3_Var1389, templ_7745c5c3_Err = templ.JoinStringErrs(name + "_unlimited")
+		var templ_7745c5c3_Var1388 string
+		templ_7745c5c3_Var1388, templ_7745c5c3_Err = templ.JoinStringErrs(name + "_unlimited")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3646, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3743, Col: 78}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1389))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1388))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2643, "\" value=\"true\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2651, "\" value=\"true\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if value < 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2644, " checked")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2652, " checked")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2645, " data-np-unlimited>Unlimited</label></span></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2653, " data-np-unlimited>Unlimited</label></span></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -29734,61 +29777,61 @@ func planToggle(name string, label string, checked bool) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1390 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1390 == nil {
-			templ_7745c5c3_Var1390 = templ.NopComponent
+		templ_7745c5c3_Var1389 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1389 == nil {
+			templ_7745c5c3_Var1389 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2646, "<label class=\"np-permission-row\"><input type=\"hidden\" name=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2654, "<label class=\"np-permission-row\"><input type=\"hidden\" name=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1390 string
+		templ_7745c5c3_Var1390, templ_7745c5c3_Err = templ.JoinStringErrs(name)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3745, Col: 125}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1390))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2655, "\" value=\"false\"><input type=\"checkbox\" name=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1391 string
 		templ_7745c5c3_Var1391, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3648, Col: 125}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3745, Col: 177}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1391))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2647, "\" value=\"false\"><input type=\"checkbox\" name=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2656, "\" value=\"true\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if checked {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2657, " checked")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2658, "><span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1392 string
-		templ_7745c5c3_Var1392, templ_7745c5c3_Err = templ.JoinStringErrs(name)
+		templ_7745c5c3_Var1392, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3648, Col: 177}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3745, Col: 228}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1392))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2648, "\" value=\"true\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if checked {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2649, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2650, "><span>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1393 string
-		templ_7745c5c3_Var1393, templ_7745c5c3_Err = templ.JoinStringErrs(label)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3648, Col: 228}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1393))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2651, "</span></label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2659, "</span></label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -29812,48 +29855,48 @@ func overuseOption(plan controlquota.Plan, value string, label string) templ.Com
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1394 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1394 == nil {
-			templ_7745c5c3_Var1394 = templ.NopComponent
+		templ_7745c5c3_Var1393 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1393 == nil {
+			templ_7745c5c3_Var1393 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2652, "<label><input type=\"radio\" name=\"overuse_policy\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2660, "<label><input type=\"radio\" name=\"overuse_policy\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1394 string
+		templ_7745c5c3_Var1394, templ_7745c5c3_Err = templ.JoinStringErrs(value)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3747, Col: 136}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1394))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2661, "\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if string(plan.OverusePolicy) == value {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2662, " checked")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2663, "><span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1395 string
-		templ_7745c5c3_Var1395, templ_7745c5c3_Err = templ.JoinStringErrs(value)
+		templ_7745c5c3_Var1395, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3650, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3747, Col: 202}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1395))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2653, "\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if string(plan.OverusePolicy) == value {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2654, " checked")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2655, "><span>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1396 string
-		templ_7745c5c3_Var1396, templ_7745c5c3_Err = templ.JoinStringErrs(label)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3650, Col: 202}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1396))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2656, "</span></label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2664, "</span></label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -29877,49 +29920,49 @@ func phpVersionOptions(plan controlquota.Plan, capabilities types.RuntimeCapabil
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1397 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1397 == nil {
-			templ_7745c5c3_Var1397 = templ.NopComponent
+		templ_7745c5c3_Var1396 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1396 == nil {
+			templ_7745c5c3_Var1396 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		for _, version := range planPHPVersions(plan, capabilities) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2657, "<option value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2665, "<option value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1397 string
+			templ_7745c5c3_Var1397, templ_7745c5c3_Err = templ.JoinStringErrs(version)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3751, Col: 25}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1397))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2666, "\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if version == plan.DefaultPHPVersion {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2667, " selected")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2668, ">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1398 string
 			templ_7745c5c3_Var1398, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3654, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3751, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1398))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2658, "\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if version == plan.DefaultPHPVersion {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2659, " selected")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2660, ">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1399 string
-			templ_7745c5c3_Var1399, templ_7745c5c3_Err = templ.JoinStringErrs(version)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3654, Col: 85}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1399))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2661, "</option>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2669, "</option>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -29944,49 +29987,49 @@ func phpVersionChecks(plan controlquota.Plan, capabilities types.RuntimeCapabili
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1400 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1400 == nil {
-			templ_7745c5c3_Var1400 = templ.NopComponent
+		templ_7745c5c3_Var1399 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1399 == nil {
+			templ_7745c5c3_Var1399 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		for _, version := range planPHPVersions(plan, capabilities) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2662, "<label class=\"np-check\"><input type=\"checkbox\" name=\"php_versions\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2670, "<label class=\"np-check\"><input type=\"checkbox\" name=\"php_versions\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1400 string
+			templ_7745c5c3_Var1400, templ_7745c5c3_Err = templ.JoinStringErrs(version)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3756, Col: 84}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1400))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2671, "\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if containsCSV(plan.PHPAllowlist, version) {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2672, " checked")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2673, ">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1401 string
 			templ_7745c5c3_Var1401, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3659, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3756, Col: 149}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1401))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2663, "\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if containsCSV(plan.PHPAllowlist, version) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2664, " checked")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2665, ">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1402 string
-			templ_7745c5c3_Var1402, templ_7745c5c3_Err = templ.JoinStringErrs(version)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3659, Col: 149}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1402))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2666, "</label>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2674, "</label>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -30011,22 +30054,22 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1403 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1403 == nil {
-			templ_7745c5c3_Var1403 = templ.NopComponent
+		templ_7745c5c3_Var1402 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1402 == nil {
+			templ_7745c5c3_Var1402 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2667, "<section class=\"np-plan-property-panel\" data-np-plan-panel=\"defaults\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2675, "<section class=\"np-plan-property-panel\" data-np-plan-panel=\"defaults\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "defaults" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2668, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2676, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2669, "><div class=\"np-property-head\"><div><h2>Mail defaults</h2><p>Defaults for mail domains created under this plan.</p></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2677, "><div class=\"np-property-head\"><div><h2>Mail defaults</h2><p>Defaults for mail domains created under this plan.</p></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30034,7 +30077,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2670, "</div><div class=\"np-permission-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2678, "</div><div class=\"np-permission-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30058,7 +30101,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2671, "</div><div class=\"np-plan-field-grid\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2679, "</div><div class=\"np-plan-field-grid\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30066,47 +30109,47 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2672, "<label>DMARC policy<select name=\"mail_dmarc_policy\"><option value=\"none\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2680, "<label>DMARC policy<select name=\"mail_dmarc_policy\"><option value=\"none\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.Presets.Mail.DMARCPolicy == "none" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2673, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2681, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2674, ">None</option><option value=\"quarantine\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2682, ">None</option><option value=\"quarantine\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.Presets.Mail.DMARCPolicy == "quarantine" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2675, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2683, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2676, ">Quarantine</option><option value=\"reject\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2684, ">Quarantine</option><option value=\"reject\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.Presets.Mail.DMARCPolicy == "reject" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2677, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2685, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2678, ">Reject</option></select></label></div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"defaults\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2686, ">Reject</option></select></label></div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"defaults\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "defaults" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2679, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2687, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2680, "><div class=\"np-property-head\"><div><h2>DNS defaults</h2><p>Initial zone mode and time-to-live settings. Zero means no configured TTL.</p></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2688, "><div class=\"np-property-head\"><div><h2>DNS defaults</h2><p>Initial zone mode and time-to-live settings. Zero means no configured TTL.</p></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30114,40 +30157,40 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2681, "</div><div class=\"np-plan-field-grid\"><label>Zone mode<select name=\"dns_mode\"><option value=\"authoritative\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2689, "</div><div class=\"np-plan-field-grid\"><label>Zone mode<select name=\"dns_mode\"><option value=\"authoritative\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.Presets.DNS.Mode == "primary" || plan.HostingPolicy.DNS.Mode == "authoritative" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2682, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2690, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2683, ">Authoritative</option><option value=\"external\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2691, ">Authoritative</option><option value=\"external\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if plan.Presets.DNS.Mode == "secondary" || plan.HostingPolicy.DNS.Mode == "external" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2684, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2692, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2685, ">External</option></select></label><label>Default TTL<input type=\"number\" name=\"dns_default_ttl\" min=\"0\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2693, ">External</option></select></label><label>Default TTL<input type=\"number\" name=\"dns_default_ttl\" min=\"0\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1404 string
-		templ_7745c5c3_Var1404, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.DNS.DefaultTTL)))
+		var templ_7745c5c3_Var1403 string
+		templ_7745c5c3_Var1403, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.DNS.DefaultTTL)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3665, Col: 785}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3762, Col: 785}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1404))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1403))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2686, "\"></label></div><div class=\"np-permission-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2694, "\"></label></div><div class=\"np-permission-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30155,203 +30198,203 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2687, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"advanced\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2695, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"advanced\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "advanced" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2688, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2696, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2689, "><div class=\"np-property-head\"><div><h2>Web performance</h2><p>Structured nginx and cache defaults applied during reconciliation. Zero keeps optional Valkey limits disabled.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"creation_default\">Applied defaults</span></div><div class=\"np-plan-field-grid\"><label>Maximum connections<input type=\"number\" min=\"0\" name=\"performance_max_connections\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2697, "><div class=\"np-property-head\"><div><h2>Web performance</h2><p>Structured nginx and cache defaults applied during reconciliation. Zero keeps optional Valkey limits disabled.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"creation_default\">Applied defaults</span></div><div class=\"np-plan-field-grid\"><label>Maximum connections<input type=\"number\" min=\"0\" name=\"performance_max_connections\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1404 string
+		templ_7745c5c3_Var1404, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.Performance.MaxConnections)))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 589}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1404))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2698, "\"></label><label>Request rate per second<input type=\"number\" min=\"0\" name=\"request_rate_per_second\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1405 string
-		templ_7745c5c3_Var1405, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.Performance.MaxConnections)))
+		templ_7745c5c3_Var1405, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.RequestRatePerSecond)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 589}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 763}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1405))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2690, "\"></label><label>Request rate per second<input type=\"number\" min=\"0\" name=\"request_rate_per_second\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2699, "\"></label><label>Request burst<input type=\"number\" min=\"0\" name=\"request_burst\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1406 string
-		templ_7745c5c3_Var1406, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.RequestRatePerSecond)))
+		templ_7745c5c3_Var1406, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.RequestBurst)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 763}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 909}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1406))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2691, "\"></label><label>Request burst<input type=\"number\" min=\"0\" name=\"request_burst\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2700, "\"></label><label>Index files<input name=\"web_index_files\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1407 string
-		templ_7745c5c3_Var1407, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.RequestBurst)))
+		templ_7745c5c3_Var1407, templ_7745c5c3_Err = templ.JoinStringErrs(plan.HostingPolicy.Web.IndexFiles)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 909}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 1010}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1407))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2692, "\"></label><label>Index files<input name=\"web_index_files\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2701, "\"></label><label>Request body, MB<input type=\"number\" min=\"0\" name=\"web_request_body_mb\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1408 string
-		templ_7745c5c3_Var1408, templ_7745c5c3_Err = templ.JoinStringErrs(plan.HostingPolicy.Web.IndexFiles)
+		templ_7745c5c3_Var1408, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.RequestBodyLimitMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 1010}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 1171}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1408))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2693, "\"></label><label>Request body, MB<input type=\"number\" min=\"0\" name=\"web_request_body_mb\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2702, "\"></label><label>Cache TTL, seconds<input type=\"number\" min=\"0\" name=\"web_cache_ttl_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1409 string
-		templ_7745c5c3_Var1409, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.RequestBodyLimitMB)))
+		templ_7745c5c3_Var1409, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.CacheTTLSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 1171}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 1333}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1409))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2694, "\"></label><label>Cache TTL, seconds<input type=\"number\" min=\"0\" name=\"web_cache_ttl_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2703, "\"></label><label>Connect timeout<input type=\"number\" min=\"0\" name=\"web_connect_timeout_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1410 string
-		templ_7745c5c3_Var1410, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.CacheTTLSeconds)))
+		templ_7745c5c3_Var1410, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.ConnectTimeoutSecs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 1333}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 1501}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1410))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2695, "\"></label><label>Connect timeout<input type=\"number\" min=\"0\" name=\"web_connect_timeout_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2704, "\"></label><label>Read timeout<input type=\"number\" min=\"0\" name=\"web_read_timeout_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1411 string
-		templ_7745c5c3_Var1411, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.ConnectTimeoutSecs)))
+		templ_7745c5c3_Var1411, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.ReadTimeoutSecs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 1501}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 1660}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1411))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2696, "\"></label><label>Read timeout<input type=\"number\" min=\"0\" name=\"web_read_timeout_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2705, "\"></label><label>Security headers<select name=\"web_security_headers\"><option value=\"off\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if plan.HostingPolicy.Web.SecurityHeaderPreset == "off" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2706, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2707, ">Off</option><option value=\"balanced\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if plan.HostingPolicy.Web.SecurityHeaderPreset == "balanced" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2708, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2709, ">Balanced</option><option value=\"strict\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if plan.HostingPolicy.Web.SecurityHeaderPreset == "strict" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2710, " selected")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2711, ">Strict</option></select></label><label>Valkey max clients<input type=\"number\" min=\"0\" name=\"valkey_max_clients\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1412 string
-		templ_7745c5c3_Var1412, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.ReadTimeoutSecs)))
+		templ_7745c5c3_Var1412, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.MaxClients)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 1660}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 2208}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1412))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2697, "\"></label><label>Security headers<select name=\"web_security_headers\"><option value=\"off\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if plan.HostingPolicy.Web.SecurityHeaderPreset == "off" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2698, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2699, ">Off</option><option value=\"balanced\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if plan.HostingPolicy.Web.SecurityHeaderPreset == "balanced" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2700, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2701, ">Balanced</option><option value=\"strict\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if plan.HostingPolicy.Web.SecurityHeaderPreset == "strict" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2702, " selected")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2703, ">Strict</option></select></label><label>Valkey max clients<input type=\"number\" min=\"0\" name=\"valkey_max_clients\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2712, "\"></label><label>Valkey idle timeout<input type=\"number\" min=\"0\" name=\"valkey_idle_timeout_seconds\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1413 string
-		templ_7745c5c3_Var1413, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.MaxClients)))
+		templ_7745c5c3_Var1413, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.IdleTimeoutSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 2208}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 2383}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1413))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2704, "\"></label><label>Valkey idle timeout<input type=\"number\" min=\"0\" name=\"valkey_idle_timeout_seconds\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2713, "\"></label><label>Valkey CPU %<input type=\"number\" min=\"0\" name=\"valkey_cpu_percent\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1414 string
-		templ_7745c5c3_Var1414, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.IdleTimeoutSeconds)))
+		templ_7745c5c3_Var1414, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.CPUPercent)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 2383}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 2534}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1414))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2705, "\"></label><label>Valkey CPU %<input type=\"number\" min=\"0\" name=\"valkey_cpu_percent\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2714, "\"></label><label>Valkey process limit<input type=\"number\" min=\"0\" name=\"valkey_process_limit\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1415 string
-		templ_7745c5c3_Var1415, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.CPUPercent)))
+		templ_7745c5c3_Var1415, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.ProcessLimit)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 2534}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3763, Col: 2697}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1415))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2706, "\"></label><label>Valkey process limit<input type=\"number\" min=\"0\" name=\"valkey_process_limit\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1416 string
-		templ_7745c5c3_Var1416, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.ProcessLimit)))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3666, Col: 2697}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1416))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2707, "\"></label></div><div class=\"np-permission-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2715, "\"></label></div><div class=\"np-permission-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30367,30 +30410,30 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2708, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"advanced\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2716, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"advanced\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "advanced" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2709, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2717, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2710, "><div class=\"np-property-head\"><div><h2>Logs &amp; Statistics</h2><p>Operational retention and traffic reporting defaults. Zero disables retention.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"creation_default\">Applied defaults</span></div><div class=\"np-plan-field-grid\"><label>Log retention, days<input type=\"number\" min=\"0\" name=\"logs_retention_days\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2718, "><div class=\"np-property-head\"><div><h2>Logs &amp; Statistics</h2><p>Operational retention and traffic reporting defaults. Zero disables retention.</p></div><span class=\"np-contract-badge\" data-np-enforcement=\"creation_default\">Applied defaults</span></div><div class=\"np-plan-field-grid\"><label>Log retention, days<input type=\"number\" min=\"0\" name=\"logs_retention_days\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1417 string
-		templ_7745c5c3_Var1417, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.Logs.RetentionDays)))
+		var templ_7745c5c3_Var1416 string
+		templ_7745c5c3_Var1416, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.Logs.RetentionDays)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3667, Col: 547}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3764, Col: 547}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1417))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1416))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2711, "\"></label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2719, "\"></label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30406,17 +30449,17 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2712, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"advanced\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2720, "</div></section><section class=\"np-plan-property-panel\" data-np-plan-panel=\"advanced\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if planEditorTab(view) != "advanced" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2713, " hidden")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2721, " hidden")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2714, "><div class=\"np-property-head\"><div><h2>Applications &amp; Containers</h2><p>Provider-curated container catalog and registry boundaries.</p></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2722, "><div class=\"np-property-head\"><div><h2>Applications &amp; Containers</h2><p>Provider-curated container catalog and registry boundaries.</p></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30424,7 +30467,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2715, "</div><div class=\"np-permission-list\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2723, "</div><div class=\"np-permission-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30432,43 +30475,43 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2716, "</div><fieldset class=\"np-field-group\"><legend>Operational runtimes</legend><div class=\"np-checkbox-grid\"><label class=\"np-check\"><input type=\"checkbox\" name=\"allowed_runtimes\" value=\"oci\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2724, "</div><fieldset class=\"np-field-group\"><legend>Operational runtimes</legend><div class=\"np-checkbox-grid\"><label class=\"np-check\"><input type=\"checkbox\" name=\"allowed_runtimes\" value=\"oci\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if stringInSlice(plan.HostingPolicy.Applications.AllowedRuntimes, "oci") {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2717, " checked")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2725, " checked")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2718, ">OCI containers</label></div><p class=\"np-form-help\">Classic and Managed PHP are operational. WordPress Toolkit is controlled in Services and runs only on Classic PHP sites. Node.js and Python adapters remain unavailable.</p></fieldset><div class=\"np-plan-field-grid\"><label>Allowed registries<input name=\"allowed_registries\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2726, ">OCI containers</label></div><p class=\"np-form-help\">Classic and Managed PHP are operational. WordPress Toolkit is controlled in Services and runs only on Classic PHP sites. Node.js and Python adapters remain unavailable.</p></fieldset><div class=\"np-plan-field-grid\"><label>Allowed registries<input name=\"allowed_registries\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1417 string
+		templ_7745c5c3_Var1417, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(plan.HostingPolicy.Applications.AllowedRegistries))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3768, Col: 1095}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1417))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2727, "\" placeholder=\"docker.io,ghcr.io\"></label><label>Allowed provider recipe slugs<input name=\"allowed_catalog_slugs\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1418 string
-		templ_7745c5c3_Var1418, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(plan.HostingPolicy.Applications.AllowedRegistries))
+		templ_7745c5c3_Var1418, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(plan.Presets.Applications.Allowed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3671, Col: 1095}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3768, Col: 1265}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1418))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2719, "\" placeholder=\"docker.io,ghcr.io\"></label><label>Allowed provider recipe slugs<input name=\"allowed_catalog_slugs\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1419 string
-		templ_7745c5c3_Var1419, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(plan.Presets.Applications.Allowed))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3671, Col: 1265}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1419))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2720, "\" placeholder=\"whoami,static-app\"></label></div></section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2728, "\" placeholder=\"whoami,static-app\"></label></div></section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30492,12 +30535,12 @@ func presetStatus() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1420 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1420 == nil {
-			templ_7745c5c3_Var1420 = templ.NopComponent
+		templ_7745c5c3_Var1419 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1419 == nil {
+			templ_7745c5c3_Var1419 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2721, "<span class=\"np-preset-badge\">Stored preset</span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2729, "<span class=\"np-preset-badge\">Stored preset</span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30521,32 +30564,32 @@ func statisticsEngineSelect(logs types.LogsPreset) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1421 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1421 == nil {
-			templ_7745c5c3_Var1421 = templ.NopComponent
+		templ_7745c5c3_Var1420 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1420 == nil {
+			templ_7745c5c3_Var1420 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2722, "<label>Statistics engine<select name=\"logs_statistics_engine\"><option value=\"disabled\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2730, "<label>Statistics engine<select name=\"logs_statistics_engine\"><option value=\"disabled\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if controlpolicy.StatisticsEngine(logs) == "disabled" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2723, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2731, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2724, ">Disabled</option> <option value=\"goaccess\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2732, ">Disabled</option> <option value=\"goaccess\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if controlpolicy.StatisticsEngine(logs) == "goaccess" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2725, " selected")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2733, " selected")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2726, ">GoAccess</option></select></label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2734, ">GoAccess</option></select></label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30570,12 +30613,12 @@ func planPreviewDialog(plan controlquota.Plan, view WorkspaceView) templ.Compone
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1422 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1422 == nil {
-			templ_7745c5c3_Var1422 = templ.NopComponent
+		templ_7745c5c3_Var1421 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1421 == nil {
+			templ_7745c5c3_Var1421 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2727, "<dialog class=\"np-dialog np-plan-preview-dialog\" id=\"plan-preview-dialog\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2735, "<dialog class=\"np-dialog np-plan-preview-dialog\" id=\"plan-preview-dialog\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30583,20 +30626,20 @@ func planPreviewDialog(plan controlquota.Plan, view WorkspaceView) templ.Compone
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2728, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">Contract review</span><h2>Review activation and synchronization</h2><p>Activation requires a deliverable runtime. Synced subscriptions receive a new immutable snapshot; locked and custom subscriptions retain their current contract.</p></div><dl class=\"np-preview-facts\"><div><dt>Synced subscriptions</dt><dd data-np-preview-synced>-</dd></div><div><dt>Locked subscriptions</dt><dd data-np-preview-locked>-</dd></div><div><dt>Custom subscriptions</dt><dd data-np-preview-custom>-</dd></div><div><dt>Server committed disk</dt><dd data-np-preview-disk>-</dd></div><div data-np-preview-reseller-row hidden><dt>Reseller allocation</dt><dd data-np-preview-reseller>-</dd></div></dl><div class=\"np-preview-section\"><h3>Contract changes</h3><div class=\"np-preview-list\" data-np-preview-changes><p class=\"np-empty\">No entitlement changes.</p></div></div><div class=\"np-preview-section\"><h3>Affected subscriptions</h3><div class=\"np-preview-list\" data-np-preview-impacts><p class=\"np-empty\">No synchronized subscriptions are affected.</p></div></div><div class=\"np-preview-section\"><h3>Server readiness</h3><div class=\"np-preview-list\" data-np-preview-capabilities><p class=\"np-empty\">Capability checks passed.</p></div></div><div class=\"np-preview-list is-blocked\" data-np-preview-blockers hidden></div><div class=\"np-preview-list\" data-np-preview-warnings hidden></div><p class=\"np-gate\" data-np-preview-warning></p><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"button\" data-np-plan-confirm-submit>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2736, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">Contract review</span><h2>Review activation and synchronization</h2><p>Activation requires a deliverable runtime. Synced subscriptions receive a new immutable snapshot; locked and custom subscriptions retain their current contract.</p></div><dl class=\"np-preview-facts\"><div><dt>Synced subscriptions</dt><dd data-np-preview-synced>-</dd></div><div><dt>Locked subscriptions</dt><dd data-np-preview-locked>-</dd></div><div><dt>Custom subscriptions</dt><dd data-np-preview-custom>-</dd></div><div><dt>Server committed disk</dt><dd data-np-preview-disk>-</dd></div><div data-np-preview-reseller-row hidden><dt>Reseller allocation</dt><dd data-np-preview-reseller>-</dd></div></dl><div class=\"np-preview-section\"><h3>Contract changes</h3><div class=\"np-preview-list\" data-np-preview-changes><p class=\"np-empty\">No entitlement changes.</p></div></div><div class=\"np-preview-section\"><h3>Affected subscriptions</h3><div class=\"np-preview-list\" data-np-preview-impacts><p class=\"np-empty\">No synchronized subscriptions are affected.</p></div></div><div class=\"np-preview-section\"><h3>Server readiness</h3><div class=\"np-preview-list\" data-np-preview-capabilities><p class=\"np-empty\">Capability checks passed.</p></div></div><div class=\"np-preview-list is-blocked\" data-np-preview-blockers hidden></div><div class=\"np-preview-list\" data-np-preview-warnings hidden></div><p class=\"np-gate\" data-np-preview-warning></p><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"button\" data-np-plan-confirm-submit>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1423 string
-		templ_7745c5c3_Var1423, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSubmitLabel(plan, false))
+		var templ_7745c5c3_Var1422 string
+		templ_7745c5c3_Var1422, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSubmitLabel(plan, false))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3683, Col: 1927}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3780, Col: 1927}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1423))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1422))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2729, "</button></div></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2737, "</button></div></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30620,25 +30663,25 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1424 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1424 == nil {
-			templ_7745c5c3_Var1424 = templ.NopComponent
+		templ_7745c5c3_Var1423 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1423 == nil {
+			templ_7745c5c3_Var1423 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2730, "<dialog class=\"np-dialog np-subdomain-dialog\" id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2738, "<dialog class=\"np-dialog np-subdomain-dialog\" id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1425 string
-		templ_7745c5c3_Var1425, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-dialog-" + formatJobID(parent.ID))
+		var templ_7745c5c3_Var1424 string
+		templ_7745c5c3_Var1424, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-dialog-" + formatJobID(parent.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3686, Col: 94}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3783, Col: 94}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1425))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1424))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2731, "\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2739, "\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30646,98 +30689,98 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2732, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2740, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1426 string
-		templ_7745c5c3_Var1426, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
+		var templ_7745c5c3_Var1425 string
+		templ_7745c5c3_Var1425, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3686, Col: 285}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3783, Col: 285}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1425))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2741, "</span><h2>Add subdomain</h2><p>Creates separate website files under this subscription.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1426 templ.SafeURL
+		templ_7745c5c3_Var1426, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(parent.ID) + "/subdomains"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3784, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1426))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2733, "</span><h2>Add subdomain</h2><p>Creates separate website files under this subscription.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2742, "\" data-np-create-subdomain-form data-np-parent-domain=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1427 templ.SafeURL
-		templ_7745c5c3_Var1427, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(parent.ID) + "/subdomains"))
+		var templ_7745c5c3_Var1427 string
+		templ_7745c5c3_Var1427, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3687, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3784, Col: 193}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1427))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2734, "\" data-np-create-subdomain-form data-np-parent-domain=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2743, "\" data-np-max-subdomains=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1428 string
-		templ_7745c5c3_Var1428, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
+		templ_7745c5c3_Var1428, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.MaxSubdomains))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3687, Col: 193}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3784, Col: 273}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1428))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2735, "\" data-np-max-subdomains=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2744, "\" data-np-subdomains-used=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1429 string
-		templ_7745c5c3_Var1429, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.MaxSubdomains))
+		templ_7745c5c3_Var1429, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.SubdomainsUsed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3687, Col: 273}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3784, Col: 355}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1429))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2736, "\" data-np-subdomains-used=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2745, "\" data-np-overuse-policy=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1430 string
-		templ_7745c5c3_Var1430, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.SubdomainsUsed))
+		templ_7745c5c3_Var1430, templ_7745c5c3_Err = templ.JoinStringErrs(string(subscription.OverusePolicy))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3687, Col: 355}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3784, Col: 417}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1430))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2737, "\" data-np-overuse-policy=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2746, "\" data-np-php-ready=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1431 string
-		templ_7745c5c3_Var1431, templ_7745c5c3_Err = templ.JoinStringErrs(string(subscription.OverusePolicy))
+		templ_7745c5c3_Var1431, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(stringInSlice(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist), controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3687, Col: 417}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3784, Col: 632}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1431))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2738, "\" data-np-php-ready=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1432 string
-		templ_7745c5c3_Var1432, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(stringInSlice(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist), controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion))))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3687, Col: 632}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1432))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2739, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2747, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30745,79 +30788,79 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2740, "<label>Subdomain name<input name=\"label\" maxlength=\"253\" placeholder=\"blog\" autocapitalize=\"none\" autocomplete=\"off\" spellcheck=\"false\" required></label><p class=\"np-subdomain-preview\">Address: <strong data-np-subdomain-preview>blog.")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2748, "<label>Subdomain name<input name=\"label\" maxlength=\"253\" placeholder=\"blog\" autocapitalize=\"none\" autocomplete=\"off\" spellcheck=\"false\" required></label><p class=\"np-subdomain-preview\">Address: <strong data-np-subdomain-preview>blog.")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1432 string
+		templ_7745c5c3_Var1432, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3787, Col: 98}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1432))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2749, "</strong></p><p class=\"np-form-help\">Enter <strong>blog</strong> to create blog.")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1433 string
 		templ_7745c5c3_Var1433, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3788, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1433))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2741, "</strong></p><p class=\"np-form-help\">Enter <strong>blog</strong> to create blog.")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2750, ". The matching full address also works.</p><p class=\"np-form-help\">Subscription allowance: ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1434 string
-		templ_7745c5c3_Var1434, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
+		templ_7745c5c3_Var1434, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.SubdomainsUsed, subscription.MaxSubdomains, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3691, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3789, Col: 137}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1434))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2742, ". The matching full address also works.</p><p class=\"np-form-help\">Subscription allowance: ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2751, " subdomains. The document root is created automatically.</p><p class=\"np-form-help\">PHP starts with ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1435 string
-		templ_7745c5c3_Var1435, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.SubdomainsUsed, subscription.MaxSubdomains, true))
+		templ_7745c5c3_Var1435, templ_7745c5c3_Err = templ.JoinStringErrs(displayFallback(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion), "the subscription default"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3692, Col: 137}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3790, Col: 186}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1435))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2743, " subdomains. The document root is created automatically.</p><p class=\"np-form-help\">PHP starts with ")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1436 string
-		templ_7745c5c3_Var1436, templ_7745c5c3_Err = templ.JoinStringErrs(displayFallback(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion), "the subscription default"))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3693, Col: 186}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1436))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2744, ". Change it on the new domain after creation.</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2752, ". Change it on the new domain after creation.</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !stringInSlice(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist), controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion)) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2745, "<p class=\"np-gate is-blocked\">The subscription default PHP version is not available on this server. Update the plan or PHP installation first.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2753, "<p class=\"np-gate is-blocked\">The subscription default PHP version is not available on this server. Update the plan or PHP installation first.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2746, "<p class=\"np-gate\" data-np-subdomain-gate aria-live=\"polite\"></p><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\" data-np-create-submit")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2754, "<p class=\"np-gate\" data-np-subdomain-gate aria-live=\"polite\"></p><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\" data-np-create-submit")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if !stringInSlice(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist), controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion)) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2747, " disabled")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2755, " disabled")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2748, ">Create subdomain</button></div></form></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2756, ">Create subdomain</button></div></form></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30841,12 +30884,12 @@ func routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities ty
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1437 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1437 == nil {
-			templ_7745c5c3_Var1437 = templ.NopComponent
+		templ_7745c5c3_Var1436 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1436 == nil {
+			templ_7745c5c3_Var1436 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2749, "<dialog class=\"np-dialog\" id=\"site-dialog\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2757, "<dialog class=\"np-dialog\" id=\"site-dialog\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30854,7 +30897,7 @@ func routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities ty
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2750, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">Hosting services</span><h2>Add website</h2><p>Use this for an independent domain. Add subdomains from their parent website.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"/sites\" data-np-create-site-form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2758, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">Hosting services</span><h2>Add website</h2><p>Use this for an independent domain. Add subdomains from their parent website.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"/sites\" data-np-create-site-form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30866,43 +30909,43 @@ func routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities ty
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2751, "<label>Domain<input name=\"domain\" required></label><input type=\"hidden\" name=\"username\" value=\"npsystem\"><label>PHP<select name=\"php_version\" data-np-site-php>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2759, "<label>Domain<input name=\"domain\" required></label><input type=\"hidden\" name=\"username\" value=\"npsystem\"><label>PHP<select name=\"php_version\" data-np-site-php>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, version := range subscriptionPHPVersions(subscriptions, capabilities) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2752, "<option value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2760, "<option value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1437 string
+			templ_7745c5c3_Var1437, templ_7745c5c3_Err = templ.JoinStringErrs(version)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3803, Col: 26}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1437))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2761, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1438 string
 			templ_7745c5c3_Var1438, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3706, Col: 26}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3803, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1438))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2753, "\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1439 string
-			templ_7745c5c3_Var1439, templ_7745c5c3_Err = templ.JoinStringErrs(version)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3706, Col: 38}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1439))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2754, "</option>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2762, "</option>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2755, "</select></label><p class=\"np-gate\" data-np-customer-gate></p><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\" data-np-create-submit>Create website</button></div></form></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2763, "</select></label><p class=\"np-gate\" data-np-customer-gate></p><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\" data-np-create-submit>Create website</button></div></form></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -30926,178 +30969,178 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1440 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1440 == nil {
-			templ_7745c5c3_Var1440 = templ.NopComponent
+		templ_7745c5c3_Var1439 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1439 == nil {
+			templ_7745c5c3_Var1439 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2756, "<label>Subscription <select name=\"subscription_id\" required>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2764, "<label>Subscription <select name=\"subscription_id\" required>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		for _, subscription := range subscriptions {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2757, "<option value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2765, "<option value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1440 string
+			templ_7745c5c3_Var1440, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaUserID(subscription.ID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 53}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1440))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2766, "\" data-subscription-id=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1441 string
 			templ_7745c5c3_Var1441, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaUserID(subscription.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 113}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1441))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2758, "\" data-subscription-id=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2767, "\" data-customer-id=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1442 string
-			templ_7745c5c3_Var1442, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaUserID(subscription.ID))
+			templ_7745c5c3_Var1442, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaUserID(subscription.CustomerID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 113}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 177}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1442))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2759, "\" data-customer-id=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2768, "\" data-email=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1443 string
-			templ_7745c5c3_Var1443, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaUserID(subscription.CustomerID))
+			templ_7745c5c3_Var1443, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerEmail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 177}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 219}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1443))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2760, "\" data-email=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2769, "\" data-plan-name=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1444 string
-			templ_7745c5c3_Var1444, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerEmail)
+			templ_7745c5c3_Var1444, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 219}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 260}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1444))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2761, "\" data-plan-name=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2770, "\" data-has-quota=\"true\" data-max-sites=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1445 string
-			templ_7745c5c3_Var1445, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
+			templ_7745c5c3_Var1445, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.MaxSites))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 260}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 349}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1445))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2762, "\" data-has-quota=\"true\" data-max-sites=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2771, "\" data-sites-used=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1446 string
-			templ_7745c5c3_Var1446, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.MaxSites))
+			templ_7745c5c3_Var1446, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.DomainsUsed))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 349}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 420}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1446))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2763, "\" data-sites-used=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2772, "\" data-overuse-policy=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1447 string
-			templ_7745c5c3_Var1447, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.DomainsUsed))
+			templ_7745c5c3_Var1447, templ_7745c5c3_Err = templ.JoinStringErrs(string(subscription.OverusePolicy))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 420}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 479}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1447))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2764, "\" data-overuse-policy=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2773, "\" data-storage-mb=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1448 string
-			templ_7745c5c3_Var1448, templ_7745c5c3_Err = templ.JoinStringErrs(string(subscription.OverusePolicy))
+			templ_7745c5c3_Var1448, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.DiskMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 479}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 545}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1448))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2765, "\" data-storage-mb=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2774, "\" data-php-versions=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1449 string
-			templ_7745c5c3_Var1449, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.DiskMB))
+			templ_7745c5c3_Var1449, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 545}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 648}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1449))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2766, "\" data-php-versions=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2775, "\" data-default-php=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1450 string
-			templ_7745c5c3_Var1450, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist)))
+			templ_7745c5c3_Var1450, templ_7745c5c3_Err = templ.JoinStringErrs(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 648}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 767}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1450))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2767, "\" data-default-php=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2776, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1451 string
-			templ_7745c5c3_Var1451, templ_7745c5c3_Err = templ.JoinStringErrs(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion))
+			templ_7745c5c3_Var1451, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSelectLabel(subscription))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 767}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3812, Col: 809}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1451))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2768, "\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1452 string
-			templ_7745c5c3_Var1452, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSelectLabel(subscription))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3715, Col: 809}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1452))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2769, "</option>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2777, "</option>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2770, "</select></label>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2778, "</select></label>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -31121,12 +31164,12 @@ func customerDialog(view WorkspaceView) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1453 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1453 == nil {
-			templ_7745c5c3_Var1453 = templ.NopComponent
+		templ_7745c5c3_Var1452 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1452 == nil {
+			templ_7745c5c3_Var1452 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2771, "<dialog class=\"np-dialog\" id=\"customer-dialog\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2779, "<dialog class=\"np-dialog\" id=\"customer-dialog\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -31134,7 +31177,7 @@ func customerDialog(view WorkspaceView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2772, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">Account management</span><h2>Add customer</h2><p>Create a contact-only customer or enable panel access now.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"/customers\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2780, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">Account management</span><h2>Add customer</h2><p>Create a contact-only customer or enable panel access now.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"/customers\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -31142,7 +31185,7 @@ func customerDialog(view WorkspaceView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2773, "<label>Email<input type=\"email\" name=\"customer_email\" required></label><label>Name<input name=\"customer_name\"></label><label>Company<input name=\"company\"></label><label>Notes<input name=\"notes\"></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enable_login\" value=\"true\">Enable panel login</label><label>Password<input type=\"password\" name=\"password\" autocomplete=\"new-password\"></label><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">Create customer</button></div></form></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2781, "<label>Email<input type=\"email\" name=\"customer_email\" required></label><label>Name<input name=\"customer_name\"></label><label>Company<input name=\"company\"></label><label>Notes<input name=\"notes\"></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enable_login\" value=\"true\">Enable panel login</label><label>Password<input type=\"password\" name=\"password\" autocomplete=\"new-password\"></label><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">Create customer</button></div></form></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -31166,43 +31209,43 @@ func noticeBanner(message string, kind dashboard.NoticeKind) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1454 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1454 == nil {
-			templ_7745c5c3_Var1454 = templ.NopComponent
+		templ_7745c5c3_Var1453 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1453 == nil {
+			templ_7745c5c3_Var1453 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var1455 = []any{"np-notice " + noticeKindClass(kind)}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1455...)
+		var templ_7745c5c3_Var1454 = []any{"np-notice " + noticeKindClass(kind)}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1454...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2774, "<p class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2782, "<p class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1455 string
+		templ_7745c5c3_Var1455, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1454).String())
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1455))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2783, "\" role=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1456 string
-		templ_7745c5c3_Var1456, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1455).String())
+		templ_7745c5c3_Var1456, templ_7745c5c3_Err = templ.JoinStringErrs(noticeRole(kind))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3822, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1456))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2775, "\" role=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1457 string
-		templ_7745c5c3_Var1457, templ_7745c5c3_Err = templ.JoinStringErrs(noticeRole(kind))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3725, Col: 74}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1457))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2776, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2784, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -31210,20 +31253,20 @@ func noticeBanner(message string, kind dashboard.NoticeKind) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2777, "<span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2785, "<span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1458 string
-		templ_7745c5c3_Var1458, templ_7745c5c3_Err = templ.JoinStringErrs(message)
+		var templ_7745c5c3_Var1457 string
+		templ_7745c5c3_Var1457, templ_7745c5c3_Err = templ.JoinStringErrs(message)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3727, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3824, Col: 17}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1458))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1457))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2778, "</span></p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2786, "</span></p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -31247,56 +31290,56 @@ func navAlert(path string, label string, iconName string, active string, count i
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1459 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1459 == nil {
-			templ_7745c5c3_Var1459 = templ.NopComponent
+		templ_7745c5c3_Var1458 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1458 == nil {
+			templ_7745c5c3_Var1458 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		var templ_7745c5c3_Var1460 = []any{"np-routed-nav-item " + active}
-		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1460...)
+		var templ_7745c5c3_Var1459 = []any{"np-routed-nav-item " + active}
+		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1459...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2779, "<a href=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2787, "<a href=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1461 templ.SafeURL
-		templ_7745c5c3_Var1461, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(path))
+		var templ_7745c5c3_Var1460 templ.SafeURL
+		templ_7745c5c3_Var1460, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(path))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3732, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3829, Col: 30}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1460))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2788, "\" class=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var1461 string
+		templ_7745c5c3_Var1461, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1459).String())
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1461))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2780, "\" class=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2789, "\" aria-current=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1462 string
-		templ_7745c5c3_Var1462, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1460).String())
+		templ_7745c5c3_Var1462, templ_7745c5c3_Err = templ.JoinStringErrs(ariaCurrent(active))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3829, Col: 108}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1462))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2781, "\" aria-current=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var1463 string
-		templ_7745c5c3_Var1463, templ_7745c5c3_Err = templ.JoinStringErrs(ariaCurrent(active))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3732, Col: 108}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1463))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2782, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2790, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -31304,74 +31347,74 @@ func navAlert(path string, label string, iconName string, active string, count i
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2783, "<span>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2791, "<span>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1464 string
-		templ_7745c5c3_Var1464, templ_7745c5c3_Err = templ.JoinStringErrs(label)
+		var templ_7745c5c3_Var1463 string
+		templ_7745c5c3_Var1463, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3734, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3831, Col: 15}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1464))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1463))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2784, "</span> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2792, "</span> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if count > 0 {
-			var templ_7745c5c3_Var1465 = []any{"np-nav-badge " + navBadgeClass(severity)}
-			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1465...)
+			var templ_7745c5c3_Var1464 = []any{"np-nav-badge " + navBadgeClass(severity)}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1464...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2785, "<span class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2793, "<span class=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var1465 string
+			templ_7745c5c3_Var1465, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1464).String())
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1465))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2794, "\" title=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1466 string
-			templ_7745c5c3_Var1466, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1465).String())
+			templ_7745c5c3_Var1466, templ_7745c5c3_Err = templ.JoinStringErrs(attentionBadgeTitle(count))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3833, Col: 95}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1466))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2786, "\" title=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2795, "\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1467 string
-			templ_7745c5c3_Var1467, templ_7745c5c3_Err = templ.JoinStringErrs(attentionBadgeTitle(count))
+			templ_7745c5c3_Var1467, templ_7745c5c3_Err = templ.JoinStringErrs(formatBadgeCount(count))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3736, Col: 95}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3833, Col: 123}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1467))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2787, "\">")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var1468 string
-			templ_7745c5c3_Var1468, templ_7745c5c3_Err = templ.JoinStringErrs(formatBadgeCount(count))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3736, Col: 123}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1468))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2788, "</span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2796, "</span>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2789, "</a>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2797, "</a>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -31398,32 +31441,32 @@ func domainHealthPanel(item dashboard.Site, view WorkspaceView) templ.Component 
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1469 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1469 == nil {
-			templ_7745c5c3_Var1469 = templ.NopComponent
+		templ_7745c5c3_Var1468 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1468 == nil {
+			templ_7745c5c3_Var1468 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		health := siteHealthOf(item)
 		if health.NeedsAttention() {
-			var templ_7745c5c3_Var1470 = []any{"np-panel np-attention " + healthPanelClass(health)}
-			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1470...)
+			var templ_7745c5c3_Var1469 = []any{"np-panel np-attention " + healthPanelClass(health)}
+			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1469...)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2790, "<section class=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2798, "<section class=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1471 string
-			templ_7745c5c3_Var1471, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1470).String())
+			var templ_7745c5c3_Var1470 string
+			templ_7745c5c3_Var1470, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1469).String())
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1471))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1470))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2791, "\"><div class=\"np-panel-title\"><div class=\"np-attention-heading\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2799, "\"><div class=\"np-panel-title\"><div class=\"np-attention-heading\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -31431,124 +31474,124 @@ func domainHealthPanel(item dashboard.Site, view WorkspaceView) templ.Component 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2792, "<h2>What is wrong with this website</h2></div><a href=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2800, "<h2>What is wrong with this website</h2></div><a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1472 templ.SafeURL
-			templ_7745c5c3_Var1472, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/activity")))
+			var templ_7745c5c3_Var1471 templ.SafeURL
+			templ_7745c5c3_Var1471, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/activity")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3753, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3850, Col: 61}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1472))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1471))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2793, "\">Open activity</a></div><div class=\"np-attention-list\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2801, "\">Open activity</a></div><div class=\"np-attention-list\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, issue := range health.Issues {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2794, "<div class=\"np-attention-row\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2802, "<div class=\"np-attention-row\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var1473 = []any{"np-attention-dot " + severityDotClass(issue.Severity)}
-				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1473...)
+				var templ_7745c5c3_Var1472 = []any{"np-attention-dot " + severityDotClass(issue.Severity)}
+				templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var1472...)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2795, "<span class=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2803, "<span class=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var1473 string
+				templ_7745c5c3_Var1473, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1472).String())
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1473))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2804, "\" aria-hidden=\"true\"></span><div class=\"np-attention-copy\"><strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var1474 string
-				templ_7745c5c3_Var1474, templ_7745c5c3_Err = templ.JoinStringErrs(templ.CSSClasses(templ_7745c5c3_Var1473).String())
+				templ_7745c5c3_Var1474, templ_7745c5c3_Err = templ.JoinStringErrs(issue.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1, Col: 0}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3857, Col: 28}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1474))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2796, "\" aria-hidden=\"true\"></span><div class=\"np-attention-copy\"><strong>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var1475 string
-				templ_7745c5c3_Var1475, templ_7745c5c3_Err = templ.JoinStringErrs(issue.Title)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3760, Col: 28}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1475))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2797, "</strong> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2805, "</strong> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if issue.Detail != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2798, "<span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2806, "<span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					var templ_7745c5c3_Var1476 string
-					templ_7745c5c3_Var1476, templ_7745c5c3_Err = templ.JoinStringErrs(issue.Detail)
+					var templ_7745c5c3_Var1475 string
+					templ_7745c5c3_Var1475, templ_7745c5c3_Err = templ.JoinStringErrs(issue.Detail)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3762, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3859, Col: 28}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1475))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2807, "</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2808, "</div>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if issue.Action != "" {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2809, "<a class=\"np-secondary-button\" href=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var1476 templ.SafeURL
+					templ_7745c5c3_Var1476, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, issue.ActionTo)))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3863, Col: 95}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1476))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2799, "</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2810, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2800, "</div>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				if issue.Action != "" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2801, "<a class=\"np-secondary-button\" href=\"")
+					var templ_7745c5c3_Var1477 string
+					templ_7745c5c3_Var1477, templ_7745c5c3_Err = templ.JoinStringErrs(issue.Action)
 					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1477 templ.SafeURL
-					templ_7745c5c3_Var1477, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, issue.ActionTo)))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3766, Col: 95}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3863, Col: 112}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1477))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2802, "\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var1478 string
-					templ_7745c5c3_Var1478, templ_7745c5c3_Err = templ.JoinStringErrs(issue.Action)
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3766, Col: 112}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1478))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2803, "</a>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2811, "</a>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2804, "</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2812, "</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2805, "</div></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2813, "</div></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -31576,12 +31619,12 @@ func emptyState(iconName string, title string, detail string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var1479 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var1479 == nil {
-			templ_7745c5c3_Var1479 = templ.NopComponent
+		templ_7745c5c3_Var1478 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var1478 == nil {
+			templ_7745c5c3_Var1478 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2806, "<div class=\"np-empty-state\"><span class=\"np-empty-icon\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2814, "<div class=\"np-empty-state\"><span class=\"np-empty-icon\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -31589,47 +31632,47 @@ func emptyState(iconName string, title string, detail string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2807, "</span> <strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2815, "</span> <strong>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var1480 string
-		templ_7745c5c3_Var1480, templ_7745c5c3_Err = templ.JoinStringErrs(title)
+		var templ_7745c5c3_Var1479 string
+		templ_7745c5c3_Var1479, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3781, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3878, Col: 17}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1480))
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1479))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2808, "</strong> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2816, "</strong> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if detail != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2809, "<p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2817, "<p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var1481 string
-			templ_7745c5c3_Var1481, templ_7745c5c3_Err = templ.JoinStringErrs(detail)
+			var templ_7745c5c3_Var1480 string
+			templ_7745c5c3_Var1480, templ_7745c5c3_Err = templ.JoinStringErrs(detail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3783, Col: 14}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3880, Col: 14}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1481))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1480))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2810, "</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2818, "</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templ_7745c5c3_Var1479.Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = templ_7745c5c3_Var1478.Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2811, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2819, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

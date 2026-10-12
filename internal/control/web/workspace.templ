@@ -2397,9 +2397,12 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 		@subscriptionObjectHead(user, subscription, data, actions, view)
 		<div class="np-detail-split">
 			<div class="np-detail-main">
-				@subscriptionAttention(subscription, data, view)
+				if data.ServiceLoadError != "" {
+					<p class="np-gate is-blocked" role="alert">Some hosting service data is unavailable. Resource lists and counts may be incomplete. Refresh the page or contact your provider.</p>
+				}
+				@subscriptionAttention(user, subscription, data, view)
 				if view.Tab == "resources" {
-					if user.Role == auth.RoleClient {
+					if user.Role == auth.RoleClient || view.SupportCustomerID > 0 {
 						@subscriptionClientLimits(subscription, data)
 					} else {
 						@subscriptionSettingsPanel(subscription, data, view)
@@ -2433,7 +2436,7 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 // subscriptionObjectHead carries the identity, the condition and the actions in
 // one place, and renders above the tab bar so all three survive a tab change.
 templ subscriptionObjectHead(user auth.SessionUser, subscription types.SubscriptionSummary, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
-	{{ provider := user.Role != auth.RoleClient }}
+	{{ provider := user.Role != auth.RoleClient && view.SupportCustomerID == 0 }}
 	{{ breaches := subscriptionBreaches(subscription, data) }}
 	<header class="np-object-head">
 		<div class="np-object-head-main">
@@ -2443,18 +2446,19 @@ templ subscriptionObjectHead(user auth.SessionUser, subscription types.Subscript
 					<h1>{ subscription.SubscriptionName }</h1>
 					@tonePill(subscriptionStatusWord(subscription.Status), statusPillClass(subscription.Status))
 					if len(breaches) > 0 {
-						<span class="np-status-pill np-status-pill-fail np-pill-icon">@icon("triangle-alert")<span>Over its limits</span></span>
+						<span class="np-status-pill np-status-pill-fail np-pill-icon">@icon("triangle-alert")
+<span>Over its limits</span></span>
 					}
 				</div>
 				<p class="np-object-meta">
 					if provider {
-						<a href={ templ.SafeURL(workspacePath(view,"/customers/"+formatJobID(subscription.CustomerID))) }>{ subscription.CustomerName }</a>
+						<a href={ templ.SafeURL(workspacePath(view, "/customers/"+formatJobID(subscription.CustomerID))) }>{ subscription.CustomerName }</a>
 					} else {
 						{ subscription.CustomerName }
 					}
 					<span class="np-object-sep">·</span>
 					if provider {
-						plan <a href={ templ.SafeURL("/service-plans/"+formatJobID(subscription.PlanID)) }>{ subscription.PlanName }</a>
+						plan <a href={ templ.SafeURL("/service-plans/" + formatJobID(subscription.PlanID)) }>{ subscription.PlanName }</a>
 					} else {
 						plan { subscription.PlanName }
 					}
@@ -2470,7 +2474,7 @@ templ subscriptionObjectHead(user auth.SessionUser, subscription types.Subscript
 			</div>
 			<div class="np-object-head-actions">
 				if provider {
-					<a class="np-secondary-button" href={ subscriptionTabPath(view,subscription.ID,"resources") }>Change plan</a>
+					<a class="np-secondary-button" href={ subscriptionTabPath(view, subscription.ID, "resources") }>Change plan</a>
 					if subscription.SyncMode != "custom" {
 						<form method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync") }>
 							@csrfInput(view)
@@ -2479,22 +2483,23 @@ templ subscriptionObjectHead(user auth.SessionUser, subscription types.Subscript
 					}
 				}
 				if actions.CanCreateSite {
-					<a class="np-primary-link" href={ templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID:view.SupportCustomerID,SelectedSubscription:subscription.ID},"php")) }>@icon("plus")<span>Add Domain</span></a>
+					<a class="np-primary-link" href={ templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")) }>@icon("plus")
+<span>Add Domain</span></a>
 				}
 			</div>
 		</div>
 		<nav class="np-domain-tabs np-subscription-tabs" aria-label="Subscription workspace">
-			@subscriptionTabLink(view, subscription.ID, "overview", "Websites & Domains", formatPlanLimit(len(sitesForSubscription(data.Sites,subscription.ID))), false)
+			@subscriptionTabLink(view, subscription.ID, "overview", "Websites & Domains", formatPlanLimit(len(sitesForSubscription(data.Sites, subscription.ID))), false)
 			if view.Tab == "resources" {
-				<a class="is-active" aria-current="page" href={ subscriptionTabPath(view,subscription.ID,"resources") }>Resources<span class="np-sr-only"> Subscription settings</span></a>
+				<a class="is-active" aria-current="page" href={ subscriptionTabPath(view, subscription.ID, "resources") }>Resources<span class="np-sr-only">Subscription settings</span></a>
 			} else {
-				<a href={ subscriptionTabPath(view,subscription.ID,"resources") }>Resources<span class="np-sr-only"> Subscription settings</span></a>
+				<a href={ subscriptionTabPath(view, subscription.ID, "resources") }>Resources<span class="np-sr-only">Subscription settings</span></a>
 			}
-			@subscriptionTabLink(view, subscription.ID, "access", "Account Access", formatPlanLimit(subscriptionAccessObjects(subscription,data)), false)
+			@subscriptionTabLink(view, subscription.ID, "access", "Account Access", formatPlanLimit(subscriptionAccessObjects(subscription, data)), false)
 			@subscriptionTabLink(view, subscription.ID, "cache", "Cache", "", false)
 			@subscriptionTabLink(view, subscription.ID, "mail", "Mail", "", false)
-			@subscriptionTabLink(view, subscription.ID, "tasks", "Scheduled Tasks", formatPlanLimit(len(tasksForSubscription(data.SubscriptionServices.Tasks,subscription.ID))), false)
-			@subscriptionTabLink(view, subscription.ID, "applications", "Applications", formatPlanLimit(len(applicationsForSubscription(data.SubscriptionServices.Applications,subscription.ID))), false)
+			@subscriptionTabLink(view, subscription.ID, "tasks", "Scheduled Tasks", formatPlanLimit(len(tasksForSubscription(data.SubscriptionServices.Tasks, subscription.ID))), false)
+			@subscriptionTabLink(view, subscription.ID, "applications", "Applications", formatPlanLimit(len(applicationsForSubscription(data.SubscriptionServices.Applications, subscription.ID))), false)
 			@subscriptionTabLink(view, subscription.ID, "backups", "Backups", formatPlanLimit(subscription.BackupsUsed), subscription.MaxBackups >= 0 && subscription.BackupsUsed > subscription.MaxBackups)
 			@subscriptionTabLink(view, subscription.ID, "activity", "Activity", "", false)
 		</nav>
@@ -2521,7 +2526,7 @@ templ subscriptionTabBadge(badge string, alert bool) {
 
 // subscriptionAttention states the one condition that matters, once, with the
 // ways out. It renders on every tab so the condition cannot be tabbed away.
-templ subscriptionAttention(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+templ subscriptionAttention(user auth.SessionUser, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
 	{{ breaches := subscriptionBreaches(subscription, data) }}
 	if len(breaches) > 0 {
 		<section class="np-attention" aria-labelledby="np-subscription-breach">
@@ -2533,9 +2538,9 @@ templ subscriptionAttention(subscription types.SubscriptionSummary, data dashboa
 				}
 			</div>
 			<div class="np-attention-body">
-				<p><strong>{ subscriptionBreachSentence(breaches) }.</strong> Existing resources were preserved, but new provisioning is checked against the plan, so the next request will be refused.</p>
+				<p><strong>{ subscriptionBreachSentence(breaches) }.</strong> Existing resources were preserved. New requests follow the subscription's overuse policy, provider allocation, and server capacity limits.</p>
 				<div class="np-attention-actions">
-					<a class="np-secondary-button" href={ subscriptionTabPath(view,subscription.ID,"resources") }>Review the limits</a>
+					<a class="np-secondary-button" href={ subscriptionTabPath(view, subscription.ID, "resources") }>Review the limits</a>
 				</div>
 			</div>
 		</section>
@@ -2548,12 +2553,16 @@ templ subscriptionAttention(subscription types.SubscriptionSummary, data dashboa
 			</div>
 			<div class="np-attention-body">
 				<p>{ subscription.SyncError }</p>
-				<div class="np-attention-actions">
-					<form method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync") }>
-						@csrfInput(view)
-						<button type="submit" class="np-secondary-button">Try again</button>
-					</form>
-				</div>
+				if user.Role != auth.RoleClient && view.SupportCustomerID == 0 {
+					<div class="np-attention-actions">
+						<form method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync") }>
+							@csrfInput(view)
+							<button type="submit" class="np-secondary-button">Try again</button>
+						</form>
+					</div>
+				} else {
+					<p>Contact your provider to retry synchronization.</p>
+				}
 			</div>
 		</section>
 	}
@@ -2563,7 +2572,7 @@ templ subscriptionAttention(subscription types.SubscriptionSummary, data dashboa
 // against the plan beside every tab, so switching tabs loses no context. The
 // compliance value renders here, which is why it is tab independent.
 templ subscriptionPropertiesRail(user auth.SessionUser, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
-	{{ provider := user.Role != auth.RoleClient }}
+	{{ provider := user.Role != auth.RoleClient && view.SupportCustomerID == 0 }}
 	<aside class="np-detail-rail" aria-label="Subscription properties">
 		<section class="np-panel">
 			<div class="np-panel-title"><h2>Subscription</h2></div>
@@ -2572,7 +2581,7 @@ templ subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subsc
 					<dt>Subscriber</dt>
 					<dd>
 						if provider {
-							<a href={ templ.SafeURL(workspacePath(view,"/customers/"+formatJobID(subscription.CustomerID))) }>{ subscription.CustomerName }</a>
+							<a href={ templ.SafeURL(workspacePath(view, "/customers/"+formatJobID(subscription.CustomerID))) }>{ subscription.CustomerName }</a>
 						} else {
 							<strong>{ subscription.CustomerName }</strong>
 						}
@@ -2586,7 +2595,7 @@ templ subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subsc
 						<dt>Service plan</dt>
 						<dd>
 							if provider {
-								<a href={ templ.SafeURL("/service-plans/"+formatJobID(subscription.PlanID)) }>{ subscription.PlanName }</a>
+								<a href={ templ.SafeURL("/service-plans/" + formatJobID(subscription.PlanID)) }>{ subscription.PlanName }</a>
 							} else {
 								<strong>{ subscription.PlanName }</strong>
 							}
@@ -2594,7 +2603,7 @@ templ subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subsc
 						</dd>
 					</div>
 					if provider {
-						<a class="np-secondary-button" href={ subscriptionTabPath(view,subscription.ID,"resources") }>Change</a>
+						<a class="np-secondary-button" href={ subscriptionTabPath(view, subscription.ID, "resources") }>Change</a>
 					}
 				</div>
 				<div>
@@ -2628,7 +2637,8 @@ templ subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subsc
 				if !subscription.CreatedAt.IsZero() {
 					<div>
 						<dt>Created</dt>
-						<dd><strong>{ formatDateLabel(subscription.CreatedAt) }</strong>
+						<dd>
+							<strong>{ formatDateLabel(subscription.CreatedAt) }</strong>
 							if !subscription.UpdatedAt.IsZero() {
 								<small>Last changed { formatRelativeLabel(subscription.UpdatedAt) }</small>
 							}
@@ -2636,9 +2646,9 @@ templ subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subsc
 					</div>
 				}
 			</dl>
-			if user.Role == auth.RoleAdmin {
+			if user.Role == auth.RoleAdmin && view.SupportCustomerID == 0 {
 				<div class="np-prop-actions">
-					<form method="post" action={ templ.SafeURL("/support/customers/"+formatJobID(subscription.CustomerID)+"/enter") }>
+					<form method="post" action={ templ.SafeURL("/support/customers/" + formatJobID(subscription.CustomerID) + "/enter") }>
 						@csrfInput(view)
 						<button type="submit" class="np-secondary-button">Open support view</button>
 					</form>
@@ -2646,7 +2656,7 @@ templ subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subsc
 			}
 		</section>
 		<section class="np-panel">
-			<div class="np-panel-title"><h2>Against the plan</h2><a href={ subscriptionTabPath(view,subscription.ID,"resources") }>All limits</a></div>
+			<div class="np-panel-title"><h2>Against the plan</h2><a href={ subscriptionTabPath(view, subscription.ID, "resources") }>All limits</a></div>
 			<div class="np-usage-list">
 				for _, row := range subscriptionRailLimits(subscription, data) {
 					@limitRowBlock(row)
@@ -2887,37 +2897,46 @@ templ subscriptionActivityPanel(subscription types.SubscriptionSummary, data das
 
 templ subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
 	{{ backups := subscriptionBackupsForID(data.Phase6.Backups, subscription.ID) }}
-	{{ beyond := subscriptionBackupBeyondPlan(backups, subscription.MaxBackups) }}
 	<section class="np-panel">
-		<div class="np-panel-title"><div><h2>Subscription backups</h2><span class="np-muted">{ formatBytes(subscriptionBackupBytes(backups)) } stored · { formatQuotaCompactCount(len(backups), subscription.MaxBackups, true) } kept</span></div></div>
-		if len(beyond) > 0 {
-			<p class="np-gate is-blocked">{ formatPlanLimit(len(beyond)) } of these backups are beyond the plan limit of { formatPlanLimit(subscription.MaxBackups) }. They are still restorable, but the next backup will be refused until the count is back within the plan.</p>
+		<div class="np-panel-title"><div><h2>Subscription backups</h2><span class="np-muted">{ formatBytes(subscription.BackupBytesUsed) } stored · { formatQuotaCompactCount(subscription.BackupsUsed, subscription.MaxBackups, true) } counted</span></div></div>
+		if subscription.MaxBackups >= 0 && subscription.BackupsUsed > subscription.MaxBackups {
+			<p class="np-gate is-blocked">{ formatPlanLimit(subscription.BackupsUsed-subscription.MaxBackups) } backups are beyond the plan limit of { formatPlanLimit(subscription.MaxBackups) }. Existing recovery points are preserved. New requests follow the subscription's overuse policy and storage limits.</p>
 		}
 		if len(backups) == 0 {
 			<div class="np-empty-block">
-				<span class="np-empty-icon">@icon("archive")</span>
-				<strong>No backups have been taken</strong>
-				<p>A backup captures the document root and databases of one website, and can be restored to the same subscription.</p>
+				<span class="np-empty-icon">@icon("archive")
+</span>
+				if subscription.BackupsUsed > 0 {
+					<strong>No recent backups are loaded</strong>
+					<p>{ formatPlanLimit(subscription.BackupsUsed) } backups are recorded for this subscription. Open a domain's Backups tool to view its recovery points.</p>
+				} else {
+					<strong>No backups have been taken</strong>
+					<p>A backup captures the document root and databases of one website, and can be restored to the same subscription.</p>
+				}
 			</div>
 		} else {
-			<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Taken</th><th>Target</th><th>Size</th><th>Status</th></tr></thead><tbody>
-				for _, item := range backups {
-					<tr class={ backupRowClass(beyond[item.ID]) }>
-						<td data-label="Taken">{ formatStampLabel(item.CreatedAt) }
-							if beyond[item.ID] {
-								<small class="np-usage-note">beyond the plan limit</small>
-							}
-						</td>
-						<td data-label="Target">{ item.TargetName }</td>
-						<td data-label="Size">{ formatBytes(item.SizeBytes) }</td>
-						<td data-label="Status">@statusPill(item.Status)
-							if item.LastError != "" {
-								<small class="np-usage-note">{ item.LastError }</small>
-							}
-						</td>
-					</tr>
-				}
-			</tbody></table></div>
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead><tr><th>Taken</th><th>Target</th><th>Size</th><th>Status</th></tr></thead>
+					<tbody>
+						for _, item := range backups {
+							<tr>
+								<td data-label="Taken">
+									{ formatStampLabel(item.CreatedAt) }
+								</td>
+								<td data-label="Target">{ item.TargetName }</td>
+								<td data-label="Size">{ formatBytes(item.SizeBytes) }</td>
+								<td data-label="Status">
+									@statusPill(item.Status)
+									if item.LastError != "" {
+										<small class="np-usage-note">{ item.LastError }</small>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
 		}
 	</section>
 }
@@ -2954,59 +2973,86 @@ templ subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dash
 
 templ subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
 	{{ identities := sftpForSubscription(data.SubscriptionServices.SFTP, subscription.ID) }}
-	<section class="np-panel"><div class="np-panel-title"><div><h2>Account Access</h2><span class="np-muted">Shared Linux account and scoped SFTP identities</span></div></div>
+	<section class="np-panel">
+		<div class="np-panel-title"><div><h2>Account Access</h2><span class="np-muted">Shared Linux account and scoped SFTP identities</span></div></div>
 		if account, found := accountForSubscription(data.SubscriptionServices.Accounts,subscription.ID); found {
 			<dl class="np-facts">
 				<div><dt>System user</dt><dd><code>{ account.Username }</code></dd></div>
 				<div><dt>Home</dt><dd><code>{ account.HomePath }</code></dd></div>
-				<div><dt>Shell</dt><dd>{ accountShellWord(account.ShellMode) }
-					if accountShellDetail(account.ShellMode) != "" {
-						<small class="np-muted">{ accountShellDetail(account.ShellMode) }</small>
-					}
-				</dd></div>
-				<div><dt>Convergence</dt><dd>@tonePill(subscriptionSyncStatusWord(account.ConvergenceStatus), statusPillClass(account.ConvergenceStatus))</dd></div>
+				<div>
+					<dt>Shell</dt>
+					<dd>
+						{ accountShellWord(account.ShellMode) }
+						if accountShellDetail(account.ShellMode) != "" {
+							<small class="np-muted">{ accountShellDetail(account.ShellMode) }</small>
+						}
+					</dd>
+				</div>
+				<div><dt>Convergence</dt><dd>@tonePill(subscriptionSyncStatusWord(account.ConvergenceStatus), statusPillClass(account.ConvergenceStatus))
+</dd></div>
 			</dl>
 		} else {
 			<p class="np-empty">No system account has converged for this subscription yet.</p>
 		}
 		if subscriptionSFTPBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
 			<p class="np-gate is-policy">SFTP is disabled by the subscription hosting policy. A provider must enable and synchronize SFTP before identities can be created.</p>
+		}
+		if len(identities) == 0 {
+			<div class="np-empty-block">
+				<span class="np-empty-icon">@icon("folder-up")
+</span>
+				<strong>No SFTP identities yet</strong>
+				<p>An identity is a named public key confined to one directory under the subscription home, so a deploy pipeline or an agency never needs the account password.</p>
+			</div>
 		} else {
-			if len(identities) == 0 {
-				<div class="np-empty-block">
-					<span class="np-empty-icon">@icon("folder-up")</span>
-					<strong>No SFTP identities yet</strong>
-					<p>An identity is a named public key confined to one directory under the subscription home, so a deploy pipeline or an agency never needs the account password.</p>
-				</div>
-			} else {
-				<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Identity</th><th>Directory</th><th>Status</th><th></th></tr></thead><tbody>
-					for _, item := range identities {
-						<tr><td data-label="Identity">{ item.Name }</td><td data-label="Directory"><code>{ item.RelativeRoot }</code></td><td data-label="Status">@tonePill(formatEnabled(item.Enabled), enabledTone(item.Enabled))</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID,"sftp",item.ID,view)</td></tr>
-					}
-				</tbody></table></div>
-			}
-			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/sftp") }>@csrfInput(view)<div class="np-form-grid"><label>Name<input name="name" required/></label><label>Directory<input name="relative_root" value="." required/></label><label class="np-wide-field">SSH public key<textarea name="public_key" rows="3" required></textarea></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Add SFTP identity</button></form>
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead><tr><th>Identity</th><th>Directory</th><th>Status</th><th></th></tr></thead>
+					<tbody>
+						for _, item := range identities {
+							<tr><td data-label="Identity">{ item.Name }</td><td data-label="Directory"><code>{ item.RelativeRoot }</code></td><td data-label="Status">@tonePill(formatEnabled(item.Enabled), enabledTone(item.Enabled))
+</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID, "sftp", item.ID, view)
+</td></tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		if !subscriptionSFTPBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
+			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sftp") }>@csrfInput(view)
+<div class="np-form-grid"><label>Name<input name="name" required/></label><label>Directory<input name="relative_root" value="." required/></label><label class="np-wide-field">SSH public key<textarea name="public_key" rows="3" required></textarea></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Add SFTP identity</button></form>
 		}
 	</section>
-	<section class="np-panel"><div class="np-panel-title"><div><h2>Primary FTPS account</h2><span class="np-muted">Explicit TLS and subscription-root confinement · one account only</span></div></div>
+	<section class="np-panel">
+		<div class="np-panel-title"><div><h2>Primary FTPS account</h2><span class="np-muted">Explicit TLS and subscription-root confinement · one account only</span></div></div>
 		if subscriptionFTPSBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
 			<p class="np-gate is-policy">FTPS is disabled by the subscription hosting policy. A provider must enable and synchronize FTPS before accounts can be created.</p>
+		}
+		{{ accounts := subscriptionPrimaryFTP(data.SubscriptionServices.FTP, subscription.ID) }}
+		if len(accounts) == 0 {
+			<div class="np-empty-block">
+				<span class="np-empty-icon">@icon("upload")
+</span>
+				<strong>No FTPS account yet</strong>
+				<p>One account may exist, confined to the subscription home. Its password is shown once and never stored in plaintext.</p>
+			</div>
 		} else {
-			{{ accounts := subscriptionPrimaryFTP(data.SubscriptionServices.FTP, subscription.ID) }}
-			if len(accounts) == 0 {
-				<div class="np-empty-block">
-					<span class="np-empty-icon">@icon("upload")</span>
-					<strong>No FTPS account yet</strong>
-					<p>One account may exist, confined to the subscription home. Its password is shown once and never stored in plaintext.</p>
-				</div>
-			} else {
-				<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Login</th><th>Root</th><th>Status</th><th></th></tr></thead><tbody>
-					for _, item := range accounts {
-						<tr><td data-label="Login"><code>{ item.Name }</code></td><td data-label="Root">Subscription home</td><td data-label="Status">@statusPill(item.ConvergenceStatus)</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID,"ftp",item.ID,view)</td></tr>
-					}
-				</tbody></table></div>
-			}
-			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/ftp") }>@csrfInput(view)<div class="np-form-grid"><label>Login name<input name="name" pattern="[a-z][a-z0-9._-]{2,31}" required/></label><label>Password<input type="password" name="password" autocomplete="new-password" placeholder="Generate when blank"/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><p class="np-form-help">Only one primary account is allowed. Passwords are shown once and never stored in plaintext.</p><button type="submit">Create or reset FTPS account</button></form>
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead><tr><th>Login</th><th>Root</th><th>Status</th><th></th></tr></thead>
+					<tbody>
+						for _, item := range accounts {
+							<tr><td data-label="Login"><code>{ item.Name }</code></td><td data-label="Root">Subscription home</td><td data-label="Status">@statusPill(item.ConvergenceStatus)
+</td><td data-label="Action">@subscriptionServiceDelete(subscription.ID, "ftp", item.ID, view)
+</td></tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		if !subscriptionFTPSBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
+			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/ftp") }>@csrfInput(view)
+<div class="np-form-grid"><label>Login name<input name="name" pattern="[a-z][a-z0-9._-]{2,31}" required/></label><label>Password<input type="password" name="password" autocomplete="new-password" placeholder="Generate when blank"/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><p class="np-form-help">Only one primary account is allowed. Passwords are shown once and never stored in plaintext.</p><button type="submit">Create or reset FTPS account</button></form>
 		}
 	</section>
 }
@@ -3075,46 +3121,69 @@ templ valkeyConfigurationForms(subscription types.SubscriptionSummary, view Work
 templ subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
 	{{ tasks := tasksForSubscription(data.SubscriptionServices.Tasks, subscription.ID) }}
 	{{ sites := sitesForSubscription(data.Sites, subscription.ID) }}
-	<section class="np-panel"><div class="np-panel-title"><div><h2>Scheduled Tasks</h2><span class="np-muted">Commands run as the subscription account</span></div></div>
+	<section class="np-panel">
+		<div class="np-panel-title"><div><h2>Scheduled Tasks</h2><span class="np-muted">Commands run as the subscription account</span></div></div>
 		if subscriptionTasksBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
 			<p class="np-gate is-policy">Scheduled tasks are disabled by the subscription hosting policy. A provider must enable and synchronize them before tasks can be created.</p>
+		}
+		if len(tasks) == 0 {
+			<div class="np-empty-block">
+				<span class="np-empty-icon">@icon("activity")
+</span>
+				<strong>No scheduled tasks yet</strong>
+				<p>A task runs a shell command as the subscription account on a schedule you set — imports, cache warming, cleanups.</p>
+			</div>
 		} else {
-			if len(tasks) == 0 {
-				<div class="np-empty-block">
-					<span class="np-empty-icon">@icon("activity")</span>
-					<strong>No scheduled tasks yet</strong>
-					<p>A task runs a shell command as the subscription account on a schedule you set — imports, cache warming, cleanups.</p>
-				</div>
-			} else {
-				<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Task</th><th>Schedule</th><th>Command</th><th>Status</th><th></th></tr></thead><tbody>
-					for _, item := range tasks {
-						<tr>
-							<td data-label="Task">{ item.Name }
-								if domain := siteDomain(data.Sites, item.SiteID); domain != "" {
-									<small class="np-muted">{ domain } · timeout { formatPlanLimit(item.TimeoutSeconds) }s</small>
-								}
-							</td>
-							<td data-label="Schedule"><code>{ item.Schedule }</code></td>
-							<td data-label="Command"><code>{ item.Command }</code></td>
-							<td data-label="Status">@tonePill(formatEnabled(item.Enabled), enabledTone(item.Enabled))
-								if item.LastError != "" {
-									<small class="np-usage-note">{ item.LastError }</small>
-								}
-							</td>
-							<td data-label="Action"><div class="np-row-actions">
-								<form class="np-inline-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/scheduled-tasks/"+formatJobID(item.ID)+"/run") }>@csrfInput(view)<button type="submit" class="np-secondary-button">Run now</button></form>
-								@subscriptionServiceDelete(subscription.ID,"task",item.ID,view)
-							</div></td>
-						</tr>
-					}
-				</tbody></table></div>
-			}
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead><tr><th>Task</th><th>Schedule</th><th>Command</th><th>Status</th><th></th></tr></thead>
+					<tbody>
+						for _, item := range tasks {
+							<tr>
+								<td data-label="Task">
+									{ item.Name }
+									if domain := siteDomain(data.Sites, item.SiteID); domain != "" {
+										<small class="np-muted">{ domain } · timeout { formatPlanLimit(item.TimeoutSeconds) }s</small>
+									}
+								</td>
+								<td data-label="Schedule"><code>{ item.Schedule }</code></td>
+								<td data-label="Command"><code>{ item.Command }</code></td>
+								<td data-label="Status">
+									@tonePill(formatEnabled(item.Enabled), enabledTone(item.Enabled))
+									if item.LastError != "" {
+										<small class="np-usage-note">{ item.LastError }</small>
+									}
+								</td>
+								<td data-label="Action">
+									<div class="np-row-actions">
+										if !subscriptionTasksBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
+											<form class="np-inline-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks/" + formatJobID(item.ID) + "/run") }>@csrfInput(view)
+<button type="submit" class="np-secondary-button">Run now</button></form>
+										}
+										@subscriptionServiceDelete(subscription.ID, "task", item.ID, view)
+									</div>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		if !subscriptionTasksBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
 			if len(sites) > 0 {
-				<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/scheduled-tasks") }>@csrfInput(view)<div class="np-form-grid"><label>Domain<select name="site_id" required>
-					for _, site := range sites {
-						<option value={ formatJobID(site.ID) }>{ site.Domain }</option>
-					}
-				</select></label><label>Name<input name="name" required/></label><label>Schedule<input name="schedule" placeholder="0 2 * * *" required/></label><label>Working directory<input name="working_directory" value="." required/></label><label>Timeout seconds<input type="number" min="1" max="86400" name="timeout_seconds" value="300" required/></label><label class="np-wide-field">Command<input name="command" required/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Add scheduled task</button></form>
+				<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks") }>
+					@csrfInput(view)
+					<div class="np-form-grid">
+						<label>
+							Domain
+							<select name="site_id" required>
+								for _, site := range sites {
+									<option value={ formatJobID(site.ID) }>{ site.Domain }</option>
+								}
+							</select>
+						</label><label>Name<input name="name" required/></label><label>Schedule<input name="schedule" placeholder="0 2 * * *" required/></label><label>Working directory<input name="working_directory" value="." required/></label><label>Timeout seconds<input type="number" min="1" max="86400" name="timeout_seconds" value="300" required/></label><label class="np-wide-field">Command<input name="command" required/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label>
+					</div><button type="submit">Add scheduled task</button>
+				</form>
 			} else {
 				<p class="np-empty">Add a hosted domain before creating a scheduled task.</p>
 			}
@@ -3124,33 +3193,50 @@ templ subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashbo
 
 templ subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
 	{{ sites := sitesForSubscription(data.Sites, subscription.ID) }}
-	if !subscriptionMailAllowed(subscription) {
+	{{ mailAllowed := subscriptionMailAllowed(subscription, data.SubscriptionServices.Accounts) }}
+	{{ mailboxLimit := subscriptionMailboxLimit(subscription, data.SubscriptionServices.Accounts) }}
+	if !mailAllowed {
 		<section class="np-attention is-warn" aria-labelledby="np-mail-gate">
-			<div class="np-attention-head">@icon("mail")<h2 id="np-mail-gate">Mail is not included in this plan</h2></div>
+			<div class="np-attention-head">@icon("mail")
+<h2 id="np-mail-gate">Mail is not included in this plan</h2></div>
 			<div class="np-attention-body">
-				<p><strong>{ subscription.PlanName } allows no mailboxes</strong>, so no mailbox, alias or forwarder can be created for these domains. DNS for each domain is unaffected and still editable.</p>
+				if mailboxLimit == 0 {
+					<p><strong>{ subscription.PlanName } allows no mailboxes</strong>, so no mailbox, alias or forwarder can be created for these domains. DNS for each domain is unaffected and still editable.</p>
+				} else {
+					<p>Mail is disabled by the effective subscription hosting policy. Contact your provider to enable and synchronize mail service. Existing mail resources and DNS are preserved.</p>
+				}
 				<div class="np-attention-actions">
-					<a class="np-secondary-button" href={ subscriptionTabPath(view,subscription.ID,"resources") }>Raise the mailbox limit</a>
+					<a class="np-secondary-button" href={ subscriptionTabPath(view, subscription.ID, "resources") }>Raise the mailbox limit</a>
 				</div>
 			</div>
 		</section>
 	}
-	<section class="np-panel"><div class="np-panel-title"><div><h2>Mail domains</h2><span class="np-muted">Mail is managed from each hosted domain</span></div>if subscriptionMailAllowed(subscription) {
-			<span class="np-muted">{ formatQuotaCompactCount(subscriptionMailboxesUsed(subscription,data), subscription.MaxMailboxes, true) } mailboxes</span>
-		} else {
-			<span class="np-muted">No mailboxes allowed</span>
-		}</div>
+	<section class="np-panel">
+		<div class="np-panel-title">
+			<div><h2>Mail domains</h2><span class="np-muted">Mail is managed from each hosted domain</span></div>
+			if mailAllowed {
+				<span class="np-muted">{ formatQuotaCompactCount(subscriptionMailboxesUsed(subscription,data), mailboxLimit, true) } mailboxes</span>
+			} else {
+				<span class="np-muted">No mailboxes allowed</span>
+			}
+		</div>
 		if len(sites) == 0 {
 			<p class="np-empty">No domains are hosted by this subscription.</p>
 		} else {
 			<div class="np-object-list">
 				for _, site := range sites {
 					if domain, found := mailDomainForSite(data.SubscriptionServices.MailDomains,site); found {
-						<a class="np-object-row" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=mail") }><span class="np-object-icon">@icon("mail")</span><span><strong>{ site.Domain }</strong><small>{ formatPlanLimit(len(mailboxesForWorkspace(data.SubscriptionServices.Mailboxes,[]dashboard.MailDomain{domain}))) } mailboxes · DKIM { formatEnabled(domain.DKIM) } · DMARC { domain.DMARCPolicy }</small></span>@statusPill(domain.Status)<span class="np-secondary-button">Manage Mail</span></a>
-					} else if subscriptionMailAllowed(subscription) {
-						<a class="np-object-row" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=mail") }><span class="np-object-icon">@icon("mail")</span><span><strong>{ site.Domain }</strong><small>Mail service is not configured</small></span>@tonePill("Not configured","susp")<span class="np-secondary-button">Configure Mail</span></a>
+						<a class="np-object-row" href={ templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=mail") }><span class="np-object-icon">@icon("mail")
+</span><span><strong>{ site.Domain }</strong><small>{ formatPlanLimit(len(mailboxesForWorkspace(data.SubscriptionServices.Mailboxes,[]dashboard.MailDomain{domain}))) } mailboxes · DKIM { formatEnabled(domain.DKIM) } · DMARC { domain.DMARCPolicy }</small></span>@statusPill(domain.Status)
+<span class="np-secondary-button">Manage Mail</span></a>
+					} else if mailAllowed {
+						<a class="np-object-row" href={ templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=mail") }><span class="np-object-icon">@icon("mail")
+</span><span><strong>{ site.Domain }</strong><small>Mail service is not configured</small></span>@tonePill("Not configured", "susp")
+<span class="np-secondary-button">Configure Mail</span></a>
 					} else {
-						<a class="np-object-row" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=dns") }><span class="np-object-icon">@icon("mail")</span><span><strong>{ site.Domain }</strong><small>MX, SPF and DKIM are not set</small></span>@tonePill("Mail off","susp")<span class="np-secondary-button">Open DNS</span></a>
+						<a class="np-object-row" href={ templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=dns") }><span class="np-object-icon">@icon("mail")
+</span><span><strong>{ site.Domain }</strong><small>MX, SPF and DKIM are not set</small></span>@tonePill("Mail off", "susp")
+<span class="np-secondary-button">Open DNS</span></a>
 					}
 				}
 			</div>
@@ -3161,40 +3247,51 @@ templ subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboa
 templ subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
 	{{ instances := applicationsForSubscription(data.SubscriptionServices.Applications, subscription.ID) }}
 	{{ sites := sitesForSubscription(data.Sites, subscription.ID) }}
-	<section class="np-panel"><div class="np-panel-title"><div><h2>Applications</h2><span class="np-muted">Rootless application instances · { formatQuotaCompactCount(len(instances), subscriptionApplicationLimit(data.SubscriptionServices.Accounts,subscription.ID), true) } allowed</span></div></div>
+	<section class="np-panel">
+		<div class="np-panel-title"><div><h2>Applications</h2><span class="np-muted">Rootless application instances · { formatQuotaCompactCount(len(instances), subscriptionApplicationLimit(data.SubscriptionServices.Accounts,subscription.ID), true) } allowed</span></div></div>
 		if subscriptionApplicationsBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
 			<p class="np-gate is-policy">Applications are disabled by the subscription hosting policy. A provider must grant the application permission and an instance allowance before one can be installed.</p>
-		} else if len(instances) == 0 {
+		}
+		if len(instances) == 0 {
 			<div class="np-empty-block">
-				<span class="np-empty-icon">@icon("package-open")</span>
+				<span class="np-empty-icon">@icon("package-open")
+</span>
 				<strong>No applications installed</strong>
 				<p>An application runs as its own rootless service under the subscription account, with its own port, logs and start, stop and restart controls. Choose the domain to install it in.</p>
 			</div>
 		} else {
-			<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Application</th><th>Runtime</th><th>Image</th><th>State</th><th></th></tr></thead><tbody>
-				for _, item := range instances {
-					<tr>
-						<td data-label="Application">{ item.Name }
-							if domain := siteDomain(data.Sites, item.SiteID); domain != "" {
-								<small class="np-muted">{ domain }</small>
-							}
-						</td>
-						<td data-label="Runtime">{ item.Runtime }</td>
-						<td data-label="Image"><code>{ item.ImageRef }</code></td>
-						<td data-label="State">@statusPill(item.Status)
-							if item.LastError != "" {
-								<small class="np-usage-note">{ item.LastError }</small>
-							}
-						</td>
-						<td data-label="Action">@subscriptionServiceDelete(subscription.ID,"application",item.ID,view)</td>
-					</tr>
-				}
-			</tbody></table></div>
+			<div class="np-table-wrap">
+				<table class="np-table">
+					<thead><tr><th>Application</th><th>Runtime</th><th>Image</th><th>State</th><th></th></tr></thead>
+					<tbody>
+						for _, item := range instances {
+							<tr>
+								<td data-label="Application">
+									{ item.Name }
+									if domain := siteDomain(data.Sites, item.SiteID); domain != "" {
+										<small class="np-muted">{ domain }</small>
+									}
+								</td>
+								<td data-label="Runtime">{ item.Runtime }</td>
+								<td data-label="Image"><code>{ item.ImageRef }</code></td>
+								<td data-label="State">
+									@statusPill(item.Status)
+									if item.LastError != "" {
+										<small class="np-usage-note">{ item.LastError }</small>
+									}
+								</td>
+								<td data-label="Action">@subscriptionServiceDelete(subscription.ID, "application", item.ID, view)
+</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
 		}
 		if len(sites) > 0 && !subscriptionApplicationsBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
 			<div class="np-object-list">
 				for _, site := range sites {
-					<a class="np-object-row" href={ templ.SafeURL("/sites/"+formatJobID(site.ID)+"/applications") }><span><strong>{ site.Domain }</strong><small>Deploy and manage applications in this domain context.</small></span><span class="np-secondary-button">Manage applications</span></a>
+					<a class="np-object-row" href={ templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)+"/applications")) }><span><strong>{ site.Domain }</strong><small>Deploy and manage applications in this domain context.</small></span><span class="np-secondary-button">Manage applications</span></a>
 				}
 			</div>
 		}

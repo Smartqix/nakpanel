@@ -585,7 +585,7 @@ func (s *Server) handleRunScheduledTask(w http.ResponseWriter, r *http.Request) 
 		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"/scheduled-tasks?notice=task-ran"), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, "/subscriptions/"+strconv.FormatInt(subscriptionID, 10)+"?tab=tasks&notice=task-ran", http.StatusSeeOther)
+	http.Redirect(w, r, supportRedirectPath(r, user, "/subscriptions/"+strconv.FormatInt(subscriptionID, 10)+"?tab=tasks&notice=task-ran"), http.StatusSeeOther)
 }
 
 func (s *Server) handleMailDomain(w http.ResponseWriter, r *http.Request) {

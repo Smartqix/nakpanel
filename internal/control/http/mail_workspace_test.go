@@ -81,6 +81,21 @@ func (*fakeMailDomainServices) RunScheduledTask(context.Context, auth.SessionUse
 	return types.ScheduledTaskRun{}, nil
 }
 
+func TestSubscriptionTaskRunPreservesSupportContext(t *testing.T) {
+	services := &fakeMailDomainServices{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DomainManager: services})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/subscriptions/20/scheduled-tasks/5/run", strings.NewReader("support_customer_id=88"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	want := "/support/customers/88/subscriptions/20?tab=tasks&notice=task-ran"
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != want {
+		t.Fatalf("task run status=%d location=%q, want %q", rec.Code, rec.Header().Get("Location"), want)
+	}
+}
+
 type fakeMailManager struct {
 	settings  types.MailSettingsView
 	update    types.MailSettingsUpdate

@@ -96,11 +96,11 @@ func countLimitRow(group, label, field string, used, allowed int, unitNoun strin
 		case used > allowed:
 			row.Tone = limitToneOver
 			row.Severity = 3
-			row.Note = fmt.Sprintf("%d over · the next %s will be refused", used-allowed, unitNoun)
+			row.Note = fmt.Sprintf("%d over the %s allowance", used-allowed, unitNoun)
 		case used == allowed:
 			row.Tone = limitToneFull
 			row.Severity = 2
-			row.Note = "Full · no room for another"
+			row.Note = "Allowance reached"
 		case percentOf(used, allowed) >= 80:
 			row.Tone = limitToneFull
 			row.Severity = 1
@@ -131,12 +131,12 @@ func subscriptionLimitRows(subscription types.SubscriptionSummary, data dashboar
 		countLimitRow("Hosting", "Subdomains", "max_subdomains", subscription.SubdomainsUsed, subscription.MaxSubdomains, "subdomain"),
 		countLimitRow("Hosting", "Domain aliases", "max_domain_aliases", 0, subscription.MaxDomainAliases, "alias"),
 		countLimitRow("Hosting", "Databases", "max_databases", subscription.DatabasesUsed, subscription.MaxDatabases, "database"),
-		byteLimitRow("Storage", "Disk", "disk_mb", subscriptionDiskUsedBytes(subscription, data), subscription.DiskMB),
-		byteLimitRow("Storage", "Monthly traffic", "bandwidth_mb", subscriptionTrafficUsedBytes(subscription, data), subscription.BandwidthMB),
+		subscriptionMeasuredLimitRow(subscription, data, false),
+		subscriptionMeasuredLimitRow(subscription, data, true),
 		countLimitRow("Storage", "Backups", "max_backups", subscription.BackupsUsed, subscription.MaxBackups, "backup"),
 		byteLimitRow("Storage", "Backup storage", "backup_storage_mb", subscription.BackupBytesUsed, subscription.BackupStorageMB),
-		countLimitRow("Mail and access", "Mailboxes", "max_mailboxes", subscriptionMailboxesUsed(subscription, data), subscription.MaxMailboxes, "mailbox"),
-		countLimitRow("Mail and access", "FTP accounts", "max_ftp_accounts", subscriptionFTPUsed(subscription, data), subscription.MaxFTPAccounts, "account"),
+		countLimitRow("Mail and access", "Mailboxes", "max_mailboxes", subscriptionMailboxesUsed(subscription, data), subscriptionMailboxLimit(subscription, data.SubscriptionServices.Accounts), "mailbox"),
+		countLimitRow("Mail and access", "FTP accounts", "max_ftp_accounts", subscriptionFTPUsed(subscription, data), subscriptionFTPLimit(subscription, data.SubscriptionServices.Accounts), "account"),
 	}
 }
 
@@ -193,29 +193,23 @@ func joinWithAnd(parts []string) string {
 }
 
 func subscriptionMailboxesUsed(subscription types.SubscriptionSummary, data dashboard.Data) int {
-	domains := make([]dashboard.MailDomain, 0)
-	for _, site := range sitesForSubscription(data.Sites, subscription.ID) {
-		if domain, found := mailDomainForSite(data.SubscriptionServices.MailDomains, site); found {
-			domains = append(domains, domain)
-		}
-	}
-	return len(mailboxesForWorkspace(data.SubscriptionServices.Mailboxes, domains))
-}
-
-func subscriptionFTPUsed(subscription types.SubscriptionSummary, data dashboard.Data) int {
 	count := 0
-	for _, item := range ftpForSubscription(data.SubscriptionServices.FTP, subscription.ID) {
-		if item.SiteID == 0 {
+	for _, item := range data.SubscriptionServices.Mailboxes {
+		if item.SubscriptionID == subscription.ID {
 			count++
 		}
 	}
 	return count
 }
 
+func subscriptionFTPUsed(subscription types.SubscriptionSummary, data dashboard.Data) int {
+	return len(ftpForSubscription(data.SubscriptionServices.FTP, subscription.ID))
+}
+
 // subscriptionAccessObjects is the badge beside the Account Access tab: scoped
 // identities plus the primary FTPS account, which is what that tab holds.
 func subscriptionAccessObjects(subscription types.SubscriptionSummary, data dashboard.Data) int {
-	return len(sftpForSubscription(data.SubscriptionServices.SFTP, subscription.ID)) + subscriptionFTPUsed(subscription, data)
+	return len(sftpForSubscription(data.SubscriptionServices.SFTP, subscription.ID)) + len(subscriptionPrimaryFTP(data.SubscriptionServices.FTP, subscription.ID))
 }
 
 func subscriptionBackupsForID(items []dashboard.Backup, subscriptionID int64) []dashboard.Backup {
@@ -490,10 +484,23 @@ func valkeyStateWord(instance types.ValkeyInstance) string {
 	}
 }
 
-// subscriptionMailAllowed is false when the plan grants no mailboxes, which is
-// the gate the Mail tab needs before it offers anything.
-func subscriptionMailAllowed(subscription types.SubscriptionSummary) bool {
-	return subscription.MaxMailboxes != 0
+func subscriptionMailAllowed(subscription types.SubscriptionSummary, accounts []types.SubscriptionSystemAccount) bool {
+	account, found := accountForSubscription(accounts, subscription.ID)
+	return found && account.EffectivePolicy.Permissions.Mail && account.EffectivePolicy.Mail.Enabled && account.EffectivePolicy.Resources.MaxMailboxes != 0
+}
+
+func subscriptionMailboxLimit(subscription types.SubscriptionSummary, accounts []types.SubscriptionSystemAccount) int {
+	if account, found := accountForSubscription(accounts, subscription.ID); found {
+		return account.EffectivePolicy.Resources.MaxMailboxes
+	}
+	return subscription.MaxMailboxes
+}
+
+func subscriptionFTPLimit(subscription types.SubscriptionSummary, accounts []types.SubscriptionSystemAccount) int {
+	if account, found := accountForSubscription(accounts, subscription.ID); found {
+		return account.EffectivePolicy.Resources.MaxFTPAccounts
+	}
+	return subscription.MaxFTPAccounts
 }
 
 func subscriptionFTPSBlocked(accounts []types.SubscriptionSystemAccount, subscriptionID int64) bool {
@@ -738,21 +745,43 @@ func byteLimitRow(group, label, field string, usedBytes int64, allowedMB int) li
 }
 
 func subscriptionDiskUsedBytes(subscription types.SubscriptionSummary, data dashboard.Data) int64 {
-	var total int64
-	for _, site := range sitesForSubscription(data.Sites, subscription.ID) {
-		if usage, ok := usageForSite(data.SubscriptionServices.SiteUsage, site.ID); ok {
-			total += usage.DocumentRootBytes
-		}
+	if usage, found := subscriptionCollectedUsage(subscription, data); found {
+		return usage.DiskBytes
 	}
-	return total
+	return 0
 }
 
 func subscriptionTrafficUsedBytes(subscription types.SubscriptionSummary, data dashboard.Data) int64 {
-	var total int64
-	for _, site := range sitesForSubscription(data.Sites, subscription.ID) {
-		if usage, ok := usageForSite(data.SubscriptionServices.SiteUsage, site.ID); ok {
-			total += usage.TrafficBytes
+	if usage, found := subscriptionCollectedUsage(subscription, data); found {
+		return usage.TrafficBytes
+	}
+	return 0
+}
+
+func subscriptionCollectedUsage(subscription types.SubscriptionSummary, data dashboard.Data) (types.SubscriptionUsage, bool) {
+	for _, usage := range data.SubscriptionUsage {
+		if usage.SubscriptionID == subscription.ID {
+			return usage, true
 		}
 	}
-	return total
+	return types.SubscriptionUsage{}, false
+}
+
+func subscriptionMeasuredLimitRow(subscription types.SubscriptionSummary, data dashboard.Data, traffic bool) limitRow {
+	label, field, limit := "Disk", "disk_mb", subscription.DiskMB
+	used := subscriptionDiskUsedBytes(subscription, data)
+	if traffic {
+		label, field, limit = "Monthly traffic", "bandwidth_mb", subscription.BandwidthMB
+		used = subscriptionTrafficUsedBytes(subscription, data)
+	}
+	row := byteLimitRow("Storage", label, field, used, limit)
+	usage, found := subscriptionCollectedUsage(subscription, data)
+	if !found || usage.CollectedAt.IsZero() {
+		row.Used, row.Note, row.HasBar = "Not measured", "Awaiting a complete usage scan", false
+		row.Tone, row.Severity = "", 0
+	} else if !usage.Complete {
+		row.Note, row.HasBar = "Last recorded usage · collection incomplete", false
+		row.Tone, row.Severity = "", 0
+	}
+	return row
 }
