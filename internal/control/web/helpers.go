@@ -3029,3 +3029,93 @@ func errorMessages(messages ...string) []string {
 	}
 	return visible
 }
+
+// noticeKindClass maps a notice severity onto the shipped status vocabulary so
+// success, warning and failure are visually distinct instead of all-green.
+// noticeKindClass returns the complete class name on purpose: the CSS build
+// scans source for whole class strings, so a fragment assembled at render time
+// would be stripped from the stylesheet.
+func noticeKindClass(kind dashboard.NoticeKind) string {
+	switch kind {
+	case dashboard.NoticeError:
+		return "np-notice-fail"
+	case dashboard.NoticeWarning:
+		return "np-notice-pend"
+	case dashboard.NoticeInfo:
+		return "np-notice-run"
+	default:
+		return "np-notice-ok"
+	}
+}
+
+// noticeRole promotes failures to an assertive live region; successes stay
+// polite so a screen reader is not interrupted by routine confirmations.
+func noticeRole(kind dashboard.NoticeKind) string {
+	if kind == dashboard.NoticeError {
+		return "alert"
+	}
+	return "status"
+}
+
+func noticeKindIcon(kind dashboard.NoticeKind) string {
+	switch kind {
+	case dashboard.NoticeError, dashboard.NoticeWarning:
+		return "triangle-alert"
+	default:
+		return "shield-check"
+	}
+}
+
+// accountLabel names who is signed in. Under support view it names the customer
+// being managed, because that is the identity the panel is acting with.
+func accountLabel(user auth.SessionUser, view WorkspaceView) string {
+	if view.SupportCustomerID > 0 && strings.TrimSpace(view.SupportCustomerName) != "" {
+		return view.SupportCustomerName
+	}
+	if local, _, ok := strings.Cut(user.Email, "@"); ok && local != "" {
+		return local
+	}
+	return user.Email
+}
+
+func accountRoleLabel(user auth.SessionUser, view WorkspaceView) string {
+	if view.SupportCustomerID > 0 {
+		return "Support view · acting as customer"
+	}
+	switch user.Role {
+	case auth.RoleAdmin:
+		return "Administrator"
+	case auth.RoleReseller:
+		return "Reseller"
+	default:
+		return "Customer"
+	}
+}
+
+// restoreConfirmation spells out what a restore replaces. Restore is the most
+// destructive action a tenant can trigger, and this table offered it as a
+// single unguarded click.
+func restoreConfirmation(backup dashboard.Backup) string {
+	target := strings.TrimSpace(backup.TargetName)
+	if target == "" {
+		target = "this website"
+	}
+	return "Restore " + target + " from the " + formatTime(backup.CreatedAt) +
+		" recovery point? Current files and database state may be replaced."
+}
+
+// restoreUnavailableLabel replaces a bare dash with the reason the action is
+// missing, so an operator is not left guessing why a row cannot be restored.
+func restoreUnavailableLabel(backup dashboard.Backup) string {
+	if strings.TrimSpace(backup.ArchivePath) == "" {
+		return "No archive"
+	}
+	return "Not restorable"
+}
+
+func restoreUnavailableReason(backup dashboard.Backup) string {
+	if strings.TrimSpace(backup.ArchivePath) == "" {
+		return "This backup has no stored archive to restore from."
+	}
+	return "Only a completed backup can be restored; this one is " + backup.Status + "."
+}

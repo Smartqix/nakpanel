@@ -286,7 +286,7 @@ func TestWordPressSupportViewKeepsScopedMutationContext(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `name="support_customer_id" value="88"`) ||
-		!strings.Contains(rec.Body.String(), "reached its WordPress site limit") || !strings.Contains(rec.Body.String(), "np-notice-error") {
+		!strings.Contains(rec.Body.String(), "reached its WordPress site limit") || !strings.Contains(rec.Body.String(), "np-notice-fail") {
 		t.Fatalf("support workspace = %d body=%s", rec.Code, rec.Body.String())
 	}
 

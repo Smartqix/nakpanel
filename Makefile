@@ -33,7 +33,7 @@ tailwind-download:
 
 tailwind-build: tailwind-download
 	@if [ -x "$(TAILWIND_BIN)" ]; then \
-		BROWSERSLIST_IGNORE_OLD_DATA=1 "$(TAILWIND_BIN)" -i internal/control/web/assets/input.css -o internal/control/web/static/app.css --minify --content 'internal/control/web/**/*.{templ,js}'; \
+		BROWSERSLIST_IGNORE_OLD_DATA=1 "$(TAILWIND_BIN)" -i internal/control/web/assets/input.css -o internal/control/web/static/app.css --minify --content 'internal/control/web/**/*.{templ,js,go}'; \
 	elif [ ! -s internal/control/web/static/app.css ]; then \
 		echo "Tailwind compiler and committed embedded CSS are both unavailable" >&2; \
 		exit 1; \
