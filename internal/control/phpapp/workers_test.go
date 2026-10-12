@@ -49,7 +49,7 @@ func expectWorkerPolicyLoadBeforeRuntime(t *testing.T, mock sqlmock.Sqlmock, pol
 	mock.ExpectBegin()
 	mock.ExpectQuery(`SELECT application.id`).WithArgs(int64(7)).WillReturnRows(workerLoadRows(
 		7, 4, 9, 5, "nps4", "example.test", "managed", "8.4", 3, "main", "plain", "", "/", "[]", false, false, false, 3,
-		"active", "healthy", 0, 0, 2, 1, "pending", "", "", "active", "active", siteState, true,
+		"active", "healthy", 0, 0, 2, 1, "pending", "", "", "active", "active", siteState, true, false,
 	))
 	mock.ExpectQuery(`SELECT site.subscription_id`).WithArgs(int64(9)).WillReturnRows(workerLoadRows(4, "{}"))
 	mock.ExpectQuery(`SELECT subscription_id,plan_name`).WithArgs(int64(4)).WillReturnRows(workerLoadRows(

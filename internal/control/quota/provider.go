@@ -1168,6 +1168,9 @@ func (s *SQLStore) TransferCustomer(ctx context.Context, customerID, resellerID 
 			return err
 		}
 	}
+	if err := s.enqueueCustomerHostingStateTx(ctx, tx, customerID); err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 

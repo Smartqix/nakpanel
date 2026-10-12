@@ -330,6 +330,37 @@ FROM sites s CROSS JOIN LATERAL (SELECT id FROM users WHERE role='admin' ORDER B
 }
 
 func (s *SQLStore) enqueueCustomerHostingStateTx(ctx context.Context, tx *sql.Tx, customerID int64) error {
+	// Site-only jobs cannot converge shared services or subscriptions with no
+	// websites. Advance every live account in this same lifecycle transaction.
+	accounts, err := tx.QueryContext(ctx, `SELECT account.subscription_id
+FROM subscription_system_accounts account JOIN subscriptions sub ON sub.id=account.subscription_id
+WHERE sub.customer_id=$1 AND account.desired_state IN ('active','suspended')
+AND NOT EXISTS (SELECT 1 FROM billing_accounts billing WHERE billing.subscription_id=sub.id AND billing.provisioning_state IN ('terminating','terminated'))
+ORDER BY account.subscription_id`, customerID)
+	if err != nil {
+		return err
+	}
+	var subscriptionIDs []int64
+	for accounts.Next() {
+		var id int64
+		if err := accounts.Scan(&id); err != nil {
+			accounts.Close()
+			return err
+		}
+		subscriptionIDs = append(subscriptionIDs, id)
+	}
+	if err := accounts.Err(); err != nil {
+		accounts.Close()
+		return err
+	}
+	if err := accounts.Close(); err != nil {
+		return err
+	}
+	for _, id := range subscriptionIDs {
+		if err := s.markSubscriptionPendingTx(ctx, tx, id); err != nil {
+			return fmt.Errorf("enqueue inherited account convergence: %w", err)
+		}
+	}
 	rows, err := tx.QueryContext(ctx, `SELECT r.id,r.username,r.domain,r.php_version,
 CASE WHEN c.status='active' AND sub.status='active' AND (c.reseller_id IS NULL OR (ra.status='active' AND rs.id IS NOT NULL)) THEN 'active' ELSE 'suspended' END
 ,r.desired_php_version,r.desired_https_redirect
@@ -353,6 +384,10 @@ WHERE c.id=$1 ORDER BY r.id`, customerID)
 		desiredPHPBySite[a.SiteID] = desiredPHP
 		desiredRedirectBySite[a.SiteID] = desiredRedirect
 		jobs = append(jobs, a)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
 	}
 	if err := rows.Close(); err != nil {
 		return err
@@ -402,7 +437,13 @@ func (s *SQLStore) enqueueResellerHostingStateTx(ctx context.Context, tx *sql.Tx
 		}
 		ids = append(ids, id)
 	}
-	rows.Close()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
 	for _, id := range ids {
 		if err := s.enqueueCustomerHostingStateTx(ctx, tx, id); err != nil {
 			return err

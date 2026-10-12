@@ -325,7 +325,7 @@ func (m *Manager) ConfigureValkey(ctx context.Context, actor auth.SessionUser, s
 }
 
 func (m *Manager) ReadSiteLog(ctx context.Context, actor auth.SessionUser, siteID int64, req types.SiteLogRequest) (types.SiteLogResult, error) {
-	if m.hostingToolkitAgent == nil {
+	if m.hostingToolkitAgent == nil && req.Source != types.SiteLogTask {
 		return types.SiteLogResult{}, errors.New("site log service is not configured")
 	}
 	domainStore, ok := m.quotaStore.(controlquota.DomainSettingsStore)
@@ -352,16 +352,28 @@ func (m *Manager) ReadSiteLog(ctx context.Context, actor auth.SessionUser, siteI
 	if !effective.Permissions.Logs {
 		return types.SiteLogResult{}, errors.New("log access is disabled by the subscription policy")
 	}
-	username, authoritativeDomain, err := domainStore.SiteRuntimeIdentity(ctx, siteID)
+	var result types.SiteLogResult
+	req.SiteID = siteID
+	if req.Source == types.SiteLogTask {
+		reader, ok := m.quotaStore.(interface {
+			ReadScheduledTaskLog(context.Context, int64, types.SiteLogRequest) (types.SiteLogResult, error)
+		})
+		if !ok {
+			return types.SiteLogResult{}, errors.New("scheduled task logs are not configured")
+		}
+		result, err = reader.ReadScheduledTaskLog(ctx, siteID, req)
+	} else {
+		username, authoritativeDomain, identityErr := domainStore.SiteRuntimeIdentity(ctx, siteID)
+		if identityErr != nil {
+			return types.SiteLogResult{}, identityErr
+		}
+		req.Username, req.Domain = username, authoritativeDomain
+		result, err = m.hostingToolkitAgent.ReadSiteLog(ctx, req)
+	}
 	if err != nil {
 		return types.SiteLogResult{}, err
 	}
-	req.SiteID, req.Username, req.Domain = siteID, username, authoritativeDomain
-	result, err := m.hostingToolkitAgent.ReadSiteLog(ctx, req)
-	if err != nil {
-		return types.SiteLogResult{}, err
-	}
-	if req.Source == types.SiteLogPHPDeployment || req.Source == types.SiteLogPHPWorker || req.Source == types.SiteLogPHPFPM {
+	if req.Source == types.SiteLogTask || req.Source == types.SiteLogPHPDeployment || req.Source == types.SiteLogPHPWorker || req.Source == types.SiteLogPHPFPM {
 		redactor, ok := m.quotaStore.(interface {
 			RedactPHPEnvironmentSecrets(context.Context, int64, []string) ([]string, error)
 		})
@@ -372,6 +384,9 @@ func (m *Manager) ReadSiteLog(ctx context.Context, actor auth.SessionUser, siteI
 		if err != nil {
 			return types.SiteLogResult{}, err
 		}
+	}
+	if result.Lines == nil {
+		result.Lines = []string{}
 	}
 	return result, nil
 }

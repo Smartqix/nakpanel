@@ -224,6 +224,9 @@ updated_at=now() WHERE id=$1`, subscriptionID, status)
 				return err
 			}
 		}
+		if err = setSubscriptionAccountIntentTx(ctx, tx, subscriptionID, status); err != nil {
+			return err
+		}
 		if err = s.enqueueSubscriptionHostingStateTx(ctx, tx, subscriptionID); err != nil {
 			return err
 		}
@@ -233,6 +236,11 @@ updated_at=now() WHERE id=$1`, subscriptionID, status)
 
 func ensureSubscriptionNotTerminatingTx(ctx context.Context, tx *sql.Tx, subscriptionID int64) error {
 	return LockSubscriptionMutationTx(ctx, tx, subscriptionID)
+}
+
+func setSubscriptionAccountIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, status string) error {
+	_, err := tx.ExecContext(ctx, `UPDATE subscription_system_accounts SET desired_state=CASE WHEN $2='active' THEN 'active' ELSE 'suspended' END,updated_at=now() WHERE subscription_id=$1`, subscriptionID, status)
+	return err
 }
 
 // LockSubscriptionMutationTx serializes tenant intent mutations with account

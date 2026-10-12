@@ -123,7 +123,7 @@ func scanApplication(row interface{ Scan(...any) error }) (applicationRecord, er
 		&record.activeDeploymentID, &record.previousDeploymentID,
 		&record.spec.DesiredRevision, &record.appliedRevision, &record.convergenceStatus,
 		&record.observedMessage, &record.lastError, &record.subscriptionStatus,
-		&record.customerStatus, &record.siteStatus, &record.providerActive,
+		&record.customerStatus, &record.siteStatus, &record.providerActive, &record.spec.HTTPSRedirect,
 	)
 	if err != nil {
 		return record, err
@@ -146,7 +146,7 @@ customer.status,site.desired_status,
 CASE WHEN customer.reseller_id IS NULL THEN TRUE ELSE EXISTS (
  SELECT 1 FROM reseller_accounts reseller JOIN reseller_subscriptions allocation
  ON allocation.reseller_id=reseller.id AND allocation.status='active'
- WHERE reseller.id=customer.reseller_id AND reseller.status='active') END
+ WHERE reseller.id=customer.reseller_id AND reseller.status='active') END,site.desired_https_redirect
 FROM php_applications application
 JOIN sites site ON site.id=application.site_id
 JOIN subscriptions subscription ON subscription.id=application.subscription_id

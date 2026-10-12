@@ -4,6 +4,8 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -1523,7 +1525,10 @@ func (p *PHPApplicationProvisioner) activateRelease(ctx context.Context, spec ty
 	}
 	managedNginx, err := replaceManagedNginxRuntime(currentNginx, documentRoot, filepath.Join(p.phpRunDir, fmt.Sprintf("site-%d.sock", spec.SiteID)))
 	if err != nil {
-		return err
+		managedNginx, err = p.resumeSuspendedManagedNginx(spec, currentNginx, documentRoot, filepath.Join(p.phpRunDir, fmt.Sprintf("site-%d.sock", spec.SiteID)))
+		if err != nil {
+			return err
+		}
 	}
 	if err := writeFileAtomic(fpmConfig, []byte(renderManagedFPMConfig(spec, documentRoot, filepath.Join(p.phpRunDir, fmt.Sprintf("site-%d.sock", spec.SiteID)))), 0o600); err != nil {
 		return err
@@ -1549,7 +1554,11 @@ func (p *PHPApplicationProvisioner) activateRelease(ctx context.Context, spec ty
 			return rollback(redactPHPError(fmt.Errorf("activate managed PHP release: %w: %s", runErr, strings.TrimSpace(string(output))), environment))
 		}
 	}
-	if err := p.probeThree(ctx, "http://127.0.0.1"+spec.HealthPath, spec.Domain); err != nil {
+	healthAddress := "http://127.0.0.1" + spec.HealthPath
+	if spec.HTTPSRedirect {
+		healthAddress = "https://127.0.0.1" + spec.HealthPath
+	}
+	if err := p.probeThree(ctx, healthAddress, spec.Domain); err != nil {
 		return rollback(fmt.Errorf("live managed PHP release failed readiness: %w", err))
 	}
 	if err := p.writeMarker(marker); err != nil {
@@ -1702,6 +1711,35 @@ func replaceManagedNginxRuntime(config []byte, documentRoot, socket string) ([]b
 	return []byte(strings.Join(lines, "\n")), nil
 }
 
+func (p *PHPApplicationProvisioner) resumeSuspendedManagedNginx(spec types.PHPApplicationSpec, config []byte, documentRoot, socket string) ([]byte, error) {
+	plan, err := NewSitePlan(types.CreateSiteReq{SiteID: spec.SiteID, SubscriptionID: spec.SubscriptionID, Username: spec.Username, Domain: spec.Domain, PHPVersion: spec.PHPVersion, SharedAccount: true, Limits: siteLimitsFromPolicy(spec.Policy)}, SitePathConfig{
+		HomeRoot: p.homeRoot, NginxAvailableDir: p.nginxAvailableDir,
+		PHPFPMDedicatedDir: p.phpConfigDir, PHPFPMDedicatedRunDir: p.phpRunDir, SystemdUnitDir: p.systemdUnitDir,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cert, key := "", ""
+	certMatches := regexp.MustCompile(`(?m)^    ssl_certificate ([A-Za-z0-9/._-]+);$`).FindAllSubmatch(config, -1)
+	keyMatches := regexp.MustCompile(`(?m)^    ssl_certificate_key ([A-Za-z0-9/._-]+);$`).FindAllSubmatch(config, -1)
+	if len(certMatches) == 1 && len(keyMatches) == 1 {
+		cert, key = string(certMatches[0][1]), string(keyMatches[0][1])
+		if !filepath.IsAbs(cert) || !filepath.IsAbs(key) || filepath.Clean(cert) != cert || filepath.Clean(key) != key {
+			return nil, errors.New("suspended Nakpanel TLS paths are invalid")
+		}
+	}
+	// A 503 response alone is not identity proof. Only the complete deterministic
+	// Nakpanel template for this domain and policy may be replaced on resume.
+	if !bytes.Equal(config, []byte(renderSuspendedNginxRuntimeVHost(plan, cert, key))) {
+		return nil, errors.New("existing nginx site configuration is not a recognized Nakpanel PHP vhost")
+	}
+	if spec.HTTPSRedirect && cert == "" {
+		return nil, errors.New("managed PHP HTTPS redirect requires the suspended site certificate")
+	}
+	active := RenderNginxRuntimeVHost(plan, cert, key, spec.HTTPSRedirect)
+	return replaceManagedNginxRuntime([]byte(active), documentRoot, socket)
+}
+
 func (p *PHPApplicationProvisioner) probeThree(ctx context.Context, address, host string) error {
 	probeWindow := p.healthProbeWindow
 	if probeWindow <= 0 {
@@ -1749,6 +1787,10 @@ func (p *PHPApplicationProvisioner) probeThree(ctx context.Context, address, hos
 }
 
 func probePHPHTTP(ctx context.Context, address, host string) error {
+	return probePHPHTTPWithRoots(ctx, address, host, nil)
+}
+
+func probePHPHTTPWithRoots(ctx context.Context, address, host string, roots *x509.CertPool) error {
 	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	request, err := http.NewRequestWithContext(probeCtx, http.MethodGet, address, nil)
@@ -1756,7 +1798,11 @@ func probePHPHTTP(ctx context.Context, address, host string) error {
 		return err
 	}
 	request.Host = host
-	client := &http.Client{Timeout: 3 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.Proxy = nil
+	transport.TLSClientConfig = &tls.Config{ServerName: host, RootCAs: roots, MinVersion: tls.VersionTLS12}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: 3 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 	response, err := client.Do(request)
 	if err != nil {
 		return err

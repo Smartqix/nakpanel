@@ -1234,6 +1234,9 @@ func (p *HostingToolkitProvisioner) ReadSiteLog(_ context.Context, req types.Sit
 	}
 	file, err := os.Open(path)
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return types.SiteLogResult{Source: req.Source, Lines: []string{}, Rotated: req.Cursor > 0}, nil
+		}
 		return types.SiteLogResult{}, err
 	}
 	defer file.Close()
@@ -1241,7 +1244,7 @@ func (p *HostingToolkitProvisioner) ReadSiteLog(_ context.Context, req types.Sit
 	if err != nil {
 		return types.SiteLogResult{}, err
 	}
-	result := types.SiteLogResult{Source: req.Source}
+	result := types.SiteLogResult{Source: req.Source, Lines: []string{}}
 	if req.Cursor > info.Size() {
 		req.Cursor = 0
 		result.Rotated = true
@@ -1251,8 +1254,10 @@ func (p *HostingToolkitProvisioner) ReadSiteLog(_ context.Context, req types.Sit
 	}
 	limited := &io.LimitedReader{R: file, N: int64(req.ByteLimit)}
 	reader := bufio.NewReaderSize(limited, min(64<<10, req.ByteLimit))
-	for len(result.Lines) < req.LineLimit && limited.N > 0 {
+	var consumed int64
+	for len(result.Lines) < req.LineLimit && consumed < int64(req.ByteLimit) {
 		line, readErr := reader.ReadString('\n')
+		consumed += int64(len(line))
 		if line != "" {
 			line = sanitizeLogLine(strings.TrimRight(line, "\r\n"))
 			if (req.Search == "" || strings.Contains(strings.ToLower(line), strings.ToLower(req.Search))) &&
@@ -1267,7 +1272,7 @@ func (p *HostingToolkitProvisioner) ReadSiteLog(_ context.Context, req types.Sit
 			return result, readErr
 		}
 	}
-	result.NextCursor = req.Cursor + int64(req.ByteLimit) - limited.N
+	result.NextCursor = req.Cursor + consumed
 	result.Truncated = result.NextCursor < info.Size()
 	return result, nil
 }

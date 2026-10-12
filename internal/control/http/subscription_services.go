@@ -355,7 +355,7 @@ func (s *Server) handleGitRepository(w http.ResponseWriter, r *http.Request) {
 	siteID, subscriptionID := site.ID, site.SubscriptionID
 	input := types.GitRepositoryInput{
 		Connect: r.Form.Get("connect") == "yes",
-		ID: parseFormInt64Default(r, "resource_id", 0), Mode: formStringDefault(r, "mode", "remote"),
+		ID:      parseFormInt64Default(r, "resource_id", 0), Mode: formStringDefault(r, "mode", "remote"),
 		RemoteURL: strings.TrimSpace(r.Form.Get("remote_url")), Branch: formStringDefault(r, "branch", "main"),
 		DeployTarget: formStringDefault(r, "deploy_target", "."), Automatic: formBoolDefault(r, "automatic", false),
 		KnownHostKey:   strings.TrimSpace(r.Form.Get("known_host_key")),
@@ -551,6 +551,9 @@ func (s *Server) handleSiteLogData(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeQuotaError(w, r, "Could not read site log", err)
 		return
+	}
+	if result.Lines == nil {
+		result.Lines = []string{}
 	}
 	if r.URL.Query().Get("download") == "1" {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")

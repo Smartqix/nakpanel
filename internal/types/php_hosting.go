@@ -74,6 +74,7 @@ type PHPApplicationSpec struct {
 	Domain           string              `json:"domain,omitempty"`
 	HostingMode      PHPHostingMode      `json:"hosting_mode"`
 	PHPVersion       string              `json:"php_version"`
+	HTTPSRedirect    bool                `json:"https_redirect"`
 	RepositoryID     int64               `json:"repository_id,omitempty"`
 	RepositoryRef    string              `json:"repository_ref,omitempty"`
 	FrameworkProfile PHPFrameworkProfile `json:"framework_profile,omitempty"`
