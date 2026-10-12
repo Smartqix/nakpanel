@@ -78,13 +78,14 @@ func TestManagedPHPResumesLastGoodReleaseFromHostingSuspension(t *testing.T) {
 }
 
 func TestManagedPHPResumeRejectsUnrecognizedSuspendedVhosts(t *testing.T) {
-	for _, config := range []string{
-		"server { listen 80; server_name example.test; return 503; }\n",
-		renderSuspendedNginxRuntimeVHost(SitePlan{Domain: "another.test"}, "", ""),
-		strings.Replace(RenderSuspendedNginxVHost(SitePlan{Domain: "example.test"}), "return 503;", "return 503;\n        proxy_pass http://untrusted;", 1),
-		RenderSuspendedNginxVHost(SitePlan{Domain: "example.test"}),
+	for _, test := range []struct{ name, config string }{
+		{"arbitrary-vhost", "server { listen 80; server_name example.test; return 503; }\n"},
+		{"wrong-domain", renderSuspendedNginxRuntimeVHost(SitePlan{Domain: "another.test"}, "", "")},
+		{"injected-proxy", strings.Replace(RenderSuspendedNginxVHost(SitePlan{Domain: "example.test"}), "return 503;", "return 503;\n        proxy_pass http://untrusted;", 1)},
+		{"redirect-without-certificate", RenderSuspendedNginxVHost(SitePlan{Domain: "example.test"})},
 	} {
-		t.Run(strings.Split(config, "\n")[0]+strings.TrimSpace(config), func(t *testing.T) {
+		t.Run(test.name, func(t *testing.T) {
+			config := test.config
 			p, spec := newPHPApplicationTestProvisioner(t, &scriptedPHPAppRunner{}, nil)
 			spec.HTTPSRedirect = true
 			paths, err := p.pathsFor(spec, 22)
