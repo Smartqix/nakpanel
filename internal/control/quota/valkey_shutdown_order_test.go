@@ -66,7 +66,7 @@ func TestValkeyShutdownPrecedesFailingAccountConvergence(t *testing.T) {
 			}
 			mock.ExpectQuery("SELECT subscription_id,plan_name").WithArgs(int64(42)).WillReturnRows(sqlmock.NewRows(columns).AddRow(42, "plan", 1024, 1, 1, 1024, 0, false, true, 1, "8.4", 4, 128, 1024, 1, 1024, 1, "block", 80, 80, 1, 1, 1, 0, true, "8.4", true, true, true, []byte(`{}`), raw))
 			mock.ExpectQuery("SELECT e.hosting_policy").WithArgs(int64(42)).WillReturnRows(sqlmock.NewRows([]string{"policy", "patch"}).AddRow(raw, []byte(`{}`)))
-			for _, query := range []string{"SELECT site.id,site.domain", "SELECT id,name,public_key", "SELECT task.id,COALESCE", "SELECT ftp.id,ftp.subscription_id"} {
+			for _, query := range []string{"SELECT site.id,site.domain", "SELECT id,name,public_key", "SELECT task.id,COALESCE"} {
 				mock.ExpectQuery(query).WillReturnRows(sqlmock.NewRows([]string{"empty"}))
 			}
 			mock.ExpectQuery("SELECT instance.subscription_id").WithArgs(int64(42)).WillReturnRows(sqlmock.NewRows([]string{"sub", "user", "state", "memory", "clients", "idle", "cpu", "process", "acl", "flush"}).AddRow(42, "npaccount", "enabled", 128, 64, 300, 25, 64, strings.Repeat("a", 64), false))

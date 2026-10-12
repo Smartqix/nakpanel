@@ -863,14 +863,8 @@ func (w *ConvergeSubscriptionWorker) Work(ctx context.Context, job *river.Job[Co
 	if _, err = w.db.ExecContext(ctx, `UPDATE scheduled_tasks SET convergence_status='in_sync',last_error='',updated_at=now() WHERE subscription_id=$1`, job.Args.SubscriptionID); err != nil {
 		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 	}
-	if snapshot.FTPS != nil {
-		if _, err = w.agent.EnsureFTPS(ctx, *snapshot.FTPS); err != nil {
-			ackErr := acknowledgeFTPSConvergence(ctx, w.db, *snapshot.FTPS, "failed", err.Error())
-			return errors.Join(err, ackErr, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
-		}
-		if err = acknowledgeFTPSConvergence(ctx, w.db, *snapshot.FTPS, "in_sync", ""); err != nil {
-			return err
-		}
+	if err = convergeFTPSAccounts(ctx, w.db, w.agent); err != nil {
+		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
 	}
 	if snapshot.Valkey != nil {
 		if valkeyErr := convergeValkeyAllocation(ctx, w.db, w.agent, *snapshot.Valkey, snapshot.DesiredRevision, snapshot.ValkeyAllocationError); valkeyErr != nil {
@@ -1012,7 +1006,6 @@ type convergenceSnapshot struct {
 	Account               types.EnsureSubscriptionAccountReq
 	MailDomainCount       int
 	Applications          []applicationConvergence
-	FTPS                  *types.EnsureFTPSReq
 	Valkey                *types.EnsureValkeyReq
 	ValkeyAllocationError error
 	Git                   []types.EnsureGitRepositoryReq
@@ -1101,22 +1094,6 @@ WHERE e.subscription_id=$1`, subscriptionID).Scan(&storedPolicy, &subscriptionPa
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}
-	policyCache := map[int64]types.HostingPolicy{subscriptionID: account.Policy}
-	policyForSubscription := func(candidateID int64) (types.HostingPolicy, error) {
-		if policy, ok := policyCache[candidateID]; ok {
-			return policy, nil
-		}
-		candidateBase, candidatePatch, loadErr := effectiveSubscriptionPolicyTx(ctx, tx, candidateID)
-		if loadErr != nil {
-			return types.HostingPolicy{}, loadErr
-		}
-		policy, resolveErr := controlpolicy.Resolve(candidateBase, candidatePatch, nil)
-		if resolveErr != nil {
-			return types.HostingPolicy{}, resolveErr
-		}
-		policyCache[candidateID] = policy
-		return policy, nil
-	}
 	rows, err := tx.QueryContext(ctx, `SELECT site.id,site.domain,site.document_root,
 CASE WHEN $2='active' AND site.desired_status='active' THEN 'active' ELSE 'suspended' END,
 COALESCE(o.policy_patch,'{}'::jsonb),
@@ -1180,55 +1157,6 @@ FROM scheduled_tasks task LEFT JOIN sites site ON site.id=task.site_id WHERE tas
 	}
 	rows.Close()
 	snapshot.Account = account
-	ftps := types.EnsureFTPSReq{Revision: time.Now().UnixNano(), State: "suspended"}
-	rows, err = tx.QueryContext(ctx, `SELECT ftp.id,ftp.subscription_id,account.username,COALESCE(ftp.site_id,0),COALESCE(site.domain,''),ftp.name,ftp.password_hash,
-ftp.enabled AND sub.status='active' AND customer.status='active' AND (customer.reseller_id IS NULL OR reseller.status='active')
-AND (customer.reseller_id IS NULL OR EXISTS (
-    SELECT 1 FROM reseller_subscriptions allocation
-    WHERE allocation.reseller_id=customer.reseller_id AND allocation.status='active'
-))
-FROM ftp_accounts ftp
-JOIN subscriptions sub ON sub.id=ftp.subscription_id
-JOIN customers customer ON customer.id=sub.customer_id
-JOIN subscription_system_accounts account ON account.subscription_id=sub.id
-LEFT JOIN sites site ON site.id=ftp.site_id
-LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
-ORDER BY ftp.id`)
-	if err != nil {
-		return convergenceSnapshot{}, err
-	}
-	type pendingFTPSAccount struct {
-		account          types.EnsureFTPSAccount
-		subscriptionID   int64
-		lifecycleEnabled bool
-	}
-	pendingFTPSAccounts := make([]pendingFTPSAccount, 0)
-	for rows.Next() {
-		var pending pendingFTPSAccount
-		if err := rows.Scan(&pending.account.ID, &pending.subscriptionID, &pending.account.Username, &pending.account.SiteID, &pending.account.Domain, &pending.account.Name, &pending.account.PasswordHash, &pending.lifecycleEnabled); err != nil {
-			rows.Close()
-			return convergenceSnapshot{}, err
-		}
-		pendingFTPSAccounts = append(pendingFTPSAccounts, pending)
-	}
-	if err := rows.Close(); err != nil {
-		return convergenceSnapshot{}, err
-	}
-	// FTPS configuration is node-wide, so rows can belong to subscriptions
-	// other than the one being converged. Close the active result set before
-	// loading those subscriptions' policies from the same transaction.
-	for _, pending := range pendingFTPSAccounts {
-		itemPolicy, policyErr := policyForSubscription(pending.subscriptionID)
-		if policyErr != nil {
-			return convergenceSnapshot{}, policyErr
-		}
-		pending.account.Enabled = effectiveFTPSAccountEnabled(pending.lifecycleEnabled, itemPolicy)
-		if pending.account.Enabled {
-			ftps.State = "active"
-		}
-		ftps.Accounts = append(ftps.Accounts, pending.account)
-	}
-	snapshot.FTPS = &ftps
 	var valkey types.EnsureValkeyReq
 	err = tx.QueryRowContext(ctx, `SELECT instance.subscription_id,account.username,instance.desired_state,
 instance.memory_mb,instance.max_clients,instance.idle_timeout_seconds,instance.cpu_percent,instance.process_limit,instance.acl_hash,instance.flush_requested

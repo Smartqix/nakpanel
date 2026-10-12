@@ -71,6 +71,20 @@ func TestAccountTeardownRemovesWordPressBeforeDatabase(t *testing.T) {
 	}
 }
 
+func TestTeardownLocksGlobalFTPSBeforeIntentDeletes(t *testing.T) {
+	data, err := os.ReadFile("jobs.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := string(data)
+	lock := strings.Index(source, "controlquota.LockFTPSConvergenceTx(ctx, tx)")
+	deletion := strings.Index(source, "DELETE FROM ftp_accounts WHERE subscription_id=$1")
+	apply := strings.Index(source, "w.agent.EnsureFTPS(ctx, ftps)")
+	if lock < 0 || lock > deletion || deletion > apply {
+		t.Fatal("teardown must hold the shared node-wide lock before changing FTP intent through runtime apply")
+	}
+}
+
 func TestMarkAccountTerminatingClosesSubscriptionMutationGate(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

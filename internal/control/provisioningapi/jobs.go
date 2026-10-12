@@ -303,6 +303,9 @@ WHERE deployment.subscription_id=$1 ORDER BY deployment.id`, subscriptionID)
 		return err
 	}
 	defer tx.Rollback()
+	if err := controlquota.LockFTPSConvergenceTx(ctx, tx); err != nil {
+		return err
+	}
 	// Child tables cascade from sites/subscriptions where configured. Explicit deletes keep the tombstone subscription and billing identity.
 	if _, err = tx.ExecContext(ctx, `SELECT set_config('nakpanel.account_teardown','on',true)`); err != nil {
 		return err
