@@ -849,9 +849,13 @@ func (p *SubscriptionAccountProvisioner) renderSFTPKeys(req types.EnsureSubscrip
 	if err := os.MkdirAll(p.sshConfigDir, 0o755); err != nil {
 		return err
 	}
+	// sshd normally opens AuthorizedKeysFile as the login user. A fixed
+	// root-run lookup keeps this managed key store root-only and immutable.
 	config := fmt.Sprintf(`Match User %s
     ChrootDirectory %s
-    AuthorizedKeysFile %s
+    AuthorizedKeysFile none
+    AuthorizedKeysCommand /usr/bin/cat %q
+    AuthorizedKeysCommandUser root
     PasswordAuthentication no
     KbdInteractiveAuthentication no
     DisableForwarding yes

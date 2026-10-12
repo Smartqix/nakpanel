@@ -147,6 +147,15 @@ func TestEnsureSubscriptionAccountCreatesSharedLayoutAndLimits(t *testing.T) {
 		!strings.Contains(string(sshConfig), "DisableForwarding yes") {
 		t.Fatalf("sshd account config = %q", sshConfig)
 	}
+	for _, want := range []string{"AuthorizedKeysFile none", "AuthorizedKeysCommand /usr/bin/cat ", "AuthorizedKeysCommandUser root"} {
+		if !strings.Contains(string(sshConfig), want) {
+			t.Fatalf("root-only key store is not readable through the privileged lookup: missing %q", want)
+		}
+	}
+	keyInfo, err := os.Stat(filepath.Join(root, "ssh", "authorized_keys", "npaccount"))
+	if err != nil || keyInfo.Mode().Perm() != 0o600 {
+		t.Fatalf("authorized keys must remain private: info=%v error=%v", keyInfo, err)
+	}
 	slice, err := os.ReadFile(filepath.Join(units, "user-1201.slice.d", "50-nakpanel.conf"))
 	if err != nil {
 		t.Fatal(err)
