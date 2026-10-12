@@ -1008,9 +1008,12 @@ func (p *HostingToolkitProvisioner) EnsureFTPS(ctx context.Context, req types.En
 		return types.EnsureFTPSResult{}, err
 	}
 	hadUnit := false
+	unit := []byte(renderProFTPDUnit(configPath, p.homeRoot, req.Accounts))
+	unitChanged := true
 	for _, snapshot := range snapshots {
 		if snapshot.path == unitPath {
 			hadUnit = snapshot.exists
+			unitChanged = !snapshot.exists || !bytes.Equal(snapshot.data, unit)
 			break
 		}
 	}
@@ -1041,6 +1044,9 @@ func (p *HostingToolkitProvisioner) EnsureFTPS(ctx context.Context, req types.En
 		action := "stop"
 		if hadUnit {
 			action = "reload-or-restart"
+			if unitChanged {
+				action = "restart"
+			}
 		}
 		if _, serviceErr := p.runner.Run(context.Background(), "systemctl", action, p.ftpsService); serviceErr != nil {
 			rollbackErrors = append(rollbackErrors, serviceErr)
@@ -1057,7 +1063,7 @@ func (p *HostingToolkitProvisioner) EnsureFTPS(ctx context.Context, req types.En
 	if err := writeFileAtomic(configPath, []byte(config), 0o600); err != nil {
 		return rollback(err)
 	}
-	if err := writeFileAtomic(unitPath, []byte(renderProFTPDUnit(configPath, p.homeRoot, req.Accounts)), 0o644); err != nil {
+	if err := writeFileAtomic(unitPath, unit, 0o644); err != nil {
 		return rollback(err)
 	}
 	if err := writeFileAtomic(revisionPath, []byte(strconv.FormatInt(req.Revision, 10)+"\n"), 0o600); err != nil {
@@ -1076,7 +1082,11 @@ func (p *HostingToolkitProvisioner) EnsureFTPS(ctx context.Context, req types.En
 		if output, err = p.runner.Run(ctx, "systemctl", "enable", p.ftpsService); err != nil {
 			return rollback(fmt.Errorf("enable FTPS at boot: %w: %s", err, strings.TrimSpace(string(output))))
 		}
-		output, err = p.runner.Run(ctx, "systemctl", "reload-or-restart", p.ftpsService)
+		action := "reload-or-restart"
+		if hadUnit && unitChanged {
+			action = "restart"
+		}
+		output, err = p.runner.Run(ctx, "systemctl", action, p.ftpsService)
 	}
 	if err != nil {
 		return rollback(fmt.Errorf("converge FTPS service: %w: %s", err, strings.TrimSpace(string(output))))
@@ -1202,7 +1212,8 @@ func renderProFTPDUnit(configPath, homeRoot string, accounts []types.EnsureFTPSA
 		}
 		path := filepath.Join(homeRoot, account.Username)
 		if account.SiteID > 0 {
-			path = filepath.Join(path, "domains", account.Domain, "public_html")
+			// Restores replace public_html; mount its stable parent, not its inode.
+			path = filepath.Join(path, "domains", account.Domain)
 		}
 		writable[path] = true
 	}

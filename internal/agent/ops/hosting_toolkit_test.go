@@ -784,7 +784,7 @@ func TestRenderProFTPDUnitAllowsOnlyValidatedAccountHomes(t *testing.T) {
 	})
 	for _, marker := range []string{
 		"ProtectHome=read-only",
-		"ReadWritePaths=/run /var/log/proftpd /home/npalpha /home/npbeta/domains/example.test/public_html",
+		"ReadWritePaths=/run /var/log/proftpd /home/npalpha /home/npbeta/domains/example.test",
 	} {
 		if !strings.Contains(rendered, marker) {
 			t.Fatalf("ProFTPD unit missing %q:\n%s", marker, rendered)
@@ -792,6 +792,61 @@ func TestRenderProFTPDUnitAllowsOnlyValidatedAccountHomes(t *testing.T) {
 	}
 	if strings.Contains(rendered, "/home/npdisabled") {
 		t.Fatalf("disabled account home is writable:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "/public_html") {
+		t.Fatalf("FTPS sandbox pins a replaceable document root:\n%s", rendered)
+	}
+}
+
+func TestEnsureFTPSRefreshesChangedSandboxAndKeepsDomainChroot(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	docroot := filepath.Join(home, "npbeta", "domains", "example.test", "public_html")
+	for _, directory := range []string{filepath.Join(home, "npalpha"), docroot} {
+		if err := os.MkdirAll(directory, 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	bundle, _, _ := trustedCustomBundle(t, "example.test")
+	cert, key := filepath.Join(root, "cert.pem"), filepath.Join(root, "key.pem")
+	for path, data := range map[string][]byte{cert: bundle.CertificatePEM, key: bundle.PrivateKeyPEM} {
+		if err := os.WriteFile(path, data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runner := &toolkitRunner{}
+	p := NewHostingToolkitProvisioner(HostingToolkitOptions{
+		HomeRoot: home, FTPSConfigDir: filepath.Join(root, "config"), SystemdUnitDir: filepath.Join(root, "units"), Runner: runner,
+	})
+	p.lookupUser = func(string) (*user.User, error) { return &user.User{Uid: "1001", Gid: "1001"}, nil }
+	p.ftpsLogDir = filepath.Join(root, "logs")
+	request := types.EnsureFTPSReq{
+		Revision: 1, State: "active", TLSCertPath: cert, TLSKeyPath: key,
+		Accounts: []types.EnsureFTPSAccount{{ID: 1, Username: "npalpha", Name: "npalpha", PasswordHash: "$6$saltsalt$" + strings.Repeat("a", 86), Enabled: true}},
+	}
+	if _, err := p.EnsureFTPS(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	runner.calls = nil
+	request.Revision++
+	request.Accounts = append(request.Accounts, types.EnsureFTPSAccount{ID: 2, SiteID: 12, Domain: "example.test", Username: "npbeta", Name: "npbeta", PasswordHash: "$6$saltsalt$" + strings.Repeat("b", 86), Enabled: true})
+	if _, err := p.EnsureFTPS(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(runner.calls, "systemctl restart nakpanel-proftpd.service") {
+		t.Fatalf("changed sandbox was not restarted: %v", runner.calls)
+	}
+	auth, err := os.ReadFile(filepath.Join(p.ftpsConfigDir, "AuthUserFile"))
+	if err != nil || !strings.Contains(string(auth), ":"+docroot+":/usr/sbin/nologin") {
+		t.Fatalf("domain account lost its document-root chroot: %v", err)
+	}
+	runner.calls = nil
+	request.Revision++
+	if _, err := p.EnsureFTPS(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(runner.calls, "systemctl reload-or-restart nakpanel-proftpd.service") || slices.Contains(runner.calls, "systemctl restart nakpanel-proftpd.service") {
+		t.Fatalf("unchanged sandbox did not use an ordinary reload: %v", runner.calls)
 	}
 }
 
