@@ -275,7 +275,7 @@ func TestQueueGitDeploymentRejectsSuspendedSubscriptionBeforeMutation(t *testing
 		WillReturnRows(sqlmock.NewRows([]string{"subscription_status", "customer_status", "reseller_id"}).
 			AddRow("suspended", "active", nil))
 	mock.ExpectRollback()
-	if _, err := NewSQLStore(db).QueueGitDeployment(context.Background(), 83, 49); err == nil {
+	if _, err := NewSQLStore(db).QueueGitWorkspaceOperation(context.Background(), 83, 49, types.GitWorkspaceOperationInput{Action: "deploy", Revision: strings.Repeat("a", 40), ConfirmOverwrite: true}); err == nil {
 		t.Fatal("suspended subscription queued a Git deployment")
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

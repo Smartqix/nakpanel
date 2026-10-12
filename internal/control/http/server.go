@@ -47,7 +47,7 @@ type SiteCreator interface {
 }
 
 type SubdomainCreator interface {
-	CreateSubdomainFor(ctx context.Context, owner auth.SessionUser, parentSiteID int64, label string) (int64, error)
+	CreateSubdomainFor(ctx context.Context, owner auth.SessionUser, parentSiteID int64, label, phpVersion string) (int64, error)
 }
 
 type DatabaseCreator interface {
@@ -253,6 +253,7 @@ type ServerOptions struct {
 	MailManager                MailManager
 	ServerAdmin                ServerAdmin
 	DatabaseAdmin              DatabaseAdminService
+	DatabaseManager            *DatabaseManagerProxy
 	DNSTemplates               DNSTemplateManager
 	ApplicationLogs            ApplicationLogReader
 	PHPApplications            PHPApplicationService
@@ -284,6 +285,7 @@ type Server struct {
 	mail               MailManager
 	serverAdmin        ServerAdmin
 	databaseAdmin      DatabaseAdminService
+	databaseManager    *DatabaseManagerProxy
 	dnsTemplates       DNSTemplateManager
 	applicationLogs    ApplicationLogReader
 	phpApplications    PHPApplicationService
@@ -317,6 +319,7 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		mail:               opts.MailManager,
 		serverAdmin:        opts.ServerAdmin,
 		databaseAdmin:      opts.DatabaseAdmin,
+		databaseManager:    opts.DatabaseManager,
 		dnsTemplates:       opts.DNSTemplates,
 		applicationLogs:    opts.ApplicationLogs,
 		phpApplications:    opts.PHPApplications,
@@ -348,6 +351,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /sites/{id}/subdomains", s.handleCreateSubdomain)
 	mux.HandleFunc("POST /websites", s.handleCreateWebsite)
 	mux.HandleFunc("POST /databases", s.handleCreateDatabase)
+	s.registerDatabaseWorkspaceRoutes(mux)
 	mux.HandleFunc("POST /certificates", s.handleIssueCertificate)
 	mux.HandleFunc("POST /sites/{id}/certificates/custom", s.handleInstallCustomCertificate)
 	mux.HandleFunc("POST /jobs/retry", s.handleRetryJob)
@@ -365,6 +369,7 @@ func (s *Server) Handler() http.Handler {
 	s.registerServerBackupRoutes(mux)
 	s.registerPhase26DMailRoutes(mux)
 	RegisterDatabaseAdminRoutes(mux, s, s.databaseAdmin)
+	RegisterDatabaseManagerRoutes(mux, s, s.databaseManager)
 	mux.HandleFunc("POST /dns", s.handleConfigureDNS)
 	mux.HandleFunc("POST /reconcile", s.handleReconcileSystem)
 	mux.HandleFunc("POST /quotas", s.handleUpsertQuota)
@@ -408,6 +413,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /subscriptions/{id}/scheduled-tasks/{taskID}/run", s.handleRunScheduledTask)
 	mux.HandleFunc("POST /sites/{id}/git", s.handleGitRepository)
 	mux.HandleFunc("POST /sites/{id}/git/deploy", s.handleGitDeploy)
+	mux.HandleFunc("GET /sites/{id}/git/status", s.handleGitStatus)
+	mux.HandleFunc("POST /sites/{id}/git/key", s.handleGitKey)
+	for _, action := range []string{"prepare", "fetch", "test", "preview", "rollback", "disconnect"} {
+		mux.HandleFunc("POST /sites/{id}/git/"+action, s.handleGitWorkspaceAction(action))
+	}
 	mux.HandleFunc("POST /sites/{id}/git/webhook", s.handleGitWebhookRotate)
 	mux.HandleFunc("POST /git/hooks/{siteID}/{token}", s.handleGitWebhook)
 	mux.HandleFunc("POST /sites/{id}/staging", s.handleStagingOperation)
@@ -1441,9 +1451,18 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Site provisioning is not configured", http.StatusServiceUnavailable)
 		return
 	}
-	if err := r.ParseForm(); err != nil {
+	if err := parseSiteForm(r); err != nil {
+		status := http.StatusBadRequest
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			status = http.StatusRequestEntityTooLarge
+		}
 		if wantsSPAJSON(r) {
-			writeSPAError(w, http.StatusBadRequest, "Invalid site form")
+			writeSPAError(w, status, "Invalid site form")
+			return
+		}
+		if status == http.StatusRequestEntityTooLarge {
+			http.Error(w, "Request body too large", status)
 			return
 		}
 		formFailure(w, r, "Invalid site form")
@@ -1455,6 +1474,10 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		Username:       strings.ToLower(strings.TrimSpace(r.Form.Get("username"))),
 		Domain:         strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))),
 		PHPVersion:     strings.TrimSpace(r.Form.Get("php_version")),
+	}
+	if wantsSPAJSON(r) && req.SubscriptionID <= 0 {
+		writeSPAError(w, http.StatusBadRequest, "Select an active subscription.")
+		return
 	}
 	if (user.Role == auth.RoleClient || user.Role == auth.RoleReseller) && req.SubscriptionID <= 0 {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -1515,25 +1538,16 @@ func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	mediaType, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
-	if mediaType == "multipart/form-data" {
-		err = r.ParseMultipartForm(32 << 10)
-		if r.MultipartForm != nil {
-			defer r.MultipartForm.RemoveAll()
-		}
-	} else {
-		err = r.ParseForm()
-	}
-	if err != nil {
+	if err := parseSiteForm(r); err != nil {
 		if wantsSPAJSON(r) {
 			writeSPAError(w, http.StatusBadRequest, "Invalid subdomain form")
 		} else {
-			http.Error(w, "Invalid subdomain form", http.StatusBadRequest)
+			formFailure(w, r, "Invalid subdomain form")
 		}
 		return
 	}
 	label := strings.ToLower(strings.TrimSpace(r.Form.Get("label")))
-	siteID, err := creator.CreateSubdomainFor(r.Context(), user, parentID, label)
+	siteID, err := creator.CreateSubdomainFor(r.Context(), user, parentID, label, "")
 	if err != nil {
 		if errors.Is(err, provision.ErrForbidden) {
 			http.NotFound(w, r)
@@ -1542,7 +1556,7 @@ func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
 		if wantsSPAJSON(r) {
 			writeSPAError(w, http.StatusBadRequest, "Could not create subdomain: "+err.Error())
 		} else {
-			http.Error(w, "Could not create subdomain: "+err.Error(), http.StatusBadRequest)
+			formFailure(w, r, "Could not create subdomain: "+err.Error())
 		}
 		return
 	}
@@ -1574,7 +1588,7 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	engine := strings.TrimSpace(r.Form.Get("engine"))
+	engine := strings.ToLower(strings.TrimSpace(r.Form.Get("engine")))
 	if engine == "" {
 		engine = string(types.EngineMariaDB)
 	}
@@ -1584,6 +1598,15 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		Engine:         types.DBEngine(engine),
 		DBName:         strings.ToLower(strings.TrimSpace(r.Form.Get("db_name"))),
 		DBUser:         strings.ToLower(strings.TrimSpace(r.Form.Get("db_user"))),
+		Password:       r.Form.Get("password"),
+	}
+	if err := s.prepareDatabaseCreate(r, user, &req); err != nil {
+		if errors.Is(err, provision.ErrForbidden) {
+			http.NotFound(w, r)
+			return
+		}
+		writeSPAError(w, http.StatusBadRequest, "Could not validate database ownership.")
+		return
 	}
 	if (user.Role == auth.RoleClient || user.Role == auth.RoleReseller) && req.SubscriptionID <= 0 {
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -1594,13 +1617,34 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		formFailure(w, r, "Invalid database form: "+err.Error())
 		return
 	}
-	databaseID, err := s.databases.CreateDatabaseFor(r.Context(), user, resourceOwnerID, req)
+	if err = prepareDatabaseIdempotency(r, user, resourceOwnerID, &req); err != nil {
+		writeSPAError(w, http.StatusBadRequest, "Invalid database request key.")
+		return
+	}
+	var databaseID int64
+	if creator, ok := s.databases.(databaseIdempotentCreator); ok {
+		databaseID, err = creator.CreateDatabaseIdempotentFor(r.Context(), user, resourceOwnerID, req)
+	} else {
+		databaseID, err = s.databases.CreateDatabaseFor(r.Context(), user, resourceOwnerID, req)
+	}
 	if err != nil {
+		if errors.Is(err, provision.ErrDatabaseIdempotencyConflict) || errors.Is(err, provision.ErrDatabaseExists) {
+			if wantsSPAJSON(r) {
+				writeSPAError(w, http.StatusConflict, "Database name or request key is already in use.")
+				return
+			}
+			formFailure(w, r, "Database name or request key is already in use.")
+			return
+		}
 		if errors.Is(err, provision.ErrForbidden) {
 			http.NotFound(w, r)
 			return
 		}
-		formFailure(w, r, "Could not create database: "+err.Error())
+		if wantsSPAJSON(r) {
+			writeSPAError(w, http.StatusBadRequest, "Could not create database. Check the name, credentials and subscription limits.")
+			return
+		}
+		formFailure(w, r, "Could not create database. Check the name, credentials and subscription limits.")
 		return
 	}
 	customerID := int64(0)
@@ -1608,6 +1652,17 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 		customerID, _ = s.workspace.CustomerIDForSubscription(r.Context(), req.SubscriptionID)
 	}
 	s.recordAudit(r.Context(), user, customerID, req.SubscriptionID, "database.queued", "database", databaseID, map[string]any{"name": req.DBName})
+	if wantsSPAJSON(r) {
+		statusURL := ""
+		if req.SiteID > 0 {
+			statusURL = "/sites/" + strconv.FormatInt(req.SiteID, 10) + "/databases/status"
+			if supportID := parseFormInt64Default(r, "support_customer_id", 0); user.Role == auth.RoleAdmin && supportID > 0 {
+				statusURL += "?support_customer_id=" + strconv.FormatInt(supportID, 10)
+			}
+		}
+		writeSPAJSON(w, http.StatusAccepted, map[string]any{"ok": true, "database_id": databaseID, "status_url": statusURL, "notice": "Database provisioning queued."})
+		return
+	}
 	if req.SiteID > 0 {
 		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(req.SiteID, 10)+"?tab=databases&notice=database-queued"), http.StatusSeeOther)
 		return
@@ -1976,20 +2031,13 @@ func (s *Server) handleReconcileSystem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleAdminer(w http.ResponseWriter, r *http.Request) {
-	user, ok := s.requireAdmin(w, r)
+	_, ok := s.currentUser(w, r)
 	if !ok {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
-	if s.phase6 == nil {
-		http.Error(w, "Phase 6 operations are not configured", http.StatusServiceUnavailable)
-		return
-	}
-	token, err := s.phase6.CreateAdminerToken(r.Context(), user)
-	if err != nil {
-		http.Error(w, "Could not create Adminer token: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	renderPage(w, r, web.AdminerPage(token))
+	w.Header().Set("Cache-Control", "no-store")
+	http.Redirect(w, r, "/databases?notice=database-select", http.StatusSeeOther)
 }
 
 func (s *Server) handleUpsertQuota(w http.ResponseWriter, r *http.Request) {
@@ -3139,6 +3187,12 @@ func limitPostBody(next http.Handler, files FileManagerService) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			limit := int64(maxFormBodyBytes)
+			if strings.HasPrefix(r.URL.Path, "/database-manager/") {
+				limit = 17 << 20
+			}
+			if r.URL.Path == "/sites" {
+				limit = maxSiteFormBytes
+			}
 			if strings.HasSuffix(r.URL.Path, "/certificates/custom") {
 				limit = certificates.MaxBundleBytes
 			}
@@ -3146,6 +3200,10 @@ func limitPostBody(next http.Handler, files FileManagerService) http.Handler {
 				limit = files.UploadMaxBytes() + fileUploadOverhead
 			}
 			if r.ContentLength > limit {
+				if r.URL.Path == "/sites" && wantsSPAJSON(r) {
+					writeSPAError(w, http.StatusRequestEntityTooLarge, "Request body too large")
+					return
+				}
 				http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
 				return
 			}
@@ -3168,7 +3226,7 @@ func securityHeaders(next http.Handler) http.Handler {
 
 func csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path == "/login" || isGitWebhookRequest(r) {
+		if r.Method != http.MethodPost || r.URL.Path == "/login" || isGitWebhookRequest(r) || strings.HasPrefix(r.URL.Path, "/database-manager/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -3412,18 +3470,21 @@ type noticeEntry struct {
 
 var noticeCatalogue = map[string]noticeEntry{
 	// Provisioning
-	"site-queued":        {"Website queued. Provisioning usually completes within a minute.", dashboard.NoticeSuccess},
-	"database-queued":    {"Database queued. Credentials are shown once it is ready.", dashboard.NoticeSuccess},
-	"certificate-queued": {"Certificate requested. The status updates when the issuer responds.", dashboard.NoticeSuccess},
-	"backup-queued":      {"Backup queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
-	"restore-queued":     {"Restore queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
-	"webmail-queued":     {"Webmail configuration queued.", dashboard.NoticeSuccess},
-	"dns-queued":         {"DNS zone configuration queued.", dashboard.NoticeSuccess},
-	"reconcile-queued":   {"Reconciliation queued. Generated configs will be refreshed from intent.", dashboard.NoticeSuccess},
-	"staging-queued":     {"Staging operation queued. A rollback point will be created before the target changes.", dashboard.NoticeSuccess},
-	"git-deploy-queued":  {"Git deployment queued. The previous revision remains available as a rollback point.", dashboard.NoticeSuccess},
-	"job-retried":        {"Retry queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
-	"task-ran":           {"Scheduled task started. Its run appears in the task history.", dashboard.NoticeSuccess},
+	"site-queued":              {"Website queued. Provisioning usually completes within a minute.", dashboard.NoticeSuccess},
+	"subdomain-queued":         {"Subdomain queued. Hosting, DNS, and TLS status will appear as setup progresses.", dashboard.NoticeSuccess},
+	"database-queued":          {"Database creation queued. Its status updates automatically.", dashboard.NoticeSuccess},
+	"database-select":          {"Select a database to open phpMyAdmin.", dashboard.NoticeSuccess},
+	"database-password-queued": {"Password change queued. Wait for Ready to connect before updating your application.", dashboard.NoticeSuccess},
+	"certificate-queued":       {"Certificate requested. The status updates when the issuer responds.", dashboard.NoticeSuccess},
+	"backup-queued":            {"Backup queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"restore-queued":           {"Restore queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"webmail-queued":           {"Webmail configuration queued.", dashboard.NoticeSuccess},
+	"dns-queued":               {"DNS zone configuration queued.", dashboard.NoticeSuccess},
+	"reconcile-queued":         {"Reconciliation queued. Generated configs will be refreshed from intent.", dashboard.NoticeSuccess},
+	"staging-queued":           {"Staging operation queued. A rollback point will be created before the target changes.", dashboard.NoticeSuccess},
+	"git-deploy-queued":        {"Git deployment queued. The previous revision remains available as a rollback point.", dashboard.NoticeSuccess},
+	"job-retried":              {"Retry queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"task-ran":                 {"Scheduled task started. Its run appears in the task history.", dashboard.NoticeSuccess},
 
 	// Mail
 	"mail-settings-saved":     {"Mail server settings saved and convergence queued.", dashboard.NoticeSuccess},

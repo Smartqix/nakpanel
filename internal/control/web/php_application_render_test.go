@@ -152,7 +152,7 @@ func TestPHPSettingsExposeSubscriptionLimitsAndInlineErrorHooks(t *testing.T) {
 		t.Fatal("PHP memory field does not terminate")
 	}
 	field := body[fieldAt : fieldAt+fieldEnd]
-	for _, want := range []string{`min="0"`, `max="128"`, `aria-describedby="site-php-memory-help"`} {
+	for _, want := range []string{`min="1"`, `max="128"`, `aria-describedby="site_php_memory-help"`} {
 		if !strings.Contains(field, want) {
 			t.Fatalf("PHP memory field %q missing %q", field, want)
 		}
@@ -160,15 +160,15 @@ func TestPHPSettingsExposeSubscriptionLimitsAndInlineErrorHooks(t *testing.T) {
 	if !strings.Contains(body, "Subscription ceiling") || strings.Contains(body, "Provider ceiling") {
 		t.Fatalf("PHP settings summary does not describe the subscription ceiling:\n%s", body)
 	}
-	for _, want := range []string{`max="3" name="site_fpm_children"`, `max="64" name="site_php_opcache_memory"`} {
+	for _, want := range []string{`name="site_fpm_children" min="1" max="3"`, `name="site_php_opcache_memory" min="1" max="64"`} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("PHP settings do not expose subscription ceiling %q:\n%s", want, body)
 		}
 	}
 	for _, want := range []string{
-		`min="-1" max="" name="site_php_execution"`,
-		`min="1" max="30" name="site_php_input"`,
-		`min="-1" max="-1" name="site_php_post"`,
+		`name="site_php_execution" min="-1"`,
+		`name="site_php_input" min="1" max="30"`,
+		`name="site_php_post" min="-1"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("PHP operational setting does not match subscription semantics %q:\n%s", want, body)

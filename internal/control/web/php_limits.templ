@@ -1,0 +1,13 @@
+package web
+
+templ phpRuntimeLimit(label string, name string, value int, ceiling int) {
+	<label>{ label }
+		if ceiling > 0 {
+			<input type="number" name={ name } min="1" max={ formatPlanLimitFormValue(ceiling) } required value={ formatPlanLimitFormValue(value) } aria-describedby={ name+"-help" }/>
+			<small id={ name+"-help" }>Subscription maximum: { formatPlanLimit(ceiling) }. Unlimited is not permitted.</small>
+		} else {
+			<input type="number" name={ name } min="-1" required value={ formatPlanLimitFormValue(value) } aria-describedby={ name+"-help" }/>
+			<small id={ name+"-help" }>No finite subscription limit.</small>
+		}
+	</label>
+}

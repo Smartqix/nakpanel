@@ -335,12 +335,16 @@ const (
 )
 
 type CreateDatabaseReq struct {
-	SubscriptionID int64    `json:"subscription_id"`
-	SiteID         int64    `json:"site_id,omitempty"`
-	Engine         DBEngine `json:"engine"`
-	DBName         string   `json:"db_name"`
-	DBUser         string   `json:"db_user"`
-	Password       string   `json:"password"`
+	DatabaseID             int64    `json:"database_id,omitempty"`
+	IdempotencyScope       string   `json:"-"`
+	IdempotencyKey         string   `json:"-"`
+	IdempotencyFingerprint string   `json:"-"`
+	SubscriptionID         int64    `json:"subscription_id"`
+	SiteID                 int64    `json:"site_id,omitempty"`
+	Engine                 DBEngine `json:"engine"`
+	DBName                 string   `json:"db_name"`
+	DBUser                 string   `json:"db_user"`
+	Password               string   `json:"password"`
 }
 
 type CertIssuer string

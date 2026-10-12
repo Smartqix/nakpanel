@@ -235,10 +235,11 @@ func (w *CreateDatabaseWorker) Work(ctx context.Context, job *river.Job[CreateDa
 	defer clear(password)
 
 	resp, err := w.agent.CreateDatabase(ctx, types.CreateDatabaseReq{
-		Engine:   job.Args.Engine,
-		DBName:   job.Args.DBName,
-		DBUser:   job.Args.DBUser,
-		Password: string(password),
+		DatabaseID: job.Args.DatabaseID,
+		Engine:     job.Args.Engine,
+		DBName:     job.Args.DBName,
+		DBUser:     job.Args.DBUser,
+		Password:   string(password),
 	})
 	if err != nil {
 		w.markFailed(ctx, job.Args.DatabaseID, err.Error())

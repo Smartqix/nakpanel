@@ -74,6 +74,77 @@ func TestSiteIntentGuardRechecksQuotaUnderSubscriptionLock(t *testing.T) {
 	}
 }
 
+func TestSiteIntentGuardEnforcesSubdomainLimitAndExplicitParent(t *testing.T) {
+	for _, tc := range []struct {
+		name, domain string
+		parentID     int64
+		want         error
+	}{
+		{"subdomain limit", "blog.example.test", 5, controlquota.ErrExceeded},
+		{"generic website cannot bypass subdomain flow", "shop.example.test", 0, ErrSubdomainRequired},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			mock.ExpectBegin()
+			tx, err := db.BeginTx(context.Background(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			expectMutableSubscription(mock, 7)
+			mock.ExpectQuery(`SELECT e.max_sites`).WithArgs(int64(7)).WillReturnRows(
+				sqlmock.NewRows([]string{"max_sites", "max_subdomains", "max_databases", "max_backups", "backup_storage_mb", "overuse_policy", "hosting_enabled", "allow_backups"}).AddRow(1, 1, 2, 2, 128, "block", true, true),
+			)
+			mock.ExpectQuery(`SELECT subscription_id FROM sites`).WithArgs(tc.domain).WillReturnError(sql.ErrNoRows)
+			mock.ExpectQuery(`SELECT id,COALESCE\(parent_site_id,0\)`).WithArgs(tc.domain).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "parent_site_id", "subscription_id", "status", "desired_status"}).AddRow(int64(5), int64(0), int64(7), "active", "active"))
+			if tc.parentID > 0 {
+				mock.ExpectQuery(`SELECT COUNT\(\*\)::int FROM sites`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
+			}
+			mock.ExpectRollback()
+			if err := guardSiteIntentTx(context.Background(), tx, 7, tc.domain, tc.parentID); !errors.Is(err, tc.want) {
+				t.Fatalf("guardSiteIntentTx error = %v, want %v", err, tc.want)
+			}
+			_ = tx.Rollback()
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestSiteIntentGuardRejectsAnotherSubscriptionsParentDomain(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectBegin()
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectMutableSubscription(mock, 7)
+	mock.ExpectQuery(`SELECT e.max_sites`).WithArgs(int64(7)).WillReturnRows(
+		sqlmock.NewRows([]string{"max_sites", "max_subdomains", "max_databases", "max_backups", "backup_storage_mb", "overuse_policy", "hosting_enabled", "allow_backups"}).AddRow(1, 1, 2, 2, 128, "block", true, true),
+	)
+	mock.ExpectQuery(`SELECT subscription_id FROM sites`).WithArgs("blog.example.test").WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery(`SELECT id,COALESCE\(parent_site_id,0\)`).WithArgs("blog.example.test").WillReturnRows(
+		sqlmock.NewRows([]string{"id", "parent_site_id", "subscription_id", "status", "desired_status"}).AddRow(int64(5), int64(0), int64(99), "active", "active"),
+	)
+	mock.ExpectRollback()
+	if err := guardSiteIntentTx(context.Background(), tx, 7, "blog.example.test", 0); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("cross-subscription parent error = %v, want forbidden", err)
+	}
+	_ = tx.Rollback()
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestBackupIntentGuardAllowsOneReplacementAtLimit(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

@@ -218,6 +218,19 @@ type gitDeploymentStore interface {
 	TriggerGitWebhook(context.Context, int64, string) error
 }
 
+func (m *Manager) QueueGitWorkspaceOperation(ctx context.Context, actor auth.SessionUser, subscriptionID, siteID int64, input types.GitWorkspaceOperationInput) (int64, error) {
+	if _, err := m.authorizedAccountServices(ctx, actor, subscriptionID); err != nil {
+		return 0, err
+	}
+	store, ok := m.quotaStore.(interface {
+		QueueGitWorkspaceOperation(context.Context, int64, int64, types.GitWorkspaceOperationInput) (int64, error)
+	})
+	if !ok {
+		return 0, errors.New("Git workspace is not configured")
+	}
+	return store.QueueGitWorkspaceOperation(ctx, subscriptionID, siteID, input)
+}
+
 func (m *Manager) QueueGitDeployment(ctx context.Context, actor auth.SessionUser, subscriptionID, siteID int64) (int64, error) {
 	if _, err := m.authorizedAccountServices(ctx, actor, subscriptionID); err != nil {
 		return 0, err
@@ -256,6 +269,17 @@ func (m *Manager) TriggerGitWebhook(ctx context.Context, repositoryID int64, tok
 	}
 	sum := sha256.Sum256([]byte(token))
 	return store.TriggerGitWebhook(ctx, repositoryID, hex.EncodeToString(sum[:]))
+}
+
+func (m *Manager) TriggerGitWorkspaceWebhook(ctx context.Context, siteID int64, token, deliveryID, ref string) error {
+	store, ok := m.quotaStore.(interface {
+		TriggerGitWorkspaceWebhook(context.Context, int64, string, string, string) error
+	})
+	if !ok {
+		return errors.New("Git webhooks are not configured")
+	}
+	sum := sha256.Sum256([]byte(token))
+	return store.TriggerGitWorkspaceWebhook(ctx, siteID, hex.EncodeToString(sum[:]), deliveryID, ref)
 }
 
 func (m *Manager) QueueStagingOperation(ctx context.Context, actor auth.SessionUser, input types.StagingOperationInput) (int64, error) {

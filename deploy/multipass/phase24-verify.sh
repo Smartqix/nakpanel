@@ -44,6 +44,17 @@ site_id="$(db "SELECT id FROM sites WHERE desired_status='active' ORDER BY id LI
 subscription_id="$(db "SELECT subscription_id FROM sites WHERE id=${site_id}")"
 domain="$(db "SELECT domain FROM sites WHERE id=${site_id}")"
 username="$(db "SELECT username FROM subscription_system_accounts WHERE subscription_id=${subscription_id}")"
+deploy_git_revision(){
+  local revision sha
+  revision="$(db "SELECT operation_revision FROM git_repositories WHERE site_id=${site_id}")"
+  curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" -d "subscription_id=${subscription_id}" -d "expected_revision=${revision}" \
+    "https://${VM_IP}:7443/sites/${site_id}/git/fetch" -o /dev/null
+  wait_for "SELECT convergence_status FROM git_repositories WHERE site_id=${site_id}" "in_sync"
+  revision="$(db "SELECT operation_revision FROM git_repositories WHERE site_id=${site_id}")"
+  sha="$(db "SELECT fetched_revision FROM git_repositories WHERE site_id=${site_id}")"
+  curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" -d "subscription_id=${subscription_id}" -d "expected_revision=${revision}" -d "revision=${sha}" -d 'confirm=yes' \
+    "https://${VM_IP}:7443/sites/${site_id}/git/deploy" -o /dev/null
+}
 db "UPDATE subscription_entitlements SET hosting_policy=jsonb_set(jsonb_set(jsonb_set(COALESCE(hosting_policy,'{}'::jsonb),'{permissions,git}','true'::jsonb,true),'{permissions,staging}','true'::jsonb,true),'{permissions,applications}','true'::jsonb,true) WHERE subscription_id=${subscription_id}" >/dev/null
 
 curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
@@ -65,8 +76,7 @@ git -C "${work}" branch -M main
 git -C "${work}" remote add origin "/var/lib/nakpanel/git/site-${SITE_ID}/repository.git"
 git -C "${work}" push -q --force origin main
 REMOTE
-curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" -d "subscription_id=${subscription_id}" \
-  "https://${VM_IP}:7443/sites/${site_id}/git/deploy" -o /dev/null
+deploy_git_revision
 wait_for "SELECT status FROM git_deployments ORDER BY id DESC LIMIT 1" "succeeded"
 multipass_exec_short "${VM_NAME}" -- sudo test -f "/home/${username}/domains/${domain}/public_html/phase24.txt" || fail "hosted Git commit was not deployed"
 multipass exec "${VM_NAME}" -- sudo -u "${username}" env SITE_ID="${site_id}" bash -se <<'REMOTE'
@@ -82,8 +92,7 @@ git -C "${work}" add phase24-next.txt
 git -C "${work}" commit -qm 'verify deleted paths are removed'
 git -C "${work}" push -q origin main
 REMOTE
-curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" -d "subscription_id=${subscription_id}" \
-  "https://${VM_IP}:7443/sites/${site_id}/git/deploy" -o /dev/null
+deploy_git_revision
 wait_for "SELECT status FROM git_deployments ORDER BY id DESC LIMIT 1" "succeeded"
 multipass_exec_short "${VM_NAME}" -- sudo test ! -e "/home/${username}/domains/${domain}/public_html/phase24.txt" || fail "Git deployment retained a file deleted by the next revision"
 multipass_exec_short "${VM_NAME}" -- sudo test -f "/home/${username}/domains/${domain}/public_html/phase24-next.txt" || fail "second hosted Git revision was not deployed"

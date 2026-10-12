@@ -63,7 +63,10 @@ func TestMissingActiveSubscriptionDeniesProvisioning(t *testing.T) {
 func TestSiteLimitsDistinguishDomainsAndSubdomains(t *testing.T) {
 	store := fakeStore{
 		hasLimits: true,
-		limits: Limits{MaxSites: 1, MaxSubdomains: 2, SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 2, PHPMemoryMB: 128},
+		limits: Limits{
+			MaxSites: 1, MaxSubdomains: 2,
+			SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 2, PHPMemoryMB: 128,
+		},
 		usage: Usage{Sites: 2, Domains: 1, Subdomains: 1},
 	}
 	if _, _, err := SiteLimitsForSubscription(context.Background(), store, 7); !errors.Is(err, ErrExceeded) {

@@ -296,10 +296,11 @@ func TestCreateDatabaseWorkerCallsAgent(t *testing.T) {
 		t.Fatalf("Work returned error: %v", err)
 	}
 	want := types.CreateDatabaseReq{
-		Engine:   types.EngineMariaDB,
-		DBName:   "np_demo",
-		DBUser:   "np_demo_user",
-		Password: "generated-password",
+		DatabaseID: 11,
+		Engine:     types.EngineMariaDB,
+		DBName:     "np_demo",
+		DBUser:     "np_demo_user",
+		Password:   "generated-password",
 	}
 	if client.req != want {
 		t.Fatalf("CreateDatabase request = %#v, want %#v", client.req, want)

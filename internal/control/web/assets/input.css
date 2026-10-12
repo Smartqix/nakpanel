@@ -5353,6 +5353,11 @@
   .np-domain-db-state { justify-items: start; }
   .np-domain-db-state .np-error { color: var(--np-fail); overflow-wrap: anywhere; }
   .np-domain-db-dialog { max-width: 560px; }
+  .np-domain-db-actions { grid-column: 2 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .np-domain-db-actions form { margin: 0; }
+  .np-domain-db-actions .np-secondary-button { min-height: 44px; }
+  .np-domain-databases [data-np-db-feedback] { padding: 12px 20px; }
+  .np-domain-databases dialog input { min-height: 44px; }
   .np-domain-db-create-form { grid-template-columns: 1fr; }
   .np-domain-db-create-form label:first-of-type { grid-column: auto; }
   .np-domain-form { align-items: end; display: grid; gap: 14px; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 4px 16px 16px; }
@@ -6337,4 +6342,25 @@
     width: 40px;
   }
   .np-empty-state > a { margin-top: 4px; }
+}
+
+@layer components {
+  .np-list-table tr[data-subdomain] td:first-child { padding-left: 30px; }
+  .np-domain-block[data-subdomain] { margin-left: 18px; }
+  .np-subdomain-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; padding: 16px; }
+  .np-subdomain-parent { color: var(--np-muted); font-size: 13px; margin: 12px 16px 0; }
+  .np-subdomain-parent a { color: var(--np-primary); font-weight: 600; }
+  .np-subdomain-dns-note { margin: 0 16px 16px; }
+  .np-subdomain-steps > div { display: grid; gap: 8px; min-width: 0; }
+  .np-subdomain-steps strong { color: var(--np-ink); font-size: 13px; }
+  .np-subdomain-steps .np-status-pill { justify-self: start; }
+  .np-subdomain-setup > .np-callout, .np-subdomain-setup > .np-secondary-link { margin: 0 16px 16px; }
+  .np-subdomain-preview { background: var(--np-surface-2); border: 1px solid var(--np-border-soft); border-radius: 6px; color: var(--np-muted); grid-column: 1 / -1; margin: 0; padding: 10px 12px; overflow-wrap: anywhere; }
+  .np-subdomain-preview strong { color: var(--np-ink); }
+  .np-subdomain-dialog .np-form-help { grid-column: 1 / -1; margin: 0; }
+  @media (max-width: 640px) {
+    .np-subdomain-steps { grid-template-columns: 1fr; }
+    .np-list-table tr[data-subdomain] td:first-child { padding-left: 16px; }
+    .np-domain-block[data-subdomain] { margin-left: 0; }
+  }
 }

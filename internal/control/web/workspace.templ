@@ -20,6 +20,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<meta name="nakpanel-csrf" content={ view.CSRFToken }/>
 			<title>{ title }</title>
 			<link rel="stylesheet" href="/assets/app.css"/>
+			<link rel="stylesheet" href="/assets/git.css"/>
 		</head>
 		<body class="np-app np-routed" data-np-role={ string(user.Role) }>
 			<div class="np-routed-layout">
@@ -48,7 +49,9 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 				<script defer src="/assets/ace/ace.js"></script>
 			}
 			@confirmationDialog()
+			<script defer src="/assets/interaction.js"></script>
 			<script defer src="/assets/app.js"></script>
+			<script defer src="/assets/git.js"></script>
 		</body>
 	</html>
 }
@@ -462,15 +465,22 @@ templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions [
 							<th><button type="button" data-np-list-sort="3">TLS</button></th>
 							<th><button type="button" data-np-list-sort="4">Status</button></th>
 							<th><button type="button" data-np-list-sort="5">Health</button></th>
+							<th>Actions</th>
 						</tr>
 					</thead>
 					<tbody data-np-list-body>
-						for _, item := range sites {
+						for _, item := range sitesInDomainOrder(sites) {
 							{{ health := siteHealthOf(item) }}
-							<tr data-np-list-row data-status={ item.Status } data-health={ healthFilterValue(health) }>
+							<tr data-np-list-row data-status={ item.Status } data-health={ healthFilterValue(health) } data-subdomain?={ item.ParentSiteID>0 }>
 								<td data-label="Domain">
 									<a href={ templ.SafeURL(workspacePath(view, "/sites/" + formatJobID(item.ID))) }><strong>{ item.Domain }</strong></a>
-									<small>{ item.Username }</small>
+									<small>
+										if parent := parentDomain(sites,item); parent != "" {
+											Subdomain of { parent }
+										} else {
+											Primary domain
+										}
+									</small>
 								</td>
 								<td data-label="Subscription">
 									{ siteSubscriptionName(subscriptions, item) }
@@ -484,6 +494,11 @@ templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions [
 										<span class={ "np-pill " + severityPillClass(health.Severity) }>{ health.Summary }</span>
 									} else {
 										<span class="np-muted">&#8212;</span>
+									}
+								</td>
+								<td data-label="Actions">
+									if activeSubscriptionForSite(subscriptions,item) && actions.CanCreateSite && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
+										<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?add=subdomain")) }>Add subdomain</a>
 									}
 								</td>
 							</tr>
@@ -596,6 +611,9 @@ templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary
 		@subdomainSetupStatus(item,data,view)
 	}
 	@domainHealthPanel(item, view)
+	if item.ParentSiteID > 0 {
+		@subdomainSetupStatus(item,data,view)
+	}
 	<section class="np-panel np-domain-summary"><div class="np-panel-title"><div><h2>Hosting overview</h2><span class="np-muted">Desired and applied service state for this domain</span></div>@statusPill(item.SettingsStatus)</div>
 		<dl class="np-domain-overview-band"><div><dt>PHP</dt><dd>{ item.PHPVersion }</dd><small>dedicated FPM service</small></div><div><dt>TLS</dt><dd>{ formatTLSStatus(item) }</dd><small>HTTPS redirect { yesNo(item.HTTPSRedirect) }</small></div><div><dt>DNS</dt><dd>{ domainDNSStateForSite(data.Phase6,item) }</dd><small>{ dnsZoneDescription(item) }</small></div><div><dt>Databases</dt><dd>{ formatPlanLimit(len(databasesForSite(data.Databases,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) } subscription use</small></div><div><dt>Backups</dt><dd>{ formatPlanLimit(len(backupsForSite(data.Phase6.Backups,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.BackupsUsed,subscription.MaxBackups,true) } subscription use</small></div></dl>
 		if usage, ok := usageForSite(data.SubscriptionServices.SiteUsage,item.ID); ok {
@@ -644,15 +662,6 @@ templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary
 	</div></details>
 }
 
-templ ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view WorkspaceView) {
-	if len(childSites(sites,parent.ID)) > 0 {
-		<section class="np-panel"><div class="np-panel-title"><h2>Subdomains</h2></div><div class="np-object-list">
-			for _, child := range childSites(sites,parent.ID) {
-				<a class="np-object-row" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(child.ID))) }><span class="np-object-icon">@icon("globe")</span><span><strong>{ child.Domain }</strong><small>Hosting { child.Status } · DNS { child.DNSZoneMode } · TLS { child.TLSStatus }</small></span><span class={ "np-status-pill "+customerStatusClass(child.Status) }>{ child.Status }</span></a>
-			}
-		</div></section>
-	}
-}
 
 templ subdomainSetupStatus(item dashboard.Site, data dashboard.Data, view WorkspaceView) {
 	{{ zone, hasZone := dnsZoneForSiteWorkspace(data.Phase6.DNSZones,data.Phase6.DNSRecords,item) }}
@@ -678,6 +687,17 @@ templ subdomainSetupStatus(item dashboard.Site, data dashboard.Data, view Worksp
 		}
 	</section>
 }
+
+templ ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view WorkspaceView) {
+	if len(childSites(sites,parent.ID)) > 0 {
+		<section class="np-panel"><div class="np-panel-title"><h2>Subdomains</h2></div><div class="np-object-list">
+			for _, child := range childSites(sites,parent.ID) {
+				<a class="np-object-row" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(child.ID))) }><span class="np-object-icon">@icon("globe")</span><span><strong>{ child.Domain }</strong><small>Hosting { child.Status } · DNS { child.DNSZoneMode } · TLS { child.TLSStatus }</small></span><span class={ "np-status-pill "+customerStatusClass(child.Status) }>{ child.Status }</span></a>
+			}
+		</div></section>
+	}
+}
+
 
 templ domainToolGroup(title string) {
 	<section class="np-panel np-domain-tool-group"><div class="np-panel-title"><h2>{ title }</h2></div><div class="np-tool-grid">{ children... }</div></section>
@@ -793,10 +813,21 @@ templ domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription
 					</select><small>Changing version restarts only this domain’s PHP service.</small></label></div>
 				}
 				@domainSettingsSection("Process Manager","Worker behavior for this domain’s dedicated FPM pool",sitePolicyScopeCustomized(policyView,"php")) {
-					<div class="np-settings-fields"><label>FPM mode<select name="site_fpm_mode"><option value="ondemand" selected?={ policyView.EffectivePolicy.PHP.FPMMode=="ondemand" }>On demand</option><option value="dynamic" selected?={ policyView.EffectivePolicy.PHP.FPMMode=="dynamic" }>Dynamic</option></select></label><label>FPM children<input type="number" min={ siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.FPMMaxChildren) } max={ siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.FPMMaxChildren) } name="site_fpm_children" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.FPMMaxChildren) }/><small>Maximum allowed: { formatPlanLimit(policyView.InheritedPolicy.PHP.FPMMaxChildren) }</small></label><label>Maximum requests<input type="number" min={ siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.FPMMaxRequests) } max={ siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.FPMMaxRequests) } name="site_fpm_requests" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.FPMMaxRequests) }/></label><label>Idle timeout, seconds<input type="number" min={ siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.FPMIdleTimeoutSecs) } max={ siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.FPMIdleTimeoutSecs) } name="site_fpm_idle" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.FPMIdleTimeoutSecs) }/></label><label>Request termination, seconds<input type="number" min={ siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.RequestTerminateSecs) } max={ siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.RequestTerminateSecs) } name="site_fpm_terminate" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.RequestTerminateSecs) }/></label></div>
+					<div class="np-settings-fields"><label>FPM mode<select name="site_fpm_mode"><option value="ondemand" selected?={ policyView.EffectivePolicy.PHP.FPMMode=="ondemand" }>On demand</option><option value="dynamic" selected?={ policyView.EffectivePolicy.PHP.FPMMode=="dynamic" }>Dynamic</option></select></label>
+					@phpRuntimeLimit("FPM children","site_fpm_children",policyView.EffectivePolicy.PHP.FPMMaxChildren,policyView.InheritedPolicy.PHP.FPMMaxChildren)
+					@phpRuntimeLimit("Maximum requests","site_fpm_requests",policyView.EffectivePolicy.PHP.FPMMaxRequests,policyView.InheritedPolicy.PHP.FPMMaxRequests)
+					@phpRuntimeLimit("Idle timeout, seconds","site_fpm_idle",policyView.EffectivePolicy.PHP.FPMIdleTimeoutSecs,policyView.InheritedPolicy.PHP.FPMIdleTimeoutSecs)
+					@phpRuntimeLimit("Request termination, seconds","site_fpm_terminate",policyView.EffectivePolicy.PHP.RequestTerminateSecs,policyView.InheritedPolicy.PHP.RequestTerminateSecs)
+					</div>
 				}
 				@domainSettingsSection("Resource limits","PHP request limits constrained by the subscription",sitePolicyScopeCustomized(policyView,"php")) {
-					<div class="np-settings-fields"><label>Memory limit, MB<input type="number" min={ siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.MemoryLimitMB) } max={ siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.MemoryLimitMB) } name="site_php_memory" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.MemoryLimitMB) } aria-describedby="site-php-memory-help"/><small id="site-php-memory-help">Maximum allowed: { formatPlanLimitMB(policyView.InheritedPolicy.PHP.MemoryLimitMB) }</small></label><label>Execution time, seconds<input type="number" min={ siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.MaxExecutionSeconds) } max={ siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.MaxExecutionSeconds) } name="site_php_execution" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.MaxExecutionSeconds) }/></label><label>Input time, seconds<input type="number" min={ siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.MaxInputSeconds) } max={ siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.MaxInputSeconds) } name="site_php_input" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.MaxInputSeconds) }/></label><label>POST size, MB<input type="number" min={ siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.PostMaxMB) } max={ siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.PostMaxMB) } name="site_php_post" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.PostMaxMB) }/></label><label>Upload size, MB<input type="number" min={ siteBoundedSettingMinimum(policyView.InheritedPolicy.PHP.UploadMaxMB) } max={ siteBoundedSettingMaximum(policyView.InheritedPolicy.PHP.UploadMaxMB) } name="site_php_upload" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.UploadMaxMB) }/></label></div>
+					<div class="np-settings-fields">
+					@phpRuntimeLimit("Memory limit, MB","site_php_memory",policyView.EffectivePolicy.PHP.MemoryLimitMB,policyView.InheritedPolicy.PHP.MemoryLimitMB)
+					@phpRuntimeLimit("Execution time, seconds","site_php_execution",policyView.EffectivePolicy.PHP.MaxExecutionSeconds,policyView.InheritedPolicy.PHP.MaxExecutionSeconds)
+					@phpRuntimeLimit("Input time, seconds","site_php_input",policyView.EffectivePolicy.PHP.MaxInputSeconds,policyView.InheritedPolicy.PHP.MaxInputSeconds)
+					@phpRuntimeLimit("POST size, MB","site_php_post",policyView.EffectivePolicy.PHP.PostMaxMB,policyView.InheritedPolicy.PHP.PostMaxMB)
+					@phpRuntimeLimit("Upload size, MB","site_php_upload",policyView.EffectivePolicy.PHP.UploadMaxMB,policyView.InheritedPolicy.PHP.UploadMaxMB)
+					</div>
 				}
 				@domainSettingsSection("Error handling & security","Production-safe logging and high-risk runtime permissions",sitePolicyScopeCustomized(policyView,"php")) {
 					<div class="np-settings-toggles">@planToggle("site_php_log_errors","Log errors",policyView.EffectivePolicy.PHP.LogErrors) @planToggle("site_php_display_errors","Display errors",policyView.EffectivePolicy.PHP.DisplayErrors) @planToggle("site_php_url_fopen","URL fopen",policyView.EffectivePolicy.PHP.AllowURLFOpen) @planToggle("site_php_exec","PHP process execution",policyView.EffectivePolicy.PHP.ExecEnabled)</div>
@@ -804,7 +835,7 @@ templ domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription
 				}
 				@domainSettingsSection("OPcache","Compiled script caching for lower PHP latency",sitePolicyScopeCustomized(policyView,"php")) {
 					<div class="np-settings-toggles">@planToggle("site_php_opcache","OPcache",policyView.EffectivePolicy.PHP.OPcacheEnabled)</div>
-					<div class="np-settings-fields"><label>OPcache memory, MB<input type="number" min={ siteResourceLimitMinimum(policyView.InheritedPolicy.PHP.OPcacheMemoryMB) } max={ siteResourceLimitMaximum(policyView.InheritedPolicy.PHP.OPcacheMemoryMB) } name="site_php_opcache_memory" value={ formatPlanLimitFormValue(policyView.EffectivePolicy.PHP.OPcacheMemoryMB) }/></label></div>
+					<div class="np-settings-fields">@phpRuntimeLimit("OPcache memory, MB","site_php_opcache_memory",policyView.EffectivePolicy.PHP.OPcacheMemoryMB,policyView.InheritedPolicy.PHP.OPcacheMemoryMB)</div>
 				}
 				<div class="np-sticky-actions"><button class="np-secondary-button" type="submit" name="reset_scope" value="php" formaction={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/policy") } formnovalidate>Reset PHP</button><button class="np-secondary-button" type="submit" name="reset_scope" value="all" formaction={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/policy") } formnovalidate>Reset all</button><button type="submit" data-np-dirty-submit disabled>Save &amp; restart PHP</button></div>
 			</form>
@@ -871,41 +902,7 @@ templ domainStatistics(item dashboard.Site, subscription types.SubscriptionSumma
 }
 
 templ domainGit(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
-	@pageSectionHead("Git", "Deploy a verified branch below this domain document root.")
-	if policy, found := policyForSite(data.SubscriptionServices.SitePolicies,item.ID); !found {
-		<p class="np-gate is-blocked">Git policy is unavailable.</p>
-	} else if !policy.Permissions.Git {
-		<p class="np-gate">Git deployment is disabled by this subscription policy.</p>
-	} else {
-	<section class="np-panel">
-		if repository, found := gitForSite(data.SubscriptionServices.Git,item.ID); found {
-			<dl class="np-facts"><div><dt>Mode</dt><dd>{ repository.Mode }</dd></div><div><dt>Remote</dt><dd><code>{ repository.RemoteURL }</code></dd></div><div><dt>Branch</dt><dd>{ repository.Branch }</dd></div><div><dt>Target</dt><dd>{ repository.DeployTarget }</dd></div><div><dt>Last revision</dt><dd>{ repository.LastRevision }</dd></div><div><dt>State</dt><dd>@statusPill(repository.ConvergenceStatus)</dd></div><div><dt>Webhook</dt><dd>{ yesNo(repository.WebhookConfigured) }</dd></div></dl>
-			if repository.DeployPublicKey != "" {
-				<div class="np-callout"><strong>Read-only deploy key</strong><pre>{ repository.DeployPublicKey }</pre></div>
-			}
-			<div class="np-panel-actions"><form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/git/deploy") }>@csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><button type="submit">Deploy now</button></form>
-				if repository.Automatic {
-					<form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/git/webhook") }>@csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><button type="submit" class="np-secondary-button">Rotate webhook URL</button></form>
-				}
-			</div>
-			if len(gitDeploymentsForRepository(data.SubscriptionServices.GitDeployments,repository.ID)) > 0 {
-				<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Deployment</th><th>Revision</th><th>Status</th><th>Finished</th></tr></thead><tbody>
-					for _, deployment := range gitDeploymentsForRepository(data.SubscriptionServices.GitDeployments,repository.ID) {
-						<tr><td data-label="Deployment">#{ formatJobID(deployment.ID) }</td><td data-label="Revision"><code>{ deployment.Revision }</code></td><td data-label="Status">@statusPill(deployment.Status)</td><td data-label="Finished">{ formatTime(deployment.FinishedAt) }</td></tr>
-					}
-				</tbody></table></div>
-			}
-		}
-		<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/git") }>@csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/>
-			if repository, found := gitForSite(data.SubscriptionServices.Git,item.ID); found {
-				<input type="hidden" name="resource_id" value={ formatJobID(repository.ID) }/>
-				<input type="hidden" name="return_to" value="site-git"/><div class="np-form-grid"><label>Repository mode<select name="mode"><option value="remote" selected?={ repository.Mode=="remote" }>Remote repository</option><option value="hosted" selected?={ repository.Mode=="hosted" }>Panel hosted</option></select></label><label>Branch<input name="branch" value={ repository.Branch } required/></label><label class="np-wide-field">Remote URL<input name="remote_url" value={ repository.RemoteURL } placeholder="ssh://git@example/repository.git"/></label><label class="np-wide-field">Verified SSH host key<input name="known_host_key" value={ repository.KnownHostKey } placeholder="git.example ssh-ed25519 AAAA..."/></label><label>Deployment target<input name="deploy_target" value={ repository.DeployTarget } required/></label><label class="np-check"><input type="checkbox" name="automatic" value="true" checked?={ repository.Automatic }/>Automatic deployment</label></div>
-			} else {
-				<input type="hidden" name="return_to" value="site-git"/><div class="np-form-grid"><label>Repository mode<select name="mode"><option value="remote">Remote repository</option><option value="hosted">Panel hosted</option></select></label><label>Branch<input name="branch" value="main" required/></label><label class="np-wide-field">Remote URL<input name="remote_url" placeholder="ssh://git@example/repository.git"/></label><label class="np-wide-field">Verified SSH host key<input name="known_host_key" placeholder="git.example ssh-ed25519 AAAA..."/></label><label>Deployment target<input name="deploy_target" value="." required/></label><label class="np-check"><input type="checkbox" name="automatic" value="true"/>Automatic deployment</label></div>
-			}
-			<p class="np-form-help">Deployment paths remain below public_html. Remote URLs cannot contain credentials. SSH remotes require a pinned host key.</p><button type="submit">Save repository</button></form>
-	</section>
-	}
+	@gitWorkspace(item,subscription,data,view)
 }
 
 templ domainPHPApplication(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
@@ -2026,7 +2023,7 @@ templ domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.S
 }
 
 templ domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary, databases []dashboard.Database, actions DashboardActions, view WorkspaceView) {
-	<section class="np-panel np-domain-settings np-domain-databases" data-np-domain-databases>
+	<section class="np-panel np-domain-settings np-domain-databases" data-np-domain-databases data-np-db-support={formatJobID(view.SupportCustomerID)} data-np-db-status-url={ databaseScopedURL("/sites/"+formatJobID(item.ID)+"/databases/status",view) }>
 		<header class="np-domain-db-head">
 			<div class="np-domain-db-title">
 				<span class="np-settings-category-icon">@icon("database")</span>
@@ -2036,6 +2033,7 @@ templ domainDatabases(item dashboard.Site, subscription types.SubscriptionSummar
 				<button type="button" data-np-dialog-open={ "database-create-dialog-"+formatJobID(item.ID) }>@icon("plus")<span>Create database</span></button>
 			}
 		</header>
+		<p class="np-form-help" data-np-db-feedback role="status" hidden></p>
 		<dl class="np-domain-db-summary" aria-label="Database allocation summary">
 			<div><dt>Domain databases</dt><dd>{ formatPlanLimit(len(databases)) }</dd><small>assigned here</small></div>
 			<div><dt>Subscription usage</dt><dd>{ formatQuotaCompactCount(subscription.DatabasesUsed, subscription.MaxDatabases, true) }</dd><small>{ subscription.SubscriptionName }</small></div>
@@ -2052,17 +2050,20 @@ templ domainDatabases(item dashboard.Site, subscription types.SubscriptionSummar
 		} else {
 			<div class="np-domain-db-list">
 				for _, database := range databases {
-					<article class="np-domain-db-row">
+					<article class="np-domain-db-row" data-np-db-id={ formatJobID(database.ID) } data-np-db-state={ database.Status }>
 						<span class="np-domain-db-icon">@icon("database")</span>
 						<div class="np-domain-db-identity"><strong>{ database.Name }</strong><small>{ databaseEngineLabel(database.Engine) }</small></div>
 						<div class="np-domain-db-principal"><span>Database user</span><code>{ database.User }</code></div>
 						<div class="np-domain-db-state">@statusPill(database.Status)
 							if database.LastError != "" {
-								<small class="np-error">{ database.LastError }</small>
+								<small class="np-error">Provisioning did not complete. Retry or contact your provider.</small>
+							} else if database.Status == "pending" || database.Status == "provisioning" {
+								<small data-np-database-pending role="status">Creating database. Status updates automatically.</small>
 							} else {
 								<small>Provisioning state is current</small>
 							}
 						</div>
+						@databaseRowActions(database, actions, view)
 					</article>
 				}
 			</div>
@@ -2075,18 +2076,20 @@ templ domainDatabases(item dashboard.Site, subscription types.SubscriptionSummar
 					<h2 id={ "database-create-title-"+formatJobID(item.ID) }>Create database</h2>
 					<p>The database will belong to { item.Domain } under { subscription.SubscriptionName }.</p>
 				</div>
-				<form class="np-form np-dialog-form np-domain-db-create-form" method="post" action="/databases">
+				<form class="np-form np-dialog-form np-domain-db-create-form" method="post" action="/databases" data-np-domain-db-form>
 					@csrfInput(view)
 					<input type="hidden" name="subscription_id" value={ formatJobID(item.SubscriptionID) }/>
 					<input type="hidden" name="site_id" value={ formatJobID(item.ID) }/>
 					<input type="hidden" name="engine" value="mariadb"/>
-					<label>Database name<input name="db_name" autocomplete="off" placeholder="application_db" required/></label>
-					<label>Database user<input name="db_user" autocomplete="off" placeholder="application_user" required/></label>
-					<p class="np-form-help">Names are validated by the server and provisioned through the privileged agent. Credentials remain write-only.</p>
-					<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Queue database</button></div>
+					<label>Database name<input name="db_name" autocomplete="off" placeholder="application_db" pattern="[a-z][a-z0-9_]{1,47}" maxlength="48" required/></label>
+					<label>Database user<input name="db_user" autocomplete="off" placeholder="application_user" pattern="[a-z][a-z0-9_]{1,47}" maxlength="48" required/></label>
+					@databasePasswordInput()
+					<p class="np-error" data-np-db-form-error role="alert" hidden></p>
+					<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create database</button></div>
 				</form>
 			</dialog>
 		}
+		<dialog class="np-dialog" id="database-connection-dialog" data-np-dialog aria-labelledby="database-connection-title"><div class="np-dialog-head"><h2 id="database-connection-title">Connection details</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close">@icon("x")</button></div><div class="np-dialog-form"><pre data-np-db-connection-output class="np-log-output"></pre><p class="np-form-help">Use the password saved when creating the database. Reset it only if it is lost.</p></div></dialog>
 	</section>
 }
 
@@ -2676,7 +2679,7 @@ templ customEntitlementEditor(subscription types.SubscriptionSummary, data dashb
 			<div class="np-plan-field-grid">
 				@planLimitField("Disk space","disk_mb",subscription.DiskMB,"MB")
 				@planLimitField("Monthly traffic","bandwidth_mb",subscription.BandwidthMB,"MB")
-				@planLimitField("Websites","max_sites",subscription.MaxSites,"count")
+				@planLimitField("Domains","max_sites",subscription.MaxSites,"count")
 				@planLimitField("Subdomains","max_subdomains",subscription.MaxSubdomains,"count")
 				@planLimitField("Domain aliases","max_domain_aliases",subscription.MaxDomainAliases,"count")
 				@planLimitField("Databases","max_databases",subscription.MaxDatabases,"count")
@@ -2740,10 +2743,11 @@ templ subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Wor
 			<span class="np-object-icon">@icon("globe")</span>
 			<div>
 				<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))) }><strong>{ site.Domain }</strong></a>
-				<span>{ site.Username } · PHP { site.PHPVersion }
+				<span>
 					if parent := parentDomain(data.Sites,site); parent != "" {
-						 · Subdomain of { parent }
+						Subdomain of { parent } ·
 					}
+					PHP { site.PHPVersion }
 				</span>
 			</div>
 			@statusPill(site.Status)
@@ -2847,7 +2851,7 @@ templ addonPlanTable(data dashboard.Data, view WorkspaceView) {
 		<div class="np-table-wrap"><table class="np-table np-plan-table"><thead><tr><th><span class="np-sr-only">Select</span></th><th>Add-on</th><th>Provider</th><th>Resources added</th><th>Revision</th><th>Status</th></tr></thead><tbody>
 		for _, addon := range data.AddonPlans {
 			if addonMatchesFilter(addon, view) {
-				<tr><td data-label="Select" class="np-select-cell"><input type="checkbox" name="addon_id" value={ formatPlanID(addon.ID) } data-np-bulk-check aria-label={ "Select " + addon.Name }/></td><td data-label="Add-on"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/addons/" + formatPlanID(addon.ID)) }><strong>{ addon.Name }</strong><small>{ addon.Description }</small></a></td><td data-label="Provider">{ addonProvider(addon, data.Resellers) }</td><td data-label="Resources"><span class="np-resource-summary"><strong>+{ formatPlanLimitMB(addon.Entitlements.DiskMB) }</strong><small>+{ formatPlanLimit(addon.Entitlements.MaxSites) } sites · +{ formatPlanLimit(addon.Entitlements.MaxDatabases) } databases</small></span></td><td data-label="Revision">{ formatPlanID(int64(addon.Revision)) }</td><td data-label="Status">@statusPill(planActiveStatus(addon.IsActive))</td></tr>
+				<tr><td data-label="Select" class="np-select-cell"><input type="checkbox" name="addon_id" value={ formatPlanID(addon.ID) } data-np-bulk-check aria-label={ "Select " + addon.Name }/></td><td data-label="Add-on"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/addons/" + formatPlanID(addon.ID)) }><strong>{ addon.Name }</strong><small>{ addon.Description }</small></a></td><td data-label="Provider">{ addonProvider(addon, data.Resellers) }</td><td data-label="Resources"><span class="np-resource-summary"><strong>+{ formatPlanLimitMB(addon.Entitlements.DiskMB) }</strong><small>+{ formatPlanLimit(addon.Entitlements.MaxSites) } domains · +{ formatPlanLimit(addon.Entitlements.MaxSubdomains) } subdomains</small></span></td><td data-label="Revision">{ formatPlanID(int64(addon.Revision)) }</td><td data-label="Status">@statusPill(planActiveStatus(addon.IsActive))</td></tr>
 			}
 		}
 	</tbody></table></div></form></section>
@@ -3140,17 +3144,18 @@ templ routedSubdomainDialog(parent dashboard.Site, subscription types.Subscripti
 }
 
 templ routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities, view WorkspaceView) {
-	<dialog class="np-dialog" id="site-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Hosting services</span><h2>Add website</h2><p>Limits are derived from the selected subscription.</p></div><form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>@csrfInput(view)@routedSubscriptionSelect(subscriptions,capabilities)<label>Domain<input name="domain" required/></label><input type="hidden" name="username" value="npsystem"/><label>PHP<select name="php_version" data-np-site-php>
+	<dialog class="np-dialog" id="site-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Hosting services</span><h2>Add website</h2><p>Use this for an independent domain. Add subdomains from their parent website.</p></div><form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>@csrfInput(view)@routedSubscriptionSelect(subscriptions,capabilities)<label>Domain<input name="domain" required/></label><input type="hidden" name="username" value="npsystem"/><label>PHP<select name="php_version" data-np-site-php>
 		for _, version := range subscriptionPHPVersions(subscriptions,capabilities) {
 			<option value={ version }>{ version }</option>
 		}
 	</select></label><p class="np-gate" data-np-customer-gate></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit>Create website</button></div></form></dialog>
 }
 
+
 templ routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities) {
 	<label>Subscription <select name="subscription_id" required>
 		for _, subscription := range subscriptions {
-			<option value={ formatQuotaUserID(subscription.ID) } data-subscription-id={ formatQuotaUserID(subscription.ID) } data-customer-id={ formatQuotaUserID(subscription.CustomerID) } data-email={ subscription.CustomerEmail } data-plan-name={ subscription.PlanName } data-has-quota="true" data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.DomainsUsed) } data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) } data-php-versions={ joinStrings(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist)) } data-default-php={ controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion) }>{ subscriptionSelectLabel(subscription) }</option>
+			<option value={ formatQuotaUserID(subscription.ID) } data-subscription-id={ formatQuotaUserID(subscription.ID) } data-customer-id={ formatQuotaUserID(subscription.CustomerID) } data-email={ subscription.CustomerEmail } data-plan-name={ subscription.PlanName } data-has-quota="true" data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.DomainsUsed) } data-overuse-policy={ string(subscription.OverusePolicy) } data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) } data-php-versions={ joinStrings(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist)) } data-default-php={ controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion) }>{ subscriptionSelectLabel(subscription) }</option>
 		}
 	</select></label>
 }

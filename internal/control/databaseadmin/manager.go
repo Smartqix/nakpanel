@@ -5,6 +5,7 @@ package databaseadmin
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -29,10 +30,6 @@ const (
 	pendingSecretScope   = "database_pending"
 	canonicalSecretScope = "database"
 )
-
-func pendingCredentialName(operationID string) string {
-	return "rotation_" + strings.ToLower(operationID)
-}
 
 type Agent interface {
 	InspectDatabaseAdmin(context.Context, types.InspectDatabaseAdminReq) (types.DatabaseAdminSnapshot, error)
@@ -235,6 +232,7 @@ func SafeError(err error) string {
 }
 
 type mutationRequest struct {
+	SubscriptionID  int64                     `json:"-"`
 	Action          types.DatabaseAdminAction `json:"action"`
 	Target          types.DatabaseAdminTarget `json:"target"`
 	Role            types.DatabaseAdminRole   `json:"role,omitempty"`
@@ -261,6 +259,11 @@ func (m *Manager) queueMutation(ctx context.Context, actorUserID int64, request 
 
 	// Serialize creation per tracked target. River uniqueness is a second line of
 	// defense; the advisory lock prevents an orphaned pending operation record.
+	if request.SubscriptionID > 0 {
+		if err := guardScopedDatabaseMutation(ctx, tx, request.Target.DatabaseID, request.SubscriptionID); err != nil {
+			return types.ManageDatabaseAdminResult{}, err
+		}
+	}
 	if _, err := tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock($1)`, request.Target.DatabaseID+26000000); err != nil {
 		return types.ManageDatabaseAdminResult{}, fmt.Errorf("lock database administration target: %w", err)
 	}
@@ -274,6 +277,9 @@ WHERE target_type='database' AND target_key=$1
 ORDER BY id DESC
 LIMIT 1`, strconv.FormatInt(request.Target.DatabaseID, 10)).Scan(&activeOperationID, &activeAction, &activePayload)
 	if err == nil {
+		if request.Action == types.DatabaseAdminRotatePassword {
+			return types.ManageDatabaseAdminResult{}, ErrOperationInProgress
+		}
 		var activeRequest mutationRequest
 		_ = json.Unmarshal(activePayload, &activeRequest)
 		return types.ManageDatabaseAdminResult{
@@ -286,6 +292,9 @@ LIMIT 1`, strconv.FormatInt(request.Target.DatabaseID, 10)).Scan(&activeOperatio
 	}
 
 	if request.Action == types.DatabaseAdminRotatePassword {
+		if _, err := tx.ExecContext(ctx, `UPDATE database_manager_grants SET revoked_at=now() WHERE database_id=$1 AND revoked_at IS NULL`, request.Target.DatabaseID); err != nil {
+			return types.ManageDatabaseAdminResult{}, errors.New("revoke database manager sessions failed")
+		}
 		if len(plaintext) != 1 || len(plaintext[0]) == 0 {
 			return types.ManageDatabaseAdminResult{}, errors.New("replacement database password is required")
 		}
@@ -333,4 +342,8 @@ func mustJSON(value map[string]any) json.RawMessage {
 		return json.RawMessage(`{}`)
 	}
 	return payload
+}
+
+func pendingCredentialName(operationID string) string {
+	return fmt.Sprintf("rotation-%x", sha256.Sum256([]byte(operationID)))
 }

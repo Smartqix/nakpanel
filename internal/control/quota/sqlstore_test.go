@@ -152,13 +152,13 @@ func TestGetUsageForSubscriptionCountsOnlySelectedSubscription(t *testing.T) {
 	mock.ExpectQuery("subscription_id = \\$1").
 		WithArgs(int64(44)).
 		WillReturnRows(sqlmock.NewRows([]string{"subscription_id", "sites", "domains", "subdomains", "databases", "backups", "backup_storage_bytes"}).
-			AddRow(int64(44), 1, 1, 0, 2, 3, int64(4096)))
+			AddRow(int64(44), 2, 1, 1, 2, 3, int64(4096)))
 
 	usage, err := store.GetUsageForSubscription(context.Background(), 44)
 	if err != nil {
 		t.Fatalf("GetUsageForSubscription returned error: %v", err)
 	}
-	if usage.SubscriptionID != 44 || usage.Sites != 1 || usage.Databases != 2 || usage.Backups != 3 || usage.BackupStorageBytes != 4096 {
+	if usage.SubscriptionID != 44 || usage.Sites != 2 || usage.Domains != 1 || usage.Subdomains != 1 || usage.Databases != 2 || usage.Backups != 3 || usage.BackupStorageBytes != 4096 {
 		t.Fatalf("usage = %#v, want selected subscription counts", usage)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

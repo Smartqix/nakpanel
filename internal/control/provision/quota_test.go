@@ -162,6 +162,53 @@ func TestManagerCreatesSiteForSelectedSubscription(t *testing.T) {
 	}
 }
 
+func TestManagerCreatesSubdomainWithinSeparateAllowance(t *testing.T) {
+	repo := &fakeSiteRepository{parent: SubdomainParent{ID: 9, SubscriptionID: 44, Domain: "example.test", Username: "npdemo", Status: "active", DesiredStatus: "active"}}
+	quotas := &fakeQuotaStore{
+		hasLimits: true,
+		limits:    controlquota.Limits{MaxSites: 1, MaxSubdomains: 2, SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 3, PHPMemoryMB: 128},
+		usage:     controlquota.Usage{Sites: 2, Domains: 1, Subdomains: 1},
+	}
+	manager := NewManager(repo, WithQuotaStore(quotas))
+	_, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "blog", "8.3")
+	if err != nil {
+		t.Fatalf("CreateSubdomainFor: %v", err)
+	}
+	if repo.req.Domain != "blog.example.test" || repo.req.ParentSiteID != 9 || repo.req.SubscriptionID != 44 {
+		t.Fatalf("site request = %#v", repo.req)
+	}
+	quotas.usage.Subdomains = 2
+	repo.req = types.CreateSiteReq{}
+	_, err = manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "shop", "8.3")
+	if !errors.Is(err, controlquota.ErrExceeded) || repo.req != (types.CreateSiteReq{}) {
+		t.Fatalf("over-limit request = %#v, error = %v", repo.req, err)
+	}
+}
+
+func TestManagerRejectsInactiveParentAndInvalidSubdomainName(t *testing.T) {
+	repo := &fakeSiteRepository{parent: SubdomainParent{ID: 9, SubscriptionID: 44, Domain: "example.test", Username: "npdemo", Status: "pending", DesiredStatus: "active"}}
+	manager := NewManager(repo, WithQuotaStore(&fakeQuotaStore{hasLimits: true}))
+	if _, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "blog", "8.3"); err == nil {
+		t.Fatal("pending parent accepted")
+	}
+	repo.parent.Status = "active"
+	if _, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "blog.example", "8.3"); err == nil {
+		t.Fatal("multi-label subdomain accepted")
+	}
+	if repo.req != (types.CreateSiteReq{}) {
+		t.Fatalf("repository called for invalid parent/name: %#v", repo.req)
+	}
+}
+
+func TestManagerRejectsForeignSubdomainParentBeforeProvisioning(t *testing.T) {
+	repo := &fakeSiteRepository{parent: SubdomainParent{ID: 9, SubscriptionID: 44, Domain: "example.test", Username: "npdemo", Status: "active", DesiredStatus: "active"}}
+	manager := NewManager(repo, WithAccessPolicy(fakeAccessPolicy{allow: false}))
+	_, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 2, Role: auth.RoleClient}, 9, "blog", "8.3")
+	if !errors.Is(err, ErrForbidden) || repo.req != (types.CreateSiteReq{}) {
+		t.Fatalf("foreign parent request = %#v, error = %v", repo.req, err)
+	}
+}
+
 func TestManagerRejectsSiteCreationAtQuotaAndDoesNotCallRepository(t *testing.T) {
 	repo := &fakeSiteRepository{}
 	quotas := &fakeQuotaStore{
@@ -188,7 +235,7 @@ func TestManagerCreatesSubdomainUnderParentWithPlanPHP(t *testing.T) {
 	repo := &fakeSiteRepository{parent: SubdomainParent{ID: 9, SubscriptionID: 44, Domain: "example.test", Status: "active", DesiredStatus: "active"}}
 	quotas := &fakeQuotaStore{hasLimits: true, limits: controlquota.Limits{MaxSites: 1, MaxSubdomains: 2, DefaultPHPVersion: "8.4", PHPAllowlist: "8.4", SiteDiskQuotaMB: 512, PHPFPMMaxChildren: 3, PHPMemoryMB: 128}, usage: controlquota.Usage{Sites: 1, Domains: 1}}
 	manager := NewManager(repo, WithQuotaStore(quotas))
-	_, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "Blog.Example.Test")
+	_, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "Blog.Example.Test", "")
 	if err != nil {
 		t.Fatalf("CreateSubdomainFor: %v", err)
 	}
@@ -203,7 +250,7 @@ func TestManagerCreatesSubdomainUnderParentWithPlanPHP(t *testing.T) {
 func TestManagerRejectsNestedSubdomainWithoutWritingIntent(t *testing.T) {
 	repo := &fakeSiteRepository{parent: SubdomainParent{ID: 9, ParentSiteID: 2, SubscriptionID: 44, Domain: "blog.example.test", Status: "active", DesiredStatus: "active"}}
 	manager := NewManager(repo)
-	if _, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "news"); err == nil {
+	if _, err := manager.CreateSubdomainFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 9, "news", ""); err == nil {
 		t.Fatal("nested subdomain was accepted")
 	}
 	if repo.req != (types.CreateSiteReq{}) {

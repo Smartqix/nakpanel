@@ -1,0 +1,29 @@
+.np-git {font-size:15px;line-height:1.55;min-width:0}
+.np-git h2 {font-size:24px}.np-git h3 {font-size:18px}.np-git p {color:var(--np-muted);margin:8px 0 16px}
+.np-git-heading,.np-git-summary,.np-git-actions {display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.np-git-heading h2 {margin:0}.np-git-heading p {margin:4px 0}.np-git-actions {justify-content:flex-start;margin:20px 0}
+.np-git-tabs {display:flex;gap:24px;border-bottom:1px solid var(--np-border);margin:24px 0 0;overflow-x:auto;white-space:nowrap}
+.np-git-tabs a {padding:12px 0;color:var(--np-muted);border-bottom:2px solid transparent;text-decoration:none}
+.np-git-tabs a[aria-selected=true] {color:var(--np-primary);border-color:var(--np-primary)}
+.np-git [data-git-panel] {padding:24px 0;min-width:0}.np-git [hidden] {display:none!important}
+.np-git-facts {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;border-block:1px solid var(--np-border);padding:24px 0;margin-top:20px}
+.np-git dt {font-size:14px;color:var(--np-muted)}.np-git dd {margin:6px 0 0}.np-git code,.np-git pre,.np-git-summary h3 {overflow-wrap:anywhere;white-space:pre-wrap;word-break:break-word}
+.np-git-summary h3 {margin:0;max-width:100%}.np-git .np-table {font-size:14px}.np-git .np-table pre {max-width:560px;max-height:320px;overflow:auto}
+.np-git-empty {padding:48px 16px;text-align:center}.np-git-empty>svg {height:40px;width:40px;margin:auto;color:var(--np-muted)}
+.np-git-settings {display:block;width:100%;max-width:800px}.np-git fieldset {display:block;width:100%;border:0;border-bottom:1px solid var(--np-border);padding:20px 0;margin:0;min-width:0;box-sizing:border-box}.np-git legend {font-size:16px;font-weight:600;padding-top:16px}
+.np-git label {font-size:14px}.np-git-settings fieldset>label,.np-git-settings .np-form-grid>label {display:grid;width:100%;gap:8px}.np-git input:not([type=checkbox]):not([type=hidden]),.np-git select,.np-git textarea {display:block;width:100%;box-sizing:border-box;font-size:15px;min-height:44px;max-width:100%;border:1px solid var(--np-border);border-radius:4px;padding:10px 12px;background:var(--np-surface,#fff);color:inherit}.np-git textarea {resize:vertical}.np-git-settings label.np-check {display:flex;width:auto;align-items:center;gap:10px;min-height:44px}.np-git input[type=checkbox] {width:18px;height:18px;min-height:0;flex:none}
+.np-git-key,.np-git-danger {border-top:1px solid var(--np-border);padding:24px 0;margin-top:24px}.np-git-key pre {padding:16px;font-size:14px}
+.np-git .np-dialog {padding:24px;max-height:90vh;overflow:auto}.np-git-message:empty {display:none}.np-git-message {border-left:3px solid var(--np-primary);padding:12px}
+.np-git button,.np-git .np-secondary-button {min-height:44px}.np-git button:disabled {opacity:.5;cursor:not-allowed}
+.np-git-settings>label,.np-git-settings details label {display:grid;gap:8px;margin:16px 0}
+.np-git-settings details {border-top:1px solid var(--np-border);padding:16px 0;min-width:0}
+.np-git-settings summary {cursor:pointer;font-weight:600;min-height:44px;display:flex;align-items:center;gap:8px}
+.np-git-settings summary::before {content:">";font-family:monospace}.np-git-settings details[open]>summary::before {transform:rotate(90deg)}
+.np-git-auth {margin:16px 0}.np-git-key-line {display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.np-git-auth pre {padding:12px;background:var(--np-canvas,#f5f6f8);border:1px solid var(--np-border);border-radius:6px}
+.np-git #git-connect {width:min(680px,calc(100vw - 32px));max-height:calc(100dvh - 32px);box-sizing:border-box;border-radius:8px}
+.np-git #git-connect .np-git-actions {position:sticky;bottom:-24px;background:var(--np-surface,#fff);padding:16px 0;margin-bottom:0;border-top:1px solid var(--np-border)}
+.np-git #git-connect .np-git-actions .np-secondary-button {background:#fff;color:#253449;border:1px solid var(--np-border)}
+.np-git .np-table td {overflow-wrap:anywhere;white-space:normal;max-width:360px}.np-git .np-table td:first-child {min-width:80px}.np-git .np-table code {white-space:normal;overflow-wrap:anywhere}
+@media(max-width:640px) {.np-git-facts {grid-template-columns:1fr}.np-git-tabs {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;white-space:normal}.np-git-heading {align-items:flex-start}.np-git .np-dialog {padding:16px;width:calc(100vw - 24px)}.np-git .np-form-grid {grid-template-columns:1fr}.np-git-actions {gap:8px}.np-git .np-table-wrap {overflow-x:auto}}
+@media(max-width:640px) {.np-git #git-connect .np-git-actions {position:static}}

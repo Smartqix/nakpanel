@@ -132,63 +132,96 @@ type RunScheduledTaskResult struct {
 }
 
 type GitRepository struct {
-	ID                int64     `json:"id"`
-	SiteID            int64     `json:"site_id"`
-	Mode              string    `json:"mode"`
-	RemoteURL         string    `json:"remote_url,omitempty"`
-	Branch            string    `json:"branch"`
-	DeployTarget      string    `json:"deploy_target"`
-	Automatic         bool      `json:"automatic"`
-	ConvergenceStatus string    `json:"convergence_status"`
-	LastRevision      string    `json:"last_revision,omitempty"`
-	LastError         string    `json:"last_error,omitempty"`
-	KnownHostKey      string    `json:"known_host_key,omitempty"`
-	DeployPublicKey   string    `json:"deploy_public_key,omitempty"`
-	WebhookConfigured bool      `json:"webhook_configured"`
-	CreatedAt         time.Time `json:"created_at"`
+	DeploymentMode    string      `json:"deployment_mode"`
+	ConnectionStatus  string      `json:"connection_status"`
+	FetchedRevision   string      `json:"fetched_revision,omitempty"`
+	DeployedRevision  string      `json:"deployed_revision,omitempty"`
+	PreviousRevision  string      `json:"previous_revision,omitempty"`
+	Branches          []string    `json:"branches,omitempty"`
+	Commits           []GitCommit `json:"commits,omitempty"`
+	Conflicts         []string    `json:"conflicts,omitempty"`
+	OperationRevision int64       `json:"operation_revision"`
+	ID                int64       `json:"id"`
+	SiteID            int64       `json:"site_id"`
+	Mode              string      `json:"mode"`
+	RemoteURL         string      `json:"remote_url,omitempty"`
+	Branch            string      `json:"branch"`
+	DeployTarget      string      `json:"deploy_target"`
+	Automatic         bool        `json:"automatic"`
+	ConvergenceStatus string      `json:"convergence_status"`
+	LastRevision      string      `json:"last_revision,omitempty"`
+	LastError         string      `json:"last_error,omitempty"`
+	KnownHostKey      string      `json:"known_host_key,omitempty"`
+	DeployPublicKey   string      `json:"deploy_public_key,omitempty"`
+	WebhookConfigured bool        `json:"webhook_configured"`
+	CreatedAt         time.Time   `json:"created_at"`
 }
 
 type GitRepositoryInput struct {
-	ID           int64  `json:"id,omitempty"`
-	Mode         string `json:"mode"`
-	RemoteURL    string `json:"remote_url,omitempty"`
-	Branch       string `json:"branch"`
-	DeployTarget string `json:"deploy_target"`
-	Automatic    bool   `json:"automatic"`
-	KnownHostKey string `json:"known_host_key,omitempty"`
+	Connect          bool   `json:"connect,omitempty"`
+	ExpectedRevision int64  `json:"expected_revision,omitempty"`
+	DeploymentMode   string `json:"deployment_mode"`
+	ID               int64  `json:"id,omitempty"`
+	Mode             string `json:"mode"`
+	RemoteURL        string `json:"remote_url,omitempty"`
+	Branch           string `json:"branch"`
+	DeployTarget     string `json:"deploy_target"`
+	Automatic        bool   `json:"automatic"`
+	KnownHostKey     string `json:"known_host_key,omitempty"`
 }
 
 type EnsureGitRepositoryReq struct {
-	RepositoryID int64  `json:"repository_id"`
-	SiteID       int64  `json:"site_id"`
-	Username     string `json:"username"`
-	Domain       string `json:"domain"`
-	Mode         string `json:"mode"`
-	RemoteURL    string `json:"remote_url,omitempty"`
-	Branch       string `json:"branch"`
-	DeployTarget string `json:"deploy_target"`
-	Automatic    bool   `json:"automatic"`
-	Deploy       bool   `json:"deploy"`
-	KnownHostKey string `json:"known_host_key,omitempty"`
-	State        string `json:"state"`
+	OperationRevision int64  `json:"operation_revision,omitempty"`
+	Action            string `json:"action,omitempty"`
+	Revision          string `json:"revision,omitempty"`
+	ConfirmOverwrite  bool   `json:"confirm_overwrite,omitempty"`
+	RepositoryID      int64  `json:"repository_id"`
+	SiteID            int64  `json:"site_id"`
+	Username          string `json:"username"`
+	Domain            string `json:"domain"`
+	Mode              string `json:"mode"`
+	RemoteURL         string `json:"remote_url,omitempty"`
+	Branch            string `json:"branch"`
+	DeployTarget      string `json:"deploy_target"`
+	Automatic         bool   `json:"automatic"`
+	Deploy            bool   `json:"deploy"`
+	KnownHostKey      string `json:"known_host_key,omitempty"`
+	State             string `json:"state"`
 }
 
 type EnsureGitRepositoryResult struct {
-	RepositoryPath  string `json:"repository_path"`
-	Revision        string `json:"revision,omitempty"`
-	DeployPublicKey string `json:"deploy_public_key,omitempty"`
-	Changed         bool   `json:"changed"`
+	Status           string      `json:"status,omitempty"`
+	ConnectionStatus string      `json:"connection_status,omitempty"`
+	Branches         []string    `json:"branches,omitempty"`
+	Commits          []GitCommit `json:"commits,omitempty"`
+	FetchedRevision  string      `json:"fetched_revision,omitempty"`
+	DeployedRevision string      `json:"deployed_revision,omitempty"`
+	PreviousRevision string      `json:"previous_revision,omitempty"`
+	Conflicts        []string    `json:"conflicts,omitempty"`
+	RepositoryPath   string      `json:"repository_path"`
+	Revision         string      `json:"revision,omitempty"`
+	DeployPublicKey  string      `json:"deploy_public_key,omitempty"`
+	Changed          bool        `json:"changed"`
+}
+
+type GitCommit struct {
+	Revision   string `json:"revision"`
+	Subject    string `json:"subject"`
+	Author     string `json:"author"`
+	AuthoredAt string `json:"authored_at"`
 }
 
 type GitDeployment struct {
-	ID               int64     `json:"id"`
-	RepositoryID     int64     `json:"repository_id"`
-	Revision         string    `json:"revision"`
-	Status           string    `json:"status"`
-	Output           string    `json:"output,omitempty"`
-	RollbackRevision string    `json:"rollback_revision,omitempty"`
-	CreatedAt        time.Time `json:"created_at"`
-	FinishedAt       time.Time `json:"finished_at,omitempty"`
+	Action            string    `json:"action,omitempty"`
+	OperationRevision int64     `json:"operation_revision,omitempty"`
+	ID                int64     `json:"id"`
+	RepositoryID      int64     `json:"repository_id"`
+	Revision          string    `json:"revision"`
+	Status            string    `json:"status"`
+	Output            string    `json:"output,omitempty"`
+	RollbackRevision  string    `json:"rollback_revision,omitempty"`
+	CreatedAt         time.Time `json:"created_at"`
+	FinishedAt        time.Time `json:"finished_at,omitempty"`
 }
 
 type ProtectedDirectory struct {

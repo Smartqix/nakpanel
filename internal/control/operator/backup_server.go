@@ -162,10 +162,11 @@ func (s *Service) RestoreMariaDBCredentials(ctx context.Context) (restored []str
 			continue
 		}
 		response, err := s.agent.CreateDatabase(ctx, types.CreateDatabaseReq{
-			Engine:   types.EngineMariaDB,
-			DBName:   e.name,
-			DBUser:   e.dbUser,
-			Password: string(password),
+			DatabaseID: e.id,
+			Engine:     types.EngineMariaDB,
+			DBName:     e.name,
+			DBUser:     e.dbUser,
+			Password:   string(password),
 		})
 		if err != nil {
 			return restored, warnings, fmt.Errorf("recreate database user %s: %w", e.dbUser, err)

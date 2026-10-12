@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/go-sql-driver/mysql"
 	dbvalidation "github.com/nakroteck/nakpanel/internal/database"
@@ -59,14 +60,17 @@ func (p *DatabaseProvisioner) CreateDatabase(ctx context.Context, req types.Crea
 }
 
 type MariaDBEngine struct {
-	exec        SQLExecutor
-	opener      SQLOpener
-	dsn         string
-	verifyLogin bool
+	mu           sync.Mutex
+	ownershipDir string
+	ownerUID     uint32
+	exec         SQLExecutor
+	opener       SQLOpener
+	dsn          string
+	verifyLogin  bool
 }
 
 func NewMariaDBEngine(exec SQLExecutor) *MariaDBEngine {
-	return &MariaDBEngine{exec: exec}
+	return &MariaDBEngine{exec: exec, ownershipDir: "/var/lib/nakpanel-agent/database-ownership"}
 }
 
 func NewLazyMariaDBEngine(dsn string) *MariaDBEngine {
@@ -74,8 +78,9 @@ func NewLazyMariaDBEngine(dsn string) *MariaDBEngine {
 		dsn = DefaultMariaDBDSN()
 	}
 	return &MariaDBEngine{
-		dsn:         dsn,
-		verifyLogin: true,
+		ownershipDir: "/var/lib/nakpanel-agent/database-ownership",
+		dsn:          dsn,
+		verifyLogin:  true,
 		opener: func(ctx context.Context) (SQLDatabase, error) {
 			db, err := sql.Open("mysql", dsn)
 			if err != nil {
@@ -95,6 +100,8 @@ func DefaultMariaDBDSN() string {
 }
 
 func (e *MariaDBEngine) CreateDatabase(ctx context.Context, req types.CreateDatabaseReq) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	req = NormalizeCreateDatabaseRequest(req)
 	if err := ValidateCreateDatabaseRequest(req); err != nil {
 		return err
@@ -119,6 +126,11 @@ func (e *MariaDBEngine) CreateDatabase(ctx context.Context, req types.CreateData
 	if closer != nil {
 		defer closer.Close()
 	}
+	release, err := e.claimDatabaseOwnership(ctx, exec, req)
+	if err != nil {
+		return err
+	}
+	defer release()
 
 	quotedDB := quoteMariaDBIdentifier(req.DBName)
 	quotedUser := quoteMariaDBAccount(req.DBUser)
@@ -140,13 +152,13 @@ func (e *MariaDBEngine) CreateDatabase(ctx context.Context, req types.CreateData
 			query: fmt.Sprintf("ALTER USER %s ACCOUNT UNLOCK", quotedUser),
 		},
 		{
-			query: fmt.Sprintf("GRANT ALL PRIVILEGES ON %s.* TO %s", quotedDB, quotedUser),
+			query: fmt.Sprintf("GRANT ALL PRIVILEGES ON %s.* TO %s", quoteMariaDBGrantDatabase(req.DBName), quotedUser),
 		},
 	}
 
 	for _, stmt := range statements {
 		if _, err := exec.ExecContext(ctx, stmt.query, stmt.args...); err != nil {
-			return fmt.Errorf("run mariadb statement: %w", err)
+			return errors.New("apply tracked database provisioning failed")
 		}
 	}
 	if e.verifyLogin {
@@ -191,6 +203,13 @@ func ValidateCreateDatabaseRequest(req types.CreateDatabaseReq) error {
 
 func quoteMariaDBIdentifier(name string) string {
 	return "`" + strings.ReplaceAll(name, "`", "``") + "`"
+}
+
+// Database names in GRANT are patterns, even inside backticks. Keep this
+// separate from SQL identifier quoting used by CREATE DATABASE and table SQL.
+func quoteMariaDBGrantDatabase(name string) string {
+	pattern := strings.NewReplacer(`\`, `\\`, `_`, `\_`, `%`, `\%`).Replace(name)
+	return quoteMariaDBIdentifier(pattern)
 }
 
 func quoteMariaDBAccount(user string) string {

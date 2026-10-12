@@ -304,6 +304,26 @@ type Database struct {
 	SiteID         sql.NullInt64
 }
 
+type DatabaseCreateRequest struct {
+	ScopeHash   string
+	RequestKey  string
+	PayloadHash string
+	DatabaseID  int64
+	CreatedAt   time.Time
+}
+
+type DatabaseManagerGrant struct {
+	TokenHash          string
+	SessionHash        string
+	ActorUserID        int64
+	DatabaseID         int64
+	CredentialRevision string
+	CreatedAt          time.Time
+	LastUsedAt         time.Time
+	ConsumedAt         sql.NullTime
+	RevokedAt          sql.NullTime
+}
+
 type DnsRecord struct {
 	ID                int64
 	ZoneID            int64
@@ -439,14 +459,18 @@ type FtpAccount struct {
 }
 
 type GitDeployment struct {
-	ID               int64
-	RepositoryID     int64
-	Revision         string
-	Status           string
-	Output           string
-	RollbackRevision string
-	CreatedAt        time.Time
-	FinishedAt       sql.NullTime
+	ID                int64
+	RepositoryID      int64
+	Revision          string
+	Status            string
+	Output            string
+	RollbackRevision  string
+	CreatedAt         time.Time
+	FinishedAt        sql.NullTime
+	Action            string
+	OperationRevision int64
+	ConfirmOverwrite  bool
+	IdempotencyKey    string
 }
 
 type GitRepository struct {
@@ -466,6 +490,21 @@ type GitRepository struct {
 	LastError           string
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
+	DeploymentMode      string
+	ConnectionStatus    string
+	FetchedRevision     string
+	DeployedRevision    string
+	PreviousRevision    string
+	Branches            json.RawMessage
+	Commits             json.RawMessage
+	Conflicts           json.RawMessage
+	OperationRevision   int64
+}
+
+type GitWebhookDelivery struct {
+	RepositoryID int64
+	DeliveryID   string
+	ReceivedAt   time.Time
 }
 
 type LoginAttempt struct {

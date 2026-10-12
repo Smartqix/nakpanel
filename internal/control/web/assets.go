@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed static/app.css static/app.js static/icons.svg static/ace/*
+//go:embed static/app.css static/app.js static/interaction.js static/git.js static/git.css static/icons.svg static/ace/*
 var staticFiles embed.FS
 
 var appCSS = mustReadStatic("static/app.css")
@@ -24,6 +24,15 @@ func StaticHandler() http.Handler {
 			return
 		}
 		switch r.URL.Path {
+		case "interaction.js", "/interaction.js":
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			http.ServeContent(w, r, "interaction.js", time.Time{}, bytes.NewReader(mustReadStatic("static/interaction.js")))
+		case "git.js", "/git.js":
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			http.ServeContent(w, r, "git.js", time.Time{}, bytes.NewReader(mustReadStatic("static/git.js")))
+		case "git.css", "/git.css":
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			http.ServeContent(w, r, "git.css", time.Time{}, bytes.NewReader(mustReadStatic("static/git.css")))
 		case "app.css", "/app.css":
 			w.Header().Set("Content-Type", "text/css; charset=utf-8")
 			http.ServeContent(w, r, "app.css", time.Time{}, bytes.NewReader(appCSS))

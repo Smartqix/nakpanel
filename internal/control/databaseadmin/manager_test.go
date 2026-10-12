@@ -33,6 +33,9 @@ type fakeAdminStore struct {
 }
 
 func (f *fakeAdminStore) PutSecretTx(_ context.Context, _ *sql.Tx, params serveradmin.PutSecretParams) (serveradmin.SecretReference, error) {
+	if !regexp.MustCompile(`^[a-z][a-z0-9_.-]{0,127}$`).MatchString(params.Name) {
+		return serveradmin.SecretReference{}, errors.New("invalid service secret identity")
+	}
 	f.secretParams = params
 	f.secretParams.Plaintext = append([]byte(nil), params.Plaintext...)
 	copied := params
@@ -177,6 +180,7 @@ SELECT operation_id, action, request
 FROM server_operations`)).
 		WithArgs("42").
 		WillReturnError(sql.ErrNoRows)
+	mock.ExpectExec("UPDATE database_manager_grants").WithArgs(int64(42)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
 	result, err := manager.RotatePassword(context.Background(), 7, 42, replacement)
@@ -189,8 +193,7 @@ FROM server_operations`)).
 	}
 	if string(store.secretParams.Plaintext) != replacement ||
 		store.secretParams.Scope != pendingSecretScope ||
-		!strings.HasPrefix(store.secretParams.Name, "rotation_op_") ||
-		store.secretParams.Name != strings.ToLower(store.secretParams.Name) {
+		store.secretParams.Name != pendingCredentialName(result.OperationID) {
 		t.Fatalf("unexpected staged secret: %#v", store.secretParams)
 	}
 	if strings.Contains(string(store.operationParams.Request), replacement) {
@@ -304,7 +307,7 @@ func TestMutationWorkerPromotesCredentialAndScrubsPendingReference(t *testing.T)
 	}
 }
 
-func TestMutationWorkerScrubsPendingCredentialAndAuditsTerminalFailure(t *testing.T) {
+func TestMutationWorkerRetainsDesiredCredentialAfterLostResponse(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
@@ -328,16 +331,6 @@ func TestMutationWorkerScrubsPendingCredentialAndAuditsTerminalFailure(t *testin
 	manager := NewManager(db, agent, store, nil)
 	worker := NewMutationWorker(manager)
 
-	mock.ExpectBegin()
-	mock.ExpectExec(regexp.QuoteMeta("UPDATE server_operations")).
-		WithArgs(operationID, serveradmin.OperationFailed, sqlmock.AnyArg(),
-			"Database administration operation failed.", sqlmock.AnyArg()).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO audit_events")).
-		WithArgs(int64(7), "database.rotate_password_failed", int64(42), sqlmock.AnyArg()).
-		WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-
 	err = worker.Work(context.Background(), &river.Job[MutationArgs]{
 		Args:   MutationArgs{OperationID: operationID, DatabaseID: 42},
 		JobRow: &rivertype.JobRow{Attempt: 3, MaxAttempts: 3},
@@ -348,9 +341,29 @@ func TestMutationWorkerScrubsPendingCredentialAndAuditsTerminalFailure(t *testin
 	if len(store.secretWrites) != 0 {
 		t.Fatalf("terminal failure promoted a credential: %#v", store.secretWrites)
 	}
-	if len(store.deletedSecrets) != 1 ||
-		store.deletedSecrets[0] != [2]string{pendingSecretScope, pendingCredentialName(operationID)} {
-		t.Fatalf("terminal failure did not scrub staged credential: %#v", store.deletedSecrets)
+	if len(store.deletedSecrets) != 0 {
+		t.Fatal("uncertain application discarded the desired credential")
+	}
+	if len(store.updates) != 2 || store.updates[1].Status != serveradmin.OperationPending {
+		t.Fatal("uncertain rotation must remain pending for reconciliation")
+	}
+	var snooze *river.JobSnoozeError
+	if !errors.As(err, &snooze) {
+		t.Fatalf("uncertain rotation must reschedule without exhausting attempts: %v", err)
+	}
+	// A fresh worker after restart resolves exactly the same staged credential.
+	agent.err = nil
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE server_operations").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO audit_events").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectCommit()
+	if err := NewMutationWorker(manager).Work(context.Background(), &river.Job[MutationArgs]{
+		Args: MutationArgs{OperationID: operationID, DatabaseID: 42},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if agent.calls != 2 || agent.request.Password != string(store.plaintext) || len(store.secretWrites) != 1 {
+		t.Fatal("restart did not converge the original desired credential")
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)

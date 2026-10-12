@@ -1,0 +1,28 @@
+[Unit]
+Description=Loopback-only Nakpanel phpMyAdmin gateway
+Requires=nakpanel-database-manager.service
+After=nakpanel-database-manager.service
+
+[Service]
+Type=simple
+User=nakpanel-dbmgr
+Group=nakpanel-dbmgr
+UMask=0077
+ExecStart=/usr/sbin/nginx -c /etc/nakpanel-database-manager/nginx.conf
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+InaccessiblePaths=-/etc/nakpanel -/var/lib/nakpanel -/run/nakpanel-agent -/run/postgresql -/var/www -/srv
+ReadWritePaths=/var/lib/nakpanel-database-manager /run/nakpanel-database-manager
+CapabilityBoundingSet=
+TasksMax=8
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

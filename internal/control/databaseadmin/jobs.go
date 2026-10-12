@@ -57,7 +57,7 @@ func (w *MutationWorker) Work(ctx context.Context, job *river.Job[MutationArgs])
 	}
 	operation, err := w.manager.secrets.GetOperation(ctx, job.Args.OperationID)
 	if err != nil {
-		return fmt.Errorf("load database administration operation: %w", err)
+		return river.JobSnooze(time.Minute)
 	}
 	switch operation.Status {
 	case serveradmin.OperationSucceeded, serveradmin.OperationFailed,
@@ -77,6 +77,9 @@ func (w *MutationWorker) Work(ctx context.Context, job *river.Job[MutationArgs])
 		OperationID: operation.OperationID, Status: serveradmin.OperationRunning,
 		Result: json.RawMessage(`{}`), StartedAt: sql.NullTime{Time: startedAt, Valid: true},
 	}); err != nil {
+		if request.Action == types.DatabaseAdminRotatePassword {
+			return river.JobSnooze(time.Minute)
+		}
 		return fmt.Errorf("mark database administration operation running: %w", err)
 	}
 
@@ -105,6 +108,11 @@ func (w *MutationWorker) Work(ctx context.Context, job *river.Job[MutationArgs])
 	result.OperationID = operation.OperationID
 	result.Status = "succeeded"
 	if err := w.finish(ctx, operation, request, result, plaintext, serveradmin.OperationSucceeded, ""); err != nil {
+		if request.Action == types.DatabaseAdminRotatePassword {
+			// A commit error is ambiguous. Re-read the persisted operation on the
+			// next attempt instead of overwriting a possibly committed success.
+			return river.JobSnooze(time.Minute)
+		}
 		return fmt.Errorf("finish database administration operation: %w", err)
 	}
 	return nil
@@ -118,6 +126,19 @@ func (w *MutationWorker) failOrRetry(
 	startedAt time.Time,
 	failure error,
 ) error {
+	// An agent response can be lost after ALTER USER succeeds. Retain the desired
+	// secret and replay it until verification and canonical promotion converge.
+	if request.Action == types.DatabaseAdminRotatePassword {
+		if _, err := w.manager.secrets.UpdateOperation(ctx, serveradmin.UpdateOperationParams{
+			OperationID: operation.OperationID, Status: serveradmin.OperationPending,
+			Result: json.RawMessage(`{}`), LastError: "Database password update is awaiting verification and will be retried.",
+			StartedAt: sql.NullTime{Time: startedAt, Valid: true},
+		}); err != nil {
+			return river.JobSnooze(time.Minute)
+		}
+		return river.JobSnooze(time.Minute)
+	}
+	failure = errors.New("database administration operation failed")
 	terminal := job.JobRow != nil && job.JobRow.Attempt >= job.JobRow.MaxAttempts
 	if terminal {
 		result := types.ManageDatabaseAdminResult{

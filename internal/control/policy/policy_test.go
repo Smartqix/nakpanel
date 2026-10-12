@@ -277,6 +277,25 @@ func TestValidateSiteWithinRuntimeCeilings(t *testing.T) {
 	}
 }
 
+func TestPHPMaxRequestsFiniteCeiling(t *testing.T) {
+	parent := testPolicy()
+	parent.PHP.FPMMaxRequests = 500
+	for _, value := range []int{-1, 0, 501, 1000} {
+		child := parent
+		child.PHP.FPMMaxRequests = value
+		if err := ValidateSiteWithin(child, parent); err == nil {
+			t.Fatalf("accepted max requests %d above finite ceiling", value)
+		}
+	}
+	for _, value := range []int{1, 250, 500} {
+		child := parent
+		child.PHP.FPMMaxRequests = value
+		if err := ValidateSiteWithin(child, parent); err != nil {
+			t.Fatalf("rejected max requests %d: %v", value, err)
+		}
+	}
+}
+
 func TestValidateSiteWithinNamesSubscriptionCeiling(t *testing.T) {
 	parent := testPolicy()
 	parent.PHP.MemoryLimitMB = 128

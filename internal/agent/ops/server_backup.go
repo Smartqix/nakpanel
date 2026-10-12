@@ -72,6 +72,7 @@ func NewServerBackupProvisioner(opts ServerBackupProvisionerOptions) *ServerBack
 // serverBackupTrees are archived verbatim. Missing roots are skipped so the
 // same inventory serves installs without optional components.
 var serverBackupTrees = []string{
+	"/var/lib/nakpanel-agent",
 	"/etc/nakpanel",
 	"/etc/stalwart",
 	"/etc/nginx/conf.d",

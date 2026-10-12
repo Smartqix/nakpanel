@@ -33,6 +33,9 @@ type RestoreOptions struct {
 	// older than the installed one (the operator must run goose up after).
 	AllowSchemaMismatch bool
 	Log                 func(format string, args ...any)
+	// AfterDatabasesRestored runs as root after authenticated archive extraction
+	// and SQL imports, before any panel or agent service is started.
+	AfterDatabasesRestored func(context.Context, []string) error
 }
 
 type RestoreSummary struct {
@@ -234,6 +237,11 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 			return summary, err
 		}
 		summary.MariaDBRestored = append(summary.MariaDBRestored, base)
+	}
+	if opts.AfterDatabasesRestored != nil {
+		if err := opts.AfterDatabasesRestored(ctx, summary.MariaDBRestored); err != nil {
+			return summary, fmt.Errorf("restore database ownership: %w", err)
+		}
 	}
 
 	// --- Services ---------------------------------------------------------

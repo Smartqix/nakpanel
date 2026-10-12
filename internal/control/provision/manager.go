@@ -28,6 +28,7 @@ type SubdomainParent struct {
 	ParentSiteID   int64
 	SubscriptionID int64
 	Domain         string
+	Username       string
 	Status         string
 	DesiredStatus  string
 }
@@ -402,7 +403,7 @@ func (m *Manager) CreateSite(ctx context.Context, owner auth.SessionUser, req ty
 	return m.CreateSiteFor(ctx, owner, owner.ID, req)
 }
 
-func (m *Manager) CreateSubdomainFor(ctx context.Context, actor auth.SessionUser, parentSiteID int64, label string) (int64, error) {
+func (m *Manager) CreateSubdomainFor(ctx context.Context, actor auth.SessionUser, parentSiteID int64, label, phpVersion string) (int64, error) {
 	reader, ok := m.siteRepo.(SubdomainParentReader)
 	if !ok {
 		return 0, errors.New("subdomain provisioning is not configured")
@@ -438,7 +439,9 @@ func (m *Manager) CreateSubdomainFor(ctx context.Context, actor auth.SessionUser
 	}
 	return m.CreateSiteForSubscription(ctx, actor, parent.SubscriptionID, types.CreateSiteReq{
 		ParentSiteID: parent.ID,
+		Username:     parent.Username,
 		Domain:       label + "." + parent.Domain,
+		PHPVersion:   phpVersion,
 	})
 }
 
@@ -546,7 +549,7 @@ func (m *Manager) CreateDatabaseFor(ctx context.Context, actor auth.SessionUser,
 	if m.databaseRepo == nil {
 		return 0, errors.New("database repository is not configured")
 	}
-	if m.passwordGenerator == nil {
+	if req.Password == "" && m.passwordGenerator == nil {
 		return 0, errors.New("database password generator is not configured")
 	}
 
@@ -554,11 +557,13 @@ func (m *Manager) CreateDatabaseFor(ctx context.Context, actor auth.SessionUser,
 	if normalized.Engine == "" {
 		normalized.Engine = types.EngineMariaDB
 	}
-	password, err := m.passwordGenerator()
-	if err != nil {
-		return 0, fmt.Errorf("generate database password: %w", err)
+	if normalized.Password == "" {
+		password, err := m.passwordGenerator()
+		if err != nil {
+			return 0, errors.New("generate database password failed")
+		}
+		normalized.Password = password
 	}
-	normalized.Password = password
 	if err := dbvalidation.ValidateCreateDatabaseRequest(normalized); err != nil {
 		return 0, err
 	}
@@ -587,7 +592,7 @@ func (m *Manager) CreateDatabaseForSubscription(ctx context.Context, actor auth.
 	if m.databaseRepo == nil {
 		return 0, errors.New("database repository is not configured")
 	}
-	if m.passwordGenerator == nil {
+	if req.Password == "" && m.passwordGenerator == nil {
 		return 0, errors.New("database password generator is not configured")
 	}
 
@@ -595,11 +600,13 @@ func (m *Manager) CreateDatabaseForSubscription(ctx context.Context, actor auth.
 	if normalized.Engine == "" {
 		normalized.Engine = types.EngineMariaDB
 	}
-	password, err := m.passwordGenerator()
-	if err != nil {
-		return 0, fmt.Errorf("generate database password: %w", err)
+	if normalized.Password == "" {
+		password, err := m.passwordGenerator()
+		if err != nil {
+			return 0, errors.New("generate database password failed")
+		}
+		normalized.Password = password
 	}
-	normalized.Password = password
 	if err := dbvalidation.ValidateCreateDatabaseRequest(normalized); err != nil {
 		return 0, err
 	}

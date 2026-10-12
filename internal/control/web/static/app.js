@@ -1,5 +1,6 @@
 (function () {
   "use strict";
+  var fetch = window.NakpanelUI ? window.NakpanelUI.fetch : window.fetch.bind(window);
 
   document.documentElement.classList.add("nakpanel-js");
   var lastDialogTrigger = null;
@@ -483,6 +484,7 @@
     if (resolve) resolve(confirmed);
     closeDialog(document.getElementById("np-confirmation-dialog"));
   }
+  if (window.NakpanelUI) window.NakpanelUI.confirm = askConfirmation;
 
   function setMenu(open) {
     document.body.classList.toggle("np-sidebar-open", open);
@@ -921,6 +923,7 @@
   }
 
   function setFormBusy(form, busy) {
+    if (window.NakpanelUI) { window.NakpanelUI.setBusy(form,busy); return; }
     each('button[type="submit"], input[type="submit"]', form, function (control) {
       control.disabled = busy;
     });
@@ -936,6 +939,7 @@
     var attempts = 0;
     var terminal = {succeeded: true, failed: true, rolled_back: true, cancelled: true};
     function poll() {
+      if (status.isConnected === false) return;
       attempts += 1;
       fetch("/tools-settings/operations/" + encodeURIComponent(operationID), {
         credentials: "same-origin",
@@ -952,6 +956,7 @@
         status.setAttribute("role", state === "failed" ? "alert" : "status");
         if (state === "succeeded" && onSuccess) onSuccess();
         if (!terminal[state] && attempts < 40) window.setTimeout(poll, 1500);
+        else if (!terminal[state]) status.textContent += ' · Automatic checking paused. Refresh this view to check progress; do not submit the operation again.';
       }).catch(function () {
         if (attempts < 10) window.setTimeout(poll, 2000);
       });
@@ -960,6 +965,7 @@
   }
 
   function submitServerAdminForm(form, submitter) {
+    if (form.getAttribute('aria-busy') === 'true') return;
     var isReauthentication = form.matches("[data-np-reauth-form]");
     var status = formStatus(form, "[data-np-service-operation]");
     var data = new FormData(form);
@@ -1690,6 +1696,98 @@
     return form;
   }
 
+  function initDatabaseRefresh() {
+    var panel = document.querySelector('[data-np-domain-databases]');
+    if (!panel) return;
+    var attempts = 0;
+    async function refresh() {
+      if (document.querySelector('[data-np-domain-databases]') !== panel) return;
+      if (++attempts > 150) {
+        var feedback = panel.querySelector('[data-np-db-feedback]');
+        if (feedback) { feedback.hidden = false; feedback.textContent = 'Still processing. Refresh this page to check again; do not create a duplicate database.'; }
+        return;
+      }
+      var pending = false;
+      if (!document.hidden && !panel.querySelector('dialog[open]')) {
+        try {
+          var response = await fetch(panel.dataset.npDbStatusUrl, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'application/json'}});
+          if (response.redirected || response.status === 401 || response.status === 403 || response.status === 404) {
+            var feedback = panel.querySelector('[data-np-db-feedback]');
+            if (feedback) {feedback.hidden=false;feedback.textContent='Status checks stopped. Refresh this page to check your session and database access.';}
+            return;
+          }
+          if (!response.ok) throw new Error('Database status is temporarily unavailable.');
+          var payload = await response.json();
+          if (document.querySelector('[data-np-domain-databases]') !== panel) return;
+          var changed = false;
+          (payload.databases || []).forEach(function(database) {
+            var row = panel.querySelector('[data-np-db-id="'+database.id+'"]');
+            if (!row || row.dataset.npDbState !== database.status) changed = true;
+            var updating = database.credential_state === 'updating' || database.credential_state === 'unknown';
+            if (updating || database.status === 'pending' || database.status === 'provisioning') pending = true;
+            if (row) {
+              each('.np-domain-db-actions button',row,function(button){button.disabled=updating;});
+              var state = row.querySelector('.np-domain-db-state small');
+              if (state && database.status === 'active') state.textContent=updating?'Updating credentials...':database.credential_state==='failed'?'Password change failed. Contact your provider.':'Ready to connect';
+            }
+          });
+          if (changed) {await reloadDatabasePanel();return;}
+        } catch (_) {pending=true;}
+      } else {pending=true;}
+      if (pending) window.setTimeout(refresh, 2000);
+    }
+    window.setTimeout(refresh, 600);
+  }
+
+  async function reloadDatabasePanel() {
+    var panel = document.querySelector('[data-np-domain-databases]');
+    if (!panel || panel.querySelector('dialog[open]')) return;
+    var response = await fetch(window.location.href, {credentials:'same-origin',cache:'no-store',headers:{Accept:'text/html'}});
+    if (!response.ok || response.redirected) throw new Error('Refresh this page to see the latest database status.');
+    var next = new DOMParser().parseFromString(await response.text(),'text/html').querySelector('[data-np-domain-databases]');
+    if (!next) throw new Error('Refresh this page to see the latest database status.');
+    panel.replaceWith(next);
+    initDatabaseRefresh();
+  }
+
+  async function submitDomainDatabase(form) {
+    if (form.dataset.npSubmitting === 'true') return;
+    var error = form.querySelector('[data-np-db-form-error]');
+    if (new URL(form.action).pathname === '/databases' && !form.querySelector('[name="idempotency_key"]')) {
+      var requestKey = document.createElement('input');
+      requestKey.type = 'hidden'; requestKey.name = 'idempotency_key'; requestKey.value = window.crypto.randomUUID();
+      form.appendChild(requestKey);
+    }
+    var body = new URLSearchParams(new FormData(form));
+    form.dataset.npSubmitting = 'true';
+    setFormBusy(form,true);
+    if (error) error.hidden = true;
+    try {
+      var response = await fetch(form.action,{method:'POST',credentials:'same-origin',body:body,headers:{'X-Nakpanel-SPA':'true','X-Nakpanel-CSRF':csrfToken(),'Accept':'application/json'}});
+      var payload = await response.json();
+      if (!response.ok || !payload.ok) throw new Error(payload.error || 'The database operation could not be completed.');
+      var dialog = form.closest('dialog');
+      if (dialog) closeDialog(dialog);
+      clearSensitiveInputs(form);
+      var refreshFailed = false;
+      try {await reloadDatabasePanel();} catch (_) {refreshFailed = true;}
+      var feedback = document.querySelector('[data-np-db-feedback]');
+      if (feedback) {
+        feedback.hidden=false;
+        feedback.textContent=(payload.notice || 'Operation queued. Database status will update automatically.') +
+          (refreshFailed ? ' The operation was accepted, but the list could not refresh. Refresh this page to check progress; do not submit again.' : '');
+      }
+    } catch (failure) {
+      if (error) {error.hidden=false;error.textContent=failure.message;}
+    } finally {form.dataset.npSubmitting='false';setFormBusy(form,false);}
+  }
+
+  function generateDatabasePassword() {
+    var bytes = new Uint8Array(24);
+    window.crypto.getRandomValues(bytes);
+    return Array.from(bytes,function(value){return 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'[value & 63];}).join('');
+  }
+
   function loadDatabaseAdmin() {
     var target = document.querySelector("[data-np-database-rows]");
     if (!target || !window.fetch) return;
@@ -1787,6 +1885,7 @@
   }
 
   function submitPhase26Form(form, statusSelector, submitter) {
+    if (form.getAttribute('aria-busy') === 'true') return;
     var status = document.querySelector(statusSelector);
     var data = new FormData(form);
     setFormBusy(form, true);
@@ -1823,16 +1922,16 @@
   }
 
   function submitSite(form) {
-    if (form.dataset.npSubmitting === "true") return;
-    form.dataset.npSubmitting = "true";
+    if (form.dataset.npSubmitting === 'true') return;
+    form.dataset.npSubmitting = 'true';
     var submit = form.querySelector("[data-np-create-submit]");
     var gate = form.querySelector("[data-np-customer-gate], [data-np-subdomain-gate]");
+    var body = new URLSearchParams(new FormData(form));
     if (submit) submit.disabled = true;
-    fetch(form.action, {
+    window.NakpanelUI.fetch(form.action, {
       method: "POST",
-      body: new FormData(form),
-      credentials: "same-origin",
-      headers: { "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken() }
+      body: body,
+      headers: { "X-Nakpanel-SPA": "true" }
     }).then(function (response) {
       return response.text().then(function (body) {
         var data;
@@ -2286,7 +2385,7 @@
       return isNaN(value) ? 0 : value;
     }
     function checked(name) {
-      var input = form.elements[name];
+      var input = form.querySelector('input[type="checkbox"][name="' + name + '"]');
       return !!(input && input.checked);
     }
     var registries = (form.elements.policy_registries.value || "").split(",").map(function (value) { return value.trim(); }).filter(Boolean);
@@ -2317,7 +2416,7 @@
       return isNaN(value) ? 0 : value;
     }
     function checked(name) {
-      var input = form.elements[name];
+      var input = form.querySelector('input[type="checkbox"][name="' + name + '"]');
       return !!(input && input.checked);
     }
     function value(name) {
@@ -2859,6 +2958,8 @@
   });
 
   document.addEventListener("submit", function (event) {
+    var databaseForm = event.target.closest('[data-np-domain-db-form]');
+    if (databaseForm && window.fetch) {event.preventDefault();submitDomainDatabase(databaseForm);return;}
     var mailQueueFilter = event.target.closest("[data-np-mail-queue-filter]");
     if (mailQueueFilter && window.fetch) {
       event.preventDefault();
@@ -2922,23 +3023,55 @@
 	if (subdomainForm) {
 	  updateSubdomainGate(subdomainForm.closest("dialog") || document);
 	  if (subdomainForm.dataset.npGateBlocked === "true") { event.preventDefault(); return; }
-	  if (window.fetch) { event.preventDefault(); submitSite(subdomainForm); }
+	  if (window.NakpanelUI) { event.preventDefault(); submitSite(subdomainForm); }
 	  return;
 	}
 	var form = event.target.closest("[data-np-create-site-form]");
     if (!form) return;
-    updateCreateGate(form);
+    updateCreateGate(form.closest("dialog") || document);
     if (form.dataset.npGateBlocked === "true") { event.preventDefault(); return; }
-    if (!window.fetch) return;
+    if (!window.NakpanelUI) return;
     event.preventDefault();
     submitSite(form);
   });
 
+  initDatabaseRefresh();
   document.addEventListener("input", function (event) {
     var form = event.target.closest("[data-np-create-subdomain-form]");
     if (form) updateSubdomainGate(form.closest("dialog") || document);
   });
-
+  document.addEventListener('input',function(event){
+    var form=event.target.closest('.np-domain-db-create-form');
+    if(!form)return;
+    if(event.target.name==='db_user')form.dataset.npUserEdited='true';
+    if(event.target.name==='db_name' && form.dataset.npUserEdited!=='true')form.elements.db_user.value=event.target.value.toLowerCase();
+  });
+  document.addEventListener('click',async function(event) {
+    var button = event.target.closest('[data-np-db-generate], [data-np-db-copy], [data-np-db-reveal], [data-np-db-connection]');
+    if (!button) return;
+    if (button.hasAttribute('data-np-db-connection')) {
+      var output = document.querySelector('[data-np-db-connection-output]');
+      output.textContent='Loading connection details...';
+      openDialog('database-connection-dialog',button);
+      try {
+        var support=button.closest('[data-np-domain-databases]').dataset.npDbSupport;
+        var response=await fetch('/databases/'+button.dataset.npDbConnection+'/connection'+(parseInt(support,10)>0?'?support_customer_id='+encodeURIComponent(support):''),{credentials:'same-origin',headers:{'Accept':'application/json'}});
+        var payload=await response.json();
+        if (!response.ok || payload.ok === false) throw new Error('Connection details are unavailable.');
+        var info=payload.connection || payload;
+        output.textContent='Database: '+info.database+'\nUser: '+info.username+'\nHost: '+info.host+'\nPort: '+info.port+'\n\n'+info.pdo;
+      } catch(error) {output.textContent=error.message;}
+      return;
+    }
+    var form=button.closest('form');
+    var password=form.querySelector('[data-np-db-password]');
+    var help=form.querySelector('[data-np-db-password-help]');
+    if (button.hasAttribute('data-np-db-generate')) {password.value=generateDatabasePassword();help.textContent='Password generated. Copy and save it before submitting.';}
+    if (button.hasAttribute('data-np-db-reveal')) {password.type=password.type==='password'?'text':'password';button.setAttribute('aria-label',password.type==='password'?'Show password':'Hide password');}
+    if (button.hasAttribute('data-np-db-copy')) {
+      try {if (!password.value) throw new Error();await navigator.clipboard.writeText(password.value);help.textContent='Password copied. Store it securely.';} catch (_) {help.textContent='Reveal and select the password to copy it manually.';}
+    }
+  });
   initSiteLogs();
   initContainerLogs();
   initContainerDeployForms();
@@ -3022,6 +3155,15 @@
   updateCreateGate(document);
   updateSubdomainGate(document);
   each("[data-np-v2-create-site-form]", document, updateV2CreateGate);
+  if (new URLSearchParams(window.location.search).get("add") === "subdomain") {
+    var subdomainDialog = document.querySelector(".np-subdomain-dialog");
+    if (subdomainDialog) {
+      openDialog(subdomainDialog.id, null);
+      var cleanURL = new URL(window.location.href);
+      cleanURL.searchParams.delete("add");
+      window.history.replaceState(null, "", cleanURL.pathname + cleanURL.search + cleanURL.hash);
+    }
+  }
   updateOnboarding();
   each("[data-np-bulk-form]", document, updateBulkForm);
   each("[data-np-unlimited]", document, updateUnlimited);

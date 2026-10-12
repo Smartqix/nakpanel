@@ -96,10 +96,11 @@ func (c *fakeSiteCreator) CreateSiteFor(ctx context.Context, owner auth.SessionU
 	return 7, c.err
 }
 
-func (c *fakeSiteCreator) CreateSubdomainFor(_ context.Context, owner auth.SessionUser, parentSiteID int64, label string) (int64, error) {
+func (c *fakeSiteCreator) CreateSubdomainFor(_ context.Context, owner auth.SessionUser, parentSiteID int64, label, phpVersion string) (int64, error) {
 	c.owner = owner
 	c.parentSiteID = parentSiteID
 	c.label = label
+	c.requests = append(c.requests, types.CreateSiteReq{PHPVersion: phpVersion})
 	return 7, c.err
 }
 
@@ -1082,7 +1083,7 @@ func TestAdminCanUsePhase6Actions(t *testing.T) {
 	}
 }
 
-func TestAdminerRouteRequiresAdminAndIssuesToken(t *testing.T) {
+func TestAdminerRouteRedirectsWithoutIssuingToken(t *testing.T) {
 	manager := &fakePhase6Manager{}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{Phase6Manager: manager})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
@@ -1092,14 +1093,14 @@ func TestAdminerRouteRequiresAdminAndIssuesToken(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /db status = %d, want 200; body:\n%s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/databases?notice=database-select" {
+		t.Fatalf("GET /db status = %d, want selection redirect; body:\n%s", rec.Code, rec.Body.String())
 	}
-	if manager.adminerOwner.Role != auth.RoleAdmin {
-		t.Fatalf("adminer owner = %#v, want admin", manager.adminerOwner)
+	if manager.adminerOwner.Role != "" {
+		t.Fatal("legacy token issuer was called")
 	}
-	if !strings.Contains(rec.Body.String(), "adminer-token") || !strings.Contains(rec.Body.String(), "Adminer SSO") {
-		t.Fatalf("adminer page missing token/details:\n%s", rec.Body.String())
+	if strings.Contains(rec.Body.String(), "adminer-token") {
+		t.Fatal("legacy token was displayed")
 	}
 }
 
@@ -1216,8 +1217,8 @@ func TestClientCannotUsePhase6Actions(t *testing.T) {
 	addAuthenticatedCookie(req, cookie)
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("GET /db status = %d, want 403", rec.Code)
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("GET /db status = %d, want 303", rec.Code)
 	}
 	if manager.backupReq.Domain != "" || manager.webmailDomain != "example.test" || manager.dnsDomain != "" || manager.reconcileOwner.Role != "" || manager.adminerOwner.Role != "" || manager.restoreOwner.Role != "" {
 		t.Fatalf("client invoked phase6 manager: %#v", manager)
@@ -2195,15 +2196,15 @@ func TestAddSubdomainUsesParentAndLabelOnly(t *testing.T) {
 	creator := &fakeSiteCreator{}
 	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleAdmin, creator)
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
-	form := url.Values{"label": {"blog"}, "domain": {"evil.test"}, "subscription_id": {"999"}, "php_version": {"8.5"}}
+	form := url.Values{"label": {"blog"}, "php_version": {"8.4"}, "domain": {"evil.test"}, "subscription_id": {"999"}}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/9/subdomains", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	addAuthenticatedCookie(req, cookie)
 	req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusSeeOther || creator.parentSiteID != 9 || creator.label != "blog" {
-		t.Fatalf("subdomain status=%d parent=%d label=%q body=%q", rec.Code, creator.parentSiteID, creator.label, rec.Body.String())
+	if rec.Code != http.StatusSeeOther || creator.parentSiteID != 9 || creator.label != "blog" || len(creator.requests) != 1 || creator.requests[0].PHPVersion != "" {
+		t.Fatalf("subdomain status=%d parent=%d label=%q requests=%#v body=%q", rec.Code, creator.parentSiteID, creator.label, creator.requests, rec.Body.String())
 	}
 	if got := rec.Header().Get("Location"); got != "/sites/9?tab=overview&notice=subdomain-queued" {
 		t.Fatalf("redirect = %q", got)
@@ -2233,12 +2234,12 @@ func TestAddSubdomainAcceptsBrowserMultipartForm(t *testing.T) {
 		t.Fatalf("multipart subdomain status=%d parent=%d label=%q body=%q", rec.Code, creator.parentSiteID, creator.label, rec.Body.String())
 	}
 }
-
 func TestAddSubdomainHidesForeignParent(t *testing.T) {
 	creator := &fakeSiteCreator{err: provision.ErrForbidden}
 	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleClient, creator)
 	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
-	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/9/subdomains", strings.NewReader(url.Values{"label": {"blog"}}.Encode()))
+	form := url.Values{"label": {"blog"}}
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/9/subdomains", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	addAuthenticatedCookie(req, cookie)
 	req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
@@ -2255,10 +2256,11 @@ func TestAdminCanCreateSiteWithSPAJSON(t *testing.T) {
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
 	form := url.Values{
-		"owner_user_id": {"2"},
-		"username":      {"npdemo"},
-		"domain":        {"example.test"},
-		"php_version":   {"8.3"},
+		"subscription_id": {"39"},
+		"owner_user_id":   {"2"},
+		"username":        {"npdemo"},
+		"domain":          {"example.test"},
+		"php_version":     {"8.3"},
 	}
 	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -2292,7 +2294,7 @@ func TestOverQuotaCreateWithSPAJSONReturnsError(t *testing.T) {
 	handler, _ := newTestHandlerWithSiteCreator(t, auth.RoleAdmin, creator)
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 
-	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader("username=npdemo&domain=example.test&php_version=8.3"))
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites", strings.NewReader("subscription_id=39&username=npdemo&domain=example.test&php_version=8.3"))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("X-Nakpanel-SPA", "true")
 	addAuthenticatedCookie(req, cookie)

@@ -844,25 +844,62 @@ func (w *ConvergeSubscriptionWorker) Work(ctx context.Context, job *river.Job[Co
 		}
 		for _, repository := range snapshot.Git {
 			var deploymentID sql.NullInt64
+			repository.Action = "prepare"
 			deploymentErr := w.db.QueryRowContext(ctx, `WITH next AS (
-    SELECT id FROM git_deployments WHERE repository_id=$1 AND status='pending' ORDER BY id LIMIT 1
+    SELECT id FROM git_deployments WHERE repository_id=$1 AND status IN ('pending','running') AND operation_revision=$2 ORDER BY id LIMIT 1
 )
-UPDATE git_deployments deployment SET status='running',rollback_revision=repository.last_revision
+UPDATE git_deployments deployment SET status='running',rollback_revision=repository.deployed_revision
 FROM next,git_repositories repository
 WHERE deployment.id=next.id AND repository.id=$1
-RETURNING deployment.id`, repository.RepositoryID).Scan(&deploymentID)
+RETURNING deployment.id,deployment.action,deployment.revision,deployment.confirm_overwrite`, repository.RepositoryID, repository.OperationRevision).Scan(&deploymentID, &repository.Action, &repository.Revision, &repository.ConfirmOverwrite)
 			if deploymentErr != nil && !errors.Is(deploymentErr, sql.ErrNoRows) {
 				return deploymentErr
 			}
-			runAgent, deploy := gitConvergenceAction(repository.Mode, repository.Automatic, deploymentID.Valid)
-			if !runAgent {
-				if _, err = w.db.ExecContext(ctx, `UPDATE git_repositories SET convergence_status='in_sync',last_error='',updated_at=now() WHERE id=$1`, repository.RepositoryID); err != nil {
+			if run, _ := gitConvergenceAction(repository.Mode, repository.Automatic, deploymentID.Valid); !run {
+				continue
+			}
+			repository.Deploy = false
+			if repository.State != "active" && deploymentID.Valid && repository.Action != "disconnect" {
+				_, err = w.db.ExecContext(ctx, `UPDATE git_deployments SET status='failed',output='Git operations are suspended by policy.',finished_at=now() WHERE id=$1`, deploymentID.Int64)
+				if err != nil {
+					return err
+				}
+				if _, err = w.db.ExecContext(ctx, `UPDATE git_repositories SET convergence_status='failed',last_error='Git operations are suspended by policy.',updated_at=now() WHERE id=$1 AND operation_revision=$2`, repository.RepositoryID, repository.OperationRevision); err != nil {
 					return err
 				}
 				continue
 			}
-			repository.Deploy = deploy
-			gitResult, gitErr := gitAgent.EnsureGitRepository(ctx, repository)
+			gitResult, gitErr := gitAgent.EnsureGitRepository(ctx, gitAgentWorkspaceRequest(repository))
+			if gitErr == nil && repository.Action == "fetch" && repository.Automatic && gitResult.FetchedRevision != "" {
+				previewReq := repository
+				previewReq.Action = "preview"
+				previewReq.Revision = gitResult.FetchedRevision
+				previewReq.ConfirmOverwrite = false
+				preview, previewErr := gitAgent.EnsureGitRepository(ctx, previewReq)
+				if previewErr != nil {
+					gitErr = previewErr
+				} else if len(preview.Conflicts) > 0 || preview.Status == "conflicts" {
+					gitResult.Conflicts = preview.Conflicts
+					gitResult.Status = "conflicts"
+				} else {
+					previewReq.Action = "deploy"
+					if deploymentID.Valid {
+						if _, err = w.db.ExecContext(ctx, `UPDATE git_deployments SET action='deploy',revision=$2 WHERE id=$1 AND operation_revision=$3`, deploymentID.Int64, previewReq.Revision, repository.OperationRevision); err != nil {
+							return err
+						}
+					}
+					deployed, deployErr := gitAgent.EnsureGitRepository(ctx, previewReq)
+					if deployErr != nil {
+						gitErr = deployErr
+					} else {
+						gitResult.DeployedRevision = deployed.DeployedRevision
+						gitResult.PreviousRevision = deployed.PreviousRevision
+						gitResult.Revision = deployed.Revision
+						gitResult.Conflicts = deployed.Conflicts
+						gitResult.Status = deployed.Status
+					}
+				}
+			}
 			if gitErr != nil {
 				_, _ = w.db.ExecContext(ctx, `UPDATE git_repositories SET convergence_status='failed',last_error=$2,updated_at=now() WHERE id=$1`, repository.RepositoryID, gitErr.Error())
 				if deploymentID.Valid {
@@ -870,18 +907,16 @@ RETURNING deployment.id`, repository.RepositoryID).Scan(&deploymentID)
 				}
 				return errors.Join(gitErr, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", gitErr.Error(), result.LinuxUID))
 			}
-			if _, err = w.db.ExecContext(ctx, `UPDATE git_repositories SET convergence_status='in_sync',last_revision=COALESCE(NULLIF($2,''),last_revision),deploy_public_key=COALESCE(NULLIF($3,''),deploy_public_key),last_error='',updated_at=now() WHERE id=$1`,
-				repository.RepositoryID, gitResult.Revision, gitResult.DeployPublicKey); err != nil {
+			conflicts, _ := json.Marshal(gitResult.Conflicts)
+			if err = persistGitWorkspaceResult(ctx, w.db, repository, gitResult); err != nil {
 				return err
 			}
 			if deploymentID.Valid {
-				if gitResult.Revision == "" {
-					if _, err = w.db.ExecContext(ctx, `UPDATE git_deployments SET status='failed',output='The hosted branch has no commits to deploy.',finished_at=now() WHERE id=$1`, deploymentID.Int64); err != nil {
-						return err
-					}
-					continue
+				status := "succeeded"
+				if gitResult.Status == "conflicts" {
+					status = "failed"
 				}
-				if _, err = w.db.ExecContext(ctx, `UPDATE git_deployments SET revision=$2,status='succeeded',output='',finished_at=now() WHERE id=$1`, deploymentID.Int64, gitResult.Revision); err != nil {
+				if _, err = w.db.ExecContext(ctx, `UPDATE git_deployments SET revision=COALESCE(NULLIF($2,''),revision),status=$4,output=$3,finished_at=now() WHERE id=$1`, deploymentID.Int64, gitResult.Revision, string(conflicts), status); err != nil {
 					return err
 				}
 			}
@@ -919,8 +954,8 @@ RETURNING deployment.id`, repository.RepositoryID).Scan(&deploymentID)
 }
 
 func gitConvergenceAction(mode string, automatic, hasPendingDeployment bool) (runAgent, deploy bool) {
-	deploy = automatic || hasPendingDeployment
-	return mode == "hosted" || mode == "remote", deploy
+	deploy = hasPendingDeployment
+	return (mode == "hosted" || mode == "remote") && hasPendingDeployment, deploy
 }
 
 func truncateConvergenceOutput(value string) string {
@@ -1227,19 +1262,19 @@ WHERE application.subscription_id=$1 ORDER BY volume.application_id,volume.id`, 
 		return convergenceSnapshot{}, err
 	}
 	rows, err = tx.QueryContext(ctx, `SELECT repository.id,site.id,account.username,site.domain,repository.mode,
-repository.remote_url,repository.branch,repository.deploy_target,repository.automatic,repository.known_host_key,
+repository.remote_url,repository.branch,repository.deploy_target,repository.automatic,repository.known_host_key,repository.operation_revision,
 CASE WHEN $2='active' AND site.desired_status='active' THEN 'active' ELSE 'suspended' END
 FROM git_repositories repository
 JOIN sites site ON site.id=repository.site_id
 JOIN subscription_system_accounts account ON account.subscription_id=site.subscription_id
-WHERE site.subscription_id=$1 ORDER BY repository.id`, subscriptionID, desiredState)
+WHERE site.subscription_id=$1 AND (repository.connection_status<>'disconnected' OR EXISTS(SELECT 1 FROM git_deployments operation WHERE operation.repository_id=repository.id AND operation.status IN ('pending','running'))) ORDER BY repository.id`, subscriptionID, desiredState)
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}
 	for rows.Next() {
 		var item types.EnsureGitRepositoryReq
 		if err := rows.Scan(&item.RepositoryID, &item.SiteID, &item.Username, &item.Domain, &item.Mode,
-			&item.RemoteURL, &item.Branch, &item.DeployTarget, &item.Automatic, &item.KnownHostKey, &item.State); err != nil {
+			&item.RemoteURL, &item.Branch, &item.DeployTarget, &item.Automatic, &item.KnownHostKey, &item.OperationRevision, &item.State); err != nil {
 			rows.Close()
 			return convergenceSnapshot{}, err
 		}
