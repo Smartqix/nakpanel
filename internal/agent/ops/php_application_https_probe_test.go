@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -20,9 +21,9 @@ func TestManagedPHPHTTPSActivationDoesNotAcknowledgeHTTPRedirect(t *testing.T) {
 				http.Redirect(w, r, "https://example.com/up", http.StatusMovedPermanently)
 			}))
 			defer plain.Close()
-			tlsCalls := 0
+			var tlsCalls atomic.Int32
 			secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				tlsCalls++
+				tlsCalls.Add(1)
 				if !healthy {
 					w.WriteHeader(http.StatusInternalServerError)
 				}
@@ -40,7 +41,7 @@ func TestManagedPHPHTTPSActivationDoesNotAcknowledgeHTTPRedirect(t *testing.T) {
 				return probePHPHTTPWithRoots(ctx, plain.URL+"/up", host, nil)
 			}
 			p, spec := newPHPApplicationTestProvisioner(t, &scriptedPHPAppRunner{}, probe)
-			p.healthProbeWindow = 10 * time.Millisecond
+			p.healthProbeWindow = time.Second
 			spec.HTTPSRedirect = true
 			paths, err := p.pathsFor(spec, 22)
 			if err != nil {
@@ -57,7 +58,7 @@ func TestManagedPHPHTTPSActivationDoesNotAcknowledgeHTTPRedirect(t *testing.T) {
 			if (err == nil) != healthy {
 				t.Fatalf("HTTPS health %t: activation error=%v", healthy, err)
 			}
-			if tlsCalls == 0 {
+			if tlsCalls.Load() == 0 {
 				t.Fatal("activation only checked the HTTP redirect, not the HTTPS application")
 			}
 		})
