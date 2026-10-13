@@ -192,7 +192,7 @@ templ routedContent(user auth.SessionUser, data dashboard.Data, actions Dashboar
 		case "sites":
 			@routedSites(user, sitesForSubscription(sitesForCustomer(data.Sites, view.SupportCustomerID), view.SelectedSubscription), selectedSubscription(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), view.SelectedSubscription), actions, view)
 		case "site-new":
-			@siteCreatePage(activeSubscriptions(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID)), actions, view)
+			@siteCreatePage(activeSubscriptions(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID)),data.Capabilities, actions, view)
 		case "site-detail":
 			@routedSiteDetail(user, data, actions, view)
 		case "site-setup":
@@ -3799,6 +3799,7 @@ templ routedSubdomainDialog(parent dashboard.Site, subscription types.Subscripti
 			@csrfInput(view)
 			<label>Subdomain name<input name="label" maxlength="253" placeholder="blog" autocapitalize="none" autocomplete="off" spellcheck="false" required/></label>
 			<p class="np-subdomain-preview">Address: <strong data-np-subdomain-preview>blog.{ parent.Domain }</strong></p>
+			@creationSSLChoice(subscription.AllowTLS,capabilities.ACMEAvailable,view)
 			<p class="np-form-help">Enter <strong>blog</strong> to create blog.{ parent.Domain }. The matching full address also works.</p>
 			<p class="np-form-help">Subscription allowance: { formatQuotaCompactCount(subscription.SubdomainsUsed,subscription.MaxSubdomains,true) } subdomains. The document root is created automatically.</p>
 			<p class="np-form-help">PHP starts with { displayFallback(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion),"the subscription default") }. Change it on the new domain after creation.</p>
@@ -3809,7 +3810,7 @@ templ routedSubdomainDialog(parent dashboard.Site, subscription types.Subscripti
 			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites")) } data-np-subdomain-check-existing hidden>Check Websites</a>
 			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit disabled?={ !stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion)) }>Create subdomain</button></div>
 		</form>
-		@siteSetupProgress(types.SiteSetupStatus{State:"pending",Message:"Creating subdomain."},view,true)
+		@siteSetupProgress(types.SiteSetupStatus{Kind:"subdomain",State:"pending",Message:"Creating subdomain."},view,true)
 	</dialog>
 }
 
@@ -3818,14 +3819,14 @@ templ routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities t
 		for _, version := range subscriptionPHPVersions(subscriptions,capabilities) {
 			<option value={ version }>{ version }</option>
 		}
-	</select></label><p class="np-gate" data-np-customer-gate></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit>Create website</button></div></form></dialog>
+	</select></label>@creationSSLChoice(creationSubscriptionTLS(subscriptions,0),capabilities.ACMEAvailable,view)<p class="np-gate" data-np-customer-gate></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit>Create website</button></div></form>@siteSetupProgress(types.SiteSetupStatus{Kind:"website",State:"pending",Message:"Creating website."},view,true)</dialog>
 }
 
 
 templ routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities) {
 	<label>Subscription <select name="subscription_id" required>
 		for _, subscription := range subscriptions {
-			<option value={ formatQuotaUserID(subscription.ID) } data-subscription-id={ formatQuotaUserID(subscription.ID) } data-customer-id={ formatQuotaUserID(subscription.CustomerID) } data-email={ subscription.CustomerEmail } data-plan-name={ subscription.PlanName } data-has-quota="true" data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.DomainsUsed) } data-overuse-policy={ string(subscription.OverusePolicy) } data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) } data-php-versions={ joinStrings(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist)) } data-default-php={ controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion) }>{ subscriptionSelectLabel(subscription) }</option>
+			<option value={ formatQuotaUserID(subscription.ID) } data-allow-tls={ formatBool(subscription.AllowTLS) } data-subscription-id={ formatQuotaUserID(subscription.ID) } data-customer-id={ formatQuotaUserID(subscription.CustomerID) } data-email={ subscription.CustomerEmail } data-plan-name={ subscription.PlanName } data-has-quota="true" data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.DomainsUsed) } data-overuse-policy={ string(subscription.OverusePolicy) } data-storage-mb={ formatPlanLimitFormValue(subscription.DiskMB) } data-php-versions={ joinStrings(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist)) } data-default-php={ controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion) }>{ subscriptionSelectLabel(subscription) }</option>
 		}
 	</select></label>
 }

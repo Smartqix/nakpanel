@@ -43,9 +43,15 @@ func (s *Server) siteSetupTarget(w http.ResponseWriter, r *http.Request) (auth.S
 		writeSPAError(w, http.StatusServiceUnavailable, "Setup status is temporarily unavailable.")
 		return user, setup, 0, false
 	}
-	if setup.SiteID != id || setup.ParentID <= 0 {
+	if setup.SiteID != id {
 		http.NotFound(w, r)
 		return user, setup, 0, false
+	}
+	if setup.Kind == "" {
+		setup.Kind = "website"
+		if setup.ParentID > 0 {
+			setup.Kind = "subdomain"
+		}
 	}
 	var supportID int64
 	if raw := r.PathValue("customerID"); raw != "" {
@@ -71,7 +77,47 @@ func (s *Server) handleSiteSetupStatus(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeSPAJSON(w, http.StatusOK, map[string]any{"ok": true, "site_id": setup.SiteID, "domain": setup.Domain, "state": setup.State, "message": setup.Message, "steps": setup.Steps, "redirect": setupPath(supportID, setup.SiteID, "?tab=overview&notice=subdomain-created")})
+	writeSPAJSON(w, http.StatusOK, map[string]any{"ok": true, "site_id": setup.SiteID, "kind": setup.Kind, "ssl_requested": setup.SSLRequested, "can_retry_ssl": setup.CanRetrySSL, "domain": setup.Domain, "state": setup.State, "message": setup.Message, "steps": setup.Steps, "redirect": setupPath(supportID, setup.SiteID, "?tab=overview&notice="+setupNotice(setup))})
+}
+
+func setupNotice(setup types.SiteSetupStatus) string {
+	if setup.SSLRequested {
+		return "website-secured"
+	}
+	if setup.ParentID > 0 {
+		return "subdomain-created"
+	}
+	return "website-created"
+}
+
+func (s *Server) handleRetrySetupSSL(w http.ResponseWriter, r *http.Request) {
+	user, setup, supportID, ok := s.siteSetupTarget(w, r)
+	if !ok {
+		return
+	}
+	retry, ok := s.sites.(interface {
+		RetryCreationSSLFor(context.Context, auth.SessionUser, int64) (int64, error)
+	})
+	if !ok {
+		writeSPAError(w, http.StatusServiceUnavailable, "SSL retry is unavailable.")
+		return
+	}
+	_, err := retry.RetryCreationSSLFor(r.Context(), user, setup.SiteID)
+	if errors.Is(err, provision.ErrForbidden) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		writeSPAError(w, http.StatusBadRequest, "Could not retry SSL: "+err.Error())
+		return
+	}
+	s.recordAudit(r.Context(), user, setup.CustomerID, setup.SubscriptionID, "certificate.setup_retry", "site", setup.SiteID, map[string]any{"domain": setup.Domain})
+	progress := setupPath(supportID, setup.SiteID, "/setup")
+	if wantsSPAJSON(r) {
+		writeSPAJSON(w, http.StatusAccepted, map[string]any{"ok": true, "site_id": setup.SiteID, "kind": setup.Kind, "ssl_requested": true, "status_url": progress + "/status", "setup_url": progress})
+		return
+	}
+	http.Redirect(w, r, progress, http.StatusSeeOther)
 }
 
 func (s *Server) handleSiteSetupPage(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +126,7 @@ func (s *Server) handleSiteSetupPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if setup.State == "ready" {
-		http.Redirect(w, r, setupPath(supportID, setup.SiteID, "?tab=overview&notice=subdomain-created"), http.StatusSeeOther)
+		http.Redirect(w, r, setupPath(supportID, setup.SiteID, "?tab=overview&notice="+setupNotice(setup)), http.StatusSeeOther)
 		return
 	}
 	data, err := s.loadDashboard(r.Context(), user)

@@ -33,9 +33,14 @@ type UsageCollector struct {
 	mariaDSN      string
 	containerRoot string
 	runtimeProbe  RuntimeCapabilityProbe
+	acmeAvailable bool
 }
 
 type UsageCollectorOption func(*UsageCollector)
+
+func WithACMEAvailability(available bool) UsageCollectorOption {
+	return func(collector *UsageCollector) { collector.acmeAvailable = available }
+}
 
 func WithRuntimeCapabilityProbe(probe RuntimeCapabilityProbe) UsageCollectorOption {
 	return func(collector *UsageCollector) {
@@ -137,7 +142,8 @@ func (c *UsageCollector) RuntimeCapabilities(ctx context.Context) (types.Runtime
 	runtimes, versions := probePHPRuntimes(ctx, probe)
 	_, quotaErr := probe.LookPath("setquota")
 	capabilities := types.RuntimeCapabilities{
-		PHPVersions: versions, PHPRuntimes: runtimes, DiskQuota: quotaErr == nil,
+		ACMEAvailable: c.acmeAvailable,
+		PHPVersions:   versions, PHPRuntimes: runtimes, DiskQuota: quotaErr == nil,
 		ApplicationHealth:   []string{types.ApplicationHealthHTTP, types.ApplicationHealthTCP},
 		ApplicationPortFrom: 20000, ApplicationPortTo: 29999,
 	}

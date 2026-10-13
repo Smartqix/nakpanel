@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
@@ -28,6 +29,24 @@ func (r *SQLSiteRepository) GetSubdomainParent(ctx context.Context, siteID int64
 }
 
 var ErrCertificateOperationInProgress = errors.New("certificate operation is already in progress")
+var ErrSiteAlreadyExists = errors.New("this domain already exists; open the existing website")
+
+func guardCreationSSLTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, domain string) error {
+	var exists, allowed bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM sites WHERE domain=$1)`, domain).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return ErrSiteAlreadyExists
+	}
+	if err := tx.QueryRowContext(ctx, `SELECT allow_tls FROM subscription_entitlements WHERE subscription_id=$1`, subscriptionID).Scan(&allowed); err != nil {
+		return err
+	}
+	if !allowed {
+		return fmt.Errorf("%w: SSL is disabled by the subscription", controlquota.ErrExceeded)
+	}
+	return nil
+}
 
 const activeCertificateJobSQL = `SELECT EXISTS (
 SELECT 1
@@ -63,6 +82,11 @@ func (r *SQLSiteRepository) CreateSite(ctx context.Context, ownerID int64, req t
 	defer tx.Rollback()
 	if err := guardSiteIntentTx(ctx, tx, req.SubscriptionID, req.Domain, req.ParentSiteID); err != nil {
 		return 0, fmt.Errorf("guard site entitlement: %w", err)
+	}
+	if req.SecureWithSSL {
+		if err := guardCreationSSLTx(ctx, tx, req.SubscriptionID, req.Domain); err != nil {
+			return 0, err
+		}
 	}
 
 	site, err := r.queries.WithTx(tx).UpsertSiteIntent(ctx, store.UpsertSiteIntentParams{
@@ -102,6 +126,15 @@ WHERE child.subscription_id=$2
 	if err != nil {
 		return 0, fmt.Errorf("enqueue create_site job: %w", err)
 	}
+	if req.SecureWithSSL {
+		if _, err = tx.ExecContext(ctx, `UPDATE sites SET ssl_setup_requested=true,tls_status='pending',tls_issuer='acme',tls_last_error='',tls_auto_renew=true,updated_at=now() WHERE id=$1`, site.ID); err != nil {
+			return 0, err
+		}
+		args := IssueCertArgs{SiteID: site.ID, Username: site.Username, Domain: site.Domain, PHPVersion: site.PhpVersion, Issuer: types.CertIssuerACME, SharedAccount: true, Limits: req.Limits, SubscriptionID: site.SubscriptionID, CustomerID: site.CustomerID, ActorUserID: req.RequestedByUserID, AfterProvisioning: true}
+		if _, err = r.river.InsertTx(ctx, tx, args, &river.InsertOpts{MaxAttempts: 3, ScheduledAt: time.Now().Add(2 * time.Second)}); err != nil {
+			return 0, fmt.Errorf("enqueue website SSL: %w", err)
+		}
+	}
 	if _, err = controlquota.EnqueueSubscriptionConvergenceTx(ctx, tx, r.river, req.SubscriptionID); err != nil {
 		return 0, fmt.Errorf("enqueue subscription convergence: %w", err)
 	}
@@ -112,6 +145,12 @@ WHERE child.subscription_id=$2
 }
 
 func (r *SQLSiteRepository) IssueCertificate(ctx context.Context, ownerID int64, domain string, issuer types.CertIssuer) (int64, error) {
+	return r.enqueueCertificate(ctx, ownerID, domain, issuer, false)
+}
+func (r *SQLSiteRepository) RetryCreationSSL(ctx context.Context, ownerID int64, domain string) (int64, error) {
+	return r.enqueueCertificate(ctx, ownerID, domain, types.CertIssuerACME, true)
+}
+func (r *SQLSiteRepository) enqueueCertificate(ctx context.Context, ownerID int64, domain string, issuer types.CertIssuer, integrated bool) (int64, error) {
 	if r.db == nil {
 		return 0, errors.New("database is not configured")
 	}
@@ -138,18 +177,35 @@ func (r *SQLSiteRepository) IssueCertificate(ctx context.Context, ownerID int64,
 	if err := guardCertificateOperationTx(ctx, tx, site.ID); err != nil {
 		return 0, err
 	}
+	if integrated {
+		var retryable bool
+		err = tx.QueryRowContext(ctx, `SELECT ssl_setup_requested AND tls_issuer<>'custom' FROM sites WHERE id=$1`, site.ID).Scan(&retryable)
+		if err != nil || !retryable {
+			return 0, errors.New("SSL setup is not awaiting retry")
+		}
+		var permitted bool
+		if err = tx.QueryRowContext(ctx, `SELECT entitlement.allow_tls FROM subscription_entitlements entitlement
+ JOIN subscriptions subscription ON subscription.id=entitlement.subscription_id
+ JOIN customers customer ON customer.id=subscription.customer_id
+ WHERE subscription.id=$1 AND subscription.status='active' AND customer.status='active' FOR UPDATE OF subscription`, site.SubscriptionID).Scan(&permitted); err != nil || !permitted {
+			return 0, ErrProvisionedSSLInactive
+		}
+	}
 	limits, err := controlquota.EffectiveSiteResourceLimitsTx(ctx, tx, site.ID)
 	if err != nil {
 		return 0, fmt.Errorf("resolve site policy for certificate: %w", err)
 	}
-	if err := r.queries.WithTx(tx).MarkSiteTLSPending(ctx, store.MarkSiteTLSPendingParams{
-		ID:        site.ID,
-		TlsIssuer: string(issuer),
-	}); err != nil {
-		return 0, fmt.Errorf("mark site tls pending: %w", err)
+	if !reuseInstalledCreationCertificate(site, integrated) {
+		if err := r.queries.WithTx(tx).MarkSiteTLSPending(ctx, store.MarkSiteTLSPendingParams{
+			ID:        site.ID,
+			TlsIssuer: string(issuer),
+		}); err != nil {
+			return 0, fmt.Errorf("mark site tls pending: %w", err)
+		}
 	}
 
 	_, err = r.river.InsertTx(ctx, tx, IssueCertArgs{
+		AfterProvisioning: integrated, ActorUserID: ownerID, CustomerID: site.CustomerID, SubscriptionID: site.SubscriptionID,
 		SiteID:        site.ID,
 		Username:      site.Username,
 		Domain:        site.Domain,
@@ -165,6 +221,10 @@ func (r *SQLSiteRepository) IssueCertificate(ctx context.Context, ownerID int64,
 		return 0, fmt.Errorf("commit certificate transaction: %w", err)
 	}
 	return site.ID, nil
+}
+
+func reuseInstalledCreationCertificate(site store.GetSiteByDomainRow, integrated bool) bool {
+	return integrated && site.TlsStatus == "active" && site.TlsIssuer == string(types.CertIssuerACME) && site.TlsExpiresAt.Valid && site.TlsExpiresAt.Time.After(time.Now()) && site.TlsCertPath != "" && site.TlsKeyPath != ""
 }
 
 func (r *SQLSiteRepository) InstallCustomCertificate(ctx context.Context, ownerID int64, domain, stagingPath string) (int64, error) {

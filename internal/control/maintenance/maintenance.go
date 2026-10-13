@@ -443,6 +443,13 @@ func (s *Service) deleteBackup(ctx context.Context, id int64) error {
 }
 
 func (s *Service) ReportCertificate(ctx context.Context, a provision.IssueCertArgs, workErr error) error {
+	if a.AfterProvisioning {
+		key := fmt.Sprintf("setup:cert:%d", a.SiteID)
+		if workErr != nil {
+			return s.recordFailure(ctx, a.ActorUserID, a.CustomerID, a.SubscriptionID, "certificate.setup_failed", "site", a.SiteID, "Website created; SSL needs attention", workErr.Error(), key)
+		}
+		return s.recordSuccess(ctx, a.ActorUserID, a.CustomerID, a.SubscriptionID, "certificate.installed", "site", a.SiteID, map[string]any{"domain": a.Domain}, key)
+	}
 	if !a.Automated {
 		return nil
 	}

@@ -350,6 +350,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /sites", s.handleCreateSite)
 	mux.HandleFunc("POST /sites/{id}/subdomains", s.handleCreateSubdomain)
 	mux.HandleFunc("GET /sites/{id}/setup/status", s.handleSiteSetupStatus)
+	mux.HandleFunc("POST /sites/{id}/setup/retry-ssl", s.handleRetrySetupSSL)
+	mux.HandleFunc("POST /support/customers/{customerID}/sites/{id}/setup/retry-ssl", s.handleRetrySetupSSL)
 	mux.HandleFunc("GET /sites/{id}/setup", s.handleSiteSetupPage)
 	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}/setup/status", s.handleSiteSetupStatus)
 	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}/setup", s.handleSiteSetupPage)
@@ -1475,6 +1477,7 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := types.CreateSiteReq{
+		SecureWithSSL:  r.Form.Get("secure_with_ssl") == "true",
 		SubscriptionID: parseFormInt64Default(r, "subscription_id", 0),
 		Username:       strings.ToLower(strings.TrimSpace(r.Form.Get("username"))),
 		Domain:         strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))),
@@ -1515,16 +1518,18 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		customerID, _ = s.workspace.CustomerIDForSubscription(r.Context(), req.SubscriptionID)
 	}
 	s.recordAudit(r.Context(), user, customerID, req.SubscriptionID, "site.queued", "site", siteID, map[string]any{"domain": req.Domain})
+	progress := supportRedirectPath(r, user, fmt.Sprintf("/sites/%d/setup", siteID))
 	if wantsSPAJSON(r) {
 		writeSPAJSON(w, http.StatusAccepted, map[string]any{
-			"ok":       true,
-			"site_id":  siteID,
-			"redirect": "/",
-			"notice":   "Site provisioning queued.",
+			"ok":        true,
+			"site_id":   siteID,
+			"redirect":  supportRedirectPath(r, user, fmt.Sprintf("/sites/%d?tab=overview", siteID)),
+			"setup_url": progress, "status_url": progress + "/status", "kind": "website", "domain": req.Domain, "ssl_requested": req.SecureWithSSL,
+			"notice": "Site provisioning queued.",
 		})
 		return
 	}
-	redirectAfterPost(w, r, "/", "/sites?notice=site-queued")
+	http.Redirect(w, r, progress, http.StatusSeeOther)
 }
 
 func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
@@ -1570,7 +1575,19 @@ func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	siteID, err := creator.CreateSubdomainFor(r.Context(), user, parentID, label, "")
+	var siteID int64
+	if r.Form.Get("secure_with_ssl") == "true" {
+		secureCreator, ok := s.sites.(interface {
+			CreateSubdomainWithSSLFor(context.Context, auth.SessionUser, int64, string, string, bool) (int64, error)
+		})
+		if !ok {
+			writeSPAError(w, http.StatusServiceUnavailable, "Secure subdomain creation is unavailable.")
+			return
+		}
+		siteID, err = secureCreator.CreateSubdomainWithSSLFor(r.Context(), user, parentID, label, "", true)
+	} else {
+		siteID, err = creator.CreateSubdomainFor(r.Context(), user, parentID, label, "")
+	}
 	if err != nil {
 		if errors.Is(err, provision.ErrForbidden) {
 			http.NotFound(w, r)
@@ -1587,7 +1604,7 @@ func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
 	progress := supportRedirectPath(r, user, fmt.Sprintf("/sites/%d/setup", siteID))
 	redirect := supportRedirectPath(r, user, fmt.Sprintf("/sites/%d?tab=overview&notice=subdomain-created", siteID))
 	if wantsSPAJSON(r) {
-		writeSPAJSON(w, http.StatusAccepted, map[string]any{"ok": true, "site_id": siteID, "redirect": redirect, "setup_url": progress, "status_url": progress + "/status", "notice": "Creating subdomain."})
+		writeSPAJSON(w, http.StatusAccepted, map[string]any{"ok": true, "site_id": siteID, "kind": "subdomain", "ssl_requested": r.Form.Get("secure_with_ssl") == "true", "redirect": redirect, "setup_url": progress, "status_url": progress + "/status", "notice": "Creating subdomain."})
 		return
 	}
 	http.Redirect(w, r, progress, http.StatusSeeOther)
@@ -3497,6 +3514,8 @@ var noticeCatalogue = map[string]noticeEntry{
 	"site-queued":              {"Website queued. Provisioning usually completes within a minute.", dashboard.NoticeSuccess},
 	"subdomain-queued":         {"Subdomain setup is underway. Open its setup page to check progress.", dashboard.NoticeInfo},
 	"subdomain-created":        {"Subdomain created successfully.", dashboard.NoticeSuccess},
+	"website-created":          {"Website created successfully.", dashboard.NoticeSuccess},
+	"website-secured":          {"Website created and secured.", dashboard.NoticeSuccess},
 	"database-queued":          {"Database creation queued. Its status updates automatically.", dashboard.NoticeSuccess},
 	"database-select":          {"Select a database to open phpMyAdmin.", dashboard.NoticeSuccess},
 	"database-password-queued": {"Password change queued. Wait for Ready to connect before updating your application.", dashboard.NoticeSuccess},

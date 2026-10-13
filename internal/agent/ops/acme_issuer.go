@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/hex"
 	"encoding/pem"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/types"
 	"golang.org/x/crypto/acme"
 )
 
@@ -38,29 +40,37 @@ type ACMEProtocolClient interface {
 }
 
 type ACMEHTTP01IssuerOptions struct {
-	Client         ACMEProtocolClient
-	DirectoryURL   string
-	AccountKeyPath string
-	Email          string
+	ChallengeChecker       func(context.Context, string, string, string) error
+	AllowPrivateChallenges bool
+	Client                 ACMEProtocolClient
+	DirectoryURL           string
+	AccountKeyPath         string
+	Email                  string
 }
 
 type ACMEHTTP01Issuer struct {
-	client         ACMEProtocolClient
-	directoryURL   string
-	accountKeyPath string
-	email          string
+	challengeChecker func(context.Context, string, string, string) error
+	client           ACMEProtocolClient
+	directoryURL     string
+	accountKeyPath   string
+	email            string
 }
 
 func NewACMEHTTP01Issuer(opts ACMEHTTP01IssuerOptions) *ACMEHTTP01Issuer {
+	checker := opts.ChallengeChecker
+	if checker == nil {
+		checker = (http01ChallengeProbe{allowPrivate: opts.AllowPrivateChallenges}).Check
+	}
 	accountKeyPath := opts.AccountKeyPath
 	if accountKeyPath == "" {
 		accountKeyPath = defaultACMEAccountKeyPath
 	}
 	return &ACMEHTTP01Issuer{
-		client:         opts.Client,
-		directoryURL:   opts.DirectoryURL,
-		accountKeyPath: accountKeyPath,
-		email:          strings.TrimSpace(opts.Email),
+		challengeChecker: checker,
+		client:           opts.Client,
+		directoryURL:     opts.DirectoryURL,
+		accountKeyPath:   accountKeyPath,
+		email:            strings.TrimSpace(opts.Email),
 	}
 }
 
@@ -73,6 +83,23 @@ func (i *ACMEHTTP01Issuer) Issue(ctx context.Context, req ACMEIssueRequest) (ACM
 	}
 	if req.CertPath == "" || req.KeyPath == "" {
 		return ACMEIssueResult{}, errors.New("certificate and key paths are required")
+	}
+	proof := make([]byte, 16)
+	if _, err := rand.Read(proof); err != nil {
+		return ACMEIssueResult{}, err
+	}
+	path := http01ChallengePrefix + "np-" + hex.EncodeToString(proof)
+	probeFile, err := http01ChallengeFile(req.Docroot, path)
+	if err != nil {
+		return ACMEIssueResult{}, err
+	}
+	if err = writeFileAtomic(probeFile, proof, 0o644); err != nil {
+		return ACMEIssueResult{}, err
+	}
+	err = i.challengeChecker(ctx, req.Domain, path, string(proof))
+	_ = os.Remove(probeFile)
+	if err != nil {
+		return ACMEIssueResult{}, fmt.Errorf("%w: %v", types.ErrACMEChallengePending, err)
 	}
 
 	client := i.client
@@ -92,7 +119,7 @@ func (i *ACMEHTTP01Issuer) Issue(ctx context.Context, req ACMEIssueRequest) (ACM
 		return ACMEIssueResult{}, fmt.Errorf("authorize acme order: %w", err)
 	}
 	for _, authzURL := range order.AuthzURLs {
-		if err := i.completeHTTP01Authorization(ctx, client, req.Docroot, authzURL); err != nil {
+		if err := i.completeHTTP01Authorization(ctx, client, req.Domain, req.Docroot, authzURL); err != nil {
 			return ACMEIssueResult{}, err
 		}
 	}
@@ -135,7 +162,7 @@ func (i *ACMEHTTP01Issuer) Issue(ctx context.Context, req ACMEIssueRequest) (ACM
 	return ACMEIssueResult{CertPath: req.CertPath, KeyPath: req.KeyPath, ExpiresAt: expiresAt}, nil
 }
 
-func (i *ACMEHTTP01Issuer) completeHTTP01Authorization(ctx context.Context, client ACMEProtocolClient, docroot, authzURL string) error {
+func (i *ACMEHTTP01Issuer) completeHTTP01Authorization(ctx context.Context, client ACMEProtocolClient, domain, docroot, authzURL string) error {
 	authz, err := client.GetAuthorization(ctx, authzURL)
 	if err != nil {
 		return fmt.Errorf("get acme authorization: %w", err)
@@ -159,6 +186,9 @@ func (i *ACMEHTTP01Issuer) completeHTTP01Authorization(ctx context.Context, clie
 		return fmt.Errorf("write http-01 challenge: %w", err)
 	}
 	defer os.Remove(challengeFile)
+	if err := i.challengeChecker(ctx, domain, client.HTTP01ChallengePath(challenge.Token), keyAuthorization); err != nil {
+		return fmt.Errorf("%w: %v", types.ErrACMEChallengePending, err)
+	}
 
 	if _, err := client.Accept(ctx, challenge); err != nil {
 		return fmt.Errorf("accept http-01 challenge: %w", err)

@@ -6597,6 +6597,10 @@
 
 @layer components {
   .np-setup-tracker { padding: 20px 0; min-width: 0; }
+  .np-creation-ssl { grid-column: 1 / -1; padding: 12px 0; min-width: 0; }
+  .np-creation-ssl .np-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; }
+  .np-creation-ssl .np-form-help { margin: 4px 0 0; font-size: 14px; }
+  .np-setup-tracker [data-np-setup-retry] { display: block; margin: 16px 0; }
   .np-dialog .np-setup-tracker { padding: 20px 24px 0; }
   .np-setup-heading { display: flex; align-items: center; gap: 10px; }
   .np-setup-heading h3 { margin: 0; font-size: 18px; line-height: 1.4; }

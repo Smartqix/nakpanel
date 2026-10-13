@@ -1059,6 +1059,7 @@ type Site struct {
 	ParentSiteID                 sql.NullInt64
 	DnsZoneMode                  string
 	DnsTemplateAdoptionCompleted bool
+	SslSetupRequested            bool
 }
 
 type SitePolicyOverride struct {

@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 )
 
@@ -12,11 +13,16 @@ type Request struct {
 }
 
 type Response struct {
-	ID    string          `json:"id"`
-	OK    bool            `json:"ok"`
-	Data  json.RawMessage `json:"data,omitempty"`
-	Error string          `json:"error,omitempty"`
+	ID        string          `json:"id"`
+	OK        bool            `json:"ok"`
+	Data      json.RawMessage `json:"data,omitempty"`
+	Error     string          `json:"error,omitempty"`
+	ErrorCode string          `json:"error_code,omitempty"`
 }
+
+const ErrorACMEChallengePending = "acme_challenge_pending"
+
+var ErrACMEChallengePending = errors.New("ACME challenge is not publicly reachable yet")
 
 const (
 	OpPing                        = "ping"
@@ -275,15 +281,17 @@ type FileMutationResult struct {
 }
 
 type CreateSiteReq struct {
-	SiteID         int64              `json:"site_id,omitempty"`
-	ParentSiteID   int64              `json:"parent_site_id,omitempty"`
-	SubscriptionID int64              `json:"subscription_id"`
-	Username       string             `json:"username"`
-	Domain         string             `json:"domain"`
-	PHPVersion     string             `json:"php_version"`
-	Docroot        string             `json:"docroot"`
-	SharedAccount  bool               `json:"shared_account,omitempty"`
-	Limits         SiteResourceLimits `json:"limits"`
+	SecureWithSSL     bool               `json:"secure_with_ssl,omitempty"`
+	RequestedByUserID int64              `json:"-"`
+	SiteID            int64              `json:"site_id,omitempty"`
+	ParentSiteID      int64              `json:"parent_site_id,omitempty"`
+	SubscriptionID    int64              `json:"subscription_id"`
+	Username          string             `json:"username"`
+	Domain            string             `json:"domain"`
+	PHPVersion        string             `json:"php_version"`
+	Docroot           string             `json:"docroot"`
+	SharedAccount     bool               `json:"shared_account,omitempty"`
+	Limits            SiteResourceLimits `json:"limits"`
 }
 
 type SiteResourceLimits struct {
@@ -356,6 +364,7 @@ const (
 )
 
 type IssueCertReq struct {
+	ReuseExisting bool               `json:"reuse_existing,omitempty"`
 	SiteID        int64              `json:"site_id,omitempty"`
 	Username      string             `json:"username"`
 	Domain        string             `json:"domain"`
@@ -798,6 +807,7 @@ type CollectUsageResult struct {
 }
 
 type RuntimeCapabilities struct {
+	ACMEAvailable        bool                   `json:"acme_available"`
 	GoAccessAvailable    bool                   `json:"goaccess_available"`
 	GoAccessVersion      string                 `json:"goaccess_version,omitempty"`
 	PHPVersions          []string               `json:"php_versions"`

@@ -33,6 +33,7 @@ type loadedOperation struct {
 	backupDatabases                                                     []string
 	subscriptionStatus, customerStatus, siteStatus, siteProvisionStatus string
 	providerActive                                                      bool
+	sslSetupState                                                       string
 }
 
 var workerLocks sync.Map
@@ -76,7 +77,8 @@ subscription.status,customer.status,site.desired_status,site.status,
 CASE WHEN customer.reseller_id IS NULL THEN TRUE ELSE EXISTS (
  SELECT 1 FROM reseller_accounts reseller JOIN reseller_subscriptions allocation
  ON allocation.reseller_id=reseller.id AND allocation.status='active'
- WHERE reseller.id=customer.reseller_id AND reseller.status='active') END
+ WHERE reseller.id=customer.reseller_id AND reseller.status='active') END,
+CASE WHEN site.ssl_setup_requested THEN site.tls_status ELSE '' END
 FROM wordpress_instances instance
 JOIN wordpress_operations operation ON operation.instance_id=instance.id
 JOIN sites site ON site.id=instance.site_id
@@ -104,7 +106,7 @@ WHERE instance.id=$1 AND operation.id=$2`, args.InstanceID, args.OperationID).Sc
 		&loaded.identity.HostingMode, &loaded.identity.TLSActive, &loaded.databaseName, &loaded.databaseUser, &loaded.databaseStatus,
 		&loaded.backupStatus, &loaded.backupArchive, &loaded.backupChecksum, &loaded.backupSize,
 		&loaded.backupSiteID, &loaded.backupSubscriptionID, &backupDatabases,
-		&loaded.subscriptionStatus, &loaded.customerStatus, &loaded.siteStatus, &loaded.siteProvisionStatus, &loaded.providerActive)
+		&loaded.subscriptionStatus, &loaded.customerStatus, &loaded.siteStatus, &loaded.siteProvisionStatus, &loaded.providerActive, &loaded.sslSetupState)
 	if errors.Is(err, sql.ErrNoRows) {
 		return loaded, true, nil
 	}
@@ -174,6 +176,12 @@ func (loaded loadedOperation) validate() error {
 		return ErrInactive
 	}
 	if loaded.operation.Kind == types.WordPressActionInstall {
+		if loaded.sslSetupState != "" && !loaded.identity.TLSActive {
+			if loaded.sslSetupState == "failed" {
+				return errors.New("WordPress is waiting for SSL recovery; retry SSL first")
+			}
+			return errDependencyPending
+		}
 		switch loaded.siteProvisionStatus {
 		case "active":
 		case "failed":

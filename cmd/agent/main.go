@@ -48,7 +48,7 @@ func main() {
 		TLSHostname: os.Getenv("NAKPANEL_WEBMAIL_TLS_HOSTNAME"), TLSCertPath: os.Getenv("NAKPANEL_WEBMAIL_TLS_CERT"), TLSKeyPath: os.Getenv("NAKPANEL_WEBMAIL_TLS_KEY"),
 	})
 	dnsProvisioner := ops.NewDNSProvisioner(ops.DNSProvisionerOptions{Reloader: reloader})
-	usageCollector := ops.NewUsageCollector("/home", "/var/log/nginx", os.Getenv("NAKPANEL_MARIADB_DSN"))
+	usageCollector := ops.NewUsageCollector("/home", "/var/log/nginx", os.Getenv("NAKPANEL_MARIADB_DSN"), ops.WithACMEAvailability(true))
 	fileManager := ops.NewFileManager(ops.FileManagerOptions{TransferDir: config.FileTransferDir, PanelUser: config.PanelUser})
 	accountProvisioner := ops.NewSubscriptionAccountProvisioner(ops.SubscriptionAccountProvisionerOptions{
 		UserManager:     ops.NewLinuxUserManager(ops.LinuxUserManagerOptions{ManageSubIDs: true}),
@@ -94,9 +94,10 @@ func main() {
 				Reloader:    reloader,
 				NginxTester: ops.NewCommandNginxConfigTester(nil),
 				ACMEIssuer: ops.NewACMEHTTP01Issuer(ops.ACMEHTTP01IssuerOptions{
-					DirectoryURL:   os.Getenv("NAKPANEL_ACME_DIRECTORY_URL"),
-					AccountKeyPath: os.Getenv("NAKPANEL_ACME_ACCOUNT_KEY"),
-					Email:          os.Getenv("NAKPANEL_ACME_EMAIL"),
+					DirectoryURL:           os.Getenv("NAKPANEL_ACME_DIRECTORY_URL"),
+					AllowPrivateChallenges: ops.IsLocalACMEDirectory(os.Getenv("NAKPANEL_ACME_DIRECTORY_URL")),
+					AccountKeyPath:         os.Getenv("NAKPANEL_ACME_ACCOUNT_KEY"),
+					Email:                  os.Getenv("NAKPANEL_ACME_EMAIL"),
 				}),
 			}),
 			BackupProvisioner: ops.NewBackupProvisioner(ops.BackupProvisionerOptions{

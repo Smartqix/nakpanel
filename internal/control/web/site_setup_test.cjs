@@ -44,6 +44,12 @@ test('superseded setup timers cannot fetch or navigate',async()=>{
 test('ready setup does not discard unsaved settings',async()=>{
   const h=harness([{ok:true,site_id:7,state:'ready',steps:[],redirect:'/sites/7?tab=overview'}],{dirty:true});h.begin();await h.tick();assert.equal(h.navigations.length,0);assert.equal(h.panel.dataset.npSetupState,'ready');
 });
+test('website SSL tracker waits through HTTPS activation',async()=>{
+ const h=harness([{ok:true,site_id:7,kind:'website',state:'pending',steps:[{code:'tls',state:'active'},{code:'https',state:'pending'}]},{ok:true,site_id:7,kind:'website',state:'ready',steps:[{code:'https',state:'active'}],redirect:'/sites/7?notice=website-secured'}]);h.data.kind='website';h.begin();await h.tick();assert.equal(h.navigations.length,0);assert.equal(h.nodes['[data-np-setup-step="https"]'].textContent,'Waiting');assert.match(h.nodes['[data-np-setup-title]'].textContent,/website/i);await h.tick();assert.equal(h.navigations.length,1);
+});
+test('generated WordPress credentials prevent automatic navigation until acknowledged',async()=>{
+ const h=harness([{ok:true,site_id:7,state:'ready',steps:[],redirect:'/sites/7'}]);h.panel.dataset.npSetupHold='true';h.begin();await h.tick();assert.equal(h.navigations.length,0);assert.equal(h.panel.dataset.npSetupState,'ready');
+});
 for(const status of [401,403,404]) test(`access change ${status} stops polling`,async()=>{
   const h=harness([{ok:false,status}]);h.begin();await h.tick();assert.equal(h.navigations.length,0);assert.equal(h.timers.size,0);
 });

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -84,17 +85,18 @@ type AgentDatabaseClient interface {
 }
 
 type IssueCertArgs struct {
-	SiteID         int64                    `json:"site_id" river:"unique"`
-	Username       string                   `json:"username"`
-	Domain         string                   `json:"domain"`
-	PHPVersion     string                   `json:"php_version"`
-	Issuer         types.CertIssuer         `json:"issuer"`
-	SharedAccount  bool                     `json:"shared_account,omitempty"`
-	Limits         types.SiteResourceLimits `json:"limits"`
-	SubscriptionID int64                    `json:"subscription_id,omitempty"`
-	CustomerID     int64                    `json:"customer_id,omitempty"`
-	ActorUserID    int64                    `json:"actor_user_id,omitempty"`
-	Automated      bool                     `json:"automated,omitempty"`
+	AfterProvisioning bool                     `json:"after_provisioning,omitempty"`
+	SiteID            int64                    `json:"site_id" river:"unique"`
+	Username          string                   `json:"username"`
+	Domain            string                   `json:"domain"`
+	PHPVersion        string                   `json:"php_version"`
+	Issuer            types.CertIssuer         `json:"issuer"`
+	SharedAccount     bool                     `json:"shared_account,omitempty"`
+	Limits            types.SiteResourceLimits `json:"limits"`
+	SubscriptionID    int64                    `json:"subscription_id,omitempty"`
+	CustomerID        int64                    `json:"customer_id,omitempty"`
+	ActorUserID       int64                    `json:"actor_user_id,omitempty"`
+	Automated         bool                     `json:"automated,omitempty"`
 }
 
 func (IssueCertArgs) Kind() string { return "issue_cert" }
@@ -321,6 +323,12 @@ type IssueCertWorker struct {
 	agent    AgentCertificateClient
 	sites    SiteTLSStatusStore
 	reporter AutomatedReporter
+	setup    ProvisioningCertificateSetup
+}
+
+func (w *IssueCertWorker) WithProvisioningSetup(setup ProvisioningCertificateSetup) *IssueCertWorker {
+	w.setup = setup
+	return w
 }
 
 func NewIssueCertWorker(agent AgentCertificateClient, sites SiteTLSStatusStore, reporters ...AutomatedReporter) *IssueCertWorker {
@@ -338,6 +346,32 @@ func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs
 	if w.agent == nil {
 		return errors.New("agent certificate client is not configured")
 	}
+	if job.Args.AfterProvisioning {
+		if w.setup == nil {
+			return errors.New("website SSL setup is not configured")
+		}
+		state, err := w.setup.PrepareProvisionedCertificate(ctx, job.Args)
+		if err != nil {
+			if errors.Is(err, ErrProvisionedSSLInactive) {
+				return errors.Join(river.JobCancel(err), w.markFailed(ctx, job.Args.SiteID, err.Error()))
+			}
+			return err
+		}
+		if state.Installed {
+			if err := w.setup.EnableProvisionedHTTPS(ctx, job.Args.SiteID); err != nil {
+				return err
+			}
+			return w.report(ctx, job.Args, nil)
+		}
+		if job.JobRow != nil && time.Since(job.CreatedAt) >= 15*time.Minute {
+			message := "Website created; SSL could not finish within 15 minutes. Check DNS and retry SSL."
+			return errors.Join(river.JobCancel(errors.New(message)), w.markFailed(ctx, job.Args.SiteID, message))
+		}
+		if !state.Ready {
+			return river.JobSnooze(5 * time.Second)
+		}
+		job.Args = state.Args
+	}
 
 	resp, err := w.agent.IssueCert(ctx, types.IssueCertReq{
 		SiteID:        job.Args.SiteID,
@@ -347,13 +381,17 @@ func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs
 		Issuer:        job.Args.Issuer,
 		SharedAccount: job.Args.SharedAccount,
 		Limits:        job.Args.Limits,
+		ReuseExisting: job.Args.AfterProvisioning,
 	})
 	if err != nil {
-		return errors.Join(err, w.markFailed(ctx, job.Args.SiteID, err.Error()), w.report(ctx, job.Args, err))
+		return w.failCertificate(ctx, job.Args, err)
 	}
 	if !resp.OK {
+		if job.Args.AfterProvisioning && resp.ErrorCode == types.ErrorACMEChallengePending {
+			return river.JobSnooze(10 * time.Second)
+		}
 		err := fmt.Errorf("agent issue_cert failed: %s", resp.Error)
-		return errors.Join(err, w.markFailed(ctx, job.Args.SiteID, err.Error()), w.report(ctx, job.Args, err))
+		return w.failCertificate(ctx, job.Args, err)
 	}
 	var result types.IssueCertResult
 	if err := json.Unmarshal(resp.Data, &result); err != nil {
@@ -369,12 +407,25 @@ func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs
 			return fmt.Errorf("mark site tls active: %w", err)
 		}
 	}
+	if job.Args.AfterProvisioning {
+		if err := w.setup.EnableProvisionedHTTPS(ctx, job.Args.SiteID); err != nil {
+			return err
+		}
+	}
 	if w.reporter != nil {
 		if err := w.reporter.ReportCertificate(ctx, job.Args, nil); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (w *IssueCertWorker) failCertificate(ctx context.Context, args IssueCertArgs, err error) error {
+	failure := err
+	if args.AfterProvisioning {
+		failure = river.JobCancel(err)
+	}
+	return errors.Join(failure, w.markFailed(ctx, args.SiteID, err.Error()), w.report(ctx, args, err))
 }
 
 func (w *IssueCertWorker) report(ctx context.Context, args IssueCertArgs, err error) error {

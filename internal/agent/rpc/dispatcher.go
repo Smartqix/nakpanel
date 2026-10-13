@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -1197,6 +1198,11 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 		}
 		result, err := d.certificateProvisioner.IssueCert(ctx, payload)
 		if err != nil {
+			if errors.Is(err, types.ErrACMEChallengePending) {
+				response := errorResponse(req.ID, err.Error())
+				response.ErrorCode = types.ErrorACMEChallengePending
+				return response
+			}
 			return errorResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, result)

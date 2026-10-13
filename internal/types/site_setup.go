@@ -9,6 +9,9 @@ type SiteSetupStep struct {
 }
 
 type SiteSetupStatus struct {
+	Kind           string          `json:"kind"`
+	SSLRequested   bool            `json:"ssl_requested"`
+	CanRetrySSL    bool            `json:"-"`
 	SiteID         int64           `json:"site_id"`
 	ParentID       int64           `json:"parent_id"`
 	ParentDomain   string          `json:"-"`

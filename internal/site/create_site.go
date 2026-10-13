@@ -84,15 +84,17 @@ func ValidateSFTPRelativeRoot(value string) error {
 
 func NormalizeCreateSiteRequest(req types.CreateSiteReq) types.CreateSiteReq {
 	return types.CreateSiteReq{
-		SiteID:         req.SiteID,
-		ParentSiteID:   req.ParentSiteID,
-		SubscriptionID: req.SubscriptionID,
-		Username:       strings.ToLower(strings.TrimSpace(req.Username)),
-		Domain:         NormalizeDomain(req.Domain),
-		PHPVersion:     strings.TrimSpace(req.PHPVersion),
-		Docroot:        strings.TrimSpace(req.Docroot),
-		SharedAccount:  req.SharedAccount,
-		Limits:         req.Limits,
+		SecureWithSSL:     req.SecureWithSSL,
+		RequestedByUserID: req.RequestedByUserID,
+		SiteID:            req.SiteID,
+		ParentSiteID:      req.ParentSiteID,
+		SubscriptionID:    req.SubscriptionID,
+		Username:          strings.ToLower(strings.TrimSpace(req.Username)),
+		Domain:            NormalizeDomain(req.Domain),
+		PHPVersion:        strings.TrimSpace(req.PHPVersion),
+		Docroot:           strings.TrimSpace(req.Docroot),
+		SharedAccount:     req.SharedAccount,
+		Limits:            req.Limits,
 	}
 }
 

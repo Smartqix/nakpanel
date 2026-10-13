@@ -106,7 +106,7 @@ func TestACMEHTTP01IssuerCompletesChallengeAndWritesCertificate(t *testing.T) {
 			t.Fatalf("challenge file = %q, want key authorization", got)
 		}
 	}
-	issuer := NewACMEHTTP01Issuer(ACMEHTTP01IssuerOptions{Client: client})
+	issuer := NewACMEHTTP01Issuer(ACMEHTTP01IssuerOptions{Client: client, ChallengeChecker: func(context.Context, string, string, string) error { return nil }})
 	certPath := filepath.Join(tmp, "var", "lib", "nakpanel", "certs", "example.test", "fullchain.pem")
 	keyPath := filepath.Join(tmp, "var", "lib", "nakpanel", "certs", "example.test", "privkey.pem")
 

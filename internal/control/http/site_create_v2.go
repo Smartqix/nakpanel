@@ -24,6 +24,7 @@ type websiteCreateInput struct {
 	Kind           string
 	WordPress      controlwordpress.InstallInput
 	GeneratedPass  bool
+	SecureWithSSL  bool
 }
 
 func parseWebsiteCreateInput(r *http.Request) (websiteCreateInput, error) {
@@ -41,6 +42,7 @@ func parseWebsiteCreateInput(r *http.Request) (websiteCreateInput, error) {
 		return websiteCreateInput{}, err
 	}
 	input := websiteCreateInput{
+		SecureWithSSL:  r.Form.Get("secure_with_ssl") == "true",
 		SubscriptionID: parseFormInt64Default(r, "subscription_id", 0),
 		Domain:         strings.ToLower(strings.TrimSpace(r.Form.Get("domain"))),
 		Kind:           strings.ToLower(strings.TrimSpace(r.Form.Get("website_type"))),
@@ -126,6 +128,7 @@ func (s *Server) handleCreateWebsite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	siteID, err := s.sites.CreateSiteFor(r.Context(), actor, actor.ID, types.CreateSiteReq{
+		SecureWithSSL:  input.SecureWithSSL,
 		SubscriptionID: input.SubscriptionID,
 		Domain:         input.Domain,
 	})
@@ -166,12 +169,18 @@ func (s *Server) handleCreateWebsite(w http.ResponseWriter, r *http.Request) {
 	}
 	input.WordPress.AdminPassword = ""
 	result.Redirect = supportRedirectPath(r, actor, result.Redirect)
+	result.SetupURL = supportRedirectPath(r, actor, "/sites/"+strconv.FormatInt(siteID, 10)+"/setup")
 	if wantsSPAJSON(r) {
 		writeSPAJSON(w, http.StatusAccepted, map[string]any{
 			"ok": true, "site_id": siteID, "website_type": input.Kind, "operation_id": result.OperationID,
 			"redirect": result.Redirect, "notice": result.Message, "partial": result.Partial,
 			"admin_user": result.AdminUser, "admin_password": result.AdminPassword,
+			"status_url": result.SetupURL + "/status", "setup_url": result.SetupURL, "kind": "website", "domain": input.Domain, "ssl_requested": input.SecureWithSSL,
 		})
+		return
+	}
+	if input.Kind != "wordpress" {
+		http.Redirect(w, r, result.SetupURL, http.StatusSeeOther)
 		return
 	}
 	s.renderWebsiteCreatePage(w, r, actor, http.StatusAccepted, input, "", &result)
@@ -222,7 +231,8 @@ func (s *Server) renderWebsiteCreatePage(w http.ResponseWriter, r *http.Request,
 		Route: "site-new", Title: dashboardTitle(actor.Role), CSRFToken: csrfToken(r),
 		SelectedSubscription: input.SubscriptionID, SiteCreateError: message, SiteCreateDomain: input.Domain,
 		SiteCreateKind: input.Kind, SiteCreateTitle: input.WordPress.Title, SiteCreateEmail: input.WordPress.AdminEmail,
-		SiteCreated: result,
+		SiteCreated:   result,
+		SiteCreateSSL: &input.SecureWithSSL,
 	}
 	if s.wordpress == nil && view.SiteCreateKind == "wordpress" {
 		view.SiteCreateKind = "php"

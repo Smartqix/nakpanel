@@ -404,6 +404,10 @@ func (m *Manager) CreateSite(ctx context.Context, owner auth.SessionUser, req ty
 }
 
 func (m *Manager) CreateSubdomainFor(ctx context.Context, actor auth.SessionUser, parentSiteID int64, label, phpVersion string) (int64, error) {
+	return m.CreateSubdomainWithSSLFor(ctx, actor, parentSiteID, label, phpVersion, false)
+}
+
+func (m *Manager) CreateSubdomainWithSSLFor(ctx context.Context, actor auth.SessionUser, parentSiteID int64, label, phpVersion string, secure bool) (int64, error) {
 	reader, ok := m.siteRepo.(SubdomainParentReader)
 	if !ok {
 		return 0, errors.New("subdomain provisioning is not configured")
@@ -438,10 +442,11 @@ func (m *Manager) CreateSubdomainFor(ctx context.Context, actor auth.SessionUser
 		return 0, err
 	}
 	return m.CreateSiteForSubscription(ctx, actor, parent.SubscriptionID, types.CreateSiteReq{
-		ParentSiteID: parent.ID,
-		Username:     parent.Username,
-		Domain:       label + "." + parent.Domain,
-		PHPVersion:   phpVersion,
+		SecureWithSSL: secure,
+		ParentSiteID:  parent.ID,
+		Username:      parent.Username,
+		Domain:        label + "." + parent.Domain,
+		PHPVersion:    phpVersion,
 	})
 }
 
@@ -451,6 +456,9 @@ func (m *Manager) CreateSiteFor(ctx context.Context, actor auth.SessionUser, res
 	}
 	if actor.Role != auth.RoleAdmin {
 		return 0, ErrForbidden
+	}
+	if req.SecureWithSSL {
+		return 0, errors.New("select a subscription before requesting SSL during creation")
 	}
 	if resourceOwnerID <= 0 {
 		return 0, errors.New("resource owner id is required")
@@ -522,6 +530,31 @@ func (m *Manager) CreateSiteForSubscription(ctx context.Context, actor auth.Sess
 	}
 	if err := m.validateInstalledPHP(ctx, normalized.PHPVersion); err != nil {
 		return 0, err
+	}
+	if normalized.SecureWithSSL {
+		reader, ok := m.quotaStore.(interface {
+			EffectiveSubscriptionPolicy(context.Context, int64) (types.HostingPolicy, error)
+		})
+		if !ok {
+			return 0, errors.New("subscription SSL policy is unavailable")
+		}
+		policy, err := reader.EffectiveSubscriptionPolicy(ctx, subscriptionID)
+		if err != nil {
+			return 0, err
+		}
+		if !policy.Permissions.TLS {
+			return 0, fmt.Errorf("%w: SSL is disabled by the subscription", controlquota.ErrExceeded)
+		}
+		if m.capabilities == nil {
+			return 0, errors.New("free SSL is unavailable on this server")
+		}
+		capabilities, err := m.capabilities.RuntimeCapabilities(ctx)
+		if err != nil || !capabilities.ACMEAvailable {
+			return 0, errors.New("free SSL is unavailable on this server")
+		}
+	}
+	if normalized.SecureWithSSL {
+		normalized.RequestedByUserID = actor.ID
 	}
 	normalized.SubscriptionID = subscriptionID
 	normalized.Limits = limits

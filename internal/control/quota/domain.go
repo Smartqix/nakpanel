@@ -107,6 +107,58 @@ FROM sites site WHERE site.id=$1 FOR UPDATE`, req.SiteID).Scan(&username, &domai
 	return tx.Commit()
 }
 
+// SSL setup changes only HTTPS intent; concurrent PHP/lifecycle intent remains authoritative.
+func (s *SQLStore) EnableSiteHTTPS(ctx context.Context, siteID int64) error {
+	if s == nil || s.db == nil || s.river == nil {
+		return errors.New("HTTPS reconciliation queue is unavailable")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var subscriptionID int64
+	if err = tx.QueryRowContext(ctx, `SELECT subscription_id FROM sites WHERE id=$1`, siteID).Scan(&subscriptionID); err != nil {
+		return err
+	}
+	if err = LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
+	if err = lockActiveSubscriptionTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
+	var username, domain, currentPHP, desiredPHP, status, tls, settings string
+	var desiredRedirect, appliedRedirect bool
+	if err = tx.QueryRowContext(ctx, `SELECT username,domain,php_version,desired_php_version,desired_status,tls_status,settings_status,desired_https_redirect,https_redirect
+FROM sites WHERE id=$1 AND subscription_id=$2 FOR UPDATE`, siteID, subscriptionID).Scan(&username, &domain, &currentPHP, &desiredPHP, &status, &tls, &settings, &desiredRedirect, &appliedRedirect); err != nil {
+		return err
+	}
+	if status != "active" {
+		return errors.New("website is suspended; HTTPS setup cannot reactivate it")
+	}
+	if tls != "active" {
+		return errors.New("HTTPS redirect requires an installed certificate")
+	}
+	if desiredRedirect && appliedRedirect && settings == "in_sync" {
+		return tx.Commit()
+	}
+	policy, err := EffectiveSitePolicyTx(ctx, tx, siteID)
+	if err != nil {
+		return err
+	}
+	if !policy.Permissions.TLS {
+		return errors.New("SSL is not enabled by the subscription")
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE sites SET desired_https_redirect=true,tls_auto_renew=true,settings_status='pending',settings_error='',updated_at=now() WHERE id=$1`, siteID); err != nil {
+		return err
+	}
+	_, err = s.river.InsertTx(ctx, tx, SetHostingStateArgs{SiteID: siteID, SettingsKey: siteSettingsKey(status, desiredPHP, true, siteResourceLimitsFromPolicy(policy)), Username: username, Domain: domain, PHPVersion: currentPHP, State: status}, nil)
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (s *SQLStore) UpdateSitePHPSettings(ctx context.Context, req types.UpdateSitePHPSettingsReq) error {
 	if s == nil || s.db == nil {
 		return errors.New("quota database is not configured")

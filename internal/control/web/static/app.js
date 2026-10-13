@@ -425,6 +425,7 @@
   }
 
   function updateCreateGate(scope) {
+    each('[data-np-create-site-form]', scope || document, updateCreationSSLChoice);
     each("[data-np-create-site-form]", scope || document, function (form) {
       var result = gateMessage(selectedSubscription(form));
       updateSitePHP(form);
@@ -1999,6 +2000,7 @@
   }
 
   function renderSiteSetupProgress(panel, data) {
+	if (data.kind) panel.dataset.npSetupKind = data.kind;
     panel.dataset.npSetupState = data.state;
     panel.setAttribute('aria-busy', data.state === 'pending' ? 'true' : 'false');
     var message = panel.querySelector('[data-np-setup-message]');
@@ -2007,7 +2009,8 @@
     if (domain && data.domain) domain.textContent = data.domain;
     var spinner = panel.querySelector('[data-np-setup-spinner]');
     if (spinner) spinner.hidden = data.state !== 'pending';
-    var titles = {pending:'Creating subdomain',ready:'Subdomain created',failed:'Setup needs attention',attention:'Setup needs attention',timeout:'Setup continues in background'};
+    var label = panel.dataset.npSetupKind === 'subdomain' ? 'Subdomain' : 'Website';
+    var titles = {pending:label + ' setup',ready:label + ' ready',failed:'Website created; setup needs attention',attention:'Setup needs attention',timeout:'Setup continues in background'};
     var title = panel.querySelector('[data-np-setup-title]');
     if (title) title.textContent = titles[data.state] || 'Subdomain setup';
     var dialog = panel.closest('dialog');
@@ -2015,9 +2018,11 @@
     if (heading) heading.textContent = titles[data.state] || 'Subdomain setup';
     var check = panel.querySelector('[data-np-setup-check]');
     if (check) check.hidden = data.state === 'pending';
+	var retry = panel.querySelector('[data-np-setup-retry]');
+	if (retry) retry.hidden = !data.can_retry_ssl;
     var labels = {active:'Done', in_sync:'Done', failed:'Failed', external:'External DNS', missing:'Needs attention', not_requested:'Not requested', pending:'Waiting'};
     (data.steps || []).forEach(function (step) {
-      if (['hosting','dns','tls'].indexOf(step.code) === -1) return;
+      if (['hosting','dns','tls','https'].indexOf(step.code) === -1) return;
       var control = panel.querySelector('[data-np-setup-step="' + step.code + '"]');
       if (control) { control.textContent = labels[step.state] || 'Waiting'; control.dataset.state = step.state; }
     });
@@ -2035,6 +2040,7 @@
       return;
     }
     panel.dataset.npSetupSiteId = String(siteID);
+	panel.dataset.npSetupKind = data.kind || panel.dataset.npSetupKind || 'website';
     panel.dataset.npSetupStatusUrl = statusURL.href;
     panel.dataset.npSetupRedirect = data.redirect || base + '?tab=overview&notice=subdomain-created';
     var token = String(Number(panel.dataset.npSetupRun || 0) + 1);
@@ -2045,7 +2051,9 @@
     if (view) view.href = base + '?tab=overview';
     var check = panel.querySelector('[data-np-setup-check]');
     if (check) check.href = base + '/setup';
-    renderSiteSetupProgress(panel, {state:'pending', message:'Creating subdomain. Setup continues even if you close this dialog.'});
+	var retry = panel.querySelector('[data-np-setup-retry]');
+	if (retry) retry.action = base + '/setup/retry-ssl';
+    renderSiteSetupProgress(panel, {state:'pending', message:'Setting up hosting and domain services. Setup continues in the background.'});
     function current() { return !cancelled && panel.isConnected !== false && panel.dataset.npSetupRun === token && window.location.href === pageURL && (!dialog || dialog.open); }
     async function poll() {
       if (!current()) return;
@@ -2073,7 +2081,7 @@
           renderSiteSetupProgress(panel, next);
           if (next.state === 'ready') {
             var target = new URL(next.redirect || panel.dataset.npSetupRedirect, window.location.href);
-            if (target.origin === window.location.origin && target.pathname === base && !document.querySelector('[data-np-dirty-guard][data-np-dirty="true"]')) window.location.assign(target.href);
+            if (target.origin === window.location.origin && target.pathname === base && panel.dataset.npSetupHold !== 'true' && !document.querySelector('[data-np-dirty-guard][data-np-dirty="true"]')) window.location.assign(target.href);
             return;
           }
           if (next.state !== 'pending') return;
@@ -2117,7 +2125,7 @@
         return data;
       });
     }).then(function (data) {
-      if (subdomain) {
+      {
         var dialog = form.closest('dialog');
         var panel = dialog && dialog.querySelector('[data-np-setup-tracker]');
         if (panel && data.status_url) {
@@ -2126,7 +2134,7 @@
           if (submit) submit.disabled = true;
           panel.hidden = false;
           var heading = dialog.querySelector('.np-dialog-head h2');
-          if (heading) heading.textContent = 'Creating subdomain';
+          if (heading) heading.textContent = 'Website setup';
           trackSiteSetup(panel, data);
           var background = panel.querySelector('[data-np-setup-background]');
           if (background) background.focus({preventScroll:true});
@@ -2139,10 +2147,9 @@
         if (submit) submit.disabled = true;
         return;
       }
-      window.location.assign(data.redirect || "/sites");
     }).catch(function (error) {
       if ([400,401,403,404,409,422,429].indexOf(error.status) !== -1) confirmedRejection = true;
-      var uncertain = subdomain && !confirmedRejection;
+      var uncertain = !confirmedRejection;
       if (gate) { gate.textContent = uncertain ? 'The creation result could not be confirmed. Check Websites before trying again; setup may already be running.' : error.message; gate.classList.add("is-blocked"); }
       var existing = form.querySelector('[data-np-subdomain-check-existing]');
       if (existing) existing.hidden = !uncertain;
@@ -2154,6 +2161,8 @@
 
   function updateV2CreateGate(form) {
     if (!form) return;
+	if (form.dataset.npSubmitting === 'true') return;
+	updateCreationSSLChoice(form);
     var control = form.querySelector("[data-np-v2-subscription]");
     var selected = control && control.tagName === "SELECT" ? control.selectedOptions[0] : control;
     var used = selected ? parseInt(selected.dataset.sitesUsed || "0", 10) : 0;
@@ -2166,6 +2175,9 @@
   }
 
   function submitWebsiteV2(form) {
+	if (form.dataset.npSubmitting === 'true') return;
+	form.dataset.npSubmitting = 'true';
+	var confirmedRejection = false;
     var submit = form.querySelector("[data-np-v2-create-submit]");
     var gate = form.querySelector("[data-np-v2-create-gate]");
     if (submit) submit.disabled = true;
@@ -2176,6 +2188,7 @@
       credentials: "same-origin",
       headers: { "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken() }
     }).then(function (response) {
+		confirmedRejection = response.status >= 400 && response.status < 500;
       return response.json().then(function (data) {
         if (!response.ok || !data.ok) throw new Error(data.error || "Website setup could not start.");
         return data;
@@ -2191,7 +2204,7 @@
       var passwordBlock = result.querySelector("[data-np-v2-live-password]");
       if (title) title.textContent = data.partial ? "Website created; WordPress needs attention" : (data.website_type === "wordpress" ? "WordPress setup started" : "Website setup started");
       if (message) message.textContent = data.notice || "Website setup is underway.";
-      if (link) link.href = data.redirect || "/sites";
+      if (link) link.href = data.setup_url || data.redirect || "/sites";
       if (credential && data.admin_user) {
         credential.hidden = false;
         var user = credential.querySelector("[data-np-v2-live-user]");
@@ -2208,13 +2221,34 @@
       var choices = page.querySelector(".np-v2-type-list");
       if (choices) choices.hidden = true;
       result.hidden = false;
+	  var panel = result.querySelector('[data-np-setup-tracker]');
+	  if (panel && data.status_url) {
+		panel.hidden = false;
+		panel.dataset.npSetupHold = data.admin_password || data.partial ? 'true' : 'false';
+		trackSiteSetup(panel, data);
+	  }
       if (title) title.focus && title.focus();
       result.scrollIntoView({ block: "start" });
     }).catch(function (error) {
+	  form.dataset.npSubmitting = confirmedRejection ? 'false' : 'true';
       updateV2CreateGate(form);
-      if (gate) { gate.textContent = error.message || "Website setup could not start."; gate.setAttribute("role", "alert"); }
+      if (gate) { gate.textContent = confirmedRejection ? (error.message || "Website setup could not start.") : 'Creation could not be confirmed. Check Websites before trying again; setup may already be running.'; gate.setAttribute("role", "alert"); }
       if (submit && !submit.disabled) submit.focus();
     });
+  }
+
+  function updateCreationSSLChoice(form) {
+	var choice = form.querySelector('[data-np-ssl-choice]');
+	if (!choice) return;
+	var input = choice.querySelector('[data-np-create-ssl]');
+	var subscription = form.querySelector('[name="subscription_id"]');
+	var selected = subscription && subscription.tagName === 'SELECT' ? subscription.selectedOptions[0] : subscription;
+	var allowed = (!subscription || (selected && selected.dataset.allowTls === 'true')) && choice.dataset.npSslAvailable === 'true';
+	if (!allowed) { if (!input.disabled) input.dataset.npSslPreference = input.checked ? 'true' : 'false'; input.checked = false; }
+	else if (input.disabled) input.checked = input.dataset.npSslPreference !== 'false';
+	input.disabled = !allowed;
+	var help = choice.querySelector('[data-np-ssl-help]');
+	if (help) help.textContent = choice.dataset.npSslAvailable !== 'true' ? 'Free SSL is unavailable on this server.' : !allowed ? 'SSL is not included in this subscription.' : 'Automatic renewal and HTTPS redirect are enabled after the certificate is installed.';
   }
 
   function selectPlanTab(tab, updateURL) {
@@ -2915,6 +2949,12 @@
     if (closer) closeDialog(closer.closest("dialog"));
     var setupBackground = event.target.closest('[data-np-setup-background]');
     if (setupBackground) closeDialog(setupBackground.closest('dialog'));
+	var savedCredentials = event.target.closest('[data-np-setup-credentials-saved]');
+	if (savedCredentials) {
+		var result = savedCredentials.closest('[data-np-v2-live-result]');
+		var tracker = result && result.querySelector('[data-np-setup-tracker]');
+		if (tracker) { tracker.dataset.npSetupHold = 'false'; savedCredentials.hidden = true; trackSiteSetup(tracker,{site_id:tracker.dataset.npSetupSiteId,status_url:tracker.dataset.npSetupStatusUrl,kind:tracker.dataset.npSetupKind}); }
+	}
     var setupCheck = event.target.closest('[data-np-setup-check]');
     if (setupCheck) {
       event.preventDefault();
@@ -3189,6 +3229,15 @@
   });
 
   document.addEventListener("submit", function (event) {
+	var sslRetry = event.target.closest('[data-np-setup-retry]');
+	if (sslRetry && window.NakpanelUI) {
+		event.preventDefault();
+		if (sslRetry.dataset.npSubmitting === 'true') return;
+		sslRetry.dataset.npSubmitting = 'true';setFormBusy(sslRetry,true);
+		var retryPanel = sslRetry.closest('[data-np-setup-tracker]');
+		window.NakpanelUI.fetch(sslRetry.action,{method:'POST',body:new URLSearchParams(new FormData(sslRetry)),headers:{'X-Nakpanel-SPA':'true'}}).then(function(response){return response.json();}).then(function(data){if(!data.ok)throw new Error(data.error||'SSL retry could not start.');trackSiteSetup(retryPanel,data);}).catch(function(error){renderSiteSetupProgress(retryPanel,{state:'attention',message:error.message||'Check SSL status before retrying.',can_retry_ssl:false});}).finally(function(){setFormBusy(sslRetry,false);sslRetry.dataset.npSubmitting='false';});
+		return;
+	}
     var databaseForm = event.target.closest('[data-np-domain-db-form]');
     if (databaseForm && window.fetch) {event.preventDefault();submitDomainDatabase(databaseForm);return;}
     var mailQueueFilter = event.target.closest("[data-np-mail-queue-filter]");

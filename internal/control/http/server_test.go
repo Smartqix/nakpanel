@@ -2195,8 +2195,8 @@ func TestAdminCanCreateSite(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Fatalf("POST /sites status = %d, want 303", rec.Code)
 	}
-	if location := rec.Header().Get("Location"); location != "/" {
-		t.Fatalf("Location = %q, want /", location)
+	if location := rec.Header().Get("Location"); location != "/sites/7/setup" {
+		t.Fatalf("Location = %q, want /sites/7/setup", location)
 	}
 	if creator.owner.Role != auth.RoleAdmin || creator.owner.Email != "admin@nakpanel.test" {
 		t.Fatalf("owner = %#v, want admin session user", creator.owner)
@@ -2305,7 +2305,7 @@ func TestAdminCanCreateSiteWithSPAJSON(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if !body.OK || body.SiteID != 7 || body.Redirect != "/" || body.Notice == "" {
+	if !body.OK || body.SiteID != 7 || body.Redirect != "/sites/7?tab=overview" || body.Notice == "" {
 		t.Fatalf("SPA response = %#v, want ok site id redirect and notice", body)
 	}
 }

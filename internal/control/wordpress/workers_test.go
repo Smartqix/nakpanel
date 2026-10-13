@@ -123,6 +123,18 @@ func TestWordPressInstallWaitsForSiteProvisioning(t *testing.T) {
 	if err := loaded.validate(); err != nil {
 		t.Fatalf("active site validation = %v", err)
 	}
+	loaded.sslSetupState = "pending"
+	if err := loaded.validate(); !errors.Is(err, errDependencyPending) {
+		t.Fatalf("SSL dependency=%v", err)
+	}
+	loaded.sslSetupState = "failed"
+	if err := loaded.validate(); err == nil || !strings.Contains(err.Error(), "SSL recovery") {
+		t.Fatalf("failed SSL=%v", err)
+	}
+	loaded.identity.TLSActive = true
+	if err := loaded.validate(); err != nil {
+		t.Fatalf("installed SSL=%v", err)
+	}
 }
 
 func TestUninstallWorkerAllowsProviderCleanupWithoutLiveEntitlement(t *testing.T) {

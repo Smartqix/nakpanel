@@ -46,6 +46,16 @@ func TestChildDomainCannotOfferNestedSubdomainCreation(t *testing.T) {
 	}
 }
 
+func TestSubdomainCreationOffersPlanGatedFreeSSL(t *testing.T) {
+	var out bytes.Buffer
+	if err := routedSubdomainDialog(dashboard.Site{ID: 1, Domain: "example.test"}, types.SubscriptionSummary{AllowTLS: true, PHPAllowlist: "8.4", DefaultPHPVersion: "8.4"}, types.RuntimeCapabilities{PHPVersions: []string{"8.4"}, ACMEAvailable: true}, WorkspaceView{}).Render(context.Background(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), `name="secure_with_ssl"`) || !strings.Contains(out.String(), "Secure with free SSL") {
+		t.Fatal("no integrated SSL choice")
+	}
+}
+
 func TestDomainOrderKeepsSubdomainsNearParent(t *testing.T) {
 	items := []dashboard.Site{
 		{ID: 3, Domain: "shop.example.test", ParentSiteID: 1},

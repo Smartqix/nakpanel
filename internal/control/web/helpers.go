@@ -62,6 +62,7 @@ type WorkspaceView struct {
 	SiteCreateTitle      string
 	SiteCreateEmail      string
 	SiteCreated          *SiteCreationResult
+	SiteCreateSSL        *bool
 	SiteSetup            *types.SiteSetupStatus
 	SiteSetupTimedOut    bool
 	DetailID             int64
@@ -121,6 +122,7 @@ func setupStepLabel(state string) string {
 }
 
 type SiteCreationResult struct {
+	SetupURL      string
 	SiteID        int64
 	Domain        string
 	Kind          string
@@ -130,6 +132,33 @@ type SiteCreationResult struct {
 	Partial       bool
 	AdminUser     string
 	AdminPassword string
+}
+
+func creationSubscriptionTLS(subscriptions []types.SubscriptionSummary, selected int64) bool {
+	if len(subscriptions) == 0 {
+		return false
+	}
+	for _, subscription := range subscriptions {
+		if subscription.ID == selected {
+			return subscription.AllowTLS
+		}
+	}
+	return subscriptions[0].AllowTLS
+}
+func creationSSLChecked(allowed, available bool, view WorkspaceView) bool {
+	if !allowed || !available {
+		return false
+	}
+	if view.SiteCreateSSL != nil {
+		return *view.SiteCreateSSL
+	}
+	return true
+}
+func setupLabel(status types.SiteSetupStatus) string {
+	if status.Kind == "subdomain" || status.ParentID > 0 {
+		return "Subdomain"
+	}
+	return "Website"
 }
 
 type phpMutationGate struct {

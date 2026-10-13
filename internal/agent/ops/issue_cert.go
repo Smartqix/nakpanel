@@ -161,6 +161,18 @@ func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueC
 			return types.IssueCertResult{}, err
 		}
 	case types.CertIssuerACME:
+		if req.ReuseExisting {
+			certificate, certErr := os.ReadFile(certPath)
+			key, keyErr := os.ReadFile(keyPath)
+			if certErr == nil && keyErr == nil {
+				if validated, validationErr := p.validator.Validate(req.Domain, certificates.Bundle{CertificatePEM: certificate, PrivateKeyPEM: key}); validationErr == nil {
+					expiresAt = validated.Leaf.NotAfter
+				}
+			}
+		}
+		if !expiresAt.IsZero() {
+			break
+		}
 		if p.acmeIssuer == nil {
 			return types.IssueCertResult{}, errors.New("acme certificate issuer is not configured")
 		}

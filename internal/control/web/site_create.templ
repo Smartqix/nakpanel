@@ -4,7 +4,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
-templ siteCreatePage(subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
+templ siteCreatePage(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities, actions DashboardActions, view WorkspaceView) {
 	@pageHead("Hosting services", "Add website", "Choose what to host. PHP and resource limits come from the subscription.") {
 		<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view, "/sites")) }>Back to websites</a>
 	}
@@ -34,6 +34,7 @@ templ siteCreatePage(subscriptions []types.SubscriptionSummary, actions Dashboar
 					<input type="hidden" name="website_type" value={ siteCreateKind(view.SiteCreateKind) }/>
 					@siteCreateSubscription(subscriptions, view)
 					<label class="np-v2-create-field">Domain name<input type="text" name="domain" value={ view.SiteCreateDomain } placeholder="example.com" autocomplete="off" required/></label>
+					@creationSSLChoice(creationSubscriptionTLS(subscriptions,view.SelectedSubscription),capabilities.ACMEAvailable,view)
 					if siteCreateKind(view.SiteCreateKind) == "wordpress" {
 						<div class="np-v2-create-wordpress">
 							<h2>WordPress details</h2>
@@ -59,9 +60,11 @@ templ siteCreatePage(subscriptions []types.SubscriptionSummary, actions Dashboar
 						<strong>WordPress login</strong><p>Username: <code data-np-v2-live-user></code></p>
 						<div data-np-v2-live-password hidden><div class="np-password-field"><label>Password<input type="text" readonly data-np-generated-password autocomplete="off"/></label><button type="button" class="np-secondary-button" data-np-copy-password title="Copy password">Copy</button></div>
 							<p>Save this password now. It will not be shown again.</p>
+							<button type="button" class="np-secondary-button" data-np-setup-credentials-saved>I saved the WordPress login</button>
 						</div>
 					</div>
 					<div class="np-v2-create-actions"><a class="np-primary-link" href={ templ.SafeURL(workspacePath(view,"/sites")) } data-np-v2-live-redirect>View website setup</a><a href={ templ.SafeURL(workspacePath(view,"/sites")) }>All websites</a></div>
+					@siteSetupProgress(types.SiteSetupStatus{Kind:"website",State:"pending",Message:"Creating website."},view,false)
 				</section>
 			}
 		}
@@ -75,14 +78,29 @@ templ siteCreateType(view WorkspaceView, kind string, title string, description 
 	</a>
 }
 
+templ creationSSLChoice(allowed bool,available bool,view WorkspaceView){
+	<div class="np-creation-ssl" data-np-ssl-choice data-np-ssl-available={formatBool(available)}>
+		<label class="np-check"><input type="checkbox" name="secure_with_ssl" value="true" checked?={creationSSLChecked(allowed,available,view)} disabled?={!allowed||!available} data-np-create-ssl/>Secure with free SSL</label>
+		<p class="np-form-help" data-np-ssl-help>
+			if !available {
+				Free SSL is unavailable on this server.
+			} else if !allowed {
+				SSL is not included in this subscription.
+			} else {
+				Automatic renewal and HTTPS redirect are enabled after the certificate is installed.
+			}
+		</p>
+	</div>
+}
+
 templ siteCreateSubscription(subscriptions []types.SubscriptionSummary, view WorkspaceView) {
 	if len(subscriptions) == 1 {
-		<input type="hidden" name="subscription_id" value={ formatJobID(subscriptions[0].ID) } data-np-v2-subscription data-max-sites={ formatPlanLimitFormValue(subscriptions[0].MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscriptions[0].SitesUsed) }/>
-		<div class="np-v2-create-subscription"><span>Subscription</span><strong>{ subscriptions[0].SubscriptionName }</strong><small>{ subscriptions[0].PlanName } · { formatQuotaCompactCount(subscriptions[0].SitesUsed, subscriptions[0].MaxSites, true) } websites</small></div>
+		<input type="hidden" name="subscription_id" value={ formatJobID(subscriptions[0].ID) } data-np-v2-subscription data-allow-tls={formatBool(subscriptions[0].AllowTLS)} data-max-sites={ formatPlanLimitFormValue(subscriptions[0].MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscriptions[0].DomainsUsed) }/>
+		<div class="np-v2-create-subscription"><span>Subscription</span><strong>{ subscriptions[0].SubscriptionName }</strong><small>{ subscriptions[0].PlanName } · { formatQuotaCompactCount(subscriptions[0].DomainsUsed, subscriptions[0].MaxSites, true) } websites</small></div>
 	} else {
 		<label class="np-v2-create-field">Subscription<select name="subscription_id" data-np-v2-subscription required>
 			for _, subscription := range subscriptions {
-				<option value={ formatJobID(subscription.ID) } selected?={ subscription.ID == view.SelectedSubscription } data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.SitesUsed) }>{ subscriptionSelectLabel(subscription) }</option>
+				<option value={ formatJobID(subscription.ID) } selected?={ subscription.ID == view.SelectedSubscription } data-allow-tls={formatBool(subscription.AllowTLS)} data-max-sites={ formatPlanLimitFormValue(subscription.MaxSites) } data-sites-used={ formatPlanLimitFormValue(subscription.DomainsUsed) }>{ subscriptionSelectLabel(subscription) }</option>
 			}
 		</select></label>
 	}
@@ -108,6 +126,6 @@ templ siteCreationResult(result SiteCreationResult, view WorkspaceView) {
 				}
 			</div>
 		}
-		<div class="np-v2-create-actions"><a class="np-primary-link" href={ templ.SafeURL(result.Redirect) }>View website setup</a><a href={ templ.SafeURL(workspacePath(view,"/sites")) }>All websites</a></div>
+		<div class="np-v2-create-actions"><a class="np-primary-link" href={ templ.SafeURL(result.SetupURL) }>View website setup</a><a href={ templ.SafeURL(workspacePath(view,"/sites")) }>All websites</a></div>
 	</section>
 }

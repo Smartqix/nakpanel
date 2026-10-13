@@ -6,9 +6,9 @@ import (
 
 templ siteSetupProgress(status types.SiteSetupStatus, view WorkspaceView, dialog bool) {
 	{{ path := "/sites/"+formatJobID(status.SiteID) }}
-	{{ steps := status.Steps; if len(steps)==0 {steps=[]types.SiteSetupStep{{Code:"hosting",Label:"Hosting",State:"pending"},{Code:"dns",Label:"DNS",State:"pending"},{Code:"tls",Label:"SSL/TLS",State:"pending"}}} }}
+	{{ steps := status.Steps; if len(steps)==0 {steps=[]types.SiteSetupStep{{Code:"hosting",Label:"Hosting",State:"pending"},{Code:"dns",Label:"DNS",State:"pending"},{Code:"tls",Label:"SSL/TLS",State:"pending"},{Code:"https",Label:"HTTPS",State:"pending"}}} }}
 	<section class="np-setup-tracker" data-np-setup-tracker data-np-setup-site-id={ formatJobID(status.SiteID) } data-np-setup-state={ status.State } data-np-setup-status-url={ setupStatusURL(status,view) } data-np-setup-timed-out?={ view.SiteSetupTimedOut } data-np-setup-redirect={ workspacePath(view,path+"?tab=overview&notice=subdomain-created") } hidden?={ status.SiteID==0 }>
-		<div class="np-setup-heading"><span data-np-setup-spinner hidden?={ status.State!="pending" || view.SiteSetupTimedOut }>@icon("refresh-cw")</span><h3 data-np-setup-title>Subdomain setup</h3></div>
+		<div class="np-setup-heading"><span data-np-setup-spinner hidden?={ status.State!="pending" || view.SiteSetupTimedOut }>@icon("refresh-cw")</span><h3 data-np-setup-title>{ setupLabel(status) } setup</h3></div>
 		<strong data-np-setup-domain>{ status.Domain }</strong>
 		<p class="np-setup-message" data-np-setup-message role="status" aria-live="polite">{ status.Message }</p>
 		<ol class="np-setup-steps" aria-label="Setup progress">
@@ -21,17 +21,22 @@ templ siteSetupProgress(status types.SiteSetupStatus, view WorkspaceView, dialog
 			if dialog {
 				<button type="button" class="np-secondary-button" data-np-setup-background>Continue in background</button>
 			} else {
-				<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(status.ParentID))) }>Continue in background</a>
+				<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites")) }>Continue in background</a>
 			}
 			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,path+"/setup")) } data-np-setup-check hidden?={ status.State=="pending" && !view.SiteSetupTimedOut }>Check status again</a>
-			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,path+"?tab=overview")) } data-np-setup-view>Open subdomain</a>
+				<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,path+"?tab=overview")) } data-np-setup-view>Open website</a>
 		</div>
+		<form method="post" action={ workspacePath(view,path+"/setup/retry-ssl") } data-np-setup-retry hidden?={!status.CanRetrySSL}>
+			@csrfInput(view)
+			<button type="submit" class="np-secondary-button">Retry SSL only</button>
+			<p class="np-form-help">Keeps the existing website. Retries DNS validation, certificate installation and HTTPS activation.</p>
+		</form>
 	</section>
 }
 
 templ routedSiteSetup(view WorkspaceView) {
 	if view.SiteSetup!=nil {
-		@pageHead("Subdomain",view.SiteSetup.Domain,"Setting up hosting and domain services.") { }
+		@pageHead(setupLabel(*view.SiteSetup),view.SiteSetup.Domain,"Setting up hosting and domain services.") { }
 		@siteSetupProgress(*view.SiteSetup,view,false)
 		if view.SiteSetupTimedOut {
 			<p class="np-callout" role="status">Setup is taking longer than expected. It continues in the background.</p>
