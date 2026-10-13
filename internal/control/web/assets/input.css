@@ -10,6 +10,7 @@
 .np-routed input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
 .np-routed select, .np-routed button:not(.np-icon-button) { min-height: 40px; }
 .np-routed .np-routed-page-head > button { align-items: center; display: inline-flex; gap: 8px; justify-content: center; width: auto; }
+.np-routed button:has(> .np-icon) { align-items: center; display: inline-flex; gap: 8px; justify-content: center; }
 .np-dialog { overscroll-behavior: contain; max-height: calc(100dvh - 40px); }
 .np-routed .np-dialog .np-dialog-head { background: var(--np-surface); padding: 20px 68px 20px 20px; position: sticky; top: 0; z-index: 7; }
 .np-routed .np-dialog .np-dialog-head h2 { font-size: 18px; line-height: 1.35; margin: 3px 0 0; }
@@ -28,7 +29,7 @@
 @media (max-width: 760px) {
   .np-dialog { max-height: calc(100dvh - 16px); }
   .np-dialog .np-dialog-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
-  .np-dialog .np-dialog-form select, .np-dialog button { min-height: 44px; }
+  .np-dialog .np-dialog-form select, .np-routed .np-dialog button { min-height: 44px; }
   .np-dialog .np-dialog-close button, .np-dialog .np-dialog-head > button[data-np-dialog-close] { height: 44px; width: 44px; }
   .np-dialog .np-dialog-actions > button { flex: 1 1 auto; justify-content: center; }
   .np-routed .np-routed-page-head > button { width: 100%; }
@@ -2008,7 +2009,7 @@
     margin-top: 16px;
   }
 
-  .np-plan-revision-row {
+  .np-object-row.np-plan-revision-row {
     grid-template-columns: minmax(0, 1fr) minmax(150px, .45fr) auto;
   }
 
@@ -2261,7 +2262,7 @@
       flex-direction: column;
     }
 
-    .np-plan-revision-row {
+    .np-object-row.np-plan-revision-row {
       grid-template-columns: minmax(0, 1fr) auto;
     }
 
