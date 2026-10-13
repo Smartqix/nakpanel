@@ -3,6 +3,7 @@ package panelhttp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	controlwordpress "github.com/nakroteck/nakpanel/internal/control/wordpress"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -245,6 +247,43 @@ func TestWordPressUninstallUsesPRGAndRequiresCSRF(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/sites/7/wordpress?notice=wordpress-uninstall-queued" {
 		t.Fatalf("uninstall PRG = %d location=%q body=%s", rec.Code, rec.Header().Get("Location"), rec.Body.String())
+	}
+}
+
+func TestWordPressUninstallEntitlementFailuresAreActionable(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		err     error
+		status  int
+		message string
+		notice  string
+	}{
+		{"backup limit", fmt.Errorf("%w: backups 5 / 5; internal detail", controlquota.ErrExceeded), http.StatusBadRequest, "resource limit", "wordpress-resource-limit"},
+		{"inactive subscription", controlquota.ErrNoActiveSubscription, http.StatusConflict, "active subscription", "wordpress-conflict"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service := &fakeWordPressService{err: test.err}
+			handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{WordPress: service})
+			cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+			for _, enhanced := range []bool{false, true} {
+				form := url.Values{"create_backup": {"true"}, "confirm_domain": {"owned.test"}}
+				req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/wordpress/uninstall", strings.NewReader(form.Encode()))
+				req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				if enhanced {
+					req.Header.Set("X-Nakpanel-SPA", "true")
+				}
+				addAuthenticatedCookie(req, cookie)
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, req)
+				if enhanced {
+					if rec.Code != test.status || !strings.Contains(rec.Body.String(), test.message) || strings.Contains(rec.Body.String(), "internal detail") {
+						t.Fatalf("enhanced entitlement response = %d %s", rec.Code, rec.Body.String())
+					}
+				} else if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/sites/7/wordpress?notice="+test.notice {
+					t.Fatalf("native entitlement response = %d %q", rec.Code, rec.Header().Get("Location"))
+				}
+			}
+		})
 	}
 }
 

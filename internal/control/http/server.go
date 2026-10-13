@@ -3558,6 +3558,7 @@ var noticeCatalogue = map[string]noticeEntry{
 	"wordpress-input-error":      {"The WordPress request was not valid. Review the form and try again.", dashboard.NoticeError},
 	"wordpress-disabled":         {"WordPress Toolkit is disabled by this subscription. Update and synchronize its service plan first.", dashboard.NoticeError},
 	"wordpress-limit-reached":    {"This subscription has reached its WordPress site limit.", dashboard.NoticeError},
+	"wordpress-resource-limit":   {"The subscription has reached a resource limit. Free backup or database capacity, or ask your provider to increase the allowance, then try again.", dashboard.NoticeError},
 	"wordpress-conflict":         {"The WordPress operation cannot run in the site's current state. Refresh the workspace and check the active subscription.", dashboard.NoticeError},
 	"wordpress-unavailable":      {"WordPress Toolkit is temporarily unavailable. Check the agent, secret store, and WP-CLI runtime.", dashboard.NoticeError},
 	"wordpress-operation-failed": {"The WordPress operation could not be queued. No secret details were exposed.", dashboard.NoticeError},

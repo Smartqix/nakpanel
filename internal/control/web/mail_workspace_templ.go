@@ -1085,7 +1085,7 @@ func mailDomainCard(subscription types.SubscriptionSummary, domain dashboard.Mai
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = mailboxDialog(subscription, domain, dashboard.Mailbox{}, view, returnTo, returnSiteID).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = mailboxDialog(subscription, domain, dashboard.Mailbox{QuotaMB: mailboxDefaultQuota(subscription, data)}, view, returnTo, returnSiteID).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -1901,20 +1901,20 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "</button></span></label><label>Quota MB<input type=\"number\" min=\"-1\" name=\"quota_mb\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 186, "</button></span></label><label>Quota (MB)<input type=\"number\" min=\"1\" name=\"quota_mb\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var82 string
 		templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(formatMailboxQuotaInput(mailbox.QuotaMB))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 218, Col: 1071}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 218, Col: 1072}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 187, "\"></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enabled\" value=\"true\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 187, "\" placeholder=\"Subscription default\"><small>Leave blank to use the subscription allowance.</small></label><label class=\"np-check\"><input type=\"checkbox\" name=\"enabled\" value=\"true\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1931,7 +1931,7 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 		var templ_7745c5c3_Var83 string
 		templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(mailboxSubmitLabel(mailbox.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 218, Col: 1401}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 218, Col: 1498}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 		if templ_7745c5c3_Err != nil {

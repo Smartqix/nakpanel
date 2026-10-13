@@ -904,6 +904,7 @@ func TestDashboardNoticeToneDistinguishesFailures(t *testing.T) {
 		{code: "wordpress-input-error", want: "error"},
 		{code: "wordpress-disabled", want: "error"},
 		{code: "wordpress-limit-reached", want: "error"},
+		{code: "wordpress-resource-limit", want: "error"},
 		{code: "wordpress-conflict", want: "error"},
 		{code: "wordpress-unavailable", want: "error"},
 		{code: "wordpress-operation-failed", want: "error"},

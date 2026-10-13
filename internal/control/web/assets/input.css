@@ -11,7 +11,7 @@
 .np-routed select, .np-routed button:not(.np-icon-button) { min-height: 40px; }
 .np-routed label > textarea:not([hidden]) { background: var(--np-surface); border: 1px solid var(--np-border); border-radius: var(--np-radius); min-height: 80px; min-width: 0; padding: 10px 12px; resize: vertical; width: 100%; }
 .np-routed .np-routed-page-head > button { align-items: center; display: inline-flex; gap: 8px; justify-content: center; width: auto; }
-.np-routed button:has(> .np-icon) { align-items: center; display: inline-flex; gap: 8px; justify-content: center; }
+.np-domain-dns-head button:has(> .np-icon), .np-domain-db-head button:has(> .np-icon) { align-items: center; display: inline-flex; gap: 8px; justify-content: center; }
 .np-dialog { overscroll-behavior: contain; max-height: calc(100dvh - 40px); }
 .np-routed .np-dialog .np-dialog-head { background: var(--np-surface); padding: 20px 68px 20px 20px; position: sticky; top: 0; z-index: 7; }
 .np-routed .np-dialog .np-dialog-head h2 { font-size: 18px; line-height: 1.35; margin: 3px 0 0; }

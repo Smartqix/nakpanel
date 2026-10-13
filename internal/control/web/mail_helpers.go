@@ -240,10 +240,17 @@ func mailboxSubmitLabel(id int64) string {
 }
 
 func formatMailboxQuotaInput(quotaMB int) string {
-	if quotaMB == 0 {
-		return "-1"
+	if quotaMB <= 0 {
+		return ""
 	}
 	return fmt.Sprintf("%d", quotaMB)
+}
+
+func mailboxDefaultQuota(subscription types.SubscriptionSummary, data dashboard.Data) int {
+	if account, ok := accountForSubscription(data.SubscriptionServices.Accounts, subscription.ID); ok && account.EffectivePolicy.Mail.MailboxQuotaMB > 0 {
+		return account.EffectivePolicy.Mail.MailboxQuotaMB
+	}
+	return -1
 }
 
 func aliasDialogKind(id int64) string {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/control/web"
 	controlwordpress "github.com/nakroteck/nakpanel/internal/control/wordpress"
@@ -194,6 +195,14 @@ func (s *Server) writeWordPressError(w http.ResponseWriter, r *http.Request, act
 	case errors.Is(err, controlwordpress.ErrNotFound):
 		http.NotFound(w, r)
 		return
+	case errors.Is(err, controlquota.ErrExceeded):
+		status = http.StatusBadRequest
+		notice = "wordpress-resource-limit"
+		message = "The subscription has reached a resource limit. Free backup or database capacity, or ask your provider to increase the allowance, then try again."
+	case errors.Is(err, controlquota.ErrNoActiveSubscription):
+		status = http.StatusConflict
+		notice = "wordpress-conflict"
+		message = "WordPress operations require an active subscription. Ask your provider to review its status."
 	case errors.Is(err, controlwordpress.ErrInactive), errors.Is(err, controlwordpress.ErrNotClassic), errors.Is(err, controlwordpress.ErrBusy):
 		status = http.StatusConflict
 		notice = "wordpress-conflict"
