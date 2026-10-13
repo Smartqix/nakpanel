@@ -84,8 +84,12 @@
         var response;
         try { response = await environment.fetch(url.href,Object.assign({},options,{headers:headers,credentials:'same-origin',cache:'no-store',signal:controller.signal})); }
         catch (_) { throw new Error('The request could not finish. Check status before trying again; the operation may already have been accepted.'); }
-        if (response.status === 401 || response.redirected && response.url && new URL(response.url).pathname === '/login') throw new Error('Your session expired. Refresh this page and sign in again.');
         if (response.url && new URL(response.url).origin !== url.origin) throw new Error('The server returned a response outside this panel. Check status before retrying.');
+        if (response.status === 401 || response.redirected && response.url && new URL(response.url).pathname === '/login') {
+          var authError = new Error('Your session expired. Refresh this page and sign in again.');
+          authError.status = 401;
+          throw authError;
+        }
         if (options.allowPageResponse && response.ok && (response.redirected || (response.headers.get('Content-Type') || '').includes('text/html'))) return response;
         if (response.redirected && json) throw new Error('The server returned a page instead of an operation result. Check status before resubmitting.');
         if (json) {

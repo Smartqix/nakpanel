@@ -84,17 +84,23 @@ WHERE site.id=$1`, id).Scan(&result.SiteID, &result.ParentID, &result.CustomerID
 	result.State, result.Message = "pending", "Creating "+result.Kind+"."
 	var desiredHTTPS, appliedHTTPS, integrated bool
 	var certJob string
+	var certificateStarted sql.NullTime
 	if tls != "" && tls != "none" {
 		err = r.db.QueryRowContext(ctx, `SELECT site.desired_https_redirect,site.https_redirect,
-site.ssl_setup_requested,COALESCE(certificate.state::text,'')
-FROM sites site LEFT JOIN LATERAL(SELECT args,state FROM river_job WHERE kind='issue_cert'
-AND args->>'site_id'=site.id::text ORDER BY id DESC LIMIT 1) certificate ON true WHERE site.id=$1`, id).Scan(&desiredHTTPS, &appliedHTTPS, &integrated, &certJob)
+site.ssl_setup_requested,COALESCE(certificate.state::text,''),certificate.created_at
+FROM sites site LEFT JOIN LATERAL(SELECT state,created_at FROM river_job WHERE kind='issue_cert'
+AND args->>'site_id'=site.id::text ORDER BY id DESC LIMIT 1) certificate ON true WHERE site.id=$1`, id).Scan(&desiredHTTPS, &appliedHTTPS, &integrated, &certJob, &certificateStarted)
 		if err != nil {
 			return result, err
 		}
 	}
 	result.SSLRequested = integrated
-	result.CanRetrySSL = integrated && (tls == "failed" || settings == "failed" || certJob == "discarded" || certJob == "cancelled" || (tls == "pending" && certJob == ""))
+	if integrated && certificateStarted.Valid && certificateStarted.Time.After(result.StartedAt) {
+		result.StartedAt = certificateStarted.Time
+	}
+	certificateRunning := certJob == "available" || certJob == "pending" || certJob == "retryable" || certJob == "running" || certJob == "scheduled"
+	sslIncomplete := tls != "active" || !desiredHTTPS || !appliedHTTPS || settings != "in_sync"
+	result.CanRetrySSL = integrated && sslIncomplete && !certificateRunning && (tls == "failed" || settings == "failed" || certJob == "discarded" || certJob == "cancelled" || (tls == "pending" && certJob == ""))
 	hostingState := hosting
 	if hosting == "active" && settings != "" && settings != "in_sync" && !(integrated && tls == "active") {
 		hostingState = settings
@@ -112,7 +118,7 @@ AND args->>'site_id'=site.id::text ORDER BY id DESC LIMIT 1) certificate ON true
 	}
 	result.Steps = []types.SiteSetupStep{{Code: "hosting", Label: "Hosting", State: hostingState}, {Code: "dns", Label: "DNS", State: dnsState}, {Code: "tls", Label: "SSL/TLS", State: tls}}
 	httpsState := "pending"
-	if settings == "failed" {
+	if settings == "failed" && !certificateRunning {
 		httpsState = "failed"
 	}
 	if desiredHTTPS && appliedHTTPS && settings == "in_sync" {
@@ -128,11 +134,15 @@ AND args->>'site_id'=site.id::text ORDER BY id DESC LIMIT 1) certificate ON true
 		result.State, result.Message = "failed", "Hosting setup failed. Open the subdomain to review the error."
 	case dnsState == "failed":
 		result.State, result.Message = "failed", "DNS configuration failed. Open the subdomain's DNS settings to review it."
-	case tls == "failed":
+	case tls == "failed" && !(integrated && certificateRunning):
 		result.State, result.Message = "failed", "The website was created, but SSL issuance failed. Open SSL/TLS to review it."
 	case job == "retryable" || job == "discarded" || job == "cancelled":
 		result.State, result.Message = "failed", "Subdomain setup needs attention. Review the provisioning job in Activity."
 	case hostingState != "active" || job == "running" || job == "available" || job == "pending" || job == "scheduled":
+	case integrated && certificateRunning && (tls == "failed" || settings == "failed"):
+		result.Message = "Retrying SSL and HTTPS setup. Hosting remains available."
+	case integrated && sslIncomplete && (certJob == "discarded" || certJob == "cancelled"):
+		result.State, result.Message = "failed", "Website created; SSL setup stopped before HTTPS was ready. Check SSL/TLS and retry setup."
 	case integrated && httpsState == "failed":
 		result.State, result.Message = "failed", "Certificate installed; HTTPS activation failed. Retry SSL setup to restore HTTPS."
 	case integrated && tls != "active" && (certJob == "discarded" || certJob == "cancelled" || certJob == ""):

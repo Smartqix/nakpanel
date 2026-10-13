@@ -66,3 +66,20 @@ test('progressive responses reject cross-origin navigation and login redirects',
   await assert.rejects(()=>client.fetch('/operation',{method:'POST',allowPageResponse:true}));
  }
 });
+test('expired sessions carry a confirmed 401 instead of mutation uncertainty',async()=>{
+ for(const redirected of [false,true]){
+  const response=new Response('',{status:redirected?200:401});
+  Object.defineProperties(response,{redirected:{value:redirected},url:{value:'https://panel.test/login'}});
+  const client=createClient({baseURL:'https://panel.test',fetch:async()=>response});
+  await assert.rejects(()=>client.fetch('/sites',{method:'POST'}),error=>{
+   assert.equal(error.status,401);assert.match(error.message,/sign in/);return true;
+  });
+ }
+});
+test('an outside login redirect cannot be classified as a confirmed rejection',async()=>{
+ const response=new Response('');Object.defineProperties(response,{redirected:{value:true},url:{value:'https://outside.test/login'}});
+ const client=createClient({baseURL:'https://panel.test',fetch:async()=>response});
+ await assert.rejects(()=>client.fetch('/sites',{method:'POST'}),error=>{
+  assert.equal(error.status,undefined);assert.match(error.message,/outside this panel/);return true;
+ });
+});

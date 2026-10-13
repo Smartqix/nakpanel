@@ -37,7 +37,7 @@ func TestSiteSetupReportsRealConvergence(t *testing.T) {
 			rows := sqlmock.NewRows([]string{"id", "parent", "customer", "subscription", "domain", "hosting", "desired", "settings", "tls", "zone_mode", "dns", "address", "applied", "job", "started", "parent_domain"}).AddRow(7, 1, 88, 20, "blog.example.test", tc.hosting, "active", tc.settings, tc.tls, "primary", tc.dns, tc.address, tc.applied, tc.job, time.Now(), "example.test")
 			mock.ExpectQuery("SELECT site.id").WithArgs(int64(7)).WillReturnRows(rows)
 			if tc.tls != "none" {
-				mock.ExpectQuery("SELECT site.desired_https_redirect").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"desired", "applied", "integrated", "job"}).AddRow(false, false, false, "completed"))
+				mock.ExpectQuery("SELECT site.desired_https_redirect").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"desired", "applied", "integrated", "job", "started"}).AddRow(false, false, false, "completed", nil))
 			}
 			setup, err := (&SQLSiteRepository{db: db}).ReadSiteSetup(context.Background(), 7)
 			if err != nil || setup.State != tc.state {
@@ -67,18 +67,43 @@ func TestIntegratedSSLSetupRequiresCertificateAndAppliedHTTPS(t *testing.T) {
 		{"external DNS HTTPS pending", "active", "in_sync", "completed", "external", "pending", true, false},
 		{"external DNS secured", "active", "in_sync", "completed", "external", "ready", true, true},
 		{"certificate cancelled", "pending", "in_sync", "cancelled", "primary", "failed", false, false},
+		{"HTTPS recovery cancelled", "active", "in_sync", "cancelled", "primary", "failed", true, false},
+		{"HTTPS recovery discarded", "active", "pending", "discarded", "primary", "failed", true, false},
+		{"secured despite terminal history", "active", "in_sync", "cancelled", "primary", "ready", true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db, mock, _ := sqlmock.New()
 			defer db.Close()
 			mock.ExpectQuery("SELECT site.id").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"id", "parent", "customer", "subscription", "domain", "hosting", "desired", "settings", "tls", "mode", "dns", "address", "applied", "job", "started", "parentDomain"}).AddRow(7, 0, 88, 20, "example.test", "active", "active", tc.settings, tc.tls, tc.mode, "active", true, true, "completed", time.Now(), ""))
-			mock.ExpectQuery("SELECT site.desired_https_redirect").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"desired", "applied", "integrated", "job"}).AddRow(tc.desired, tc.applied, true, tc.cert))
+			mock.ExpectQuery("SELECT site.desired_https_redirect").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"desired", "applied", "integrated", "job", "started"}).AddRow(tc.desired, tc.applied, true, tc.cert, nil))
 			status, err := (&SQLSiteRepository{db: db}).ReadSiteSetup(context.Background(), 7)
 			if err != nil || status.State != tc.want || !status.SSLRequested || len(status.Steps) != 4 {
 				t.Fatalf("status=%#v error=%v", status, err)
 			}
+			if tc.want == "ready" && status.CanRetrySSL {
+				t.Fatal("secured website still offers SSL retry")
+			}
 			if err = mock.ExpectationsWereMet(); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestIntegratedSSLRecoveryRemainsPendingWithoutAnotherRetry(t *testing.T) {
+	for _, state := range []string{"available", "pending", "retryable", "running", "scheduled"} {
+		t.Run(state, func(t *testing.T) {
+			db, mock, _ := sqlmock.New()
+			defer db.Close()
+			retryStarted := time.Now()
+			mock.ExpectQuery("SELECT site.id").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"id", "parent", "customer", "subscription", "domain", "hosting", "desired", "settings", "tls", "mode", "dns", "address", "applied", "job", "started", "parentDomain"}).AddRow(7, 0, 88, 20, "example.test", "active", "active", "failed", "active", "primary", "active", true, true, "completed", retryStarted.Add(-24*time.Hour), ""))
+			mock.ExpectQuery("SELECT site.desired_https_redirect").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"desired", "applied", "integrated", "job", "started"}).AddRow(true, false, true, state, retryStarted))
+			status, err := (&SQLSiteRepository{db: db}).ReadSiteSetup(context.Background(), 7)
+			if err != nil || status.State != "pending" || status.CanRetrySSL {
+				t.Fatalf("recovery status=%#v error=%v", status, err)
+			}
+			if !status.StartedAt.Equal(retryStarted) {
+				t.Fatalf("retry timer=%v want=%v", status.StartedAt, retryStarted)
 			}
 		})
 	}

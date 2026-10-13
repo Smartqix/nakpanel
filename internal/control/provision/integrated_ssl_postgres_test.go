@@ -90,8 +90,18 @@ CREATE TRIGGER reject_ssl_job BEFORE INSERT ON river_job FOR EACH ROW WHEN(NEW.k
 	if _, err = db.Exec(`UPDATE sites SET status='active',tls_status='active',tls_issuer='acme',tls_expires_at=$2,tls_cert_path='/test/cert.pem',tls_key_path='/test/key.pem',settings_status='failed',settings_error='nginx reload failed' WHERE id=$1`, id, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = db.Exec(`UPDATE sites SET created_at=now()-interval '1 day' WHERE id=$1;`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE river_job SET created_at=now()-interval '1 day',state='completed',finalized_at=now() WHERE kind='create_site' AND args->>'site_id'=$1`, strconv.FormatInt(id, 10)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err = repo.RetryCreationSSL(ctx, actor, "ssl-integration.example.test"); err != nil {
 		t.Fatal(err)
+	}
+	recovery, err := repo.ReadSiteSetup(ctx, id)
+	if err != nil || time.Since(recovery.StartedAt) > time.Minute || recovery.State != "pending" || recovery.CanRetrySSL {
+		t.Fatalf("fresh retry must keep polling with a new timer: %#v %v", recovery, err)
 	}
 	if err = db.QueryRow(`SELECT tls_status FROM sites WHERE id=$1`, id).Scan(&tls); err != nil || tls != "active" {
 		t.Fatalf("HTTPS retry lost installed certificate: %s %v", tls, err)

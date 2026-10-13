@@ -26,6 +26,9 @@ test('queued setup waits and redirects only to the ready child',async()=>{
   const h=harness([{ok:true,site_id:7,state:'pending',message:'Applying DNS',steps:[]},{ok:true,site_id:7,state:'ready',message:'Created',steps:[],redirect:'/sites/7?tab=overview'}]);
   h.begin();assert.equal(h.navigations.length,0);await h.tick();assert.equal(h.navigations.length,0);await h.tick();assert.equal(new URL(h.navigations[0]).pathname,'/sites/7');assert(h.requests.every(r=>r.init.method==='GET'));
 });
+test('starting recovery immediately hides the previous retry action',()=>{
+ const h=harness([]);h.nodes['[data-np-setup-retry]']={hidden:false};h.begin();assert.equal(h.nodes['[data-np-setup-retry]'].hidden,true);
+});
 for(const state of ['failed','attention']) test(`${state} setup stops without redirect or resubmission`,async()=>{
   const h=harness([{ok:true,site_id:7,state,message:'Review this step',steps:[]}]);h.begin();await h.tick();assert.equal(h.panel.dataset.npSetupState,state);assert.equal(h.navigations.length,0);assert.equal(h.requests.length,1);assert.equal(h.timers.size,0);
 });
@@ -93,4 +96,45 @@ test('editing an uncertain request cannot erase its warning or re-enable Create'
   const form={dataset:{npSubmitting:'true'},querySelector(){throw new Error('must preserve the in-flight request state');}};
   const context=vm.createContext({each:(_selector,_scope,fn)=>fn(form),document:{}});
   vm.runInContext(source.slice(start,end),context);context.updateSubdomainGate();
+});
+
+function websiteSubmissionHarness(response, sharedClient=false) {
+ const start=source.indexOf('  function submitWebsiteV2('),end=source.indexOf('\n  function updateCreationSSLChoice(',start);
+ const submit={disabled:false,focus(){}},gate={textContent:'',setAttribute(){},removeAttribute(){}};
+ const form={dataset:{},action:'/websites',querySelector:selector=>selector==='[data-np-v2-create-submit]'?submit:gate};
+ let posts=0;
+ const transport=async()=>{posts++;if(response instanceof Error)throw response;return response;};
+ const request=sharedClient?require('./static/interaction.js').createClient({baseURL:'https://panel.test',csrf:()=> 'token',fetch:transport}).fetch:transport;
+ const context=vm.createContext({URL,window:{location:{origin:'https://panel.test'}},FormData:class{},csrfToken:()=> 'token',updateV2CreateGate:f=>{if(f.dataset.npSubmitting!=='true')submit.disabled=false;},fetch:request});
+ vm.runInContext(source.slice(start,end),context);
+ return {submit:()=>context.submitWebsiteV2(form),form,gate,button:submit,posts:()=>posts};
+}
+test('website login redirects preserve input and offer sign-in recovery',async()=>{
+ const h=websiteSubmissionHarness({status:200,ok:true,redirected:true,url:'https://panel.test/login',json:async()=>{throw new SyntaxError('HTML');}});
+ // Match the real page origin without borrowing a browser session.
+ h.form.action='https://panel.test/websites';
+ await h.submit();assert.equal(h.form.dataset.npSubmitting,'false');assert.equal(h.button.disabled,false);assert.match(h.gate.textContent,/sign in/i);assert.equal(h.posts(),1);
+});
+test('website 401 HTML responses have sign-in recovery instead of a parse error',async()=>{
+ const h=websiteSubmissionHarness({status:401,ok:false,redirected:false,json:async()=>{throw new SyntaxError('HTML');}});
+ await h.submit();assert.equal(h.form.dataset.npSubmitting,'false');assert.match(h.gate.textContent,/sign in/i);
+});
+test('website network uncertainty keeps creation locked without replay',async()=>{
+ const h=websiteSubmissionHarness(new Error('offline'));await h.submit();await h.submit();assert.equal(h.posts(),1);assert.equal(h.button.disabled,true);assert.match(h.gate.textContent,/Check Websites/);
+});
+test('website outside login redirect remains uncertain and cannot replay',async()=>{
+ const h=websiteSubmissionHarness({status:200,ok:true,redirected:true,url:'https://outside.test/login',json:async()=>{throw new SyntaxError('HTML');}});
+ await h.submit();await h.submit();assert.equal(h.posts(),1);assert.equal(h.form.dataset.npSubmitting,'true');assert.match(h.gate.textContent,/Check Websites/);
+});
+test('website shared-client session rejection offers sign-in and preserves input',async()=>{
+ const response=new Response('<html>login</html>');Object.defineProperties(response,{redirected:{value:true},url:{value:'https://panel.test/login'}});
+ const h=websiteSubmissionHarness(response,true);await h.submit();assert.equal(h.form.dataset.npSubmitting,'false');assert.equal(h.button.disabled,false);assert.match(h.gate.textContent,/sign in/i);assert.equal(h.posts(),1);
+});
+test('website shared-client validation errors remain correctable',async()=>{
+ const h=websiteSubmissionHarness(new Response('{"ok":false,"error":"Invalid domain"}',{status:400,headers:{'Content-Type':'application/json'}}),true);
+ await h.submit();assert.equal(h.form.dataset.npSubmitting,'false');assert.match(h.gate.textContent,/Invalid domain/);
+});
+test('website shared-client server failures cannot replay creation',async()=>{
+ const h=websiteSubmissionHarness(new Response('{"ok":false,"error":"Server unavailable"}',{status:503,headers:{'Content-Type':'application/json'}}),true);
+ await h.submit();await h.submit();assert.equal(h.posts(),1);assert.equal(h.form.dataset.npSubmitting,'true');assert.match(h.gate.textContent,/Check Websites/);
 });

@@ -2,6 +2,7 @@ package panelhttp
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +19,8 @@ type fakeSetupCreator struct {
 	*fakeSiteCreator
 	setup    types.SiteSetupStatus
 	setupErr error
+	retryErr error
+	retries  int
 }
 
 func setupTestHandler(t *testing.T, role auth.Role, creator *fakeSetupCreator) (http.Handler, *http.Cookie) {
@@ -35,6 +38,73 @@ func setupTestHandler(t *testing.T, role auth.Role, creator *fakeSetupCreator) (
 
 func (f *fakeSetupCreator) SiteSetupStatus(_ context.Context, _ auth.SessionUser, _ int64) (types.SiteSetupStatus, error) {
 	return f.setup, f.setupErr
+}
+
+func (f *fakeSetupCreator) RetryCreationSSLFor(_ context.Context, _ auth.SessionUser, _ int64) (int64, error) {
+	f.retries++
+	return f.setup.SiteID, f.retryErr
+}
+
+func TestSSLRetryFailurePreservesNonJavaScriptWorkspace(t *testing.T) {
+	creator := &fakeSetupCreator{fakeSiteCreator: &fakeSiteCreator{}, setup: types.SiteSetupStatus{SiteID: 7, SubscriptionID: 20, Domain: "example.test", State: "failed"}, retryErr: errors.New("SSL setup is not awaiting retry")}
+	handler, cookie := setupTestHandler(t, auth.RoleAdmin, creator)
+	req := httptest.NewRequest("POST", "https://panel.test/sites/7/setup/retry-ssl", strings.NewReader(""))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 303 || rec.Header().Get("Location") != "/sites/7/setup" || creator.retries != 1 {
+		t.Fatalf("retry response=%d location=%s calls=%d body=%s", rec.Code, rec.Header().Get("Location"), creator.retries, rec.Body.String())
+	}
+	var notice *http.Cookie
+	for _, candidate := range rec.Result().Cookies() {
+		if candidate.Name == FormErrorCookieName {
+			notice = candidate
+		}
+	}
+	if notice == nil {
+		t.Fatal("no one-shot retry error")
+	}
+	get := httptest.NewRequest("GET", "https://panel.test/sites/7/setup", nil)
+	get.AddCookie(cookie)
+	get.AddCookie(notice)
+	page := httptest.NewRecorder()
+	handler.ServeHTTP(page, get)
+	if page.Code != 200 || !strings.Contains(page.Body.String(), "Could not retry SSL: SSL setup is not awaiting retry") || !strings.Contains(page.Body.String(), "data-np-setup-tracker") {
+		t.Fatalf("retry error page=%d %s", page.Code, page.Body.String())
+	}
+	cleared := false
+	for _, candidate := range page.Result().Cookies() {
+		if candidate.Name == FormErrorCookieName && candidate.MaxAge < 0 {
+			cleared = true
+		}
+	}
+	if !cleared {
+		t.Fatal("retry error cookie was not consumed")
+	}
+}
+
+func TestSSLRetryEnhancedFailureAndSupportIsolation(t *testing.T) {
+	creator := &fakeSetupCreator{fakeSiteCreator: &fakeSiteCreator{}, setup: types.SiteSetupStatus{SiteID: 7, SubscriptionID: 20, CustomerID: 88}, retryErr: errors.New("SSL setup is not awaiting retry")}
+	handler, cookie := setupTestHandler(t, auth.RoleAdmin, creator)
+	for _, path := range []string{"/sites/7/setup/retry-ssl", "/support/customers/99/sites/7/setup/retry-ssl"} {
+		req := httptest.NewRequest("POST", "https://panel.test"+path, strings.NewReader(""))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.Header.Set("X-Nakpanel-SPA", "true")
+		addAuthenticatedCookie(req, cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		want := 400
+		if strings.Contains(path, "/support/") {
+			want = 404
+		}
+		if rec.Code != want {
+			t.Fatalf("%s status=%d body=%s", path, rec.Code, rec.Body.String())
+		}
+	}
+	if creator.retries != 1 {
+		t.Fatalf("cross-customer retry reached service: %d", creator.retries)
+	}
 }
 
 func (f *fakeSetupCreator) CreateSubdomainWithSSLFor(ctx context.Context, user auth.SessionUser, parent int64, label, php string, secure bool) (int64, error) {

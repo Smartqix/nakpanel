@@ -2186,12 +2186,17 @@
     var gate = form.querySelector("[data-np-v2-create-gate]");
     if (submit) submit.disabled = true;
     if (gate) { gate.textContent = "Creating website..."; gate.removeAttribute("role"); }
-    fetch(form.action, {
+    return fetch(form.action, {
       method: "POST",
       body: new FormData(form),
       credentials: "same-origin",
       headers: { "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken() }
     }).then(function (response) {
+		if (response.url && new URL(response.url).origin !== window.location.origin) throw new Error('The server returned a response outside this panel.');
+		if (response.status === 401 || (response.redirected && response.url && new URL(response.url).pathname === '/login')) {
+			confirmedRejection = true;
+			throw new Error('Your session expired. Sign in again before creating this website.');
+		}
 		confirmedRejection = response.status >= 400 && response.status < 500;
       return response.json().then(function (data) {
         if (!response.ok || !data.ok) throw new Error(data.error || "Website setup could not start.");
@@ -2234,6 +2239,7 @@
       if (title) title.focus && title.focus();
       result.scrollIntoView({ block: "start" });
     }).catch(function (error) {
+	  if ([400,401,403,404,409,422,429].indexOf(error.status) !== -1) confirmedRejection = true;
 	  form.dataset.npSubmitting = confirmedRejection ? 'false' : 'true';
       updateV2CreateGate(form);
       if (gate) { gate.textContent = confirmedRejection ? (error.message || "Website setup could not start.") : 'Creation could not be confirmed. Check Websites before trying again; setup may already be running.'; gate.setAttribute("role", "alert"); }

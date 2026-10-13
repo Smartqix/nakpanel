@@ -99,7 +99,11 @@ func (s *Server) handleRetrySetupSSL(w http.ResponseWriter, r *http.Request) {
 		RetryCreationSSLFor(context.Context, auth.SessionUser, int64) (int64, error)
 	})
 	if !ok {
-		writeSPAError(w, http.StatusServiceUnavailable, "SSL retry is unavailable.")
+		if wantsSPAJSON(r) {
+			writeSPAError(w, http.StatusServiceUnavailable, "SSL retry is unavailable.")
+		} else {
+			redirectFormError(w, r, setupPath(supportID, setup.SiteID, "/setup"), "SSL retry is unavailable.")
+		}
 		return
 	}
 	_, err := retry.RetryCreationSSLFor(r.Context(), user, setup.SiteID)
@@ -108,7 +112,11 @@ func (s *Server) handleRetrySetupSSL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeSPAError(w, http.StatusBadRequest, "Could not retry SSL: "+err.Error())
+		if wantsSPAJSON(r) {
+			writeSPAError(w, http.StatusBadRequest, "Could not retry SSL: "+err.Error())
+		} else {
+			redirectFormError(w, r, setupPath(supportID, setup.SiteID, "/setup"), "Could not retry SSL: "+err.Error())
+		}
 		return
 	}
 	s.recordAudit(r.Context(), user, setup.CustomerID, setup.SubscriptionID, "certificate.setup_retry", "site", setup.SiteID, map[string]any{"domain": setup.Domain})
@@ -134,6 +142,7 @@ func (s *Server) handleSiteSetupPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not load setup workspace", http.StatusServiceUnavailable)
 		return
 	}
+	data.Notice, data.NoticeKind = workspaceNotice(w, r)
 	view := web.WorkspaceView{Route: "site-setup", Title: "Website setup", DetailID: setup.SiteID, CSRFToken: csrfToken(r), SiteSetup: &setup, SupportCustomerID: supportID, SiteSetupTimedOut: !setup.StartedAt.IsZero() && time.Since(setup.StartedAt) >= 5*time.Minute}
 	if supportID > 0 {
 		data = filterDashboardForCustomer(data, supportID)
