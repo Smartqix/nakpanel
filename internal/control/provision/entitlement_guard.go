@@ -158,9 +158,9 @@ func enforceCountLimitTx(ctx context.Context, tx *sql.Tx, table string, subscrip
 		return nil
 	}
 	query := map[string]string{
-		"sites":      `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND status<>'failed'`,
-		"domains":    `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND parent_site_id IS NULL AND status<>'failed'`,
-		"subdomains": `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND parent_site_id IS NOT NULL AND status<>'failed'`,
+		"sites":      `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND (status<>'failed' OR removal_state<>'none')`,
+		"domains":    `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND parent_site_id IS NULL AND (status<>'failed' OR removal_state<>'none')`,
+		"subdomains": `SELECT COUNT(*)::int FROM sites WHERE subscription_id=$1 AND parent_site_id IS NOT NULL AND (status<>'failed' OR removal_state<>'none')`,
 		"databases":  `SELECT COUNT(*)::int FROM databases WHERE subscription_id=$1 AND status<>'failed'`,
 		"backups":    `SELECT COUNT(*)::int FROM backups WHERE subscription_id=$1 AND status<>'failed'`,
 	}[table]

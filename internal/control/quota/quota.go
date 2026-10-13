@@ -555,9 +555,9 @@ func (s *SQLStore) GetUsage(ctx context.Context, userID int64) (Usage, error) {
 	}
 	var usage Usage
 	err := s.db.QueryRowContext(ctx, `SELECT $1::bigint AS user_id,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND status <> 'failed'), 0)::int AS sites,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND parent_site_id IS NULL AND status <> 'failed'), 0)::int AS domains,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND parent_site_id IS NOT NULL AND status <> 'failed'), 0)::int AS subdomains,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS sites,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND parent_site_id IS NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS domains,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND parent_site_id IS NOT NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS subdomains,
     COALESCE((SELECT COUNT(*) FROM databases WHERE owner_user_id = $1 AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE owner_user_id = $1 AND status <> 'failed'), 0)::int AS backups,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = $1 AND status = 'active'), 0)::bigint AS backup_storage_bytes`, userID).Scan(
@@ -578,9 +578,9 @@ func (s *SQLStore) GetUsageForSubscription(ctx context.Context, subscriptionID i
 	}
 	var usage Usage
 	err := s.db.QueryRowContext(ctx, `SELECT $1::bigint AS subscription_id,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS sites,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND parent_site_id IS NULL AND status <> 'failed'), 0)::int AS domains,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND parent_site_id IS NOT NULL AND status <> 'failed'), 0)::int AS subdomains,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS sites,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND parent_site_id IS NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS domains,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND parent_site_id IS NOT NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS subdomains,
     COALESCE((SELECT COUNT(*) FROM databases WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS backups,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id = $1 AND status = 'active'), 0)::bigint AS backup_storage_bytes`, subscriptionID).Scan(
@@ -688,9 +688,9 @@ const accountQuotaSummarySQL = `SELECT u.id, u.email, u.role,
     COALESCE(e.max_sites, 0), COALESCE(e.max_databases, 0), COALESCE(e.disk_mb, 0),
     COALESCE(e.max_backups, 0), COALESCE(e.backup_storage_mb, 0),
     COALESCE(e.site_disk_quota_mb, 0), COALESCE(e.php_fpm_max_children, 0), COALESCE(e.php_memory_mb, 0),
-    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS sites,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND parent_site_id IS NULL AND status <> 'failed'), 0)::int AS domains,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND parent_site_id IS NOT NULL AND status <> 'failed'), 0)::int AS subdomains,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS sites,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND parent_site_id IS NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS domains,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND parent_site_id IS NOT NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS subdomains,
     COALESCE((SELECT COUNT(*) FROM databases WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS backups,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = u.id AND status = 'active'), 0)::bigint AS backup_storage_bytes

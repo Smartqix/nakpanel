@@ -268,8 +268,8 @@ func bytesToCeilingMB(bytes int64) int64 {
 func loadSubscriptionComplianceUsage(ctx context.Context, q queryRower, subscriptionID int64) (SubscriptionComplianceUsage, error) {
 	var usage SubscriptionComplianceUsage
 	err := q.QueryRowContext(ctx, `SELECT
-    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id=$1 AND parent_site_id IS NULL AND status<>'failed'),0)::int,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id=$1 AND parent_site_id IS NOT NULL AND status<>'failed'),0)::int,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id=$1 AND parent_site_id IS NULL AND (status<>'failed' OR removal_state<>'none')),0)::int,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id=$1 AND parent_site_id IS NOT NULL AND (status<>'failed' OR removal_state<>'none')),0)::int,
     COALESCE((SELECT COUNT(*) FROM databases WHERE subscription_id=$1 AND status<>'failed'),0)::int,
     COALESCE((SELECT COUNT(*) FROM backups WHERE subscription_id=$1 AND status<>'failed'),0)::int,
     COALESCE((SELECT COUNT(*) FROM mailboxes mailbox JOIN mail_domains domain ON domain.id=mailbox.mail_domain_id WHERE domain.subscription_id=$1 AND NOT domain.delete_requested),0)::int,

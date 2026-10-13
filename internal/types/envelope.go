@@ -967,6 +967,7 @@ type AuditEvent struct {
 
 type SubscriptionSummary struct {
 	ID                    int64                        `json:"id"`
+	PrimarySiteID         int64                        `json:"primary_site_id,omitempty"`
 	CustomerID            int64                        `json:"customer_id"`
 	CustomerUserID        int64                        `json:"customer_user_id,omitempty"`
 	CustomerEmail         string                       `json:"customer_email"`
