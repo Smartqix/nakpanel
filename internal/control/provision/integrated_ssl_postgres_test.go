@@ -79,6 +79,14 @@ CREATE TRIGGER reject_ssl_job BEFORE INSERT ON river_job FOR EACH ROW WHEN(NEW.k
 	if _, err = db.Exec(`UPDATE river_job SET state='cancelled',finalized_at=now() WHERE kind='issue_cert'`); err != nil {
 		t.Fatal(err)
 	}
+	if _, err = db.Exec(`UPDATE sites SET status='active' WHERE id=$1`, id); err != nil {
+		t.Fatal(err)
+	}
+	preflight := NewSQLProvisioningCertificateSetup(db, client)
+	prepared, err := preflight.PrepareProvisionedCertificate(ctx, IssueCertArgs{SiteID: id, SubscriptionID: sub, CustomerID: customer, Domain: "ssl-integration.example.test", AfterProvisioning: true})
+	if err != nil || !prepared.Ready {
+		t.Fatalf("external DNS must reach public challenge preflight: %#v %v", prepared, err)
+	}
 	if _, err = db.Exec(`UPDATE sites SET status='active',tls_status='active',tls_issuer='acme',tls_expires_at=$2,tls_cert_path='/test/cert.pem',tls_key_path='/test/key.pem',settings_status='failed',settings_error='nginx reload failed' WHERE id=$1`, id, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}

@@ -134,7 +134,7 @@ func (s *Server) handleSiteSetupPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Could not load setup workspace", http.StatusServiceUnavailable)
 		return
 	}
-	view := web.WorkspaceView{Route: "site-setup", Title: "Subdomain setup", DetailID: setup.SiteID, CSRFToken: csrfToken(r), SiteSetup: &setup, SupportCustomerID: supportID, SiteSetupTimedOut: !setup.StartedAt.IsZero() && time.Since(setup.StartedAt) >= 5*time.Minute}
+	view := web.WorkspaceView{Route: "site-setup", Title: "Website setup", DetailID: setup.SiteID, CSRFToken: csrfToken(r), SiteSetup: &setup, SupportCustomerID: supportID, SiteSetupTimedOut: !setup.StartedAt.IsZero() && time.Since(setup.StartedAt) >= 5*time.Minute}
 	if supportID > 0 {
 		data = filterDashboardForCustomer(data, supportID)
 		for _, customer := range data.Customers {

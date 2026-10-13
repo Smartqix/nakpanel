@@ -89,19 +89,8 @@ func (s *SQLProvisioningCertificateSetup) PrepareProvisionedCertificate(ctx cont
 			return result, nil
 		}
 	}
-	if policy.Permissions.DNS && (policy.DNS.Mode == "authoritative" || policy.DNS.Mode == "primary") {
-		zoneSiteID := site.ID
-		if setup.ParentID > 0 {
-			zoneSiteID = setup.ParentID
-		}
-		var configured bool
-		if err = s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM dns_zones WHERE site_id=$1)`, zoneSiteID).Scan(&configured); err != nil {
-			return result, err
-		}
-		if !configured {
-			return result, nil
-		}
-	}
+	// DNS permission is a capability, not proof that this hostname uses a local zone.
+	// Existing managed zones must converge above; external DNS is checked by HTTP-01.
 	if site.Status != "active" {
 		return result, nil
 	}
