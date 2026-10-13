@@ -587,6 +587,11 @@
 	}
   }
 
+  function searchKindLabel(kind) {
+    var labels = {site: "Website", customer: "Customer", subscription: "Subscription", database: "Database", mail_domain: "Mail domain", mailbox: "Mailbox"};
+    return Object.prototype.hasOwnProperty.call(labels, kind) ? labels[kind] : "Resource";
+  }
+
   function renderSearch(results) {
     var panel = document.querySelector("[data-np-search-results]");
     if (!panel) return;
@@ -602,7 +607,7 @@
         var label = document.createElement("strong");
         label.textContent = result.label;
         var detail = document.createElement("span");
-        detail.textContent = result.kind + " · " + result.detail;
+        detail.textContent = searchKindLabel(result.kind) + " · " + result.detail;
         link.append(label, detail);
         panel.appendChild(link);
       });

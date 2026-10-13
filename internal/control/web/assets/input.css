@@ -29,6 +29,8 @@
 .np-dialog button:focus-visible, .np-dialog input:focus-visible,
 .np-dialog select:focus-visible, .np-dialog textarea:focus-visible { outline: 2px solid var(--np-primary); outline-offset: 2px; }
 @media (max-width: 760px) {
+  .np-routed .np-routed-nav-item { min-height: 44px; }
+  .np-routed .np-menu-icon { height: 44px; min-height: 44px; width: 44px; }
   .np-dialog { max-height: calc(100dvh - 16px); }
   .np-dialog .np-dialog-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
   .np-dialog .np-dialog-form select, .np-routed .np-dialog button { min-height: 44px; }

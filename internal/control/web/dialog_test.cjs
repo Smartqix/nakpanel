@@ -34,7 +34,7 @@ function fixture() {
     };
   }
   const opener = control('BUTTON');
-  const close = control('BUTTON', {matches: selector => selector.includes('data-np-dialog-close')});
+  const close = control('BUTTON', {matches: selector => selector === '[data-np-dialog-close], .np-dialog-close button'});
   const disabled = control('INPUT', {disabled: true});
   const hidden = control('INPUT', {getClientRects: () => []});
   const input = control('INPUT');
@@ -53,6 +53,14 @@ test('creation dialogs focus the first visible enabled field, not the close butt
   const f = fixture();
   f.controller.open(f.dialogs.edit, f.opener);
   assert.equal(f.document.activeElement, f.input);
+});
+
+test('review dialogs without fields prefer their Cancel action over committing a change', () => {
+  const f = fixture();
+  f.cancel.cancel = false;
+  f.cancel.matches = selector => selector === '.np-dialog-actions [data-np-dialog-close]' || selector === '[data-np-dialog-close], .np-dialog-close button';
+  f.controller.open(f.dialogs.confirm, f.opener);
+  assert.equal(f.document.activeElement, f.cancel);
 });
 
 test('dialogs derive an accessible title and description without replacing explicit names', () => {

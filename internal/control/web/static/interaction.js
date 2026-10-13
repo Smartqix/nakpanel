@@ -13,6 +13,7 @@
       var cancel = dialog.querySelector('[data-np-confirmation-cancel]');
       var target = cancel && controls.includes(cancel) ? cancel : controls.find(function (control) { return control.matches('[autofocus], [data-np-autofocus]'); });
       if (!target) target = controls.find(function (control) { return /^(INPUT|SELECT|TEXTAREA)$/.test(control.tagName); });
+      if (!target) target = controls.find(function (control) { return control.matches('.np-dialog-actions [data-np-dialog-close]'); });
       if (!target) target = controls.find(function (control) { return !control.matches('[data-np-dialog-close], .np-dialog-close button'); });
       (target || controls[0] || dialog).focus();
     }
