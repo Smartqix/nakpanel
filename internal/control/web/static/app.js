@@ -2530,17 +2530,19 @@
   }
 
   function submitSitePolicyForm(form, submitter) {
+    if (form.getAttribute("aria-busy") === "true") return;
     clearSitePolicyError(form);
     var body = new URLSearchParams(new window.FormData(form));
     if (submitter && submitter.name) body.append(submitter.name, submitter.value);
     var action = submitter && submitter.hasAttribute("formaction") ? submitter.formAction : form.action;
     if (submitter) submitter.disabled = true;
     form.setAttribute("aria-busy", "true");
-    fetch(action, {
-      method: "POST", body: body, credentials: "same-origin",
+    return fetch(action, {
+      method: "POST", body: body, credentials: "same-origin", allowPageResponse: true,
       headers: {"Accept": "application/json", "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken()}
     }).then(function (response) {
       if (response.ok) {
+        form.dataset.npDirty = "false";
         if (response.redirected) window.location.assign(response.url);
         else window.location.reload();
         return null;
