@@ -25,6 +25,23 @@ func TestGitSettingsPreserveScopeAndHideNewHostedMode(t *testing.T) {
 	}
 }
 
+func TestGitCreationUsesSharedDialogFooter(t *testing.T) {
+	var out bytes.Buffer
+	if err := gitSettingsForm(dashboard.Site{ID: 58}, types.SubscriptionSummary{ID: 39}, types.GitRepository{Mode: "remote", Branch: "main", DeployTarget: "."}, WorkspaceView{}).Render(context.Background(), &out); err != nil {
+		t.Fatal(err)
+	}
+	html := out.String()
+	if !strings.Contains(html, `np-dialog-actions`) {
+		t.Fatal("Git creation must use the shared dialog action footer")
+	}
+	if strings.Index(html, `>Cancel</button>`) > strings.LastIndex(html, `Add Repository`) {
+		t.Fatal("Cancel must precede the primary action")
+	}
+	if !strings.Contains(html, `icons.svg#chevron-right`) {
+		t.Fatal("Git disclosures must use a bundled icon")
+	}
+}
+
 func TestGitRemovedRepositoryReturnsEmptyWithRevisionPreserved(t *testing.T) {
 	repository := types.GitRepository{ID: 7, SiteID: 58, OperationRevision: 9, ConnectionStatus: "disconnected", ConvergenceStatus: "in_sync"}
 	if gitConnectionVisible(repository) {

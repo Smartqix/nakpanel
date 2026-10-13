@@ -4,7 +4,7 @@ import "github.com/nakroteck/nakpanel/internal/control/dashboard"
 
 templ databasePasswordInput() {
  <label>Password<input type="password" name="password" minlength="16" maxlength="128" pattern="[A-Za-z0-9_-]{16,128}" title="16-128 letters, digits, underscores or hyphens" autocomplete="new-password" required data-np-db-password/></label>
- <div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-db-generate>Generate password</button><button type="button" class="np-icon-button" data-np-db-reveal aria-label="Show password" title="Show password">@icon("eye")</button><button type="button" class="np-icon-button" data-np-db-copy aria-label="Copy password" title="Copy password">@icon("copy")</button></div>
+ <div class="np-password-actions"><button type="button" class="np-secondary-button" data-np-db-generate>Generate password</button><button type="button" class="np-icon-button" data-np-db-reveal aria-label="Show password" title="Show password">@icon("eye")</button><button type="button" class="np-icon-button" data-np-db-copy aria-label="Copy password" title="Copy password">@icon("copy")</button></div>
  <p class="np-form-help" data-np-db-password-help>Use 16-128 letters, digits, underscores or hyphens. Save the password before submitting; it cannot be viewed again.</p>
 }
 

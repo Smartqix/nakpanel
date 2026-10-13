@@ -9,6 +9,7 @@
 .np-routed button, .np-routed p { font-size: 14px; letter-spacing: 0; }
 .np-routed input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
 .np-routed select, .np-routed button:not(.np-icon-button) { min-height: 40px; }
+.np-routed label > textarea:not([hidden]) { background: var(--np-surface); border: 1px solid var(--np-border); border-radius: var(--np-radius); min-height: 80px; min-width: 0; padding: 10px 12px; resize: vertical; width: 100%; }
 .np-routed .np-routed-page-head > button { align-items: center; display: inline-flex; gap: 8px; justify-content: center; width: auto; }
 .np-routed button:has(> .np-icon) { align-items: center; display: inline-flex; gap: 8px; justify-content: center; }
 .np-dialog { overscroll-behavior: contain; max-height: calc(100dvh - 40px); }
@@ -19,6 +20,7 @@
 .np-dialog .np-dialog-close button, .np-dialog .np-dialog-head > button[data-np-dialog-close] { height: 40px; min-height: 40px; width: 40px; }
 .np-dialog .np-dialog-head > button[data-np-dialog-close] { right: 16px; top: 16px; }
 .np-dialog .np-dialog-form > label { min-width: 0; width: 100%; }
+.np-password-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; grid-column: 1 / -1; justify-content: flex-end; }
 .np-dialog .np-dialog-form > p, .np-dialog .np-dialog-form > pre,
 .np-dialog .np-dialog-form > .np-check { grid-column: 1 / -1; }
 .np-dialog .np-gate:empty, .np-dialog .np-notice:empty,
@@ -2726,7 +2728,7 @@
   .np-container-deploy-form > .np-form-grid { padding: 20px 20px 8px; }
   .np-container-deploy-form > .np-gate { margin: 20px; }
   .np-container-deploy-form > .np-form-help { margin: 14px 20px; }
-  .np-container-deploy-form > .np-dialog-actions { border-top: 1px solid var(--np-border-soft); padding: 16px 20px 20px; }
+  .np-dialog .np-container-deploy-form > .np-dialog-actions { border-top: 1px solid var(--np-border-soft); bottom: 0; padding: 16px 20px 20px; }
   .np-container-deploy-form label small { color: var(--np-muted); font-size: 11px; font-weight: 500; line-height: 1.45; }
   .np-container-empty { align-items: center; color: var(--np-muted); display: flex; gap: 14px; min-height: 128px; padding: 24px; }
   .np-container-empty .np-empty-icon { align-items: center; background: var(--np-hover); border-radius: var(--np-radius); color: var(--np-ink-soft); display: inline-flex; flex: 0 0 44px; height: 44px; justify-content: center; }
@@ -5392,7 +5394,7 @@
   .np-domain-db-actions .np-secondary-button { min-height: 44px; }
   .np-domain-databases [data-np-db-feedback] { padding: 12px 20px; }
   .np-domain-databases dialog input { min-height: 44px; }
-  .np-domain-db-create-form { grid-template-columns: 1fr; }
+  .np-dialog .np-domain-db-create-form { grid-template-columns: 1fr; }
   .np-domain-db-create-form label:first-of-type { grid-column: auto; }
   .np-domain-form { align-items: end; display: grid; gap: 14px; grid-template-columns: repeat(3,minmax(0,1fr)); padding: 4px 16px 16px; }
   .np-domain-form > .np-plan-field-grid,

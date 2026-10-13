@@ -80,20 +80,21 @@ templ gitSettingsForm(item dashboard.Site, subscription types.SubscriptionSummar
   <div data-git-ssh-field class="np-git-auth">
    <div data-git-prepared hidden><h4>SSH deploy key</h4><p>Add this public key to your Git provider with read-only access.</p><div class="np-git-key-line"><code data-git-prepared-title></code><button type="button" class="np-secondary-button" data-git-copy-prepared-title>@icon("copy") Copy title</button></div><pre data-git-prepared-key></pre><button type="button" class="np-secondary-button" data-git-copy-prepared>@icon("copy") Copy public key</button></div>
    <button type="button" class="np-secondary-button" data-git-prepare>Prepare SSH key</button>
-   <details data-git-host-details><summary>SSH server verification</summary><label>Verified SSH host key<textarea name="known_host_key" rows="2" placeholder="github.com ssh-ed25519 AAAA..." spellcheck="false">{ repository.KnownHostKey }</textarea></label><p>Compare with your provider's published fingerprint before trusting it.</p><label class="np-check"><input type="checkbox" name="trust_host" value="yes" checked?={ repository.KnownHostKey!="" }/>I verified this host key with my Git provider</label></details>
+   <details data-git-host-details><summary>@icon("chevron-right") SSH server verification</summary><label>Verified SSH host key<textarea name="known_host_key" rows="2" placeholder="github.com ssh-ed25519 AAAA..." spellcheck="false">{ repository.KnownHostKey }</textarea></label><p>Compare with your provider's published fingerprint before trusting it.</p><label class="np-check"><input type="checkbox" name="trust_host" value="yes" checked?={ repository.KnownHostKey!="" }/>I verified this host key with my Git provider</label></details>
   </div>
-  <details open?={ repository.RemoteURL!="" }><summary>Deployment options</summary><div class="np-form-grid"><label>Branch<input name="branch" value={ repository.Branch } list="git-branches" required/><datalist id="git-branches" data-git-branches></datalist></label><label>Directory under public_html<input name="deploy_target" value={ repository.DeployTarget } required/></label></div><label>Deployment mode<select name="deployment_mode"><option value="manual" selected?={ repository.DeploymentMode=="manual" || repository.DeploymentMode=="" && !repository.Automatic }>Manual</option><option value="automatic" selected?={ repository.DeploymentMode=="automatic" || repository.Automatic }>Automatic</option><option value="disabled" selected?={ repository.DeploymentMode=="disabled" }>No deployment</option></select></label><p>Default: main branch, public_html, manual deployment. Connecting does not publish files. Automatic updates require a webhook.</p></details>
+  <details open?={ repository.RemoteURL!="" }><summary>@icon("chevron-right") Deployment options</summary><div class="np-form-grid"><label>Branch<input name="branch" value={ repository.Branch } list="git-branches" required/><datalist id="git-branches" data-git-branches></datalist></label><label>Directory under public_html<input name="deploy_target" value={ repository.DeployTarget } required/></label></div><label>Deployment mode<select name="deployment_mode"><option value="manual" selected?={ repository.DeploymentMode=="manual" || repository.DeploymentMode=="" && !repository.Automatic }>Manual</option><option value="automatic" selected?={ repository.DeploymentMode=="automatic" || repository.Automatic }>Automatic</option><option value="disabled" selected?={ repository.DeploymentMode=="disabled" }>No deployment</option></select></label><p>Default: main branch, public_html, manual deployment. Connecting does not publish files. Automatic updates require a webhook.</p></details>
   <p class="np-git-message" data-git-message role="status" aria-live="polite"></p>
-  <div class="np-git-actions"><button type="submit">
+  <div class="np-git-actions np-dialog-actions">
+  if repository.RemoteURL=="" {
+   <button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button>
+  }
+  <button type="submit">
    if repository.RemoteURL=="" {
     Add Repository
    } else {
     Save &amp; Connect
    }
   </button>
-  if repository.RemoteURL=="" {
-   <button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button>
-  }
   </div>
   if repository.RemoteURL!="" {
    <button type="button" class="np-secondary-button" data-git-test>Test connection</button>
