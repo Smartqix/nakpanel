@@ -29,6 +29,10 @@ management, and migration-sensitive control-plane behavior.
   while retaining subscription, quota, lifecycle, audit, and River gates.
 - ACME, self-signed, and system-trusted custom site certificates with atomic
   agent installation and custom-certificate expiry warnings.
+- Website and subdomain creation can secure hosting with free SSL in one setup
+  flow when the subscription permits it. Setup waits for DNS, certificate
+  installation and HTTPS activation; DNS delays continue in the background.
+  SSL-only retry preserves the website, and hidden files remain protected.
 - Privileged Unix-socket agent for Linux provisioning work.
 - Subscription system accounts with honest account-level disk quotas and
   per-domain document-root usage.

@@ -13,7 +13,7 @@ templ siteSetupProgress(status types.SiteSetupStatus, view WorkspaceView, dialog
 		<p class="np-setup-message" data-np-setup-message role="status" aria-live="polite">{ status.Message }</p>
 		<ol class="np-setup-steps" aria-label="Setup progress">
 			for _,step:=range steps {
-				<li><span>{ step.Label }</span><strong data-np-setup-step={ step.Code }>{ setupStepLabel(step.State) }</strong></li>
+				<li data-np-setup-https?={step.Code=="https"} hidden?={step.Code=="https"&&!status.SSLRequested}><span>{ step.Label }</span><strong data-np-setup-step={ step.Code }>{ setupStepLabel(step.State) }</strong></li>
 			}
 		</ol>
 		<p class="np-form-help">DNS configuration does not guarantee that public DNS propagation has finished.</p>

@@ -2018,6 +2018,8 @@
     if (heading) heading.textContent = titles[data.state] || 'Subdomain setup';
     var check = panel.querySelector('[data-np-setup-check]');
     if (check) check.hidden = data.state === 'pending';
+	var httpsRow = panel.querySelector('[data-np-setup-https]');
+	if (httpsRow && typeof data.ssl_requested === 'boolean') httpsRow.hidden = !data.ssl_requested;
 	var retry = panel.querySelector('[data-np-setup-retry]');
 	if (retry) retry.hidden = !data.can_retry_ssl;
     var labels = {active:'Done', in_sync:'Done', failed:'Failed', external:'External DNS', missing:'Needs attention', not_requested:'Not requested', pending:'Waiting'};

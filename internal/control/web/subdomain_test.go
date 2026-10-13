@@ -56,6 +56,38 @@ func TestSubdomainCreationOffersPlanGatedFreeSSL(t *testing.T) {
 	}
 }
 
+func TestWebsiteSSLDefaultAndSubscriptionRootUsage(t *testing.T) {
+	for _, tc := range []struct {
+		name              string
+		allow, available  bool
+		choice            *bool
+		checked, disabled bool
+	}{
+		{"default", true, true, nil, true, false}, {"no entitlement", false, true, nil, false, true}, {"no ACME", true, false, nil, false, true}, {"unchecked preserved", true, true, boolPtrForSSL(false), false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			view := WorkspaceView{SiteCreateSSL: tc.choice}
+			if err := siteCreatePage([]types.SubscriptionSummary{{ID: 20, AllowTLS: tc.allow, MaxSites: 5, DomainsUsed: 1, SitesUsed: 6}}, types.RuntimeCapabilities{ACMEAvailable: tc.available}, DashboardActions{}, view).Render(context.Background(), &out); err != nil {
+				t.Fatal(err)
+			}
+			body := out.String()
+			start := strings.Index(body, `name="secure_with_ssl"`)
+			if start < 0 {
+				t.Fatal("missing SSL choice")
+			}
+			input := body[start : start+strings.Index(body[start:], ">")]
+			if strings.Contains(input, " checked") != tc.checked || strings.Contains(input, " disabled") != tc.disabled {
+				t.Fatalf("choice=%s", input)
+			}
+			if !strings.Contains(body, `data-sites-used="1"`) {
+				t.Fatal("subdomains incorrectly consume root-website UI allowance")
+			}
+		})
+	}
+}
+func boolPtrForSSL(value bool) *bool { return &value }
+
 func TestDomainOrderKeepsSubdomainsNearParent(t *testing.T) {
 	items := []dashboard.Site{
 		{ID: 3, Domain: "shop.example.test", ParentSiteID: 1},

@@ -147,5 +147,5 @@ func (s *Server) handleSiteSetupPage(w http.ResponseWriter, r *http.Request) {
 	if supportID > 0 {
 		actionUser.Role = auth.RoleClient
 	}
-	renderPage(w, r, web.RoutedDashboardPage("Subdomain setup", user, data, s.dashboardActions(actionUser), view))
+	renderPage(w, r, web.RoutedDashboardPage("Website setup", user, data, s.dashboardActions(actionUser), view))
 }

@@ -353,7 +353,7 @@ func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs
 		state, err := w.setup.PrepareProvisionedCertificate(ctx, job.Args)
 		if err != nil {
 			if errors.Is(err, ErrProvisionedSSLInactive) {
-				return errors.Join(river.JobCancel(err), w.markFailed(ctx, job.Args.SiteID, err.Error()))
+				return w.failCertificate(ctx, job.Args, err)
 			}
 			return err
 		}
@@ -365,7 +365,7 @@ func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs
 		}
 		if job.JobRow != nil && time.Since(job.CreatedAt) >= 15*time.Minute {
 			message := "Website created; SSL could not finish within 15 minutes. Check DNS and retry SSL."
-			return errors.Join(river.JobCancel(errors.New(message)), w.markFailed(ctx, job.Args.SiteID, message))
+			return w.failCertificate(ctx, job.Args, errors.New(message))
 		}
 		if !state.Ready {
 			return river.JobSnooze(5 * time.Second)

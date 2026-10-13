@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/store"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -22,7 +22,7 @@ func TestIntegratedSSLPostgreSQLRecovery(t *testing.T) {
 	if dsn == "" {
 		t.Skip("requires migrated nakpanel_ssl_test database")
 	}
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatal(err)
 	}

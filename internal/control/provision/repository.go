@@ -127,7 +127,7 @@ WHERE child.subscription_id=$2
 		return 0, fmt.Errorf("enqueue create_site job: %w", err)
 	}
 	if req.SecureWithSSL {
-		if _, err = tx.ExecContext(ctx, `UPDATE sites SET ssl_setup_requested=true,tls_status='pending',tls_issuer='acme',tls_last_error='',tls_auto_renew=true,updated_at=now() WHERE id=$1`, site.ID); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE sites SET ssl_setup_requested=true,tls_status='pending',tls_issuer='acme',tls_last_error='',tls_auto_renew=false,updated_at=now() WHERE id=$1`, site.ID); err != nil {
 			return 0, err
 		}
 		args := IssueCertArgs{SiteID: site.ID, Username: site.Username, Domain: site.Domain, PHPVersion: site.PhpVersion, Issuer: types.CertIssuerACME, SharedAccount: true, Limits: req.Limits, SubscriptionID: site.SubscriptionID, CustomerID: site.CustomerID, ActorUserID: req.RequestedByUserID, AfterProvisioning: true}
