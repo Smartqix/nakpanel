@@ -623,9 +623,6 @@ templ domainOverview(item dashboard.Site, subscription types.SubscriptionSummary
 		@subdomainSetupStatus(item,data,view)
 	}
 	@domainHealthPanel(item, view)
-	if item.ParentSiteID > 0 {
-		@subdomainSetupStatus(item,data,view)
-	}
 	<section class="np-panel np-domain-summary"><div class="np-panel-title"><div><h2>Hosting overview</h2><span class="np-muted">Desired and applied service state for this domain</span></div>@statusPill(item.SettingsStatus)</div>
 		<dl class="np-domain-overview-band"><div><dt>PHP</dt><dd>{ item.PHPVersion }</dd><small>dedicated FPM service</small></div><div><dt>TLS</dt><dd>{ formatTLSStatus(item) }</dd><small>HTTPS redirect { yesNo(item.HTTPSRedirect) }</small></div><div><dt>DNS</dt><dd>{ domainDNSStateForSite(data.Phase6,item) }</dd><small>{ dnsZoneDescription(item) }</small></div><div><dt>Databases</dt><dd>{ formatPlanLimit(len(databasesForSite(data.Databases,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.DatabasesUsed,subscription.MaxDatabases,true) } subscription use</small></div><div><dt>Backups</dt><dd>{ formatPlanLimit(len(backupsForSite(data.Phase6.Backups,item.ID))) }</dd><small>{ formatQuotaCompactCount(subscription.BackupsUsed,subscription.MaxBackups,true) } subscription use</small></div></dl>
 		if usage, ok := usageForSite(data.SubscriptionServices.SiteUsage,item.ID); ok {

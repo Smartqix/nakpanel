@@ -392,6 +392,7 @@
 
   function updateSubdomainGate(scope) {
     each("[data-np-create-subdomain-form]", scope || document, function (form) {
+      if (form.dataset.npSubmitting === 'true') return;
       var input = form.querySelector('input[name="label"]');
       var label = input ? input.value.trim().toLowerCase().replace(/\.$/, "") : "";
       var parent = (form.dataset.npParentDomain || "").toLowerCase();

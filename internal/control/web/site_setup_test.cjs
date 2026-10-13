@@ -82,3 +82,9 @@ test('shared fetch HTTP validation errors allow correction while keeping network
   const error=new Error('Invalid label');error.status=400;error.payload={error:'Invalid label'};
   const h=submissionHarness(error);await h.submit();await h.submit();assert.equal(h.posts(),2);assert.match(h.gate.textContent,/Invalid label/);
 });
+test('editing an uncertain request cannot erase its warning or re-enable Create',()=>{
+  const start=source.indexOf('  function updateSubdomainGate('),end=source.indexOf('\n  function updateCreateGate(',start);
+  const form={dataset:{npSubmitting:'true'},querySelector(){throw new Error('must preserve the in-flight request state');}};
+  const context=vm.createContext({each:(_selector,_scope,fn)=>fn(form),document:{}});
+  vm.runInContext(source.slice(start,end),context);context.updateSubdomainGate();
+});

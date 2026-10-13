@@ -41,6 +41,9 @@ func TestChildDomainCannotOfferNestedSubdomainCreation(t *testing.T) {
 	if !strings.Contains(out.String(), "Parent domain:") || !strings.Contains(out.String(), `href="/sites/1"`) {
 		t.Fatal("child lost parent context")
 	}
+	if count := strings.Count(out.String(), "<h2>Subdomain setup</h2>"); count != 1 {
+		t.Fatalf("child has %d duplicated setup summaries", count)
+	}
 }
 
 func TestDomainOrderKeepsSubdomainsNearParent(t *testing.T) {
