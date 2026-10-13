@@ -9,6 +9,30 @@ import (
 	"strings"
 )
 
+// An HTTP-only snapshot can predate concurrent certificate installation. TLS
+// removal is not a runtime operation; keep the installed route until explicit
+// certificate replacement, including while serving a suspension response.
+func retainInstalledTLS(plan SitePlan, cert, key string, redirect bool) (string, string, bool, error) {
+	if cert != "" || key != "" {
+		return cert, key, redirect, nil
+	}
+	config, err := os.ReadFile(plan.NginxConfig)
+	if errors.Is(err, os.ErrNotExist) {
+		return cert, key, redirect, nil
+	}
+	if err != nil {
+		return cert, key, redirect, err
+	}
+	if !regexp.MustCompile(`(?m)^\s*ssl_certificate(?:_key)?\s`).Match(config) {
+		return cert, key, redirect, nil
+	}
+	_, cert, key, redirect, _, err = existingCertificateRuntime(plan)
+	if err == nil && (cert == "" || key == "") {
+		err = errors.New("existing TLS directives could not be safely retained")
+	}
+	return cert, key, redirect, err
+}
+
 // Certificate replacement must not switch an active managed release back to public_html.
 func existingCertificateRuntime(plan SitePlan) (SitePlan, string, string, bool, bool, error) {
 	config, err := os.ReadFile(plan.NginxConfig)

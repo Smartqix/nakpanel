@@ -553,6 +553,10 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 			return err
 		}
 	}
+	req.TLSCertPath, req.TLSKeyPath, req.HTTPSRedirect, err = retainInstalledTLS(desired, req.TLSCertPath, req.TLSKeyPath, req.HTTPSRedirect)
+	if err != nil {
+		return fmt.Errorf("retain installed TLS runtime: %w", err)
+	}
 	if err := ensureSiteAuxiliaryIncludes(desired); err != nil {
 		return err
 	}
@@ -1094,6 +1098,10 @@ func (p *SiteProvisioner) createSiteRuntime(ctx context.Context, req types.Creat
 		if err = p.stopSitePHP(ctx, plan); err != nil {
 			return err
 		}
+	}
+	certPath, keyPath, redirectHTTPS, err = retainInstalledTLS(plan, certPath, keyPath, redirectHTTPS)
+	if err != nil {
+		return fmt.Errorf("retain installed TLS runtime: %w", err)
 	}
 	if p.users == nil {
 		return errors.New("system user manager is not configured")

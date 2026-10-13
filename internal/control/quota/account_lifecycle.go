@@ -102,6 +102,12 @@ var subscriptionConvergenceLocks sync.Map
 var applicationConvergenceLocks sync.Map
 
 func lockSubscriptionConvergence(subscriptionID int64) func() {
+	return LockSubscriptionRuntime(subscriptionID)
+}
+
+// LockSubscriptionRuntime serializes account snapshots with integrated SSL
+// installation, so a captured pre-certificate snapshot cannot win afterward.
+func LockSubscriptionRuntime(subscriptionID int64) func() {
 	value, _ := subscriptionConvergenceLocks.LoadOrStore(subscriptionID, &sync.Mutex{})
 	mutex := value.(*sync.Mutex)
 	mutex.Lock()

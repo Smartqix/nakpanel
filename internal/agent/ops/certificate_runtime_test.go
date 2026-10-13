@@ -122,3 +122,25 @@ func TestACMEIssuanceKeepsSuspendedHostingClosed(t *testing.T) {
 		t.Fatalf("certificate activation changed suspended hosting: %s, %v", applied, err)
 	}
 }
+
+func TestRetainedTLSDoesNotOverrideExplicitRedirectChange(t *testing.T) {
+	cert, key, redirect, err := retainInstalledTLS(SitePlan{}, "/certs/new.pem", "/certs/new.key", false)
+	if err != nil || cert != "/certs/new.pem" || key != "/certs/new.key" || redirect {
+		t.Fatalf("explicit runtime change lost: %s %s %v %v", cert, key, redirect, err)
+	}
+}
+
+func TestRetainedTLSRejectsUnrecognizedExistingDirectives(t *testing.T) {
+	root := t.TempDir()
+	plan, err := NewSitePlan(types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: "8.4"}, SitePathConfig{HomeRoot: filepath.Join(root, "home"), NginxAvailableDir: filepath.Join(root, "available")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := RenderNginxVHost(plan) + "\n  ssl_certificate /certs/current.pem;\n  ssl_certificate_key /certs/current.key;\n"
+	if err = writeFileAtomic(plan.NginxConfig, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err = retainInstalledTLS(plan, "", "", false); err == nil {
+		t.Fatal("unrecognized TLS would be silently removed")
+	}
+}

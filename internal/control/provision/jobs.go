@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
@@ -349,6 +350,10 @@ func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs
 	if job.Args.AfterProvisioning {
 		if w.setup == nil {
 			return errors.New("website SSL setup is not configured")
+		}
+		if job.Args.SubscriptionID > 0 {
+			unlock := controlquota.LockSubscriptionRuntime(job.Args.SubscriptionID)
+			defer unlock()
 		}
 		state, err := w.setup.PrepareProvisionedCertificate(ctx, job.Args)
 		if err != nil {

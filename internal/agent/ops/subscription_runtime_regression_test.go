@@ -96,6 +96,66 @@ func TestSuspendedAccountStopsPHPBeforeUserSetupFailure(t *testing.T) {
 	}
 }
 
+func TestStaleHTTPOnlyRuntimeCannotRemoveInstalledTLS(t *testing.T) {
+	for _, operation := range []string{"account", "runtime", "creation retry", "suspension"} {
+		t.Run(operation, func(t *testing.T) {
+			p, req, _, plan := convergenceRuntimeFixture(t)
+			if _, err := p.EnsureSubscriptionAccount(context.Background(), req); err != nil {
+				t.Fatal(err)
+			}
+			cert, key := req.Domains[0].TLSCertPath, req.Domains[0].TLSKeyPath
+			req.Domains[0].TLSCertPath, req.Domains[0].TLSKeyPath, req.Domains[0].HTTPSRedirect = "", "", false
+			var err error
+			switch operation {
+			case "account":
+				_, err = p.EnsureSubscriptionAccount(context.Background(), req)
+			case "suspension":
+				req.State = "suspended"
+				_, err = p.EnsureSubscriptionAccount(context.Background(), req)
+			case "runtime":
+				err = p.sites.ApplySiteRuntime(context.Background(), types.ApplySiteRuntimeReq{SiteID: 7, Username: req.Username, Domain: req.Domains[0].Domain, SharedAccount: true, CurrentPHPVersion: "8.4", DesiredPHPVersion: "8.4", State: "active"})
+			case "creation retry":
+				err = p.sites.CreateSite(context.Background(), types.CreateSiteReq{SiteID: 7, Username: req.Username, Domain: req.Domains[0].Domain, PHPVersion: "8.4", SharedAccount: true})
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			config, err := os.ReadFile(plan.NginxConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, directive := range []string{"ssl_certificate " + cert + ";", "ssl_certificate_key " + key + ";"} {
+				if !strings.Contains(string(config), directive) {
+					t.Fatalf("stale runtime removed %q:\n%s", directive, config)
+				}
+			}
+			if operation == "suspension" {
+				if !strings.Contains(string(config), "return 503;") || strings.Contains(string(config), "fastcgi_pass") {
+					t.Fatal("TLS preservation reactivated suspended hosting")
+				}
+			} else if !strings.Contains(string(config), "return 301 https://$host$request_uri;") {
+				t.Fatal("stale runtime removed HTTPS redirect")
+			}
+		})
+	}
+}
+
+func TestSuspensionStopsPHPWhenExistingTLSCannotBeRetained(t *testing.T) {
+	p, req, observer, plan := convergenceRuntimeFixture(t)
+	if _, err := p.EnsureSubscriptionAccount(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	config := RenderNginxVHost(plan) + "\n  ssl_certificate /certs/current.pem;\n  ssl_certificate_key /certs/current.key;\n"
+	if err := writeFileAtomic(plan.NginxConfig, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	observer.phpStarts, observer.stops = 0, 0
+	err := p.sites.ApplySiteRuntime(context.Background(), types.ApplySiteRuntimeReq{SiteID: 7, Username: req.Username, Domain: req.Domains[0].Domain, SharedAccount: true, CurrentPHPVersion: "8.4", DesiredPHPVersion: "8.4", State: "suspended"})
+	if err == nil || observer.stops == 0 || observer.phpStarts != 0 {
+		t.Fatalf("invalid TLS bypassed suspension shutdown: err=%v stops=%d starts=%d", err, observer.stops, observer.phpStarts)
+	}
+}
+
 func TestSuspendedSiteStopsPHPBeforeUserSetupFailure(t *testing.T) {
 	p, req, observer, _ := convergenceRuntimeFixture(t)
 	p.sites.users = shutdownFailingUserManager{}

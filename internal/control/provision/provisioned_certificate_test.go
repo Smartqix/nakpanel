@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -15,6 +16,38 @@ type fakeCertificateSetup struct {
 	state          ProvisionedCertificateState
 	err, enableErr error
 	enabled        int64
+}
+
+func TestIntegratedSSLWaitsForSubscriptionRuntimeSnapshot(t *testing.T) {
+	const subscriptionID = 98765
+	unlock := controlquota.LockSubscriptionRuntime(subscriptionID)
+	locked := true
+	defer func() {
+		if locked {
+			unlock()
+		}
+	}()
+	setup := &fakeCertificateSetup{state: ProvisionedCertificateState{Ready: true, Installed: true}}
+	worker := NewIssueCertWorker(&fakeAgentCertificateClient{}, &recordingTLSStatusStore{}).WithProvisioningSetup(setup)
+	done := make(chan error, 1)
+	go func() {
+		done <- worker.Work(context.Background(), &river.Job[IssueCertArgs]{Args: IssueCertArgs{SiteID: 7, SubscriptionID: subscriptionID, AfterProvisioning: true}})
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("SSL crossed an in-flight runtime snapshot: %v", err)
+	case <-time.After(100 * time.Millisecond):
+	}
+	unlock()
+	locked = false
+	select {
+	case err := <-done:
+		if err != nil || setup.enabled != 7 {
+			t.Fatalf("SSL did not resume after runtime convergence: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("SSL did not resume after runtime lock release")
+	}
 }
 
 func (s *fakeCertificateSetup) PrepareProvisionedCertificate(context.Context, IssueCertArgs) (ProvisionedCertificateState, error) {
