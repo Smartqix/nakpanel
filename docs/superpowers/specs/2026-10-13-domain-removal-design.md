@@ -2,9 +2,9 @@
 
 ## Status
 
-The product direction and default retention choices were approved in chat on
-2026-10-13. This written specification awaits review before the implementation
-plan and product code are created. Deployment and two verification passes on
+The product direction, default retention choices, and this written specification
+were approved in chat on 2026-10-13. The implementation plan requires review
+before product code is created. Deployment and two verification passes on
 nakpanel.com are part of the requested delivery.
 
 ## Purpose
