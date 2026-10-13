@@ -48,6 +48,7 @@ type SitePathConfig struct {
 	NginxConfDir          string
 	NginxCacheDir         string
 	NginxProtectedDir     string
+	ACMEChallengeRoot     string
 	PHPFPMPoolDir         string
 	PHPFPMDedicatedDir    string
 	PHPFPMDedicatedRunDir string
@@ -68,6 +69,7 @@ type SitePlan struct {
 	SiteSlug               string
 	SiteHome               string
 	Docroot                string
+	ACMEWebroot            string
 	NginxConfig            string
 	NginxEnabled           string
 	NginxAccessLog         string
@@ -135,6 +137,7 @@ func DefaultSitePathConfig() SitePathConfig {
 		NginxConfDir:          "/etc/nginx/conf.d",
 		NginxCacheDir:         "/var/cache/nginx/nakpanel",
 		NginxProtectedDir:     "/etc/nginx/nakpanel/protected",
+		ACMEChallengeRoot:     "/var/lib/nakpanel-acme/domains",
 		PHPFPMDedicatedDir:    "/etc/nakpanel/php-fpm/sites",
 		PHPFPMDedicatedRunDir: defaultPHPFPMDedicatedRunDir,
 		PHPFPMLogDir:          "/var/log/php-fpm",
@@ -233,6 +236,7 @@ func NewSitePlan(req types.CreateSiteReq, paths SitePathConfig) (SitePlan, error
 		SiteSlug:               slug,
 		SiteHome:               siteHome,
 		Docroot:                docroot,
+		ACMEWebroot:            filepath.Join(paths.ACMEChallengeRoot, normalized.Domain),
 		NginxConfig:            filepath.Join(paths.NginxAvailableDir, nginxName),
 		NginxEnabled:           filepath.Join(paths.NginxEnabledDir, nginxName),
 		NginxAccessLog:         filepath.Join(paths.NginxLogDir, slug+".access.log"),
@@ -270,10 +274,15 @@ func RenderNginxVHost(plan SitePlan) string {
 
     access_log %[3]s;
     error_log %[4]s;
+%[11]s
 
 	    location / {
 	%[7]s
 	        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ /\. {
+        deny all;
     }
 
     location ~ \.php$ {
@@ -281,12 +290,26 @@ func RenderNginxVHost(plan SitePlan) string {
 %[10]s
         fastcgi_pass unix:%[6]s;
     }
-
-    location ~ /\. {
-        deny all;
-    }
 }
-	`, nginxServerNames(plan), plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, controls, nginxIndexFiles(plan), renderNginxServerControls(plan), renderNginxPHPControls(plan))
+	`, nginxServerNames(plan), plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, controls, nginxIndexFiles(plan), renderNginxServerControls(plan), renderNginxPHPControls(plan), renderNginxACMEChallenge(plan))
+}
+
+func renderNginxACMEChallenge(plan SitePlan) string {
+	webroot := plan.ACMEWebroot
+	if webroot == "" {
+		webroot = filepath.Join(DefaultSitePathConfig().ACMEChallengeRoot, plan.Domain)
+	}
+	return fmt.Sprintf(`
+    location ^~ /.well-known/acme-challenge/ {
+        alias %s/.well-known/acme-challenge/;
+        default_type text/plain;
+        autoindex off;
+        disable_symlinks on;
+        allow all;
+        if ($uri !~ "^/[.]well-known/acme-challenge/[A-Za-z0-9_-]+$") { return 404; }
+        limit_except GET { deny all; }
+    }
+`, webroot)
 }
 
 func renderNginxLocationControls(plan SitePlan) string {
@@ -340,17 +363,30 @@ func nginxIndexFiles(plan SitePlan) string {
 }
 
 func renderNginxServerControls(plan SitePlan) string {
-	var lines []string
+	// Enforce this before nested PHP or application locations can override the
+	// outer hidden-file regex. The challenge location validates its own tokens.
+	lines := []string{`    if ($uri ~ "^/(?![.]well-known/acme-challenge/[A-Za-z0-9_-]+$)(?:[^/]+/)*[.]") { return 403; }`}
 	if plan.SiteID > 0 {
 		lines = append(lines, "    include "+plan.NginxProtectedConfig+";")
 		lines = append(lines, "    include "+plan.NginxApplicationConfig+";")
 	}
 	preferred := strings.ToLower(strings.TrimSpace(plan.Limits.PreferredDomain))
+	redirectHost, targetHost := "", ""
 	if preferred == "www" && !strings.HasPrefix(plan.Domain, "www.") {
-		lines = append(lines, fmt.Sprintf("    if ($host = %s) { return 301 $scheme://www.%s$request_uri; }", plan.Domain, plan.Domain))
+		redirectHost, targetHost = plan.Domain, "www."+plan.Domain
 	}
 	if (preferred == "root" || preferred == "non-www") && !strings.HasPrefix(plan.Domain, "www.") {
-		lines = append(lines, fmt.Sprintf("    if ($host = www.%s) { return 301 $scheme://%s$request_uri; }", plan.Domain, plan.Domain))
+		redirectHost, targetHost = "www."+plan.Domain, plan.Domain
+	}
+	if redirectHost != "" {
+		// Server rewrite rules run before location selection. Keep validation on
+		// the requested hostname even when normal traffic uses a canonical host.
+		lines = append(lines,
+			"    set $np_preferred_redirect 0;",
+			fmt.Sprintf("    if ($host = %s) { set $np_preferred_redirect 1; }", redirectHost),
+			`    if ($uri ~ "^/[.]well-known/acme-challenge/") { set $np_preferred_redirect 0; }`,
+			fmt.Sprintf("    if ($np_preferred_redirect = 1) { return 301 $scheme://%s$request_uri; }", targetHost),
+		)
 	}
 	if plan.Limits.RequestBodyLimitMB > 0 {
 		lines = append(lines, fmt.Sprintf("    client_max_body_size %dm;", plan.Limits.RequestBodyLimitMB))
@@ -421,12 +457,13 @@ func renderSuspendedNginxRuntimeVHost(plan SitePlan, certPath, keyPath string) s
     listen 80;
     listen [::]:80;
 %s    server_name %s;
+%s
     location / {
         add_header Retry-After "3600" always;
         return 503;
 	    }
 }
-`, tls, nginxServerNames(plan))
+`, tls, nginxServerNames(plan), renderNginxACMEChallenge(plan))
 }
 
 func RenderNginxRuntimeVHost(plan SitePlan, certPath, keyPath string, redirectHTTPS bool) string {
@@ -440,7 +477,8 @@ func RenderNginxRuntimeVHost(plan SitePlan, certPath, keyPath string, redirectHT
     listen 80;
     listen [::]:80;
     server_name %[1]s;
-    return 301 https://$host$request_uri;
+%[13]s
+    location / { return 301 https://$host$request_uri; }
 }
 
 server {
@@ -457,18 +495,19 @@ server {
 
     access_log %[3]s;
     error_log %[4]s;
+%[13]s
     location / {
 %[9]s
         try_files $uri $uri/ /index.php?$query_string;
     }
+    location ~ /\. { deny all; }
     location ~ \.php$ {
         include %[5]s;
 %[12]s
         fastcgi_pass unix:%[6]s;
     }
-    location ~ /\. { deny all; }
 }
-`, nginxServerNames(plan), plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath, renderNginxLocationControls(plan), nginxIndexFiles(plan), renderNginxServerControls(plan), renderNginxPHPControls(plan))
+`, nginxServerNames(plan), plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath, renderNginxLocationControls(plan), nginxIndexFiles(plan), renderNginxServerControls(plan), renderNginxPHPControls(plan), renderNginxACMEChallenge(plan))
 }
 
 func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplySiteRuntimeReq) (err error) {
@@ -1771,6 +1810,9 @@ func fillSitePathDefaults(paths SitePathConfig) SitePathConfig {
 	}
 	if paths.NginxProtectedDir == "" {
 		paths.NginxProtectedDir = defaults.NginxProtectedDir
+	}
+	if paths.ACMEChallengeRoot == "" {
+		paths.ACMEChallengeRoot = defaults.ACMEChallengeRoot
 	}
 	if paths.PHPFPMPoolDir == "" {
 		paths.PHPFPMPoolDir = defaults.PHPFPMPoolDir

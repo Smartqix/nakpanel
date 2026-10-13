@@ -123,6 +123,7 @@ func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueC
 	}
 
 	plan, err := NewSitePlan(types.CreateSiteReq{
+		SiteID:        req.SiteID,
 		Username:      req.Username,
 		Domain:        req.Domain,
 		PHPVersion:    req.PHPVersion,
@@ -131,6 +132,10 @@ func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueC
 	}, p.paths)
 	if err != nil {
 		return types.IssueCertResult{}, err
+	}
+	plan, previousCert, previousKey, redirect, suspended, err := existingCertificateRuntime(plan)
+	if err != nil {
+		return types.IssueCertResult{}, fmt.Errorf("resolve certificate hosting runtime: %w", err)
 	}
 
 	certDir := filepath.Join(p.certRoot, req.Domain)
@@ -159,9 +164,24 @@ func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueC
 		if p.acmeIssuer == nil {
 			return types.IssueCertResult{}, errors.New("acme certificate issuer is not configured")
 		}
+		// Upgrade legacy vhosts before the CA visits the HTTP-01 verification URL.
+		if err := writeFileAtomic(plan.NginxConfig, []byte(renderCertificateRuntime(plan, previousCert, previousKey, redirect, suspended)), plan.FileMode); err != nil {
+			return types.IssueCertResult{}, fmt.Errorf("prepare nginx ACME route: %w", err)
+		}
+		if err := ensureSymlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
+			return types.IssueCertResult{}, err
+		}
+		if p.nginxTester != nil {
+			if err := p.nginxTester.TestNginxConfig(ctx); err != nil {
+				return types.IssueCertResult{}, err
+			}
+		}
+		if err := p.reloader.ReloadService(ctx, "nginx"); err != nil {
+			return types.IssueCertResult{}, err
+		}
 		result, err := p.acmeIssuer.Issue(ctx, ACMEIssueRequest{
 			Domain:   req.Domain,
-			Docroot:  plan.Docroot,
+			Docroot:  plan.ACMEWebroot,
 			CertPath: certPath,
 			KeyPath:  keyPath,
 		})
@@ -176,7 +196,7 @@ func (p *CertificateProvisioner) IssueCert(ctx context.Context, req types.IssueC
 		expiresAt = result.ExpiresAt
 	}
 
-	if err := writeFileAtomic(plan.NginxConfig, []byte(RenderNginxTLSVHost(plan, certPath, keyPath)), plan.FileMode); err != nil {
+	if err := writeFileAtomic(plan.NginxConfig, []byte(renderCertificateRuntime(plan, certPath, keyPath, redirect, suspended)), plan.FileMode); err != nil {
 		return types.IssueCertResult{}, fmt.Errorf("write nginx tls site config: %w", err)
 	}
 	if err := ensureSymlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
@@ -206,6 +226,7 @@ func (p *CertificateProvisioner) InstallCustomCert(ctx context.Context, req type
 	defer siteConfigMutationMu.Unlock()
 
 	normalized := NormalizeIssueCertRequest(types.IssueCertReq{
+		SiteID:   req.SiteID,
 		Username: req.Username, Domain: req.Domain, PHPVersion: req.PHPVersion,
 		SharedAccount: req.SharedAccount, Limits: req.Limits, Issuer: types.CertIssuerLocalSelfSigned,
 	})
@@ -225,11 +246,15 @@ func (p *CertificateProvisioner) InstallCustomCert(ctx context.Context, req type
 		return types.InstallCustomCertResult{}, err
 	}
 	plan, err := NewSitePlan(types.CreateSiteReq{
-		Username: normalized.Username, Domain: normalized.Domain, PHPVersion: normalized.PHPVersion,
+		SiteID: normalized.SiteID, Username: normalized.Username, Domain: normalized.Domain, PHPVersion: normalized.PHPVersion,
 		SharedAccount: normalized.SharedAccount, Limits: normalized.Limits,
 	}, p.paths)
 	if err != nil {
 		return types.InstallCustomCertResult{}, err
+	}
+	plan, _, _, redirect, suspended, err := existingCertificateRuntime(plan)
+	if err != nil {
+		return types.InstallCustomCertResult{}, fmt.Errorf("resolve certificate hosting runtime: %w", err)
 	}
 	certDir := filepath.Join(p.certRoot, normalized.Domain)
 	certPath := filepath.Join(certDir, "fullchain.pem")
@@ -262,7 +287,7 @@ func (p *CertificateProvisioner) InstallCustomCert(ctx context.Context, req type
 	if err = writeFileAtomic(keyPath, validated.PrivateKeyPEM, 0o600); err != nil {
 		return types.InstallCustomCertResult{}, fmt.Errorf("write custom private key: %w", err)
 	}
-	if err = writeFileAtomic(plan.NginxConfig, []byte(RenderNginxTLSVHost(plan, certPath, keyPath)), plan.FileMode); err != nil {
+	if err = writeFileAtomic(plan.NginxConfig, []byte(renderCertificateRuntime(plan, certPath, keyPath, redirect, suspended)), plan.FileMode); err != nil {
 		return types.InstallCustomCertResult{}, fmt.Errorf("write nginx TLS site config: %w", err)
 	}
 	if err = ensureSymlink(plan.NginxConfig, plan.NginxEnabled); err != nil {
@@ -311,20 +336,21 @@ func RenderNginxTLSVHost(plan SitePlan, certPath, keyPath string) string {
 
     access_log %[3]s;
     error_log %[4]s;
+%[13]s
 
     location / {
 %[9]s
         try_files $uri $uri/ /index.php?$query_string;
     }
 
+    location ~ /\. {
+        deny all;
+    }
+
     location ~ \.php$ {
         include %[5]s;
 %[12]s
         fastcgi_pass unix:%[6]s;
-    }
-
-    location ~ /\. {
-        deny all;
     }
 }
 
@@ -342,10 +368,15 @@ server {
 
     access_log %[3]s;
     error_log %[4]s;
+%[13]s
 
     location / {
 %[9]s
         try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    location ~ /\. {
+        deny all;
     }
 
     location ~ \.php$ {
@@ -353,12 +384,8 @@ server {
 %[12]s
         fastcgi_pass unix:%[6]s;
     }
-
-    location ~ /\. {
-        deny all;
-    }
 }
-`, nginxServerNames(plan), plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath, renderNginxLocationControls(plan), nginxIndexFiles(plan), renderNginxServerControls(plan), renderNginxPHPControls(plan))
+`, nginxServerNames(plan), plan.Docroot, plan.NginxAccessLog, plan.NginxErrorLog, plan.NginxSnippet, plan.PHPFPMSocket, certPath, keyPath, renderNginxLocationControls(plan), nginxIndexFiles(plan), renderNginxServerControls(plan), renderNginxPHPControls(plan), renderNginxACMEChallenge(plan))
 }
 
 func (p *CertificateProvisioner) writeSelfSignedCertificate(domain, certPath, keyPath string) (time.Time, error) {

@@ -340,6 +340,7 @@ func (w *IssueCertWorker) Work(ctx context.Context, job *river.Job[IssueCertArgs
 	}
 
 	resp, err := w.agent.IssueCert(ctx, types.IssueCertReq{
+		SiteID:        job.Args.SiteID,
 		Username:      job.Args.Username,
 		Domain:        job.Args.Domain,
 		PHPVersion:    job.Args.PHPVersion,

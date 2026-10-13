@@ -1684,6 +1684,57 @@
     });
   }
 
+  function initTLSRefresh() {
+    var panel = document.querySelector('[data-np-tls-workspace]');
+    if (!panel || panel.dataset.npTlsState !== 'pending') return;
+    var statusURL = window.location.href;
+    var attempts = 0;
+    var submitting = false;
+    // Progressive form handlers run first; only native navigation stops polling.
+    document.addEventListener('submit', function (event) {
+      if (!event.defaultPrevented && panel.contains(event.target) && event.target.method.toLowerCase() === 'post') submitting = true;
+    });
+    function busy() {
+      return document.hidden || document.querySelector('dialog[open], [data-np-dirty-guard][data-np-dirty="true"]');
+    }
+    function current() {
+      return !submitting && document.querySelector('[data-np-tls-workspace]') === panel && window.location.href === statusURL;
+    }
+    async function refresh() {
+      if (!current()) return;
+      if (++attempts > 60) {
+        var feedback = panel.querySelector('[data-np-tls-feedback]');
+        if (feedback) {
+          feedback.hidden = false;
+          feedback.textContent = 'Certificate request is still pending. Automatic status checks have stopped.';
+        }
+        return;
+      }
+      if (!busy()) {
+        var controller = new AbortController();
+        var timeout = window.setTimeout(function () { controller.abort(); }, 10000);
+        try {
+          var response = await window.fetch(statusURL, {method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: {Accept: 'text/html'}, signal: controller.signal});
+          if (response.redirected || response.status === 401 || response.status === 403 || response.status === 404) return;
+          if (!response.ok) throw new Error('TLS status is temporarily unavailable.');
+          var page = new DOMParser().parseFromString(await response.text(), 'text/html');
+          var next = page.querySelector('[data-np-tls-workspace]');
+          if (!current() || !next || next.dataset.npTlsSiteId !== panel.dataset.npTlsSiteId) return;
+          if (next.dataset.npTlsState !== 'pending' && !busy()) {
+            window.location.replace(statusURL);
+            return;
+          }
+        } catch (_) {
+          if (!current()) return;
+        } finally {
+          window.clearTimeout(timeout);
+        }
+      }
+      window.setTimeout(refresh, 5000);
+    }
+    window.setTimeout(refresh, 600);
+  }
+
   function databaseActionForm(action, databaseID, label) {
     var form = document.createElement("form");
     form.method = "post";
@@ -3212,6 +3263,7 @@
   each("[data-np-file-manager]", document, updateFileSelection);
   filterSettings("");
   initializeDirtyForms();
+  initTLSRefresh();
   initializeSubscriptionTabs();
   initializeDNSFilters();
   initializeDNSSettingsTabs();

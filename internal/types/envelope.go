@@ -356,6 +356,7 @@ const (
 )
 
 type IssueCertReq struct {
+	SiteID        int64              `json:"site_id,omitempty"`
 	Username      string             `json:"username"`
 	Domain        string             `json:"domain"`
 	PHPVersion    string             `json:"php_version"`
@@ -375,6 +376,7 @@ type IssueCertResult struct {
 // InstallCustomCertReq is sent only across the privileged local agent socket.
 // River job arguments must contain a staging path instead of these PEM values.
 type InstallCustomCertReq struct {
+	SiteID         int64              `json:"site_id,omitempty"`
 	Username       string             `json:"username"`
 	Domain         string             `json:"domain"`
 	PHPVersion     string             `json:"php_version"`

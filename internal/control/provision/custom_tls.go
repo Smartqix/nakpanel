@@ -215,6 +215,7 @@ func (w *InstallCustomCertWorker) Work(ctx context.Context, job *river.Job[Insta
 		return errors.New("agent custom certificate client is not configured")
 	}
 	response, err := w.agent.InstallCustomCert(ctx, types.InstallCustomCertReq{
+		SiteID:   job.Args.SiteID,
 		Username: job.Args.Username, Domain: job.Args.Domain, PHPVersion: job.Args.PHPVersion,
 		SharedAccount: job.Args.SharedAccount, Limits: job.Args.Limits,
 		CertificatePEM: payload.CertificatePEM, PrivateKeyPEM: payload.PrivateKeyPEM, ChainPEM: payload.ChainPEM,

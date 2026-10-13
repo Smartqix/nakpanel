@@ -683,6 +683,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		applyCertificateQueuedNotice(r, route, view.DetailID, &data)
 		if route == "site-detail" && view.Tab == "applications" {
 			if !s.loadPHPApplicationWorkspace(w, r, user, view.DetailID, &view) {
 				return
@@ -899,6 +900,7 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
+	applyCertificateQueuedNotice(r, page, detailID, &data)
 	tab := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tab")))
 	if !validWorkspaceTab(page, tab) {
 		tab = "overview"
@@ -3474,7 +3476,7 @@ var noticeCatalogue = map[string]noticeEntry{
 	"database-queued":          {"Database creation queued. Its status updates automatically.", dashboard.NoticeSuccess},
 	"database-select":          {"Select a database to open phpMyAdmin.", dashboard.NoticeSuccess},
 	"database-password-queued": {"Password change queued. Wait for Ready to connect before updating your application.", dashboard.NoticeSuccess},
-	"certificate-queued":       {"Certificate requested. The status updates when the issuer responds.", dashboard.NoticeSuccess},
+	"certificate-queued":       {"Certificate request queued. Check the domain's SSL/TLS status for the result.", dashboard.NoticeInfo},
 	"backup-queued":            {"Backup queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
 	"restore-queued":           {"Restore queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
 	"webmail-queued":           {"Webmail configuration queued.", dashboard.NoticeSuccess},

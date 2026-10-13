@@ -114,3 +114,29 @@ func TestManagedPHPResumeRejectsUnrecognizedSuspendedVhosts(t *testing.T) {
 		})
 	}
 }
+
+func TestManagedPHPResumeAcceptsExactLegacySuspendedTemplate(t *testing.T) {
+	for _, tls := range []bool{false, true} {
+		t.Run(map[bool]string{false: "http", true: "tls"}[tls], func(t *testing.T) {
+			p, spec := newPHPApplicationTestProvisioner(t, &scriptedPHPAppRunner{}, nil)
+			config := "server {\n    listen 80;\n    listen [::]:80;\n"
+			if tls {
+				config += "    listen 443 ssl;\n    listen [::]:443 ssl;\n    ssl_certificate /certs/fullchain.pem;\n    ssl_certificate_key /certs/privkey.pem;\n"
+				spec.HTTPSRedirect = true
+			}
+			config += "    server_name example.test;\n    location / {\n        add_header Retry-After \"3600\" always;\n        return 503;\n\t    }\n}\n"
+			root := filepath.Join(p.homeRoot, spec.Username, "domains", spec.Domain, ".nakpanel", "releases", "22", "public")
+			socket := filepath.Join(p.phpRunDir, "site-7.sock")
+			active, err := p.resumeSuspendedManagedNginx(spec, []byte(config), root, socket)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(active), "root "+root+";") || !strings.Contains(string(active), "fastcgi_pass unix:"+socket+";") || strings.Contains(string(active), "return 503;") {
+				t.Fatalf("legacy resume lost the managed runtime: %s", active)
+			}
+			if _, err := p.resumeSuspendedManagedNginx(spec, []byte(config+"# unexpected mutation\n"), root, socket); err == nil {
+				t.Fatal("accepted a modified legacy template")
+			}
+		})
+	}
+}

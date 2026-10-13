@@ -89,7 +89,8 @@ func TestInstallCustomCertRollsBackOnNginxTestFailure(t *testing.T) {
 	certRoot := filepath.Join(tmp, "certs")
 	certPath := filepath.Join(certRoot, "example.test", "fullchain.pem")
 	keyPath := filepath.Join(certRoot, "example.test", "privkey.pem")
-	for path, data := range map[string]string{plan.NginxConfig: "old nginx", certPath: "old cert", keyPath: "old key"} {
+	oldNginx := RenderNginxRuntimeVHost(plan, certPath, keyPath, true)
+	for path, data := range map[string]string{plan.NginxConfig: oldNginx, certPath: "old cert", keyPath: "old key"} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -109,7 +110,7 @@ func TestInstallCustomCertRollsBackOnNginxTestFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("InstallCustomCert returned nil error")
 	}
-	for path, want := range map[string]string{plan.NginxConfig: "old nginx", certPath: "old cert", keyPath: "old key"} {
+	for path, want := range map[string]string{plan.NginxConfig: oldNginx, certPath: "old cert", keyPath: "old key"} {
 		got, readErr := os.ReadFile(path)
 		if readErr != nil || string(got) != want {
 			t.Fatalf("rollback %s = %q, %v; want %q", path, got, readErr, want)
@@ -132,7 +133,8 @@ func TestInstallCustomCertRollsBackOnReloadFailure(t *testing.T) {
 	certRoot := filepath.Join(tmp, "certs")
 	certPath := filepath.Join(certRoot, "example.test", "fullchain.pem")
 	keyPath := filepath.Join(certRoot, "example.test", "privkey.pem")
-	for path, data := range map[string]string{plan.NginxConfig: "old nginx", certPath: "old cert", keyPath: "old key"} {
+	oldNginx := RenderNginxRuntimeVHost(plan, certPath, keyPath, true)
+	for path, data := range map[string]string{plan.NginxConfig: oldNginx, certPath: "old cert", keyPath: "old key"} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -152,7 +154,7 @@ func TestInstallCustomCertRollsBackOnReloadFailure(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "injected reload failure") {
 		t.Fatalf("reload failure error = %v", err)
 	}
-	for path, want := range map[string]string{plan.NginxConfig: "old nginx", certPath: "old cert", keyPath: "old key"} {
+	for path, want := range map[string]string{plan.NginxConfig: oldNginx, certPath: "old cert", keyPath: "old key"} {
 		got, readErr := os.ReadFile(path)
 		if readErr != nil || string(got) != want {
 			t.Fatalf("rollback %s = %q, %v; want %q", path, got, readErr, want)

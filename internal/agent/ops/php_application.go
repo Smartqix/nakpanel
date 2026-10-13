@@ -1730,7 +1730,11 @@ func (p *PHPApplicationProvisioner) resumeSuspendedManagedNginx(spec types.PHPAp
 	}
 	// A 503 response alone is not identity proof. Only the complete deterministic
 	// Nakpanel template for this domain and policy may be replaced on resume.
-	if !bytes.Equal(config, []byte(renderSuspendedNginxRuntimeVHost(plan, cert, key))) {
+	expected := renderSuspendedNginxRuntimeVHost(plan, cert, key)
+	// Before the ACME exception was introduced, the same deterministic template
+	// went directly from server_name to location /. Accept only that exact form.
+	legacy := strings.Replace(expected, renderNginxACMEChallenge(plan)+"\n", "", 1)
+	if !bytes.Equal(config, []byte(expected)) && !bytes.Equal(config, []byte(legacy)) {
 		return nil, errors.New("existing nginx site configuration is not a recognized Nakpanel PHP vhost")
 	}
 	if spec.HTTPSRedirect && cert == "" {

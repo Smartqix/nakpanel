@@ -201,8 +201,8 @@ func TestACMECertificateProvisionerUsesIssuerAndWritesTLSVHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("IssueCert returned error: %v", err)
 	}
-	if issuer.req.Domain != "example.test" || issuer.req.Docroot != filepath.Join(paths.HomeRoot, "npdemo", "domains", "example.test", "public_html") {
-		t.Fatalf("ACME request = %#v, want domain and docroot", issuer.req)
+	if issuer.req.Domain != "example.test" || issuer.req.Docroot != "/var/lib/nakpanel-acme/domains/example.test" {
+		t.Fatalf("ACME request = %#v, want agent-owned challenge webroot outside mutable website content", issuer.req)
 	}
 	if issuer.req.CertPath != issuer.result.CertPath || issuer.req.KeyPath != issuer.result.KeyPath {
 		t.Fatalf("ACME request paths = %#v, want cert/key result paths", issuer.req)
@@ -217,7 +217,7 @@ func TestACMECertificateProvisionerUsesIssuerAndWritesTLSVHost(t *testing.T) {
 	if !strings.Contains(string(nginx), "ssl_certificate "+issuer.result.CertPath+";") {
 		t.Fatalf("nginx config missing ACME cert path:\n%s", nginx)
 	}
-	if got, want := reloader.services, []string{"nginx"}; !slices.Equal(got, want) {
+	if got, want := reloader.services, []string{"nginx", "nginx"}; !slices.Equal(got, want) {
 		t.Fatalf("reloaded services = %#v, want %#v", got, want)
 	}
 }
@@ -263,7 +263,7 @@ func TestACMECertificateProvisionerRejectsInvalidIssuerResult(t *testing.T) {
 	if !strings.Contains(err.Error(), "missing certificate path") {
 		t.Fatalf("IssueCert error = %q, want missing certificate path", err.Error())
 	}
-	if got, want := reloader.services, []string{"nginx"}; !slices.Equal(got, want) {
+	if got, want := reloader.services, []string{"nginx", "nginx"}; !slices.Equal(got, want) {
 		t.Fatalf("rollback reloads = %#v, want %#v", got, want)
 	}
 	if _, err := os.Stat(filepath.Join(paths.NginxAvailableDir, "example.test.conf")); !os.IsNotExist(err) {

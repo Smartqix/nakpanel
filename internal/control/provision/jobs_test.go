@@ -447,12 +447,24 @@ func TestIssueCertWorkerCallsAgentAndMarksTLSActive(t *testing.T) {
 		t.Fatalf("Work returned error: %v", err)
 	}
 	wantReq := types.IssueCertReq{
+		SiteID:        7,
 		Username:      "npdemo",
 		Domain:        "example.test",
 		PHPVersion:    "8.3",
 		Issuer:        types.CertIssuerLocalSelfSigned,
 		SharedAccount: true,
 		Limits:        types.SiteResourceLimits{RequestRatePerSecond: 5, MaxConnections: 20},
+	}
+	encodedRequest, err := json.Marshal(client.req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var requestFields map[string]any
+	if err := json.Unmarshal(encodedRequest, &requestFields); err != nil {
+		t.Fatal(err)
+	}
+	if requestFields["site_id"] != float64(7) {
+		t.Fatalf("agent certificate request lost the dedicated PHP site identity: %s", encodedRequest)
 	}
 	if client.req != wantReq {
 		t.Fatalf("IssueCert request = %#v, want %#v", client.req, wantReq)
