@@ -62,6 +62,8 @@ type WorkspaceView struct {
 	SiteCreateTitle      string
 	SiteCreateEmail      string
 	SiteCreated          *SiteCreationResult
+	SiteSetup            *types.SiteSetupStatus
+	SiteSetupTimedOut    bool
 	DetailID             int64
 	ContainerID          int64
 	SelectedSubscription int64
@@ -92,6 +94,30 @@ type WorkspaceView struct {
 	WebStatistics        *webstatistics.Workspace
 	StatisticsSettings   *webstatistics.Settings
 	PHPRuntimeInventory  *types.RuntimeCapabilities
+}
+
+func setupStatusURL(status types.SiteSetupStatus, view WorkspaceView) string {
+	if status.SiteID <= 0 {
+		return ""
+	}
+	return workspacePath(view, "/sites/"+formatJobID(status.SiteID)+"/setup/status")
+}
+
+func setupStepLabel(state string) string {
+	switch state {
+	case "active", "in_sync":
+		return "Done"
+	case "failed":
+		return "Failed"
+	case "external":
+		return "External DNS"
+	case "missing":
+		return "Needs attention"
+	case "none", "not_requested":
+		return "Not requested"
+	default:
+		return "Waiting"
+	}
 }
 
 type SiteCreationResult struct {

@@ -2227,7 +2227,7 @@ func TestAddSubdomainUsesParentAndLabelOnly(t *testing.T) {
 	if rec.Code != http.StatusSeeOther || creator.parentSiteID != 9 || creator.label != "blog" || len(creator.requests) != 1 || creator.requests[0].PHPVersion != "" {
 		t.Fatalf("subdomain status=%d parent=%d label=%q requests=%#v body=%q", rec.Code, creator.parentSiteID, creator.label, creator.requests, rec.Body.String())
 	}
-	if got := rec.Header().Get("Location"); got != "/sites/9?tab=overview&notice=subdomain-queued" {
+	if got := rec.Header().Get("Location"); got != "/sites/7/setup" {
 		t.Fatalf("redirect = %q", got)
 	}
 }

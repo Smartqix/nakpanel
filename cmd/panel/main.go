@@ -200,6 +200,7 @@ func (q dashboardQuerier) ListSites(ctx context.Context) ([]store.Site, error) {
 			HttpsRedirect: row.HttpsRedirect, DesiredHttpsRedirect: row.DesiredHttpsRedirect,
 			SettingsStatus: row.SettingsStatus, SettingsError: row.SettingsError, TlsAutoRenew: row.TlsAutoRenew,
 			SystemAccountID: row.SystemAccountID, DocumentRoot: row.DocumentRoot,
+			ParentSiteID: row.ParentSiteID, DnsZoneMode: row.DnsZoneMode,
 		})
 	}
 	return items, nil

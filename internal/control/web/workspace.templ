@@ -18,6 +18,9 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<meta name="nakpanel-csrf" content={ view.CSRFToken }/>
+			if view.Route=="site-setup" && view.SiteSetup!=nil && view.SiteSetup.State=="pending" && !view.SiteSetupTimedOut {
+				<noscript><meta http-equiv="refresh" content="3"/></noscript>
+			}
 			<title>{ title }</title>
 			<link rel="stylesheet" href="/assets/app.css"/>
 			<link rel="stylesheet" href="/assets/git.css"/>
@@ -73,7 +76,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 				<span class="np-nav-label">Hosting services</span>
 				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), "")
 				@navRoute("/resellers", "Resellers", "users", routeActive(view.Route, "resellers", "reseller-detail"), "")
-				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit"), sitesNeedingAttention(data.Sites), SeverityWarning)
+				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup"), sitesNeedingAttention(data.Sites), SeverityWarning)
 				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), "")
 				@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new", "reseller-plan-new"), "")
 				<span class="np-nav-label">Server management</span>
@@ -82,7 +85,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 			} else if user.Role == auth.RoleReseller && view.SupportCustomerID == 0 {
 				<span class="np-nav-label">Hosting services</span>
 				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), "")
-				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit"), sitesNeedingAttention(data.Sites), SeverityWarning)
+				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup"), sitesNeedingAttention(data.Sites), SeverityWarning)
 				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), "")
 		@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new"), "")
 				<span class="np-nav-label">Account</span>
@@ -91,7 +94,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 				@navRoute("/my-resources", "My Resources", "activity", routeActive(view.Route, "my-resources"), "")
 			} else {
 				<span class="np-nav-label">Hosting services</span>
-				@navAlert(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit"), sitesNeedingAttention(sitesForCustomer(data.Sites, view.SupportCustomerID)), SeverityWarning)
+				@navAlert(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup"), sitesNeedingAttention(sitesForCustomer(data.Sites, view.SupportCustomerID)), SeverityWarning)
 				@navRoute(workspacePath(view, "/mail"), "Mail", "mail", routeActive(view.Route, "mail"), "")
 				@navRoute(workspacePath(view, "/backups"), "Backups", "archive", routeActive(view.Route, "backups"), "")
 				<span class="np-nav-label">Account</span>
@@ -192,6 +195,8 @@ templ routedContent(user auth.SessionUser, data dashboard.Data, actions Dashboar
 			@siteCreatePage(activeSubscriptions(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID)), actions, view)
 		case "site-detail":
 			@routedSiteDetail(user, data, actions, view)
+		case "site-setup":
+			@routedSiteSetup(view)
 		case "site-files":
 			@routedFileManager(view)
 		case "site-file-edit":
@@ -534,7 +539,8 @@ templ tlsCell(item dashboard.Site) {
 templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
 	if item, ok := siteByID(data.Sites, view.DetailID); ok {
 		if subscription, hasSubscription := subscriptionForSite(data.Subscriptions, item); hasSubscription {
-			@pageHead("Website", item.Domain, subscription.SubscriptionName + " · " + subscription.PlanName) {
+			{{ kind:="Website"; if item.ParentSiteID>0 {kind="Subdomain"} }}
+			@pageHead(kind, item.Domain, subscription.SubscriptionName + " · " + subscription.PlanName) {
 				if actions.CanCreateSite && subscription.Status == "active" && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
 					<button type="button" data-np-dialog-open={ "subdomain-dialog-"+formatJobID(item.ID) }>@icon("plus")<span>Add subdomain</span></button>
 				}
@@ -3803,8 +3809,10 @@ templ routedSubdomainDialog(parent dashboard.Site, subscription types.Subscripti
 				<p class="np-gate is-blocked">The subscription default PHP version is not available on this server. Update the plan or PHP installation first.</p>
 			}
 			<p class="np-gate" data-np-subdomain-gate aria-live="polite"></p>
+			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites")) } data-np-subdomain-check-existing hidden>Check Websites</a>
 			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit disabled?={ !stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion)) }>Create subdomain</button></div>
 		</form>
+		@siteSetupProgress(types.SiteSetupStatus{State:"pending",Message:"Creating subdomain."},view,true)
 	</dialog>
 }
 

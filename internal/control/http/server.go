@@ -349,6 +349,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /tools-settings/reauthenticate", s.handleServerReauthenticate)
 	mux.HandleFunc("POST /sites", s.handleCreateSite)
 	mux.HandleFunc("POST /sites/{id}/subdomains", s.handleCreateSubdomain)
+	mux.HandleFunc("GET /sites/{id}/setup/status", s.handleSiteSetupStatus)
+	mux.HandleFunc("GET /sites/{id}/setup", s.handleSiteSetupPage)
+	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}/setup/status", s.handleSiteSetupStatus)
+	mux.HandleFunc("GET /support/customers/{customerID}/sites/{id}/setup", s.handleSiteSetupPage)
 	mux.HandleFunc("POST /websites", s.handleCreateWebsite)
 	mux.HandleFunc("POST /databases", s.handleCreateDatabase)
 	s.registerDatabaseWorkspaceRoutes(mux)
@@ -1548,6 +1552,24 @@ func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	label := strings.ToLower(strings.TrimSpace(r.Form.Get("label")))
+	if strings.TrimSpace(r.Form.Get("support_customer_id")) != "" {
+		data, loadErr := s.loadDashboard(r.Context(), user)
+		if loadErr != nil {
+			writeSPAError(w, http.StatusServiceUnavailable, "Could not verify support scope.")
+			return
+		}
+		var parent dashboard.Site
+		for _, site := range data.Sites {
+			if site.ID == parentID {
+				parent = site
+				break
+			}
+		}
+		if parent.ID == 0 || !databaseSupportScopeAllowed(r, user, parent.CustomerID) {
+			http.NotFound(w, r)
+			return
+		}
+	}
 	siteID, err := creator.CreateSubdomainFor(r.Context(), user, parentID, label, "")
 	if err != nil {
 		if errors.Is(err, provision.ErrForbidden) {
@@ -1562,12 +1584,13 @@ func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.recordAudit(r.Context(), user, 0, 0, "site.subdomain_queued", "site", siteID, map[string]any{"parent_site_id": parentID, "label": label})
-	redirect := fmt.Sprintf("/sites/%d?tab=overview&notice=subdomain-queued", parentID)
+	progress := supportRedirectPath(r, user, fmt.Sprintf("/sites/%d/setup", siteID))
+	redirect := supportRedirectPath(r, user, fmt.Sprintf("/sites/%d?tab=overview&notice=subdomain-created", siteID))
 	if wantsSPAJSON(r) {
-		writeSPAJSON(w, http.StatusAccepted, map[string]any{"ok": true, "site_id": siteID, "redirect": redirect, "notice": "Subdomain provisioning queued."})
+		writeSPAJSON(w, http.StatusAccepted, map[string]any{"ok": true, "site_id": siteID, "redirect": redirect, "setup_url": progress, "status_url": progress + "/status", "notice": "Creating subdomain."})
 		return
 	}
-	http.Redirect(w, r, redirect, http.StatusSeeOther)
+	http.Redirect(w, r, progress, http.StatusSeeOther)
 }
 
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
@@ -3472,7 +3495,8 @@ type noticeEntry struct {
 var noticeCatalogue = map[string]noticeEntry{
 	// Provisioning
 	"site-queued":              {"Website queued. Provisioning usually completes within a minute.", dashboard.NoticeSuccess},
-	"subdomain-queued":         {"Subdomain queued. Hosting, DNS, and TLS status will appear as setup progresses.", dashboard.NoticeSuccess},
+	"subdomain-queued":         {"Subdomain setup is underway. Open its setup page to check progress.", dashboard.NoticeInfo},
+	"subdomain-created":        {"Subdomain created successfully.", dashboard.NoticeSuccess},
 	"database-queued":          {"Database creation queued. Its status updates automatically.", dashboard.NoticeSuccess},
 	"database-select":          {"Select a database to open phpMyAdmin.", dashboard.NoticeSuccess},
 	"database-password-queued": {"Password change queued. Wait for Ready to connect before updating your application.", dashboard.NoticeSuccess},

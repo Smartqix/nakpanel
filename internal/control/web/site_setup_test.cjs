@@ -1,0 +1,84 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync(__dirname + '/static/app.js', 'utf8');
+
+function harness(responses, options = {}) {
+  const start = source.indexOf('  function renderSiteSetupProgress(');
+  const end = source.indexOf('\n  function submitSite(', start);
+  assert(start >= 0 && end > start, 'shared setup tracker exists');
+  const nodes = {};
+  const node = selector => nodes[selector] ||= {dataset:{},hidden:false,textContent:'',setAttribute(){},focus(){}};
+  let closed = false, now = 0, sequence = 0;
+  const timers = new Map(), requests = [], navigations = [];
+  const dialog = {open:true,addEventListener(name,fn){if(name === 'close') this.close = fn;},querySelector:node};
+  const panel = {dataset:{},isConnected:true,closest:()=>options.page ? null : dialog,querySelector:node,setAttribute(){}};
+  const context = vm.createContext({URL,AbortController,Date:{now:()=>now},document:{hidden:false,querySelector:()=>options.dirty ? {} : null},window:{location:{href:'https://panel.test/sites/1',origin:'https://panel.test',assign:url=>navigations.push(url)},setTimeout:(fn,delay)=>{timers.set(++sequence,{fn,delay});return sequence;},clearTimeout:id=>timers.delete(id),fetch:async (url,init)=>{requests.push({url,init});const response=responses.shift();if(response instanceof Error) throw response;return {ok:true,status:200,redirected:false,json:async()=>response,...response};}}});
+  vm.runInContext(source.slice(start,end),context);
+  const data={site_id:7,status_url:'/sites/7/setup/status',redirect:'/sites/7?tab=overview',setup_url:'/sites/7/setup'};
+  const begin=()=>context.trackSiteSetup(panel,data);
+  async function tick(){const entry=[...timers].find(([,timer])=>timer.delay<10000);assert(entry,'status timer scheduled');timers.delete(entry[0]);await entry[1].fn();}
+  return {begin,tick,panel,requests,navigations,nodes,timers,dialog,data,setTime:value=>{now=value;},close:()=>{closed=true;dialog.open=false;dialog.close?.();},get closed(){return closed;}};
+}
+
+test('queued setup waits and redirects only to the ready child',async()=>{
+  const h=harness([{ok:true,site_id:7,state:'pending',message:'Applying DNS',steps:[]},{ok:true,site_id:7,state:'ready',message:'Created',steps:[],redirect:'/sites/7?tab=overview'}]);
+  h.begin();assert.equal(h.navigations.length,0);await h.tick();assert.equal(h.navigations.length,0);await h.tick();assert.equal(new URL(h.navigations[0]).pathname,'/sites/7');assert(h.requests.every(r=>r.init.method==='GET'));
+});
+for(const state of ['failed','attention']) test(`${state} setup stops without redirect or resubmission`,async()=>{
+  const h=harness([{ok:true,site_id:7,state,message:'Review this step',steps:[]}]);h.begin();await h.tick();assert.equal(h.panel.dataset.npSetupState,state);assert.equal(h.navigations.length,0);assert.equal(h.requests.length,1);assert.equal(h.timers.size,0);
+});
+test('temporary status failure retries GET without replaying creation',async()=>{
+  const h=harness([new Error('offline'),{ok:true,site_id:7,state:'ready',steps:[],redirect:'/sites/7?tab=overview'}]);h.begin();await h.tick();assert.equal(h.navigations.length,0);await h.tick();assert.equal(h.navigations.length,1);assert(h.requests.every(r=>r.init.method==='GET'));
+});
+test('five minute timeout stops polling and keeps background completion available',async()=>{
+  const h=harness([]);h.begin();h.setTime(300001);await h.tick();assert.equal(h.requests.length,0);assert.equal(h.navigations.length,0);assert.match(h.nodes['[data-np-setup-message]'].textContent,/background/i);assert.equal(h.timers.size,0);
+});
+test('closing the dialog cancels automatic navigation',async()=>{
+  const h=harness([]);h.begin();h.close();await h.tick();assert.equal(h.requests.length,0);assert.equal(h.navigations.length,0);
+});
+test('superseded setup timers cannot fetch or navigate',async()=>{
+  const h=harness([]);h.begin();h.panel.isConnected=false;await h.tick();assert.equal(h.requests.length,0);
+});
+test('ready setup does not discard unsaved settings',async()=>{
+  const h=harness([{ok:true,site_id:7,state:'ready',steps:[],redirect:'/sites/7?tab=overview'}],{dirty:true});h.begin();await h.tick();assert.equal(h.navigations.length,0);assert.equal(h.panel.dataset.npSetupState,'ready');
+});
+for(const status of [401,403,404]) test(`access change ${status} stops polling`,async()=>{
+  const h=harness([{ok:false,status}]);h.begin();await h.tick();assert.equal(h.navigations.length,0);assert.equal(h.timers.size,0);
+});
+test('cross-origin status URL is rejected',()=>{
+  const h=harness([]);h.data.status_url='https://elsewhere.test/sites/7/setup/status';h.begin();assert.equal(h.requests.length,0);assert.equal(h.timers.size,0);
+});
+test('wrong site result cannot redirect',async()=>{
+  const h=harness([{ok:true,site_id:9,state:'ready',steps:[],redirect:'/sites/9?tab=overview'}]);h.begin();await h.tick();assert.equal(h.navigations.length,0);assert.equal(h.timers.size,0);
+});
+
+function submissionHarness(payload, status=202) {
+  const start=source.indexOf('  function submitSite('), end=source.indexOf('\n  function updateV2CreateGate(',start);
+  let posts=0;const navigations=[],tracks=[];
+  const submit={disabled:false},gate={textContent:'',classList:{add(){}}},panel={hidden:true,querySelector:()=>({focus(){}})};
+  const dialog={querySelector:selector=>selector==='[data-np-setup-tracker]'?panel:{textContent:''}};
+  const form={dataset:{},hidden:false,action:'/sites/1/subdomains',matches:()=>true,closest:()=>dialog,querySelector:selector=>selector==='[data-np-create-submit]'?submit:gate};
+  const context=vm.createContext({FormData:class extends Array{constructor(){super();this.push(['label','blog']);}},URLSearchParams,setFormBusy(){},trackSiteSetup:(...args)=>tracks.push(args),window:{location:{assign:url=>navigations.push(url)},NakpanelUI:{fetch:async()=>{posts++;if(payload instanceof Error)throw payload;return {ok:status<400,status,text:async()=>typeof payload==='string'?payload:JSON.stringify(payload)};}}}});
+  vm.runInContext(source.slice(start,end),context);
+  return {submit:()=>context.submitSite(form),form,posts:()=>posts,navigations,tracks,gate};
+}
+test('accepted creation stays in its dialog and cannot POST twice',async()=>{
+  const h=submissionHarness({ok:true,site_id:7,status_url:'/sites/7/setup/status',redirect:'/sites/7'});
+  await h.submit();await h.submit();assert.equal(h.posts(),1);assert.equal(h.tracks.length,1);assert.equal(h.navigations.length,0);assert.equal(h.form.hidden,true);
+});
+test('accepted creation without a status URL cannot silently redirect or submit again',async()=>{
+  const h=submissionHarness({ok:true,site_id:7,redirect:'/sites/7'});
+  await h.submit();await h.submit();assert.equal(h.posts(),1);assert.equal(h.navigations.length,0);assert.match(h.gate.textContent,/check Websites/i);
+});
+for(const response of [new Error('connection lost'),'<html>Unexpected response</html>']) test('uncertain creation result cannot replay POST',async()=>{
+  const h=submissionHarness(response);await h.submit();await h.submit();assert.equal(h.posts(),1);assert.equal(h.navigations.length,0);assert.match(h.gate.textContent,/check Websites/i);
+});
+test('confirmed validation rejection preserves the ability to correct and submit',async()=>{
+  const h=submissionHarness({ok:false,error:'Invalid label'},400);await h.submit();await h.submit();assert.equal(h.posts(),2);assert.match(h.gate.textContent,/Invalid label/);
+});
+test('shared fetch HTTP validation errors allow correction while keeping network uncertainty locked',async()=>{
+  const error=new Error('Invalid label');error.status=400;error.payload={error:'Invalid label'};
+  const h=submissionHarness(error);await h.submit();await h.submit();assert.equal(h.posts(),2);assert.match(h.gate.textContent,/Invalid label/);
+});

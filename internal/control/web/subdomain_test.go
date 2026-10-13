@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -18,13 +19,27 @@ func TestSubdomainDialogKeepsParentAndSubscriptionServerSelected(t *testing.T) {
 	if err := routedSubdomainDialog(parent, subscription, capabilities, WorkspaceView{}).Render(context.Background(), &out); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`action="/sites/9/subdomains"`, `name="label"`, `data-np-subdomain-preview`, `example.test`, `1/2`, `PHP starts with`} {
+	for _, want := range []string{`action="/sites/9/subdomains"`, `name="label"`, `data-np-subdomain-preview`, `example.test`, `1/2`, `PHP starts with`, `data-np-setup-tracker`, `data-np-setup-background`, `data-np-setup-message`, `aria-live="polite"`} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("missing %q from subdomain dialog", want)
 		}
 	}
 	if strings.Contains(out.String(), `name="subscription_id"`) || strings.Contains(out.String(), `name="domain"`) || strings.Contains(out.String(), `name="php_version"`) {
 		t.Fatal("browser must not select subdomain ownership, full domain, or PHP before creation")
+	}
+}
+
+func TestChildDomainCannotOfferNestedSubdomainCreation(t *testing.T) {
+	data := dashboard.Data{Sites: []dashboard.Site{{ID: 1, Domain: "example.test"}, {ID: 7, Domain: "blog.example.test", ParentSiteID: 1, SubscriptionID: 20, Status: "active", DesiredStatus: "active"}}, Subscriptions: []types.SubscriptionSummary{{ID: 20, Status: "active"}}}
+	var out bytes.Buffer
+	if err := routedSiteDetail(auth.SessionUser{Role: auth.RoleAdmin}, data, DashboardActions{CanCreateSite: true}, WorkspaceView{DetailID: 7, Tab: "overview"}).Render(context.Background(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "Add subdomain") || strings.Contains(out.String(), "subdomain-dialog-7") {
+		t.Fatal("child offers nested subdomain creation")
+	}
+	if !strings.Contains(out.String(), "Parent domain:") || !strings.Contains(out.String(), `href="/sites/1"`) {
+		t.Fatal("child lost parent context")
 	}
 }
 

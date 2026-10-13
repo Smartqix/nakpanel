@@ -6594,3 +6594,24 @@
     .np-domain-card-actions { padding-left: 0; }
   }
 }
+
+@layer components {
+  .np-setup-tracker { padding: 20px 0; min-width: 0; }
+  .np-dialog .np-setup-tracker { padding: 20px 24px 0; }
+  .np-setup-heading { display: flex; align-items: center; gap: 10px; }
+  .np-setup-heading h3 { margin: 0; font-size: 18px; line-height: 1.4; }
+  .np-setup-heading [data-np-setup-spinner] { display: inline-flex; color: var(--np-primary); }
+  .np-setup-tracker[data-np-setup-state="pending"] [data-np-setup-spinner] { animation: np-setup-spin 1.2s linear infinite; }
+  .np-setup-message { font-size: 14px; line-height: 1.5; margin: 12px 0; overflow-wrap: anywhere; }
+  .np-setup-tracker[data-np-setup-state="failed"] .np-setup-message { color: #b42318; }
+  .np-setup-steps { list-style: none; padding: 0; margin: 12px 0; }
+  .np-setup-steps li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--np-border); font-size: 14px; }
+  .np-setup-steps strong { font-weight: 600; color: var(--np-muted); text-align: right; }
+  .np-setup-steps strong[data-state="active"] { color: #157347; }
+  .np-setup-steps strong[data-state="failed"] { color: #b42318; }
+  .np-setup-tracker > strong { display: block; margin-top: 8px; overflow-wrap: anywhere; }
+  .np-setup-tracker[hidden], .np-setup-tracker [hidden], .np-subdomain-dialog form[data-np-create-subdomain-form][hidden] { display: none !important; }
+  @keyframes np-setup-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .np-setup-tracker [data-np-setup-spinner] { animation: none !important; } }
+  @media (max-width: 600px) { .np-dialog .np-setup-tracker { padding: 16px 18px 0; } }
+}

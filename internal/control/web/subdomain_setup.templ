@@ -1,0 +1,40 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/types"
+)
+
+templ siteSetupProgress(status types.SiteSetupStatus, view WorkspaceView, dialog bool) {
+	{{ path := "/sites/"+formatJobID(status.SiteID) }}
+	{{ steps := status.Steps; if len(steps)==0 {steps=[]types.SiteSetupStep{{Code:"hosting",Label:"Hosting",State:"pending"},{Code:"dns",Label:"DNS",State:"pending"},{Code:"tls",Label:"SSL/TLS",State:"pending"}}} }}
+	<section class="np-setup-tracker" data-np-setup-tracker data-np-setup-site-id={ formatJobID(status.SiteID) } data-np-setup-state={ status.State } data-np-setup-status-url={ setupStatusURL(status,view) } data-np-setup-timed-out?={ view.SiteSetupTimedOut } data-np-setup-redirect={ workspacePath(view,path+"?tab=overview&notice=subdomain-created") } hidden?={ status.SiteID==0 }>
+		<div class="np-setup-heading"><span data-np-setup-spinner hidden?={ status.State!="pending" || view.SiteSetupTimedOut }>@icon("refresh-cw")</span><h3 data-np-setup-title>Subdomain setup</h3></div>
+		<strong data-np-setup-domain>{ status.Domain }</strong>
+		<p class="np-setup-message" data-np-setup-message role="status" aria-live="polite">{ status.Message }</p>
+		<ol class="np-setup-steps" aria-label="Setup progress">
+			for _,step:=range steps {
+				<li><span>{ step.Label }</span><strong data-np-setup-step={ step.Code }>{ setupStepLabel(step.State) }</strong></li>
+			}
+		</ol>
+		<p class="np-form-help">DNS configuration does not guarantee that public DNS propagation has finished.</p>
+		<div class="np-dialog-actions">
+			if dialog {
+				<button type="button" class="np-secondary-button" data-np-setup-background>Continue in background</button>
+			} else {
+				<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(status.ParentID))) }>Continue in background</a>
+			}
+			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,path+"/setup")) } data-np-setup-check hidden?={ status.State=="pending" && !view.SiteSetupTimedOut }>Check status again</a>
+			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,path+"?tab=overview")) } data-np-setup-view>Open subdomain</a>
+		</div>
+	</section>
+}
+
+templ routedSiteSetup(view WorkspaceView) {
+	if view.SiteSetup!=nil {
+		@pageHead("Subdomain",view.SiteSetup.Domain,"Setting up hosting and domain services.") { }
+		@siteSetupProgress(*view.SiteSetup,view,false)
+		if view.SiteSetupTimedOut {
+			<p class="np-callout" role="status">Setup is taking longer than expected. It continues in the background.</p>
+		}
+	}
+}
