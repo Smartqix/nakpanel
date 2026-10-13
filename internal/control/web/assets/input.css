@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Shared dialog rules stay unlayered so legacy workspace styles cannot turn
+   form grids back into inline rows or hide the primary action. */
+.np-routed { font-size: 14px; }
+.np-routed label, .np-routed input, .np-routed select, .np-routed textarea,
+.np-routed button, .np-routed p { font-size: 14px; letter-spacing: 0; }
+.np-routed input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+.np-routed select, .np-routed button:not(.np-icon-button) { min-height: 40px; }
+.np-routed .np-routed-page-head > button { align-items: center; display: inline-flex; gap: 8px; justify-content: center; width: auto; }
+.np-dialog { overscroll-behavior: contain; max-height: calc(100dvh - 40px); }
+.np-routed .np-dialog .np-dialog-head { background: var(--np-surface); padding: 20px 68px 20px 20px; position: sticky; top: 0; z-index: 7; }
+.np-routed .np-dialog .np-dialog-head h2 { font-size: 18px; line-height: 1.35; margin: 3px 0 0; }
+.np-routed .np-dialog .np-dialog-head p { font-size: 14px; line-height: 1.5; }
+.np-dialog .np-dialog-close { float: right; margin: 16px 16px -56px 0; position: sticky; right: auto; top: 16px; z-index: 8; }
+.np-dialog .np-dialog-close button, .np-dialog .np-dialog-head > button[data-np-dialog-close] { height: 40px; min-height: 40px; width: 40px; }
+.np-dialog .np-dialog-head > button[data-np-dialog-close] { right: 16px; top: 16px; }
+.np-dialog .np-dialog-form > label { min-width: 0; width: 100%; }
+.np-dialog .np-dialog-form > p, .np-dialog .np-dialog-form > pre,
+.np-dialog .np-dialog-form > .np-check { grid-column: 1 / -1; }
+.np-dialog .np-gate:empty, .np-dialog .np-notice:empty,
+.np-dialog [data-np-form-error]:empty { display: none; }
+.np-confirmation-dialog [data-np-confirmation-copy] { white-space: pre-line; }
+.np-dialog button:focus-visible, .np-dialog input:focus-visible,
+.np-dialog select:focus-visible, .np-dialog textarea:focus-visible { outline: 2px solid var(--np-primary); outline-offset: 2px; }
+@media (max-width: 760px) {
+  .np-dialog { max-height: calc(100dvh - 16px); }
+  .np-dialog .np-dialog-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
+  .np-dialog .np-dialog-form select, .np-dialog button { min-height: 44px; }
+  .np-dialog .np-dialog-close button, .np-dialog .np-dialog-head > button[data-np-dialog-close] { height: 44px; width: 44px; }
+  .np-dialog .np-dialog-actions > button { flex: 1 1 auto; justify-content: center; }
+  .np-routed .np-routed-page-head > button { width: 100%; }
+}
+
 @layer components {
   .np-list-table tr[data-subdomain] td:first-child { padding-left: 30px; }
   .np-domain-block[data-subdomain] { margin-left: 18px; }
@@ -2681,14 +2713,15 @@
   .np-dialog-head > button[data-np-dialog-close] { align-items: center; background: var(--np-surface); border: 1px solid var(--np-border); display: inline-flex; height: 30px; justify-content: center; padding: 0; position: absolute; right: 10px; top: 10px; width: 30px; }
   .np-dialog-close { position: absolute; right: 12px; top: 12px; }
   .np-dialog-close button { align-items: center; background: var(--np-surface); border-color: var(--np-border); color: var(--np-ink-soft); display: flex; font-size: 18px; height: 30px; justify-content: center; padding: 0; width: 30px; }
-  .np-dialog-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px; }
-  .np-dialog-form label:first-of-type { grid-column: 1 / -1; }
+  .np-dialog .np-dialog-form { align-items: start; display: grid; gap: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 20px; }
+  .np-dialog .np-dialog-form label:first-of-type { grid-column: 1 / -1; }
   .np-dialog-actions,
   .np-dialog-form .np-gate { grid-column: 1 / -1; }
-  .np-dialog-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .np-dialog .np-dialog-actions { align-items: center; background: var(--np-surface); border-top: 1px solid var(--np-border-soft); bottom: 0; display: flex; flex-wrap: wrap; gap: 10px; grid-column: 1 / -1; justify-content: flex-end; margin-top: 4px; padding: 16px 20px; position: sticky; width: 100%; z-index: 6; }
+  .np-dialog .np-dialog-form > .np-dialog-actions { bottom: -20px; padding: 16px 0 0; }
   .np-dialog-actions button { width: auto; }
   .np-dialog-wide { max-width: 820px; }
-  .np-container-deploy-form { display: block; padding: 0; }
+  .np-dialog .np-container-deploy-form { display: block; padding: 0; }
   .np-container-deploy-form > .np-form-grid { padding: 20px 20px 8px; }
   .np-container-deploy-form > .np-gate { margin: 20px; }
   .np-container-deploy-form > .np-form-help { margin: 14px 20px; }
@@ -3007,8 +3040,8 @@
   .np-usage-list .np-row-meter { grid-column: 1 / -1; }
   .np-tool-grid { grid-template-columns: 1fr; }
   .np-dialog { border-radius: var(--np-radius) var(--np-radius) 0 0; margin-bottom: 0; max-height: calc(100vh - 12px); width: 100%; }
-  .np-dialog-form { grid-template-columns: 1fr; }
-  .np-dialog-form label:first-of-type { grid-column: auto; }
+  .np-dialog .np-dialog-form { grid-template-columns: 1fr; }
+  .np-dialog .np-dialog-form label:first-of-type { grid-column: auto; }
   .np-dialog-actions,
   .np-dialog-form .np-gate { grid-column: auto; }
   .np-support-banner { align-items: stretch; flex-direction: column; padding: 12px 14px; }

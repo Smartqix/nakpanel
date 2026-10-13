@@ -67,10 +67,7 @@
     root.querySelectorAll('dialog').forEach(function(dialog) {
       dialog.addEventListener('close', function() {
         clearTimeout(keyTimer);
-        document.body.classList.remove('np-modal-open');
         if (!joining) dirty = false;
-        var opener = root.querySelector('[data-np-dialog-open="' + dialog.id + '"]');
-        if (opener) opener.focus();
       });
     });
     function text(selector, value) { var node = root.querySelector(selector); if (node) node.textContent = value || ''; }
@@ -161,9 +158,9 @@
       if (override && repository && ['remote_url', 'branch', 'deploy_target', 'known_host_key'].some(function (field) { return (data.get(field) || '') !== (repository[field] || ''); })) { message('Save the changed repository settings before testing the connection.'); return; }
       if (action === 'save' && sshRemote(data.get('remote_url') || '') && (!data.get('known_host_key') || data.get('trust_host') !== 'yes')) { form.querySelector('[data-git-host-details]').open = true; message('Verify the SSH server key before connecting.'); return; }
       if (action === 'disconnect' && !await confirmAction('Remove Repository?\nPublished website files, uploads, databases, and the remote repository will stay unchanged. Local Git access and the webhook will be removed.',form)) return;
-      if (action === 'webhook' && !window.confirm('Rotate the webhook URL? The previous URL will stop working.')) return;
-      if (action === 'fetch' && repository.deployment_mode === 'automatic' && !window.confirm('Pull updates and automatically publish the configured branch if destination checks pass?')) return;
-      if (action === 'rollback' && !window.confirm('Restore previously published commit ' + repository.previous_revision + '?')) return;
+      if (action === 'webhook' && !await confirmAction('Rotate the webhook URL? The previous URL will stop working.',form)) return;
+      if (action === 'fetch' && repository.deployment_mode === 'automatic' && !await confirmAction('Pull updates and automatically publish the configured branch if destination checks pass?',form)) return;
+      if (action === 'rollback' && !await confirmAction('Restore previously published commit ' + repository.previous_revision + '?',form)) return;
       operationFields(data,repository,action);
       var retry = operationKey(retryKeys,action,data,function () { return crypto.randomUUID(); });
       data.set('idempotency_key',retry.key);
@@ -184,7 +181,7 @@
           if (!completed) throw new Error('Destination check is still pending. Refresh status before retrying.');
           if (repository.convergence_status === 'failed') throw new Error(repository.last_error || 'Destination check failed.');
           var conflicts = repository.conflicts || [];
-          if (!window.confirm(conflicts.length ? 'Replace these destination files?\n' + conflicts.slice(0,20).join('\n') + '\nPublish the fetched commit?' : 'Publish the fetched commit to this website? No destination conflicts were found.')) { message('Deployment cancelled. Website unchanged.'); return; }
+          if (!await confirmAction(conflicts.length ? 'Replace these destination files?\n' + conflicts.slice(0,20).join('\n') + '\nPublish the fetched commit?' : 'Publish the fetched commit to this website? No destination conflicts were found.',form)) { message('Deployment cancelled. Website unchanged.'); return; }
           operationFields(data,repository,action);
           data.set('idempotency_key',crypto.randomUUID());
         }

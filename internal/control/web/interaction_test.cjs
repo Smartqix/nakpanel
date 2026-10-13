@@ -40,3 +40,29 @@ test('busy forms preserve controls that were already disabled by policy',()=>{
  client.setBusy(form,false);
  assert.deepEqual(controls.map(x=>x.disabled),[false,true]);
 });
+test('structured validation errors retain field information for inline recovery',async()=>{
+ const client=createClient({baseURL:'https://panel.test',fetch:async()=>new Response(JSON.stringify({ok:false,error:'Memory exceeds the plan.',field:'site_php_memory'}),{status:400,headers:{'Content-Type':'application/json'}})});
+ await assert.rejects(()=>client.fetch('/sites/1/php-settings',{method:'POST'}),error=>{
+  assert.equal(error.message,'Memory exceeds the plan.');
+  assert.equal(error.payload.field,'site_php_memory');
+  assert.equal(error.status,400);
+  return true;
+ });
+});
+test('progressive dialog forms can follow same-origin fallback redirects without replay',async()=>{
+ let calls=0;
+ const response=new Response('<main>Saved</main>',{headers:{'Content-Type':'text/html'}});
+ Object.defineProperties(response,{redirected:{value:true},url:{value:'https://panel.test/sites/1?tab=dns'}});
+ const client=createClient({baseURL:'https://panel.test',fetch:async(_,options)=>{
+  calls++;assert.equal(options.headers.get('X-Nakpanel-SPA'),'false');return response;
+ }});
+ assert.equal(await client.fetch('/sites/1/dns-records',{method:'POST',headers:{'X-Nakpanel-SPA':'false'},allowPageResponse:true}),response);
+ assert.equal(calls,1);
+});
+test('progressive responses reject cross-origin navigation and login redirects',async()=>{
+ for(const url of ['https://outside.test/sites/1','https://panel.test/login']){
+  const response=new Response('');Object.defineProperties(response,{redirected:{value:true},url:{value:url}});
+  const client=createClient({baseURL:'https://panel.test',fetch:async()=>response});
+  await assert.rejects(()=>client.fetch('/operation',{method:'POST',allowPageResponse:true}));
+ }
+});

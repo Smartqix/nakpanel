@@ -3,11 +3,17 @@
   var fetch = window.NakpanelUI ? window.NakpanelUI.fetch : window.fetch.bind(window);
 
   document.documentElement.classList.add("nakpanel-js");
-  var lastDialogTrigger = null;
   var planSubmitBypass = false;
   var pendingPlanForm = null;
   var confirmationResolver = null;
   var serverInventoryHostname = "";
+  var dialogs = window.NakpanelUI.createDialogController({document: document, onClose: function (dialog) {
+    if (dialog.id === "np-confirmation-dialog" && confirmationResolver) {
+      var resolve = confirmationResolver;
+      confirmationResolver = null;
+      resolve(false);
+    }
+  }});
 
   function each(selector, scope, callback) {
     Array.prototype.forEach.call((scope || document).querySelectorAll(selector), callback);
@@ -457,25 +463,17 @@
   function openDialog(id, trigger) {
     var dialog = document.getElementById(id);
     if (!dialog || !dialog.showModal) return;
-    lastDialogTrigger = trigger || null;
 	if (trigger && trigger.dataset.npSubscriptionId) {
 	  var subscription = dialog.querySelector('select[name="subscription_id"]');
 	  if (subscription) subscription.value = trigger.dataset.npSubscriptionId;
 	}
-    dialog.showModal();
-    document.body.classList.add("np-modal-open");
     updateCreateGate(dialog);
     updateSubdomainGate(dialog);
-    var focus = dialog.querySelector("input:not([type=hidden]), select, button");
-    if (focus) focus.focus();
+    dialogs.open(dialog, trigger);
   }
 
   function closeDialog(dialog) {
-    if (!dialog) return;
-    dialog.close();
-    document.body.classList.remove("np-modal-open");
-    if (lastDialogTrigger) lastDialogTrigger.focus();
-    lastDialogTrigger = null;
+    dialogs.close(dialog);
   }
 
   function askConfirmation(message, trigger) {
@@ -483,6 +481,15 @@
     if (!dialog || !dialog.showModal) return Promise.resolve(false);
     var copy = dialog.querySelector("[data-np-confirmation-copy]");
     if (copy) copy.textContent = message || "Continue with this action?";
+    var label = trigger && trigger.textContent.trim();
+    if (!label || label.length > 48) label = "Continue";
+    var title = dialog.querySelector("#np-confirmation-title");
+    if (title) title.textContent = label === "Continue" ? "Confirm action" : label + "?";
+    var accept = dialog.querySelector("[data-np-confirmation-accept]");
+    if (accept) {
+      accept.textContent = label;
+      accept.className = /delete|remove|restore|restart|reset|flush|revoke|purge|shutdown|reboot|suspend|overwrite|replace|rotate/i.test(message || "") ? "np-danger-button" : "np-primary-button";
+    }
     if (confirmationResolver) confirmationResolver(false);
     return new Promise(function (resolve) {
       confirmationResolver = resolve;
@@ -1336,8 +1343,8 @@
     });
   }
 
-  function securityAction(url, body, successMessage, confirmMessage) {
-    if (confirmMessage && !window.confirm(confirmMessage)) return;
+  async function securityAction(url, body, successMessage, confirmMessage) {
+    if (confirmMessage && !await askConfirmation(confirmMessage, document.activeElement)) return;
     var status = document.querySelector("[data-np-security-action-state]");
     fetch(url, {
       method: "POST",
@@ -2302,8 +2309,7 @@
       manager.dataset.npUploading = "false";
       if (input) input.value = "";
       if (error) {
-        if (label) label.textContent = "Upload stopped";
-        window.alert(error);
+        if (label) { label.textContent = "Upload stopped: " + error; label.setAttribute("role", "alert"); }
         return;
       }
       if (label) label.textContent = entries.length + " of " + entries.length;
@@ -2539,14 +2545,34 @@
       }).then(function (payload) {
         showSitePolicyError(form, payload);
       });
-    }).catch(function () {
-      showSitePolicyError(form, {error: "The panel could not be reached. Check your connection and try again."});
+    }).catch(function (error) {
+      showSitePolicyError(form, error.payload || {error: error.message || "The panel could not be reached. Check status before trying again."});
     }).then(function () {
       form.removeAttribute("aria-busy");
       if (submitter) submitter.disabled = false;
       var dirtySubmit = form.querySelector("[data-np-dirty-submit]");
       if (dirtySubmit) dirtySubmit.disabled = false;
     });
+  }
+
+  async function submitDialogForm(form, submitter) {
+    if (form.getAttribute("aria-busy") === "true") return;
+    clearSitePolicyError(form);
+    var body = new FormData(form);
+    if (submitter && submitter.name) body.append(submitter.name, submitter.value);
+    if (form.enctype !== "multipart/form-data") body = new URLSearchParams(body);
+    window.NakpanelUI.setBusy(form, true);
+    try {
+      var response = await fetch(form.action, {method: "POST", body: body, allowPageResponse: true,
+        headers: {Accept: "application/json", "X-Nakpanel-SPA": "true"}});
+      form.dataset.npDirty = "false";
+      if (response.redirected && response.url) window.location.assign(response.url);
+      else window.location.reload();
+    } catch (error) {
+      showSitePolicyError(form, error.payload || {error: error.message});
+    } finally {
+      window.NakpanelUI.setBusy(form, false);
+    }
   }
 
   function initSiteLogs() {
@@ -3039,7 +3065,15 @@
 	  return;
 	}
 	var form = event.target.closest("[data-np-create-site-form]");
-    if (!form) return;
+    if (!form) {
+      var dialogForm = event.target.closest('dialog form[method="post"]');
+      if (!event.defaultPrevented && dialogForm && window.NakpanelUI &&
+          /^(\/sites\/\d+\/(dns-records|dns-template\/reset|certificates\/custom)|\/backups|\/restores)$/.test(new URL(dialogForm.action, window.location.href).pathname)) {
+        event.preventDefault();
+        submitDialogForm(dialogForm, event.submitter);
+      }
+      return;
+    }
     updateCreateGate(form.closest("dialog") || document);
     if (form.dataset.npGateBlocked === "true") { event.preventDefault(); return; }
     if (!window.NakpanelUI) return;
@@ -3119,11 +3153,9 @@
   });
 
   document.addEventListener("keydown", function (event) {
-    var openDialog = document.querySelector("dialog[open]");
+    var openDialog = dialogs.top();
     if (event.key === "Tab" && openDialog) {
-      var focusable = Array.prototype.filter.call(openDialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'), function (item) {
-        return !item.hidden && item.offsetParent !== null;
-      });
+      var focusable = dialogs.focusable(openDialog);
       if (focusable.length) {
         var first = focusable[0];
         var last = focusable[focusable.length - 1];
@@ -3138,7 +3170,7 @@
       return;
     }
     if (event.key !== "Escape") return;
-    if (openDialog) closeDialog(openDialog);
+    if (openDialog) { event.preventDefault(); closeDialog(openDialog); return; }
     each(".np-dns-action-menu[open]", document, function (menu) { menu.open = false; });
     setMenu(false);
     var results = document.querySelector("[data-np-search-results]");
@@ -3153,16 +3185,7 @@
     });
   });
   each("dialog[data-np-dialog]", document, function (dialog) {
-    dialog.addEventListener("close", function () {
-      if (dialog.id === "np-confirmation-dialog" && confirmationResolver) {
-        var resolve = confirmationResolver;
-        confirmationResolver = null;
-        resolve(false);
-      }
-      document.body.classList.remove("np-modal-open");
-      if (lastDialogTrigger) lastDialogTrigger.focus();
-      lastDialogTrigger = null;
-    });
+    dialogs.prepare(dialog);
   });
   updateCreateGate(document);
   updateSubdomainGate(document);
