@@ -88,6 +88,16 @@ func TestWebsiteSSLDefaultAndSubscriptionRootUsage(t *testing.T) {
 }
 func boolPtrForSSL(value bool) *bool { return &value }
 
+func TestDialogSetupUsesOneVisibleHeading(t *testing.T) {
+	var out bytes.Buffer
+	if err := siteSetupProgress(types.SiteSetupStatus{SiteID: 7, Kind: "subdomain", State: "pending"}, WorkspaceView{}, true).Render(context.Background(), &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "<h3") || !strings.Contains(out.String(), `class="sr-only" data-np-setup-title`) {
+		t.Fatal("dialog duplicates its visible heading")
+	}
+}
+
 func TestDomainOrderKeepsSubdomainsNearParent(t *testing.T) {
 	items := []dashboard.Site{
 		{ID: 3, Domain: "shop.example.test", ParentSiteID: 1},

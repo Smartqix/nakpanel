@@ -8,7 +8,13 @@ templ siteSetupProgress(status types.SiteSetupStatus, view WorkspaceView, dialog
 	{{ path := "/sites/"+formatJobID(status.SiteID) }}
 	{{ steps := status.Steps; if len(steps)==0 {steps=[]types.SiteSetupStep{{Code:"hosting",Label:"Hosting",State:"pending"},{Code:"dns",Label:"DNS",State:"pending"},{Code:"tls",Label:"SSL/TLS",State:"pending"},{Code:"https",Label:"HTTPS",State:"pending"}}} }}
 	<section class="np-setup-tracker" data-np-setup-tracker data-np-setup-site-id={ formatJobID(status.SiteID) } data-np-setup-state={ status.State } data-np-setup-status-url={ setupStatusURL(status,view) } data-np-setup-timed-out?={ view.SiteSetupTimedOut } data-np-setup-redirect={ workspacePath(view,path+"?tab=overview&notice=subdomain-created") } hidden?={ status.SiteID==0 }>
-		<div class="np-setup-heading"><span data-np-setup-spinner hidden?={ status.State!="pending" || view.SiteSetupTimedOut }>@icon("refresh-cw")</span><h3 data-np-setup-title>{ setupLabel(status) } setup</h3></div>
+		<div class="np-setup-heading"><span data-np-setup-spinner hidden?={ status.State!="pending" || view.SiteSetupTimedOut }>@icon("refresh-cw")</span>
+			if dialog {
+				<span class="sr-only" data-np-setup-title>{ setupLabel(status) } setup</span>
+			} else {
+				<h3 data-np-setup-title>{ setupLabel(status) } setup</h3>
+			}
+		</div>
 		<strong data-np-setup-domain>{ status.Domain }</strong>
 		<p class="np-setup-message" data-np-setup-message role="status" aria-live="polite">{ status.Message }</p>
 		<ol class="np-setup-steps" aria-label="Setup progress">

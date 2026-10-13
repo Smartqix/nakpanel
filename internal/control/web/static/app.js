@@ -2016,6 +2016,8 @@
     var dialog = panel.closest('dialog');
     var heading = dialog && dialog.querySelector('.np-dialog-head h2');
     if (heading) heading.textContent = titles[data.state] || 'Subdomain setup';
+	var intro = dialog && dialog.querySelector('.np-dialog-head p');
+	if (intro) intro.hidden = true;
     var check = panel.querySelector('[data-np-setup-check]');
     if (check) check.hidden = data.state === 'pending';
 	var httpsRow = panel.querySelector('[data-np-setup-https]');
