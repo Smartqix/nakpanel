@@ -207,7 +207,14 @@ wait_for_repo_sync() {
 }
 
 vm_ip() {
-  multipass info "${NAKPANEL_MULTIPASS_VM}" | awk '/IPv4/{print $2; exit}'
+  local ip=""
+  for _ in $(seq 1 60); do
+    ip="$(multipass info "${NAKPANEL_MULTIPASS_VM}" 2>/dev/null | awk '/IPv4/{print $2; exit}' || true)"
+    if [[ "${ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then printf '%s\n' "${ip}"; return; fi
+    sleep 2
+  done
+  echo "Multipass IPv4 did not become available for ${NAKPANEL_MULTIPASS_VM}" >&2
+  return 1
 }
 
 csrf_token() {
