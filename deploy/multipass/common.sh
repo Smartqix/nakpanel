@@ -151,7 +151,7 @@ grep -Eq 'user quota .* is on' <<<"${state}"
 QUOTA
 }
 
-sync_repo() {
+sync_repo() (
   local root_dir="$1"
   local remote_src="${2:-${NAKPANEL_REMOTE_SRC}}"
   if [[ ! "${remote_src}" =~ ^/tmp/nakpanel-[A-Za-z0-9._-]+$ ]]; then
@@ -159,10 +159,24 @@ sync_repo() {
     echo "NAKPANEL_REMOTE_SRC must be a direct child of /tmp named nakpanel-*" >&2
     return 1
   fi
-  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- sudo rm -rf "${remote_src}"
-  multipass transfer -r "${root_dir}" "${NAKPANEL_MULTIPASS_VM}:${remote_src}"
+  local tmpdir remote_archive
+  tmpdir="$(mktemp -d)"
+  remote_archive="/tmp/nakpanel-source-$$.tar"
+  trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
+  # Include working-tree edits and nonignored new sources, but never local
+  # secrets, build caches, sockets or this task's private test artifacts.
+  git -C "${root_dir}" ls-files -z --cached --others --exclude-standard |
+    tar -C "${root_dir}" --null -T - -cf "${tmpdir}/source.tar"
+  multipass transfer "${tmpdir}/source.tar" "${NAKPANEL_MULTIPASS_VM}:${remote_archive}"
+  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- bash -se -- "${remote_src}" "${remote_archive}" <<'SYNC'
+set -euo pipefail
+sudo rm -rf "$1"
+sudo install -d -m 0755 -o ubuntu -g ubuntu "$1"
+tar --no-same-owner -xf "$2" -C "$1"
+rm -f "$2"
+SYNC
   wait_for_repo_sync "${remote_src}"
-}
+)
 
 # Multipass 1.16 on macOS can return from a recursive transfer while the daemon
 # is still materializing the final files. Require the build inputs to exist and
