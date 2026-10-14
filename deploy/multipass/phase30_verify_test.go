@@ -84,6 +84,16 @@ func TestManagedPHPFixtureDoesNotReviveNewHostedGitCreation(t *testing.T) {
 	}
 }
 
+func TestPHPCompatibilityGateAllowsImplementedWordPressNavigation(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	if strings.Contains(script, "WordPress Toolkit, Node.js, and Python are not implemented") || strings.Contains(script, "'Deploy WordPress' 'WordPress Toolkit'") {
+		t.Fatal("current implemented WordPress navigation must not be rejected as a stale runtime promise")
+	}
+	if !strings.Contains(script, "Node.js and Python adapters remain unavailable") {
+		t.Fatal("unimplemented adapter boundary must stay explicit")
+	}
+}
+
 func TestPhase30VerifierUsesBoundedWaitsAndMemoryOnlySecrets(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	for _, want := range []string{
