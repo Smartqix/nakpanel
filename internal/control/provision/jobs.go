@@ -15,12 +15,13 @@ import (
 )
 
 type CreateSiteArgs struct {
-	SiteID        int64                    `json:"site_id" river:"unique"`
-	Username      string                   `json:"username"`
-	Domain        string                   `json:"domain"`
-	PHPVersion    string                   `json:"php_version"`
-	SharedAccount bool                     `json:"shared_account,omitempty"`
-	Limits        types.SiteResourceLimits `json:"limits"`
+	SubscriptionID int64                    `json:"subscription_id,omitempty"`
+	SiteID         int64                    `json:"site_id" river:"unique"`
+	Username       string                   `json:"username"`
+	Domain         string                   `json:"domain"`
+	PHPVersion     string                   `json:"php_version"`
+	SharedAccount  bool                     `json:"shared_account,omitempty"`
+	Limits         types.SiteResourceLimits `json:"limits"`
 }
 
 func (CreateSiteArgs) Kind() string { return "create_site" }
@@ -171,12 +172,13 @@ func (w *CreateSiteWorker) Work(ctx context.Context, job *river.Job[CreateSiteAr
 	}
 
 	resp, err := w.agent.CreateSite(ctx, types.CreateSiteReq{
-		SiteID:        job.Args.SiteID,
-		Username:      job.Args.Username,
-		Domain:        job.Args.Domain,
-		PHPVersion:    job.Args.PHPVersion,
-		SharedAccount: job.Args.SharedAccount,
-		Limits:        job.Args.Limits,
+		SubscriptionID: job.Args.SubscriptionID,
+		SiteID:         job.Args.SiteID,
+		Username:       job.Args.Username,
+		Domain:         job.Args.Domain,
+		PHPVersion:     job.Args.PHPVersion,
+		SharedAccount:  job.Args.SharedAccount,
+		Limits:         job.Args.Limits,
 	})
 	if err != nil {
 		w.markFailed(ctx, job.Args.SiteID, err.Error())

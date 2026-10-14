@@ -23,6 +23,7 @@ var (
 )
 
 type SubscriptionTeardownOptions struct {
+	IdentityRegistry        *SiteIdentityRegistry
 	HomeRoot                string
 	Paths                   SitePathConfig
 	SystemdUnitDir          string
@@ -40,6 +41,7 @@ type SubscriptionTeardownOptions struct {
 	Runner                  CommandRunner
 }
 type SubscriptionTeardownProvisioner struct {
+	identityRegistry        *SiteIdentityRegistry
 	homeRoot                string
 	paths                   SitePathConfig
 	systemdUnitDir          string
@@ -98,7 +100,8 @@ func NewSubscriptionTeardownProvisioner(opts SubscriptionTeardownOptions) *Subsc
 		}
 	}
 	return &SubscriptionTeardownProvisioner{
-		homeRoot: root, paths: paths, systemdUnitDir: systemdUnitDir,
+		identityRegistry: opts.IdentityRegistry,
+		homeRoot:         root, paths: paths, systemdUnitDir: systemdUnitDir,
 		taskStateDir: taskStateDir,
 		sshConfigDir: filepath.Clean(sshConfigDir), authorizedKeysDir: filepath.Clean(authorizedKeysDir),
 		valkeyConfigRoot:        defaultPath(opts.ValkeyConfigRoot, "/etc/nakpanel/valkey"),
@@ -120,6 +123,78 @@ func defaultPath(value, fallback string) string {
 }
 
 func (p *SubscriptionTeardownProvisioner) TeardownSubscription(ctx context.Context, req types.TeardownSubscriptionReq) (types.TeardownSubscriptionResult, error) {
+	if p.identityRegistry != nil {
+		if err := p.validateAccountRemovalIntent(req); err != nil {
+			return types.TeardownSubscriptionResult{}, err
+		}
+		if len(req.SiteIDs) != len(req.Domains) {
+			return types.TeardownSubscriptionResult{}, errors.New("account removal requires current positive website identities")
+		}
+		ids := make([]types.SiteIdentity, 0, len(req.Domains))
+		for index, domain := range req.Domains {
+			ids = append(ids, types.SiteIdentity{SiteID: req.SiteIDs[index], SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain})
+		}
+		var result types.TeardownSubscriptionResult
+		err := p.identityRegistry.WithAccountRemoval(ctx, req.SubscriptionID, ids, func(ctx context.Context) error {
+			var err error
+			result, err = p.teardownSubscription(ctx, req)
+			return err
+		})
+		return result, err
+	}
+	return p.teardownSubscription(ctx, req)
+}
+
+// Validate the complete destructive identity before writing durable fences.
+// The legacy execution path also validates it before touching managed services.
+func (p *SubscriptionTeardownProvisioner) validateAccountRemovalIntent(req types.TeardownSubscriptionReq) error {
+	if req.SubscriptionID <= 0 || !accountUsernameRE.MatchString(req.Username) || filepath.Clean(req.HomePath) != filepath.Join(p.homeRoot, req.Username) {
+		return errors.New("invalid subscription account removal identity")
+	}
+	if len(req.SiteIDs) != len(req.Domains) {
+		return errors.New("account removal requires matching website identities")
+	}
+	sites := map[int64]bool{}
+	for index, domain := range req.Domains {
+		if req.SiteIDs[index] <= 0 || site.ValidateDomain(domain) != nil || domain != site.NormalizeDomain(domain) || sites[req.SiteIDs[index]] {
+			return errors.New("invalid account website identity")
+		}
+		sites[req.SiteIDs[index]] = true
+	}
+	for _, name := range req.DatabaseNames {
+		if !databaseIdentifierRE.MatchString(name) {
+			return errors.New("invalid account database identity")
+		}
+	}
+	for _, ids := range [][]int64{req.TaskIDs, req.StagingOperationIDs, req.PHPApplicationIDs, req.PHPWorkerIDs} {
+		for _, id := range ids {
+			if id <= 0 {
+				return errors.New("invalid account object identity")
+			}
+		}
+	}
+	for _, deployment := range req.PHPDeployments {
+		if deployment.DeploymentID <= 0 || !sites[deployment.SiteID] {
+			return errors.New("invalid account PHP deployment identity")
+		}
+	}
+	for _, app := range req.Applications {
+		if app.ID <= 0 || !applicationNameRE.MatchString(app.Name) {
+			return errors.New("invalid account application identity")
+		}
+	}
+	for _, root := range []string{p.systemdUnitDir, p.containerStateRoot, p.containerRuntimeRoot} {
+		if !filepath.IsAbs(root) || root == string(filepath.Separator) {
+			return errors.New("invalid account removal state root")
+		}
+		if err := ensureNoSymlinkComponents(root, root); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *SubscriptionTeardownProvisioner) teardownSubscription(ctx context.Context, req types.TeardownSubscriptionReq) (types.TeardownSubscriptionResult, error) {
 	var result types.TeardownSubscriptionResult
 	if req.SubscriptionID <= 0 || !accountUsernameRE.MatchString(req.Username) {
 		return result, errors.New("invalid subscription account identity")

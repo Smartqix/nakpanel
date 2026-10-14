@@ -34,7 +34,16 @@ func main() {
 	}
 
 	reloader := ops.NewSystemdReloader(ops.SystemdReloaderOptions{AllowedServices: []string{"nginx", "php8.1-fpm", "php8.2-fpm", "php8.3-fpm", "php8.4-fpm", "php8.5-fpm", "bind9", "named.service", "stalwart-mail.service"}})
+	identityRegistry := ops.NewSiteIdentityRegistry("")
+	if err := identityRegistry.Initialize(); err != nil {
+		log.Fatalf("initialize website identity registry: %v", err)
+	}
+	siteDependencies := ops.NewSiteServiceDependencyReader(ops.SiteServiceDependencyOptions{
+		Paths:     []string{os.Getenv("NAKPANEL_FTPS_TLS_CERT"), os.Getenv("NAKPANEL_FTPS_TLS_KEY"), os.Getenv("NAKPANEL_WEBMAIL_TLS_CERT"), os.Getenv("NAKPANEL_WEBMAIL_TLS_KEY"), os.Getenv("NAKPANEL_MAIL_TLS_CERT"), os.Getenv("NAKPANEL_MAIL_TLS_KEY"), "/etc/stalwart/tls/cert.pem", "/etc/stalwart/tls/key.pem"},
+		Hostnames: []string{os.Getenv("NAKPANEL_MAIL_TLS_HOSTNAME"), os.Getenv("NAKPANEL_WEBMAIL_TLS_HOSTNAME")},
+	})
 	siteProvisioner := ops.NewSiteProvisioner(ops.SiteProvisionerOptions{
+		IdentityRegistry: identityRegistry,
 		Paths:            ops.DefaultSitePathConfig(),
 		UserManager:      ops.NewLinuxUserManager(ops.LinuxUserManagerOptions{ManageSubIDs: true}),
 		OwnershipManager: ops.NewLinuxOwnershipManager(nil),
@@ -56,7 +65,7 @@ func main() {
 		DiskQuota:       ops.NewLinuxDiskQuotaManager(nil),
 		SiteProvisioner: siteProvisioner,
 	})
-	teardownProvisioner := ops.NewSubscriptionTeardownProvisioner(ops.SubscriptionTeardownOptions{HomeRoot: "/home", Paths: ops.DefaultSitePathConfig()})
+	teardownProvisioner := ops.NewSubscriptionTeardownProvisioner(ops.SubscriptionTeardownOptions{HomeRoot: "/home", Paths: ops.DefaultSitePathConfig(), IdentityRegistry: identityRegistry})
 	mailProvisioner := ops.NewMailProvisioner(ops.MailProvisionerOptions{
 		ManagementURL: os.Getenv("NAKPANEL_STALWART_URL"),
 		Reloader:      reloader,
@@ -84,8 +93,10 @@ func main() {
 	dispatcher := agentrpc.NewDispatcher(
 		reloader,
 		agentrpc.Options{
-			AllowedServices: []string{"nginx", "php8.1-fpm", "php8.2-fpm", "php8.3-fpm", "php8.4-fpm", "php8.5-fpm", "bind9", "named.service", "stalwart-mail.service"},
-			SiteProvisioner: siteProvisioner,
+			SiteGuard:        identityRegistry,
+			SiteDependencies: siteDependencies,
+			AllowedServices:  []string{"nginx", "php8.1-fpm", "php8.2-fpm", "php8.3-fpm", "php8.4-fpm", "php8.5-fpm", "bind9", "named.service", "stalwart-mail.service"},
+			SiteProvisioner:  siteProvisioner,
 			DatabaseProvisioner: ops.NewDatabaseProvisioner(map[types.DBEngine]ops.DatabaseEngine{
 				types.EngineMariaDB: ops.NewLazyMariaDBEngine(os.Getenv("NAKPANEL_MARIADB_DSN")),
 			}),

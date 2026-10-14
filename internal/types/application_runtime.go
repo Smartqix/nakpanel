@@ -85,6 +85,8 @@ type DeployApplicationGenerationResult struct {
 }
 
 type ApplicationControlReq struct {
+	SiteID         int64                   `json:"site_id,omitempty"`
+	Domain         string                  `json:"domain,omitempty"`
 	ApplicationID  int64                   `json:"application_id"`
 	SubscriptionID int64                   `json:"subscription_id"`
 	Username       string                  `json:"username"`
@@ -95,6 +97,8 @@ type ApplicationControlReq struct {
 }
 
 type ApplicationLogReq struct {
+	SiteID         int64  `json:"site_id,omitempty"`
+	Domain         string `json:"domain,omitempty"`
 	ApplicationID  int64  `json:"application_id"`
 	SubscriptionID int64  `json:"subscription_id"`
 	Username       string `json:"username"`

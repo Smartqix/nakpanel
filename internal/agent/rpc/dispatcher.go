@@ -117,6 +117,13 @@ type SubscriptionTeardownProvisioner interface {
 	TeardownSubscription(context.Context, types.TeardownSubscriptionReq) (types.TeardownSubscriptionResult, error)
 }
 
+type SiteTeardownProvisioner interface {
+	TeardownSite(context.Context, types.TeardownSiteReq) (types.TeardownSiteResult, error)
+}
+type SiteServiceDependencyReader interface {
+	SiteServiceDependencies(context.Context) ([]string, error)
+}
+
 type HostingToolkitProvisioner interface {
 	EnsureFTPS(context.Context, types.EnsureFTPSReq) (types.EnsureFTPSResult, error)
 	FTPSStatus(context.Context) (types.FTPSStatus, error)
@@ -200,6 +207,9 @@ type FileManager interface {
 }
 
 type Options struct {
+	SiteTeardown              SiteTeardownProvisioner
+	SiteDependencies          SiteServiceDependencyReader
+	SiteGuard                 SiteIdentityGuard
 	AllowedServices           []string
 	SiteProvisioner           SiteProvisioner
 	DatabaseProvisioner       DatabaseProvisioner
@@ -234,6 +244,9 @@ type Options struct {
 }
 
 type Dispatcher struct {
+	siteTeardown              SiteTeardownProvisioner
+	siteDependencies          SiteServiceDependencyReader
+	siteGuard                 SiteIdentityGuard
 	reloader                  ServiceReloader
 	siteProvisioner           SiteProvisioner
 	databaseProvisioner       DatabaseProvisioner
@@ -292,6 +305,9 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 
 	customCertProvisioner, _ := opts.CertificateProvisioner.(CustomCertificateProvisioner)
 	dispatcher := &Dispatcher{
+		siteTeardown:              opts.SiteTeardown,
+		siteDependencies:          opts.SiteDependencies,
+		siteGuard:                 opts.SiteGuard,
 		reloader:                  reloader,
 		siteProvisioner:           opts.SiteProvisioner,
 		databaseProvisioner:       opts.DatabaseProvisioner,
@@ -368,13 +384,38 @@ func (d *Dispatcher) Dispatch(ctx context.Context, req types.Request) types.Resp
 	return resp
 }
 
-func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Response {
+func (d *Dispatcher) dispatchUnchecked(ctx context.Context, req types.Request) types.Response {
 	switch req.Op {
 	case types.OpPing:
 		if err := validateNoFields(req.Data); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, map[string]bool{"pong": true})
+	case types.OpSiteServiceDependencies:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.siteDependencies == nil {
+			return errorResponse(req.ID, "server dependency reader is not configured")
+		}
+		domains, err := d.siteDependencies.SiteServiceDependencies(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, domains)
+	case types.OpTeardownSite:
+		var payload types.TeardownSiteReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.siteTeardown == nil {
+			return errorResponse(req.ID, "website teardown provisioner is not configured")
+		}
+		result, err := d.siteTeardown.TeardownSite(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
 	case types.OpCollectUsage:
 		var payload types.CollectUsageReq
 		if err := decodeStrict(req.Data, &payload); err != nil {

@@ -25,6 +25,22 @@ func TestSiteRemovalProtectedPrimaryAndHostname(t *testing.T) {
 	}
 }
 
+type removalDependenciesFixture struct{}
+
+func (removalDependenciesFixture) SiteServiceDependencies(context.Context) ([]string, error) {
+	return []string{"ftp.test"}, nil
+}
+func TestSiteRemovalProtectsTrustedAgentDependencies(t *testing.T) {
+	db := removaldb.New(t, "")
+	removaldb.Site(t, db, 1, "primary.test", nil)
+	addon := removaldb.Site(t, db, 1, "ftp.test", nil)
+	service := NewSiteRemovalService(db, nil, workspace.NewStore(db), SiteRemovalOptions{Dependencies: removalDependenciesFixture{}})
+	preview, err := service.PreviewSiteRemoval(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, addon)
+	if err != nil || preview.Allowed {
+		t.Fatalf("server dependency not protected: %#v %v", preview, err)
+	}
+}
+
 func TestSiteRemovalPreviewKeepsDataByDefault(t *testing.T) {
 	db := removaldb.New(t, "")
 	removaldb.Site(t, db, 1, "primary.test", nil)

@@ -19,6 +19,9 @@ type SiteRemovalUsageReader interface {
 	CollectUsage(context.Context, types.CollectUsageReq) (types.CollectUsageResult, error)
 }
 type SiteRemovalOptions struct {
+	Dependencies interface {
+		SiteServiceDependencies(context.Context) ([]string, error)
+	}
 	PanelHostname string
 	Now           func() time.Time
 	Usage         SiteRemovalUsageReader

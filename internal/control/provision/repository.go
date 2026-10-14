@@ -116,12 +116,13 @@ WHERE child.subscription_id=$2
 	}
 
 	_, err = r.river.InsertTx(ctx, tx, CreateSiteArgs{
-		SiteID:        site.ID,
-		Username:      site.Username,
-		Domain:        site.Domain,
-		PHPVersion:    site.PhpVersion,
-		SharedAccount: true,
-		Limits:        req.Limits,
+		SubscriptionID: req.SubscriptionID,
+		SiteID:         site.ID,
+		Username:       site.Username,
+		Domain:         site.Domain,
+		PHPVersion:     site.PhpVersion,
+		SharedAccount:  true,
+		Limits:         req.Limits,
 	}, nil)
 	if err != nil {
 		return 0, fmt.Errorf("enqueue create_site job: %w", err)

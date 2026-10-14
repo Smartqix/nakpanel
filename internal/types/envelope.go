@@ -405,6 +405,7 @@ type InstallCustomCertResult struct {
 }
 
 type CreateBackupReq struct {
+	SiteID         int64    `json:"site_id,omitempty"`
 	SubscriptionID int64    `json:"subscription_id"`
 	Domain         string   `json:"domain"`
 	Username       string   `json:"username"`
@@ -1039,11 +1040,13 @@ type DeleteBackupResult struct {
 }
 
 type RestoreBackupReq struct {
-	Domain      string   `json:"domain"`
-	Username    string   `json:"username"`
-	Docroot     string   `json:"docroot"`
-	ArchivePath string   `json:"archive_path"`
-	Databases   []string `json:"databases"`
+	SiteID         int64    `json:"site_id,omitempty"`
+	SubscriptionID int64    `json:"subscription_id,omitempty"`
+	Domain         string   `json:"domain"`
+	Username       string   `json:"username"`
+	Docroot        string   `json:"docroot"`
+	ArchivePath    string   `json:"archive_path"`
+	Databases      []string `json:"databases"`
 }
 
 type RestoreBackupResult struct {
@@ -1054,9 +1057,11 @@ type RestoreBackupResult struct {
 }
 
 type ConfigureWebmailReq struct {
-	Domain        string `json:"domain"`
-	Hostname      string `json:"hostname"`
-	RoundcubeRoot string `json:"roundcube_root"`
+	SiteID         int64  `json:"site_id,omitempty"`
+	SubscriptionID int64  `json:"subscription_id,omitempty"`
+	Domain         string `json:"domain"`
+	Hostname       string `json:"hostname"`
+	RoundcubeRoot  string `json:"roundcube_root"`
 }
 
 type ConfigureWebmailResult struct {
@@ -1066,6 +1071,8 @@ type ConfigureWebmailResult struct {
 }
 
 type ConfigureDNSZoneReq struct {
+	SiteID            int64          `json:"site_id,omitempty"`
+	SubscriptionID    int64          `json:"subscription_id,omitempty"`
 	ZoneID            int64          `json:"zone_id,omitempty"`
 	DesiredRevision   int64          `json:"desired_revision,omitempty"`
 	Domain            string         `json:"domain"`

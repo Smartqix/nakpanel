@@ -136,6 +136,17 @@ func (c *Client) TeardownSubscription(ctx context.Context, req types.TeardownSub
 	return nil
 }
 
+func (c *Client) TeardownSite(ctx context.Context, req types.TeardownSiteReq) (types.TeardownSiteResult, error) {
+	var result types.TeardownSiteResult
+	err := c.doResult(ctx, types.OpTeardownSite, req, &result)
+	return result, err
+}
+func (c *Client) SiteServiceDependencies(ctx context.Context) ([]string, error) {
+	var result []string
+	err := c.doResult(ctx, types.OpSiteServiceDependencies, struct{}{}, &result)
+	return result, err
+}
+
 func (c *Client) ConfigureMail(ctx context.Context, req types.ConfigureMailReq) (types.Response, error) {
 	return c.doTyped(ctx, types.OpConfigureMail, req)
 }

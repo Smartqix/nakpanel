@@ -12,6 +12,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/types"
 	"sort"
 	"strings"
+	"time"
 )
 
 type removalQueryer interface {
@@ -108,6 +109,15 @@ func (s *SiteRemovalService) preview(ctx context.Context, q removalQueryer, site
 		}
 	}
 	dependencies := []string{s.options.PanelHostname}
+	if s.options.Dependencies != nil {
+		dependencyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		hosts, dependencyErr := s.options.Dependencies.SiteServiceDependencies(dependencyCtx)
+		cancel()
+		if dependencyErr != nil {
+			return preview, errors.New("server certificate dependencies cannot be verified; retry after the agent is available")
+		}
+		dependencies = append(dependencies, hosts...)
+	}
 	depRows, err := q.QueryContext(ctx, `SELECT mail_hostname FROM mail_settings WHERE id
  UNION SELECT primary_nameserver FROM dns_template_revisions revision JOIN dns_template_state state ON revision.id=state.active_revision_id WHERE state.singleton
  UNION SELECT record.value_template FROM dns_template_records record JOIN dns_template_state state ON record.revision_id=state.active_revision_id
