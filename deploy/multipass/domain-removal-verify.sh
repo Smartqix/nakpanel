@@ -97,7 +97,14 @@ backup_id="$(db "SELECT id FROM backups WHERE site_id=${addon_id} ORDER BY id DE
 wait_for "SELECT status FROM backups WHERE id=${backup_id}" active
 username="$(db "SELECT username FROM sites WHERE id=${addon_id}")"
 stale_id="${addon_id}"
-remove_site "${addon_id}" "${addon}"
+if [[ "${NAKPANEL_REMOVAL_BROWSER_SMOKE:-0}" == 1 ]]; then
+  NAKPANEL_QA_URL="${base}" NAKPANEL_QA_SITE_ID="${addon_id}" NAKPANEL_QA_DOMAIN="${addon}" \
+    NAKPANEL_QA_REMOVE=1 node "${SCRIPT_DIR}/domain-removal-browser-smoke.cjs"
+  operation_id="$(db "SELECT id FROM site_removal_operations WHERE site_id=${addon_id} ORDER BY id DESC LIMIT 1")"
+  [[ "${operation_id}" =~ ^[0-9]+$ ]] || fail 'browser did not reserve an operation'
+else
+  remove_site "${addon_id}" "${addon}"
+fi
 observe completed
 redirect="$(jq -r .redirect "${tmpdir}/status.json")"
 [[ "${redirect}" == /subscriptions/* ]] || fail 'unsafe completion redirect'

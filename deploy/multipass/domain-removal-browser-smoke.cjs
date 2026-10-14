@@ -1,6 +1,8 @@
 // Native browser acceptance. Destructive mode is restricted to new QA fixtures.
 const {chromium} = require('playwright');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const base = process.env.NAKPANEL_QA_URL;
 const siteID = process.env.NAKPANEL_QA_SITE_ID;
 const domain = process.env.NAKPANEL_QA_DOMAIN;
@@ -13,6 +15,12 @@ let browser;
   browser = await chromium.launch({channel:'chrome', headless:true});
   const context = await browser.newContext({ignoreHTTPSErrors:true, viewport:{width:1440,height:1000}});
   const page = await context.newPage();
+  let completedObserved = false;
+  await page.route('**/site-removals/*/status', async route => {
+    const response = await route.fetch();
+    if ((await response.json()).state === 'completed') completedObserved = true;
+    await route.fulfill({response});
+  });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(`${base}/login`);
   await page.locator('[name=email]').fill(process.env.NAKPANEL_QA_EMAIL || 'admin@nakpanel.test');
@@ -29,6 +37,10 @@ let browser;
     assert.equal(await dialog.locator('[name=delete_database_ids]:checked').count(), 0);
     assert.equal(await dialog.locator('.np-removal-dialog-cancel').evaluate(e => e === document.activeElement), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+    if (process.env.NAKPANEL_QA_SCREENSHOT_DIR) {
+      fs.mkdirSync(process.env.NAKPANEL_QA_SCREENSHOT_DIR, {recursive:true});
+      await page.screenshot({path:path.join(process.env.NAKPANEL_QA_SCREENSHOT_DIR, `removal-dialog-${size.width}.png`)});
+    }
     await page.keyboard.press('Escape'); await dialog.waitFor({state:'hidden'});
   }
   if (perform) {
@@ -42,6 +54,7 @@ let browser;
     const completed = page.waitForURL(url => url.searchParams.get('notice') === 'website-removed', {timeout:300000});
     await dialog.getByRole('button', {name:'Remove website', exact:true}).click();
     await completed;
+    assert.equal(completedObserved, true, 'completion must be observed before redirect');
     assert.ok((await page.locator('body').innerText()).includes(`${domain} was removed.`));
   }
   assert.deepEqual(errors, []);

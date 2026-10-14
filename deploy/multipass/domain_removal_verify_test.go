@@ -105,3 +105,22 @@ func TestRemovalDatabaseFixturesUseCompleteValidCredentials(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeRemovalBrowserCanObserveCompletionBeforeRedirect(t *testing.T) {
+	data, err := os.ReadFile("domain-removal-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "NAKPANEL_REMOVAL_BROWSER_SMOKE") || !strings.Contains(string(data), "domain-removal-browser-smoke.cjs") {
+		t.Fatal("native browser gate is not wired")
+	}
+	data, err = os.ReadFile("domain-removal-browser-smoke.cjs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"route.fetch()", "completedObserved", "NAKPANEL_QA_SCREENSHOT_DIR", "page.screenshot"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("browser completion evidence missing %s", want)
+		}
+	}
+}
