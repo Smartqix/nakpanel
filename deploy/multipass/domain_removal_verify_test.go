@@ -83,7 +83,7 @@ func TestFreshDomainRemovalBootstrapUsesProductionInstaller(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"common.sh", "require_nakpanel_vm_name", "sync_repo", "deploy/install/install.sh --yes", "/healthz", "panelctl version"} {
+	for _, want := range []string{"common.sh", "require_nakpanel_vm_name", "sync_repo", "deploy/install/install.sh --yes", "/healthz", "panelctl version", "current-bootstrap.test", "np_current_bootstrap", "post sites", "post databases", "php_version=8.3", "csrf_token", "wait_for"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("current installer gate missing %q", want)
 		}
