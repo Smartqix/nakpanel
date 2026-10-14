@@ -40,13 +40,16 @@ or ownership markers to force a retry.
 
 ## Verification
 
-`deploy/multipass/domain-removal-verify.sh` runs Phase 34 first on the shared
+`deploy/multipass/domain-removal-verify.sh` installs the current stack and runs Phase 34 first on the shared
 `nakpanel-lab` Ubuntu 24.04 VM, then creates exact, uniquely named QA fixtures.
 It tests primary protection, child removal, default retention and download,
 same-hostname recreation, stale native RPC rejection, fixture-only failure and
 retry, CSRF, ownership, and native nginx/DNS/SSH validation.
 
-The final gate is included in `deploy/multipass/deployment-verify.sh`. These
+The final gate is included in `deploy/multipass/deployment-verify.sh`, which
+bootstraps using the production installer, then runs current OCI, security,
+recovery, PHP, plan, WordPress, statistics and removal acceptance. Historical
+phase scripts remain available for debugging their compatibility contracts. These
 verifiers are lab tools, not production reset scripts. For optional browser QA,
 use `domain-removal-browser-smoke.cjs` with Playwright and Chrome. Destructive
 browser mode accepts only the verifier's exact new QA domain naming patterns.

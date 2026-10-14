@@ -172,6 +172,26 @@ func (s *Server) handleRemovalPreview(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if p.Operation != nil {
+		op, loadErr := s.siteRemoval.SiteRemovalFor(r.Context(), user, p.Operation.ID)
+		if !removalScopeValid(w, r, support, op.CustomerID, loadErr) {
+			return
+		}
+		if loadErr != nil {
+			writeSPAError(w, 503, "Could not resume removal progress.")
+			return
+		}
+		if op.SiteID != id {
+			http.NotFound(w, r)
+			return
+		}
+		if removalWantsJSON(r) {
+			s.writeRemovalStatus(w, r, user, op, support)
+		} else {
+			http.Redirect(w, r, removalPath(support, "/site-removals/"+strconv.FormatInt(op.ID, 10)), 303)
+		}
+		return
+	}
 	model, err := s.removalPreviewModel(r, p, support)
 	if err != nil {
 		writeSPAError(w, 503, "Could not prepare removal confirmation.")

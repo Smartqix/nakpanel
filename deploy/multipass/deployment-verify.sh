@@ -18,9 +18,10 @@ ensure_vm 4 6G 48G
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"
-# Phase 28 preserves the server-security, Tools & Settings, hosting toolkit,
-# and domain workspace chain while verifying operational OCI deployments.
-"${ROOT_DIR}/deploy/multipass/phase28-verify.sh"
+# Install the current full stack before its operational acceptance gates.
+# Historical phase scripts remain available for debugging legacy contracts.
+"${ROOT_DIR}/deploy/multipass/current-install-verify.sh"
+NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase28-verify.sh"
 # Run the adversarial boundary suite against the same fully provisioned VM.
 NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/security-verify.sh"
 # Phase 29 runs last: its upgrade, reboot, and disaster-recovery legs mutate

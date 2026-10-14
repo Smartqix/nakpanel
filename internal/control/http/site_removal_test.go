@@ -86,6 +86,23 @@ func TestSiteRemovalPreviewAndDefaultRetention(t *testing.T) {
 		t.Fatal("unsafe defaults", html)
 	}
 }
+
+func TestSiteRemovalExistingPreviewResumesDurableProgress(t *testing.T) {
+	h, c, f := removalHTTPFixture(t)
+	f.preview.Operation = &f.operation
+	f.preview.Allowed = false
+	p := removalPreviewHTTP(t, h, c, "/sites/7/removal/preview")
+	if p["status_url"] != "/site-removals/42/status" || p["progress_url"] != "/site-removals/42" || p["approval"] != nil {
+		t.Fatal("existing removal needs observation, not another confirmation", p)
+	}
+	r := httptest.NewRequest("GET", "https://panel.test/sites/7/removal", nil)
+	r.AddCookie(c)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	if w.Code != 303 || w.Header().Get("Location") != "/site-removals/42" || f.calls != 0 {
+		t.Fatalf("existing progress did not resume: %d %v", w.Code, w.Header())
+	}
+}
 func TestSiteRemovalJSONAndHTMLProgress(t *testing.T) {
 	for _, enhanced := range []bool{true, false} {
 		t.Run(string(rune('0'+boolInt(enhanced))), func(t *testing.T) {

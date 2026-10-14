@@ -70,3 +70,22 @@ func TestLegacyDatabaseChecksRespectEscapedSchemaGrants(t *testing.T) {
 		}
 	}
 }
+
+func TestFreshDomainRemovalBootstrapUsesProductionInstaller(t *testing.T) {
+	data, err := os.ReadFile("deployment-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "current-install-verify.sh") || !strings.Contains(string(data), `NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase28-verify.sh"`) {
+		t.Fatal("fresh bootstrap must use the current production installer before modern native gates")
+	}
+	data, err = os.ReadFile("current-install-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"common.sh", "require_nakpanel_vm_name", "sync_repo", "deploy/install/install.sh --yes", "/healthz", "panelctl version"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("current installer gate missing %q", want)
+		}
+	}
+}

@@ -101,10 +101,10 @@ assert_contains "${tmpdir}/admin-dashboard.html" 'action="/dns"'
 assert_contains "${tmpdir}/admin-dashboard.html" 'action="/reconcile"'
 assert_contains "${tmpdir}/admin-dashboard.html" 'href="/db"'
 
-curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/db" > "${tmpdir}/adminer.html"
-assert_contains "${tmpdir}/adminer.html" 'Adminer SSO'
-assert_contains "${tmpdir}/adminer.html" 'Token'
-assert_contains "${tmpdir}/adminer.html" 'Expires'
+# Legacy Adminer SSO now leads to database selection, never a global root token.
+curl -skL --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/db" > "${tmpdir}/adminer.html"
+assert_contains "${tmpdir}/adminer.html" 'Databases'
+assert_contains "${tmpdir}/adminer.html" 'np_phase5'
 
 post_phase6_action() {
   local label="$1"
@@ -207,4 +207,4 @@ assert_contains "${tmpdir}/client-dashboard.html" 'Client dashboard'
 assert_not_contains "${tmpdir}/client-dashboard.html" 'Operations'
 assert_not_contains "${tmpdir}/client-dashboard.html" 'action="/backups"'
 
-echo "Phase 6 verification passed for backup, webmail, DNS, Adminer SSO, reconciliation, and direct :7443 recovery on https://${VM_IP}:7443"
+echo "Phase 6 verification passed for backup, webmail, DNS, scoped database navigation, reconciliation, and direct :7443 recovery on https://${VM_IP}:7443"

@@ -94,7 +94,7 @@
       var previous=controllers.get(dialog);if(previous)previous.stop();
       dialog.innerHTML='<div class="np-dialog-head"><h2 id="np-site-removal-title">Review removal</h2><button class="np-icon-button" type="button" data-np-dialog-close aria-label="Close"><svg class="np-icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg></button></div><div class="np-removal-body" role="status">Loading the exact domain impact...</div>';
       ui.dialogs.open(dialog,opener);
-      try {var result=await request(link.href+'/preview');if(dialog.open){dialog.innerHTML=result.html;var confirm=dialog.querySelector('[name="confirm_domain"]');if(confirm&&previousValue!==null)confirm.value=previousValue;mount(dialog);var input=dialog.querySelector('[data-np-autofocus]');if(input)input.focus();}}
+      try {var result=await request(link.href+'/preview');if(dialog.open){dialog.innerHTML=result.html;var confirm=dialog.querySelector('[name="confirm_domain"]');if(confirm&&previousValue!==null)confirm.value=previousValue;var current=mount(dialog);var input=dialog.querySelector('[data-np-autofocus]');if(input)input.focus();if(result.status_url)current.watch(result.status_url,result.progress_url);}}
       catch(error){var body=dialog.querySelector('.np-removal-body');if(body)body.textContent=error.status===404?'This website is not available in your workspace.':error.message;}
       return;
     }

@@ -8,7 +8,8 @@ VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 require_nakpanel_vm_name "${VM_NAME}"
 if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != 1 ]]; then
-  "${SCRIPT_DIR}/phase34-verify.sh"
+  "${SCRIPT_DIR}/current-install-verify.sh"
+  NAKPANEL_SKIP_PRIOR_PHASES=1 "${SCRIPT_DIR}/phase34-verify.sh"
 fi
 tmpdir="$(mktemp -d)"
 trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
@@ -116,7 +117,7 @@ multipass exec "${VM_NAME}" -- sudo -u nakpanel python3 - "${stale_id}" "${subsc
 import json,socket,sys
 s=socket.socket(socket.AF_UNIX);s.settimeout(10);s.connect('/run/nakpanel/agent.sock')
 data=dict(site_id=int(sys.argv[1]),subscription_id=int(sys.argv[2]),username=sys.argv[4],domain=sys.argv[5],php_version='8.4')
-s.sendall((json.dumps(dict(op='create_site',id='removal-stale-native',data=data))+'\n').encode())
+s.sendall((json.dumps(dict(op='create_site',id='removal-stale-native-'+sys.argv[1],data=data))+'\n').encode())
 result=json.loads(s.makefile().read()); assert not result['ok'] and ('removed' in result.get('error','') or 'retired' in result.get('error','')),result
 PY
 curl -sf --max-time 20 -H "Host: ${addon}" "http://${VM_IP}/" >/dev/null || fail 'stale RPC harmed the replacement'
