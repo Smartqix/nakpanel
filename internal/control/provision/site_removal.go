@@ -25,9 +25,10 @@ type SiteRemovalOptions struct {
 	Dependencies interface {
 		SiteServiceDependencies(context.Context) ([]string, error)
 	}
-	PanelHostname string
-	Now           func() time.Time
-	Usage         SiteRemovalUsageReader
+	PanelHostname       string
+	TLSStagingDirectory string
+	Now                 func() time.Time
+	Usage               SiteRemovalUsageReader
 }
 type SiteRemovalService struct {
 	db      *sql.DB

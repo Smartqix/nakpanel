@@ -798,6 +798,7 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	result, err := s.applicationLogs.ReadApplicationLog(r.Context(), types.ApplicationLogReq{
+		SiteID: site.ID, Domain: site.Domain,
 		ApplicationID: applicationID, SubscriptionID: site.SubscriptionID, Username: site.Username,
 		Lines: parseBoundedQueryInt(r, "lines", 200, 1, 1000),
 		Bytes: parseBoundedQueryInt(r, "bytes", 256*1024, 1, 1024*1024),

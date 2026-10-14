@@ -1040,6 +1040,7 @@ type DeleteBackupResult struct {
 }
 
 type RestoreBackupReq struct {
+	SHA256         string   `json:"sha256,omitempty"`
 	SiteID         int64    `json:"site_id,omitempty"`
 	SubscriptionID int64    `json:"subscription_id,omitempty"`
 	Domain         string   `json:"domain"`

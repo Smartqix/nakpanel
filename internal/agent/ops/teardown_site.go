@@ -25,7 +25,7 @@ type SiteTeardownOptions struct {
 	Dependencies     interface {
 		SiteServiceDependencies(context.Context) ([]string, error)
 	}
-	CertRoot, GitRoot, StagingRoot, TaskStateRoot, PHPApplicationStateRoot, ContainerStateRoot, ContainerRuntimeRoot, StatisticsRoot string
+	CertRoot, GitRoot, StagingRoot, TaskStateRoot, PHPApplicationStateRoot, ContainerStateRoot, ContainerRuntimeRoot, StatisticsRoot, BackupRoot string
 }
 type SiteTeardownProvisioner struct{ options SiteTeardownOptions }
 type siteRemovalJournal struct {
@@ -51,6 +51,7 @@ func NewSiteTeardownProvisioner(opts SiteTeardownOptions) *SiteTeardownProvision
 	opts.ContainerStateRoot = defaultPath(opts.ContainerStateRoot, "/var/lib/nakpanel/containers")
 	opts.ContainerRuntimeRoot = defaultPath(opts.ContainerRuntimeRoot, "/run/nakpanel-containers")
 	opts.StatisticsRoot = defaultPath(opts.StatisticsRoot, "/var/lib/nakpanel/web-statistics")
+	opts.BackupRoot = defaultPath(opts.BackupRoot, "/var/lib/nakpanel/backups")
 	return &SiteTeardownProvisioner{options: opts}
 }
 
@@ -89,6 +90,18 @@ func (p *SiteTeardownProvisioner) TeardownSite(ctx context.Context, req types.Te
 		if slices.Contains(journal.Checkpoints, string(req.Stage)) {
 			return nil
 		}
+		if req.Stage == types.RemovalFinalize {
+			if !slices.Contains(journal.Checkpoints, string(types.RemovalShared)) {
+				return errors.New("complete shared services before finalizing website removal")
+			}
+			if err = registry.CompleteRemoval(ctx, req.OperationID, ids); err != nil {
+				return err
+			}
+			journal.Complete = true
+			journal.Revision = req.Revision
+			journal.Checkpoints = append(journal.Checkpoints, string(types.RemovalFinalize))
+			return p.writeRemovalJournal(journalPath, journal)
+		}
 		if req.Stage == types.RemovalHosting && !slices.Contains(journal.Checkpoints, string(types.RemovalStopServices)) {
 			return errors.New("stop website services before removing hosting")
 		}
@@ -102,6 +115,9 @@ func (p *SiteTeardownProvisioner) TeardownSite(ctx context.Context, req types.Te
 			return err
 		}
 		if err = p.validateSelectedDatabaseOwnership(req); err != nil {
+			return err
+		}
+		if err = p.verifyToolkitRecoveryBackups(ctx, req); err != nil {
 			return err
 		}
 		if p.options.Dependencies != nil {

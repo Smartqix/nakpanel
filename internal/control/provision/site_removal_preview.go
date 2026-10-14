@@ -300,14 +300,20 @@ func (s *SiteRemovalService) loadRemovalData(ctx context.Context, q removalQuery
 		return err
 	}
 	s.verifyRemovalDatabases(ctx, snapshot)
-	rows, err = q.QueryContext(ctx, "SELECT id,site_id,target_name FROM backups WHERE site_id=ANY($1) ORDER BY id", pq.Array(ids))
+	recoveryIDs := []int64{}
+	for _, database := range snapshot.Databases {
+		if database.RecoveryBackupID > 0 {
+			recoveryIDs = append(recoveryIDs, database.RecoveryBackupID)
+		}
+	}
+	rows, err = q.QueryContext(ctx, "SELECT id,COALESCE(site_id,0),target_name,subscription_id,archive_path,checksum_sha256,database_names,status FROM backups WHERE site_id=ANY($1) OR id=ANY($2) ORDER BY id", pq.Array(ids), pq.Array(recoveryIDs))
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var item types.SiteRemovalResource
 		item.Kind = "backup"
-		if err = rows.Scan(&item.ID, &item.SiteID, &item.Name); err != nil {
+		if err = rows.Scan(&item.ID, &item.SiteID, &item.Name, &item.ParentID, &item.ArchivePath, &item.SHA256, pq.Array(&item.DatabaseNames), &item.Mode); err != nil {
 			rows.Close()
 			return err
 		}

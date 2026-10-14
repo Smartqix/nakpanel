@@ -105,3 +105,11 @@ func TestTeardownSiteRemovesExactLegacyPool(t *testing.T) {
 		t.Fatalf("legacy pool survives: %v", err)
 	}
 }
+
+func TestRemovalRestoreCannotUseSiblingRoot(t *testing.T) {
+	f := newSiteTeardownFixture(t)
+	_, err := normalizeRestoreRequest(types.RestoreBackupReq{SiteID: 2, SubscriptionID: 2, Username: "nps2", Domain: "addon.test", Docroot: f.sibling.Docroot, ArchivePath: filepath.Join(t.TempDir(), "backup.tar.gz")}, f.opts.Paths.HomeRoot)
+	if err == nil {
+		t.Fatal("positive website identity accepted a sibling restore root")
+	}
+}

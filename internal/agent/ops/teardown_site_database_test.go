@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -101,5 +102,41 @@ func TestTeardownSiteDatabaseProofIsAvailableBeforeConfirmation(t *testing.T) {
 	target.Principal = "another_principal"
 	if admin.databaseOwnershipVerified(types.DatabaseAdminTarget{DatabaseID: target.ID, Name: target.Name, Principal: target.Principal}) {
 		t.Fatal("mismatched principal proof accepted")
+	}
+}
+
+func TestTeardownSiteToolkitRecoveryProofRequired(t *testing.T) {
+	f := newSiteTeardownFixture(t)
+	engine, _, _ := removalDatabaseFixture(t, true)
+	f.opts.MariaDB = engine
+	f.request.Snapshot.Databases[0].Provenance = "wordpress_toolkit"
+	f.request.Snapshot.Databases[0].RecoveryBackupID = 70
+	f.request.DeleteDatabaseIDs = []int64{50}
+	if _, err := NewSiteTeardownProvisioner(f.opts).TeardownSite(context.Background(), f.request); err == nil {
+		t.Fatal("Toolkit database deletion without verified archive")
+	}
+	if len(f.runner.calls) != 0 {
+		t.Fatal("service stopped before recovery proof")
+	}
+}
+
+func TestTeardownSiteToolkitRecoveryArchiveCoverage(t *testing.T) {
+	f := newSiteTeardownFixture(t)
+	f.opts.BackupRoot = filepath.Join(f.opts.Paths.HomeRoot, "../backups")
+	backup, err := NewBackupProvisioner(BackupProvisionerOptions{OutputDir: f.opts.BackupRoot, HomeRoot: f.opts.Paths.HomeRoot, DatabaseDumper: &fakeDatabaseDumper{}}).CreateBackup(context.Background(), types.CreateBackupReq{Domain: "addon.test", Username: "nps2", Docroot: f.target.Docroot, Databases: []string{"np2_fixture"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	proof := types.SiteRemovalResource{ID: 70, Kind: "backup", Name: "addon.test", SiteID: 2, ParentID: 2, Mode: "active", ArchivePath: backup.ArchivePath, SHA256: backup.SHA256, DatabaseNames: []string{"np2_fixture"}}
+	p := NewSiteTeardownProvisioner(f.opts)
+	if err = p.verifyRemovalRecoveryArchive(context.Background(), proof, "np2_fixture"); err != nil {
+		t.Fatal("valid recovery archive", err)
+	}
+	if err = p.verifyRemovalRecoveryArchive(context.Background(), proof, "missing_schema"); err == nil {
+		t.Fatal("missing dump accepted")
+	}
+	proof.SHA256 = strings.Repeat("0", 64)
+	if err = p.verifyRemovalRecoveryArchive(context.Background(), proof, "np2_fixture"); err == nil {
+		t.Fatal("changed archive accepted")
 	}
 }

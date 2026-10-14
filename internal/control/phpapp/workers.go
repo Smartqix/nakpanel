@@ -64,7 +64,7 @@ func (s *SQLStore) loadForWorkerOperation(ctx context.Context, applicationID, re
 		return loaded, false, err
 	}
 	defer tx.Rollback()
-	loaded.record, err = scanApplication(tx.QueryRowContext(ctx, applicationSelect+` WHERE application.id=$1`, applicationID))
+	loaded.record, err = scanApplication(tx.QueryRowContext(ctx, applicationSelect+` WHERE application.id=$1 AND site.removal_state='none'`, applicationID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return loaded, true, nil
 	}

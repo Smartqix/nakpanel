@@ -835,6 +835,22 @@ func (m *Manager) RestoreBackup(ctx context.Context, owner auth.SessionUser, bac
 	return m.phase6Repo.RestoreBackup(ctx, owner.ID, backupID)
 }
 
+func (m *Manager) RestoreBackupToSiteFor(ctx context.Context, actor auth.SessionUser, backupID, targetSiteID int64) (int64, error) {
+	if targetSiteID <= 0 {
+		return 0, errors.New("select a website to restore this backup")
+	}
+	if err := m.canManageBackup(ctx, actor, backupID); err != nil {
+		return 0, err
+	}
+	repository, ok := m.phase6Repo.(interface {
+		RestoreBackupToSite(context.Context, int64, int64, int64) (int64, error)
+	})
+	if !ok {
+		return 0, errors.New("retained backup restore is not configured")
+	}
+	return repository.RestoreBackupToSite(ctx, actor.ID, backupID, targetSiteID)
+}
+
 func (m *Manager) UpsertAccountQuota(ctx context.Context, owner auth.SessionUser, limits controlquota.Limits) error {
 	if owner.Role != auth.RoleAdmin {
 		return ErrForbidden

@@ -91,3 +91,27 @@ func TestRemovalSharedConfigFailureRollsBack(t *testing.T) {
 		t.Fatal("shared retry", err)
 	}
 }
+
+func TestSiteRemovalCompletionReplayKeepsReplacement(t *testing.T) {
+	f := newSiteTeardownFixture(t)
+	p := NewSiteTeardownProvisioner(f.opts)
+	for _, stage := range []types.SiteRemovalStage{types.RemovalStopServices, types.RemovalHosting, types.RemovalShared, types.RemovalFinalize} {
+		f.request.Stage = stage
+		if _, err := p.TeardownSite(context.Background(), f.request); err != nil {
+			t.Fatal(err)
+		}
+	}
+	newIdentity := types.SiteIdentity{SiteID: 99, SubscriptionID: 2, Username: "nps2", Domain: "addon.test"}
+	if err := f.opts.IdentityRegistry.WithCreation(context.Background(), []types.SiteIdentity{newIdentity}, func(context.Context) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(f.target.Docroot, "new-index.php")
+	writeRemovalFixture(t, file)
+	f.request.Stage = types.RemovalHosting
+	if _, err := NewSiteTeardownProvisioner(f.opts).TeardownSite(context.Background(), f.request); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(file); err != nil {
+		t.Fatal("old cleanup deleted replacement", err)
+	}
+}

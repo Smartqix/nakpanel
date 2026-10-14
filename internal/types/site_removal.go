@@ -32,14 +32,17 @@ type SiteRemovalSite struct {
 }
 
 type SiteRemovalResource struct {
-	ID           int64  `json:"id"`
-	SiteID       int64  `json:"site_id,omitempty"`
-	ParentID     int64  `json:"parent_id,omitempty"`
-	Revision     int64  `json:"revision,omitempty"`
-	Kind         string `json:"kind"`
-	Name         string `json:"name,omitempty"`
-	IntentDigest string `json:"intent_digest,omitempty"`
-	Mode         string `json:"mode,omitempty"`
+	ID            int64    `json:"id"`
+	SiteID        int64    `json:"site_id,omitempty"`
+	ParentID      int64    `json:"parent_id,omitempty"`
+	Revision      int64    `json:"revision,omitempty"`
+	Kind          string   `json:"kind"`
+	Name          string   `json:"name,omitempty"`
+	IntentDigest  string   `json:"intent_digest,omitempty"`
+	Mode          string   `json:"mode,omitempty"`
+	ArchivePath   string   `json:"archive_path,omitempty"`
+	SHA256        string   `json:"sha256,omitempty"`
+	DatabaseNames []string `json:"database_names,omitempty"`
 }
 
 type SiteRemovalDatabase struct {

@@ -2,10 +2,12 @@ package provision
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -43,13 +45,16 @@ func (ConfigureWebmailArgs) Kind() string { return "configure_webmail" }
 func (ConfigureWebmailArgs) InsertOpts() river.InsertOpts { return activeUniqueOpts() }
 
 type RestoreBackupArgs struct {
-	RestoreID   int64    `json:"restore_id" river:"unique"`
-	BackupID    int64    `json:"backup_id"`
-	Domain      string   `json:"domain"`
-	Username    string   `json:"username"`
-	Docroot     string   `json:"docroot"`
-	ArchivePath string   `json:"archive_path"`
-	Databases   []string `json:"databases"`
+	SiteID         int64    `json:"site_id,omitempty"`
+	SubscriptionID int64    `json:"subscription_id,omitempty"`
+	RestoreID      int64    `json:"restore_id" river:"unique"`
+	BackupID       int64    `json:"backup_id"`
+	Domain         string   `json:"domain"`
+	Username       string   `json:"username"`
+	Docroot        string   `json:"docroot"`
+	ArchivePath    string   `json:"archive_path"`
+	SHA256         string   `json:"sha256,omitempty"`
+	Databases      []string `json:"databases"`
 }
 
 func (RestoreBackupArgs) Kind() string { return "restore_backup" }
@@ -176,6 +181,7 @@ func (w *CreateBackupWorker) Work(ctx context.Context, job *river.Job[CreateBack
 		return errors.New("agent backup client is not configured")
 	}
 	resp, err := w.agent.CreateBackup(ctx, types.CreateBackupReq{
+		SiteID: job.Args.SiteID, SubscriptionID: job.Args.SubscriptionID,
 		Domain:    job.Args.Domain,
 		Username:  job.Args.Username,
 		Docroot:   job.Args.Docroot,
@@ -229,13 +235,27 @@ func (w *RestoreBackupWorker) Work(ctx context.Context, job *river.Job[RestoreBa
 	if w.agent == nil {
 		return errors.New("agent restore client is not configured")
 	}
-	resp, err := w.agent.RestoreBackup(ctx, types.RestoreBackupReq{
+	req := types.RestoreBackupReq{
+		SiteID: job.Args.SiteID, SubscriptionID: job.Args.SubscriptionID, SHA256: job.Args.SHA256,
 		Domain:      job.Args.Domain,
 		Username:    job.Args.Username,
 		Docroot:     job.Args.Docroot,
 		ArchivePath: job.Args.ArchivePath,
 		Databases:   job.Args.Databases,
-	})
+	}
+	if intents, ok := w.store.(interface {
+		RestoreJobRequest(context.Context, RestoreBackupArgs) (types.RestoreBackupReq, error)
+	}); ok {
+		var err error
+		req, err = intents.RestoreJobRequest(ctx, job.Args)
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, controlquota.ErrSiteRemoving) {
+			return river.JobCancel(errors.New("restore target is missing or inactive; select a current website"))
+		}
+		if err != nil {
+			return err
+		}
+	}
+	resp, err := w.agent.RestoreBackup(ctx, req)
 	if err != nil {
 		w.markRestoreFailed(ctx, job.Args.RestoreID, err.Error())
 		return err
@@ -271,7 +291,20 @@ func (w *ConfigureWebmailWorker) Work(ctx context.Context, job *river.Job[Config
 	if w.agent == nil {
 		return errors.New("agent webmail client is not configured")
 	}
-	resp, err := w.agent.ConfigureWebmail(ctx, types.ConfigureWebmailReq{Domain: job.Args.Domain, Hostname: job.Args.Hostname})
+	req := types.ConfigureWebmailReq{Domain: job.Args.Domain, Hostname: job.Args.Hostname}
+	if intents, ok := w.store.(interface {
+		WebmailRequest(context.Context, int64) (types.ConfigureWebmailReq, error)
+	}); ok {
+		var err error
+		req, err = intents.WebmailRequest(ctx, job.Args.WebmailID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return river.JobCancel(errors.New("webmail website is inactive, missing or being removed"))
+		}
+		if err != nil {
+			return err
+		}
+	}
+	resp, err := w.agent.ConfigureWebmail(ctx, req)
 	if err != nil {
 		w.markWebmailFailed(ctx, job.Args.WebmailID, err.Error())
 		return err

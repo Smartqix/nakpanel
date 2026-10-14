@@ -88,7 +88,7 @@ JOIN subscription_system_accounts account ON account.subscription_id=subscriptio
 JOIN php_applications application ON application.site_id=site.id
 LEFT JOIN databases database ON database.id=instance.database_id
 LEFT JOIN backups backup ON backup.id=operation.backup_id
-WHERE instance.id=$1 AND operation.id=$2`, args.InstanceID, args.OperationID).Scan(
+WHERE instance.id=$1 AND operation.id=$2 AND site.removal_state='none'`, args.InstanceID, args.OperationID).Scan(
 		&loaded.instance.ID, &loaded.instance.SubscriptionID, &loaded.instance.SiteID, &loaded.instance.DatabaseID,
 		&loaded.instance.AdminUser, &loaded.instance.AdminEmail, &loaded.instance.SiteTitle,
 		&loaded.instance.InstalledVersion, &loaded.instance.UpdatePolicy, &loaded.instance.MaintenanceMode, &loaded.instance.DatabaseManaged,

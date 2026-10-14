@@ -51,7 +51,7 @@ func (p *SiteTeardownProvisioner) sharedRemovalArtifacts(req types.TeardownSiteR
 				if p.options.DNS == nil {
 					return nil, errors.New("DNS cleanup is not configured")
 				}
-				for _, artifact := range []removalArtifact{{root: p.options.DNS.zoneDir, path: filepath.Join(p.options.DNS.zoneDir, "db."+resource.Name)}, {root: p.options.DNS.includeDir, path: filepath.Join(p.options.DNS.includeDir, resource.Name+".conf")}} {
+				for _, artifact := range []removalArtifact{{root: p.options.DNS.zoneDir, path: filepath.Join(p.options.DNS.zoneDir, "db."+resource.Name)}, {root: p.options.DNS.includeDir, path: filepath.Join(p.options.DNS.includeDir, resource.Name+".conf")}, {root: p.options.DNS.includeDir, path: filepath.Join(p.options.DNS.includeDir, resource.Name+".nakpanel-revision.json")}} {
 					if err := validateRemovalArtifact(artifact); err != nil {
 						return nil, err
 					}

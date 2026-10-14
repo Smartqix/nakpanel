@@ -84,6 +84,15 @@ func (s *SiteRemovalService) authorizeOperation(ctx context.Context, actor auth.
 	if !allowed {
 		return types.SiteRemovalOperation{}, ErrForbidden
 	}
+	if actor.Role != auth.RoleAdmin {
+		var customerID int64
+		if err = s.db.QueryRowContext(ctx, "SELECT customer_id FROM subscriptions WHERE id=$1", op.SubscriptionID).Scan(&customerID); err != nil {
+			return types.SiteRemovalOperation{}, err
+		}
+		if customerID != op.CustomerID {
+			return types.SiteRemovalOperation{}, ErrForbidden
+		}
+	}
 	return op, nil
 }
 

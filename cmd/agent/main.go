@@ -39,7 +39,7 @@ func main() {
 		log.Fatalf("initialize website identity registry: %v", err)
 	}
 	siteDependencies := ops.NewSiteServiceDependencyReader(ops.SiteServiceDependencyOptions{
-		Paths:     []string{os.Getenv("NAKPANEL_FTPS_TLS_CERT"), os.Getenv("NAKPANEL_FTPS_TLS_KEY"), os.Getenv("NAKPANEL_WEBMAIL_TLS_CERT"), os.Getenv("NAKPANEL_WEBMAIL_TLS_KEY"), os.Getenv("NAKPANEL_MAIL_TLS_CERT"), os.Getenv("NAKPANEL_MAIL_TLS_KEY"), "/etc/stalwart/tls/cert.pem", "/etc/stalwart/tls/key.pem"},
+		Paths:     []string{os.Getenv("NAKPANEL_FTPS_TLS_CERT"), os.Getenv("NAKPANEL_FTPS_TLS_KEY"), os.Getenv("NAKPANEL_WEBMAIL_TLS_CERT"), os.Getenv("NAKPANEL_WEBMAIL_TLS_KEY"), os.Getenv("NAKPANEL_MAIL_TLS_CERT"), os.Getenv("NAKPANEL_MAIL_TLS_KEY"), "/etc/stalwart/tls/cert.pem", "/etc/stalwart/tls/key.pem", "/var/lib/nakpanel/tls/panel.crt", "/var/lib/nakpanel/tls/panel.key"},
 		Hostnames: []string{os.Getenv("NAKPANEL_MAIL_TLS_HOSTNAME"), os.Getenv("NAKPANEL_WEBMAIL_TLS_HOSTNAME")},
 	})
 	siteProvisioner := ops.NewSiteProvisioner(ops.SiteProvisionerOptions{
@@ -88,12 +88,14 @@ func main() {
 		log.Printf("recover staged server security policy: %v", err)
 	})
 	databaseAdministration := ops.NewMariaDBAdministration(os.Getenv("NAKPANEL_MARIADB_DSN"))
+	siteTeardown := ops.NewSiteTeardownProvisioner(ops.SiteTeardownOptions{IdentityRegistry: identityRegistry, Dependencies: siteDependencies, Mail: mailProvisioner, DNS: dnsProvisioner, MariaDB: ops.NewLazyMariaDBEngine(os.Getenv("NAKPANEL_MARIADB_DSN"))})
 	serverBackups := ops.NewServerBackupProvisioner(ops.ServerBackupProvisionerOptions{})
 	fail2banController := ops.NewFail2BanController(ops.Fail2BanControllerOptions{})
 	dispatcher := agentrpc.NewDispatcher(
 		reloader,
 		agentrpc.Options{
 			SiteGuard:        identityRegistry,
+			SiteTeardown:     siteTeardown,
 			SiteDependencies: siteDependencies,
 			AllowedServices:  []string{"nginx", "php8.1-fpm", "php8.2-fpm", "php8.3-fpm", "php8.4-fpm", "php8.5-fpm", "bind9", "named.service", "stalwart-mail.service"},
 			SiteProvisioner:  siteProvisioner,

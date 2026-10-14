@@ -91,6 +91,10 @@ BEGIN
     ELSIF table_value='restore_runs' THEN
         SELECT site_id INTO value FROM backups WHERE id=NULLIF(row_value->>'backup_id','')::BIGINT;
         ids:=ARRAY[value];
+    ELSIF table_value='sftp_access_identities' THEN
+        ids:=ARRAY(SELECT id FROM sites WHERE subscription_id=NULLIF(row_value->>'subscription_id','')::BIGINT
+          AND row_value->>'relative_root' LIKE 'domains/%'
+          AND domain=split_part(row_value->>'relative_root','/',2));
     ELSIF table_value IN ('php_deployments','php_environment_bindings','php_workers') THEN
         SELECT site_id INTO value FROM php_applications WHERE id=NULLIF(row_value->>'application_id','')::BIGINT;
         ids:=ARRAY[value];
@@ -227,7 +231,7 @@ CREATE TRIGGER removal_dns_dependency_guard BEFORE INSERT OR UPDATE ON dns_templ
 DO $$
 DECLARE table_value TEXT;
 BEGIN
-    FOREACH table_value IN ARRAY ARRAY['sites','databases','backups','restore_runs','webmail_hosts','dns_zones','dns_records',
+    FOREACH table_value IN ARRAY ARRAY['sites','databases','backups','restore_runs','webmail_hosts','dns_zones','dns_records','sftp_access_identities',
         'ftp_accounts','scheduled_tasks','scheduled_task_runs','mail_domains','mailboxes','mail_aliases','application_instances',
         'application_ports','application_volumes','application_generations','application_secret_bindings','protected_directories',
         'git_repositories','git_deployments','staging_operations','site_runtime_generations','site_policy_overrides',

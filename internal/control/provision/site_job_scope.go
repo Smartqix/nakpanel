@@ -24,7 +24,8 @@ var removalJobClassification = map[string]string{
 	"finalize_billing_account": "shared", "teardown_billing_account": "shared",
 	"system_refresh_inventory": "node", "system_control_service": "node", "system_apply_fail2ban": "node", "system_stage_firewall": "node", "system_apply_updates": "node", "system_host_power": "node",
 	"sweep_billing_webhooks": "node", "deliver_billing_webhook": "node", "deliver_notifications": "node", "server_backup": "node", "server_backup_prune": "node", "server_backup_sweep": "node",
-	"remove_site": "removal",
+	"remove_site":         "removal",
+	"sweep_site_removals": "shared",
 }
 
 func TargetSiteJobScope(snapshot types.SiteRemovalSnapshot) (string, []any) {

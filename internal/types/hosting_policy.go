@@ -247,6 +247,7 @@ func (domain SubscriptionDomain) RuntimePHPVersion() (string, error) {
 }
 
 type SFTPAccessIdentity struct {
+	SiteID       int64  `json:"site_id,omitempty"`
 	ID           int64  `json:"id"`
 	Name         string `json:"name"`
 	PublicKey    string `json:"public_key"`

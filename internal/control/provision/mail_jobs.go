@@ -48,6 +48,7 @@ func (w *ConfigureMailWorker) SetRiverClient(client *river.Client[*sql.Tx]) {
 
 type mailDomainRow struct {
 	ID              int64
+	SiteID          int64
 	SubscriptionID  int64
 	Domain          string
 	Enabled         bool
@@ -76,7 +77,7 @@ AND (customer.reseller_id IS NULL OR (
         WHERE allocation.reseller_id=customer.reseller_id AND allocation.status='active'
     )
 )),
-domain.delete_requested,domain.dkim_enabled,domain.dmarc_policy,`+mailDomainIntentVersionSQL+`
+domain.delete_requested,domain.dkim_enabled,domain.dmarc_policy,`+mailDomainIntentVersionSQL+`,COALESCE(domain.site_id,(SELECT id FROM sites selected WHERE selected.domain=domain.domain AND selected.subscription_id=domain.subscription_id))
 FROM mail_domains domain
 JOIN subscriptions subscription ON subscription.id=domain.subscription_id
 JOIN customers customer ON customer.id=subscription.customer_id
@@ -90,7 +91,7 @@ ORDER BY domain.domain`)
 	var domains []mailDomainRow
 	for rows.Next() {
 		var item mailDomainRow
-		if err := rows.Scan(&item.ID, &item.SubscriptionID, &item.Domain, &item.Enabled, &item.LifecycleActive, &item.DeleteRequested, &item.DKIM, &item.DMARCPolicy, &item.IntentVersion); err != nil {
+		if err := rows.Scan(&item.ID, &item.SubscriptionID, &item.Domain, &item.Enabled, &item.LifecycleActive, &item.DeleteRequested, &item.DKIM, &item.DMARCPolicy, &item.IntentVersion, &item.SiteID); err != nil {
 			rows.Close()
 			return err
 		}
@@ -132,6 +133,7 @@ WHERE id=$1 AND effective_enabled AND `+mailDomainIntentVersionSQL+`=$2`, domain
 	for _, domain := range domains {
 		if domain.Enabled && !domain.DeleteRequested {
 			request.Domains = append(request.Domains, types.MailDomainConfig{
+				SiteID: domain.SiteID, SubscriptionID: domain.SubscriptionID,
 				MailDomainID: domain.ID, Domain: domain.Domain, DKIM: domain.DKIM,
 			})
 		}

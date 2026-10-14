@@ -484,11 +484,11 @@ func (w *ReconcileApplicationsWorker) Work(ctx context.Context, _ *river.Job[Rec
 CASE WHEN application.desired_state='running' AND account.desired_state='active' AND site.desired_status='active'
      THEN 'running' ELSE 'stopped' END,
 application.desired_revision,application.convergence_status,
-application.active_generation,application.endpoint_port,application.container_port,application.health_kind,application.health_path
+application.active_generation,application.endpoint_port,application.container_port,application.health_kind,application.health_path,site.id,site.domain
 FROM application_instances application
 JOIN subscription_system_accounts account ON account.subscription_id=application.subscription_id
 JOIN sites site ON site.id=application.site_id AND site.subscription_id=application.subscription_id
-WHERE application.runtime='oci' AND NOT application.delete_requested
+WHERE application.runtime='oci' AND NOT application.delete_requested AND site.removal_state='none'
 ORDER BY application.id LIMIT 250`)
 	if err != nil {
 		return err
@@ -499,13 +499,15 @@ ORDER BY application.id LIMIT 250`)
 		username, desired, convergence               string
 		endpointPort, containerPort                  int
 		healthKind, healthPath                       string
+		siteID                                       int64
+		domain                                       string
 	}
 	var candidates []candidate
 	for rows.Next() {
 		var item candidate
 		if err := rows.Scan(&item.id, &item.subscriptionID, &item.username, &item.desired,
 			&item.revision, &item.convergence, &item.activeRevision, &item.endpointPort, &item.containerPort,
-			&item.healthKind, &item.healthPath); err != nil {
+			&item.healthKind, &item.healthPath, &item.siteID, &item.domain); err != nil {
 			return err
 		}
 		candidates = append(candidates, item)
@@ -518,6 +520,7 @@ ORDER BY application.id LIMIT 250`)
 	}
 	for _, item := range candidates {
 		observed, inspectErr := w.agent.ApplicationStatus(ctx, types.ApplicationControlReq{
+			SiteID: item.siteID, Domain: item.domain,
 			ApplicationID: item.id, SubscriptionID: item.subscriptionID, Username: item.username,
 			ActiveRevision: item.activeRevision,
 			Endpoint:       types.ApplicationEndpointSpec{HostPort: item.endpointPort, ContainerPort: item.containerPort},
@@ -1144,6 +1147,15 @@ WHERE site.subscription_id=$1 AND site.removal_state='none' ORDER BY site.id`, s
 			return convergenceSnapshot{}, err
 		}
 		identity.Enabled = identity.Enabled && desiredState == "active" && account.Policy.Permissions.SFTP
+		if strings.HasPrefix(identity.RelativeRoot, "domains/") {
+			domain := strings.Split(strings.TrimPrefix(identity.RelativeRoot, "domains/"), "/")[0]
+			for _, current := range account.Domains {
+				if current.Domain == domain {
+					identity.SiteID = current.SiteID
+					break
+				}
+			}
+		}
 		account.SFTPIdentities = append(account.SFTPIdentities, identity)
 	}
 	rows.Close()

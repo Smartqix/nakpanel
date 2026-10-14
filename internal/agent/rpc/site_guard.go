@@ -76,7 +76,7 @@ func guardAccount(req types.Request, p types.EnsureSubscriptionAccountReq, regis
 	for _, identity := range p.SFTPIdentities {
 		if strings.HasPrefix(identity.RelativeRoot, "domains/") {
 			domain := strings.Split(strings.TrimPrefix(identity.RelativeRoot, "domains/"), "/")[0]
-			removed, err := registry.Removed(guardIdentity(0, p.SubscriptionID, p.Username, domain))
+			removed, err := registry.Removed(guardIdentity(identity.SiteID, p.SubscriptionID, p.Username, domain))
 			if err != nil {
 				return preparedSiteGuard{}, err
 			}

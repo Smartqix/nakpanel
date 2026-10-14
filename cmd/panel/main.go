@@ -34,6 +34,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/version"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
+	"github.com/riverqueue/river/rivertype"
 	"github.com/robfig/cron/v3"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -237,6 +238,10 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	phase6Status := provision.NewSQLPhase6StatusStore(db)
 	maintenanceService := controlmaintenance.NewService(db, nil, agent, serverAdminStore)
 	certificateSetup := provision.NewSQLProvisioningCertificateSetup(db, nil)
+	removalService := provision.NewSiteRemovalService(db, nil, workspace.NewStore(db), provision.SiteRemovalOptions{PanelHostname: runtimeConfig.PanelHostname, Dependencies: agent, DatabaseInspector: agent})
+	removalShared := provision.NewSiteRemovalSharedServices(db, agent, serverAdminStore)
+	river.AddWorker(workers, provision.NewRemoveSiteWorker(removalService, agent, removalShared))
+	river.AddWorker(workers, provision.NewSweepSiteRemovalsWorker(removalService))
 	river.AddWorker(workers, provision.NewCreateSiteWorker(agent, siteStatus, autoSubdomainDNS))
 	river.AddWorker(workers, provision.NewCreateDatabaseWorker(agent, databaseStatus, serverAdminStore))
 	river.AddWorker(workers, provision.NewIssueCertWorker(agent, siteStatus, maintenanceService).WithProvisioningSetup(certificateSetup))
@@ -326,7 +331,9 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
+		WorkerMiddleware: []rivertype.WorkerMiddleware{provision.NewSiteJobFence(db)},
 		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return provision.SweepSiteRemovalsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Hour), func() (river.JobArgs, *river.InsertOpts) { return webstatistics.SweepArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(6*time.Hour), func() (river.JobArgs, *river.InsertOpts) {
 				return controlwordpress.SweepArgs{}, nil
@@ -407,6 +414,8 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	scheduledTaskSweepWorker.SetRiverClient(client)
 	convergenceWorker.SetRiverClient(client)
 	configureMailWorker.SetRiverClient(client)
+	removalService.SetRiverClient(client)
+	removalShared.SetRiverClient(client)
 	pendingConvergenceWorker.SetRiverClient(client)
 	applicationReconcileWorker.SetRiverClient(client)
 	migrationSweepWorker.SetRiverClient(client)

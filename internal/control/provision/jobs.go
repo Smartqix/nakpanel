@@ -2,6 +2,7 @@ package provision
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -171,7 +172,7 @@ func (w *CreateSiteWorker) Work(ctx context.Context, job *river.Job[CreateSiteAr
 		return errors.New("agent site client is not configured")
 	}
 
-	resp, err := w.agent.CreateSite(ctx, types.CreateSiteReq{
+	req := types.CreateSiteReq{
 		SubscriptionID: job.Args.SubscriptionID,
 		SiteID:         job.Args.SiteID,
 		Username:       job.Args.Username,
@@ -179,7 +180,20 @@ func (w *CreateSiteWorker) Work(ctx context.Context, job *river.Job[CreateSiteAr
 		PHPVersion:     job.Args.PHPVersion,
 		SharedAccount:  job.Args.SharedAccount,
 		Limits:         job.Args.Limits,
-	})
+	}
+	if intents, ok := w.dns.(interface {
+		CreateSiteRequest(context.Context, int64) (types.CreateSiteReq, error)
+	}); ok {
+		var err error
+		req, err = intents.CreateSiteRequest(ctx, job.Args.SiteID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return river.JobCancel(errors.New("website is inactive, missing or being removed"))
+		}
+		if err != nil {
+			return err
+		}
+	}
+	resp, err := w.agent.CreateSite(ctx, req)
 	if err != nil {
 		w.markFailed(ctx, job.Args.SiteID, err.Error())
 		return err
