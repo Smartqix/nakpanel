@@ -133,7 +133,7 @@ func TestNewCustomerSubscriptionCanRetryAfterCapacityFailure(t *testing.T) {
 				mock.ExpectQuery(`WHERE s.id = \$1`).WithArgs(int64(77)).WillReturnRows(onboardingRows(
 					int64(77), int64(88), customerUserID, "owner@example.test", "Owner", "", int64(10), "Starter", "Starter subscription", "active",
 					1, 1, 20, 1, 20, 0, 0, 0, 0, 0, int64(0), now, now, int64(0), "synced", "in_sync", 1, "", "compliant", "", now,
-					true, false, "8.3", 2, 64, 20, 100, 0, 0, 0, 0, 0, -1, true, "8.3", true, true, true, "block", 90, 90, []byte(`{}`)))
+					true, false, "8.3", 2, 64, 20, 100, 0, 0, 0, 0, 0, -1, true, "8.3", true, true, true, "block", 90, 90, []byte(`{}`), int64(0)))
 				mock.ExpectCommit()
 				sub, err := store.CreateSubscription(context.Background(), req)
 				if err != nil || sub.ID != 77 || sub.CustomerID != 88 || sub.CustomerUserID != customerUserID {

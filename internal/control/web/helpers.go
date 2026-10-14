@@ -54,6 +54,7 @@ type DashboardActions struct {
 }
 
 type WorkspaceView struct {
+	SiteRemoval          *SiteRemovalView
 	Route                string
 	Title                string
 	SiteCreateError      string
@@ -864,7 +865,7 @@ func routeTitle(route string) string {
 		return "Home"
 	case "site-new":
 		return "Add Website"
-	case "sites", "site-detail", "site-files", "site-file-edit":
+	case "sites", "site-detail", "site-files", "site-file-edit", "site-removal", "site-removal-progress":
 		return "Websites & Domains"
 	case "databases":
 		return "Databases"
@@ -1977,7 +1978,7 @@ func csrfField(token string) string { return token }
 
 func workspacePath(view WorkspaceView, path string) string {
 	if view.SupportCustomerID > 0 {
-		if strings.HasPrefix(path, "/sites/") || strings.HasPrefix(path, "/subscriptions/") {
+		if strings.HasPrefix(path, "/sites/") || strings.HasPrefix(path, "/subscriptions/") || strings.HasPrefix(path, "/site-removals/") || strings.HasPrefix(path, "/backups/") {
 			return "/support/customers/" + strconv.FormatInt(view.SupportCustomerID, 10) + path
 		}
 		page := strings.TrimPrefix(path, "/")

@@ -18,7 +18,16 @@ quota_packages=(quota)
 if apt-cache show "linux-modules-extra-$(uname -r)" >/dev/null 2>&1; then
   quota_packages+=("linux-modules-extra-$(uname -r)")
 fi
+# Track future generic kernels too; installing only the currently running
+# kernel's extra modules loses quota_v2 after the next image update/reboot.
+if [[ "$(uname -r)" == *-generic ]] && apt-cache show linux-generic >/dev/null 2>&1; then
+  quota_packages+=(linux-generic)
+fi
 apt-get install -y "${quota_packages[@]}"
+install -d -m 0755 /etc/modules-load.d /etc/systemd/system/quotaon.service.d
+install -m 0644 "${ROOT_DIR}/deploy/systemd/nakpanel-quota.modules-load.conf" /etc/modules-load.d/nakpanel-quota.conf
+install -m 0644 "${ROOT_DIR}/deploy/systemd/quotaon.service.d/nakpanel.conf" /etc/systemd/system/quotaon.service.d/nakpanel.conf
+systemctl daemon-reload
 modprobe quota_v2 >/dev/null 2>&1 || true
 
 ensure_quota_fstab() {

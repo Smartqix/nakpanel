@@ -67,7 +67,7 @@ post_expect(){
   local status
   status="$(curl --connect-timeout 5 --max-time 30 -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -b "${tmpdir}/admin.cookies" -c "${tmpdir}/admin.cookies" \
-    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" -H 'X-Nakpanel-SPA: true' \
     "$@" "https://${VM_IP}:7443/${endpoint}")"
   [[ "${status}" == "${expected}" ]] || {
     echo "${label} returned HTTP ${status}, want ${expected}" >&2
@@ -188,14 +188,14 @@ preview = payload["preview"]
 assert payload["ok"] is True
 assert any(change["path"] == "resources.max_sites" and change["enforcement"] == "hard_limit" for change in preview["changes"]), preview
 impact = next(item for item in preview["subscription_impacts"] if item["subscription_id"] == int(sys.argv[2]))
-assert any(value.startswith("sites 1/0") for value in impact["violations"]), impact
+assert any(value.startswith("domains 1/0") for value in impact["violations"]), impact
 assert any("no resources will be deleted" in value for value in preview["warnings"]), preview
 assert preview["allowed"] is True, preview
 PY
 post_as phase31-lower-limit plans "${plan_form[@]}"
 wait_for 'over-limit synchronization' "SELECT sync_status||':'||compliance_status FROM subscriptions WHERE id=${subscription_id}" 'in_sync:over_limit'
 compliance_error="$(db "SELECT compliance_error FROM subscriptions WHERE id=${subscription_id}")"
-[[ "${compliance_error}" == *'sites 1/0'* ]] || fail "compliance error lacks the exceeded resource: ${compliance_error}"
+[[ "${compliance_error}" == *'domains 1/0'* ]] || fail "compliance error lacks the exceeded resource: ${compliance_error}"
 [[ "$(db "SELECT status FROM sites WHERE id=${site_id}")" == 'active' ]] || fail "plan synchronization deleted or suspended the existing site"
 
 echo "phase31: refresh measured usage and restore compliance"

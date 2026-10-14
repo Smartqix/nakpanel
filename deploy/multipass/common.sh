@@ -126,7 +126,32 @@ ensure_vm() {
   wait_for_cloud_init "${NAKPANEL_MULTIPASS_VM}"
 }
 
-sync_repo() {
+ensure_lab_quota() {
+  require_nakpanel_vm_name "${NAKPANEL_MULTIPASS_VM}"
+  multipass exec "${NAKPANEL_MULTIPASS_VM}" -- sudo bash -se <<'QUOTA'
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+packages=(quota)
+if apt-cache show "linux-modules-extra-$(uname -r)" >/dev/null 2>&1; then packages+=("linux-modules-extra-$(uname -r)"); fi
+apt-get install -y "${packages[@]}"
+modprobe quota_v2 >/dev/null 2>&1 || true
+target="$(findmnt -n -o TARGET --target /home)"
+test -n "${target}"
+if ! findmnt -n -o OPTIONS --target /home | tr ',' '\n' | grep -qx usrquota; then
+ mount -o remount,usrquota,grpquota "${target}"
+fi
+state="$(quotaon -p "${target}" 2>/dev/null || true)"
+if ! grep -Eq 'user quota .* is on' <<<"${state}"; then
+ quotacheck -ugm "${target}" || quotacheck -cugm "${target}"
+ quotaon -uv "${target}" || true
+fi
+state="$(quotaon -p "${target}" 2>/dev/null || true)"
+grep -Eq 'user quota .* is on' <<<"${state}"
+QUOTA
+}
+
+sync_repo() (
   local root_dir="$1"
   local remote_src="${2:-${NAKPANEL_REMOTE_SRC}}"
   if [[ ! "${remote_src}" =~ ^/tmp/nakpanel-[A-Za-z0-9._-]+$ ]]; then
@@ -134,10 +159,24 @@ sync_repo() {
     echo "NAKPANEL_REMOTE_SRC must be a direct child of /tmp named nakpanel-*" >&2
     return 1
   fi
-  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- sudo rm -rf "${remote_src}"
-  multipass transfer -r "${root_dir}" "${NAKPANEL_MULTIPASS_VM}:${remote_src}"
+  local tmpdir remote_archive
+  tmpdir="$(mktemp -d)"
+  remote_archive="/tmp/nakpanel-source-$$.tar"
+  trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
+  # Include working-tree edits and nonignored new sources, but never local
+  # secrets, build caches, sockets or this task's private test artifacts.
+  git -C "${root_dir}" ls-files -z --cached --others --exclude-standard |
+    COPYFILE_DISABLE=1 tar -C "${root_dir}" --null -T - -cf "${tmpdir}/source.tar"
+  multipass transfer "${tmpdir}/source.tar" "${NAKPANEL_MULTIPASS_VM}:${remote_archive}"
+  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- bash -c '
+set -euo pipefail
+sudo rm -rf "$1"
+sudo install -d -m 0755 -o ubuntu -g ubuntu "$1"
+tar --no-same-owner -xf "$2" -C "$1"
+' _ "${remote_src}" "${remote_archive}"
   wait_for_repo_sync "${remote_src}"
-}
+  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- rm -f "${remote_archive}"
+)
 
 # Multipass 1.16 on macOS can return from a recursive transfer while the daemon
 # is still materializing the final files. Require the build inputs to exist and
@@ -168,7 +207,14 @@ wait_for_repo_sync() {
 }
 
 vm_ip() {
-  multipass info "${NAKPANEL_MULTIPASS_VM}" | awk '/IPv4/{print $2; exit}'
+  local ip=""
+  for _ in $(seq 1 60); do
+    ip="$(multipass info "${NAKPANEL_MULTIPASS_VM}" 2>/dev/null | awk '/IPv4/{print $2; exit}' || true)"
+    if [[ "${ip}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then printf '%s\n' "${ip}"; return; fi
+    sleep 2
+  done
+  echo "Multipass IPv4 did not become available for ${NAKPANEL_MULTIPASS_VM}" >&2
+  return 1
 }
 
 csrf_token() {

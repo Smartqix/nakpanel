@@ -1060,6 +1060,8 @@ type Site struct {
 	DnsZoneMode                  string
 	DnsTemplateAdoptionCompleted bool
 	SslSetupRequested            bool
+	RemovalState                 string
+	RemovalRevision              int64
 }
 
 type SitePolicyOverride struct {
@@ -1069,6 +1071,35 @@ type SitePolicyOverride struct {
 	UpdatedBy     sql.NullInt64
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+}
+
+type SiteRemovalOperation struct {
+	ID                int64
+	RequestID         string
+	SiteID            int64
+	SubscriptionID    int64
+	CustomerID        int64
+	ActorUserID       sql.NullInt64
+	ActorLabel        string
+	Domain            string
+	ParentSiteID      sql.NullInt64
+	Snapshot          json.RawMessage
+	PreviewDigest     string
+	DeleteDatabaseIds []int64
+	Revision          int64
+	State             string
+	Stage             string
+	Checkpoints       []string
+	LastError         string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	CompletedAt       sql.NullTime
+}
+
+type SiteRemovalTarget struct {
+	OperationID int64
+	SiteID      int64
+	Released    bool
 }
 
 type SiteRuntimeGeneration struct {
@@ -1172,6 +1203,7 @@ type Subscription struct {
 	ComplianceStatus    string
 	ComplianceError     string
 	ComplianceCheckedAt sql.NullTime
+	PrimarySiteID       sql.NullInt64
 }
 
 type SubscriptionAddon struct {

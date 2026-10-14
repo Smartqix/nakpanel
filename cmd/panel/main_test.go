@@ -21,15 +21,15 @@ func TestDashboardSiteAdapterPreservesSubdomainMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	rows := sqlmock.NewRows([]string{"id", "owner", "username", "domain", "php", "status", "error", "created", "updated", "tls_status", "issuer", "cert", "key", "expires", "tls_error", "subscription", "customer", "desired_status", "desired_php", "redirect", "desired_redirect", "settings_status", "settings_error", "renew", "account", "root", "parent", "dns_mode"}).AddRow(
-		31, 1, "nps3", "sap.example.test", "8.4", "active", "", time.Now(), time.Now(), "active", "acme", "", "", nil, "", 3, 4, "active", "8.4", false, false, "in_sync", "", true, 3, "/home/nps3/domains/sap.example.test/public_html", 1, "parent",
+	rows := sqlmock.NewRows([]string{"id", "owner", "username", "domain", "php", "status", "error", "created", "updated", "tls_status", "issuer", "cert", "key", "expires", "tls_error", "subscription", "customer", "desired_status", "desired_php", "redirect", "desired_redirect", "settings_status", "settings_error", "renew", "account", "root", "parent", "dns_mode", "removal_state"}).AddRow(
+		31, 1, "nps3", "sap.example.test", "8.4", "active", "", time.Now(), time.Now(), "active", "acme", "", "", nil, "", 3, 4, "active", "8.4", false, false, "in_sync", "", true, 3, "/home/nps3/domains/sap.example.test/public_html", 1, "parent", "removing",
 	)
 	mock.ExpectQuery("SELECT id, owner_user_id").WillReturnRows(rows)
 	sites, err := (dashboardQuerier{queries: store.New(db)}).ListSites(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(sites) != 1 || !sites[0].ParentSiteID.Valid || sites[0].ParentSiteID.Int64 != 1 || sites[0].DnsZoneMode != "parent" {
+	if len(sites) != 1 || !sites[0].ParentSiteID.Valid || sites[0].ParentSiteID.Int64 != 1 || sites[0].DnsZoneMode != "parent" || sites[0].RemovalState != "removing" {
 		t.Fatalf("lost parent/DNS identity: %#v", sites)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

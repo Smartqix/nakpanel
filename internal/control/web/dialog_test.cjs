@@ -55,6 +55,13 @@ test('creation dialogs focus the first visible enabled field, not the close butt
   assert.equal(f.document.activeElement, f.input);
 });
 
+test('collapsed impact details never receive invisible initial focus',()=>{
+  const f=fixture();const summary={contains:()=>false};const closedDetails={querySelector:()=>summary};
+  f.input.closest=selector=>selector==='details:not([open])'?closedDetails:null;
+  f.controller.open(f.dialogs.edit,f.opener);
+  assert.equal(f.document.activeElement,f.textarea);
+});
+
 test('review dialogs without fields prefer their Cancel action over committing a change', () => {
   const f = fixture();
   f.cancel.cancel = false;

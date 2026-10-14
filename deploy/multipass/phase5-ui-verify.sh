@@ -9,6 +9,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 REMOTE_SRC="${NAKPANEL_REMOTE_SRC}"
 
 ensure_vm 2 3G 16G
+ensure_lab_quota
 sync_repo "${ROOT_DIR}" "${REMOTE_SRC}"
 
 multipass exec "${VM_NAME}" -- env REMOTE_SRC="${REMOTE_SRC}" bash -se <<'REMOTE'
@@ -299,7 +300,7 @@ done
 sudo -u postgres psql -d nakpanel -tAc "SELECT status FROM databases WHERE db_name = 'np_phase5'" | grep -qx 'active'
 sudo mariadb -NBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'np_phase5'" | grep -qx 'np_phase5'
 sudo mariadb -NBe "SELECT CONCAT(User, '@', Host) FROM mysql.user WHERE User = 'np_phase5_user' AND Host = 'localhost'" | grep -qx 'np_phase5_user@localhost'
-sudo mariadb -NBe "SHOW GRANTS FOR 'np_phase5_user'@'localhost'" | grep -F 'ON `np_phase5`.*'
+sudo mariadb -NrBe "SHOW GRANTS FOR 'np_phase5_user'@'localhost'" | grep -F 'ON `np\_phase5`.*'
 REMOTE
 
 phase5_username="$(multipass exec "${VM_NAME}" -- sudo -u postgres psql -d nakpanel -tAc "SELECT username FROM sites WHERE domain='phase5-ui.test'" | tr -d '[:space:]')"

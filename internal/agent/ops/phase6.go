@@ -308,6 +308,7 @@ func (r CommandDatabaseRestorer) RestoreDatabase(ctx context.Context, name strin
 }
 
 type RestoreProvisionerOptions struct {
+	BackupRoot       string
 	DatabaseRestorer DatabaseRestorer
 	OwnershipManager OwnershipManager
 	HomeRoot         string
@@ -315,10 +316,11 @@ type RestoreProvisionerOptions struct {
 }
 
 type RestoreProvisioner struct {
-	restorer  DatabaseRestorer
-	ownership OwnershipManager
-	homeRoot  string
-	now       func() time.Time
+	backupRoot string
+	restorer   DatabaseRestorer
+	ownership  OwnershipManager
+	homeRoot   string
+	now        func() time.Time
 }
 
 func NewRestoreProvisioner(opts RestoreProvisionerOptions) *RestoreProvisioner {
@@ -330,13 +332,21 @@ func NewRestoreProvisioner(opts RestoreProvisionerOptions) *RestoreProvisioner {
 	if now == nil {
 		now = time.Now
 	}
-	return &RestoreProvisioner{restorer: opts.DatabaseRestorer, ownership: opts.OwnershipManager, homeRoot: homeRoot, now: now}
+	return &RestoreProvisioner{restorer: opts.DatabaseRestorer, ownership: opts.OwnershipManager, homeRoot: homeRoot, now: now, backupRoot: defaultPath(opts.BackupRoot, "/var/lib/nakpanel/backups")}
 }
 
 func (p *RestoreProvisioner) RestoreBackup(ctx context.Context, req types.RestoreBackupReq) (types.RestoreBackupResult, error) {
 	normalized, err := normalizeRestoreRequest(req, p.homeRoot)
 	if err != nil {
 		return types.RestoreBackupResult{}, err
+	}
+	if normalized.SiteID > 0 && !site.PathWithinDir(p.backupRoot, normalized.ArchivePath) {
+		return types.RestoreBackupResult{}, errors.New("restore archive is outside the managed backup root")
+	}
+	if normalized.SHA256 != "" {
+		if err := verifyRestoreChecksum(ctx, normalized.ArchivePath, normalized.SHA256); err != nil {
+			return types.RestoreBackupResult{}, err
+		}
 	}
 
 	parent := filepath.Dir(normalized.Docroot)
@@ -446,6 +456,11 @@ func normalizeRestoreRequest(req types.RestoreBackupReq, homeRoot string) (types
 	// tenant's tree, etc.
 	if !site.PathWithinDir(filepath.Join(homeRoot, req.Username), docroot) {
 		return types.RestoreBackupReq{}, fmt.Errorf("restore docroot %q is outside the tenant home", docroot)
+	}
+	sharedRoot := filepath.Join(homeRoot, req.Username, "domains", req.Domain, "public_html")
+	legacyRoot := filepath.Join(homeRoot, req.Username, "public_html")
+	if docroot != sharedRoot && (req.SiteID > 0 || docroot != legacyRoot) {
+		return types.RestoreBackupReq{}, errors.New("restore document root does not match the selected website")
 	}
 	req.ArchivePath = archivePath
 	req.Docroot = docroot
@@ -985,13 +1000,27 @@ func NewDNSProvisioner(opts DNSProvisionerOptions) *DNSProvisioner {
 }
 
 func (p *DNSProvisioner) ConfigureDNSZone(ctx context.Context, req types.ConfigureDNSZoneReq) (_ types.ConfigureDNSZoneResult, err error) {
+	dnsConfigMutationMu.Lock()
+	defer dnsConfigMutationMu.Unlock()
 	normalized, err := normalizeDNSZoneRequest(req, p.zoneDir)
 	if err != nil {
 		return types.ConfigureDNSZoneResult{}, err
 	}
 	zonePath := filepath.Join(normalized.ZoneDir, "db."+normalized.Domain)
 	includePath := filepath.Join(p.includeDir, normalized.Domain+".conf")
-	snapshots, err := snapshotFiles([]string{zonePath, includePath, p.aggregatePath})
+	revisionPath := filepath.Join(p.includeDir, normalized.Domain+".nakpanel-revision.json")
+	var revision dnsAppliedRevision
+	tracked := normalized.SiteID > 0 && normalized.ZoneID > 0 && normalized.DesiredRevision > 0
+	if tracked {
+		revision, err = dnsRevisionForRequest(normalized)
+		if err != nil {
+			return types.ConfigureDNSZoneResult{}, err
+		}
+		if err = checkDNSAppliedRevision(revisionPath, revision); err != nil {
+			return types.ConfigureDNSZoneResult{}, err
+		}
+	}
+	snapshots, err := snapshotFiles([]string{zonePath, includePath, p.aggregatePath, revisionPath})
 	if err != nil {
 		return types.ConfigureDNSZoneResult{}, err
 	}
@@ -1045,7 +1074,18 @@ func (p *DNSProvisioner) ConfigureDNSZone(ctx context.Context, req types.Configu
 		}
 	}
 	if normalized.Mode == "disabled" {
+		if err := os.Remove(revisionPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return types.ConfigureDNSZoneResult{}, errors.New("DNS revision marker could not be removed")
+		}
 		zonePath, includePath = "", ""
+	} else if tracked {
+		data, err := json.Marshal(revision)
+		if err != nil {
+			return types.ConfigureDNSZoneResult{}, err
+		}
+		if err := writeFileAtomic(revisionPath, data, 0600); err != nil {
+			return types.ConfigureDNSZoneResult{}, errors.New("DNS revision marker could not be persisted")
+		}
 	}
 	return types.ConfigureDNSZoneResult{
 		Domain: normalized.Domain, ZonePath: zonePath, IncludePath: includePath,

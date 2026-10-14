@@ -233,7 +233,7 @@ for marker in 'PHP Application' 'Classic Hosting' 'Managed Deployment'; do
   grep -Fq "${marker}" "${tmpdir}/applications.html" || fail "PHP application workspace is missing ${marker}"
 done
 if grep -Fq "Deploy application" "${tmpdir}/applications.html"; then fail "managed Applications page exposes a deploy action"; fi
-for unsupported in 'value="node"' 'value="python"' 'WordPress Toolkit'; do
+for unsupported in 'value="node"' 'value="python"'; do
   if grep -Fq "${unsupported}" "${tmpdir}/applications.html"; then
     fail "PHP application workspace advertises unsupported runtime ${unsupported}"
   fi

@@ -42,6 +42,8 @@ func TestPhaseVerifiersUseSingleDefaultVM(t *testing.T) {
 		"phase31-verify.sh",
 		"phase32-verify.sh",
 		"phase33-verify.sh",
+		"phase34-verify.sh",
+		"domain-removal-verify.sh",
 		"security-verify.sh",
 	}
 	for _, path := range scripts {
@@ -86,7 +88,7 @@ func TestDeploymentVerifierResetsOneCanonicalVM(t *testing.T) {
 		"destroy_legacy_phase_vms",
 		"require_nakpanel_vm_name \"${NAKPANEL_MULTIPASS_VM}\"",
 		"destroy_vm \"${NAKPANEL_MULTIPASS_VM}\"",
-		"ensure_vm 2 3G 16G",
+		"ensure_vm 4 6G 48G",
 		"security-verify.sh",
 		"phase28-verify.sh",
 		"phase29-verify.sh",

@@ -48,6 +48,7 @@ func (w *ConfigureMailWorker) SetRiverClient(client *river.Client[*sql.Tx]) {
 
 type mailDomainRow struct {
 	ID              int64
+	SiteID          int64
 	SubscriptionID  int64
 	Domain          string
 	Enabled         bool
@@ -55,7 +56,10 @@ type mailDomainRow struct {
 	DeleteRequested bool
 	DKIM            bool
 	DMARCPolicy     string
+	IntentVersion   string
 }
+
+const mailDomainIntentVersionSQL = `jsonb_build_array(domain.subscription_id,domain.site_id,domain.domain,domain.enabled,domain.delete_requested,domain.dkim_enabled,domain.dmarc_policy,domain.updated_at AT TIME ZONE 'UTC')::text`
 
 func (w *ConfigureMailWorker) Work(ctx context.Context, _ *river.Job[controlquota.ConfigureMailArgs]) error {
 	if w.db == nil || w.agent == nil || w.phase6 == nil {
@@ -73,11 +77,13 @@ AND (customer.reseller_id IS NULL OR (
         WHERE allocation.reseller_id=customer.reseller_id AND allocation.status='active'
     )
 )),
-domain.delete_requested,domain.dkim_enabled,domain.dmarc_policy
+domain.delete_requested,domain.dkim_enabled,domain.dmarc_policy,`+mailDomainIntentVersionSQL+`,COALESCE(domain.site_id,(SELECT id FROM sites selected WHERE selected.domain=domain.domain AND selected.subscription_id=domain.subscription_id))
 FROM mail_domains domain
 JOIN subscriptions subscription ON subscription.id=domain.subscription_id
 JOIN customers customer ON customer.id=subscription.customer_id
 LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
+WHERE NOT EXISTS(SELECT 1 FROM sites selected WHERE selected.subscription_id=domain.subscription_id
+ AND (selected.id=domain.site_id OR (domain.site_id IS NULL AND selected.domain=domain.domain)) AND selected.removal_state<>'none')
 ORDER BY domain.domain`)
 	if err != nil {
 		return err
@@ -85,7 +91,7 @@ ORDER BY domain.domain`)
 	var domains []mailDomainRow
 	for rows.Next() {
 		var item mailDomainRow
-		if err := rows.Scan(&item.ID, &item.SubscriptionID, &item.Domain, &item.Enabled, &item.LifecycleActive, &item.DeleteRequested, &item.DKIM, &item.DMARCPolicy); err != nil {
+		if err := rows.Scan(&item.ID, &item.SubscriptionID, &item.Domain, &item.Enabled, &item.LifecycleActive, &item.DeleteRequested, &item.DKIM, &item.DMARCPolicy, &item.IntentVersion, &item.SiteID); err != nil {
 			rows.Close()
 			return err
 		}
@@ -114,9 +120,9 @@ WHERE subscription_id=$1`, domains[index].SubscriptionID, err.Error())
 		if domain.Enabled && !domain.DeleteRequested {
 			continue
 		}
-		if _, err = w.db.ExecContext(ctx, `UPDATE mail_domains
-SET effective_enabled=false,updated_at=now()
-WHERE id=$1 AND effective_enabled`, domain.ID); err != nil {
+		if _, err = w.db.ExecContext(ctx, `UPDATE mail_domains domain
+SET effective_enabled=false
+WHERE id=$1 AND effective_enabled AND `+mailDomainIntentVersionSQL+`=$2`, domain.ID, domain.IntentVersion); err != nil {
 			return err
 		}
 	}
@@ -127,6 +133,7 @@ WHERE id=$1 AND effective_enabled`, domain.ID); err != nil {
 	for _, domain := range domains {
 		if domain.Enabled && !domain.DeleteRequested {
 			request.Domains = append(request.Domains, types.MailDomainConfig{
+				SiteID: domain.SiteID, SubscriptionID: domain.SubscriptionID,
 				MailDomainID: domain.ID, Domain: domain.Domain, DKIM: domain.DKIM,
 			})
 		}
@@ -176,7 +183,7 @@ WHERE id=$1 AND effective_enabled`, domain.ID); err != nil {
 			if err := w.reconcileZoneRecords(ctx, domain, nil); err != nil {
 				return err
 			}
-			if _, err := w.db.ExecContext(ctx, `DELETE FROM mail_domains WHERE id=$1 AND delete_requested=true`, domain.ID); err != nil {
+			if _, err := w.db.ExecContext(ctx, `DELETE FROM mail_domains domain WHERE id=$1 AND delete_requested=true AND `+mailDomainIntentVersionSQL+`=$2`, domain.ID, domain.IntentVersion); err != nil {
 				return err
 			}
 			continue
@@ -194,10 +201,15 @@ WHERE id=$1 AND effective_enabled`, domain.ID); err != nil {
 				zoneNote = "no managed DNS zone for this domain: publish MX, SPF, DKIM, and DMARC records externally"
 			}
 		}
-		if _, err := w.db.ExecContext(ctx, `UPDATE mail_domains
+		update, err := w.db.ExecContext(ctx, `UPDATE mail_domains domain
 SET effective_enabled=$2,convergence_status='in_sync',last_error=$3,updated_at=now()
-WHERE id=$1`, domain.ID, domain.Enabled, zoneNote); err != nil {
+WHERE id=$1 AND `+mailDomainIntentVersionSQL+`=$4`, domain.ID, domain.Enabled, zoneNote, domain.IntentVersion)
+		if err != nil {
 			return err
+		}
+		count, err := update.RowsAffected()
+		if err != nil || count != 1 {
+			return errors.New("mail intent changed during convergence")
 		}
 	}
 	return nil

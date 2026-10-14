@@ -14,6 +14,7 @@
       resolve(false);
     }
   }});
+	window.NakpanelUI.dialogs = dialogs;
 
   function each(selector, scope, callback) {
     Array.prototype.forEach.call((scope || document).querySelectorAll(selector), callback);

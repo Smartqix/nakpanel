@@ -247,6 +247,7 @@ func (domain SubscriptionDomain) RuntimePHPVersion() (string, error) {
 }
 
 type SFTPAccessIdentity struct {
+	SiteID       int64  `json:"site_id,omitempty"`
 	ID           int64  `json:"id"`
 	Name         string `json:"name"`
 	PublicKey    string `json:"public_key"`
@@ -309,9 +310,11 @@ type ConfigureMailReq struct {
 }
 
 type MailDomainConfig struct {
-	MailDomainID int64  `json:"mail_domain_id"`
-	Domain       string `json:"domain"`
-	DKIM         bool   `json:"dkim"`
+	SiteID         int64  `json:"site_id,omitempty"`
+	SubscriptionID int64  `json:"subscription_id,omitempty"`
+	MailDomainID   int64  `json:"mail_domain_id"`
+	Domain         string `json:"domain"`
+	DKIM           bool   `json:"dkim"`
 }
 
 // MailSmarthostConfig routes all external outbound mail through a relay

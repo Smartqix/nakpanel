@@ -5,6 +5,21 @@ import (
 	"testing"
 )
 
+func TestPlanValidationGateRequestsEnhancedErrors(t *testing.T) {
+	script := readExecutableScript(t, "phase31-verify.sh")
+	start, end := strings.Index(script, "post_expect(){"), strings.Index(script, "set_plan_form(){")
+	if start < 0 || end <= start || !strings.Contains(script[start:end], "-H 'X-Nakpanel-SPA: true'") {
+		t.Fatal("validation gate must distinguish enhanced errors from normal error-cookie redirects")
+	}
+}
+
+func TestPlanComplianceUsesCurrentDomainResourceLabel(t *testing.T) {
+	script := readExecutableScript(t, "phase31-verify.sh")
+	if !strings.Contains(script, "domains 1/0") || strings.Contains(script, "sites 1/0") {
+		t.Fatal("provider contract UI now names hosted roots domains; enforcement key remains max_sites")
+	}
+}
+
 func TestPhase31VerifierCoversProductionServicePlanAcceptance(t *testing.T) {
 	script := readExecutableScript(t, "phase31-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{
@@ -23,7 +38,7 @@ func TestPhase31VerifierCoversProductionServicePlanAcceptance(t *testing.T) {
 		},
 		"preview_and_compliance": {
 			"plans/preview", "resources.max_sites", "hard_limit", "subscription_impacts",
-			"no resources will be deleted", "in_sync:over_limit", "sites 1/0", "in_sync:compliant:true",
+			"no resources will be deleted", "in_sync:over_limit", "domains 1/0", "in_sync:compliant:true",
 			"background measurement refreshes compliance", "phase31-measured.bin", "measured compliance recovery",
 		},
 		"revision_integrity": {

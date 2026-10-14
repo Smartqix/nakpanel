@@ -13,13 +13,15 @@ destroy_legacy_phase_vms
 destroy_vm "${NAKPANEL_MULTIPASS_VM}"
 # A crashed Phase 29 disaster-recovery leg must not leak its second VM.
 destroy_vm "${NAKPANEL_MULTIPASS_VM}-dr"
-ensure_vm 2 3G 16G
+# Current native PHP/container and disaster-recovery gates need build/backup headroom.
+ensure_vm 4 6G 48G
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"
-# Phase 28 preserves the server-security, Tools & Settings, hosting toolkit,
-# and domain workspace chain while verifying operational OCI deployments.
-"${ROOT_DIR}/deploy/multipass/phase28-verify.sh"
+# Install the current full stack before its operational acceptance gates.
+# Historical phase scripts remain available for debugging legacy contracts.
+"${ROOT_DIR}/deploy/multipass/current-install-verify.sh"
+NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase28-verify.sh"
 # Run the adversarial boundary suite against the same fully provisioned VM.
 NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/security-verify.sh"
 # Phase 29 runs last: its upgrade, reboot, and disaster-recovery legs mutate
@@ -41,6 +43,8 @@ NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase32-verify.sh"
 NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase33-verify.sh"
 # Phase 34 verifies protected domain GoAccess reports and privacy boundaries.
 NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase34-verify.sh"
+# Final product gate: scoped domain removal, retry and retained-data recovery.
+NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/domain-removal-verify.sh"
 
 VM_IP="$(vm_ip)"
 if [[ -z "${VM_IP}" ]]; then

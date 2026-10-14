@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -473,6 +474,20 @@ RETURNING id`, ownerID, site.id, hostname).Scan(&id); err != nil {
 }
 
 func (r *SQLPhase6Repository) RestoreBackup(ctx context.Context, ownerID int64, backupID int64) (int64, error) {
+	if r.db == nil {
+		return 0, errors.New("database is not configured")
+	}
+	var target sql.NullInt64
+	if err := r.db.QueryRowContext(ctx, "SELECT site_id FROM backups WHERE id=$1", backupID).Scan(&target); err != nil {
+		return 0, err
+	}
+	if !target.Valid {
+		return 0, errors.New("This retained backup has no website. Create the original domain in this subscription, then select a website to restore it.")
+	}
+	return r.RestoreBackupToSite(ctx, ownerID, backupID, target.Int64)
+}
+
+func (r *SQLPhase6Repository) RestoreBackupToSite(ctx context.Context, ownerID, backupID, targetSiteID int64) (int64, error) {
 	if backupID <= 0 {
 		return 0, errors.New("backup id is required")
 	}
@@ -487,14 +502,21 @@ func (r *SQLPhase6Repository) RestoreBackup(ctx context.Context, ownerID int64, 
 		return 0, fmt.Errorf("begin restore transaction: %w", err)
 	}
 	defer tx.Rollback()
-
-	backup, err := selectRestorableBackupForUpdate(ctx, tx, backupID)
+	if err = controlquota.LockSiteMutationTx(ctx, tx, targetSiteID); err != nil {
+		return 0, err
+	}
+	backup, err := selectRestorableBackupTarget(ctx, tx, backupID, targetSiteID)
 	if err != nil {
 		return 0, err
 	}
-	databases, err := selectActiveSubscriptionDatabases(ctx, tx, backup.subscriptionID)
+	active, err := selectActiveSubscriptionDatabases(ctx, tx, backup.subscriptionID)
 	if err != nil {
 		return 0, err
+	}
+	for _, name := range backup.databases {
+		if !slices.Contains(active, name) {
+			return 0, errors.New("A covered database no longer belongs to this subscription; restore its ownership before restoring this backup.")
+		}
 	}
 	var restoreID int64
 	if err := tx.QueryRowContext(ctx, `INSERT INTO restore_runs (owner_user_id, backup_id, target_name, status)
@@ -503,13 +525,14 @@ RETURNING id`, ownerID, backupID, backup.domain).Scan(&restoreID); err != nil {
 		return 0, fmt.Errorf("insert restore run: %w", err)
 	}
 	_, err = r.river.InsertTx(ctx, tx, RestoreBackupArgs{
-		RestoreID:   restoreID,
+		RestoreID: restoreID,
+		SiteID:    backup.siteID, SubscriptionID: backup.subscriptionID, SHA256: backup.sha256,
 		BackupID:    backupID,
 		Domain:      backup.domain,
 		Username:    backup.username,
 		Docroot:     backup.documentRoot,
 		ArchivePath: backup.archivePath,
-		Databases:   databases,
+		Databases:   backup.databases,
 	}, nil)
 	if err != nil {
 		return 0, fmt.Errorf("enqueue restore_backup job: %w", err)
@@ -865,6 +888,24 @@ type restorableBackup struct {
 	domain         string
 	archivePath    string
 	documentRoot   string
+	sha256         string
+	databases      []string
+}
+
+func selectRestorableBackupTarget(ctx context.Context, tx *sql.Tx, backupID, targetID int64) (restorableBackup, error) {
+	var backup restorableBackup
+	err := tx.QueryRowContext(ctx, `SELECT b.id,b.subscription_id,site.id,site.username,site.domain,b.archive_path,site.document_root,b.checksum_sha256,b.database_names
+ FROM backups b JOIN sites site ON site.id=$2 AND site.subscription_id=b.subscription_id AND site.customer_id=b.customer_id AND site.domain=b.target_name
+ JOIN subscriptions sub ON sub.id=site.subscription_id JOIN customers customer ON customer.id=sub.customer_id
+ LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
+ WHERE b.id=$1 AND b.status='active' AND b.archive_path<>'' AND b.checksum_sha256 ~ '^[a-f0-9]{64}$'
+ AND (b.site_id IS NULL OR b.site_id=site.id) AND site.status='active' AND site.desired_status='active' AND site.removal_state='none'
+ AND sub.status='active' AND customer.status='active' AND (customer.reseller_id IS NULL OR (reseller.status='active' AND EXISTS(SELECT 1 FROM reseller_subscriptions allocation WHERE allocation.reseller_id=reseller.id AND allocation.status='active')))
+ FOR UPDATE OF b,site`, backupID, targetID).Scan(&backup.backupID, &backup.subscriptionID, &backup.siteID, &backup.username, &backup.domain, &backup.archivePath, &backup.documentRoot, &backup.sha256, pq.Array(&backup.databases))
+	if errors.Is(err, sql.ErrNoRows) {
+		return backup, errors.New("Select an active website with the original backup domain in the same subscription.")
+	}
+	return backup, err
 }
 
 func selectRestorableBackupForUpdate(ctx context.Context, tx *sql.Tx, backupID int64) (restorableBackup, error) {
@@ -985,6 +1026,7 @@ LEFT JOIN webmail_hosts w ON w.site_id = s.id
 LEFT JOIN dns_zones d ON d.site_id = s.id
 LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
 LEFT JOIN reseller_subscriptions reseller_sub ON reseller_sub.reseller_id=reseller.id AND reseller_sub.status='active'
+WHERE s.removal_state='none'
 ORDER BY s.domain`)
 	if err != nil {
 		return nil, fmt.Errorf("select reconcile sites: %w", err)
@@ -1270,15 +1312,16 @@ COALESCE(array_to_json(zone.transfer_cidrs)::text,'null'),COALESCE(zone.soa_over
 	revision.refresh_seconds,revision.retry_seconds,revision.expire_seconds,revision.minimum_ttl,
 	COALESCE(array_to_json(revision.transfer_cidrs)::text,'[]'),
 	COALESCE(NULLIF((SELECT payload->>'hostname' FROM server_inventory
-	    WHERE kind='server' AND resource_key='host'),''),zone.domain)
+	    WHERE kind='server' AND resource_key='host'),''),zone.domain),zone.site_id,site.subscription_id
 	FROM dns_zones zone
+	JOIN sites site ON site.id=zone.site_id AND site.removal_state='none'
 	JOIN dns_template_revisions revision ON revision.revision=zone.template_revision
 WHERE zone.id=$1`, id).Scan(
 		&req.ZoneID, &req.DesiredRevision, &req.Domain, &req.Address, &req.IPv6Address,
 		&req.Serial, &req.Mode, &primariesJSON, &zoneCIDRsJSON, &overrideJSON,
 		&templateSOA.PrimaryNameserver, &templateSOA.ResponsibleMailbox, &templateSOA.SerialFormat,
 		&templateSOA.DefaultTTL, &templateSOA.RefreshSeconds, &templateSOA.RetrySeconds,
-		&templateSOA.ExpireSeconds, &templateSOA.MinimumTTL, &templateCIDRsJSON, &hostname)
+		&templateSOA.ExpireSeconds, &templateSOA.MinimumTTL, &templateCIDRsJSON, &hostname, &req.SiteID, &req.SubscriptionID)
 	if err != nil {
 		return req, err
 	}

@@ -484,11 +484,11 @@ func (w *ReconcileApplicationsWorker) Work(ctx context.Context, _ *river.Job[Rec
 CASE WHEN application.desired_state='running' AND account.desired_state='active' AND site.desired_status='active'
      THEN 'running' ELSE 'stopped' END,
 application.desired_revision,application.convergence_status,
-application.active_generation,application.endpoint_port,application.container_port,application.health_kind,application.health_path
+application.active_generation,application.endpoint_port,application.container_port,application.health_kind,application.health_path,site.id,site.domain
 FROM application_instances application
 JOIN subscription_system_accounts account ON account.subscription_id=application.subscription_id
 JOIN sites site ON site.id=application.site_id AND site.subscription_id=application.subscription_id
-WHERE application.runtime='oci' AND NOT application.delete_requested
+WHERE application.runtime='oci' AND NOT application.delete_requested AND site.removal_state='none'
 ORDER BY application.id LIMIT 250`)
 	if err != nil {
 		return err
@@ -499,13 +499,15 @@ ORDER BY application.id LIMIT 250`)
 		username, desired, convergence               string
 		endpointPort, containerPort                  int
 		healthKind, healthPath                       string
+		siteID                                       int64
+		domain                                       string
 	}
 	var candidates []candidate
 	for rows.Next() {
 		var item candidate
 		if err := rows.Scan(&item.id, &item.subscriptionID, &item.username, &item.desired,
 			&item.revision, &item.convergence, &item.activeRevision, &item.endpointPort, &item.containerPort,
-			&item.healthKind, &item.healthPath); err != nil {
+			&item.healthKind, &item.healthPath, &item.siteID, &item.domain); err != nil {
 			return err
 		}
 		candidates = append(candidates, item)
@@ -518,6 +520,7 @@ ORDER BY application.id LIMIT 250`)
 	}
 	for _, item := range candidates {
 		observed, inspectErr := w.agent.ApplicationStatus(ctx, types.ApplicationControlReq{
+			SiteID: item.siteID, Domain: item.domain,
 			ApplicationID: item.id, SubscriptionID: item.subscriptionID, Username: item.username,
 			ActiveRevision: item.activeRevision,
 			Endpoint:       types.ApplicationEndpointSpec{HostPort: item.endpointPort, ContainerPort: item.containerPort},
@@ -1109,7 +1112,7 @@ CASE WHEN site.tls_status='active' THEN site.tls_key_path ELSE '' END,
 COALESCE(application.hosting_mode,'classic'),COALESCE(application.active_deployment_id,0)
 FROM sites site LEFT JOIN site_policy_overrides o ON o.site_id=site.id
 LEFT JOIN php_applications application ON application.site_id=site.id AND application.subscription_id=site.subscription_id
-WHERE site.subscription_id=$1 ORDER BY site.id`, subscriptionID, desiredState)
+WHERE site.subscription_id=$1 AND site.removal_state='none' ORDER BY site.id`, subscriptionID, desiredState)
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}
@@ -1144,11 +1147,20 @@ WHERE site.subscription_id=$1 ORDER BY site.id`, subscriptionID, desiredState)
 			return convergenceSnapshot{}, err
 		}
 		identity.Enabled = identity.Enabled && desiredState == "active" && account.Policy.Permissions.SFTP
+		if strings.HasPrefix(identity.RelativeRoot, "domains/") {
+			domain := strings.Split(strings.TrimPrefix(identity.RelativeRoot, "domains/"), "/")[0]
+			for _, current := range account.Domains {
+				if current.Domain == domain {
+					identity.SiteID = current.SiteID
+					break
+				}
+			}
+		}
 		account.SFTPIdentities = append(account.SFTPIdentities, identity)
 	}
 	rows.Close()
 	rows, err = tx.QueryContext(ctx, `SELECT task.id,COALESCE(task.site_id,0),COALESCE(site.domain,''),task.name,task.schedule,task.command,task.working_directory,task.timeout_seconds,task.enabled,task.kind,task.url,task.script_path,task.timezone
-FROM scheduled_tasks task LEFT JOIN sites site ON site.id=task.site_id WHERE task.subscription_id=$1 ORDER BY task.id`, subscriptionID)
+FROM scheduled_tasks task LEFT JOIN sites site ON site.id=task.site_id WHERE task.subscription_id=$1 AND (task.site_id IS NULL OR site.removal_state='none') ORDER BY task.id`, subscriptionID)
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}
@@ -1198,7 +1210,7 @@ application.route_mode,application.route_prefix,application.container_port,appli
 application.health_kind,application.health_path,application.health_timeout_seconds,site.desired_status
 FROM application_instances application
 JOIN sites site ON site.id=application.site_id AND site.subscription_id=application.subscription_id
-WHERE application.subscription_id=$1 ORDER BY application.id`, subscriptionID)
+WHERE application.subscription_id=$1 AND site.removal_state='none' ORDER BY application.id`, subscriptionID)
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}
@@ -1259,7 +1271,7 @@ CASE WHEN $2='active' AND site.desired_status='active' THEN 'active' ELSE 'suspe
 FROM git_repositories repository
 JOIN sites site ON site.id=repository.site_id
 JOIN subscription_system_accounts account ON account.subscription_id=site.subscription_id
-WHERE site.subscription_id=$1 AND (repository.connection_status<>'disconnected' OR EXISTS(SELECT 1 FROM git_deployments operation WHERE operation.repository_id=repository.id AND operation.status IN ('pending','running'))) ORDER BY repository.id`, subscriptionID, desiredState)
+WHERE site.subscription_id=$1 AND site.removal_state='none' AND (repository.connection_status<>'disconnected' OR EXISTS(SELECT 1 FROM git_deployments operation WHERE operation.repository_id=repository.id AND operation.status IN ('pending','running'))) ORDER BY repository.id`, subscriptionID, desiredState)
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}

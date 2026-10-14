@@ -6,6 +6,24 @@ import (
 	"testing"
 )
 
+func TestQuotaFormatIsLoadedBeforeBootQuotaActivation(t *testing.T) {
+	data, err := os.ReadFile("../install/phase8-install.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"nakpanel-quota.modules-load.conf", "quotaon.service.d/nakpanel.conf", "/etc/modules-load.d/nakpanel-quota.conf", "systemctl daemon-reload", "quota_packages+=(linux-generic)"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("missing boot quota prerequisite %q", want)
+		}
+	}
+	for path, want := range map[string]string{"../systemd/nakpanel-quota.modules-load.conf": "quota_v2", "../systemd/quotaon.service.d/nakpanel.conf": "After=systemd-modules-load.service"} {
+		data, err := os.ReadFile(path)
+		if err != nil || !strings.Contains(string(data), want) {
+			t.Errorf("boot prerequisite %s: %v", path, err)
+		}
+	}
+}
+
 func TestPhase8VerifierCoversQuotasAndDiskIsolation(t *testing.T) {
 	const path = "phase8-verify.sh"
 	data, err := os.ReadFile(path)

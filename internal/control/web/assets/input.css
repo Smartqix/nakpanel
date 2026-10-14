@@ -6623,3 +6623,61 @@
   @media (prefers-reduced-motion: reduce) { .np-setup-tracker [data-np-setup-spinner] { animation: none !important; } }
   @media (max-width: 600px) { .np-dialog .np-setup-tracker { padding: 16px 18px 0; } }
 }
+
+@layer components {
+  .np-site-removal-dialog { width: min(760px, calc(100% - 32px)); max-height: calc(100dvh - 32px); }
+  .np-removal-page { max-width: 760px; background: white; border: 1px solid var(--np-border); border-radius: 6px; overflow: hidden; }
+  .np-site-removal-dialog .np-dialog-head h2, .np-removal-page .np-dialog-head h2 { font-size: 18px; line-height: 1.4; overflow-wrap: anywhere; }
+  .np-removal-form.np-form { display: block; padding: 0; }
+  .np-removal-body { display: grid; gap: 16px; padding: 24px; min-width: 0; font-size: 14px; line-height: 1.55; color: #273445; }
+  .np-removal-body p { margin: 0; }
+  .np-removal-body label { display: block; font-size: 14px; font-weight: 500; }
+  .np-removal-body label input:not([type="checkbox"]) { display: block; width: 100%; min-height: 44px; margin-top: 8px; font-size: 14px; }
+  .np-removal-body .np-check { display: flex; align-items: flex-start; gap: 10px; line-height: 1.55; }
+  .np-removal-body .np-check input { flex: 0 0 auto; margin-top: 4px; }
+  .np-removal-summary { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); border-block: 1px solid var(--np-border); gap: 12px; padding-block: 14px; }
+  .np-removal-summary strong, .np-removal-summary span { display: block; }
+  .np-removal-summary strong { font-size: 20px; color: #182536; }
+  .np-removal-summary span { font-size: 13px; color: #46576a; }
+  .np-removal-impact summary { min-height: 44px; padding-block: 10px; cursor: pointer; font-weight: 600; }
+  .np-removal-impact li, .np-removal-impact strong { overflow-wrap: anywhere; }
+  .np-removal-impact ul { margin: 8px 0; padding-left: 20px; }
+  .np-removal-databases { display: grid; gap: 12px; padding-block: 8px; }
+  .np-removal-stages { list-style: none; padding: 0; margin: 0; }
+  .np-removal-stages li { display: flex; align-items: center; gap: 12px; min-height: 48px; border-bottom: 1px solid var(--np-border); }
+  .np-removal-stages .is-complete { color: #176b40; }
+  .np-removal-stages .is-current { font-weight: 600; color: #174ac2; }
+  .np-site-removal-dialog .np-dialog-actions, .np-removal-page .np-dialog-actions { position: sticky; bottom: 0; display: flex; gap: 10px; flex-wrap: wrap; margin: 0; padding: 16px 24px; background: white; border-top: 1px solid var(--np-border); z-index: 2; }
+  .np-site-removal-dialog .np-dialog-actions button, .np-site-removal-dialog .np-dialog-actions a, .np-removal-page .np-dialog-actions button, .np-removal-page .np-dialog-actions a { min-height: 44px; font-size: 14px; }
+  .np-removal-page .np-dialog-head > button, .np-removal-page .np-removal-dialog-cancel, .np-site-removal-dialog .np-removal-page-cancel { display: none; }
+  .np-domain-actions { display: inline-block; vertical-align: middle; }
+  .np-domain-actions > summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; }
+  .np-domain-actions > summary::-webkit-details-marker { display: none; }
+  .np-domain-actions-menu { max-width: 260px; padding: 12px 0; font-size: 14px; line-height: 1.5; white-space: normal; }
+  .np-domain-actions-menu a { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+  .np-removal-link { color: #b42318; }
+  .np-removal-body [hidden] { display: none !important; }
+  .np-retained-restore.np-form { display: grid; grid-template-columns: minmax(180px,1fr); gap: 10px; padding: 12px 0; max-width: 320px; }
+  @media(max-width:600px) {
+    .np-site-removal-dialog { width: calc(100% - 16px); max-height: calc(100dvh - 16px); }
+    .np-removal-body { padding: 18px; }
+    .np-removal-summary { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .np-site-removal-dialog .np-dialog-actions, .np-removal-page .np-dialog-actions { padding: 14px 18px; }
+    .np-removal-body .np-check { min-height: 44px; }
+  }
+}
+
+.np-dialog.np-site-removal-dialog { width: min(760px, calc(100% - 32px)); max-width: 760px; max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: hidden; }
+.np-dialog.np-site-removal-dialog[open] { display: flex; flex-direction: column; }
+.np-dialog.np-site-removal-dialog .np-dialog-head { flex: 0 0 auto; }
+.np-dialog.np-site-removal-dialog .np-dialog-form.np-removal-form { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; width: 100%; min-width: 0; gap: 0; padding: 0; overflow: hidden; min-height: 0; }
+.np-dialog.np-site-removal-dialog .np-removal-body { flex: 1 1 auto; overflow-y: auto; min-height: 0; width: 100%; }
+.np-dialog.np-site-removal-dialog .np-removal-form > .np-dialog-actions, .np-dialog.np-site-removal-dialog > .np-dialog-actions { flex: 0 0 auto; position: static; margin: 0; padding: 16px 24px; bottom: 0; width: 100%; }
+.np-dialog.np-site-removal-dialog .np-removal-body input:not([type="checkbox"]):not([type="hidden"]) { min-height: 44px; font-size: 14px; }
+.np-dialog.np-site-removal-dialog .np-dialog-actions button { min-height: 44px; }
+@media(max-width:600px) {
+  .np-dialog.np-site-removal-dialog { width: calc(100% - 16px); max-height: calc(100dvh - 16px); margin: auto; border-radius: 6px; }
+  .np-dialog.np-site-removal-dialog .np-removal-form > .np-dialog-actions, .np-dialog.np-site-removal-dialog > .np-dialog-actions { padding: 14px 18px; }
+  .np-dialog.np-site-removal-dialog .np-dialog-actions > button { flex: 0 0 auto; }
+  .np-dialog.np-site-removal-dialog .np-dialog-actions > button[type="submit"] { flex: 1 1 auto; }
+}

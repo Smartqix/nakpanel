@@ -314,6 +314,11 @@ Useful recovery and operations notes live in:
 
 ## Contributing
 
+Add-on websites and subdomains have a scoped, checkpointed removal workflow.
+Databases and backups are retained by default. See
+[Domain removal and recovery](docs/DOMAIN_REMOVAL.md) for protection rules,
+retry behaviour, retained-data recovery and the single-VM acceptance test.
+
 Contributions are welcome through the normal GitHub fork, branch, and pull
 request flow.
 

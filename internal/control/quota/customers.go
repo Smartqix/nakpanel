@@ -769,9 +769,9 @@ const subscriptionSummarySQL = `SELECT
     e.disk_mb,
     e.max_backups,
     e.backup_storage_mb,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = s.id AND status <> 'failed'), 0)::int,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = s.id AND parent_site_id IS NULL AND status <> 'failed'), 0)::int,
-    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = s.id AND parent_site_id IS NOT NULL AND status <> 'failed'), 0)::int,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = s.id AND (status <> 'failed' OR removal_state<>'none')), 0)::int,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = s.id AND parent_site_id IS NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int,
+    COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = s.id AND parent_site_id IS NOT NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int,
     COALESCE((SELECT COUNT(*) FROM databases WHERE subscription_id = s.id AND status <> 'failed'), 0)::int,
     COALESCE((SELECT COUNT(*) FROM backups WHERE subscription_id = s.id AND status <> 'failed'), 0)::int,
     COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id = s.id AND status = 'active'), 0)::bigint,
@@ -806,7 +806,8 @@ const subscriptionSummarySQL = `SELECT
     e.overuse_policy,
     e.disk_warning_percent,
     e.traffic_warning_percent,
-    e.service_presets
+    e.service_presets,
+    COALESCE(s.primary_site_id,0)
 FROM subscriptions s
 JOIN customers c ON c.id = s.customer_id
 JOIN subscription_entitlements e ON e.subscription_id = s.id`
@@ -899,6 +900,7 @@ func scanSubscriptionSummary(row subscriptionSummaryScanner) (types.Subscription
 		&summary.DiskWarningPercent,
 		&summary.TrafficWarningPercent,
 		&servicePresets,
+		&summary.PrimarySiteID,
 	); err != nil {
 		return types.SubscriptionSummary{}, err
 	}

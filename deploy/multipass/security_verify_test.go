@@ -43,3 +43,15 @@ func TestSecurityVerifierCoversEveryPart(t *testing.T) {
 		}
 	}
 }
+
+func TestSecurityDatabaseDenialsUseValidEnhancedFormsAndNoIntentProof(t *testing.T) {
+	data, err := os.ReadFile("security-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`-H 'X-Nakpanel-SPA: true'`, `db_user=dbususp${STAMP}`, `db_user=dbunosub${STAMP}`, `db_name='over${STAMP}'`, `db_name='susp${STAMP}'`, `db_name='nosub${STAMP}'`} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("missing valid denial assertion %q", want)
+		}
+	}
+}

@@ -19,3 +19,8 @@ func setStagingFileOwner(dir, path string) error {
 	}
 	return os.Chown(path, int(stat.Uid), int(stat.Gid))
 }
+
+func stagingOwnedByCurrentUser(info os.FileInfo) bool {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	return ok && int(stat.Uid) == os.Geteuid()
+}

@@ -43,6 +43,10 @@ type DeleteBackupProvisioner interface {
 	DeleteBackup(ctx context.Context, req types.DeleteBackupReq) (types.DeleteBackupResult, error)
 }
 
+type BackupDownloadReader interface {
+	ReadBackupChunk(context.Context, types.ReadBackupChunkReq) (types.ReadBackupChunkResult, error)
+}
+
 type WebmailProvisioner interface {
 	ConfigureWebmail(ctx context.Context, req types.ConfigureWebmailReq) (types.ConfigureWebmailResult, error)
 }
@@ -115,6 +119,13 @@ type WebStatisticsProvisioner interface {
 
 type SubscriptionTeardownProvisioner interface {
 	TeardownSubscription(context.Context, types.TeardownSubscriptionReq) (types.TeardownSubscriptionResult, error)
+}
+
+type SiteTeardownProvisioner interface {
+	TeardownSite(context.Context, types.TeardownSiteReq) (types.TeardownSiteResult, error)
+}
+type SiteServiceDependencyReader interface {
+	SiteServiceDependencies(context.Context) ([]string, error)
 }
 
 type HostingToolkitProvisioner interface {
@@ -200,12 +211,16 @@ type FileManager interface {
 }
 
 type Options struct {
+	SiteTeardown              SiteTeardownProvisioner
+	SiteDependencies          SiteServiceDependencyReader
+	SiteGuard                 SiteIdentityGuard
 	AllowedServices           []string
 	SiteProvisioner           SiteProvisioner
 	DatabaseProvisioner       DatabaseProvisioner
 	CertificateProvisioner    CertificateProvisioner
 	BackupProvisioner         BackupProvisioner
 	DeleteBackupProvisioner   DeleteBackupProvisioner
+	BackupDownloadReader      BackupDownloadReader
 	WebmailProvisioner        WebmailProvisioner
 	DNSProvisioner            DNSProvisioner
 	ReconciliationProvisioner ReconciliationProvisioner
@@ -234,6 +249,9 @@ type Options struct {
 }
 
 type Dispatcher struct {
+	siteTeardown              SiteTeardownProvisioner
+	siteDependencies          SiteServiceDependencyReader
+	siteGuard                 SiteIdentityGuard
 	reloader                  ServiceReloader
 	siteProvisioner           SiteProvisioner
 	databaseProvisioner       DatabaseProvisioner
@@ -241,6 +259,7 @@ type Dispatcher struct {
 	customCertProvisioner     CustomCertificateProvisioner
 	backupProvisioner         BackupProvisioner
 	deleteBackupProvisioner   DeleteBackupProvisioner
+	backupDownloadReader      BackupDownloadReader
 	webmailProvisioner        WebmailProvisioner
 	dnsProvisioner            DNSProvisioner
 	reconciliationProvisioner ReconciliationProvisioner
@@ -292,6 +311,9 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 
 	customCertProvisioner, _ := opts.CertificateProvisioner.(CustomCertificateProvisioner)
 	dispatcher := &Dispatcher{
+		siteTeardown:              opts.SiteTeardown,
+		siteDependencies:          opts.SiteDependencies,
+		siteGuard:                 opts.SiteGuard,
 		reloader:                  reloader,
 		siteProvisioner:           opts.SiteProvisioner,
 		databaseProvisioner:       opts.DatabaseProvisioner,
@@ -299,6 +321,7 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 		customCertProvisioner:     customCertProvisioner,
 		backupProvisioner:         opts.BackupProvisioner,
 		deleteBackupProvisioner:   opts.DeleteBackupProvisioner,
+		backupDownloadReader:      opts.BackupDownloadReader,
 		webmailProvisioner:        opts.WebmailProvisioner,
 		dnsProvisioner:            opts.DNSProvisioner,
 		reconciliationProvisioner: opts.ReconciliationProvisioner,
@@ -368,13 +391,38 @@ func (d *Dispatcher) Dispatch(ctx context.Context, req types.Request) types.Resp
 	return resp
 }
 
-func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Response {
+func (d *Dispatcher) dispatchUnchecked(ctx context.Context, req types.Request) types.Response {
 	switch req.Op {
 	case types.OpPing:
 		if err := validateNoFields(req.Data); err != nil {
 			return validationResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, map[string]bool{"pong": true})
+	case types.OpSiteServiceDependencies:
+		if err := validateNoFields(req.Data); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.siteDependencies == nil {
+			return errorResponse(req.ID, "server dependency reader is not configured")
+		}
+		domains, err := d.siteDependencies.SiteServiceDependencies(ctx)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, domains)
+	case types.OpTeardownSite:
+		var payload types.TeardownSiteReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.siteTeardown == nil {
+			return errorResponse(req.ID, "website teardown provisioner is not configured")
+		}
+		result, err := d.siteTeardown.TeardownSite(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
 	case types.OpCollectUsage:
 		var payload types.CollectUsageReq
 		if err := decodeStrict(req.Data, &payload); err != nil {
@@ -1228,6 +1276,19 @@ func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Resp
 			return errorResponse(req.ID, "backup provisioner is not configured")
 		}
 		result, err := d.backupProvisioner.CreateBackup(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpReadBackupChunk:
+		var payload types.ReadBackupChunkReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.backupDownloadReader == nil {
+			return errorResponse(req.ID, "backup download is not configured")
+		}
+		result, err := d.backupDownloadReader.ReadBackupChunk(ctx, payload)
 		if err != nil {
 			return errorResponse(req.ID, err.Error())
 		}

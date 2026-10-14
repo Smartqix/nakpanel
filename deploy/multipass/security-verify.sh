@@ -112,7 +112,7 @@ api() { curl -skS -H "Authorization: Bearer ${API_KEY}" -H 'Content-Type: applic
 mysql_root() { multipass_exec_short "${VM_NAME}" -- sudo mysql -N -B -e "$1"; }
 
 # admin_post ENDPOINT curl-args...  (uses the admin session + CSRF)
-admin_post() { local ep="$1"; shift; curl -sk -o "${tmpdir}/out" -w '%{http_code}' -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${ADMIN_CSRF}" "$@" "https://${VM_IP}:7443/${ep}"; }
+admin_post() { local ep="$1"; shift; curl -sk -o "${tmpdir}/out" -w '%{http_code}' -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${ADMIN_CSRF}" -H 'X-Nakpanel-SPA: true' "$@" "https://${VM_IP}:7443/${ep}"; }
 # a_post ENDPOINT curl-args...  (uses tenant A's session + CSRF)
 a_post() { local ep="$1"; shift; curl -sk -o "${tmpdir}/out" -w '%{http_code}' -b "${tmpdir}/a.cookies" -H "X-Nakpanel-CSRF: ${A_CSRF}" "$@" "https://${VM_IP}:7443/${ep}"; }
 
@@ -327,22 +327,22 @@ db "UPDATE subscription_entitlements SET hosting_policy=jsonb_set(hosting_policy
 # is refused. A already has one database, so the next create trips the gate.
 db "UPDATE subscription_entitlements SET max_databases=1, overuse_policy='block' WHERE subscription_id=${A_SUB}" >/dev/null
 code="$(admin_post databases -d "subscription_id=${A_SUB}" -d "site_id=${A_SITE}" -d "db_name=over${STAMP}" -d "db_user=dbuover${STAMP}")"
-if [[ "${code}" == 400 ]] && grep -qiE 'quota exceeded|exceeded' "${tmpdir}/out"; then ok "UI database over plan limit → ErrExceeded"; else fail "UI created a DB past the limit: HTTP ${code} $(cat "${tmpdir}/out")"; fi
+if [[ "${code}" == 400 ]] && grep -qiE 'quota exceeded|exceeded|limits' "${tmpdir}/out" && [[ "$(db "SELECT count(*) FROM databases WHERE db_name='over${STAMP}'")" == 0 ]]; then ok "UI database over plan limit is rejected with no intent"; else fail "UI accepted a DB past the limit: HTTP ${code} $(cat "${tmpdir}/out")"; fi
 db "UPDATE subscription_entitlements SET max_databases=3 WHERE subscription_id=${A_SUB}" >/dev/null
 
 # Suspended subscription: provisioning is denied while suspended.
 api -X POST -d '{}' "https://${VM_IP}:7443/api/v1/accounts/${A_ACC}/suspend" -o /dev/null >/dev/null
 wait_for "SELECT status FROM subscriptions WHERE id=${A_SUB}" suspended || true
-code="$(admin_post databases -d "subscription_id=${A_SUB}" -d "site_id=${A_SITE}" -d "db_name=susp${STAMP}")"
-[[ "${code}" != 303 && "${code}" != 200 ]] && ok "provisioning under a suspended subscription is denied (${code})" || fail "provisioned under a suspended subscription: HTTP ${code}"
+code="$(admin_post databases -d "subscription_id=${A_SUB}" -d "site_id=${A_SITE}" -d "db_name=susp${STAMP}" -d "db_user=dbususp${STAMP}")"
+[[ "${code}" == 400 && "$(db "SELECT count(*) FROM databases WHERE db_name='susp${STAMP}'")" == 0 ]] && ok "provisioning under a suspended subscription is denied with no intent (${code})" || fail "provisioned under a suspended subscription: HTTP ${code}"
 api -X POST -d '{}' "https://${VM_IP}:7443/api/v1/accounts/${A_ACC}/unsuspend" -o /dev/null >/dev/null
 wait_for "SELECT status FROM subscriptions WHERE id=${A_SUB}" active || true
 
 # No active subscription: a cancelled subscription cannot provision.
 NOSUB="$(db "SELECT id FROM subscriptions WHERE status='cancelled' ORDER BY id LIMIT 1")"
 if [[ -n "${NOSUB}" ]]; then
-  code="$(admin_post databases -d "subscription_id=${NOSUB}" -d "db_name=nosub${STAMP}")"
-  [[ "${code}" != 303 && "${code}" != 200 ]] && ok "provisioning without an active subscription is denied (${code})" || fail "provisioned without an active subscription: HTTP ${code}"
+  code="$(admin_post databases -d "subscription_id=${NOSUB}" -d "db_name=nosub${STAMP}" -d "db_user=dbunosub${STAMP}")"
+  [[ "${code}" == 400 && "$(db "SELECT count(*) FROM databases WHERE db_name='nosub${STAMP}'")" == 0 ]] && ok "provisioning without an active subscription is denied with no intent (${code})" || fail "provisioned without an active subscription: HTTP ${code}"
 else
   echo "  (no cancelled subscription available to test no-active-subscription; covered by suspended)"
 fi

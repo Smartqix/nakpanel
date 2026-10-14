@@ -212,7 +212,7 @@ fi
 
 sudo mariadb -NBe "SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'np_phase4'" | grep -qx 'np_phase4'
 sudo mariadb -NBe "SELECT CONCAT(User, '@', Host) FROM mysql.user WHERE User = 'np_phase4_user' AND Host = 'localhost'" | grep -qx 'np_phase4_user@localhost'
-sudo mariadb -NBe "SHOW GRANTS FOR 'np_phase4_user'@'localhost'" | grep -F 'ON `np_phase4`.*'
+sudo mariadb -NrBe "SHOW GRANTS FOR 'np_phase4_user'@'localhost'" | grep -F 'ON `np\_phase4`.*'
 
 password_present="$(sudo -u postgres psql -d nakpanel -tAc "SELECT COALESCE(bool_or(args ? 'password'), false) FROM river_job WHERE kind = 'create_database' AND args->>'db_name' = 'np_phase4'" | tr -d '[:space:]')"
 if [[ "${password_present}" != "f" ]]; then

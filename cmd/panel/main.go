@@ -34,6 +34,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/version"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/riverdriver/riverdatabasesql"
+	"github.com/riverqueue/river/rivertype"
 	"github.com/robfig/cron/v3"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -108,6 +109,7 @@ func main() {
 	)
 	siteManager := provision.NewManager(
 		siteRepo,
+		provision.WithSiteRemovalService(provision.NewSiteRemovalService(db, riverClient, workspaceStore, provision.SiteRemovalOptions{PanelHostname: cfg.PanelHostname, Usage: agentCapabilities, Dependencies: agentCapabilities, DatabaseInspector: agentCapabilities})),
 		provision.WithDatabaseRepository(databaseRepo),
 		provision.WithCertificateRepository(siteRepo),
 		provision.WithCustomCertificateRepository(siteRepo),
@@ -118,6 +120,7 @@ func main() {
 		provision.WithRuntimeCapabilities(agentCapabilities),
 		provision.WithMailAgent(agentCapabilities),
 		provision.WithHostingToolkitAgent(agentCapabilities),
+		provision.WithBackupChunkReader(agentCapabilities),
 	)
 	wordpressManager := controlwordpress.NewManager(wordpressStore, workspaceStore, siteManager)
 	if err := provision.SweepCustomTLSStagingForJobs(ctx, db, provision.DefaultCustomTLSStagingDir, 24*time.Hour); err != nil {
@@ -132,6 +135,7 @@ func main() {
 	defer closeDatabaseManager()
 	uiHandler := panelhttp.NewServer(authStore, sessionManager, panelhttp.ServerOptions{
 		SiteCreator:                siteManager,
+		SiteRemoval:                siteManager,
 		DatabaseCreator:            siteManager,
 		CertificateIssuer:          siteManager,
 		CustomCertificateInstaller: siteManager,
@@ -201,6 +205,7 @@ func (q dashboardQuerier) ListSites(ctx context.Context) ([]store.Site, error) {
 			SettingsStatus: row.SettingsStatus, SettingsError: row.SettingsError, TlsAutoRenew: row.TlsAutoRenew,
 			SystemAccountID: row.SystemAccountID, DocumentRoot: row.DocumentRoot,
 			ParentSiteID: row.ParentSiteID, DnsZoneMode: row.DnsZoneMode,
+			RemovalState: row.RemovalState,
 		})
 	}
 	return items, nil
@@ -236,6 +241,10 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	phase6Status := provision.NewSQLPhase6StatusStore(db)
 	maintenanceService := controlmaintenance.NewService(db, nil, agent, serverAdminStore)
 	certificateSetup := provision.NewSQLProvisioningCertificateSetup(db, nil)
+	removalService := provision.NewSiteRemovalService(db, nil, workspace.NewStore(db), provision.SiteRemovalOptions{PanelHostname: runtimeConfig.PanelHostname, Dependencies: agent, DatabaseInspector: agent})
+	removalShared := provision.NewSiteRemovalSharedServices(db, agent, serverAdminStore)
+	river.AddWorker(workers, provision.NewRemoveSiteWorker(removalService, agent, removalShared))
+	river.AddWorker(workers, provision.NewSweepSiteRemovalsWorker(removalService))
 	river.AddWorker(workers, provision.NewCreateSiteWorker(agent, siteStatus, autoSubdomainDNS))
 	river.AddWorker(workers, provision.NewCreateDatabaseWorker(agent, databaseStatus, serverAdminStore))
 	river.AddWorker(workers, provision.NewIssueCertWorker(agent, siteStatus, maintenanceService).WithProvisioningSetup(certificateSetup))
@@ -325,7 +334,9 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
+		WorkerMiddleware: []rivertype.WorkerMiddleware{provision.NewSiteJobFence(db)},
 		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return provision.SweepSiteRemovalsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Hour), func() (river.JobArgs, *river.InsertOpts) { return webstatistics.SweepArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(6*time.Hour), func() (river.JobArgs, *river.InsertOpts) {
 				return controlwordpress.SweepArgs{}, nil
@@ -406,6 +417,8 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	scheduledTaskSweepWorker.SetRiverClient(client)
 	convergenceWorker.SetRiverClient(client)
 	configureMailWorker.SetRiverClient(client)
+	removalService.SetRiverClient(client)
+	removalShared.SetRiverClient(client)
 	pendingConvergenceWorker.SetRiverClient(client)
 	applicationReconcileWorker.SetRiverClient(client)
 	migrationSweepWorker.SetRiverClient(client)

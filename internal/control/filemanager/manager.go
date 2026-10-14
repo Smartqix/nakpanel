@@ -416,7 +416,7 @@ func NewSQLStore(db *sql.DB) *SQLStore { return &SQLStore{db: db} }
 
 func (s *SQLStore) GetSite(ctx context.Context, id int64) (Site, error) {
 	var site Site
-	err := s.db.QueryRowContext(ctx, `SELECT id,username,domain,status,COALESCE(customer_id,0),COALESCE(subscription_id,0) FROM sites WHERE id=$1`, id).Scan(
+	err := s.db.QueryRowContext(ctx, `SELECT id,username,domain,status,COALESCE(customer_id,0),COALESCE(subscription_id,0) FROM sites WHERE id=$1 AND removal_state='none'`, id).Scan(
 		&site.ID, &site.Username, &site.Domain, &site.Status, &site.CustomerID, &site.SubscriptionID,
 	)
 	return site, err

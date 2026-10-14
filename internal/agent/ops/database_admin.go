@@ -31,6 +31,8 @@ type MariaDBAdministration struct {
 	opener           databaseAdminOpener
 	now              func() time.Time
 	verifyCredential func(context.Context, types.CreateDatabaseReq) error
+	ownershipDir     string
+	ownershipUID     uint32
 }
 
 func NewMariaDBAdministration(dsn string) *MariaDBAdministration {
@@ -38,6 +40,7 @@ func NewMariaDBAdministration(dsn string) *MariaDBAdministration {
 		dsn = DefaultMariaDBDSN()
 	}
 	return &MariaDBAdministration{
+		ownershipDir:     "/var/lib/nakpanel-agent/database-ownership",
 		dsn:              dsn,
 		verifyCredential: (&MariaDBEngine{dsn: dsn}).verifyDatabaseLogin,
 		opener: func(ctx context.Context) (databaseAdminDB, error) {
@@ -101,6 +104,7 @@ func (m *MariaDBAdministration) InspectDatabaseAdmin(ctx context.Context, req ty
 	for _, target := range req.Targets {
 		state := types.TrackedDatabaseState{
 			DatabaseID: target.DatabaseID, Name: target.Name, Principal: target.Principal,
+			OwnershipVerified: m.databaseOwnershipVerified(target),
 		}
 		var databaseCount int
 		if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?`, target.Name).Scan(&databaseCount); err != nil {
@@ -115,9 +119,24 @@ func (m *MariaDBAdministration) InspectDatabaseAdmin(ctx context.Context, req ty
 		} else {
 			state.PrincipalExists = principalCount == 1
 		}
+		if state.OwnershipVerified {
+			shared, err := databasePrincipalDependencies(ctx, db, target.Name, target.Principal)
+			state.PrincipalShared = err != nil || shared > 0
+			if err != nil {
+				state.LastError = "principal dependencies could not be inspected"
+			}
+		}
 		result.Databases = append(result.Databases, state)
 	}
 	return result, nil
+}
+
+func (m *MariaDBAdministration) databaseOwnershipVerified(target types.DatabaseAdminTarget) bool {
+	if m == nil || m.ownershipDir == "" || validateDatabaseAdminTarget(target) != nil {
+		return false
+	}
+	engine := &MariaDBEngine{ownershipDir: m.ownershipDir, ownerUID: m.ownershipUID}
+	return engine.verifiedDatabaseOwnership(databaseOwnership{DatabaseID: target.DatabaseID, Name: target.Name, Principal: target.Principal}) == nil
 }
 
 func (m *MariaDBAdministration) ManageDatabaseAdmin(ctx context.Context, req types.ManageDatabaseAdminReq) (types.ManageDatabaseAdminResult, error) {

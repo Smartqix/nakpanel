@@ -97,6 +97,7 @@ type SitePlan struct {
 const sitePrivateRuntimeFileMode os.FileMode = 0o600
 
 type SiteProvisionerOptions struct {
+	IdentityRegistry *SiteIdentityRegistry
 	Paths            SitePathConfig
 	UserManager      SystemUserManager
 	OwnershipManager OwnershipManager
@@ -108,14 +109,15 @@ type SiteProvisionerOptions struct {
 }
 
 type SiteProvisioner struct {
-	paths      SitePathConfig
-	users      SystemUserManager
-	ownership  OwnershipManager
-	diskQuotas DiskQuotaManager
-	reloader   SiteServiceReloader
-	nginxTest  NginxConfigTester
-	phpTest    PHPConfigTester
-	runner     CommandRunner
+	identityRegistry *SiteIdentityRegistry
+	paths            SitePathConfig
+	users            SystemUserManager
+	ownership        OwnershipManager
+	diskQuotas       DiskQuotaManager
+	reloader         SiteServiceReloader
+	nginxTest        NginxConfigTester
+	phpTest          PHPConfigTester
+	runner           CommandRunner
 }
 
 // Site and certificate operations replace shared nginx and PHP-FPM files.
@@ -156,14 +158,15 @@ func NewSiteProvisioner(opts SiteProvisionerOptions) *SiteProvisioner {
 		runner = ExecRunner{}
 	}
 	return &SiteProvisioner{
-		paths:      opts.Paths,
-		users:      opts.UserManager,
-		ownership:  opts.OwnershipManager,
-		diskQuotas: opts.DiskQuotaManager,
-		reloader:   opts.Reloader,
-		nginxTest:  opts.NginxTester,
-		phpTest:    opts.PHPTester,
-		runner:     runner,
+		identityRegistry: opts.IdentityRegistry,
+		paths:            opts.Paths,
+		users:            opts.UserManager,
+		ownership:        opts.OwnershipManager,
+		diskQuotas:       opts.DiskQuotaManager,
+		reloader:         opts.Reloader,
+		nginxTest:        opts.NginxTester,
+		phpTest:          opts.PHPTester,
+		runner:           runner,
 	}
 }
 
@@ -1058,6 +1061,9 @@ func onOff(value bool) string {
 }
 
 func (p *SiteProvisioner) CreateSite(ctx context.Context, req types.CreateSiteReq) error {
+	if p.identityRegistry != nil {
+		return p.identityRegistry.WithCreation(ctx, []types.SiteIdentity{{SiteID: req.SiteID, SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: req.Domain}}, func(ctx context.Context) error { return p.createSite(ctx, req, "", "", false) })
+	}
 	return p.createSite(ctx, req, "", "", false)
 }
 

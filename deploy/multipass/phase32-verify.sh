@@ -185,6 +185,9 @@ update_operation="$(db "SELECT id FROM wordpress_operations WHERE instance_id=${
 [[ "$(db "SELECT status||':'||(backup_id IS NOT NULL)::text FROM wordpress_operations WHERE id=${update_operation}")" == 'waiting_backup:true' ]] || fail "update did not enter waiting_backup with a recovery point"
 wait_for 'WordPress update operation' "SELECT status FROM wordpress_operations WHERE id=${update_operation}" 'succeeded'
 [[ "$(db "SELECT backup.status FROM backups backup JOIN wordpress_operations operation ON operation.backup_id=backup.id WHERE operation.id=${update_operation}")" == 'active' ]] || fail "WordPress update backup did not complete"
+post_update_version="$(db "SELECT installed_version FROM wordpress_instances WHERE id=${instance_id}")"
+native_version="$(multipass_exec_short "${VM_NAME}" -- sudo -u "${username}" wp core version --path="${document_root}" | tr -d '\r')"
+[[ -n "${post_update_version}" && "${post_update_version}" == "${native_version}" ]] || fail 'updated WordPress version is not verified against hosted files'
 
 echo "phase32: prove explicit maintenance state"
 post_as phase32-maintenance-on "sites/${site_id}/wordpress/operations" -d 'action=maintenance' -d 'maintenance=true'
@@ -239,7 +242,7 @@ echo "phase32: rediscover complete WordPress identity from hosted state"
 post_as phase32-rediscover "sites/${site_id}/wordpress/operations" -d 'action=discover'
 wait_for 'WordPress rediscovery operation' "SELECT status FROM wordpress_operations WHERE instance_id=(SELECT id FROM wordpress_instances WHERE site_id=${site_id}) AND kind='discover' ORDER BY id DESC LIMIT 1" 'succeeded'
 rediscovered_instance_id="$(db "SELECT id FROM wordpress_instances WHERE site_id=${site_id}")"
-wait_for 'WordPress rediscovery state' "SELECT observed_state||':'||convergence_status||':'||installed_version FROM wordpress_instances WHERE id=${rediscovered_instance_id}" 'healthy:in_sync:7.1'
+wait_for 'WordPress rediscovery state' "SELECT observed_state||':'||convergence_status||':'||installed_version FROM wordpress_instances WHERE id=${rediscovered_instance_id}" "healthy:in_sync:${post_update_version}"
 rediscovered_identity="$(db "SELECT site_title||':'||admin_user||':'||admin_email FROM wordpress_instances WHERE id=${rediscovered_instance_id}")"
 [[ "${rediscovered_identity}" == "Phase 32 WordPress:siteadmin:${customer_email}" ]] || fail "discovery did not restore WordPress identity: ${rediscovered_identity}"
 post_as phase32-rediscover-detach "sites/${site_id}/wordpress/detach" -d 'confirm=detach'
