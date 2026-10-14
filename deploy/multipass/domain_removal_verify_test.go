@@ -118,7 +118,7 @@ func TestNativeRemovalBrowserCanObserveCompletionBeforeRedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"route.fetch()", "completedObserved", "NAKPANEL_QA_SCREENSHOT_DIR", "page.screenshot"} {
+	for _, want := range []string{"route.fetch()", "completedObserved", "NAKPANEL_QA_SCREENSHOT_DIR", "page.screenshot", "getBBox()"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("browser completion evidence missing %s", want)
 		}

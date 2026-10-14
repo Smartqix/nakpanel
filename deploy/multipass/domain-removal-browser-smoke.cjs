@@ -34,6 +34,10 @@ let browser;
     await page.locator('[data-np-removal-open]').first().click();
     const dialog = page.locator('#np-site-removal-dialog');
     await dialog.locator('[name=confirm_domain]').waitFor();
+    await page.waitForFunction(() => {
+      const glyph = document.querySelector('#np-site-removal-dialog .np-dialog-head button svg');
+      return glyph && glyph.getBBox().width > 0;
+    });
     assert.equal(await dialog.locator('[name=delete_database_ids]:checked').count(), 0);
     assert.equal(await dialog.locator('.np-removal-dialog-cancel').evaluate(e => e === document.activeElement), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
