@@ -153,6 +153,45 @@ func TestSiteRemovalDoesNotCancelSiblingJobs(t *testing.T) {
 	}
 }
 
+func TestSiteRemovalDoesNotCancelSiblingRecoveryProofRestore(t *testing.T) {
+	db, s, actor, req := removalServiceFixture(t)
+	if _, err := db.Exec(`INSERT INTO databases(owner_user_id,customer_id,subscription_id,site_id,engine,db_name,db_user,status) SELECT owner_user_id,customer_id,subscription_id,id,'mariadb','fixture_db','fixture_user','active' FROM sites WHERE id=$1`, req.SiteID); err != nil {
+		t.Fatal(err)
+	}
+	var siblingID, backupID int64
+	if err := db.QueryRow(`SELECT id FROM sites WHERE domain='primary.test'`).Scan(&siblingID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO backups(owner_user_id,customer_id,subscription_id,site_id,target_kind,target_name,status,archive_path,checksum_sha256,database_names) SELECT owner_user_id,customer_id,subscription_id,id,'site',domain,'active','/var/lib/nakpanel/backups/sibling-proof.tar.gz',$2,ARRAY['fixture_db'] FROM sites WHERE id=$1 RETURNING id`, siblingID, strings.Repeat("a", 64)).Scan(&backupID); err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.PreviewSiteRemoval(context.Background(), actor, req.SiteID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.Snapshot.Backups) != 1 || p.Snapshot.Backups[0].SiteID != siblingID {
+		t.Fatal("sibling proof fixture missing")
+	}
+	req.PreviewDigest = p.Digest
+	op, err := s.RemoveSiteFor(context.Background(), actor, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, payload := range []string{fmt.Sprintf(`{"backup_id":%d}`, backupID), fmt.Sprintf(`{"backup_id":%d,"site_id":%d,"domain":"primary.test"}`, backupID, siblingID)} {
+		if _, err = db.Exec(`INSERT INTO river_job(kind,args,state,queue,max_attempts) VALUES('restore_backup',$1,'available','default',3)`, payload); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ready, err := s.drainSiteJobs(context.Background(), op)
+	if err != nil || !ready {
+		t.Fatal(ready, err)
+	}
+	var count int
+	if err = db.QueryRow(`SELECT count(*) FROM river_job WHERE kind='restore_backup' AND state='available'`).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("sibling proof restore cancelled: %d %v", count, err)
+	}
+}
+
 func TestSiteRemovalStaleWorkersDoNotCallAgent(t *testing.T) {
 	_, s, actor, req := removalServiceFixture(t)
 	op, err := s.RemoveSiteFor(context.Background(), actor, req)

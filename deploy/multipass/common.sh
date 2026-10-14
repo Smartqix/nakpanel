@@ -126,6 +126,30 @@ ensure_vm() {
   wait_for_cloud_init "${NAKPANEL_MULTIPASS_VM}"
 }
 
+ensure_lab_quota() {
+  require_nakpanel_vm_name "${NAKPANEL_MULTIPASS_VM}"
+  multipass exec "${NAKPANEL_MULTIPASS_VM}" -- sudo bash -se <<'QUOTA'
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+packages=(quota)
+if apt-cache show "linux-modules-extra-$(uname -r)" >/dev/null 2>&1; then packages+=("linux-modules-extra-$(uname -r)"); fi
+apt-get install -y "${packages[@]}"
+modprobe quota_v2 >/dev/null 2>&1 || true
+target="$(findmnt -n -o TARGET --target /home)"
+test -n "${target}"
+if ! findmnt -n -o OPTIONS --target /home | tr ',' '\n' | grep -qx usrquota; then
+ mount -o remount,usrquota,grpquota "${target}"
+fi
+state="$(quotaon -p "${target}" 2>/dev/null || true)"
+if ! grep -Eq 'user quota .* is on' <<<"${state}"; then
+ quotacheck -ugm "${target}" || quotacheck -cugm "${target}"
+ quotaon -uv "${target}" || true
+fi
+quotaon -p "${target}" | grep -Eq 'user quota .* is on'
+QUOTA
+}
+
 sync_repo() {
   local root_dir="$1"
   local remote_src="${2:-${NAKPANEL_REMOTE_SRC}}"

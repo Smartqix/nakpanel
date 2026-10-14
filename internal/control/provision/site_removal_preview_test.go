@@ -81,6 +81,62 @@ func TestSiteRemovalPreviewKeepsDataByDefault(t *testing.T) {
 	}
 }
 
+func TestSiteRemovalRetainsSiblingConnectionBindings(t *testing.T) {
+	for _, binding := range []struct{ name, value string }{
+		{"DATABASE_URL", "mysql://user:private-password@localhost/fixture_db"},
+		{"DB_DSN", "mysql:host=localhost;dbname=fixture_db"},
+		{"DATABASE_DSN", "user:private-password@tcp(localhost:3306)/fixture_db"},
+	} {
+		t.Run(binding.name, func(t *testing.T) {
+			db, service, actor, req := removalServiceFixture(t)
+			if _, err := db.Exec(`INSERT INTO databases(owner_user_id,customer_id,subscription_id,site_id,engine,db_name,db_user,status) SELECT owner_user_id,customer_id,subscription_id,id,'mariadb','fixture_db','fixture_user','active' FROM sites WHERE id=$1`, req.SiteID); err != nil {
+				t.Fatal(err)
+			}
+			var appID int64
+			if err := db.QueryRow(`SELECT id FROM php_applications WHERE site_id=(SELECT id FROM sites WHERE domain='primary.test')`).Scan(&appID); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.Exec(`INSERT INTO php_environment_bindings(subscription_id,application_id,name,plain_value) VALUES(1,$1,$2,$3)`, appID, binding.name, binding.value); err != nil {
+				t.Fatal(err)
+			}
+			p, err := service.PreviewSiteRemoval(context.Background(), actor, req.SiteID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(p.Snapshot.Databases) != 1 || p.Snapshot.Databases[0].DeletionEligible {
+				t.Fatal("surviving application's database remained selectable")
+			}
+			encoded, _ := json.Marshal(p)
+			if strings.Contains(string(encoded), "private-password") {
+				t.Fatal("database binding leaked into preview")
+			}
+		})
+	}
+}
+
+func TestSiteRemovalFreezesNewSiblingDatabaseBindings(t *testing.T) {
+	db, service, actor, req := removalServiceFixture(t)
+	var databaseID, appID int64
+	if err := db.QueryRow(`INSERT INTO databases(owner_user_id,customer_id,subscription_id,site_id,engine,db_name,db_user,status) SELECT owner_user_id,customer_id,subscription_id,id,'mariadb','fixture_db','fixture_user','active' FROM sites WHERE id=$1 RETURNING id`, req.SiteID).Scan(&databaseID); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT id FROM php_applications WHERE site_id=(SELECT id FROM sites WHERE domain='primary.test')`).Scan(&appID); err != nil {
+		t.Fatal(err)
+	}
+	p, err := service.PreviewSiteRemoval(context.Background(), actor, req.SiteID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.PreviewDigest = p.Digest
+	req.DeleteDatabaseIDs = []int64{databaseID}
+	if _, err = service.RemoveSiteFor(context.Background(), actor, req); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO php_environment_bindings(subscription_id,application_id,name,plain_value) VALUES(1,$1,'DATABASE_URL','mysql://localhost/fixture_db')`, appID); err == nil {
+		t.Fatal("new sibling database consumer accepted after destructive scope was reserved")
+	}
+}
+
 func TestSiteRemovalCrossScopeNotFound(t *testing.T) {
 	db := removaldb.New(t, "")
 	removaldb.Site(t, db, 1, "primary.test", nil)

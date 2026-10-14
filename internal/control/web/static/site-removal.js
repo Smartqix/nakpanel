@@ -75,7 +75,7 @@
       if (recovery && ['signin','uncertain'].includes(value.state)) recovery.hidden=false;
       if(value.refresh_preview){var refresh=root.querySelector('[data-np-removal-refresh]');if(refresh)refresh.hidden=false;}
       if (form) {
-        ui.setBusy(form,value.state!=='validation'||!!value.refresh_preview);
+        ui.setBusy(form,!['validation','failed'].includes(value.state)||!!value.refresh_preview);
         if(value.refresh_preview)form.dataset.npRemovalStale='true';
         if (['signin','uncertain'].includes(value.state)) form.dataset.npRemovalUncertain='true';
         if (value.state==='validation') {var target=form.querySelector('[name="confirm_domain"]');if(target)target.focus();}

@@ -259,7 +259,9 @@ func (s *SiteRemovalService) loadRemovalData(ctx context.Context, q removalQuery
  EXISTS(SELECT 1 FROM wordpress_instances wp WHERE wp.database_id=db.id AND wp.database_managed),
  EXISTS(SELECT 1 FROM php_environment_bindings binding JOIN php_applications app ON app.id=binding.application_id
  WHERE app.subscription_id=db.subscription_id AND NOT app.site_id=ANY($1)
- AND (binding.plain_value=db.db_name OR (binding.secret_id IS NOT NULL AND binding.name IN ('DATABASE_URL','DB_DATABASE','DB_NAME')))),
+ AND (binding.plain_value=db.db_name
+   OR (COALESCE(binding.plain_value,'')<>'' AND upper(binding.name) IN ('DATABASE_URL','DB_URL','DATABASE_DSN','DB_DSN','PDO_DSN','MYSQL_DSN','MYSQL_URL'))
+   OR (binding.secret_id IS NOT NULL AND upper(binding.name) IN ('DATABASE_URL','DB_URL','DATABASE_DSN','DB_DSN','PDO_DSN','MYSQL_DSN','MYSQL_URL','DB_DATABASE','DB_NAME')))),
  COALESCE((SELECT backup.id FROM backups backup WHERE backup.subscription_id=db.subscription_id AND backup.status='active'
    AND db.db_name=ANY(backup.database_names) AND backup.checksum_sha256 ~ '^[a-f0-9]{64}$' AND backup.archive_path<>'' ORDER BY backup.created_at DESC LIMIT 1),0)
  FROM databases db WHERE db.site_id=ANY($1) ORDER BY db.id`, pq.Array(ids))

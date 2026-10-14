@@ -1,6 +1,8 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const {createSiteRemovalController}=require('./static/site-removal.js');
+const fs=require('node:fs');
+const vm=require('node:vm');
 
 function environment(request){let clock=0;const updates=[],redirects=[];return {request,updates,redirects,now:()=>clock,sleep:async ms=>{clock+=ms},update:value=>updates.push(value),redirect:path=>redirects.push(path),baseURL:'https://panel.test'};}
 test('TestSiteRemovalLostResponseDoesNotReplay',async()=>{
@@ -26,4 +28,14 @@ test('closing during acceptance never restarts foreground polling or steals navi
  const env=environment(async(_url,options={})=>{calls++;return options.method==='POST'?accepted:{state:'completed',redirect:'/subscriptions/20?tab=websites'};});
  const controller=createSiteRemovalController(env);const pending=controller.submit('/remove','body','/lookup');controller.stop();resolve({state:'queued',status_url:'/status',progress_url:'/progress'});await pending;
  assert.equal(calls,1);assert.equal(env.redirects.length,0);
+});
+
+test('mounted failed progress enables Retry instead of leaving the form busy',async()=>{
+ const button={disabled:false};const form={dataset:{},querySelector:()=>null};
+ const root={dataset:{npRemovalStatus:'/status'},querySelector:selector=>selector.includes('form')?form:null};
+ const document={getElementById:()=>null,addEventListener:()=>{},querySelectorAll:()=>[root]};
+ const window={document,location:{href:'https://panel.test/site-removals/1',pathname:'/site-removals/1',assign:()=>{}},NakpanelUI:{fetch:async()=>({json:async()=>({state:'failed',stage:'remove_hosting',html:'failed retry form'})}),setBusy:(_form,busy)=>{button.disabled=busy}}};
+ vm.runInNewContext(fs.readFileSync(require.resolve('./static/site-removal.js'),'utf8'),{window,URL,AbortController,setTimeout,clearTimeout,Date,WeakMap});
+ await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(button.disabled,false,'authoritative failure must offer a usable Retry');
 });

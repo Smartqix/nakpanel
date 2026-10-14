@@ -43,7 +43,13 @@ func TargetSiteJobScope(snapshot types.SiteRemovalSnapshot) (string, []any) {
 		resourceIDs["database"] = append(resourceIDs["database"], strconv.FormatInt(item.ID, 10))
 	}
 	for _, item := range snapshot.Backups {
-		resourceIDs["backup"] = append(resourceIDs["backup"], strconv.FormatInt(item.ID, 10))
+		// Recovery proof can come from a surviving sibling; it is not a target.
+		for _, selected := range snapshot.Sites {
+			if item.SiteID == selected.SiteID {
+				resourceIDs["backup"] = append(resourceIDs["backup"], strconv.FormatInt(item.ID, 10))
+				break
+			}
+		}
 	}
 	args := []any{pq.Array(siteIDs), pq.Array(domains)}
 	parts := []string{`(kind IN ('create_site','issue_cert','install_custom_cert','set_hosting_state','create_backup','restore_backup','generate_web_statistics','maintenance_prune_site_backups') AND args->>'site_id'=ANY($1::text[]))`,

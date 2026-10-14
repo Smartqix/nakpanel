@@ -132,6 +132,13 @@ BEGIN
     ids:='{}';
     IF TG_OP<>'INSERT' THEN ids:=ids||nakpanel_removal_site_ids(TG_TABLE_NAME,to_jsonb(OLD)); END IF;
     IF TG_OP<>'DELETE' THEN ids:=ids||nakpanel_removal_site_ids(TG_TABLE_NAME,to_jsonb(NEW)); END IF;
+    -- Do not add a new consumer after exclusive database removal was approved.
+    IF TG_TABLE_NAME='php_environment_bindings' AND TG_OP<>'DELETE' AND EXISTS(
+      SELECT 1 FROM site_removal_operations operation JOIN sites site ON site.subscription_id=operation.subscription_id
+      WHERE site.id=ANY(ids) AND operation.state<>'completed' AND cardinality(operation.delete_database_ids)>0
+    ) THEN
+      RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='finish or retry database removal before changing application bindings';
+    END IF;
     IF TG_TABLE_NAME='staging_operations' AND TG_OP='DELETE' THEN
       IF EXISTS(
         SELECT 1 FROM site_removal_operations operation

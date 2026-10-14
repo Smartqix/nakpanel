@@ -108,6 +108,9 @@ tar -tzf "${tmpdir}/retained.tar.gz" >/dev/null || fail 'retained backup is unus
 [[ "$(db "SELECT count(*) FROM sites WHERE id=${sibling_id} AND status='active'")" == 1 ]] || fail 'sibling changed'
 create_site "${addon}"; replacement_id="${SITE_ID}"
 [[ "${replacement_id}" != "${stale_id}" ]] || fail 'replacement reused the old ID'
+post restores -d "backup_id=${backup_id}" -d "target_site_id=${replacement_id}"
+restore_id="$(db "SELECT id FROM restore_runs WHERE backup_id=${backup_id} ORDER BY id DESC LIMIT 1")"
+wait_for "SELECT status FROM restore_runs WHERE id=${restore_id}" active
 # Replay the stale native RPC as the allowed panel UID; it must fail before dispatch.
 multipass exec "${VM_NAME}" -- sudo -u nakpanel python3 - "${stale_id}" "${subscription_id}" "${customer_id}" "${username}" "${addon}" <<'PY'
 import json,socket,sys
@@ -134,6 +137,14 @@ test -L "${path}"; unlink "${path}"; mv "${path}.removal-qa" "${path}"
 REMOTE
 post "site-removals/${operation_id}/retry" -H 'X-Nakpanel-SPA: true' -d retry=true
 observe completed
+optional="optional-${run_id}.test"
+create_site "${optional}"; optional_id="${SITE_ID}"
+post databases -d "subscription_id=${subscription_id}" -d "site_id=${optional_id}" -d "db_name=optional_${run_id//-/_}" -d 'password=NakpanelRemoval!2026'
+optional_database_id="$(db "SELECT id FROM databases WHERE site_id=${optional_id}")"
+wait_for "SELECT status FROM databases WHERE id=${optional_database_id}" active
+remove_site "${optional_id}" "${optional}" "${optional_database_id}"
+observe completed
+[[ "$(db "SELECT count(*) FROM databases WHERE id=${optional_database_id}")" == 0 ]] || fail 'selected eligible database was not removed'
 curl -skfL --max-time 30 -c "${tmpdir}/client.cookies" -d email=client@nakpanel.test -d 'password=NakpanelClient!2026' "${base}/login" >/dev/null
 code="$(curl -sk --max-time 30 -b "${tmpdir}/client.cookies" -o /dev/null -w '%{http_code}' "${base}/site-removals/${operation_id}/status")"
 [[ "${code}" == 404 ]] || fail 'cross-customer operation revealed'

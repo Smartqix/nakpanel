@@ -30,3 +30,16 @@ func TestDomainRemovalSingleVMProductGate(t *testing.T) {
 		t.Fatal("removal must be the final product gate")
 	}
 }
+
+func TestDomainRemovalPrerequisiteQuotaBeforePhase5Provisioning(t *testing.T) {
+	data, err := os.ReadFile("phase5-ui-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	start := strings.Index(script, "ensure_lab_quota")
+	provision := strings.Index(script, "-d 'domain=phase5-ui.test'")
+	if start < 0 || (provision >= 0 && start > provision) {
+		t.Fatal("current Phase 5 provisioning needs quota tooling and an enabled filesystem first")
+	}
+}

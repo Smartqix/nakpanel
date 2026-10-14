@@ -9,6 +9,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 REMOTE_SRC="${NAKPANEL_REMOTE_SRC}"
 
 ensure_vm 2 3G 16G
+ensure_lab_quota
 sync_repo "${ROOT_DIR}" "${REMOTE_SRC}"
 
 multipass exec "${VM_NAME}" -- env REMOTE_SRC="${REMOTE_SRC}" bash -se <<'REMOTE'
