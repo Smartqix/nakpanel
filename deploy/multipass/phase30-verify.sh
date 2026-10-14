@@ -797,7 +797,7 @@ for marker in 'PHP Runtime Inventory' 'PHP 8.3' 'PHP 8.4' 'PHP 8.5' 'FPM validat
   grep -Fq "${marker}" "${tmpdir}/php-runtime.html" || fail "runtime inventory is missing ${marker}"
 done
 for marker in 'Managed PHP deployments' 'PHP workers'; do grep -Fq "${marker}" "${tmpdir}/plan.html" || fail "plan controls are missing ${marker}"; done
-for marker in 'Provider Application Catalog' 'OCI catalog' 'value="oci"' 'Node.js and Python adapters remain unavailable'; do
+for marker in 'Provider Application Catalog' 'OCI catalog' 'value="oci"' 'WordPress Toolkit live in their domain workspaces' 'Node.js and Python adapters remain unavailable'; do
   grep -Fq "${marker}" "${tmpdir}/application-catalog.html" || fail "application catalog boundary is missing ${marker}"
 done
 for stale_promise in 'Deploy WordPress' 'Node.js application' 'Python application'; do
