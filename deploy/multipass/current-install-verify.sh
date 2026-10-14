@@ -68,6 +68,11 @@ if [[ "$(db "SELECT count(*) FROM dns_zones WHERE site_id=${site_id}")" == 0 ]];
 fi
 wait_for "SELECT status FROM dns_zones WHERE site_id=${site_id}" active
 test -n "$(dig +short "@${VM_IP}" current-bootstrap.test A)"
+if [[ "$(db "SELECT tls_status FROM sites WHERE id=${site_id}")" != active ]]; then
+  post certificates -d domain=current-bootstrap.test -d issuer=local-self-signed -d "site_id=${site_id}"
+fi
+wait_for "SELECT tls_status FROM sites WHERE id=${site_id}" active
+curl -skf --max-time 20 --resolve "current-bootstrap.test:443:${VM_IP}" https://current-bootstrap.test/ >/dev/null
 database_id="$(db "SELECT id FROM databases WHERE db_name='np_current_bootstrap'")"
 if [[ -z "${database_id}" ]]; then
   post databases -d "subscription_id=${subscription_id}" -d "site_id=${site_id}" \
