@@ -139,6 +139,14 @@ BEGIN
     ) THEN
       RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='finish or retry database removal before changing application bindings';
     END IF;
+    IF TG_TABLE_NAME='backups' AND TG_OP<>'INSERT' THEN
+      IF EXISTS(SELECT 1 FROM site_removal_operations operation
+        WHERE operation.state<>'completed'
+          AND operation.id::TEXT IS DISTINCT FROM current_setting('nakpanel.site_removal_operation',true)
+          AND operation.snapshot->'backups' @> jsonb_build_array(jsonb_build_object('id',OLD.id))) THEN
+        RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='backup is reserved as website removal recovery evidence';
+      END IF;
+    END IF;
     IF TG_TABLE_NAME='staging_operations' AND TG_OP='DELETE' THEN
       IF EXISTS(
         SELECT 1 FROM site_removal_operations operation

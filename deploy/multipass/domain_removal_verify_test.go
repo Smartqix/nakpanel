@@ -54,3 +54,19 @@ func TestLabQuotaChecksUserStateIndependentlyOfOffGroup(t *testing.T) {
 		t.Fatal("quotaon -p returns nonzero for disabled group/project quotas; inspect user state from captured output")
 	}
 }
+
+func TestLegacyDatabaseChecksRespectEscapedSchemaGrants(t *testing.T) {
+	for _, phase := range []string{"4", "5"} {
+		name := "phase" + phase + "-verify.sh"
+		if phase == "5" {
+			name = "phase5-ui-verify.sh"
+		}
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), "mariadb -NrBe") || !strings.Contains(string(data), "ON `np\\_phase"+phase+"`.*") {
+			t.Errorf("%s must check literal, escaped database grants", name)
+		}
+	}
+}

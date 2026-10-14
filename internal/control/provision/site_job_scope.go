@@ -43,6 +43,7 @@ func TargetSiteJobScope(snapshot types.SiteRemovalSnapshot) (string, []any) {
 		resourceIDs["database"] = append(resourceIDs["database"], strconv.FormatInt(item.ID, 10))
 	}
 	for _, item := range snapshot.Backups {
+		resourceIDs["backup_proof"] = append(resourceIDs["backup_proof"], strconv.FormatInt(item.ID, 10))
 		// Recovery proof can come from a surviving sibling; it is not a target.
 		for _, selected := range snapshot.Sites {
 			if item.SiteID == selected.SiteID {
@@ -62,7 +63,8 @@ func TargetSiteJobScope(snapshot types.SiteRemovalSnapshot) (string, []any) {
 		{"configure_webmail", "webmail_id", "webmail"},
 		{"configure_dns_zone", "zone_id", "dns_zone"},
 		{"create_database','system_database_mutation", "database_id", "database"},
-		{"restore_backup','maintenance_delete_backup", "backup_id", "backup"},
+		{"restore_backup", "backup_id", "backup"},
+		{"maintenance_delete_backup", "backup_id", "backup_proof"},
 		{"run_staging_operation", "operation_id", "staging"},
 	} {
 		values := resourceIDs[rule.resource]

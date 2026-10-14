@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 	"os"
 	"path/filepath"
 	"strings"
@@ -182,6 +183,12 @@ func TestSiteRemovalDoesNotCancelSiblingRecoveryProofRestore(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err = db.Exec(`UPDATE backups SET status='deleting' WHERE id=$1`, backupID); err == nil {
+		t.Fatal("proof archive metadata entered retention during approved removal")
+	}
+	if _, err = db.Exec(`INSERT INTO river_job(kind,args,state,queue,max_attempts) VALUES('maintenance_delete_backup',$1,'available','default',3)`, fmt.Sprintf(`{"backup_id":%d}`, backupID)); err != nil {
+		t.Fatal(err)
+	}
 	ready, err := s.drainSiteJobs(context.Background(), op)
 	if err != nil || !ready {
 		t.Fatal(ready, err)
@@ -189,6 +196,14 @@ func TestSiteRemovalDoesNotCancelSiblingRecoveryProofRestore(t *testing.T) {
 	var count int
 	if err = db.QueryRow(`SELECT count(*) FROM river_job WHERE kind='restore_backup' AND state='available'`).Scan(&count); err != nil || count != 2 {
 		t.Fatalf("sibling proof restore cancelled: %d %v", count, err)
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM river_job WHERE kind='maintenance_delete_backup' AND state='cancelled'`).Scan(&count); err != nil || count != 1 {
+		t.Fatal("proof archive pruning was not fenced", count, err)
+	}
+	called := false
+	payload := []byte(fmt.Sprintf(`{"backup_id":%d}`, backupID))
+	if err = NewSiteJobFence(db).Work(context.Background(), &rivertype.JobRow{Kind: "maintenance_delete_backup", EncodedArgs: payload}, func(context.Context) error { called = true; return nil }); err == nil || called {
+		t.Fatal("late pruning job can remove an approved recovery proof")
 	}
 }
 

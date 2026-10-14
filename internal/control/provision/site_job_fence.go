@@ -52,6 +52,16 @@ func (f *SiteJobFence) Work(ctx context.Context, job *rivertype.JobRow, inner fu
 	if len(job.EncodedArgs) > 16<<20 || json.Unmarshal(job.EncodedArgs, &args) != nil {
 		return river.JobCancel(errors.New("invalid scoped job identity"))
 	}
+	if job.Kind == "maintenance_delete_backup" && args.BackupID > 0 {
+		var protected bool
+		if err := f.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM site_removal_operations operation
+ WHERE operation.state<>'completed' AND operation.snapshot->'backups' @> jsonb_build_array(jsonb_build_object('id',$1::bigint)))`, args.BackupID).Scan(&protected); err != nil {
+			return err
+		}
+		if protected {
+			return river.JobCancel(errors.New("backup is reserved as website removal recovery evidence"))
+		}
+	}
 	query, id := removalFenceQuery(job.Kind, args)
 	values := []any{id}
 	if query == "" {
