@@ -43,6 +43,10 @@ type DeleteBackupProvisioner interface {
 	DeleteBackup(ctx context.Context, req types.DeleteBackupReq) (types.DeleteBackupResult, error)
 }
 
+type BackupDownloadReader interface {
+	ReadBackupChunk(context.Context, types.ReadBackupChunkReq) (types.ReadBackupChunkResult, error)
+}
+
 type WebmailProvisioner interface {
 	ConfigureWebmail(ctx context.Context, req types.ConfigureWebmailReq) (types.ConfigureWebmailResult, error)
 }
@@ -216,6 +220,7 @@ type Options struct {
 	CertificateProvisioner    CertificateProvisioner
 	BackupProvisioner         BackupProvisioner
 	DeleteBackupProvisioner   DeleteBackupProvisioner
+	BackupDownloadReader      BackupDownloadReader
 	WebmailProvisioner        WebmailProvisioner
 	DNSProvisioner            DNSProvisioner
 	ReconciliationProvisioner ReconciliationProvisioner
@@ -254,6 +259,7 @@ type Dispatcher struct {
 	customCertProvisioner     CustomCertificateProvisioner
 	backupProvisioner         BackupProvisioner
 	deleteBackupProvisioner   DeleteBackupProvisioner
+	backupDownloadReader      BackupDownloadReader
 	webmailProvisioner        WebmailProvisioner
 	dnsProvisioner            DNSProvisioner
 	reconciliationProvisioner ReconciliationProvisioner
@@ -315,6 +321,7 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 		customCertProvisioner:     customCertProvisioner,
 		backupProvisioner:         opts.BackupProvisioner,
 		deleteBackupProvisioner:   opts.DeleteBackupProvisioner,
+		backupDownloadReader:      opts.BackupDownloadReader,
 		webmailProvisioner:        opts.WebmailProvisioner,
 		dnsProvisioner:            opts.DNSProvisioner,
 		reconciliationProvisioner: opts.ReconciliationProvisioner,
@@ -1269,6 +1276,19 @@ func (d *Dispatcher) dispatchUnchecked(ctx context.Context, req types.Request) t
 			return errorResponse(req.ID, "backup provisioner is not configured")
 		}
 		result, err := d.backupProvisioner.CreateBackup(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpReadBackupChunk:
+		var payload types.ReadBackupChunkReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.backupDownloadReader == nil {
+			return errorResponse(req.ID, "backup download is not configured")
+		}
+		result, err := d.backupDownloadReader.ReadBackupChunk(ctx, payload)
 		if err != nil {
 			return errorResponse(req.ID, err.Error())
 		}

@@ -249,6 +249,7 @@ type Application struct {
 }
 
 type Site struct {
+	RemovalState         string
 	ID                   int64
 	Username             string
 	DocumentRoot         string
@@ -616,6 +617,7 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 	}
 	for _, site := range sites {
 		data.Sites = append(data.Sites, Site{
+			RemovalState:         site.RemovalState,
 			ID:                   site.ID,
 			Username:             site.Username,
 			DocumentRoot:         site.DocumentRoot,

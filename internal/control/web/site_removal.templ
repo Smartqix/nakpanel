@@ -1,0 +1,151 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+)
+
+templ siteRemovalActions(site dashboard.Site,primary bool,view WorkspaceView) {
+	if primary {
+		<span class="np-status-pill susp">Primary website</span>
+	}
+	<details class="np-domain-actions"><summary class="np-secondary-button">@icon("ellipsis")<span>Actions</span></summary><div class="np-domain-actions-menu">
+		if primary {
+			<p>The primary website belongs to the subscription and cannot be removed individually.</p>
+		} else if removalBusy(site) {
+			<a href={ templ.SafeURL(removalActionPath(site,view)) }>View removal progress</a>
+		} else {
+			<a class="np-removal-link" href={ templ.SafeURL(removalActionPath(site,view)) } data-np-removal-open>@icon("trash")<span>{ removalLabel(mapSiteKind(site)) }</span></a>
+		}
+	</div></details>
+}
+
+templ siteLifecyclePill(site dashboard.Site) {
+	if removalBusy(site) {
+		if site.RemovalState=="failed" {
+			@tonePill("Removal failed","fail")
+		} else {
+			@tonePill("Removal "+site.RemovalState,"pend")
+		}
+	} else {
+		@statusPill(site.Status)
+	}
+}
+
+templ SiteRemovalPreviewPage(view WorkspaceView,model SiteRemovalView) {
+	<div class="np-removal-page">@SiteRemovalPreviewContent(view,model)</div>
+}
+
+templ SiteRemovalPreviewContent(view WorkspaceView,model SiteRemovalView) {
+	if p:=model.Preview;p!=nil {
+		<div class="np-dialog-head"><div><span class="np-kicker">Permanent hosting removal</span><h2 id={ removalHeadingID(view) }>{ removalLabel(p.Kind) }: { p.Domain }</h2><p>Domain registration is unchanged. Sibling websites and shared subscription services are not removed.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div>
+		if p.Operation!=nil {
+			<div class="np-removal-body"><p>Removal has already started for this website.</p><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/site-removals/"+formatJobID(p.Operation.ID))) }>View removal progress</a></div>
+		} else if !p.Allowed {
+			<div class="np-removal-body"><p class="np-error" role="alert">This website cannot be removed individually.</p><ul>
+				for _,reason:=range p.BlockedReasons {
+					<li>{ reason }</li>
+				}
+			</ul><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(p.SubscriptionID))) }>Back to subscription</a></div>
+		} else {
+			<form class="np-form np-dialog-form np-removal-form" method="post" action={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(p.SiteID)+"/remove")) } data-np-removal-form data-np-removal-lookup={ workspacePath(view,"/site-removals/lookup")+"?request_id="+model.RequestID }>
+				@csrfInput(view)<input type="hidden" name="approval" value={ model.Approval }/><input type="hidden" name="request_id" value={ model.RequestID }/>
+				<div class="np-removal-body">
+					<div class="np-removal-summary"><div><strong>{ formatPlanLimit(len(p.Snapshot.Sites)) }</strong><span>Websites and subdomains</span></div><div><strong>{ formatPlanLimit(removalResourceCount(*p,"mailbox")) }</strong><span>Mailboxes and their messages</span></div><div><strong>{ formatPlanLimit(len(p.Snapshot.Databases)) }</strong><span>Databases kept</span></div><div><strong>{ formatPlanLimit(len(p.Snapshot.Backups)) }</strong><span>Backups kept</span></div></div>
+					<details class="np-removal-impact"><summary>What will be removed</summary><ul>
+						for _,site:=range p.Snapshot.Sites {
+							<li><strong>{ site.Domain }</strong> - website files, PHP runtime, certificates and domain logs</li>
+						}
+						<li>Domain Git deployments, containers, scheduled tasks and domain-scoped access</li><li>Domain mailboxes, messages, aliases, signing and webmail configuration</li><li>Managed domain DNS records and statistics; external DNS must be updated separately</li></ul></details>
+					<p class="np-callout"><strong>Databases and backups are kept by default.</strong> They remain available under this subscription. Retained backups can restore to an active replacement website with the same domain.</p>
+					for _,group:=range removalImpactGroups(*p) {
+						<details class="np-removal-impact"><summary>{ group.Title } ({ formatPlanLimit(len(group.Items)) })</summary><ul>
+							for _,name:=range group.Items {
+								<li>{ name }</li>
+								}
+						</ul></details>
+					}
+					if len(p.Snapshot.Databases)>0 {
+						<details class="np-removal-impact"><summary>Optional database removal</summary><div class="np-removal-databases">
+							for _,db:=range p.Snapshot.Databases {
+								if db.DeletionEligible {
+									<label class="np-check"><input type="checkbox" name="delete_database_ids" value={ formatJobID(db.ID) }/>Also permanently remove { db.Name }</label>
+								} else {
+									<p><strong>{ db.Name } will be kept.</strong> { db.IneligibleReason }</p>
+								}
+							}
+						</div></details>
+					}
+					if len(p.Snapshot.Sites)>1 {
+						<label class="np-check"><input type="checkbox" name="include_children" value="true" checked?={ model.IncludeChildren } required/>Also remove all { formatPlanLimit(len(p.Snapshot.Sites)-1) } child subdomains listed above</label>
+					}
+					if p.RequiresHostnameConfirmation {
+						<label>Type <strong>{ p.Domain }</strong> to confirm<input name="confirm_domain" value={ model.ConfirmDomain } autocomplete="off" spellcheck="false" maxlength="253" required/></label>
+					} else {
+						<input type="hidden" name="confirm_domain" value={ p.Domain }/>
+					}
+					<label class="np-check"><input type="checkbox" name="acknowledge_permanent" value="true" required checked?={ model.AcknowledgePermanent }/>I understand that hosting files and domain mail are permanently deleted.</label>
+					<p class="np-error" role="alert" data-np-removal-error hidden?={ model.Error=="" }>{ model.Error }</p>
+					<div data-np-removal-refresh hidden><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(p.SiteID)+"/removal")) } data-np-removal-open>Review updated removal impact</a></div>
+					<noscript><a href={ templ.SafeURL(workspacePath(view,"/site-removals/lookup")+"?request_id="+model.RequestID) }>Check this request after a connection problem</a></noscript>
+					<div data-np-removal-recovery hidden><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/site-removals/lookup")+"?request_id="+model.RequestID) } data-np-removal-check>Check removal status</a><a href="/login">Sign in again</a></div>
+				</div>
+				<div class="np-dialog-actions"><a class="np-secondary-button np-removal-page-cancel" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(p.SiteID))) }>Cancel</a><button type="button" class="np-secondary-button np-removal-dialog-cancel" data-np-dialog-close data-np-autofocus>Cancel</button><button class="np-danger-button" type="submit">@icon("trash")<span>{ removalLabel(p.Kind) }</span></button></div>
+			</form>
+		}
+	}
+}
+
+templ SiteRemovalProgressPage(view WorkspaceView,model SiteRemovalView) {
+	<div class="np-removal-page" data-np-removal-progress data-np-removal-status={ workspacePath(view,"/site-removals/"+formatJobID(model.Operation.ID)+"/status") }>@SiteRemovalProgressContent(view,model)</div>
+}
+
+templ SiteRemovalProgressContent(view WorkspaceView,model SiteRemovalView) {
+	if op:=model.Operation;op!=nil {
+		<div class="np-dialog-head"><div><span class="np-kicker">Hosting removal</span><h2 id={ removalHeadingID(view) }>Removing { op.Domain }</h2><p>Databases and backups selected for retention remain under this subscription.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Continue in background">@icon("x")</button></div>
+		<div class="np-removal-body" aria-live="polite">
+			@statusPill(op.State)
+			<ol class="np-removal-stages">
+				for _,stage:=range removalStageViews(*op) {
+					<li data-np-removal-stage={ stage.Key } class={ templ.KV("is-complete",stage.Complete),templ.KV("is-current",string(op.Stage)==stage.Key) }><span>@icon(removalStageIcon(stage.Complete))</span>{ stage.Label }</li>
+				}
+			</ol>
+			if op.State=="completed" {
+				<p class="np-callout">{ removalCompletionMessage(*op) }</p>
+			} else if op.State=="failed" {
+				<p class="np-error" role="alert">{ op.LastError }</p><p>Already completed stages are not undone. Retry continues the same approved removal; do not create a replacement until it finishes.</p>
+			} else {
+				<p data-np-removal-message>Removal is running. This may take a few minutes.</p>
+			}
+			<p class="np-error" role="alert" data-np-removal-error hidden></p>
+			<div data-np-removal-recovery hidden><a class="np-secondary-button" href="/login">Sign in again</a><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/site-removals/"+formatJobID(op.ID))) }>Check removal status</a></div>
+		</div>
+		<div class="np-dialog-actions">
+			<a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(op.SubscriptionID))+"?tab=websites") }>Continue in background</a>
+			if op.State=="failed" {
+				<form method="post" action={ templ.SafeURL(workspacePath(view,"/site-removals/"+formatJobID(op.ID)+"/retry")) } data-np-removal-retry>@csrfInput(view)<button type="submit" class="np-danger-button">Retry removal</button></form>
+			} else if op.State=="completed" && model.Redirect!="" {
+				<a class="np-secondary-button" href={ templ.SafeURL(model.Redirect) }>Return to websites</a>
+			} else {
+				<a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/site-removals/"+formatJobID(op.ID))) }>Refresh status</a>
+			}
+		</div>
+	}
+}
+
+templ backupRecoveryActions(backup dashboard.Backup,sites []dashboard.Site,view WorkspaceView) {
+	if canRestoreBackup(backup) {
+		<a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/backups/"+formatJobID(backup.ID)+"/download")) }>@icon("download")<span>Download</span></a>
+		if backup.SiteID>0 {
+			<form class="np-inline-form" method="post" action="/restores">@csrfInput(view)<input type="hidden" name="backup_id" value={ formatJobID(backup.ID) }/><button type="submit" class="np-secondary-button" data-np-confirm={ restoreConfirmation(backup) }>Restore</button></form>
+		} else {
+			<p class="np-form-help">The original website is no longer attached. This recovery point is kept under the subscription.</p>
+			if target,ok:=retainedBackupTarget(backup,sites);ok {
+				<form class="np-form np-retained-restore" method="post" action="/restores">@csrfInput(view)<input type="hidden" name="backup_id" value={ formatJobID(backup.ID) }/><label>Restore target<select name="target_site_id" required><option value="">Select the replacement website</option><option value={ formatJobID(target.ID) }>{ target.Domain }</option></select></label><button type="submit" class="np-secondary-button" data-np-confirm={ "Restore this recovery point onto "+target.Domain+"? Current website files and covered database contents will be replaced." }>Restore to replacement</button></form>
+			} else {
+				<p class="np-form-help">Recreate { backup.TargetName } in this subscription to restore its website files.</p>
+			}
+		}
+	} else {
+		<span class="np-muted">{ restoreUnavailableLabel(backup) }</span>
+	}
+}

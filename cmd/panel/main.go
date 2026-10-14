@@ -120,6 +120,7 @@ func main() {
 		provision.WithRuntimeCapabilities(agentCapabilities),
 		provision.WithMailAgent(agentCapabilities),
 		provision.WithHostingToolkitAgent(agentCapabilities),
+		provision.WithBackupChunkReader(agentCapabilities),
 	)
 	wordpressManager := controlwordpress.NewManager(wordpressStore, workspaceStore, siteManager)
 	if err := provision.SweepCustomTLSStagingForJobs(ctx, db, provision.DefaultCustomTLSStagingDir, 24*time.Hour); err != nil {
@@ -134,6 +135,7 @@ func main() {
 	defer closeDatabaseManager()
 	uiHandler := panelhttp.NewServer(authStore, sessionManager, panelhttp.ServerOptions{
 		SiteCreator:                siteManager,
+		SiteRemoval:                siteManager,
 		DatabaseCreator:            siteManager,
 		CertificateIssuer:          siteManager,
 		CustomCertificateInstaller: siteManager,
@@ -203,6 +205,7 @@ func (q dashboardQuerier) ListSites(ctx context.Context) ([]store.Site, error) {
 			SettingsStatus: row.SettingsStatus, SettingsError: row.SettingsError, TlsAutoRenew: row.TlsAutoRenew,
 			SystemAccountID: row.SystemAccountID, DocumentRoot: row.DocumentRoot,
 			ParentSiteID: row.ParentSiteID, DnsZoneMode: row.DnsZoneMode,
+			RemovalState: row.RemovalState,
 		})
 	}
 	return items, nil

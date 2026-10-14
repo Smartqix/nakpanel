@@ -52,9 +52,11 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 				<script defer src="/assets/ace/ace.js"></script>
 			}
 			@confirmationDialog()
+			<dialog class="np-dialog np-site-removal-dialog" id="np-site-removal-dialog" data-np-dialog></dialog>
 			<script defer src="/assets/interaction.js"></script>
 			<script defer src="/assets/app.js"></script>
 			<script defer src="/assets/git.js"></script>
+			<script defer src="/assets/site-removal.js"></script>
 		</body>
 	</html>
 }
@@ -76,7 +78,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 				<span class="np-nav-label">Hosting services</span>
 				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), "")
 				@navRoute("/resellers", "Resellers", "users", routeActive(view.Route, "resellers", "reseller-detail"), "")
-				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup"), sitesNeedingAttention(data.Sites), SeverityWarning)
+				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress"), sitesNeedingAttention(data.Sites), SeverityWarning)
 				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), "")
 				@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new", "reseller-plan-new"), "")
 				<span class="np-nav-label">Server management</span>
@@ -85,7 +87,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 			} else if user.Role == auth.RoleReseller && view.SupportCustomerID == 0 {
 				<span class="np-nav-label">Hosting services</span>
 				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), "")
-				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup"), sitesNeedingAttention(data.Sites), SeverityWarning)
+				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress"), sitesNeedingAttention(data.Sites), SeverityWarning)
 				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), "")
 		@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new"), "")
 				<span class="np-nav-label">Account</span>
@@ -94,7 +96,7 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 				@navRoute("/my-resources", "My Resources", "activity", routeActive(view.Route, "my-resources"), "")
 			} else {
 				<span class="np-nav-label">Hosting services</span>
-				@navAlert(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup"), sitesNeedingAttention(sitesForCustomer(data.Sites, view.SupportCustomerID)), SeverityWarning)
+				@navAlert(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress"), sitesNeedingAttention(sitesForCustomer(data.Sites, view.SupportCustomerID)), SeverityWarning)
 				@navRoute(workspacePath(view, "/mail"), "Mail", "mail", routeActive(view.Route, "mail"), "")
 				@navRoute(workspacePath(view, "/backups"), "Backups", "archive", routeActive(view.Route, "backups"), "")
 				<span class="np-nav-label">Account</span>
@@ -197,6 +199,14 @@ templ routedContent(user auth.SessionUser, data dashboard.Data, actions Dashboar
 			@routedSiteDetail(user, data, actions, view)
 		case "site-setup":
 			@routedSiteSetup(view)
+		case "site-removal":
+			if view.SiteRemoval!=nil {
+				@SiteRemovalPreviewPage(view,*view.SiteRemoval)
+			}
+		case "site-removal-progress":
+			if view.SiteRemoval!=nil {
+				@SiteRemovalProgressPage(view,*view.SiteRemoval)
+			}
 		case "site-files":
 			@routedFileManager(view)
 		case "site-file-edit":
@@ -204,7 +214,7 @@ templ routedContent(user auth.SessionUser, data dashboard.Data, actions Dashboar
 		case "databases":
 			@routedDatabases(databasesForSubscription(databasesForCustomer(data.Databases, view.SupportCustomerID), view.SelectedSubscription), selectedSubscription(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), view.SelectedSubscription), actions, view)
 		case "backups":
-			@routedBackups(data.Phase6, subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), actions, view)
+			@routedBackups(data.Phase6, data.Sites, subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), actions, view)
 		case "dns":
 			@routedDNS(data.Phase6, sitesForCustomer(data.Sites, view.SupportCustomerID), actions, view)
 		case "certificates":
@@ -489,7 +499,11 @@ templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions [
 										if parent := parentDomain(sites,item); parent != "" {
 											Subdomain of { parent }
 										} else {
-											Primary domain
+											if isPrimarySite(item,subscriptions) {
+												Primary website
+											} else {
+												Additional website
+											}
 										}
 									</small>
 								</td>
@@ -499,7 +513,7 @@ templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions [
 								</td>
 								<td data-label="PHP">{ item.PHPVersion }</td>
 								<td data-label="TLS">@tlsCell(item)</td>
-								<td data-label="Status"><span class={ "np-status-pill " + customerStatusClass(item.Status) }>{ item.Status }</span></td>
+								<td data-label="Status">@siteLifecyclePill(item)</td>
 								<td data-label="Health">
 									if health.NeedsAttention() {
 										<span class={ "np-pill " + severityPillClass(health.Severity) }>{ health.Summary }</span>
@@ -508,7 +522,8 @@ templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions [
 									}
 								</td>
 								<td data-label="Actions">
-									if activeSubscriptionForSite(subscriptions,item) && actions.CanCreateSite && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
+									@siteRemovalActions(item,isPrimarySite(item,subscriptions),view)
+									if !removalBusy(item) && activeSubscriptionForSite(subscriptions,item) && actions.CanCreateSite && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
 										<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?add=subdomain")) }>Add subdomain</a>
 									}
 								</td>
@@ -541,20 +556,23 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 		if subscription, hasSubscription := subscriptionForSite(data.Subscriptions, item); hasSubscription {
 			{{ kind:="Website"; if item.ParentSiteID>0 {kind="Subdomain"} }}
 			@pageHead(kind, item.Domain, subscription.SubscriptionName + " · " + subscription.PlanName) {
-				if actions.CanCreateSite && subscription.Status == "active" && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
+				@siteRemovalActions(item,item.ID==subscription.PrimarySiteID,view)
+				if !removalBusy(item) && actions.CanCreateSite && subscription.Status == "active" && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
 					<button type="button" data-np-dialog-open={ "subdomain-dialog-"+formatJobID(item.ID) }>@icon("plus")<span>Add subdomain</span></button>
 				}
 				<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/subscriptions/" + formatJobID(item.SubscriptionID))) }>Back to subscription</a>
 			}
-			if actions.CanCreateSite && subscription.Status == "active" && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
+			if !removalBusy(item) && actions.CanCreateSite && subscription.Status == "active" && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
 				@routedSubdomainDialog(item,subscription,data.Capabilities,view)
 			}
 			<div class="np-domain-commandbar">
-				<div><span class={ "np-status-pill " + customerStatusClass(item.Status) }>{ item.Status }</span><span>PHP { item.PHPVersion }</span><span>{ formatTLSStatus(item) }</span></div>
+				<div>@siteLifecyclePill(item)<span>PHP { item.PHPVersion }</span><span>{ formatTLSStatus(item) }</span></div>
 				<a href={ templ.SafeURL(siteWebsiteURL(item)) } target="_blank" rel="noreferrer">@icon("globe")<span>Open website</span></a>
 			</div>
 			@domainNavigation(item.ID,view.Tab,view,actions.CanUseFileManager)
-			if data.ServiceLoadError != "" && siteServiceTab(view.Tab) {
+			if removalBusy(item) {
+				<section class="np-panel"><h2>Website removal is { item.RemovalState }</h2><p>Hosting tools are unavailable while this approved removal is incomplete. Databases and backups remain under the subscription.</p><a class="np-secondary-button" href={ templ.SafeURL(removalActionPath(item,view)) }>View removal progress</a></section>
+			} else if data.ServiceLoadError != "" && siteServiceTab(view.Tab) {
 				<p class="np-gate is-blocked">Hosting service policy could not be loaded. Mutating tools are unavailable until the panel can verify this subscription.</p>
 			} else if view.Tab == "overview" {
 				@domainOverview(item,subscription,data,actions,view)
@@ -2139,10 +2157,14 @@ templ routedDatabases(databases []dashboard.Database, subscriptions []types.Subs
 	<section class="np-panel">@databasesSection(databases, nil, subscriptions, actions, view.CSRFToken)</section>
 }
 
-templ routedBackups(data dashboard.Phase6Data, subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
+templ routedBackups(data dashboard.Phase6Data, sites []dashboard.Site, subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
 	@pageHead("Hosting services", "Backups", "Create recovery points and restore owned website data.") {}
 	<section class="np-panel">
-		@phase6Tables(backupPhase6(data), view.CSRFToken)
+		<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Website</th><th>Created</th><th>Size</th><th>Status</th><th>Recovery</th></tr></thead><tbody>
+			for _,backup:=range data.Backups {
+				<tr><td data-label="Website">{ backup.TargetName }</td><td data-label="Created">{ formatTime(backup.CreatedAt) }</td><td data-label="Size">{ formatBytes(backup.SizeBytes) }</td><td data-label="Status">@statusPill(backup.Status)</td><td data-label="Recovery">@backupRecoveryActions(backup,sites,view)</td></tr>
+			}
+		</tbody></table></div>
 		if actions.CanUsePhase6 {
 			<form class="np-form np-action-form" method="post" action="/backups">
 				@csrfInput(view)
@@ -2923,7 +2945,7 @@ templ subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dash
 		} else {
 			<div class="np-table-wrap">
 				<table class="np-table">
-					<thead><tr><th>Taken</th><th>Target</th><th>Size</th><th>Status</th></tr></thead>
+					<thead><tr><th>Taken</th><th>Target</th><th>Size</th><th>Status</th><th>Recovery</th></tr></thead>
 					<tbody>
 						for _, item := range backups {
 							<tr>
@@ -2938,6 +2960,7 @@ templ subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dash
 										<small class="np-usage-note">{ item.LastError }</small>
 									}
 								</td>
+								<td data-label="Recovery">@backupRecoveryActions(item,data.Sites,view)</td>
 							</tr>
 						}
 					</tbody>
@@ -3412,7 +3435,7 @@ templ subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Wor
 					}
 				</span>
 			</div>
-			@statusPill(site.Status)
+			@siteLifecyclePill(site)
 		</div>
 		<div class="np-domain-service-state">
 			<span>@icon("shield")<b>{ formatTLSState(site) }</b> TLS</span>
@@ -3428,8 +3451,9 @@ templ subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Wor
 			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=backups") }>Backups</a>
 		</nav>
 		<div class="np-domain-card-actions">
+			@siteRemovalActions(site,isPrimarySite(site,data.Subscriptions),view)
 			<a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))) }>Manage</a>
-			if formatTLSState(site) == "none" {
+			if !removalBusy(site) && formatTLSState(site) == "none" {
 				<a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID))+"?tab=ssl") }>Issue certificate</a>
 			}
 		</div>

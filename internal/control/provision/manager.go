@@ -128,6 +128,9 @@ type HostingToolkitAgent interface {
 }
 
 type Manager struct {
+	backupReader interface {
+		ReadBackupChunk(context.Context, types.ReadBackupChunkReq) (types.ReadBackupChunkResult, error)
+	}
 	siteRemoval             *SiteRemovalService
 	siteRepo                SiteRepository
 	databaseRepo            DatabaseRepository

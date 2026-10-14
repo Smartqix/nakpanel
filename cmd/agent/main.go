@@ -117,6 +117,7 @@ func main() {
 				DatabaseDumper: ops.CommandDatabaseDumper{},
 			}),
 			DeleteBackupProvisioner: ops.NewDeleteBackupProvisioner(""),
+			BackupDownloadReader:    ops.NewBackupDownloadReader(""),
 			RestoreProvisioner: ops.NewRestoreProvisioner(ops.RestoreProvisionerOptions{
 				DatabaseRestorer: ops.CommandDatabaseRestorer{},
 				OwnershipManager: ops.NewLinuxOwnershipManager(nil),

@@ -74,7 +74,7 @@ FROM sites
 WHERE domain = $1;
 
 -- name: ListSites :many
-SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew, system_account_id, document_root, parent_site_id, dns_zone_mode
+SELECT id, owner_user_id, username, domain, php_version, status, last_error, created_at, updated_at, tls_status, tls_issuer, tls_cert_path, tls_key_path, tls_expires_at, tls_last_error, subscription_id, customer_id, desired_status, desired_php_version, https_redirect, desired_https_redirect, settings_status, settings_error, tls_auto_renew, system_account_id, document_root, parent_site_id, dns_zone_mode, removal_state
 FROM sites
 ORDER BY id;
 

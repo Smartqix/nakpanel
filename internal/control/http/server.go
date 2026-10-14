@@ -258,6 +258,7 @@ type ServerOptions struct {
 	ApplicationLogs            ApplicationLogReader
 	PHPApplications            PHPApplicationService
 	WordPress                  WordPressService
+	SiteRemoval                SiteRemovalManager
 	WebStatistics              *webstatistics.Service
 	SMTPConfigured             bool
 	// SecurityDB backs the durable login throttle, TOTP state, login
@@ -290,6 +291,8 @@ type Server struct {
 	applicationLogs    ApplicationLogReader
 	phpApplications    PHPApplicationService
 	wordpress          WordPressService
+	siteRemoval        SiteRemovalManager
+	removalApprovalKey []byte
 	webStatistics      *webstatistics.Service
 	smtpConfigured     bool
 	securityDB         *sql.DB
@@ -324,6 +327,8 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		applicationLogs:    opts.ApplicationLogs,
 		phpApplications:    opts.PHPApplications,
 		wordpress:          opts.WordPress,
+		siteRemoval:        opts.SiteRemoval,
+		removalApprovalKey: newSiteRemovalApprovalKey(),
 		webStatistics:      opts.WebStatistics,
 		smtpConfigured:     opts.SMTPConfigured,
 		securityDB:         opts.SecurityDB,
@@ -358,6 +363,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /websites", s.handleCreateWebsite)
 	mux.HandleFunc("POST /databases", s.handleCreateDatabase)
 	s.registerDatabaseWorkspaceRoutes(mux)
+	s.registerSiteRemovalRoutes(mux)
 	mux.HandleFunc("POST /certificates", s.handleIssueCertificate)
 	mux.HandleFunc("POST /sites/{id}/certificates/custom", s.handleInstallCustomCertificate)
 	mux.HandleFunc("POST /jobs/retry", s.handleRetryJob)
@@ -577,6 +583,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 	if user.Role == auth.RoleAdmin {
 		data.Notice, data.NoticeKind = workspaceNotice(w, r)
+		s.applyRemovalNotice(r, user, &data, 0)
 	}
 
 	renderPage(w, r, web.DashboardPage(title, user, data, web.DashboardActions{
@@ -621,6 +628,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		}
 		data.Notice, data.NoticeKind = workspaceNotice(w, r)
 		view := web.WorkspaceView{Route: route, Title: dashboardTitle(user.Role), CSRFToken: csrfToken(r)}
+		s.applyRemovalNotice(r, user, &data, 0)
 		if raw := r.PathValue("id"); raw != "" {
 			view.DetailID, err = strconv.ParseInt(raw, 10, 64)
 			if err != nil || view.DetailID <= 0 {
@@ -903,6 +911,7 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 	}
 	data = filterDashboardForCustomer(data, customerID)
 	data.Notice, data.NoticeKind = workspaceNotice(w, r)
+	s.applyRemovalNotice(r, user, &data, customerID)
 	if !workspaceDetailVisible(page, detailID, data) {
 		http.NotFound(w, r)
 		return
@@ -1954,7 +1963,30 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		formFailure(w, r, "Invalid backup id")
 		return
 	}
-	restoreID, err := s.phase6.RestoreBackup(r.Context(), user, backupID)
+	if supportID := parseFormInt64Default(r, "support_customer_id", 0); supportID > 0 {
+		if user.Role != auth.RoleAdmin || s.workspace == nil {
+			http.NotFound(w, r)
+			return
+		}
+		customer, e := s.workspace.CustomerIDForBackup(r.Context(), backupID)
+		if e != nil || customer != supportID {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	var restoreID int64
+	if targetID := parseFormInt64Default(r, "target_site_id", 0); targetID > 0 {
+		service, ok := s.phase6.(interface {
+			RestoreBackupToSiteFor(context.Context, auth.SessionUser, int64, int64) (int64, error)
+		})
+		if !ok {
+			formFailure(w, r, "Restore target selection is unavailable")
+			return
+		}
+		restoreID, err = service.RestoreBackupToSiteFor(r.Context(), user, backupID, targetID)
+	} else {
+		restoreID, err = s.phase6.RestoreBackup(r.Context(), user, backupID)
+	}
 	if err != nil {
 		if errors.Is(err, provision.ErrForbidden) {
 			http.NotFound(w, r)

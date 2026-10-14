@@ -380,7 +380,7 @@ func prepareSiteGuard(req types.Request, registry SiteIdentityGuard) (preparedSi
 		types.OpCreateServerBackup, types.OpVerifyServerBackup, types.OpPruneServerBackups, types.OpTestBackupDestination, types.OpInspectServerSecurity, types.OpStageServerSecurity,
 		types.OpConfirmServerSecurity, types.OpRevertServerSecurity, types.OpControlHostPower, types.OpInspectDatabaseAdmin, types.OpManageDatabaseAdmin, types.OpReloadService,
 		types.OpCleanupLegacyHomes, types.OpTeardownSubscription, types.OpTeardownSite, types.OpCollectMailQueue, types.OpQueryMailQueue, types.OpInspectQueuedMail, types.OpGetMailStatus,
-		types.OpWebStatisticsStatus, types.OpDeleteBackup, types.OpFTPSStatus, types.OpEnsureValkey, types.OpValkeyStatus:
+		types.OpWebStatisticsStatus, types.OpDeleteBackup, types.OpReadBackupChunk, types.OpFTPSStatus, types.OpEnsureValkey, types.OpValkeyStatus:
 		return preparedSiteGuard{request: req}, nil
 	default:
 		return preparedSiteGuard{}, errors.New("agent operation has no website-removal classification")

@@ -4,8 +4,9 @@
     var document = environment.document, frames = [], prepared = new WeakSet();
     function top() { return frames.length ? frames[frames.length - 1].dialog : null; }
     function focusable(dialog) {
-      return Array.from(dialog.querySelectorAll('a[href], button, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])')).filter(function (control) {
-        return !control.disabled && !control.hidden && !control.closest('[hidden], [inert]') && control.getClientRects().length > 0;
+      return Array.from(dialog.querySelectorAll('a[href], button, summary, input:not([type="hidden"]), select, textarea, [tabindex]:not([tabindex="-1"])')).filter(function (control) {
+        var collapsed = control.closest('details:not([open])'), summary = collapsed && collapsed.querySelector('summary');
+        return !control.disabled && !control.hidden && !control.closest('[hidden], [inert]') && (!collapsed || summary && summary.contains(control)) && control.getClientRects().length > 0;
       });
     }
     function focus(dialog) {
