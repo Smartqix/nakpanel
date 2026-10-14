@@ -13,7 +13,8 @@ destroy_legacy_phase_vms
 destroy_vm "${NAKPANEL_MULTIPASS_VM}"
 # A crashed Phase 29 disaster-recovery leg must not leak its second VM.
 destroy_vm "${NAKPANEL_MULTIPASS_VM}-dr"
-ensure_vm 2 3G 16G
+# Current native PHP/container and disaster-recovery gates need build/backup headroom.
+ensure_vm 4 6G 48G
 
 export NAKPANEL_MULTIPASS_VM="${VM_NAME}"
 export NAKPANEL_MULTIPASS_IMAGE="${IMAGE}"

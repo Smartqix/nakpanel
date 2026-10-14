@@ -43,3 +43,14 @@ func TestDomainRemovalPrerequisiteQuotaBeforePhase5Provisioning(t *testing.T) {
 		t.Fatal("current Phase 5 provisioning needs quota tooling and an enabled filesystem first")
 	}
 }
+
+func TestLabQuotaChecksUserStateIndependentlyOfOffGroup(t *testing.T) {
+	data, err := os.ReadFile("common.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(data), "ensure_lab_quota()")
+	if start < 0 || strings.Count(string(data)[start:], `state="$(quotaon -p "${target}" 2>/dev/null || true)"`) < 2 {
+		t.Fatal("quotaon -p returns nonzero for disabled group/project quotas; inspect user state from captured output")
+	}
+}

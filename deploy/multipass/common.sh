@@ -146,7 +146,8 @@ if ! grep -Eq 'user quota .* is on' <<<"${state}"; then
  quotacheck -ugm "${target}" || quotacheck -cugm "${target}"
  quotaon -uv "${target}" || true
 fi
-quotaon -p "${target}" | grep -Eq 'user quota .* is on'
+state="$(quotaon -p "${target}" 2>/dev/null || true)"
+grep -Eq 'user quota .* is on' <<<"${state}"
 QUOTA
 }
 
