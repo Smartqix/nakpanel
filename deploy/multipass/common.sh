@@ -166,7 +166,7 @@ sync_repo() (
   # Include working-tree edits and nonignored new sources, but never local
   # secrets, build caches, sockets or this task's private test artifacts.
   git -C "${root_dir}" ls-files -z --cached --others --exclude-standard |
-    tar -C "${root_dir}" --null -T - -cf "${tmpdir}/source.tar"
+    COPYFILE_DISABLE=1 tar -C "${root_dir}" --null -T - -cf "${tmpdir}/source.tar"
   multipass transfer "${tmpdir}/source.tar" "${NAKPANEL_MULTIPASS_VM}:${remote_archive}"
   multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- bash -c '
 set -euo pipefail

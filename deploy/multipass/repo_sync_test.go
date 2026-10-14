@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -24,6 +25,11 @@ func TestRepositorySyncExportsSourcesWithoutIgnoredPrivateState(t *testing.T) {
 		cmd.Dir = root
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git: %s: %v", out, err)
+		}
+	}
+	if runtime.GOOS == "darwin" {
+		if out, err := exec.Command("xattr", "-w", "com.apple.metadata:kMDItemWhereFroms", "fixture", filepath.Join(root, "tracked.go")).CombinedOutput(); err != nil {
+			t.Fatalf("xattr: %s: %v", out, err)
 		}
 	}
 	common, err := filepath.Abs("common.sh")
@@ -60,7 +66,7 @@ sync_repo "$2"
 			t.Errorf("missing %s: %s", want, files)
 		}
 	}
-	for _, forbidden := range []string{".superpowers", ".env", ".git/"} {
+	for _, forbidden := range []string{".superpowers", ".env", ".git/", "._"} {
 		if strings.Contains(files, forbidden) {
 			t.Errorf("private state included: %s", files)
 		}
