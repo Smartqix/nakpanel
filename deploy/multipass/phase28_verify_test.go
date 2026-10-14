@@ -30,6 +30,9 @@ func TestPhase28VerifierCoversOperationalContainerRuntime(t *testing.T) {
 	if strings.Contains(script, "Managed runtimes are not installed yet") {
 		t.Fatal("phase28 verifier still requires the retired application placeholder")
 	}
+	if strings.Contains(script, "'WordPress Toolkit'; do") {
+		t.Fatal("the current WordPress Toolkit navigation is implemented; reject unsupported runtime choices, not working tool links")
+	}
 	info, err := os.Stat(path)
 	if err != nil {
 		t.Fatal(err)
