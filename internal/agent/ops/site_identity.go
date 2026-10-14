@@ -442,6 +442,9 @@ func (r *SiteIdentityRegistry) ensureRoot() error {
 	return nil
 }
 func readIdentityFile(path string, out any) error {
+	return readIdentityFileLimit(path, out, 65536)
+}
+func readIdentityFileLimit(path string, out any, limit int64) error {
 	file, err := openSiteIdentityRead(path)
 	if err != nil {
 		return err
@@ -454,11 +457,11 @@ func readIdentityFile(path string, out any) error {
 	if !info.Mode().IsRegular() || info.Mode().Perm() != 0600 || !siteIdentityOwnedByAgent(info) {
 		return errors.New("unsafe website identity record permissions")
 	}
-	data, err := io.ReadAll(io.LimitReader(file, 65537))
+	data, err := io.ReadAll(io.LimitReader(file, limit+1))
 	if err != nil {
 		return err
 	}
-	if len(data) > 65536 {
+	if int64(len(data)) > limit {
 		return errors.New("website identity record is too large")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -470,6 +473,36 @@ func readIdentityFile(path string, out any) error {
 		return errors.New("website identity record has trailing data")
 	}
 	return nil
+}
+
+func (r *SiteIdentityRegistry) boundIdentities() ([]types.SiteIdentity, error) {
+	entries, err := os.ReadDir(r.root)
+	if err != nil {
+		return nil, err
+	}
+	identities := []types.SiteIdentity{}
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasPrefix(name, "site-") || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		var id int64
+		if _, err := fmt.Sscanf(name, "site-%d.json", &id); err != nil || id <= 0 {
+			return nil, errors.New("invalid website registry inventory")
+		}
+		record, err := r.readSite(id)
+		if err != nil {
+			return nil, err
+		}
+		binding, err := r.readDomain(record.Identity.Domain)
+		if err != nil {
+			return nil, err
+		}
+		if binding.ActiveID == id {
+			identities = append(identities, record.Identity)
+		}
+	}
+	return identities, nil
 }
 func (r *SiteIdentityRegistry) readSite(id int64) (siteIdentityRecord, error) {
 	var record siteIdentityRecord

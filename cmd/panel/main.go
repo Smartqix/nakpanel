@@ -108,7 +108,7 @@ func main() {
 	)
 	siteManager := provision.NewManager(
 		siteRepo,
-		provision.WithSiteRemovalService(provision.NewSiteRemovalService(db, riverClient, workspaceStore, provision.SiteRemovalOptions{PanelHostname: cfg.PanelHostname, Usage: agentCapabilities, Dependencies: agentCapabilities})),
+		provision.WithSiteRemovalService(provision.NewSiteRemovalService(db, riverClient, workspaceStore, provision.SiteRemovalOptions{PanelHostname: cfg.PanelHostname, Usage: agentCapabilities, Dependencies: agentCapabilities, DatabaseInspector: agentCapabilities})),
 		provision.WithDatabaseRepository(databaseRepo),
 		provision.WithCertificateRepository(siteRepo),
 		provision.WithCustomCertificateRepository(siteRepo),

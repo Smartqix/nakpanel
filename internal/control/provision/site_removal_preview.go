@@ -274,6 +274,7 @@ func (s *SiteRemovalService) loadRemovalData(ctx context.Context, q removalQuery
 	if err != nil {
 		return err
 	}
+	s.verifyRemovalDatabases(ctx, snapshot)
 	rows, err = q.QueryContext(ctx, "SELECT id,site_id,target_name FROM backups WHERE site_id=ANY($1) ORDER BY id", pq.Array(ids))
 	if err != nil {
 		return err
@@ -290,4 +291,42 @@ func (s *SiteRemovalService) loadRemovalData(ctx context.Context, q removalQuery
 	err = rows.Err()
 	rows.Close()
 	return err
+}
+
+func (s *SiteRemovalService) verifyRemovalDatabases(ctx context.Context, snapshot *types.SiteRemovalSnapshot) {
+	if s.options.DatabaseInspector == nil || len(snapshot.Databases) == 0 {
+		return
+	}
+	req := types.InspectDatabaseAdminReq{}
+	for _, item := range snapshot.Databases {
+		if item.DeletionEligible {
+			req.Targets = append(req.Targets, types.DatabaseAdminTarget{DatabaseID: item.ID, Name: item.Name, Principal: item.Principal})
+		}
+	}
+	if len(req.Targets) == 0 {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	proof, err := s.options.DatabaseInspector.InspectDatabaseAdmin(ctx, req)
+	states := map[int64]types.TrackedDatabaseState{}
+	if err == nil {
+		for _, state := range proof.Databases {
+			states[state.DatabaseID] = state
+		}
+	}
+	for i := range snapshot.Databases {
+		item := &snapshot.Databases[i]
+		if !item.DeletionEligible {
+			continue
+		}
+		state, ok := states[item.ID]
+		if !ok || !state.OwnershipVerified || state.Name != item.Name || state.Principal != item.Principal || state.LastError != "" {
+			item.DeletionEligible = false
+			item.IneligibleReason = "Database ownership could not be verified; this database will be kept."
+		} else if state.PrincipalShared {
+			item.DeletionEligible = false
+			item.IneligibleReason = "This database principal has other grants; this database will be kept."
+		}
+	}
 }

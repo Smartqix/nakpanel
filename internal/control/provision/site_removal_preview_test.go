@@ -7,6 +7,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/workspace"
 	"github.com/nakroteck/nakpanel/internal/testutil/removaldb"
+	"github.com/nakroteck/nakpanel/internal/types"
 	"strings"
 	"testing"
 )
@@ -38,6 +39,25 @@ func TestSiteRemovalProtectsTrustedAgentDependencies(t *testing.T) {
 	preview, err := service.PreviewSiteRemoval(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, addon)
 	if err != nil || preview.Allowed {
 		t.Fatalf("server dependency not protected: %#v %v", preview, err)
+	}
+}
+
+type removalDatabaseInspectorFixture struct{}
+
+func (removalDatabaseInspectorFixture) InspectDatabaseAdmin(context.Context, types.InspectDatabaseAdminReq) (types.DatabaseAdminSnapshot, error) {
+	return types.DatabaseAdminSnapshot{Databases: []types.TrackedDatabaseState{{DatabaseID: 1, OwnershipVerified: false}}}, nil
+}
+func TestSiteRemovalUnverifiedDatabaseIsKept(t *testing.T) {
+	db := removaldb.New(t, "")
+	removaldb.Site(t, db, 1, "primary.test", nil)
+	addon := removaldb.Site(t, db, 1, "addon.test", nil)
+	if _, err := db.Exec("INSERT INTO databases(owner_user_id,customer_id,subscription_id,site_id,engine,db_name,db_user,status) SELECT owner_user_id,customer_id,subscription_id,id,'mariadb','fixture_db','fixture_user','active' FROM sites WHERE id=$1", addon); err != nil {
+		t.Fatal(err)
+	}
+	service := NewSiteRemovalService(db, nil, workspace.NewStore(db), SiteRemovalOptions{DatabaseInspector: removalDatabaseInspectorFixture{}})
+	preview, err := service.PreviewSiteRemoval(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, addon)
+	if err != nil || !preview.Allowed || len(preview.Snapshot.Databases) != 1 || preview.Snapshot.Databases[0].DeletionEligible || preview.Snapshot.Databases[0].IneligibleReason == "" {
+		t.Fatalf("unverified database selectable: %#v %v", preview, err)
 	}
 }
 

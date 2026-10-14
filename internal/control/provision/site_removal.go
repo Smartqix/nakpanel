@@ -19,6 +19,9 @@ type SiteRemovalUsageReader interface {
 	CollectUsage(context.Context, types.CollectUsageReq) (types.CollectUsageResult, error)
 }
 type SiteRemovalOptions struct {
+	DatabaseInspector interface {
+		InspectDatabaseAdmin(context.Context, types.InspectDatabaseAdminReq) (types.DatabaseAdminSnapshot, error)
+	}
 	Dependencies interface {
 		SiteServiceDependencies(context.Context) ([]string, error)
 	}

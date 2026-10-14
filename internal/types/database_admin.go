@@ -29,13 +29,15 @@ type DatabaseServerHealth struct {
 }
 
 type TrackedDatabaseState struct {
-	DatabaseID       int64  `json:"database_id"`
-	Name             string `json:"name"`
-	Principal        string `json:"principal"`
-	DatabaseExists   bool   `json:"database_exists"`
-	PrincipalExists  bool   `json:"principal_exists"`
-	IntegrityChecked bool   `json:"integrity_checked,omitempty"`
-	LastError        string `json:"last_error,omitempty"`
+	DatabaseID        int64  `json:"database_id"`
+	Name              string `json:"name"`
+	Principal         string `json:"principal"`
+	DatabaseExists    bool   `json:"database_exists"`
+	PrincipalExists   bool   `json:"principal_exists"`
+	OwnershipVerified bool   `json:"ownership_verified,omitempty"`
+	PrincipalShared   bool   `json:"principal_shared,omitempty"`
+	IntegrityChecked  bool   `json:"integrity_checked,omitempty"`
+	LastError         string `json:"last_error,omitempty"`
 }
 
 type DatabaseAdminSnapshot struct {

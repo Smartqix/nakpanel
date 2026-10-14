@@ -60,6 +60,9 @@ func (e *MariaDBEngine) claimDatabaseOwnershipMode(ctx context.Context, exec SQL
 			release()
 		}
 	}()
+	if err := e.rejectRetiredDatabaseClaim(req); err != nil {
+		return nil, err
+	}
 	marker := filepath.Join(e.ownershipDir, strconv.FormatInt(req.DatabaseID, 10)+".json")
 	want := databaseOwnership{DatabaseID: req.DatabaseID, Name: req.DBName, Principal: req.DBUser}
 	if _, err := os.Lstat(marker); err == nil {
