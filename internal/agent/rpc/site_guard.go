@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"os"
 	"strings"
@@ -383,7 +384,7 @@ func prepareSiteGuard(req types.Request, registry SiteIdentityGuard) (preparedSi
 		types.OpWebStatisticsStatus, types.OpDeleteBackup, types.OpReadBackupChunk, types.OpFTPSStatus, types.OpEnsureValkey, types.OpValkeyStatus:
 		return preparedSiteGuard{request: req}, nil
 	default:
-		return preparedSiteGuard{}, errors.New("agent operation has no website-removal classification")
+		return preparedSiteGuard{}, fmt.Errorf("unknown op %q: agent operation has no website-removal classification", req.Op)
 	}
 }
 func (d *Dispatcher) dispatch(ctx context.Context, req types.Request) types.Response {

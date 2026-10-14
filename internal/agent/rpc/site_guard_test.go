@@ -10,8 +10,16 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestSiteGuardUnknownOperationPreservesValidationContract(t *testing.T) {
+	_, err := prepareSiteGuard(types.Request{Op: "totally_unknown_op"}, nil)
+	if err == nil || !strings.Contains(err.Error(), "unknown op") {
+		t.Fatalf("unknown operation must fail closed with the existing validation contract: %v", err)
+	}
+}
 
 func TestSiteGuardRejectsRemovedMutation(t *testing.T) {
 	parent := t.TempDir()
