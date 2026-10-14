@@ -11,7 +11,7 @@ func TestQuotaFormatIsLoadedBeforeBootQuotaActivation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"nakpanel-quota.modules-load.conf", "quotaon.service.d/nakpanel.conf", "/etc/modules-load.d/nakpanel-quota.conf", "systemctl daemon-reload"} {
+	for _, want := range []string{"nakpanel-quota.modules-load.conf", "quotaon.service.d/nakpanel.conf", "/etc/modules-load.d/nakpanel-quota.conf", "systemctl daemon-reload", "quota_packages+=(linux-generic)"} {
 		if !strings.Contains(string(data), want) {
 			t.Errorf("missing boot quota prerequisite %q", want)
 		}
