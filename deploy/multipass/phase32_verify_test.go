@@ -6,6 +6,15 @@ import (
 	"testing"
 )
 
+func TestWordPressRediscoveryChecksTheVerifiedPostUpdateVersion(t *testing.T) {
+	script := readExecutableScript(t, "phase32-verify.sh")
+	for _, want := range []string{"post_update_version=", "wp core version", "healthy:in_sync:${post_update_version}"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("rediscovery must preserve the actually updated version: %s", want)
+		}
+	}
+}
+
 func TestPhase32VerifierCoversWordPressToolkitAcceptance(t *testing.T) {
 	script := readExecutableScript(t, "phase32-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{
