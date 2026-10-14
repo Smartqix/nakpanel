@@ -7,6 +7,7 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 apt-get update
 apt-get install -y \
@@ -21,6 +22,8 @@ apt-get install -y \
   postgresql-contrib \
   roundcube \
   ufw
+
+bash "${SCRIPT_DIR}/nginx-server-names-install.sh"
 
 if ! id nakpanel >/dev/null 2>&1; then
   useradd --system --home-dir /var/lib/nakpanel --create-home --shell /usr/sbin/nologin nakpanel
