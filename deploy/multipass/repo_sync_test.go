@@ -30,6 +30,14 @@ func TestRepositorySyncExportsSourcesWithoutIgnoredPrivateState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	source, err := os.ReadFile(common)
+	if err != nil {
+		t.Fatal(err)
+	}
+	syncBody := string(source)[strings.Index(string(source), "sync_repo()"):strings.Index(string(source), "wait_for_repo_sync()")]
+	if strings.Contains(syncBody, "-- bash -se") {
+		t.Fatal("watchdog commands must not depend on background stdin")
+	}
 	archive := filepath.Join(t.TempDir(), "captured.tar")
 	cmd := exec.Command("bash", "-se", "--", common, root, archive)
 	cmd.Stdin = strings.NewReader(`source "$1"

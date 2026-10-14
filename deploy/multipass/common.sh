@@ -168,14 +168,14 @@ sync_repo() (
   git -C "${root_dir}" ls-files -z --cached --others --exclude-standard |
     tar -C "${root_dir}" --null -T - -cf "${tmpdir}/source.tar"
   multipass transfer "${tmpdir}/source.tar" "${NAKPANEL_MULTIPASS_VM}:${remote_archive}"
-  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- bash -se -- "${remote_src}" "${remote_archive}" <<'SYNC'
+  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- bash -c '
 set -euo pipefail
 sudo rm -rf "$1"
 sudo install -d -m 0755 -o ubuntu -g ubuntu "$1"
 tar --no-same-owner -xf "$2" -C "$1"
-rm -f "$2"
-SYNC
+' _ "${remote_src}" "${remote_archive}"
   wait_for_repo_sync "${remote_src}"
+  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- rm -f "${remote_archive}"
 )
 
 # Multipass 1.16 on macOS can return from a recursive transfer while the daemon
