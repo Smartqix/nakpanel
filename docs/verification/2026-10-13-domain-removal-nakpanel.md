@@ -137,9 +137,21 @@ restarted, and verification used a disposable private cluster instead.
 Databases 28/29, archives 38/39, the four QA primary/sibling websites and all
 removal history were retained. Their owner subscriptions are 13/14. No original
 database or backup was deleted; the only optional database deletion was the
-new, explicitly approved QA database. The two QA customers remain active while
-awaiting the operator's separate suspension choice; no existing customer is
-part of that optional cleanup.
+new, explicitly approved QA database.
+
+After separate operator approval, only QA customers 20 and 21 were suspended
+through the CSRF-protected customer lifecycle route. Accounts 13/14 converged
+to `suspended:in_sync`; all four empty QA primary/sibling sites returned `503`
+and their dedicated PHP-FPM services stopped. Their desired site states stayed
+active for reversible recovery, and all four document roots remained present.
+Databases 28/29 remained usable through their MariaDB credentials, and archives
+38/39 still downloaded through the authenticated panel route and passed tar
+inspection. The suspended linked QA client could no longer log in (`401`).
+No original customer or subscription was included in this cleanup.
+
+Two post-cleanup live dependency checks passed, including the 15 original
+active websites, trusted panel/test-domain TLS, removal history, retained data,
+DNS, hidden-file protection and the seven running services.
 
 ## Screenshots
 
