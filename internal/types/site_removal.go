@@ -32,12 +32,13 @@ type SiteRemovalSite struct {
 }
 
 type SiteRemovalResource struct {
-	ID       int64  `json:"id"`
-	SiteID   int64  `json:"site_id,omitempty"`
-	ParentID int64  `json:"parent_id,omitempty"`
-	Revision int64  `json:"revision,omitempty"`
-	Kind     string `json:"kind"`
-	Name     string `json:"name,omitempty"`
+	ID           int64  `json:"id"`
+	SiteID       int64  `json:"site_id,omitempty"`
+	ParentID     int64  `json:"parent_id,omitempty"`
+	Revision     int64  `json:"revision,omitempty"`
+	Kind         string `json:"kind"`
+	Name         string `json:"name,omitempty"`
+	IntentDigest string `json:"intent_digest,omitempty"`
 }
 
 type SiteRemovalDatabase struct {
@@ -74,7 +75,22 @@ func (snapshot SiteRemovalSnapshot) Digest() string {
 			if refs[i].Kind != refs[j].Kind {
 				return refs[i].Kind < refs[j].Kind
 			}
-			return refs[i].ID < refs[j].ID
+			if refs[i].ID != refs[j].ID {
+				return refs[i].ID < refs[j].ID
+			}
+			if refs[i].SiteID != refs[j].SiteID {
+				return refs[i].SiteID < refs[j].SiteID
+			}
+			if refs[i].ParentID != refs[j].ParentID {
+				return refs[i].ParentID < refs[j].ParentID
+			}
+			if refs[i].Name != refs[j].Name {
+				return refs[i].Name < refs[j].Name
+			}
+			if refs[i].Revision != refs[j].Revision {
+				return refs[i].Revision < refs[j].Revision
+			}
+			return refs[i].IntentDigest < refs[j].IntentDigest
 		})
 	}
 	sort.Strings(snapshot.Dependencies)

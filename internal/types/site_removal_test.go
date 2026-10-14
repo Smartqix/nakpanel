@@ -37,3 +37,11 @@ func TestSiteRemovalSnapshotStableDigest(t *testing.T) {
 		t.Fatal("changed identity retained approval")
 	}
 }
+
+func TestSiteRemovalSharedSecretBindingDigest(t *testing.T) {
+	left := SiteRemovalSnapshot{SchemaVersion: 1, Resources: []SiteRemovalResource{{Kind: "application_secret", ID: 4, Name: "FIRST"}, {Kind: "application_secret", ID: 4, Name: "SECOND"}}}
+	right := SiteRemovalSnapshot{SchemaVersion: 1, Resources: []SiteRemovalResource{{Kind: "application_secret", ID: 4, Name: "SECOND"}, {Kind: "application_secret", ID: 4, Name: "FIRST"}}}
+	if left.Digest() != right.Digest() {
+		t.Fatal("shared-secret binding order changed approval")
+	}
+}

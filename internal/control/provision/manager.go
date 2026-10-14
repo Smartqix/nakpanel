@@ -128,6 +128,7 @@ type HostingToolkitAgent interface {
 }
 
 type Manager struct {
+	siteRemoval             *SiteRemovalService
 	siteRepo                SiteRepository
 	databaseRepo            DatabaseRepository
 	certificateRepo         CertificateRepository
