@@ -105,8 +105,12 @@ func TestDomainRemovalPrimaryOwnershipPostgreSQL(t *testing.T) {
 		t.Fatal("primary deletion accepted")
 	}
 	var other int64
-	if err:=db.QueryRow("SELECT id FROM subscriptions WHERE id<>$1 ORDER BY id LIMIT 1",sub).Scan(&other);err!=nil {t.Fatal(err)}
-	if _,err:=db.Exec("UPDATE subscriptions SET primary_site_id=$2 WHERE id=$1",other,root);err==nil {t.Fatal("foreign subscription primary accepted")}
+	if err := db.QueryRow("SELECT id FROM subscriptions WHERE id<>$1 ORDER BY id LIMIT 1", sub).Scan(&other); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE subscriptions SET primary_site_id=$2 WHERE id=$1", other, root); err == nil {
+		t.Fatal("foreign subscription primary accepted")
+	}
 }
 
 func TestDomainRemovalMutationGuardsPostgreSQL(t *testing.T) {
@@ -317,6 +321,43 @@ func TestDomainRemovalWholeAccountCompatibilityPostgreSQL(t *testing.T) {
 	}
 	if _, err = tx.Exec("DELETE FROM sites WHERE subscription_id=$1", sub); err != nil {
 		t.Fatal(err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDomainRemovalBillingTeardownCanFinalizeOnlyInAuthorizedTransaction(t *testing.T) {
+	db, up, _ := removalSchema(t)
+	sub, root, _, _ := removalFixture(t, db)
+	if _, err := db.Exec("INSERT INTO billing_accounts(subscription_id,public_id,external_ref,primary_site_id,provisioning_state) VALUES($1,'acc_abcdefghijklmnopqrst','removal-finalize',$2,'active')", sub, root); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(up); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE billing_accounts SET provisioning_state='terminating' WHERE subscription_id=$1", sub); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("UPDATE billing_accounts SET provisioning_state='terminated' WHERE subscription_id=$1", sub); err == nil {
+		t.Fatal("unprivileged terminal transition was accepted")
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec("SELECT set_config('nakpanel.account_teardown','on',true)"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec("UPDATE subscriptions SET primary_site_id=NULL WHERE id=$1", sub); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec("DELETE FROM sites WHERE subscription_id=$1", sub); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec("UPDATE billing_accounts SET provisioning_state='terminated' WHERE subscription_id=$1", sub); err != nil {
+		t.Fatalf("authorized account teardown could not finalize: %v", err)
 	}
 	if err = tx.Commit(); err != nil {
 		t.Fatal(err)

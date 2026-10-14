@@ -193,6 +193,9 @@ BEGIN
         IF NEW.reseller_id IS NOT DISTINCT FROM OLD.reseller_id THEN RETURN NEW; END IF;
     ELSIF TG_TABLE_NAME='billing_accounts' THEN
         IF NEW.provisioning_state NOT IN ('terminating','terminated') OR NEW.provisioning_state=OLD.provisioning_state THEN RETURN NEW; END IF;
+        IF current_setting('nakpanel.account_teardown',true)='on'
+          AND OLD.provisioning_state='terminating' AND NEW.provisioning_state='terminated'
+          AND NEW.subscription_id=OLD.subscription_id THEN RETURN NEW; END IF;
         sub_value:=OLD.subscription_id;
     END IF;
     IF TG_TABLE_NAME='customers' THEN
