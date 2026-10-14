@@ -45,7 +45,7 @@ grep -q 'data-np-role="admin"' "${tmpdir}/login.html"
 post(){
   local path="$1" code; shift
   code="$(curl -sk --max-time 30 -b "${tmpdir}/cookies" \
-    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/cookies")" "$@" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/cookies")" -H 'X-Nakpanel-SPA: true' "$@" \
     -o "${tmpdir}/response" -w '%{http_code}' "${base}/${path}")"
   if [[ "${code}" != 303 && "${code}" != 202 ]]; then
     cat "${tmpdir}/response" >&2
@@ -66,7 +66,7 @@ wait_for "SELECT status||':'||php_version FROM sites WHERE id=${site_id}" active
 database_id="$(db "SELECT id FROM databases WHERE db_name='np_current_bootstrap'")"
 if [[ -z "${database_id}" ]]; then
   post databases -d "subscription_id=${subscription_id}" -d "site_id=${site_id}" \
-    -d db_name=np_current_bootstrap -d 'password=NakpanelBootstrap!2026'
+    -d db_name=np_current_bootstrap -d db_user=npu_current_bootstrap -d 'password=NakpanelBootstrap_2026'
   database_id="$(db "SELECT id FROM databases WHERE db_name='np_current_bootstrap'")"
 fi
 [[ "${database_id}" =~ ^[0-9]+$ ]]

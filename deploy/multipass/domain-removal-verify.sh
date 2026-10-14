@@ -28,7 +28,7 @@ grep -q 'data-np-role="admin"' "${tmpdir}/login.html" || fail 'administrator log
 post(){
   local path="$1" code; shift
   code="$(curl -sk --max-time 30 -b "${tmpdir}/cookies" -c "${tmpdir}/cookies" \
-    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/cookies")" "$@" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/cookies")" -H 'X-Nakpanel-SPA: true' "$@" \
     -o "${tmpdir}/response" -w '%{http_code}' "${base}/${path}")"
   [[ "${code}" == 303 || "${code}" == 202 ]] || { cat "${tmpdir}/response" >&2; fail "${path}: ${code}"; }
 }
@@ -89,7 +89,7 @@ create_site "${addon}"; addon_id="${SITE_ID}"
 post "sites/${addon_id}/subdomains" -d label=child -d issue_certificate=false
 child_id="$(db "SELECT id FROM sites WHERE parent_site_id=${addon_id}")"
 wait_for "SELECT status FROM sites WHERE id=${child_id}" active
-post databases -d "subscription_id=${subscription_id}" -d "site_id=${addon_id}" -d "db_name=removal_${run_id//-/_}" -d 'password=NakpanelRemoval!2026'
+post databases -d "subscription_id=${subscription_id}" -d "site_id=${addon_id}" -d "db_name=removal_${run_id//-/_}" -d "db_user=removal_${run_id//-/_}" -d 'password=NakpanelRemoval_2026'
 database_id="$(db "SELECT id FROM databases WHERE site_id=${addon_id}")"
 wait_for "SELECT status FROM databases WHERE id=${database_id}" active
 post backups -d "subscription_id=${subscription_id}" -d "domain=${addon}"
@@ -140,7 +140,7 @@ post "site-removals/${operation_id}/retry" -H 'X-Nakpanel-SPA: true' -d retry=tr
 observe completed
 optional="optional-${run_id}.test"
 create_site "${optional}"; optional_id="${SITE_ID}"
-post databases -d "subscription_id=${subscription_id}" -d "site_id=${optional_id}" -d "db_name=optional_${run_id//-/_}" -d 'password=NakpanelRemoval!2026'
+post databases -d "subscription_id=${subscription_id}" -d "site_id=${optional_id}" -d "db_name=optional_${run_id//-/_}" -d "db_user=optional_${run_id//-/_}" -d 'password=NakpanelRemoval_2026'
 optional_database_id="$(db "SELECT id FROM databases WHERE site_id=${optional_id}")"
 wait_for "SELECT status FROM databases WHERE id=${optional_database_id}" active
 remove_site "${optional_id}" "${optional}" "${optional_database_id}"

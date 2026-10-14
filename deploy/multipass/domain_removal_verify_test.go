@@ -89,3 +89,19 @@ func TestFreshDomainRemovalBootstrapUsesProductionInstaller(t *testing.T) {
 		}
 	}
 }
+
+func TestRemovalDatabaseFixturesUseCompleteValidCredentials(t *testing.T) {
+	for _, name := range []string{"current-install-verify.sh", "domain-removal-verify.sh"} {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		script := string(data)
+		if !strings.Contains(script, "db_user=") || strings.Contains(script, "password=NakpanelBootstrap!2026") || strings.Contains(script, "password=NakpanelRemoval!2026") {
+			t.Errorf("%s must submit an explicit database principal and URL-safe password", name)
+		}
+		if !strings.Contains(script, `-H 'X-Nakpanel-SPA: true'`) {
+			t.Errorf("%s must receive enhanced validation errors rather than error-cookie redirects", name)
+		}
+	}
+}
