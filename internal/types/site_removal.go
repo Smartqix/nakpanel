@@ -39,6 +39,7 @@ type SiteRemovalResource struct {
 	Kind         string `json:"kind"`
 	Name         string `json:"name,omitempty"`
 	IntentDigest string `json:"intent_digest,omitempty"`
+	Mode         string `json:"mode,omitempty"`
 }
 
 type SiteRemovalDatabase struct {
@@ -89,6 +90,9 @@ func (snapshot SiteRemovalSnapshot) Digest() string {
 			}
 			if refs[i].Revision != refs[j].Revision {
 				return refs[i].Revision < refs[j].Revision
+			}
+			if refs[i].Mode != refs[j].Mode {
+				return refs[i].Mode < refs[j].Mode
 			}
 			return refs[i].IntentDigest < refs[j].IntentDigest
 		})

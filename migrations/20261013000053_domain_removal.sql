@@ -75,6 +75,12 @@ BEGIN
     ELSIF table_value='dns_records' THEN
         SELECT site_id INTO value FROM dns_zones WHERE id=NULLIF(row_value->>'zone_id','')::BIGINT;
         ids:=ARRAY[value,NULLIF(row_value->>'owner_site_id','')::BIGINT];
+        ids:=ids||ARRAY(SELECT candidate.id FROM sites candidate JOIN dns_zones zone ON zone.id=NULLIF(row_value->>'zone_id','')::BIGINT
+            JOIN sites zone_site ON zone_site.id=zone.site_id
+            WHERE candidate.subscription_id=zone_site.subscription_id AND candidate.domain=CASE
+              WHEN row_value->>'host'='@' THEN zone.domain
+              WHEN lower(rtrim(row_value->>'host','.')) LIKE '%.'||zone.domain THEN lower(rtrim(row_value->>'host','.'))
+              ELSE lower(rtrim(row_value->>'host','.'))||'.'||zone.domain END);
     ELSIF table_value IN ('mailboxes','mail_aliases') THEN
         SELECT site.id INTO value FROM mail_domains md JOIN sites site ON site.domain=md.domain AND site.subscription_id=md.subscription_id
         WHERE md.id=NULLIF(row_value->>'mail_domain_id','')::BIGINT;
@@ -118,6 +124,20 @@ BEGIN
     FOR sub_value IN SELECT DISTINCT subscription_id FROM sites WHERE id=ANY(ids) ORDER BY subscription_id LOOP
         PERFORM nakpanel_assert_account_mutable(sub_value);
     END LOOP;
+    -- Resolve again after subscription locks: a concurrent child may have appeared.
+    ids:='{}';
+    IF TG_OP<>'INSERT' THEN ids:=ids||nakpanel_removal_site_ids(TG_TABLE_NAME,to_jsonb(OLD)); END IF;
+    IF TG_OP<>'DELETE' THEN ids:=ids||nakpanel_removal_site_ids(TG_TABLE_NAME,to_jsonb(NEW)); END IF;
+    IF TG_TABLE_NAME='staging_operations' AND TG_OP='DELETE' THEN
+      IF EXISTS(
+        SELECT 1 FROM site_removal_operations operation
+        WHERE operation.id::TEXT=current_setting('nakpanel.site_removal_operation',true) AND operation.state<>'completed'
+          AND operation.snapshot->'resources' @> jsonb_build_array(jsonb_build_object(
+            'kind','staging','id',OLD.id,'site_id',OLD.source_site_id,'parent_id',OLD.target_site_id))
+          AND (operation.snapshot->'sites' @> jsonb_build_array(jsonb_build_object('site_id',OLD.source_site_id))
+            OR operation.snapshot->'sites' @> jsonb_build_array(jsonb_build_object('site_id',OLD.target_site_id)))
+      ) THEN RETURN OLD; END IF;
+    END IF;
     FOR site_value IN SELECT DISTINCT id FROM sites WHERE id=ANY(ids) ORDER BY id LOOP
         SELECT removal_state INTO state_value FROM sites WHERE id=site_value FOR SHARE;
         IF state_value<>'none' AND NOT EXISTS(
@@ -172,6 +192,37 @@ BEGIN
     RETURN NEW;
 END;
 $$;
+
+CREATE FUNCTION nakpanel_assert_service_hostname(host_value TEXT) RETURNS VOID LANGUAGE plpgsql AS $$
+DECLARE sub_value BIGINT;
+BEGIN
+    FOR sub_value IN SELECT DISTINCT subscription_id FROM sites
+       WHERE lower(rtrim(host_value,'.'))=domain OR lower(rtrim(host_value,'.')) LIKE '%.'||domain ORDER BY subscription_id LOOP
+       PERFORM nakpanel_assert_account_mutable(sub_value);
+    END LOOP;
+    IF EXISTS(SELECT 1 FROM sites WHERE removal_state<>'none'
+      AND (lower(rtrim(host_value,'.'))=domain OR lower(rtrim(host_value,'.')) LIKE '%.'||domain)) THEN
+       RAISE EXCEPTION USING ERRCODE='55000',MESSAGE='server service cannot depend on a removing website';
+    END IF;
+END;
+$$;
+CREATE FUNCTION nakpanel_guard_removal_dependency() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE host_value TEXT;
+BEGIN
+    IF TG_TABLE_NAME='mail_settings' THEN
+      PERFORM nakpanel_assert_service_hostname(NEW.mail_hostname);
+    ELSE
+      FOR host_value IN SELECT primary_nameserver FROM dns_template_revisions WHERE id=NEW.active_revision_id
+        UNION SELECT value_template FROM dns_template_records WHERE revision_id=NEW.active_revision_id AND record_type='NS'
+          AND value_template NOT LIKE '%$%' AND value_template NOT LIKE '%<%' LOOP
+        PERFORM nakpanel_assert_service_hostname(host_value);
+      END LOOP;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER removal_mail_dependency_guard BEFORE INSERT OR UPDATE ON mail_settings FOR EACH ROW EXECUTE FUNCTION nakpanel_guard_removal_dependency();
+CREATE TRIGGER removal_dns_dependency_guard BEFORE INSERT OR UPDATE ON dns_template_state FOR EACH ROW EXECUTE FUNCTION nakpanel_guard_removal_dependency();
 
 DO $$
 DECLARE table_value TEXT;
@@ -236,6 +287,10 @@ FROM mail_aliases al JOIN mail_domains md ON md.id=al.mail_domain_id AND md.effe
 CROSS JOIN LATERAL unnest(al.destinations) AS dest(addr)
 WHERE EXISTS(SELECT 1 FROM stalwart_accounts account WHERE account.name=lower(dest.addr));
 DROP TRIGGER removal_subscription_owner_guard ON subscriptions;
+DROP TRIGGER removal_mail_dependency_guard ON mail_settings;
+DROP TRIGGER removal_dns_dependency_guard ON dns_template_state;
+DROP FUNCTION nakpanel_guard_removal_dependency();
+DROP FUNCTION nakpanel_assert_service_hostname(TEXT);
 DROP TRIGGER removal_customer_owner_guard ON customers;
 DROP TRIGGER removal_billing_owner_guard ON billing_accounts;
 DROP TRIGGER removal_primary_claim ON sites;

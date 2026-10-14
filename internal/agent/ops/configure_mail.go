@@ -146,6 +146,8 @@ func NewMailProvisioner(opts MailProvisionerOptions) *MailProvisioner {
 }
 
 func (p *MailProvisioner) ConfigureMail(ctx context.Context, req types.ConfigureMailReq) (_ types.ConfigureMailResult, err error) {
+	mailConfigMutationMu.Lock()
+	defer mailConfigMutationMu.Unlock()
 	normalized, err := normalizeConfigureMailRequest(req)
 	if err != nil {
 		return types.ConfigureMailResult{}, err

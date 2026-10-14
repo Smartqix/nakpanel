@@ -985,6 +985,8 @@ func NewDNSProvisioner(opts DNSProvisionerOptions) *DNSProvisioner {
 }
 
 func (p *DNSProvisioner) ConfigureDNSZone(ctx context.Context, req types.ConfigureDNSZoneReq) (_ types.ConfigureDNSZoneResult, err error) {
+	dnsConfigMutationMu.Lock()
+	defer dnsConfigMutationMu.Unlock()
 	normalized, err := normalizeDNSZoneRequest(req, p.zoneDir)
 	if err != nil {
 		return types.ConfigureDNSZoneResult{}, err

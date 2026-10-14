@@ -93,6 +93,7 @@ JOIN customers customer ON customer.id=sub.customer_id
 JOIN subscription_system_accounts account ON account.subscription_id=sub.id
 LEFT JOIN sites site ON site.id=ftp.site_id
 LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
+WHERE ftp.site_id IS NULL OR site.removal_state='none'
 ORDER BY ftp.id`)
 	if err != nil {
 		return req, nil, err

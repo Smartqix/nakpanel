@@ -21,6 +21,7 @@ type SiteTeardownOptions struct {
 	IdentityRegistry *SiteIdentityRegistry
 	MariaDB          *MariaDBEngine
 	Mail             *MailProvisioner
+	DNS              *DNSProvisioner
 	Dependencies     interface {
 		SiteServiceDependencies(context.Context) ([]string, error)
 	}
@@ -91,7 +92,13 @@ func (p *SiteTeardownProvisioner) TeardownSite(ctx context.Context, req types.Te
 		if req.Stage == types.RemovalHosting && !slices.Contains(journal.Checkpoints, string(types.RemovalStopServices)) {
 			return errors.New("stop website services before removing hosting")
 		}
+		if req.Stage == types.RemovalShared && !slices.Contains(journal.Checkpoints, string(types.RemovalHosting)) {
+			return errors.New("remove website hosting before shared services")
+		}
 		if err = p.validateRemovalArtifacts(req); err != nil {
+			return err
+		}
+		if _, err = p.sharedRemovalArtifacts(req); err != nil {
 			return err
 		}
 		if err = p.validateSelectedDatabaseOwnership(req); err != nil {
@@ -103,6 +110,11 @@ func (p *SiteTeardownProvisioner) TeardownSite(ctx context.Context, req types.Te
 				return errors.New("server certificate dependencies cannot be verified")
 			}
 			for _, dependency := range dependencies {
+				for _, resource := range req.Snapshot.Resources {
+					if resource.Kind == "webmail" && resource.Name == dependency {
+						return errors.New("webmail is required by a server service")
+					}
+				}
 				for _, id := range ids {
 					if id.Domain == dependency || strings.HasSuffix(dependency, "."+id.Domain) {
 						return errors.New("website is required by a server service")
@@ -122,6 +134,8 @@ func (p *SiteTeardownProvisioner) TeardownSite(ctx context.Context, req types.Te
 			err = p.stopRemovalServices(ctx, req, journalPath, &journal)
 		case types.RemovalHosting:
 			err = p.removeHostingArtifacts(ctx, req, journalPath, &journal)
+		case types.RemovalShared:
+			err = p.removeSharedArtifacts(ctx, req, journalPath, &journal)
 		default:
 			err = errors.New("requested website removal stage is not configured")
 		}

@@ -1109,7 +1109,7 @@ CASE WHEN site.tls_status='active' THEN site.tls_key_path ELSE '' END,
 COALESCE(application.hosting_mode,'classic'),COALESCE(application.active_deployment_id,0)
 FROM sites site LEFT JOIN site_policy_overrides o ON o.site_id=site.id
 LEFT JOIN php_applications application ON application.site_id=site.id AND application.subscription_id=site.subscription_id
-WHERE site.subscription_id=$1 ORDER BY site.id`, subscriptionID, desiredState)
+WHERE site.subscription_id=$1 AND site.removal_state='none' ORDER BY site.id`, subscriptionID, desiredState)
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}
@@ -1148,7 +1148,7 @@ WHERE site.subscription_id=$1 ORDER BY site.id`, subscriptionID, desiredState)
 	}
 	rows.Close()
 	rows, err = tx.QueryContext(ctx, `SELECT task.id,COALESCE(task.site_id,0),COALESCE(site.domain,''),task.name,task.schedule,task.command,task.working_directory,task.timeout_seconds,task.enabled,task.kind,task.url,task.script_path,task.timezone
-FROM scheduled_tasks task LEFT JOIN sites site ON site.id=task.site_id WHERE task.subscription_id=$1 ORDER BY task.id`, subscriptionID)
+FROM scheduled_tasks task LEFT JOIN sites site ON site.id=task.site_id WHERE task.subscription_id=$1 AND (task.site_id IS NULL OR site.removal_state='none') ORDER BY task.id`, subscriptionID)
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}
@@ -1198,7 +1198,7 @@ application.route_mode,application.route_prefix,application.container_port,appli
 application.health_kind,application.health_path,application.health_timeout_seconds,site.desired_status
 FROM application_instances application
 JOIN sites site ON site.id=application.site_id AND site.subscription_id=application.subscription_id
-WHERE application.subscription_id=$1 ORDER BY application.id`, subscriptionID)
+WHERE application.subscription_id=$1 AND site.removal_state='none' ORDER BY application.id`, subscriptionID)
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}
@@ -1259,7 +1259,7 @@ CASE WHEN $2='active' AND site.desired_status='active' THEN 'active' ELSE 'suspe
 FROM git_repositories repository
 JOIN sites site ON site.id=repository.site_id
 JOIN subscription_system_accounts account ON account.subscription_id=site.subscription_id
-WHERE site.subscription_id=$1 AND (repository.connection_status<>'disconnected' OR EXISTS(SELECT 1 FROM git_deployments operation WHERE operation.repository_id=repository.id AND operation.status IN ('pending','running'))) ORDER BY repository.id`, subscriptionID, desiredState)
+WHERE site.subscription_id=$1 AND site.removal_state='none' AND (repository.connection_status<>'disconnected' OR EXISTS(SELECT 1 FROM git_deployments operation WHERE operation.repository_id=repository.id AND operation.status IN ('pending','running'))) ORDER BY repository.id`, subscriptionID, desiredState)
 	if err != nil {
 		return convergenceSnapshot{}, err
 	}

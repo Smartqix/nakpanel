@@ -43,6 +43,8 @@ var (
 var (
 	ftpsConfigMutationMu sync.Mutex
 	valkeyMutationMu     sync.Mutex
+	dnsConfigMutationMu  sync.Mutex
+	mailConfigMutationMu sync.Mutex
 	siteContentLocks     sync.Map
 )
 

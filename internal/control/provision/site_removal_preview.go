@@ -10,6 +10,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -156,6 +157,27 @@ func (s *SiteRemovalService) preview(ctx context.Context, q removalQueryer, site
 	if err = s.loadRemovalResources(ctx, q, ids, &preview.Snapshot); err != nil {
 		return preview, err
 	}
+	var dependent bool
+	if err = q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM dns_zones zone WHERE NOT zone.site_id=ANY($1) AND zone.parent_zone_id IN (SELECT id FROM dns_zones WHERE site_id=ANY($1)))`, pq.Array(ids)).Scan(&dependent); err != nil {
+		return preview, err
+	}
+	if dependent {
+		preview.BlockedReasons = append(preview.BlockedReasons, "Another website depends on this DNS zone. Move its DNS before removal.")
+	}
+	if err = q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM dns_records record JOIN dns_zones zone ON zone.id=record.zone_id JOIN sites zone_site ON zone_site.id=zone.site_id WHERE record.owner_site_id=ANY($1) AND zone_site.subscription_id<>$2)`, pq.Array(ids), preview.SubscriptionID).Scan(&dependent); err != nil {
+		return preview, err
+	}
+	if dependent {
+		preview.BlockedReasons = append(preview.BlockedReasons, "Website-owned DNS records are in another subscription. Repair their ownership before removal.")
+	}
+	for _, resource := range preview.Snapshot.Resources {
+		if resource.Kind == "dns_record" && !slices.Contains(ids, resource.SiteID) {
+			preview.BlockedReasons = append(preview.BlockedReasons, "This DNS zone contains records owned by another website. Move them before removal.")
+		}
+		if resource.Kind == "webmail" && slices.Contains(preview.Snapshot.Dependencies, resource.Name) {
+			preview.BlockedReasons = append(preview.BlockedReasons, "This webmail hostname is required by server services.")
+		}
+	}
 	if err = s.loadRemovalData(ctx, q, ids, &preview.Snapshot); err != nil {
 		return preview, err
 	}
@@ -185,8 +207,8 @@ func (s *SiteRemovalService) loadRemovalResources(ctx context.Context, q removal
 		{"mailbox", "SELECT box.id,selected.id,domain.id,0,lower(box.local_part)||'@'||domain.domain FROM mailboxes box JOIN mail_domains domain ON domain.id=box.mail_domain_id JOIN sites selected ON selected.id=ANY($1) AND domain.subscription_id=selected.subscription_id AND (domain.site_id=selected.id OR (domain.site_id IS NULL AND domain.domain=selected.domain))"},
 		{"mail_alias", "SELECT alias.id,selected.id,domain.id,0,lower(alias.local_part)||'@'||domain.domain FROM mail_aliases alias JOIN mail_domains domain ON domain.id=alias.mail_domain_id JOIN sites selected ON selected.id=ANY($1) AND domain.subscription_id=selected.subscription_id AND (domain.site_id=selected.id OR (domain.site_id IS NULL AND domain.domain=selected.domain))"},
 		{"webmail", "SELECT id,site_id,0,0,hostname FROM webmail_hosts WHERE site_id=ANY($1)"},
-		{"dns_zone", "SELECT id,site_id,COALESCE(parent_zone_id,0),COALESCE(desired_revision,0),domain FROM dns_zones WHERE site_id=ANY($1)"},
-		{"dns_record", `SELECT DISTINCT record.id,COALESCE(selected.id,record.owner_site_id,zone.site_id),zone.id,0,record.host,
+		{"dns_zone", "SELECT id,site_id,COALESCE(parent_zone_id,0),COALESCE(desired_revision,0),domain,mode FROM dns_zones WHERE site_id=ANY($1)"},
+		{"dns_record", `SELECT DISTINCT record.id,COALESCE(record.owner_site_id,selected.id,zone.site_id),zone.id,0,record.host,
  jsonb_build_array(record.record_type,record.value,record.priority,record.ttl,record.owner_site_id)::text
  FROM dns_records record JOIN dns_zones zone ON zone.id=record.zone_id JOIN sites zone_site ON zone_site.id=zone.site_id
  LEFT JOIN sites selected ON selected.id=ANY($1) AND selected.subscription_id=zone_site.subscription_id
@@ -208,6 +230,9 @@ func (s *SiteRemovalService) loadRemovalResources(ctx context.Context, q removal
 			fields := []any{&item.ID, &item.SiteID, &item.ParentID, &item.Revision, &item.Name}
 			if source.kind == "dns_record" {
 				fields = append(fields, &item.IntentDigest)
+			}
+			if source.kind == "dns_zone" {
+				fields = append(fields, &item.Mode)
 			}
 			if err = rows.Scan(fields...); err != nil {
 				rows.Close()
