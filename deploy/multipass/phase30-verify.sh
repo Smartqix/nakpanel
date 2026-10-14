@@ -539,7 +539,7 @@ wait_for "Managed site provisioning" "SELECT status||':'||php_version FROM sites
 # controlled legacy fixture proves preserved managed-PHP compatibility.
 repository_id="$(db "SELECT id FROM git_repositories WHERE site_id=${managed_site_id}")"
 if [[ -z "${repository_id}" ]]; then
-  code="$(curl -sk --max-time 30 -b "${tmpdir}/admin.cookies" -H 'X-Nakpanel-SPA: true' \
+  code="$(curl --connect-timeout 5 -sk --max-time 30 -b "${tmpdir}/admin.cookies" -H 'X-Nakpanel-SPA: true' \
     -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" -d mode=hosted -d branch=main -d deploy_target=. \
     -o "${tmpdir}/hosted-denied.json" -w '%{http_code}' "https://${VM_IP}:7443/sites/${managed_site_id}/git")"
   [[ "${code}" == 400 ]] || fail 'new hosted repositories remain unavailable'
