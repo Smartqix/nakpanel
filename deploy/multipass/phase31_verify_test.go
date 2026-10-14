@@ -5,6 +5,14 @@ import (
 	"testing"
 )
 
+func TestPlanValidationGateRequestsEnhancedErrors(t *testing.T) {
+	script := readExecutableScript(t, "phase31-verify.sh")
+	start, end := strings.Index(script, "post_expect(){"), strings.Index(script, "set_plan_form(){")
+	if start < 0 || end <= start || !strings.Contains(script[start:end], "-H 'X-Nakpanel-SPA: true'") {
+		t.Fatal("validation gate must distinguish enhanced errors from normal error-cookie redirects")
+	}
+}
+
 func TestPhase31VerifierCoversProductionServicePlanAcceptance(t *testing.T) {
 	script := readExecutableScript(t, "phase31-verify.sh")
 	requireScriptContracts(t, script, map[string][]string{

@@ -67,7 +67,7 @@ post_expect(){
   local status
   status="$(curl --connect-timeout 5 --max-time 30 -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -b "${tmpdir}/admin.cookies" -c "${tmpdir}/admin.cookies" \
-    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" -H 'X-Nakpanel-SPA: true' \
     "$@" "https://${VM_IP}:7443/${endpoint}")"
   [[ "${status}" == "${expected}" ]] || {
     echo "${label} returned HTTP ${status}, want ${expected}" >&2
