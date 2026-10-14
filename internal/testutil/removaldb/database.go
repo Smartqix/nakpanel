@@ -19,6 +19,9 @@ func New(t *testing.T, before string) *sql.DB {
 	if dsn == "" {
 		t.Skip("requires nakpanel_removal_test")
 	}
+	if err := ValidateDSN(dsn); err != nil {
+		t.Fatal(err)
+	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatal(err)
@@ -72,6 +75,14 @@ func New(t *testing.T, before string) *sql.DB {
 		}
 	}
 	return db
+}
+
+func ValidateDSN(dsn string) error {
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil || config.Database != "nakpanel_removal_test" {
+		return fmt.Errorf("only nakpanel_removal_test is a disposable removal database")
+	}
+	return nil
 }
 
 func Site(t *testing.T, db *sql.DB, subscriptionID int64, domain string, parent any) int64 {

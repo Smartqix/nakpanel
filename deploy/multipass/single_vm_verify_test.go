@@ -42,6 +42,8 @@ func TestPhaseVerifiersUseSingleDefaultVM(t *testing.T) {
 		"phase31-verify.sh",
 		"phase32-verify.sh",
 		"phase33-verify.sh",
+		"phase34-verify.sh",
+		"domain-removal-verify.sh",
 		"security-verify.sh",
 	}
 	for _, path := range scripts {

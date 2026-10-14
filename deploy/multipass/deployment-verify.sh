@@ -41,6 +41,8 @@ NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase32-verify.sh"
 NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase33-verify.sh"
 # Phase 34 verifies protected domain GoAccess reports and privacy boundaries.
 NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/phase34-verify.sh"
+# Final product gate: scoped domain removal, retry and retained-data recovery.
+NAKPANEL_SKIP_PRIOR_PHASES=1 "${ROOT_DIR}/deploy/multipass/domain-removal-verify.sh"
 
 VM_IP="$(vm_ip)"
 if [[ -z "${VM_IP}" ]]; then

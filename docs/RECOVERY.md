@@ -1,5 +1,12 @@
 # nakpanel Recovery
 
+## Individual Website Removal
+
+See [Domain Removal](DOMAIN_REMOVAL.md) for durable progress, same-scope retry
+and retained backup/database recovery. Never delete agent identity tombstones
+or force SQL deletion to bypass a failed removal. Completed operations can be
+inspected after the original website row is gone.
+
 The panel is served directly by the `panel` binary on HTTPS port `7443`.
 It does not depend on the tenant nginx listener.
 
