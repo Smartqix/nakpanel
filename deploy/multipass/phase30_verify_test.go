@@ -75,6 +75,15 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 	}
 }
 
+func TestManagedPHPFixtureDoesNotReviveNewHostedGitCreation(t *testing.T) {
+	script := readExecutableScript(t, "phase30-verify.sh")
+	for _, want := range []string{"new hosted repositories remain unavailable", "INSERT INTO git_repositories", "expected_revision=${git_revision}", "X-Nakpanel-SPA: true"} {
+		if !strings.Contains(script, want) {
+			t.Errorf("legacy-only Git compatibility proof missing %q", want)
+		}
+	}
+}
+
 func TestPhase30VerifierUsesBoundedWaitsAndMemoryOnlySecrets(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	for _, want := range []string{

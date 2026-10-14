@@ -88,8 +88,8 @@ post_as(){
     -b "${tmpdir}/admin.cookies" -c "${tmpdir}/admin.cookies" \
     -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
     "$@" "https://${VM_IP}:7443/${endpoint}")"
-  [[ "${status}" == "303" ]] || {
-    echo "${label} returned HTTP ${status}, want 303" >&2
+  [[ "${status}" == "303" || "${status}" == "202" ]] || {
+    echo "${label} returned HTTP ${status}, want 303 or enhanced 202" >&2
     cat "${tmpdir}/${label}.out" >&2
     exit 1
   }
@@ -535,7 +535,20 @@ REMOTE
 post_as phase30-managed-site sites -d "subscription_id=${subscription_id}" -d 'domain=phase30-managed.test'
 managed_site_id="$(db "SELECT id FROM sites WHERE domain='phase30-managed.test'")"
 wait_for "Managed site provisioning" "SELECT status||':'||php_version FROM sites WHERE id=${managed_site_id}" "active:8.4"
+# New hosted repositories remain unavailable in the simplified Git UI. This
+# controlled legacy fixture proves preserved managed-PHP compatibility.
+repository_id="$(db "SELECT id FROM git_repositories WHERE site_id=${managed_site_id}")"
+if [[ -z "${repository_id}" ]]; then
+  code="$(curl -sk --max-time 30 -b "${tmpdir}/admin.cookies" -H 'X-Nakpanel-SPA: true' \
+    -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" -d mode=hosted -d branch=main -d deploy_target=. \
+    -o "${tmpdir}/hosted-denied.json" -w '%{http_code}' "https://${VM_IP}:7443/sites/${managed_site_id}/git")"
+  [[ "${code}" == 400 ]] || fail 'new hosted repositories remain unavailable'
+  [[ "$(db "SELECT count(*) FROM git_repositories WHERE site_id=${managed_site_id}")" == 0 ]] || fail 'rejected hosted source wrote intent'
+  db "INSERT INTO git_repositories(site_id,mode,branch,deploy_target,automatic) VALUES(${managed_site_id},'hosted','main','.',false)" >/dev/null
+fi
+git_revision="$(db "SELECT operation_revision FROM git_repositories WHERE site_id=${managed_site_id}")"
 post_as phase30-hosted-git "sites/${managed_site_id}/git" -d "subscription_id=${subscription_id}" \
+  -H 'X-Nakpanel-SPA: true' -d "expected_revision=${git_revision}" \
   -d 'mode=hosted' -d 'branch=main' -d 'deploy_target=.' -d 'automatic=false'
 wait_for "hosted Git provisioning" "SELECT convergence_status FROM git_repositories WHERE site_id=${managed_site_id}" "in_sync"
 repository_id="$(db "SELECT id FROM git_repositories WHERE site_id=${managed_site_id}")"
