@@ -12,6 +12,7 @@ import (
 
 type SiteRemovalAccessPolicy interface {
 	CanRemoveSite(context.Context, auth.SessionUser, int64) (bool, error)
+	CanRemoveSiteTx(context.Context, *sql.Tx, auth.SessionUser, int64) (bool, error)
 	CanManageSubscription(context.Context, auth.SessionUser, int64) (bool, error)
 }
 type SiteRemovalUsageReader interface {

@@ -3,7 +3,8 @@ package removaldb
 import (
 	"database/sql"
 	"fmt"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,12 +28,19 @@ func New(t *testing.T, before string) *sql.DB {
 		db.Close()
 		t.Fatalf("isolated removal database required: %q %v", name, err)
 	}
-	db.SetMaxOpenConns(1)
 	schema := fmt.Sprintf("removal_service_%d", time.Now().UnixNano())
-	if _, err = db.Exec("CREATE SCHEMA " + schema + ";SET search_path TO " + schema); err != nil {
+	if _, err = db.Exec("CREATE SCHEMA " + schema); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = db.Exec("SET search_path TO public;DROP SCHEMA " + schema + " CASCADE"); db.Close() })
+	admin := db
+	config, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.RuntimeParams["search_path"] = schema
+	db = stdlib.OpenDB(*config)
+	db.SetMaxOpenConns(4)
+	t.Cleanup(func() { db.Close(); _, _ = admin.Exec("DROP SCHEMA " + schema + " CASCADE"); admin.Close() })
 	directory, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)

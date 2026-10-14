@@ -59,6 +59,11 @@ func (s *SiteRemovalService) preview(ctx context.Context, q removalQueryer, site
 	preview.Snapshot.SchemaVersion = 1
 	if removalState != "none" {
 		preview.BlockedReasons = append(preview.BlockedReasons, "Removal has already started. Open the existing operation.")
+		op, loadErr := readRemoval(q.QueryRowContext(ctx, "SELECT "+removalOperationColumns+" FROM site_removal_operations WHERE id=(SELECT operation_id FROM site_removal_targets WHERE site_id=$1 AND NOT released)", siteID))
+		if loadErr != nil {
+			return preview, errors.New("website removal reservation is inconsistent")
+		}
+		preview.Operation = &op
 	}
 	rows, err := q.QueryContext(ctx, `WITH RECURSIVE target AS (
  SELECT id,subscription_id,customer_id,parent_site_id,username,domain,php_version,system_account_id,document_root,ARRAY[id] AS path,false AS cycle FROM sites WHERE id=$1
