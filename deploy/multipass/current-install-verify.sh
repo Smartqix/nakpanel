@@ -63,6 +63,11 @@ if [[ -z "${site_id}" ]]; then
 fi
 [[ "${site_id}" =~ ^[0-9]+$ ]]
 wait_for "SELECT status||':'||php_version FROM sites WHERE id=${site_id}" active:8.3
+if [[ "$(db "SELECT count(*) FROM dns_zones WHERE site_id=${site_id}")" == 0 ]]; then
+  post dns -d domain=current-bootstrap.test -d "address=${VM_IP}" -d "site_id=${site_id}"
+fi
+wait_for "SELECT status FROM dns_zones WHERE site_id=${site_id}" active
+test -n "$(dig +short "@${VM_IP}" current-bootstrap.test A)"
 database_id="$(db "SELECT id FROM databases WHERE db_name='np_current_bootstrap'")"
 if [[ -z "${database_id}" ]]; then
   post databases -d "subscription_id=${subscription_id}" -d "site_id=${site_id}" \
