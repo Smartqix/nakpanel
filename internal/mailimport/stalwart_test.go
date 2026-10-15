@@ -24,6 +24,7 @@ func TestStalwartCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Close()
+	if remaining,err:=c.AvailableBytes(ctx);err!=nil||remaining<=0{t.Fatalf("destination quota preflight failed: %d %v",remaining,err)}
 	folder := "Import QA/" + time.Now().UTC().Format("20060102T150405.000000000")
 	if err = c.EnsureFolder(ctx, folder); err != nil {
 		t.Fatal(err)

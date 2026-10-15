@@ -34,9 +34,11 @@ type Store interface {
 type Manager struct {
 	store  Store
 	access AccessPolicy
+	engine *Engine
 }
 
-func NewManager(s Store, a AccessPolicy) *Manager { return &Manager{s, a} }
+func NewManager(s Store, a AccessPolicy) *Manager { return &Manager{store: s, access: a} }
+func (m *Manager) SetEngine(engine *Engine)       { m.engine = engine }
 func (m *Manager) authorize(ctx context.Context, actor auth.SessionUser, id int64) (Mailbox, error) {
 	if actor.Role != auth.RoleAdmin && actor.Role != auth.RoleReseller {
 		return Mailbox{}, ErrForbidden
@@ -78,16 +80,25 @@ func (m *Manager) Preview(ctx context.Context, actor auth.SessionUser, req types
 			return types.MailImportPreview{}, errors.New("a valid source IMAP hostname and username are required")
 		}
 	case "maildir":
-		if !validStagingID(req.StagingID) {
+		if !validStagingID(req.StagingID) || len(req.ManifestSHA256) != 64 {
 			return types.MailImportPreview{}, errors.New("a staged Maildir archive is required")
 		}
 	default:
 		return types.MailImportPreview{}, errors.New("unsupported mail import source")
 	}
-	if req.TargetSecretID == "" || req.SourceKind == "imap" && req.SourceSecretID == "" {
+	if (req.TargetSecretID == "" && req.TargetPassword == "") || req.SourceKind == "imap" && req.SourceSecretID == "" && req.SourcePassword == "" {
 		return types.MailImportPreview{}, errors.New("mail import credentials are required")
 	}
-	return m.store.Preview(ctx, actor, req)
+	preview, err := m.store.Preview(ctx, actor, req)
+	if err != nil {
+		return preview, err
+	}
+	if m.engine != nil {
+		if err = m.engine.Prepare(ctx, preview.ID); err != nil {
+			return types.MailImportPreview{}, err
+		}
+	}
+	return preview, nil
 }
 func validStagingID(s string) bool {
 	if len(s) != 36 {

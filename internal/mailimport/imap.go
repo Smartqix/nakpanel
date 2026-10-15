@@ -88,6 +88,39 @@ func dialIMAP(ctx context.Context, cfg IMAPConfig, port int) (*IMAP, error) {
 	return &IMAP{client: c}, nil
 }
 func (c *IMAP) Close() error { return c.client.Close() }
+func (c *IMAP) AvailableBytes(ctx context.Context) (int64, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	defer c.bounded(ctx)()
+	selected, err := c.client.Select("INBOX", &imap.SelectOptions{ReadOnly: true}).Wait()
+	if err != nil {
+		return 0, errors.New("destination mailbox is unavailable")
+	}
+	wildcard := false
+	for _, flag := range selected.PermanentFlags {
+		wildcard = wildcard || flag == imap.FlagWildcard
+	}
+	if !wildcard || (!c.client.Caps().Has(imap.CapUIDPlus) && !c.client.Caps().Has(imap.CapIMAP4rev2)) {
+		return 0, errors.New("destination lacks durable receipt support")
+	}
+	if !c.client.Caps().Has(imap.CapQuota) {
+		return 0, errors.New("destination cannot report mailbox quota")
+	}
+	quotas, err := c.client.GetQuotaRoot("INBOX").Wait()
+	if err != nil {
+		return 0, errors.New("destination quota is unavailable")
+	}
+	remaining := int64(-1)
+	for _, quota := range quotas {
+		if storage, ok := quota.Resources[imap.QuotaResourceStorage]; ok {
+			free := max(int64(0), storage.Limit-storage.Usage) * 1024
+			if remaining < 0 || free < remaining {
+				remaining = free
+			}
+		}
+	}
+	return remaining, nil
+}
 func (c *IMAP) bounded(ctx context.Context) func() {
 	bounded, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	stop := context.AfterFunc(bounded, func() { c.Close() })
@@ -122,7 +155,7 @@ func (c *IMAP) Discover(ctx context.Context) ([]Folder, error) {
 		}
 		f := Folder{Name: entry.Mailbox, Delimiter: string(entry.Delim), UIDValidity: selected.UIDValidity}
 		for _, attr := range entry.Attrs {
-			if strings.HasPrefix(string(attr), "\\") && attr != imap.MailboxAttrHasChildren && attr != imap.MailboxAttrHasNoChildren {
+			if specialUse(string(attr)) {
 				f.SpecialUse = string(attr)
 			}
 		}
@@ -160,6 +193,43 @@ func (c *IMAP) Discover(ctx context.Context) ([]Folder, error) {
 		folders = append(folders, f)
 	}
 	return folders, nil
+}
+func specialUse(value string) bool {
+	switch strings.ToLower(value) {
+	case `\sent`, `\drafts`, `\trash`, `\junk`, `\archive`, `\all`, `\flagged`, `\important`:
+		return true
+	}
+	return false
+}
+func (c *IMAP) EnsureFolderWithRole(ctx context.Context, name, role string) error {
+	if !specialUse(role) {
+		return c.EnsureFolder(ctx, name)
+	}
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	defer c.bounded(ctx)()
+	items, err := c.client.List("", name, nil).Collect()
+	if err != nil {
+		return errors.New("cannot inspect destination folder roles")
+	}
+	for _, item := range items {
+		if item.Mailbox != name {
+			continue
+		}
+		for _, attr := range item.Attrs {
+			if strings.EqualFold(string(attr), role) {
+				return nil
+			}
+		}
+		return errors.New("destination folder has a different special-use role; review the mapping")
+	}
+	if !c.client.Caps().Has(imap.CapCreateSpecialUse) {
+		return errors.New("destination cannot preserve special-use folder roles")
+	}
+	if err = c.client.Create(name, &imap.CreateOptions{SpecialUse: []imap.MailboxAttr{imap.MailboxAttr(role)}}).Wait(); err != nil {
+		return errors.New("cannot create destination special-use folder")
+	}
+	return nil
 }
 func (c *IMAP) Read(ctx context.Context, id MessageIdentity) (Message, error) {
 	c.mutex.Lock()

@@ -20,6 +20,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/dnstemplate"
 	controlfiles "github.com/nakroteck/nakpanel/internal/control/filemanager"
 	panelhttp "github.com/nakroteck/nakpanel/internal/control/http"
+	controlmailimport "github.com/nakroteck/nakpanel/internal/control/mailimport"
 	controlmaintenance "github.com/nakroteck/nakpanel/internal/control/maintenance"
 	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
@@ -227,6 +228,13 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, nil, nil, nil, nil, nil, fmt.Errorf("load server secret keyring: %w", err)
 	}
 	serverAdminStore := serveradmin.NewStore(db, keyring)
+	mailImportNetworks, err := controlmailimport.ParseSourceNetworks(os.Getenv("NAKPANEL_MAIL_IMPORT_ALLOWED_CIDRS"))
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, err
+	}
+	mailImportStore := controlmailimport.NewSQLStore(db, nil, serverAdminStore)
+	mailImportFactory := &controlmailimport.RuntimeFactory{DB: db, Secrets: serverAdminStore, Agent: agent, AllowedSourceNetworks: mailImportNetworks}
+	river.AddWorker(workers, &controlmailimport.ImportWorker{Engine: &controlmailimport.Engine{Store: mailImportStore, Factory: mailImportFactory}})
 	phpApplicationStore := controlphpapp.NewSQLStore(db, nil, serverAdminStore)
 	wordpressStore := controlwordpress.NewSQLStore(db, nil, serverAdminStore)
 	statisticsService := webstatistics.New(db, agent, nil)
