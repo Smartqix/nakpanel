@@ -1111,7 +1111,7 @@ func planInputEnforcement(name string) string {
 	switch name {
 	case "disk_mb", "bandwidth_mb":
 		return string(types.PlanEnforcementMeasuredLimit)
-	case "max_sites", "max_subdomains", "max_domain_aliases", "max_databases", "max_mailboxes", "max_ftp_accounts", "max_backups", "backup_storage_mb", "max_tasks", "max_database_users", "max_mail_aliases", "max_scheduled_tasks", "max_applications", "container_storage_mb", "valkey_memory_mb", "max_php_workers", "max_php_releases":
+	case "max_sites", "max_subdomains", "max_domain_aliases", "max_databases", "max_mailboxes", "max_ftp_accounts", "max_backups", "backup_storage_mb", "max_tasks", "max_database_users", "max_mail_aliases", "max_scheduled_tasks", "max_applications", "container_storage_mb", "valkey_memory_mb", "max_php_workers", "max_php_releases", "max_wordpress_sites":
 		return string(types.PlanEnforcementHardLimit)
 	case "site_disk_quota_mb", "cpu_percent", "memory_limit_mb", "io_read_mbps", "io_write_mbps", "php_max_children", "php_memory_mb":
 		return string(types.PlanEnforcementCreationDefault)
@@ -1200,11 +1200,30 @@ func planSubscriptionCount(planID int64, subscriptions []types.SubscriptionSumma
 }
 
 func planSyncLabel(planID int64, subscriptions []types.SubscriptionSummary) string {
-	_, pending := planSubscriptionStats(planID, subscriptions)
-	if pending > 0 {
-		return strconv.Itoa(pending) + " pending"
+	pending, failed, excluded := 0, 0, 0
+	for _, sub := range subscriptions {
+		if sub.PlanID != planID {
+			continue
+		}
+		switch {
+		case sub.SyncMode == "locked" || sub.SyncMode == "custom":
+			excluded++
+		case sub.SyncStatus == "out_of_sync" || sub.SyncError != "":
+			failed++
+		case sub.SyncStatus != "in_sync":
+			pending++
+		}
 	}
-	return "In sync"
+	label := "In sync"
+	if failed > 0 {
+		label = strconv.Itoa(failed) + " failed"
+	} else if pending > 0 {
+		label = strconv.Itoa(pending) + " pending"
+	}
+	if excluded > 0 {
+		label += "; " + strconv.Itoa(excluded) + " excluded"
+	}
+	return label
 }
 
 func addonByID(items []types.AddonPlan, id int64) (types.AddonPlan, bool) {

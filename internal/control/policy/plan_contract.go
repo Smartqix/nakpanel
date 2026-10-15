@@ -160,6 +160,9 @@ func ValidatePlanCapabilities(policy types.HostingPolicy, capabilities types.Run
 		}
 	}
 	if policy.Permissions.WordPressToolkit {
+		if policy.Resources.MaxWordPressSites == 0 {
+			issues = append(issues, capabilityIssue("wordpress_capacity_zero", "resources.max_wordpress_sites", "WordPress Toolkit is enabled but allows zero installations. Set a positive installation limit or Unlimited."))
+		}
 		if !capabilities.WPCLIAvailable {
 			issues = append(issues, capabilityIssue("wp_cli_unavailable", "permissions.wordpress_toolkit", "WP-CLI is unavailable; WordPress Toolkit cannot be delivered."))
 		}

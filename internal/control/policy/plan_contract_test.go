@@ -107,3 +107,31 @@ func TestValidatePlanCapabilitiesRequiresWordPressRuntime(t *testing.T) {
 		t.Fatalf("ready WordPress plan issues = %+v", got)
 	}
 }
+
+func TestWordPressPlanCannotAdvertiseZeroInstallations(t *testing.T) {
+	policy := types.HostingPolicy{SchemaVersion: 5,
+		Permissions: types.HostingPermissionPolicy{WordPressToolkit: true}}
+	capabilities := types.RuntimeCapabilities{WPCLIAvailable: true, PHPVersions: []string{"8.4"}}
+	issues := ValidatePlanCapabilities(policy, capabilities)
+	found := false
+	for _, issue := range issues {
+		if issue.Code == "wordpress_capacity_zero" && issue.Blocking &&
+			issue.Field == "resources.max_wordpress_sites" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("zero-capacity WordPress plan accepted: %+v", issues)
+	}
+	for _, limit := range []int{5, -1} {
+		policy.Resources.MaxWordPressSites = limit
+		if got := ValidatePlanCapabilities(policy, capabilities); len(got) != 0 {
+			t.Fatalf("valid WordPress capacity %d rejected: %+v", limit, got)
+		}
+	}
+	policy.Permissions.WordPressToolkit = false
+	policy.Resources.MaxWordPressSites = 0
+	if got := ValidatePlanCapabilities(policy, capabilities); len(got) != 0 {
+		t.Fatalf("disabled WordPress should allow zero: %+v", got)
+	}
+}

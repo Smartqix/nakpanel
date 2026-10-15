@@ -391,6 +391,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /customers/bulk-status", s.handleBulkCustomerStatus)
 	mux.HandleFunc("POST /plans", s.handleUpsertPlan)
 	mux.HandleFunc("POST /plans/preview", s.handlePreviewPlan)
+	mux.HandleFunc("GET /plans/{id}/sync-status", s.handlePlanSynchronization)
 	mux.HandleFunc("POST /plans/status", s.handleSetPlanStatus)
 	mux.HandleFunc("POST /plans/bulk-status", s.handleBulkPlanStatus)
 	mux.HandleFunc("POST /addons/bulk-status", s.handleBulkAddonPlanStatus)
