@@ -420,12 +420,16 @@ func TestPreviewExpiryPreservesResumableImportsAndRollsBackQueueFailure(t *testi
 		t.Run(state, func(t *testing.T) {
 			db := removaldb.New(t, "")
 			ctx := context.Background()
-			store := NewSQLStore(db, failingQueue{})
+			keyring, err := serveradmin.NewKeyring(1, map[int][]byte{1: bytes.Repeat([]byte{24}, 32)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			store := NewSQLStore(db, failingQueue{}, serveradmin.NewStore(db, keyring))
 			sweeper, ok := any(store).(interface{ ExpirePreviews(context.Context) error })
 			if !ok {
 				t.Fatal("expired previews have no cleanup sweep")
 			}
-			preview, err := store.Preview(ctx, auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, types.MailImportRequest{MailboxID: fixtureMailbox(t, db), SourceKind: "imap", SourceHost: "mail.example.com", SourceSecretID: "source", TargetSecretID: "target"})
+			preview, err := store.Preview(ctx, auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, types.MailImportRequest{MailboxID: fixtureMailbox(t, db), SourceKind: "imap", SourceHost: "mail.example.com", SourcePassword: "source-secret", TargetPassword: "target-secret"})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -439,6 +443,13 @@ func TestPreviewExpiryPreservesResumableImportsAndRollsBackQueueFailure(t *testi
 			item, err := store.Load(ctx, preview.ID)
 			if err != nil || item.State != state {
 				t.Fatalf("expiry changed preserved or unqueued state: %+v %v", item, err)
+			}
+			var secrets, audits int
+			if err = db.QueryRow(`SELECT count(*) FROM service_secrets WHERE scope='mail-import'`).Scan(&secrets); err != nil || secrets != 2 {
+				t.Fatalf("resumable credentials were retired: %d %v", secrets, err)
+			}
+			if err = db.QueryRow(`SELECT count(*) FROM audit_events WHERE action='mail_import.expire'`).Scan(&audits); err != nil || audits != 0 {
+				t.Fatalf("uncommitted expiry was audited: %d %v", audits, err)
 			}
 		})
 	}
