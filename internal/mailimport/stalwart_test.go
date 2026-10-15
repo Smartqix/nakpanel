@@ -6,6 +6,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/emersion/go-imap/v2"
 )
 
 func TestStalwartCompatibility(t *testing.T) {
@@ -68,6 +70,10 @@ func TestStalwartCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reopened.Close()
+	subscribed, err := reopened.client.List("", folder, &imap.ListOptions{SelectSubscribed: true}).Collect()
+	if err != nil || len(subscribed) != 1 {
+		t.Fatalf("imported folder is absent from subscribed webmail folders: %d %v", len(subscribed), err)
+	}
 	if receipts, err := reopened.FindReceipt(ctx, folder, ReceiptToken(folder, "first")); err != nil || len(receipts) != 1 {
 		t.Fatalf("receipt did not survive a fresh connection: %d %v", len(receipts), err)
 	}

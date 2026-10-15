@@ -218,7 +218,7 @@ func (c *IMAP) EnsureFolderWithRole(ctx context.Context, name, role string) erro
 		}
 		for _, attr := range item.Attrs {
 			if strings.EqualFold(string(attr), role) {
-				return nil
+				return c.subscribeFolder(name)
 			}
 		}
 		return errors.New("destination folder has a different special-use role; review the mapping")
@@ -229,7 +229,7 @@ func (c *IMAP) EnsureFolderWithRole(ctx context.Context, name, role string) erro
 	if err = c.client.Create(name, &imap.CreateOptions{SpecialUse: []imap.MailboxAttr{imap.MailboxAttr(role)}}).Wait(); err != nil {
 		return errors.New("cannot create destination special-use folder")
 	}
-	return nil
+	return c.subscribeFolder(name)
 }
 func (c *IMAP) Read(ctx context.Context, id MessageIdentity) (Message, error) {
 	c.mutex.Lock()
@@ -282,10 +282,28 @@ func (c *IMAP) EnsureFolder(ctx context.Context, name string) error {
 	defer c.mutex.Unlock()
 	defer c.bounded(ctx)()
 	if _, err := c.client.Select(name, &imap.SelectOptions{ReadOnly: true}).Wait(); err == nil {
-		return nil
+		return c.subscribeFolder(name)
 	}
 	if err := c.client.Create(name, nil).Wait(); err != nil {
 		return errors.New("cannot create destination folder")
+	}
+	return c.subscribeFolder(name)
+}
+func (c *IMAP) subscribeFolder(name string) error {
+	// Roundcube and other clients display subscribed folders by default.
+	if c.client.Caps().Has(imap.CapListExtended) || c.client.Caps().Has(imap.CapIMAP4rev2) {
+		items, err := c.client.List("", name, &imap.ListOptions{SelectSubscribed: true}).Collect()
+		if err != nil {
+			return errors.New("cannot inspect destination folder subscription")
+		}
+		for _, item := range items {
+			if item.Mailbox == name {
+				return nil
+			}
+		}
+	}
+	if err := c.client.Subscribe(name).Wait(); err != nil {
+		return errors.New("cannot subscribe to destination folder")
 	}
 	return nil
 }
