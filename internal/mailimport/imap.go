@@ -208,7 +208,7 @@ func (c *IMAP) EnsureFolderWithRole(ctx context.Context, name, role string) erro
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	defer c.bounded(ctx)()
-	items, err := c.client.List("", name, nil).Collect()
+	items, err := c.client.List("", name, &imap.ListOptions{ReturnSpecialUse: c.client.Caps().Has(imap.CapSpecialUse)}).Collect()
 	if err != nil {
 		return errors.New("cannot inspect destination folder roles")
 	}

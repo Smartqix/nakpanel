@@ -82,4 +82,11 @@ func TestStalwartCompatibility(t *testing.T) {
 	if !foundSent {
 		t.Fatal("source discovery lost the Sent folder role")
 	}
+	for _, entry := range folders {
+		if entry.SpecialUse == `\Sent` {
+			if err := reopened.EnsureFolderWithRole(ctx, entry.Name, entry.SpecialUse); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 }
