@@ -377,6 +377,73 @@ func (q *countingImportQueue) InsertTx(_ context.Context, _ *sql.Tx, args river.
 	return &rivertype.JobInsertResult{}, nil
 }
 
+func TestExpiredMailImportPreviewRetiresSecretsAndQueuesCleanup(t *testing.T) {
+	db := removaldb.New(t, "")
+	ctx := context.Background()
+	keyring, err := serveradmin.NewKeyring(1, map[int][]byte{1: bytes.Repeat([]byte{23}, 32)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queue := &countingImportQueue{}
+	store := NewSQLStore(db, queue, serveradmin.NewStore(db, keyring))
+	sweeper, ok := any(store).(interface{ ExpirePreviews(context.Context) error })
+	if !ok {
+		t.Fatal("expired previews have no cleanup sweep")
+	}
+	actor := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
+	box := fixtureMailbox(t, db)
+	preview, err := store.Preview(ctx, actor, types.MailImportRequest{MailboxID: box, SourceKind: "imap", SourceHost: "mail.example.com", SourcePassword: "source-secret", TargetPassword: "target-secret"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE mail_imports SET expires_at=now()-interval '1 minute' WHERE id=$1`, preview.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err = sweeper.ExpirePreviews(ctx); err != nil {
+		t.Fatal(err)
+	}
+	item, err := store.Load(ctx, preview.ID)
+	if err != nil || item.State != "cancelled" || item.LastError == "" || len(queue.args) != 1 || queue.args[0].Revision != item.Revision {
+		t.Fatalf("expired preview was not retired durably: %+v jobs=%+v %v", item, queue.args, err)
+	}
+	var count int
+	if err = db.QueryRow(`SELECT count(*) FROM service_secrets WHERE scope='mail-import'`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("expired credentials retained: %d %v", count, err)
+	}
+	if err = sweeper.ExpirePreviews(ctx); err != nil || len(queue.args) != 1 {
+		t.Fatal("expiry is not idempotent", err)
+	}
+}
+
+func TestPreviewExpiryPreservesResumableImportsAndRollsBackQueueFailure(t *testing.T) {
+	for _, state := range []string{"preview", "paused", "copying"} {
+		t.Run(state, func(t *testing.T) {
+			db := removaldb.New(t, "")
+			ctx := context.Background()
+			store := NewSQLStore(db, failingQueue{})
+			sweeper, ok := any(store).(interface{ ExpirePreviews(context.Context) error })
+			if !ok {
+				t.Fatal("expired previews have no cleanup sweep")
+			}
+			preview, err := store.Preview(ctx, auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, types.MailImportRequest{MailboxID: fixtureMailbox(t, db), SourceKind: "imap", SourceHost: "mail.example.com", SourceSecretID: "source", TargetSecretID: "target"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = db.Exec(`UPDATE mail_imports SET expires_at=now()-interval '1 minute',state=$2 WHERE id=$1`, preview.ID, state); err != nil {
+				t.Fatal(err)
+			}
+			err = sweeper.ExpirePreviews(ctx)
+			if (state == "preview") != (err != nil) {
+				t.Fatalf("unexpected expiry outcome for %s: %v", state, err)
+			}
+			item, err := store.Load(ctx, preview.ID)
+			if err != nil || item.State != state {
+				t.Fatalf("expiry changed preserved or unqueued state: %+v %v", item, err)
+			}
+		})
+	}
+}
+
 type retryRetirementStore struct {
 	*SQLStore
 	failOnce    bool

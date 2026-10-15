@@ -3,6 +3,7 @@ package mailimport
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -128,6 +129,93 @@ func TestImportMetadataIgnoresOnlyOwnReceiptAndRecent(t *testing.T) {
 	if sameMetadata(want, got, "npimport_current") {
 		t.Fatal("an unrelated import keyword was silently ignored")
 	}
+}
+
+func TestImportStateLookupFailuresRemainRetryable(t *testing.T) {
+	for _, call := range []int{2, 3, 4, 7, 8} {
+		t.Run(fmt.Sprint(call), func(t *testing.T) {
+			failure := errors.New("temporary state database failure")
+			store := &faultJobStore{memoryJobStore: newMemoryJobStore(), currentFailAt: call, failure: failure}
+			target := &memoryTarget{receipts: map[string]transport.Message{}}
+			engine := Engine{Store: store, Factory: memoryFactory{&memorySource{messages: []transport.Message{testMessage("one")}}, target}}
+			if err := engine.Run(context.Background(), "import", 1); !errors.Is(err, failure) {
+				t.Fatalf("state lookup failure was acknowledged instead of retried: %v (state=%s)", err, store.state)
+			}
+			if store.state == "complete" || store.state == "attention_required" {
+				t.Fatalf("temporary database failure misclassified: %s", store.state)
+			}
+			if err := engine.Run(context.Background(), "import", 1); err != nil {
+				t.Fatal(err)
+			}
+			if call == 4 {
+				if target.appends != 0 || store.state != "attention_required" {
+					t.Fatal("unproven append was retried blindly")
+				}
+			} else if store.state != "complete" || target.appends != 1 {
+				t.Fatalf("recovery duplicated or lost mail: state=%s appends=%d", store.state, target.appends)
+			}
+		})
+	}
+}
+
+func TestImportPersistenceFailuresRemainRetryable(t *testing.T) {
+	for _, stage := range []string{"discover", "checkpoint", "connection-state"} {
+		t.Run(stage, func(t *testing.T) {
+			failure := errors.New("temporary persistence failure")
+			store := &faultJobStore{memoryJobStore: newMemoryJobStore(), stage: stage, failure: failure}
+			target := &memoryTarget{receipts: map[string]transport.Message{}, err: transport.ErrUncertain}
+			var factory Factory = memoryFactory{&memorySource{messages: []transport.Message{testMessage("one")}}, target}
+			if stage == "connection-state" {
+				factory = unavailableImportFactory{}
+			}
+			engine := Engine{Store: store, Factory: factory}
+			if err := engine.Run(context.Background(), "import", 1); !errors.Is(err, failure) {
+				t.Fatalf("unpersisted failure was acknowledged: %v", err)
+			}
+		})
+	}
+}
+
+type faultJobStore struct {
+	*memoryJobStore
+	currentCalls, currentFailAt int
+	stage                       string
+	failure                     error
+}
+
+func (s *faultJobStore) Current(ctx context.Context, id string, revision int64) (bool, error) {
+	s.currentCalls++
+	if s.currentCalls == s.currentFailAt {
+		return false, s.failure
+	}
+	return s.memoryJobStore.Current(ctx, id, revision)
+}
+
+func (s *faultJobStore) Discover(ctx context.Context, id string, folders []transport.Folder) error {
+	if s.stage == "discover" {
+		return s.failure
+	}
+	return s.memoryJobStore.Discover(ctx, id, folders)
+}
+
+func (s *faultJobStore) Checkpoint(ctx context.Context, id string, record MessageRecord) error {
+	if s.stage == "checkpoint" && record.State == "uncertain" {
+		return s.failure
+	}
+	return s.memoryJobStore.Checkpoint(ctx, id, record)
+}
+
+func (s *faultJobStore) SetState(ctx context.Context, id string, revision int64, state, message string) error {
+	if s.stage == "connection-state" {
+		return s.failure
+	}
+	return s.memoryJobStore.SetState(ctx, id, revision, state, message)
+}
+
+type unavailableImportFactory struct{}
+
+func (unavailableImportFactory) Open(context.Context, Job) (Source, Target, error) {
+	return nil, nil, errors.New("connection unavailable")
 }
 
 type changedFlagsTarget struct {

@@ -114,6 +114,7 @@ func (e *Engine) Cleanup(ctx context.Context, id string) error {
 }
 
 var ErrSuperseded = errors.New("mail import is paused, cancelled or superseded")
+var errDestinationVerification = errors.New("destination message verification failed")
 
 func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 	unlock, err := e.Store.Lock(ctx, id)
@@ -141,14 +142,16 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 	}
 	source, target, err := e.Factory.Open(ctx, job)
 	if err != nil {
-		_ = e.Store.SetState(ctx, id, revision, "attention_required", "Mail connection or authentication failed. Verify credentials and retry.")
-		return nil
+		return e.attention(ctx, id, revision, "Mail connection or authentication failed. Verify credentials and retry.")
 	}
 	defer source.Close()
 	defer target.Close()
 	for scan := 0; scan < 2; scan++ {
 		if err = e.active(ctx, id, revision); err != nil {
-			return nil
+			if errors.Is(err, ErrSuperseded) {
+				return nil
+			}
+			return err
 		}
 		if err = e.Store.SetState(ctx, id, revision, "discovering", ""); err != nil {
 			return err
@@ -158,7 +161,10 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 			return e.attention(ctx, id, revision, "Source discovery failed or changed. No source mail was removed.")
 		}
 		if err = e.Store.Discover(ctx, id, folders); err != nil {
-			return e.attention(ctx, id, revision, "Source identity changed. Review the import before resuming.")
+			if errors.Is(err, transport.ErrSourceChanged) {
+				return e.attention(ctx, id, revision, "Source identity changed. Review the import before resuming.")
+			}
+			return err
 		}
 		targets := map[string]string{}
 		for _, folder := range folders {
@@ -197,7 +203,10 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 		}
 		for _, record := range records {
 			if err = e.active(ctx, id, revision); err != nil {
-				return nil
+				if errors.Is(err, ErrSuperseded) {
+					return nil
+				}
+				return err
 			}
 			if record.State == "verified" || record.State == "excluded" {
 				continue
@@ -230,7 +239,9 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 				if err != nil || len(receipts) != 1 {
 					record.State = "uncertain"
 					record.Error = "The previous append cannot be proven. Do not retry this message blindly."
-					_ = e.Store.Checkpoint(ctx, id, record)
+					if err = e.Store.Checkpoint(ctx, id, record); err != nil {
+						return err
+					}
 					return e.attention(ctx, id, revision, record.Error)
 				}
 				record.Receipt = receipts[0]
@@ -242,7 +253,10 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 					return err
 				}
 				if err = e.active(ctx, id, revision); err != nil {
-					return nil
+					if errors.Is(err, ErrSuperseded) {
+						return nil
+					}
+					return err
 				}
 				record.Receipt, err = target.Append(ctx, copyMessage, record.Token)
 				if err != nil {
@@ -252,7 +266,9 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 						record.State = "uncertain"
 						record.Error = "The append acknowledgement was lost. Reconcile the receipt before retrying."
 					}
-					_ = e.Store.Checkpoint(ctx, id, record)
+					if err = e.Store.Checkpoint(ctx, id, record); err != nil {
+						return err
+					}
 					return e.attention(ctx, id, revision, record.Error)
 				}
 				record.State = "copied"
@@ -266,7 +282,9 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 			got, err := target.Read(ctx, transport.MessageIdentity{Folder: record.Receipt.Folder, UID: record.Receipt.UID, UIDValidity: record.Receipt.UIDValidity})
 			if err != nil || !sameMessage(msg, got, record.Token) {
 				record.Error = "Copied message content, date or flags could not be verified."
-				_ = e.Store.Checkpoint(ctx, id, record)
+				if err = e.Store.Checkpoint(ctx, id, record); err != nil {
+					return err
+				}
 				return e.attention(ctx, id, revision, record.Error)
 			}
 			record.State = "verified"
@@ -277,10 +295,19 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 		}
 	}
 	if err = e.active(ctx, id, revision); err != nil {
-		return nil
+		if errors.Is(err, ErrSuperseded) {
+			return nil
+		}
+		return err
 	}
 	if err = e.verifyFreshConnection(ctx, job); err != nil {
-		return e.attention(ctx, id, revision, "Destination verification failed on a fresh connection. The copied mail is retained; review folder visibility before resuming.")
+		if errors.Is(err, ErrSuperseded) {
+			return nil
+		}
+		if errors.Is(err, errDestinationVerification) {
+			return e.attention(ctx, id, revision, "Destination verification failed on a fresh connection. The copied mail is retained; review folder visibility before resuming.")
+		}
+		return err
 	}
 	if err = e.Store.SetState(ctx, id, revision, "complete", ""); err != nil {
 		return err
@@ -294,7 +321,7 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 func (e *Engine) verifyFreshConnection(ctx context.Context, job Job) error {
 	source, target, err := e.Factory.Open(ctx, job)
 	if err != nil {
-		return err
+		return errDestinationVerification
 	}
 	defer source.Close()
 	defer target.Close()
@@ -303,7 +330,7 @@ func (e *Engine) verifyFreshConnection(ctx context.Context, job Job) error {
 		return err
 	}
 	if len(records) == 0 {
-		return errors.New("no messages were discovered")
+		return errDestinationVerification
 	}
 	for _, record := range records {
 		if record.State == "excluded" {
@@ -313,15 +340,15 @@ func (e *Engine) verifyFreshConnection(ctx context.Context, job Job) error {
 			return err
 		}
 		if record.State != "verified" || record.Hash == "" {
-			return errors.New("message has no verified receipt")
+			return errDestinationVerification
 		}
 		receipts, err := target.FindReceipt(ctx, record.Receipt.Folder, record.Token)
 		if err != nil || len(receipts) != 1 || receipts[0] != record.Receipt {
-			return errors.New("destination receipt is not visible")
+			return errDestinationVerification
 		}
 		got, err := target.Read(ctx, transport.MessageIdentity{Folder: record.Receipt.Folder, UID: record.Receipt.UID, UIDValidity: record.Receipt.UIDValidity})
 		if err != nil || transport.ContentHash(got.Body) != record.Hash || !sameMetadata(record.Message, got, record.Token) {
-			return errors.New("destination message changed")
+			return errDestinationVerification
 		}
 	}
 	return nil

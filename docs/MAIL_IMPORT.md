@@ -29,6 +29,13 @@ receipts. Cancel stops future copying but keeps already copied messages. A
 completed import does not continue watching the old server; arrange a final
 cutover window and review the reported counts before retiring it.
 
+Unstarted previews expire after 30 minutes. A minute-based cleanup sweep
+cancels expired previews, retires their encrypted credentials and queues
+disposable staging removal. Paused and running imports are not expired by this
+sweep. Temporary ledger/database failures remain retryable instead of being
+acknowledged as completed work; uncertain append outcomes still require receipt
+reconciliation rather than a blind retry.
+
 ## Bounds And Recovery
 
 - At most 100,000 source messages and 1,000 folders per import.

@@ -243,6 +243,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	mailImportStore := controlmailimport.NewSQLStore(db, nil, serverAdminStore)
 	mailImportFactory := &controlmailimport.RuntimeFactory{DB: db, Secrets: serverAdminStore, Agent: agent, AllowedSourceNetworks: mailImportNetworks}
 	river.AddWorker(workers, &controlmailimport.ImportWorker{Engine: &controlmailimport.Engine{Store: mailImportStore, Factory: mailImportFactory}})
+	river.AddWorker(workers, &controlmailimport.ExpirePreviewsWorker{Store: mailImportStore})
 	phpApplicationStore := controlphpapp.NewSQLStore(db, nil, serverAdminStore)
 	wordpressStore := controlwordpress.NewSQLStore(db, nil, serverAdminStore)
 	statisticsService := webstatistics.New(db, agent, nil)
@@ -352,6 +353,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
 		WorkerMiddleware: []rivertype.WorkerMiddleware{provision.NewSiteJobFence(db)},
 		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return controlmailimport.ExpirePreviewsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return provision.SweepSiteRemovalsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Hour), func() (river.JobArgs, *river.InsertOpts) { return webstatistics.SweepArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(6*time.Hour), func() (river.JobArgs, *river.InsertOpts) {
@@ -424,6 +426,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	usageWorker.SetRiverClient(client)
+	mailImportStore.SetQueue(client)
 	autoSubdomainDNS.SetRiverClient(client)
 	phpApplicationStore.SetRiverClient(client)
 	wordpressStore.SetRiverClient(client)

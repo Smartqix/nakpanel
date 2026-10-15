@@ -27,6 +27,7 @@ var removalJobClassification = map[string]string{
 	"sweep_billing_webhooks": "node", "deliver_billing_webhook": "node", "deliver_notifications": "node", "server_backup": "node", "server_backup_prune": "node", "server_backup_sweep": "node",
 	"remove_site":         "removal",
 	"sweep_site_removals": "shared",
+	"expire_mail_import_previews": "shared",
 }
 
 func TargetSiteJobScope(snapshot types.SiteRemovalSnapshot) (string, []any) {
