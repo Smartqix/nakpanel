@@ -84,6 +84,12 @@ type MailProvisioner interface {
 	MailStatus(context.Context) (types.MailServerStatus, error)
 }
 
+type MailImportProvisioner interface {
+	StageMaildir(context.Context, types.StageMaildirReq) (types.StageMaildirResult, error)
+	InspectMaildir(context.Context, types.InspectMaildirReq) (types.InspectMaildirResult, error)
+	ReadMaildirMessage(context.Context, types.ReadMaildirMessageReq) (types.ReadMaildirMessageResult, error)
+}
+
 type MailQueueReader interface {
 	QueryMailQueue(context.Context, types.MailQueueQueryReq) (types.MailQueueQueryResult, error)
 	InspectQueuedMail(context.Context, types.InspectQueuedMailReq) (types.MailQueueMessage, error)
@@ -231,6 +237,7 @@ type Options struct {
 	FileManager               FileManager
 	SubscriptionAccounts      SubscriptionAccountProvisioner
 	Mail                      MailProvisioner
+	MailImport                MailImportProvisioner
 	Applications              ApplicationProvisioner
 	PHPApplications           PHPApplicationProvisioner
 	WordPress                 WordPressProvisioner
@@ -270,6 +277,7 @@ type Dispatcher struct {
 	fileManager               FileManager
 	subscriptionAccounts      SubscriptionAccountProvisioner
 	mail                      MailProvisioner
+	mailImport                MailImportProvisioner
 	mailQueue                 MailQueueReader
 	applications              ApplicationProvisioner
 	phpApplications           PHPApplicationProvisioner
@@ -332,6 +340,7 @@ func NewDispatcher(reloader ServiceReloader, opts Options) *Dispatcher {
 		fileManager:               opts.FileManager,
 		subscriptionAccounts:      opts.SubscriptionAccounts,
 		mail:                      opts.Mail,
+		mailImport:                opts.MailImport,
 		applications:              opts.Applications,
 		phpApplications:           opts.PHPApplications,
 		wordpress:                 opts.WordPress,
@@ -981,6 +990,45 @@ func (d *Dispatcher) dispatchUnchecked(ctx context.Context, req types.Request) t
 			return errorResponse(req.ID, "subscription teardown provisioner is not configured")
 		}
 		result, err := d.subscriptionTeardown.TeardownSubscription(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpStageMaildir:
+		var payload types.StageMaildirReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.mailImport == nil {
+			return errorResponse(req.ID, "mail import staging is unavailable")
+		}
+		result, err := d.mailImport.StageMaildir(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpInspectMaildir:
+		var payload types.InspectMaildirReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.mailImport == nil {
+			return errorResponse(req.ID, "mail import staging is unavailable")
+		}
+		result, err := d.mailImport.InspectMaildir(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
+	case types.OpReadMaildirMessage:
+		var payload types.ReadMaildirMessageReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.mailImport == nil {
+			return errorResponse(req.ID, "mail import staging is unavailable")
+		}
+		result, err := d.mailImport.ReadMaildirMessage(ctx, payload)
 		if err != nil {
 			return errorResponse(req.ID, err.Error())
 		}

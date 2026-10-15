@@ -137,6 +137,7 @@ func main() {
 			FileManager:             fileManager,
 			SubscriptionAccounts:    accountProvisioner,
 			Mail:                    mailProvisioner,
+			MailImport:              ops.NewMailImportProvisioner("", ""),
 			Applications:            podmanProvisioner,
 			PHPApplications:         phpApplications,
 			WordPress:               wordpress,
