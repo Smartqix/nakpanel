@@ -100,6 +100,42 @@ func TestMailImportPlanDisabledBeforeStart(t *testing.T) {
 	}
 }
 
+func TestMailImportMappingIsReviewedAndScoped(t *testing.T) {
+	db := removaldb.New(t, "")
+	ctx := context.Background()
+	store := NewSQLStore(db, acceptingQueue{})
+	actor := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
+	preview, err := store.Preview(ctx, actor, types.MailImportRequest{MailboxID: fixtureMailbox(t, db), SourceKind: "imap", SourceHost: "mail.example.com", SourceSecretID: "source", TargetSecretID: "target"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := Engine{Store: store, Factory: memoryFactory{&memorySource{messages: []transport.Message{testMessage("one")}}, &memoryTarget{receipts: map[string]transport.Message{}}}}
+	if err = engine.Prepare(ctx, preview.ID); err != nil {
+		t.Fatal(err)
+	}
+	folders, err := store.Folders(ctx, preview.ID)
+	if err != nil || len(folders) != 1 {
+		t.Fatalf("folders %v %v", folders, err)
+	}
+	if err = store.MapFolders(ctx, actor, preview.ID, []types.MailImportMapping{{FolderID: folders[0].ID + 1, Target: "Other", Include: true}}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("foreign mapping: %v", err)
+	}
+	if err = store.MapFolders(ctx, actor, preview.ID, []types.MailImportMapping{{FolderID: folders[0].ID, Target: "Imported", Include: false}}); err != nil {
+		t.Fatal(err)
+	}
+	item, err := store.Start(ctx, actor, preview.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = engine.Run(ctx, item.ID, item.Revision); err != nil {
+		t.Fatal(err)
+	}
+	item, err = store.Load(ctx, item.ID)
+	if err != nil || item.State != "complete" || item.Verified != 0 || item.Excluded != 1 {
+		t.Fatalf("excluded scope: %+v %v", item, err)
+	}
+}
+
 type failingQueue struct{}
 
 func (failingQueue) InsertTx(context.Context, *sql.Tx, river.JobArgs, *river.InsertOpts) (*rivertype.JobInsertResult, error) {

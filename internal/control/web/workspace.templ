@@ -58,6 +58,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<script defer src="/assets/git.js"></script>
 			<script defer src="/assets/site-removal.js"></script>
 			<script defer src="/assets/plan-sync.js"></script>
+			<script defer src="/assets/mail-import.js"></script>
 		</body>
 	</html>
 }
@@ -619,6 +620,8 @@ templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashb
 				@domainValkey(item,subscription,data,view)
 			} else if view.Tab == "mail" {
 				@domainMail(user, item, subscription, data, view)
+			} else if view.Tab == "mail-imports" && view.MailImports != nil {
+				@domainMailImports(*view.MailImports,view)
 			} else if view.Tab == "dns" {
 				@domainDNS(user, item, data.Phase6, subscription, actions, view)
 			} else if view.Tab == "ssl" {

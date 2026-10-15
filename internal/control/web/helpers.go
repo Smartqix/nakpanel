@@ -93,6 +93,7 @@ type WorkspaceView struct {
 	WordPressTab         string
 	PHPApplication       *controlphpapp.Workspace
 	WordPress            *controlwordpress.Workspace
+	MailImports          *types.MailImportWorkspace
 	WebStatistics        *webstatistics.Workspace
 	StatisticsSettings   *webstatistics.Settings
 	PHPRuntimeInventory  *types.RuntimeCapabilities
@@ -722,7 +723,7 @@ func subscriptionForSite(items []types.SubscriptionSummary, site dashboard.Site)
 }
 
 func domainTabActive(current, candidate string) string {
-	if current == candidate {
+	if current == candidate || current == "mail-imports" && candidate == "mail" {
 		return "is-active"
 	}
 	return ""
@@ -746,6 +747,8 @@ func domainHostingActive(current string) string {
 
 func domainToolLabel(current string) string {
 	switch current {
+	case "mail-imports":
+		return "Mail imports"
 	case "files":
 		return "File Manager"
 	case "access":

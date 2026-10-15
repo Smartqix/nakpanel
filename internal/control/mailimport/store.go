@@ -129,11 +129,11 @@ VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING expires_at`, id, box.ID
 	return preview, tx.Commit()
 }
 
-const importSQL = `SELECT id,mailbox_id,subscription_id,state,desired_revision,discovered,copied,verified,failed,uncertain,last_error,created_at FROM mail_imports WHERE id=$1`
+const importSQL = `SELECT id,mailbox_id,subscription_id,state,desired_revision,discovered,copied,verified,failed,uncertain,last_error,created_at,(SELECT count(*) FROM mail_import_messages m JOIN mail_import_folders f ON f.id=m.folder_id WHERE f.import_id=mail_imports.id AND m.state='excluded') FROM mail_imports WHERE id=$1`
 
 func scanImport(r row) (types.MailImport, error) {
 	var v types.MailImport
-	err := r.Scan(&v.ID, &v.MailboxID, &v.SubscriptionID, &v.State, &v.Revision, &v.Discovered, &v.Copied, &v.Verified, &v.Failed, &v.Uncertain, &v.LastError, &v.CreatedAt)
+	err := r.Scan(&v.ID, &v.MailboxID, &v.SubscriptionID, &v.State, &v.Revision, &v.Discovered, &v.Copied, &v.Verified, &v.Failed, &v.Uncertain, &v.LastError, &v.CreatedAt, &v.Excluded)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}

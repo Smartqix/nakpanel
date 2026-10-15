@@ -18,9 +18,37 @@ type MailImportRequest struct {
 }
 
 type MailImportPreview struct {
-	ID        string            `json:"id"`
-	Request   MailImportRequest `json:"request"`
-	ExpiresAt time.Time         `json:"expires_at"`
+	ID        string             `json:"id"`
+	Request   MailImportRequest  `json:"request"`
+	ExpiresAt time.Time          `json:"expires_at"`
+	Folders   []MailImportFolder `json:"folders"`
+}
+type MailImportFolder struct {
+	ID       int64  `json:"id"`
+	Source   string `json:"source"`
+	Target   string `json:"target"`
+	Messages int64  `json:"messages"`
+	Bytes    int64  `json:"bytes"`
+	Approved bool   `json:"approved"`
+}
+type MailImportMapping struct {
+	FolderID int64
+	Target   string
+	Include  bool
+}
+type MailImportMailbox struct {
+	ID      int64  `json:"id"`
+	Address string `json:"address"`
+	Active  bool   `json:"active"`
+}
+type MailImportWorkspace struct {
+	SiteID         int64               `json:"site_id"`
+	SubscriptionID int64               `json:"subscription_id"`
+	Domain         string              `json:"domain"`
+	Mailboxes      []MailImportMailbox `json:"mailboxes"`
+	Imports        []MailImport        `json:"imports"`
+	Selected       *MailImport         `json:"selected,omitempty"`
+	Folders        []MailImportFolder  `json:"folders"`
 }
 
 type MailImport struct {
@@ -34,6 +62,7 @@ type MailImport struct {
 	Verified       int64     `json:"verified"`
 	Failed         int64     `json:"failed"`
 	Uncertain      int64     `json:"uncertain"`
+	Excluded       int64     `json:"excluded"`
 	LastError      string    `json:"last_error,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 }

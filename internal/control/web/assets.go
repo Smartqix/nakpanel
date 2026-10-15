@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed static/app.css static/app.js static/interaction.js static/git.js static/git.css static/site-removal.js static/plan-sync.js static/icons.svg static/ace/*
+//go:embed static/app.css static/app.js static/interaction.js static/git.js static/git.css static/site-removal.js static/plan-sync.js static/mail-import.js static/icons.svg static/ace/*
 var staticFiles embed.FS
 
 var appCSS = mustReadStatic("static/app.css")
@@ -24,6 +24,9 @@ func StaticHandler() http.Handler {
 			return
 		}
 		switch r.URL.Path {
+		case "mail-import.js", "/mail-import.js":
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			http.ServeContent(w, r, "mail-import.js", time.Time{}, bytes.NewReader(mustReadStatic("static/mail-import.js")))
 		case "plan-sync.js", "/plan-sync.js":
 			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 			http.ServeContent(w, r, "plan-sync.js", time.Time{}, bytes.NewReader(mustReadStatic("static/plan-sync.js")))

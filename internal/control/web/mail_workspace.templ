@@ -107,7 +107,11 @@ templ mailSubscriptionPanel(user auth.SessionUser, subscription types.Subscripti
 
 templ domainMail(user auth.SessionUser, site dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
 	<section class="np-mail-workspace np-domain-mail" aria-labelledby="domain-mail-title">
-		<div class="np-panel-title"><div><h2 id="domain-mail-title">Mail for { site.Domain }</h2><span class="np-muted">Mailboxes, aliases, signing policy, and webmail for this domain</span></div></div>
+		<div class="np-panel-title"><div><h2 id="domain-mail-title">Mail for { site.Domain }</h2><span class="np-muted">Mailboxes, aliases, signing policy, and webmail for this domain</span></div>
+		if user.Role==auth.RoleAdmin || user.Role==auth.RoleReseller {
+			<a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID)+"/mail-imports")) }>@icon("upload") Import mail</a>
+		}
+		</div>
 		if !subscriptionMailEnabled(subscription, data.SubscriptionServices) || subscription.Status != "active" {
 			<div class="np-mail-unavailable" role="status"><span>@icon("shield")</span><div><h3>Mail unavailable</h3><p>{ mailSubscriptionGate(subscription) }</p>
 				if user.Role == auth.RoleClient {

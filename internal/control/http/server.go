@@ -92,6 +92,15 @@ type WordPressService interface {
 	Detach(context.Context, auth.SessionUser, int64) error
 	Uninstall(context.Context, auth.SessionUser, int64, controlwordpress.UninstallInput) (controlwordpress.Operation, error)
 }
+type MailImportService interface {
+	Workspace(context.Context, auth.SessionUser, int64, string) (types.MailImportWorkspace, error)
+	Preview(context.Context, auth.SessionUser, types.MailImportRequest) (types.MailImportPreview, error)
+	Start(context.Context, auth.SessionUser, string) (types.MailImport, error)
+	Status(context.Context, auth.SessionUser, string) (types.MailImport, error)
+	Transition(context.Context, auth.SessionUser, string, string) (types.MailImport, error)
+	Stage(context.Context, auth.SessionUser, int64, io.Reader) (types.StageMaildirResult, error)
+	MapFolders(context.Context, auth.SessionUser, string, []types.MailImportMapping) error
+}
 
 type JobRetrier interface {
 	RetryProvisioningJob(ctx context.Context, jobID int64) error
@@ -258,6 +267,7 @@ type ServerOptions struct {
 	ApplicationLogs            ApplicationLogReader
 	PHPApplications            PHPApplicationService
 	WordPress                  WordPressService
+	MailImports                MailImportService
 	SiteRemoval                SiteRemovalManager
 	WebStatistics              *webstatistics.Service
 	SMTPConfigured             bool
@@ -291,6 +301,7 @@ type Server struct {
 	applicationLogs    ApplicationLogReader
 	phpApplications    PHPApplicationService
 	wordpress          WordPressService
+	mailImports        MailImportService
 	siteRemoval        SiteRemovalManager
 	removalApprovalKey []byte
 	webStatistics      *webstatistics.Service
@@ -327,6 +338,7 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		applicationLogs:    opts.ApplicationLogs,
 		phpApplications:    opts.PHPApplications,
 		wordpress:          opts.WordPress,
+		mailImports:        opts.MailImports,
 		siteRemoval:        opts.SiteRemoval,
 		removalApprovalKey: newSiteRemovalApprovalKey(),
 		webStatistics:      opts.WebStatistics,
@@ -339,6 +351,7 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	s.registerMailImportRoutes(mux)
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", web.StaticHandler()))
 	mux.HandleFunc("GET /healthz", s.handleHealthz)
 	mux.HandleFunc("GET /login", s.handleLoginForm)
@@ -709,6 +722,11 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 				return
 			}
 		}
+		if route == "site-detail" && view.Tab == "mail-imports" {
+			if !s.loadMailImportWorkspace(w, r, user, view.DetailID, &view) {
+				return
+			}
+		}
 		if route == "site-detail" && view.Tab == "overview" && s.wordpress != nil {
 			if workspace, loadErr := s.wordpress.Workspace(r.Context(), user, view.DetailID); loadErr == nil {
 				view.WordPress = &workspace
@@ -940,6 +958,11 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
+	if page == "site-detail" && tab == "mail-imports" {
+		if !s.loadMailImportWorkspace(w, r, user, detailID, &view) {
+			return
+		}
+	}
 	if page == "site-detail" && tab == "overview" && s.wordpress != nil {
 		if workspace, loadErr := s.wordpress.Workspace(r.Context(), user, detailID); loadErr == nil {
 			view.WordPress = &workspace
@@ -958,7 +981,7 @@ func validWorkspaceTab(route, tab string) bool {
 		return map[string]bool{"overview": true, "resources": true, "access": true, "cache": true, "mail": true, "tasks": true, "applications": true, "backups": true, "activity": true}[tab]
 	}
 	if route == "site-detail" {
-		return map[string]bool{"overview": true, "access": true, "hosting": true, "web-server": true, "php": true, "logs": true, "scheduled-tasks": true, "statistics": true, "git": true, "applications": true, "wordpress": true, "containers": true, "staging": true, "redis": true, "mail": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
+		return map[string]bool{"overview": true, "access": true, "hosting": true, "web-server": true, "php": true, "logs": true, "scheduled-tasks": true, "statistics": true, "git": true, "applications": true, "wordpress": true, "containers": true, "staging": true, "redis": true, "mail": true, "mail-imports": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
 	}
 	return map[string]bool{"overview": true, "hosting": true, "php": true, "dns": true, "ssl": true, "databases": true, "backups": true}[tab]
 }
@@ -3271,6 +3294,9 @@ func limitPostBody(next http.Handler, files FileManagerService) http.Handler {
 			if strings.HasSuffix(r.URL.Path, "/certificates/custom") {
 				limit = certificates.MaxBundleBytes
 			}
+			if isMailImportMultipartPreview(r) {
+				limit = (128 << 20) + (128 << 10)
+			}
 			if files != nil && strings.HasSuffix(r.URL.Path, "/files/upload") {
 				limit = files.UploadMaxBytes() + fileUploadOverhead
 			}
@@ -3301,6 +3327,11 @@ func securityHeaders(next http.Handler) http.Handler {
 
 func csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Multipart import forms validate CSRF after authenticating and before using the upload.
+		if isMailImportMultipartPreview(r) && r.Header.Get("X-Nakpanel-CSRF") == "" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if r.Method != http.MethodPost || r.URL.Path == "/login" || isGitWebhookRequest(r) || strings.HasPrefix(r.URL.Path, "/database-manager/") {
 			next.ServeHTTP(w, r)
 			return

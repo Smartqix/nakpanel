@@ -134,13 +134,29 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 		if err = e.Store.Discover(ctx, id, folders); err != nil {
 			return e.attention(ctx, id, revision, "Source identity changed. Review the import before resuming.")
 		}
+		targets := map[string]string{}
 		for _, folder := range folders {
+			targets[folder.Name] = folder.Name
+		}
+		if store, ok := e.Store.(interface {
+			FolderTargets(context.Context, string) (map[string]string, error)
+		}); ok {
+			targets, err = store.FolderTargets(ctx, id)
+			if err != nil {
+				return err
+			}
+		}
+		for _, folder := range folders {
+			targetName, included := targets[folder.Name]
+			if !included {
+				continue
+			}
 			if scoped, ok := target.(interface {
 				EnsureFolderWithRole(context.Context, string, string) error
 			}); ok && folder.SpecialUse != "" {
-				err = scoped.EnsureFolderWithRole(ctx, folder.Name, folder.SpecialUse)
+				err = scoped.EnsureFolderWithRole(ctx, targetName, folder.SpecialUse)
 			} else {
-				err = target.EnsureFolder(ctx, folder.Name)
+				err = target.EnsureFolder(ctx, targetName)
 			}
 			if err != nil {
 				return e.attention(ctx, id, revision, "A destination folder could not be prepared.")
@@ -170,8 +186,14 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 			}
 			record.Hash = hash
 			record.Message = msg
+			targetName, included := targets[msg.Identity.Folder]
+			if !included {
+				continue
+			}
+			copyMessage := msg
+			copyMessage.Identity.Folder = targetName
 			if record.State == "appending" || record.State == "uncertain" {
-				receipts, err := target.FindReceipt(ctx, msg.Identity.Folder, record.Token)
+				receipts, err := target.FindReceipt(ctx, targetName, record.Token)
 				if err != nil || len(receipts) != 1 {
 					record.State = "uncertain"
 					record.Error = "The previous append cannot be proven. Do not retry this message blindly."
@@ -189,7 +211,7 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 				if err = e.active(ctx, id, revision); err != nil {
 					return nil
 				}
-				record.Receipt, err = target.Append(ctx, msg, record.Token)
+				record.Receipt, err = target.Append(ctx, copyMessage, record.Token)
 				if err != nil {
 					record.State = "failed"
 					record.Error = "Destination rejected this message. Check quota and supported flags before resuming."

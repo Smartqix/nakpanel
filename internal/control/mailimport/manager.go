@@ -98,6 +98,12 @@ func (m *Manager) Preview(ctx context.Context, actor auth.SessionUser, req types
 			return types.MailImportPreview{}, err
 		}
 	}
+	if store, ok := m.store.(workspaceStore); ok {
+		preview.Folders, err = store.Folders(ctx, preview.ID)
+		if err != nil {
+			return types.MailImportPreview{}, err
+		}
+	}
 	return preview, nil
 }
 func validStagingID(s string) bool {

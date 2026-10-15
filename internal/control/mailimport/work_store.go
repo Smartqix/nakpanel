@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	transport "github.com/nakroteck/nakpanel/internal/mailimport"
@@ -74,7 +75,12 @@ func (s *SQLStore) Discover(ctx context.Context, id string, folders []transport.
 	defer tx.Rollback()
 	for _, folder := range folders {
 		var folderID int64
-		err = tx.QueryRowContext(ctx, `INSERT INTO mail_import_folders(import_id,source_name,target_name,uid_validity,special_use) VALUES($1,$2,$2,$3,$4) ON CONFLICT(import_id,source_name) DO UPDATE SET source_name=EXCLUDED.source_name WHERE mail_import_folders.uid_validity=EXCLUDED.uid_validity RETURNING id`, id, folder.Name, folder.UIDValidity, folder.SpecialUse).Scan(&folderID)
+		var approved bool
+		target := folder.Name
+		if folder.Delimiter != "" && folder.Delimiter != "/" {
+			target = strings.ReplaceAll(target, folder.Delimiter, "/")
+		}
+		err = tx.QueryRowContext(ctx, `INSERT INTO mail_import_folders(import_id,source_name,target_name,uid_validity,special_use) VALUES($1,$2,$5,$3,$4) ON CONFLICT(import_id,source_name) DO UPDATE SET source_name=EXCLUDED.source_name WHERE mail_import_folders.uid_validity=EXCLUDED.uid_validity RETURNING id,approved`, id, folder.Name, folder.UIDValidity, folder.SpecialUse, target).Scan(&folderID, &approved)
 		if errors.Is(err, sql.ErrNoRows) {
 			return transport.ErrSourceChanged
 		}
@@ -90,7 +96,7 @@ func (s *SQLStore) Discover(ctx context.Context, id string, folders []transport.
 			if m.Body != nil {
 				hash = transport.ContentHash(m.Body)
 			}
-			_, err = tx.ExecContext(ctx, `INSERT INTO mail_import_messages(folder_id,source_identity,source_uid,sha256,byte_size,internal_date,flags,receipt_token,source_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(folder_id,source_identity) DO NOTHING`, folderID, m.Identity.String(), m.Identity.UID, hash, m.Size, m.InternalDate, flags, transport.ReceiptToken(id, m.Identity.String()), m.Identity.Key)
+			_, err = tx.ExecContext(ctx, `INSERT INTO mail_import_messages(folder_id,source_identity,source_uid,sha256,byte_size,internal_date,flags,receipt_token,source_key,state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,CASE WHEN $10 THEN 'pending' ELSE 'excluded' END) ON CONFLICT(folder_id,source_identity) DO NOTHING`, folderID, m.Identity.String(), m.Identity.UID, hash, m.Size, m.InternalDate, flags, transport.ReceiptToken(id, m.Identity.String()), m.Identity.Key, approved)
 			if err != nil {
 				return err
 			}
@@ -102,7 +108,7 @@ func (s *SQLStore) Discover(ctx context.Context, id string, folders []transport.
 	return tx.Commit()
 }
 func (s *SQLStore) Messages(ctx context.Context, id string) ([]MessageRecord, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT m.id,f.source_name,f.uid_validity,m.source_uid,m.source_key,m.sha256,m.byte_size,m.internal_date,m.flags,m.receipt_token,m.state,m.target_uid,m.target_uid_validity,m.last_error FROM mail_import_messages m JOIN mail_import_folders f ON f.id=m.folder_id WHERE f.import_id=$1 ORDER BY m.id`, id)
+	rows, err := s.db.QueryContext(ctx, `SELECT m.id,f.source_name,f.uid_validity,m.source_uid,m.source_key,m.sha256,m.byte_size,m.internal_date,m.flags,m.receipt_token,m.state,m.target_uid,m.target_uid_validity,m.last_error,f.target_name FROM mail_import_messages m JOIN mail_import_folders f ON f.id=m.folder_id WHERE f.import_id=$1 ORDER BY m.id`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -112,14 +118,13 @@ func (s *SQLStore) Messages(ctx context.Context, id string) ([]MessageRecord, er
 		var r MessageRecord
 		var flags []byte
 		var key string
-		if err = rows.Scan(&r.ID, &r.Message.Identity.Folder, &r.Message.Identity.UIDValidity, &r.Message.Identity.UID, &key, &r.Hash, &r.Message.Size, &r.Message.InternalDate, &flags, &r.Token, &r.State, &r.Receipt.UID, &r.Receipt.UIDValidity, &r.Error); err != nil {
+		if err = rows.Scan(&r.ID, &r.Message.Identity.Folder, &r.Message.Identity.UIDValidity, &r.Message.Identity.UID, &key, &r.Hash, &r.Message.Size, &r.Message.InternalDate, &flags, &r.Token, &r.State, &r.Receipt.UID, &r.Receipt.UIDValidity, &r.Error, &r.Receipt.Folder); err != nil {
 			return nil, err
 		}
 		if err = json.Unmarshal(flags, &r.Message.Flags); err != nil {
 			return nil, err
 		}
 		r.Message.Identity.Key = key
-		r.Receipt.Folder = r.Message.Identity.Folder
 		out = append(out, r)
 	}
 	return out, rows.Err()

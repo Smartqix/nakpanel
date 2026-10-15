@@ -124,6 +124,13 @@ func main() {
 		provision.WithBackupChunkReader(agentCapabilities),
 	)
 	wordpressManager := controlwordpress.NewManager(wordpressStore, workspaceStore, siteManager)
+	mailImportStore := controlmailimport.NewSQLStore(db, riverClient, serverAdminManager.Store())
+	mailImportNetworks, err := controlmailimport.ParseSourceNetworks(os.Getenv("NAKPANEL_MAIL_IMPORT_ALLOWED_CIDRS"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	mailImportManager := controlmailimport.NewManager(mailImportStore, workspaceStore)
+	mailImportManager.SetEngine(&controlmailimport.Engine{Store: mailImportStore, Factory: &controlmailimport.RuntimeFactory{DB: db, Secrets: serverAdminManager.Store(), Agent: agentclient.New(config.AgentSocket), AllowedSourceNetworks: mailImportNetworks}})
 	if err := provision.SweepCustomTLSStagingForJobs(ctx, db, provision.DefaultCustomTLSStagingDir, 24*time.Hour); err != nil {
 		log.Printf("sweep stale custom TLS staging files: %v", err)
 	}
@@ -155,6 +162,7 @@ func main() {
 		ApplicationLogs:            agentCapabilities,
 		PHPApplications:            phpApplicationManager,
 		WordPress:                  wordpressManager,
+		MailImports:                mailImportManager,
 		WebStatistics:              webstatistics.New(db, agentclient.New(config.AgentSocket), riverClient),
 		SMTPConfigured:             cfg.SMTPHost != "" && cfg.SMTPFrom != "",
 		SecurityDB:                 db,

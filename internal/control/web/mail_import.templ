@@ -1,0 +1,82 @@
+package web
+
+import "github.com/nakroteck/nakpanel/internal/types"
+
+templ domainMailImports(data types.MailImportWorkspace,view WorkspaceView) {
+	{{ base:=workspacePath(view,"/sites/"+formatJobID(data.SiteID)+"/mail-imports") }}
+	<div class="np-panel-title"><div><h2>Mail imports</h2><p class="np-muted">{ data.Domain }</p></div><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(data.SiteID)+"?tab=mail")) }>Back to Mail</a></div>
+	if len(data.Mailboxes)==0 {
+		<p class="np-callout">Create an active mailbox on this domain before importing mail.</p>
+	} else {
+		<div class="np-button-row"><button type="button" data-np-dialog-open="mail-import-source">@icon("upload") Import mail</button></div>
+		<dialog class="np-dialog np-mail-import-dialog" id="mail-import-source" data-np-dialog>
+			<form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form>
+			<div class="np-dialog-head"><h2>Import mail</h2><p>Copy existing messages into a mailbox. Source mail and DNS stay unchanged.</p></div>
+			@mailImportSourceForm(base,data,view)
+		</dialog>
+		<noscript><details><summary>Import mail</summary>@mailImportSourceForm(base,data,view)</details></noscript>
+	}
+	if data.Selected!=nil {
+		{{ item:=*data.Selected }}
+		<section class="np-panel np-mail-import-progress" data-np-mail-import-progress data-status-url={ base+"/"+item.ID+"/status" } data-state={ item.State }>
+			<div class="np-panel-title"><h3>Import progress</h3><span data-mail-import-state>@statusPill(item.State)</span></div>
+			<div class="np-mail-import-counts"><div><span>Discovered</span><strong data-mail-import-count="discovered">{ formatJobID(item.Discovered) }</strong></div><div><span>Copied</span><strong data-mail-import-count="copied">{ formatJobID(item.Copied) }</strong></div><div><span>Verified</span><strong data-mail-import-count="verified">{ formatJobID(item.Verified) }</strong></div><div><span>Failed</span><strong data-mail-import-count="failed">{ formatJobID(item.Failed) }</strong></div><div><span>Uncertain</span><strong data-mail-import-count="uncertain">{ formatJobID(item.Uncertain) }</strong></div></div>
+			<p class="np-gate is-blocked" role="status" data-mail-import-error hidden?={ item.LastError=="" }>{ item.LastError }</p>
+				<p class="np-muted np-mail-import-excluded"><span data-mail-import-count="excluded">{ formatJobID(item.Excluded) }</span> messages excluded by the reviewed folder selection.</p>
+			if item.State=="preview" {
+				<div class="np-mail-import-review"><h3>Review folder mapping</h3><p>All listed messages will be copied, including Trash, Junk and messages flagged for deletion. Existing destination mail is kept.</p>
+					<form method="post" action={ templ.SafeURL(base+"/"+item.ID+"/start") } data-mail-import-action>
+					@csrfInput(view)
+					<div class="np-table-wrap"><table class="np-table np-mail-import-map"><thead><tr><th>Source</th><th>Destination</th><th>Messages</th><th>Size</th></tr></thead><tbody>
+					for _,folder:=range data.Folders {
+						<tr><td data-label="Source"><input type="hidden" name="folder_id" value={ formatJobID(folder.ID) }/><label class="np-check"><input type="checkbox" name={ "include_"+formatJobID(folder.ID) } value="true" checked?={ folder.Approved }/>{ folder.Source }</label></td><td data-label="Destination"><input name={ "target_"+formatJobID(folder.ID) } value={ folder.Target } aria-label={ "Destination for "+folder.Source } maxlength="255" required/></td><td data-label="Messages">{ formatJobID(folder.Messages) }</td><td data-label="Size">{ formatBytes(folder.Bytes) }</td></tr>
+					}
+				</tbody></table></div>
+					<label class="np-check"><input type="checkbox" name="confirm" value="import" required/>Copy this reviewed scope without deleting source or destination mail.</label><div class="np-button-row"><button type="submit">Start import</button></div></form>
+				</div>
+			}
+			<div class="np-button-row" data-mail-import-controls>
+				if item.State=="queued"||item.State=="discovering"||item.State=="copying"||item.State=="verifying" {
+					@mailImportAction(base,item.ID,"pause","Pause",view)
+				}
+				if item.State=="paused"||item.State=="attention_required"||item.State=="failed" {
+					@mailImportAction(base,item.ID,"resume","Reconcile and resume",view)
+				}
+				if item.State!="complete"&&item.State!="cancelled" {
+					<form method="post" action={ templ.SafeURL(base+"/"+item.ID+"/cancel") } data-mail-import-action>@csrfInput(view)<input type="hidden" name="confirm" value="cancel"/><button class="np-secondary-button" type="submit" data-np-confirm="Cancel this import? Already copied messages will be kept.">Cancel import</button></form>
+				}
+				<button type="button" class="np-secondary-button" data-mail-import-refresh>@icon("refresh-cw") Refresh status</button>
+			</div>
+		</section>
+	}
+	<section class="np-panel"><div class="np-panel-title"><h3>Import history</h3></div>
+		if len(data.Imports)==0 {
+			<p class="np-empty">No mail imports yet.</p>
+		} else {
+			for _,item:=range data.Imports {
+				<div class="np-plan-sync-row np-mail-import-history-row"><a href={ templ.SafeURL(base+"/"+item.ID) }>{ item.CreatedAt.UTC().Format("02 Jan 2006 15:04 UTC") }</a><span>{ formatJobID(item.Verified) } verified</span>@statusPill(item.State)</div>
+			}
+		}
+	</section>
+}
+
+templ mailImportSourceForm(base string,data types.MailImportWorkspace,view WorkspaceView){
+	<form method="post" action={ templ.SafeURL(base+"/preview") } enctype="multipart/form-data" class="np-dialog-form np-mail-import-form" data-mail-import-source>
+		@csrfInput(view)
+		<label>Destination mailbox<select name="mailbox_id" required>
+			for _,box:=range data.Mailboxes {
+				<option value={ formatJobID(box.ID) } disabled?={ !box.Active }>{ box.Address }</option>
+			}
+		</select></label>
+		<label>Source<select name="source_kind"><option value="imap">IMAP over TLS</option><option value="maildir">Maildir++ archive</option></select></label>
+		<div class="np-mail-import-source-fields" data-mail-source="imap"><label>Source IMAP hostname<input name="source_host" maxlength="253" placeholder="mail.old-provider.example"/></label><label>Source mailbox login<input name="source_user" maxlength="320" autocomplete="off"/></label><label>Source password<input name="source_password" type="password" autocomplete="new-password" maxlength="4096"/></label></div>
+		<div class="np-mail-import-source-fields" data-mail-source="maildir"><label>Maildir++ archive<input name="archive" type="file" accept=".tar,.gz,.tgz"/></label><p class="np-muted">TAR or TAR.GZ, up to 128 MiB compressed. Include cur, new and Maildir++ folders.</p></div>
+		<label>Destination mailbox password<input name="target_password" type="password" autocomplete="new-password" maxlength="4096" required/></label>
+		<p class="np-gate is-blocked" role="alert" tabindex="-1" data-mail-import-form-error hidden></p>
+		<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Check source and review</button></div>
+	</form>
+}
+
+templ mailImportAction(base,id,action,label string,view WorkspaceView){
+	<form method="post" action={ templ.SafeURL(base+"/"+id+"/"+action) } data-mail-import-action>@csrfInput(view)<button type="submit" class="np-secondary-button">{ label }</button></form>
+}
