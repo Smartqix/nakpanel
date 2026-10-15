@@ -43,3 +43,30 @@ func TestDeletedTemplateRecordLeavesSuppression(t *testing.T) {
 		t.Fatalf("record remained: %d %v", count, err)
 	}
 }
+
+func TestNewZoneDoesNotInventNameserversOrWebmail(t *testing.T) {
+	db := removaldb.New(t, "")
+	site := removaldb.Site(t, db, 1, "provider.example.test", nil)
+	var zone int64
+	if err := db.QueryRow(`INSERT INTO dns_zones(owner_user_id,site_id,domain,address,serial,status,template_revision) VALUES(1,$1,'provider.example.test','192.0.2.1',1,'active',1) RETURNING id`, site).Scan(&zone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO dns_records(zone_id,owner_site_id,host,record_type,value,ttl,origin) VALUES($1,$2,'@','NS','ns1.provider.test',3600,'custom'),($1,$2,'@','NS','ns2.provider.test',3600,'custom')`, zone, site); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if err = ensureSystemDNSRecordsTx(context.Background(), tx, zone, site, "provider.example.test", "192.0.2.1"); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err = tx.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND record_type='NS'`, zone).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("extra nameserver: %d %v", count, err)
+	}
+	if err = tx.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND host='webmail'`, zone).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("unconfigured webmail published: %d %v", count, err)
+	}
+}

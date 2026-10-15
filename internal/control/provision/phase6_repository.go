@@ -663,10 +663,13 @@ WHERE zone_id=$1 AND origin='system' AND (
 	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO dns_records(
 zone_id,owner_site_id,host,record_type,value,ttl,origin
-) VALUES
-($1,$2,'@','NS',$3,3600,'system'),
-($1,$2,'ns1','A',$4,3600,'system'),
-($1,$2,'webmail','A',$4,3600,'system')
+) SELECT $1::bigint,$2::bigint,'@','NS',$3::text,3600,'system'
+WHERE NOT EXISTS(SELECT 1 FROM dns_records WHERE zone_id=$1 AND record_type='NS')
+UNION ALL SELECT $1,$2,'ns1','A',$4::text,3600,'system'
+WHERE NOT EXISTS(SELECT 1 FROM dns_records WHERE zone_id=$1 AND record_type='NS')
+   OR EXISTS(SELECT 1 FROM dns_records WHERE zone_id=$1 AND record_type='NS' AND value=$3)
+UNION ALL SELECT $1,$2,'webmail','A',$4,3600,'system'
+WHERE EXISTS(SELECT 1 FROM webmail_hosts WHERE site_id=$2 AND hostname LIKE 'webmail.%' AND status='active')
 ON CONFLICT DO NOTHING`, zoneID, ownerSiteID, "ns1."+domain, address)
 	return err
 }

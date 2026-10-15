@@ -50,6 +50,8 @@ func (m *Manager) View(ctx context.Context, previewID int64) (types.DNSTemplateV
 		return types.DNSTemplateView{}, err
 	}
 	view := types.DNSTemplateView{Template: template, RecentRuns: runs}
+	view.ProviderDefaults = providerDefaults(template)
+	view.ProviderWarnings = providerWarnings(ctx, view.ProviderDefaults)
 	if previewID > 0 {
 		run, loadErr := m.loadRun(ctx, previewID)
 		if loadErr != nil {

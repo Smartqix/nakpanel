@@ -90,9 +90,16 @@ type DNSSyncRun struct {
 }
 
 type DNSTemplateView struct {
-	Template   DNSTemplateRevision `json:"template"`
-	RecentRuns []DNSSyncRun        `json:"recent_runs"`
-	Preview    *DNSSyncRun         `json:"preview,omitempty"`
+	Template         DNSTemplateRevision `json:"template"`
+	RecentRuns       []DNSSyncRun        `json:"recent_runs"`
+	Preview          *DNSSyncRun         `json:"preview,omitempty"`
+	ProviderDefaults DNSProviderDefaults `json:"provider_defaults"`
+	ProviderWarnings []string            `json:"provider_warnings,omitempty"`
+}
+
+type DNSProviderDefaults struct {
+	PrimaryNameserver   string `json:"primary_nameserver"`
+	SecondaryNameserver string `json:"secondary_nameserver"`
 }
 
 type DNSTemplateSettingsInput struct {
