@@ -2,7 +2,12 @@
   'use strict';
   function pending(state) { return state === 'pending' || state === 'running'; }
   function formBody(data) { return new URLSearchParams(data); }
-  if (typeof module !== 'undefined' && module.exports) module.exports = {pending: pending, formBody: formBody};
+  function targetURL(raw, current) {
+    var target = new URL(raw, current), before = new URL(current);
+    if (target.pathname === before.pathname && !target.hash) target.hash = target.searchParams.has('run') ? '#dns-sync' : before.hash;
+    return target;
+  }
+  if (typeof module !== 'undefined' && module.exports) module.exports = {pending: pending, formBody: formBody, targetURL: targetURL};
   if (typeof document === 'undefined') return;
   var workspace = document.querySelector('[data-np-dns-settings-workspace]');
   if (!workspace) return;
@@ -22,7 +27,7 @@
           var data = (response.headers.get('Content-Type') || '').includes('application/json') ? await response.json() : null;
           throw new Error(data && data.error || 'The request was not accepted. Check authorization and try again.');
         }
-        var target = new URL(response.url || window.location.href, window.location.href);
+        var target = targetURL(response.url || window.location.href, window.location.href);
         if (target.origin !== window.location.origin) throw new Error('Unexpected redirect.');
         window.location.assign(target.href);
       } catch (failure) { error.textContent = failure.message; error.hidden = false; error.tabIndex=-1; error.focus(); }
