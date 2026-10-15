@@ -187,6 +187,230 @@ func TestMailImportSQLWorkerIdentityAndIdempotency(t *testing.T) {
 		t.Fatal("repeated worker duplicated messages")
 	}
 }
+
+func TestMailImportCheckpointPreservesCopiedMetadata(t *testing.T) {
+	db := removaldb.New(t, "")
+	ctx := context.Background()
+	store := NewSQLStore(db, acceptingQueue{})
+	actor := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
+	preview, err := store.Preview(ctx, actor, types.MailImportRequest{MailboxID: fixtureMailbox(t, db), SourceKind: "imap", SourceHost: "mail.example.com", SourceSecretID: "source", TargetSecretID: "target"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := testMessage("metadata")
+	message.Flags = []string{`\Seen`}
+	source := &memorySource{messages: []transport.Message{message}}
+	target := &memoryTarget{receipts: map[string]transport.Message{}}
+	engine := Engine{Store: store, Factory: memoryFactory{source, target}}
+	if err = engine.Prepare(ctx, preview.ID); err != nil {
+		t.Fatal(err)
+	}
+	// The source user marks it unread after preview, before the actual copy.
+	source.messages[0].Flags = nil
+	item, err := store.Start(ctx, actor, preview.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = engine.Run(ctx, item.ID, item.Revision); err != nil {
+		t.Fatal(err)
+	}
+	item, err = store.Load(ctx, item.ID)
+	if err != nil || item.State != "complete" || item.Verified != 1 {
+		t.Fatalf("fresh verification used stale preview metadata: %+v %v", item, err)
+	}
+	records, err := store.Messages(ctx, item.ID)
+	if err != nil || len(records) != 1 || len(records[0].Message.Flags) != 0 {
+		t.Fatalf("copied flags not persisted: %+v %v", records, err)
+	}
+}
+
+func TestMailImportWorkerUsesDesiredLifecycleGate(t *testing.T) {
+	for _, change := range []string{"domain-disabled", "reseller-suspended", "reseller-allocation-suspended"} {
+		t.Run(change, func(t *testing.T) {
+			db := removaldb.New(t, "")
+			ctx := context.Background()
+			store := NewSQLStore(db, acceptingQueue{})
+			actor := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
+			preview, err := store.Preview(ctx, actor, types.MailImportRequest{MailboxID: fixtureMailbox(t, db), SourceKind: "imap", SourceHost: "mail.example.com", SourceSecretID: "source", TargetSecretID: "target"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			source := &memorySource{messages: []transport.Message{testMessage("one")}}
+			target := &memoryTarget{receipts: map[string]transport.Message{}}
+			engine := Engine{Store: store, Factory: memoryFactory{source, target}}
+			if err = engine.Prepare(ctx, preview.ID); err != nil {
+				t.Fatal(err)
+			}
+			item, err := store.Start(ctx, actor, preview.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if change == "domain-disabled" {
+				_, err = db.Exec(`UPDATE mail_domains SET enabled=false`)
+			} else {
+				_, err = db.Exec(`INSERT INTO users(email,password_hash,role) VALUES('provider@test.invalid','hash','reseller');
+INSERT INTO reseller_accounts(login_user_id,email) SELECT id,email FROM users WHERE email='provider@test.invalid';
+INSERT INTO reseller_subscriptions(reseller_id,reseller_plan_id) SELECT id,(SELECT id FROM reseller_plans LIMIT 1) FROM reseller_accounts WHERE email='provider@test.invalid';
+UPDATE customers SET reseller_id=(SELECT id FROM reseller_accounts WHERE email='provider@test.invalid') WHERE id=(SELECT customer_id FROM subscriptions WHERE id=1)`)
+				if err == nil && change == "reseller-suspended" {
+					_, err = db.Exec(`UPDATE reseller_accounts SET status='suspended' WHERE email='provider@test.invalid'`)
+				} else if err == nil {
+					_, err = db.Exec(`UPDATE reseller_subscriptions SET status='suspended'`)
+				}
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = engine.Run(ctx, item.ID, item.Revision); err != nil {
+				t.Fatal(err)
+			}
+			if target.appends != 0 {
+				t.Fatal("worker copied mail after desired service/provider suspension")
+			}
+		})
+	}
+}
+
+func TestMailImportTerminalCleanupRetries(t *testing.T) {
+	for _, stage := range []string{"retire", "cleanup"} {
+		t.Run(stage, func(t *testing.T) {
+			db := removaldb.New(t, "")
+			ctx := context.Background()
+			store := &retryRetirementStore{SQLStore: NewSQLStore(db, acceptingQueue{}), failOnce: stage == "retire"}
+			actor := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
+			preview, err := store.Preview(ctx, actor, types.MailImportRequest{MailboxID: fixtureMailbox(t, db), SourceKind: "imap", SourceHost: "mail.example.com", SourceSecretID: "source", TargetSecretID: "target"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := &memoryTarget{receipts: map[string]transport.Message{}}
+			factory := &retryCleanupFactory{memoryFactory: memoryFactory{&memorySource{messages: []transport.Message{testMessage("one")}}, target}, failOnce: stage == "cleanup"}
+			engine := Engine{Store: store, Factory: factory}
+			if err = engine.Prepare(ctx, preview.ID); err != nil {
+				t.Fatal(err)
+			}
+			item, err := store.Start(ctx, actor, preview.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = engine.Run(ctx, item.ID, item.Revision); err == nil {
+				t.Fatal("transient cleanup failure was hidden")
+			}
+			opens := factory.opens
+			if err = engine.Run(ctx, item.ID, item.Revision); err != nil {
+				t.Fatal(err)
+			}
+			if store.retireCalls != 2 || factory.cleanupCalls == 0 || factory.failOnce {
+				t.Fatalf("terminal cleanup not retried: retire=%d cleanup=%d", store.retireCalls, factory.cleanupCalls)
+			}
+			if factory.opens != opens || target.appends != 1 {
+				t.Fatal("cleanup retry reopened credentials or copied messages again")
+			}
+		})
+	}
+}
+
+func TestMailImportResumesWithOriginalAppendMetadata(t *testing.T) {
+	db := removaldb.New(t, "")
+	ctx := context.Background()
+	store := NewSQLStore(db, acceptingQueue{})
+	actor := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
+	preview, err := store.Preview(ctx, actor, types.MailImportRequest{MailboxID: fixtureMailbox(t, db), SourceKind: "imap", SourceHost: "mail.example.com", SourceSecretID: "source", TargetSecretID: "target"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := testMessage("resume-metadata")
+	message.Flags = []string{`\Seen`}
+	source := &memorySource{messages: []transport.Message{message}}
+	target := &memoryTarget{receipts: map[string]transport.Message{}}
+	engine := Engine{Store: store, Factory: memoryFactory{source, target}}
+	if err = engine.Prepare(ctx, preview.ID); err != nil {
+		t.Fatal(err)
+	}
+	item, err := store.Start(ctx, actor, preview.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := store.Messages(ctx, item.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := records[0]
+	record.State, record.Hash = "appending", transport.ContentHash(message.Body)
+	if err = store.Checkpoint(ctx, item.ID, record); err != nil {
+		t.Fatal(err)
+	}
+	message.Identity.UID = 1
+	target.receipts[record.Token] = message
+	source.messages[0].Flags = nil
+	if err = engine.Run(ctx, item.ID, item.Revision); err != nil {
+		t.Fatal(err)
+	}
+	item, err = store.Load(ctx, item.ID)
+	if err != nil || item.State != "complete" || target.appends != 0 {
+		t.Fatalf("receipt recovery replaced the original append metadata: %+v appends=%d %v", item, target.appends, err)
+	}
+}
+
+func TestMailImportCancellationQueuesCleanup(t *testing.T) {
+	db := removaldb.New(t, "")
+	queue := &countingImportQueue{}
+	store := NewSQLStore(db, queue)
+	ctx := context.Background()
+	actor := auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
+	preview, err := store.Preview(ctx, actor, types.MailImportRequest{MailboxID: fixtureMailbox(t, db), SourceKind: "imap", SourceHost: "mail.example.com", SourceSecretID: "source", TargetSecretID: "target"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := store.Transition(ctx, actor, preview.ID, "cancel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(queue.args) != 1 || queue.args[0].ImportID != item.ID || queue.args[0].Revision != item.Revision {
+		t.Fatalf("cancelled preview has no durable cleanup job: %+v", queue.args)
+	}
+}
+
+type countingImportQueue struct{ args []ImportArgs }
+
+func (q *countingImportQueue) InsertTx(_ context.Context, _ *sql.Tx, args river.JobArgs, _ *river.InsertOpts) (*rivertype.JobInsertResult, error) {
+	q.args = append(q.args, args.(ImportArgs))
+	return &rivertype.JobInsertResult{}, nil
+}
+
+type retryRetirementStore struct {
+	*SQLStore
+	failOnce    bool
+	retireCalls int
+}
+
+func (s *retryRetirementStore) Retire(ctx context.Context, id string) error {
+	s.retireCalls++
+	if s.failOnce {
+		s.failOnce = false
+		return errors.New("transient retirement failure")
+	}
+	return s.SQLStore.Retire(ctx, id)
+}
+
+type retryCleanupFactory struct {
+	memoryFactory
+	failOnce            bool
+	cleanupCalls, opens int
+}
+
+func (f *retryCleanupFactory) Open(ctx context.Context, job Job) (Source, Target, error) {
+	f.opens++
+	return f.memoryFactory.Open(ctx, job)
+}
+
+func (f *retryCleanupFactory) Cleanup(context.Context, Job) error {
+	f.cleanupCalls++
+	if f.failOnce {
+		f.failOnce = false
+		return errors.New("transient staging cleanup failure")
+	}
+	return nil
+}
 func TestMailImportStartRollsBackOnEnqueueFailure(t *testing.T) {
 	db := removaldb.New(t, "")
 	ctx := context.Background()

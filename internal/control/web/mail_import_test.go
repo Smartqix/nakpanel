@@ -20,6 +20,10 @@ func TestMailImportRenderAndBrowserFixtures(t *testing.T) {
 			if state == "attention_required" {
 				item.LastError = "The append acknowledgement was lost. Reconcile the receipt before retrying."
 			}
+			if state == "complete" {
+				item.Copied = 2
+				item.Verified = 2
+			}
 			imports := types.MailImportWorkspace{SiteID: 7, Domain: "owned.test", Mailboxes: []types.MailImportMailbox{{ID: 1, Address: "test@owned.test", Active: true}}, Imports: []types.MailImport{item}, Selected: &item, Folders: []types.MailImportFolder{{ID: 1, Source: "INBOX", Target: "INBOX", Messages: 2, Bytes: 1234, Approved: true}}}
 			data := dashboard.Data{Sites: []dashboard.Site{{ID: 7, Domain: "owned.test", SubscriptionID: 20, Status: "active"}}, Subscriptions: []types.SubscriptionSummary{{ID: 20, PlanName: "Business", SubscriptionName: "Hosting", Status: "active"}}}
 			var output bytes.Buffer
@@ -34,6 +38,9 @@ func TestMailImportRenderAndBrowserFixtures(t *testing.T) {
 			}
 			if strings.Contains(output.String(), `value="source-secret"`) {
 				t.Fatal("password rendered")
+			}
+			if strings.Contains(output.String(), "Before switching mail delivery") != (state == "complete") {
+				t.Fatal("mail cutover guidance must follow completed verification")
 			}
 			if dir := os.Getenv("NAKPANEL_MAIL_UI_FIXTURES"); dir != "" {
 				if err = os.MkdirAll(dir, 0700); err != nil {

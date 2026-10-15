@@ -90,7 +90,7 @@ func (s *SQLStore) Transition(ctx context.Context, actor auth.SessionUser, id, a
 	if _, err = tx.ExecContext(ctx, `UPDATE mail_imports SET state=$2,desired_revision=$3,last_error='',updated_at=now() WHERE id=$1`, id, state, item.Revision); err != nil {
 		return item, err
 	}
-	if state == "queued" {
+	if state == "queued" || state == "cancelled" {
 		if s.queue == nil {
 			return item, errors.New("mail worker unavailable")
 		}

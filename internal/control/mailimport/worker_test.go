@@ -100,6 +100,56 @@ func TestImportRejectsEmptyDiscovery(t *testing.T) {
 	}
 }
 
+func TestImportRejectsUnexpectedDestinationFlags(t *testing.T) {
+	for _, flag := range []string{`\Seen`, `\Deleted`, "unexpected-keyword"} {
+		t.Run(flag, func(t *testing.T) {
+			store := newMemoryJobStore()
+			target := &changedFlagsTarget{memoryTarget: &memoryTarget{receipts: map[string]transport.Message{}}, flags: []string{flag}}
+			factory := flagCheckingFactory{source: &memorySource{messages: []transport.Message{testMessage("one")}}, target: target}
+			if err := (&Engine{Store: store, Factory: factory}).Run(context.Background(), "import", 1); err != nil {
+				t.Fatal(err)
+			}
+			if store.state != "attention_required" {
+				t.Fatalf("unexpected flag %q accepted: %s", flag, store.state)
+			}
+		})
+	}
+}
+
+func TestImportMetadataIgnoresOnlyOwnReceiptAndRecent(t *testing.T) {
+	want := testMessage("metadata")
+	want.Flags = []string{`\SEEN`, "original-keyword", `\Recent`}
+	got := want
+	got.Flags = []string{`\seen`, "original-keyword", "npimport_current", `\Recent`}
+	if !sameMetadata(want, got, "npimport_current") {
+		t.Fatal("receipt or transient Recent caused a false mismatch")
+	}
+	got.Flags = append(got.Flags, "npimport_unexpected")
+	if sameMetadata(want, got, "npimport_current") {
+		t.Fatal("an unrelated import keyword was silently ignored")
+	}
+}
+
+type changedFlagsTarget struct {
+	*memoryTarget
+	flags []string
+}
+
+func (t *changedFlagsTarget) Read(ctx context.Context, id transport.MessageIdentity) (transport.Message, error) {
+	m, err := t.memoryTarget.Read(ctx, id)
+	m.Flags = append(m.Flags, t.flags...)
+	return m, err
+}
+
+type flagCheckingFactory struct {
+	source Source
+	target Target
+}
+
+func (f flagCheckingFactory) Open(context.Context, Job) (Source, Target, error) {
+	return f.source, f.target, nil
+}
+
 type reopeningFactory struct {
 	source  *memorySource
 	target  *memoryTarget

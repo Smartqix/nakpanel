@@ -21,6 +21,8 @@ type snapshot struct {
 	Counts   map[string]int `json:"counts"`
 }
 
+func includeFolder(name, selected string) bool { return selected == "" || name == selected }
+
 func body() []byte {
 	return []byte("From: migration@example.test\r\nTo: fixture@example.test\r\nSubject: Native mail import fixture\r\nMessage-ID: <same-id@fixture.test>\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=fixture\r\n\r\n--fixture\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nPreserve every distinct copy.\r\n--fixture\r\nContent-Type: application/octet-stream\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: attachment; filename=fixture.bin\r\n\r\nAAECAwQFBgcICQ==\r\n--fixture--\r\n")
 }
@@ -127,6 +129,9 @@ func main() {
 	}
 	s := snapshot{Counts: map[string]int{}}
 	for _, folder := range folders {
+		if !includeFolder(folder.Name, os.Getenv("NAKPANEL_MAIL_VERIFY_FOLDER")) {
+			continue
+		}
 		for _, entry := range folder.Messages {
 			msg, err := client.Read(ctx, entry.Identity)
 			if err != nil {

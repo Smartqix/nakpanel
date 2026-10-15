@@ -25,6 +25,10 @@ management, and migration-sensitive control-plane behavior.
   through River.
 - First-class, subscription-scoped Mail workspace for domains, mailboxes,
   aliases, DKIM/DMARC, webmail, and administrator Stalwart controls.
+- [Maildir/IMAP import](docs/MAIL_IMPORT.md) with reviewed folder mapping,
+  encrypted credentials, resumable receipts and verified message preservation.
+- [Provider DNS templates](docs/DNS_TEMPLATES.md) with explicit nameservers,
+  safe preview/apply, local-deletion preservation and revision-aware jobs.
 - `panelctl` operator and recovery commands that work without the web listener,
   while retaining subscription, quota, lifecycle, audit, and River gates.
 - ACME, self-signed, and system-trusted custom site certificates with atomic

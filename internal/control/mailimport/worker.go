@@ -10,7 +10,7 @@ import (
 )
 
 type Job struct {
-	ID                                                                                            string
+	ID, State                                                                                     string
 	MailboxID, SubscriptionID, Revision                                                           int64
 	Address                                                                                       string
 	SourceKind, SourceHost, SourceUser, StagingID, ManifestSHA256, SourceSecretID, TargetSecretID string
@@ -121,16 +121,23 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 		return err
 	}
 	defer unlock()
+	job, err := e.Store.Job(ctx, id)
+	if err != nil {
+		return err
+	}
+	// Terminal retries finish disposal without reopening retired credentials.
+	if job.State == "complete" || job.State == "cancelled" {
+		if err = e.Store.Retire(ctx, id); err != nil {
+			return err
+		}
+		return e.Cleanup(ctx, id)
+	}
 	current, err := e.Store.Current(ctx, id, revision)
 	if err != nil {
 		return err
 	}
 	if !current {
 		return nil
-	}
-	job, err := e.Store.Job(ctx, id)
-	if err != nil {
-		return err
 	}
 	source, target, err := e.Factory.Open(ctx, job)
 	if err != nil {
@@ -204,7 +211,14 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 				return e.attention(ctx, id, revision, "Source message content changed; import needs review.")
 			}
 			record.Hash = hash
-			record.Message = msg
+			if record.State == "pending" || record.State == "failed" {
+				record.Message = msg
+			} else {
+				// A recovered receipt belongs to the metadata of the original append.
+				msg.Flags = record.Message.Flags
+				msg.InternalDate = record.Message.InternalDate
+				msg.Size = record.Message.Size
+			}
 			targetName, included := targets[msg.Identity.Folder]
 			if !included {
 				continue
@@ -250,7 +264,7 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 				return err
 			}
 			got, err := target.Read(ctx, transport.MessageIdentity{Folder: record.Receipt.Folder, UID: record.Receipt.UID, UIDValidity: record.Receipt.UIDValidity})
-			if err != nil || !sameMessage(msg, got) {
+			if err != nil || !sameMessage(msg, got, record.Token) {
 				record.Error = "Copied message content, date or flags could not be verified."
 				_ = e.Store.Checkpoint(ctx, id, record)
 				return e.attention(ctx, id, revision, record.Error)
@@ -306,7 +320,7 @@ func (e *Engine) verifyFreshConnection(ctx context.Context, job Job) error {
 			return errors.New("destination receipt is not visible")
 		}
 		got, err := target.Read(ctx, transport.MessageIdentity{Folder: record.Receipt.Folder, UID: record.Receipt.UID, UIDValidity: record.Receipt.UIDValidity})
-		if err != nil || transport.ContentHash(got.Body) != record.Hash || !sameMetadata(record.Message, got) {
+		if err != nil || transport.ContentHash(got.Body) != record.Hash || !sameMetadata(record.Message, got, record.Token) {
 			return errors.New("destination message changed")
 		}
 	}
@@ -325,19 +339,29 @@ func (e *Engine) active(ctx context.Context, id string, revision int64) error {
 func (e *Engine) attention(ctx context.Context, id string, revision int64, message string) error {
 	return e.Store.SetState(ctx, id, revision, "attention_required", message)
 }
-func sameMessage(want, got transport.Message) bool {
-	return transport.ContentHash(want.Body) == transport.ContentHash(got.Body) && sameMetadata(want, got)
+func sameMessage(want, got transport.Message, receipt string) bool {
+	return transport.ContentHash(want.Body) == transport.ContentHash(got.Body) && sameMetadata(want, got, receipt)
 }
-func sameMetadata(want, got transport.Message) bool {
+func sameMetadata(want, got transport.Message, receipt string) bool {
 	if want.InternalDate.Unix() != got.InternalDate.Unix() {
 		return false
 	}
-	flags := map[string]bool{}
-	for _, f := range got.Flags {
-		flags[strings.ToLower(f)] = true
+	normalize := func(flags []string, ignoredReceipt string) map[string]bool {
+		out := map[string]bool{}
+		for _, flag := range flags {
+			flag = strings.ToLower(flag)
+			if flag != `\recent` && (ignoredReceipt == "" || flag != strings.ToLower(ignoredReceipt)) {
+				out[flag] = true
+			}
+		}
+		return out
 	}
-	for _, f := range want.Flags {
-		if !flags[strings.ToLower(f)] {
+	wantFlags, gotFlags := normalize(want.Flags, ""), normalize(got.Flags, receipt)
+	if len(wantFlags) != len(gotFlags) {
+		return false
+	}
+	for flag := range wantFlags {
+		if !gotFlags[flag] {
 			return false
 		}
 	}

@@ -31,7 +31,7 @@ func (s *SQLStore) Lock(ctx context.Context, id string) (func(), error) {
 }
 func (s *SQLStore) Job(ctx context.Context, id string) (Job, error) {
 	var j Job
-	err := s.db.QueryRowContext(ctx, `SELECT i.id,i.mailbox_id,i.subscription_id,i.desired_revision,mb.local_part||'@'||md.domain,i.source_kind,i.source_host,i.source_user,i.staging_id,i.manifest_sha256,i.source_secret_id,i.target_secret_id FROM mail_imports i JOIN mailboxes mb ON mb.id=i.mailbox_id JOIN mail_domains md ON md.id=mb.mail_domain_id WHERE i.id=$1`, id).Scan(&j.ID, &j.MailboxID, &j.SubscriptionID, &j.Revision, &j.Address, &j.SourceKind, &j.SourceHost, &j.SourceUser, &j.StagingID, &j.ManifestSHA256, &j.SourceSecretID, &j.TargetSecretID)
+	err := s.db.QueryRowContext(ctx, `SELECT i.id,i.mailbox_id,i.subscription_id,i.desired_revision,mb.local_part||'@'||md.domain,i.source_kind,i.source_host,i.source_user,i.staging_id,i.manifest_sha256,i.source_secret_id,i.target_secret_id,i.state FROM mail_imports i JOIN mailboxes mb ON mb.id=i.mailbox_id JOIN mail_domains md ON md.id=mb.mail_domain_id WHERE i.id=$1`, id).Scan(&j.ID, &j.MailboxID, &j.SubscriptionID, &j.Revision, &j.Address, &j.SourceKind, &j.SourceHost, &j.SourceUser, &j.StagingID, &j.ManifestSHA256, &j.SourceSecretID, &j.TargetSecretID, &j.State)
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -39,7 +39,7 @@ func (s *SQLStore) Job(ctx context.Context, id string) (Job, error) {
 }
 func (s *SQLStore) Current(ctx context.Context, id string, revision int64) (bool, error) {
 	var ok bool
-	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM mail_imports i JOIN mailboxes mb ON mb.id=i.mailbox_id JOIN mail_domains md ON md.id=mb.mail_domain_id JOIN subscriptions sub ON sub.id=i.subscription_id JOIN customers c ON c.id=sub.customer_id JOIN users actor ON actor.id=i.actor_user_id JOIN subscription_entitlements ent ON ent.subscription_id=sub.id WHERE i.id=$1 AND i.desired_revision=$2 AND i.state IN ('queued','discovering','copying','verifying') AND mb.enabled AND md.effective_enabled AND NOT md.delete_requested AND sub.status='active' AND c.status='active' AND COALESCE((ent.hosting_policy#>>'{permissions,mail}')::boolean,false) AND COALESCE((ent.hosting_policy#>>'{mail,enabled}')::boolean,false) AND (actor.role='admin' OR (actor.role='reseller' AND EXISTS(SELECT 1 FROM reseller_accounts ra WHERE ra.id=c.reseller_id AND ra.login_user_id=actor.id AND ra.status='active'))))`, id, revision).Scan(&ok)
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM mail_imports i JOIN mailboxes mb ON mb.id=i.mailbox_id JOIN mail_domains md ON md.id=mb.mail_domain_id JOIN subscriptions sub ON sub.id=i.subscription_id JOIN customers c ON c.id=sub.customer_id JOIN users actor ON actor.id=i.actor_user_id JOIN subscription_entitlements ent ON ent.subscription_id=sub.id WHERE i.id=$1 AND i.desired_revision=$2 AND i.state IN ('queued','discovering','copying','verifying') AND mb.enabled AND md.enabled AND md.effective_enabled AND NOT md.delete_requested AND sub.status='active' AND c.status='active' AND COALESCE((ent.hosting_policy#>>'{permissions,mail}')::boolean,false) AND COALESCE((ent.hosting_policy#>>'{mail,enabled}')::boolean,false) AND (c.reseller_id IS NULL OR EXISTS(SELECT 1 FROM reseller_accounts ra JOIN reseller_subscriptions rs ON rs.reseller_id=ra.id AND rs.status='active' WHERE ra.id=c.reseller_id AND ra.status='active')) AND (actor.role='admin' OR (actor.role='reseller' AND EXISTS(SELECT 1 FROM reseller_accounts ra WHERE ra.id=c.reseller_id AND ra.login_user_id=actor.id AND ra.status='active'))))`, id, revision).Scan(&ok)
 	return ok, err
 }
 func (s *SQLStore) SetState(ctx context.Context, id string, revision int64, state, message string) error {
@@ -130,12 +130,19 @@ func (s *SQLStore) Messages(ctx context.Context, id string) ([]MessageRecord, er
 	return out, rows.Err()
 }
 func (s *SQLStore) Checkpoint(ctx context.Context, id string, r MessageRecord) error {
+	flags, err := json.Marshal(r.Message.Flags)
+	if err != nil {
+		return err
+	}
+	if r.Message.Flags == nil {
+		flags = []byte("[]")
+	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `UPDATE mail_import_messages SET state=$3,sha256=$4,target_uid=$5,target_uid_validity=$6,last_error=$7 WHERE id=$2 AND folder_id IN (SELECT id FROM mail_import_folders WHERE import_id=$1)`, id, r.ID, r.State, r.Hash, r.Receipt.UID, r.Receipt.UIDValidity, r.Error)
+	_, err = tx.ExecContext(ctx, `UPDATE mail_import_messages SET state=$3,sha256=$4,target_uid=$5,target_uid_validity=$6,last_error=$7,flags=$8,internal_date=$9,byte_size=$10 WHERE id=$2 AND folder_id IN (SELECT id FROM mail_import_folders WHERE import_id=$1)`, id, r.ID, r.State, r.Hash, r.Receipt.UID, r.Receipt.UIDValidity, r.Error, flags, r.Message.InternalDate, r.Message.Size)
 	if err != nil {
 		return err
 	}

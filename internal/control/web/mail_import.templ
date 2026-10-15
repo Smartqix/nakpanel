@@ -48,6 +48,9 @@ templ domainMailImports(data types.MailImportWorkspace,view WorkspaceView) {
 				<button type="button" class="np-secondary-button" data-mail-import-refresh>@icon("refresh-cw") Refresh status</button>
 			</div>
 		</section>
+		if item.State=="complete" && item.Verified>0 && item.Failed==0 && item.Uncertain==0 && item.Verified+item.Excluded==item.Discovered {
+			<section class="np-panel"><div class="np-panel-title"><h3>Before switching mail delivery</h3></div><ul><li>Open representative messages and attachments in webmail.</li><li>Review folder counts and any intentional exclusions.</li><li>Confirm MX, SPF, DKIM and DMARC, then test incoming and outgoing mail.</li><li>Keep the old server available through the final delivery check.</li></ul><p class="np-muted">This import did not change DNS or delete source mail. New arrivals after the final scan are not included.</p><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(data.SiteID)+"?tab=dns")) }>Review DNS records</a></section>
+		}
 	}
 	<section class="np-panel"><div class="np-panel-title"><h3>Import history</h3></div>
 		if len(data.Imports)==0 {

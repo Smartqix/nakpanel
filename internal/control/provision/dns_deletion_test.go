@@ -82,6 +82,30 @@ func TestNewZoneDoesNotInventNameserversOrWebmail(t *testing.T) {
 	}
 }
 
+func TestSystemDNSFallbackRespectsTemplateDeletions(t *testing.T) {
+	db := removaldb.New(t, "")
+	site := removaldb.Site(t, db, 1, "deleted-ns.example.test", nil)
+	var zone int64
+	if err := db.QueryRow(`INSERT INTO dns_zones(owner_user_id,site_id,domain,address,serial,status,template_revision) VALUES(1,$1,'deleted-ns.example.test','192.0.2.1',1,'active',1) RETURNING id`, site).Scan(&zone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO dns_template_deletions(zone_id,owner_site_id,template_record_key) VALUES($1,$2,'primary-ns'),($1,$2,'ns1-a')`, zone, site); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if err = ensureSystemDNSRecordsTx(context.Background(), tx, zone, site, "deleted-ns.example.test", "192.0.2.1"); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err = tx.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND (record_type='NS' OR host='ns1')`, zone).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("fallback resurrected deleted nameserver records: %d %v", count, err)
+	}
+}
+
 func TestDNSQueuedRevisionDoesNotSuppressNewerChange(t *testing.T) {
 	db := removaldb.New(t, "")
 	driver := riverdatabasesql.New(db)
