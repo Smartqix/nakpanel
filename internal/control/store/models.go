@@ -552,6 +552,61 @@ type MailDomain struct {
 	EffectiveEnabled  bool
 }
 
+type MailImport struct {
+	ID              string
+	MailboxID       int64
+	SubscriptionID  int64
+	ActorUserID     int64
+	SourceKind      string
+	SourceHost      string
+	SourcePort      int32
+	SourceUser      string
+	StagingID       string
+	ManifestSha256  string
+	Prepared        bool
+	SourceSecretID  string
+	TargetSecretID  string
+	State           string
+	DesiredRevision int64
+	AppliedRevision int64
+	Discovered      int64
+	Copied          int64
+	Verified        int64
+	Failed          int64
+	Uncertain       int64
+	LastError       string
+	ExpiresAt       time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type MailImportFolder struct {
+	ID          int64
+	ImportID    string
+	SourceName  string
+	TargetName  string
+	UidValidity int64
+	SpecialUse  string
+	Approved    bool
+}
+
+type MailImportMessage struct {
+	ID                int64
+	FolderID          int64
+	SourceIdentity    string
+	SourceKey         string
+	SourceUid         int64
+	Sha256            string
+	ByteSize          int64
+	InternalDate      time.Time
+	Flags             json.RawMessage
+	ReceiptToken      string
+	TargetUid         int64
+	TargetUidValidity int64
+	State             string
+	LastError         string
+}
+
 type MailSetting struct {
 	ID                  bool
 	MailHostname        string

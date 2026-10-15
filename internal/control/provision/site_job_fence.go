@@ -28,6 +28,7 @@ type removalFenceArgs struct {
 	RunID         int64           `json:"run_id"`
 	OperationID   json.RawMessage `json:"operation_id"`
 	Domain        string          `json:"domain"`
+	ImportID      string          `json:"import_id"`
 }
 
 const fenceSiteQuery = `SELECT site.removal_state,site.created_at FROM sites site WHERE site.id=$1`
@@ -67,7 +68,14 @@ func (f *SiteJobFence) Work(ctx context.Context, job *rivertype.JobRow, inner fu
 	if query == "" {
 		return river.JobCancel(errors.New("scoped job identity is unavailable"))
 	}
-	if id <= 0 {
+	missing := id == nil
+	switch value := id.(type) {
+	case int64:
+		missing = value <= 0
+	case string:
+		missing = value == ""
+	}
+	if missing {
 		if args.Domain == "" || query != fenceSiteQuery {
 			return river.JobCancel(errors.New("scoped job identity is unavailable"))
 		}
@@ -86,8 +94,10 @@ func (f *SiteJobFence) Work(ctx context.Context, job *rivertype.JobRow, inner fu
 	return inner(ctx)
 }
 
-func removalFenceQuery(kind string, args removalFenceArgs) (string, int64) {
+func removalFenceQuery(kind string, args removalFenceArgs) (string, any) {
 	switch kind {
+	case "mail_import":
+		return `SELECT site.removal_state,site.created_at FROM mail_imports i JOIN mailboxes mb ON mb.id=i.mailbox_id JOIN mail_domains md ON md.id=mb.mail_domain_id JOIN sites site ON site.id=md.site_id WHERE i.id=$1`, args.ImportID
 	case "create_site", "issue_cert", "install_custom_cert", "set_hosting_state", "generate_web_statistics", "maintenance_prune_site_backups":
 		return fenceSiteQuery, args.SiteID
 	case "create_backup", "restore_backup":
@@ -116,5 +126,5 @@ func removalFenceQuery(kind string, args removalFenceArgs) (string, int64) {
 	case "maintenance_delete_backup":
 		return `SELECT COALESCE(site.removal_state,'none'),backup.created_at FROM backups backup LEFT JOIN sites site ON site.id=backup.site_id WHERE backup.id=$1`, args.BackupID
 	}
-	return "", 0
+	return "", nil
 }

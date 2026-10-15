@@ -53,6 +53,42 @@ func (p *MailImportProvisioner) StageMaildir(ctx context.Context, req types.Stag
 	if err = ctx.Err(); err != nil {
 		return types.StageMaildirResult{}, err
 	}
+	if err = os.MkdirAll(p.root, 0700); err != nil {
+		return types.StageMaildirResult{}, err
+	}
+	lock, err := os.OpenFile(filepath.Join(p.root, ".staging.lock"), os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return types.StageMaildirResult{}, err
+	}
+	defer lock.Close()
+	if err = unix.Flock(int(lock.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
+		return types.StageMaildirResult{}, errors.New("another mail archive is being staged; try again shortly")
+	}
+	defer unix.Flock(int(lock.Fd()), unix.LOCK_UN)
+	var used int64
+	err = filepath.WalkDir(p.root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return errors.New("unexpected staging link")
+		}
+		if !entry.IsDir() {
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			used += info.Size()
+		}
+		return nil
+	})
+	if err != nil || used > 1<<30 {
+		return types.StageMaildirResult{}, errors.New("mail archive staging capacity is exhausted")
+	}
+	var space unix.Statfs_t
+	if unix.Statfs(p.root, &space) != nil || space.Bavail*uint64(space.Bsize) < (1<<30)+(256<<20) {
+		return types.StageMaildirResult{}, errors.New("insufficient disk space for mail archive staging")
+	}
 	b := make([]byte, 16)
 	if _, err = rand.Read(b); err != nil {
 		return types.StageMaildirResult{}, err
@@ -72,6 +108,25 @@ func (p *MailImportProvisioner) StageMaildir(ctx context.Context, req types.Stag
 		return types.StageMaildirResult{}, err
 	}
 	return types.StageMaildirResult{StagingID: id, ManifestSHA256: manifest.SHA256, Messages: len(manifest.Messages)}, nil
+}
+func (p *MailImportProvisioner) RemoveMaildirStage(ctx context.Context, req types.RemoveMaildirStageReq) error {
+	if len(req.ManifestSHA256) != 64 {
+		return errors.New("Maildir manifest hash is required for cleanup")
+	}
+	root, err := p.stagingRoot(req.SubscriptionID, req.StagingID)
+	if err != nil {
+		return err
+	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
+	if _, err = os.Lstat(root); os.IsNotExist(err) {
+		return nil
+	}
+	if _, err = mailimport.LoadMaildirManifest(root, req.ManifestSHA256); err != nil {
+		return err
+	}
+	return os.RemoveAll(root)
 }
 func (p *MailImportProvisioner) InspectMaildir(ctx context.Context, req types.InspectMaildirReq) (types.InspectMaildirResult, error) {
 	root, err := p.stagingRoot(req.SubscriptionID, req.StagingID)

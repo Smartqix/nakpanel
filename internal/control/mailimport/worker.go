@@ -93,6 +93,18 @@ func (e *Engine) Prepare(ctx context.Context, id string) error {
 	}
 	return nil
 }
+func (e *Engine) Cleanup(ctx context.Context, id string) error {
+	job, err := e.Store.Job(ctx, id)
+	if err != nil {
+		return err
+	}
+	if cleaner, ok := e.Factory.(interface {
+		Cleanup(context.Context, Job) error
+	}); ok {
+		return cleaner.Cleanup(ctx, job)
+	}
+	return nil
+}
 
 var ErrSuperseded = errors.New("mail import is paused, cancelled or superseded")
 
@@ -249,7 +261,10 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 	if err = e.Store.SetState(ctx, id, revision, "complete", ""); err != nil {
 		return err
 	}
-	return e.Store.Retire(ctx, id)
+	if err = e.Store.Retire(ctx, id); err != nil {
+		return err
+	}
+	return e.Cleanup(ctx, id)
 }
 func (e *Engine) active(ctx context.Context, id string, revision int64) error {
 	ok, err := e.Store.Current(ctx, id, revision)

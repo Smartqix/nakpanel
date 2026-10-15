@@ -95,6 +95,7 @@ func (m *Manager) Preview(ctx context.Context, actor auth.SessionUser, req types
 	}
 	if m.engine != nil {
 		if err = m.engine.Prepare(ctx, preview.ID); err != nil {
+			_, _ = m.Cancel(ctx, actor, preview.ID)
 			return types.MailImportPreview{}, err
 		}
 	}

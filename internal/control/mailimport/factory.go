@@ -25,6 +25,14 @@ type RuntimeFactory struct {
 	AllowedSourceNetworks []netip.Prefix
 }
 
+func (f *RuntimeFactory) Cleanup(ctx context.Context, job Job) error {
+	if job.SourceKind != "maildir" {
+		return nil
+	}
+	var result struct{}
+	return callAgent(ctx, f.Agent, types.OpRemoveMaildirStage, types.RemoveMaildirStageReq{SubscriptionID: job.SubscriptionID, StagingID: job.StagingID, ManifestSHA256: job.ManifestSHA256}, &result)
+}
+
 func ParseSourceNetworks(value string) ([]netip.Prefix, error) {
 	var result []netip.Prefix
 	for _, raw := range strings.Split(value, ",") {

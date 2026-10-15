@@ -16,6 +16,7 @@ var removalJobClassification = map[string]string{
 	"deploy_php_release": "target", "rollback_php_release": "target", "reconcile_php_application": "target", "reconcile_php_workers": "target",
 	"wordpress_operation": "target", "cleanup_wordpress_removal": "target", "converge_application": "target", "run_scheduled_task": "target", "run_staging_operation": "target",
 	"generate_web_statistics": "target", "maintenance_prune_site_backups": "target", "maintenance_delete_backup": "target", "system_database_mutation": "target",
+	"mail_import":      "target",
 	"reconcile_system": "shared", "converge_subscription": "shared", "converge_pending_subscriptions": "shared", "configure_mail": "shared", "reconcile_applications": "shared",
 	"sync_dns_template": "shared", "sync_plan_subscriptions": "shared", "sync_addon_subscriptions": "shared", "collect_subscription_usage": "shared",
 	"migrate_subscription_account": "shared", "cleanup_legacy_homes": "shared", "sweep_legacy_account_cleanup": "shared", "sweep_legacy_account_migrations": "shared",
@@ -54,6 +55,7 @@ func TargetSiteJobScope(snapshot types.SiteRemovalSnapshot) (string, []any) {
 	}
 	args := []any{pq.Array(siteIDs), pq.Array(domains)}
 	parts := []string{`(kind IN ('create_site','issue_cert','install_custom_cert','set_hosting_state','create_backup','restore_backup','generate_web_statistics','maintenance_prune_site_backups') AND args->>'site_id'=ANY($1::text[]))`,
+		`(kind='mail_import' AND args->>'import_id' IN (SELECT i.id FROM mail_imports i JOIN mailboxes mb ON mb.id=i.mailbox_id JOIN mail_domains md ON md.id=mb.mail_domain_id WHERE md.site_id::text=ANY($1::text[])))`,
 		`(kind IN ('issue_cert','install_custom_cert','configure_webmail','create_backup','restore_backup','configure_dns_zone') AND args->>'domain'=ANY($2::text[]))`,
 		`(kind='reconcile_system' AND CASE WHEN jsonb_typeof(args->'sites')='array' THEN jsonb_array_length(args->'sites')=1 AND args->'sites'->0->>'site_id'=ANY($1::text[]) ELSE false END)`}
 	for _, rule := range []struct{ kind, field, resource string }{

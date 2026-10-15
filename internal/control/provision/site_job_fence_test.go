@@ -37,11 +37,15 @@ func TestRemovalFenceDoesNotCancelSharedJobs(t *testing.T) {
 }
 
 func TestRemovalFenceClassifiesEveryTargetKind(t *testing.T) {
-	args := removalFenceArgs{SiteID: 1, ApplicationID: 1, InstanceID: 1, ZoneID: 1, WebmailID: 1, BackupID: 1, DatabaseID: 1, RunID: 1, OperationID: json.RawMessage("1")}
+	args := removalFenceArgs{SiteID: 1, ApplicationID: 1, InstanceID: 1, ZoneID: 1, WebmailID: 1, BackupID: 1, DatabaseID: 1, RunID: 1, OperationID: json.RawMessage("1"), ImportID: "imp_fixture"}
 	for kind, class := range removalJobClassification {
 		if class == "target" {
 			query, id := removalFenceQuery(kind, args)
-			if query == "" || id != 1 {
+			var expected any = int64(1)
+			if kind == "mail_import" {
+				expected = "imp_fixture"
+			}
+			if query == "" || id != expected {
 				t.Errorf("target kind lacks scoped worker guard: %s", kind)
 			}
 		}

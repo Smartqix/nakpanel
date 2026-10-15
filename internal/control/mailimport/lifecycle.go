@@ -32,7 +32,14 @@ func (m *Manager) Transition(ctx context.Context, actor auth.SessionUser, id, ac
 			return item, ErrInactive
 		}
 	}
-	return store.Transition(ctx, actor, id, action)
+	result, err := store.Transition(ctx, actor, id, action)
+	if err != nil {
+		return result, err
+	}
+	if action == "cancel" && m.engine != nil {
+		_ = m.engine.Cleanup(ctx, id)
+	}
+	return result, nil
 }
 func (m *Manager) Pause(ctx context.Context, actor auth.SessionUser, id string) (types.MailImport, error) {
 	return m.Transition(ctx, actor, id, "pause")

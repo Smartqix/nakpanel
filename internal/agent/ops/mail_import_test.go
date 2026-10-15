@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -39,6 +40,15 @@ func TestMaildirStagingRoundTripAndSubscriptionIsolation(t *testing.T) {
 	_, err = p.InspectMaildir(context.Background(), types.InspectMaildirReq{SubscriptionID: 2, StagingID: staged.StagingID, ManifestSHA256: staged.ManifestSHA256, Limit: 100})
 	if err == nil {
 		t.Fatal("cross-subscription staging was readable")
+	}
+	if err = p.RemoveMaildirStage(context.Background(), types.RemoveMaildirStageReq{SubscriptionID: 1, StagingID: staged.StagingID, ManifestSHA256: strings.Repeat("0", 64)}); err == nil {
+		t.Fatal("cleanup accepted an unverified manifest")
+	}
+	if err = p.RemoveMaildirStage(context.Background(), types.RemoveMaildirStageReq{SubscriptionID: 1, StagingID: staged.StagingID, ManifestSHA256: staged.ManifestSHA256}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = p.InspectMaildir(context.Background(), types.InspectMaildirReq{SubscriptionID: 1, StagingID: staged.StagingID, ManifestSHA256: staged.ManifestSHA256, Limit: 100}); err == nil {
+		t.Fatal("temporary stage was not removed")
 	}
 }
 

@@ -1,8 +1,8 @@
 -- +goose Up
 CREATE TABLE mail_imports (
  id TEXT PRIMARY KEY,
- mailbox_id BIGINT NOT NULL REFERENCES mailboxes(id) ON DELETE RESTRICT,
- subscription_id BIGINT NOT NULL REFERENCES subscriptions(id) ON DELETE RESTRICT,
+ mailbox_id BIGINT NOT NULL REFERENCES mailboxes(id) ON DELETE CASCADE,
+ subscription_id BIGINT NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
  actor_user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
  source_kind TEXT NOT NULL CHECK(source_kind IN ('imap','maildir')),
  source_host TEXT NOT NULL DEFAULT '', source_port INTEGER NOT NULL DEFAULT 993 CHECK(source_port=993),

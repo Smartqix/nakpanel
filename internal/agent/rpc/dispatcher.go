@@ -88,6 +88,7 @@ type MailImportProvisioner interface {
 	StageMaildir(context.Context, types.StageMaildirReq) (types.StageMaildirResult, error)
 	InspectMaildir(context.Context, types.InspectMaildirReq) (types.InspectMaildirResult, error)
 	ReadMaildirMessage(context.Context, types.ReadMaildirMessageReq) (types.ReadMaildirMessageResult, error)
+	RemoveMaildirStage(context.Context, types.RemoveMaildirStageReq) error
 }
 
 type MailQueueReader interface {
@@ -994,6 +995,18 @@ func (d *Dispatcher) dispatchUnchecked(ctx context.Context, req types.Request) t
 			return errorResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, result)
+	case types.OpRemoveMaildirStage:
+		var payload types.RemoveMaildirStageReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		if d.mailImport == nil {
+			return errorResponse(req.ID, "mail import staging is unavailable")
+		}
+		if err := d.mailImport.RemoveMaildirStage(ctx, payload); err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, struct{}{})
 	case types.OpStageMaildir:
 		var payload types.StageMaildirReq
 		if err := decodeStrict(req.Data, &payload); err != nil {

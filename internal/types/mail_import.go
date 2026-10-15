@@ -71,6 +71,7 @@ const (
 	OpStageMaildir       = "stage_maildir"
 	OpInspectMaildir     = "inspect_maildir"
 	OpReadMaildirMessage = "read_maildir_message"
+	OpRemoveMaildirStage = "remove_maildir_stage"
 )
 
 type StageMaildirReq struct {
@@ -115,4 +116,9 @@ type ReadMaildirMessageResult struct {
 	Data   []byte `json:"data"`
 	EOF    bool   `json:"eof"`
 	SHA256 string `json:"sha256"`
+}
+type RemoveMaildirStageReq struct {
+	SubscriptionID int64  `json:"subscription_id"`
+	StagingID      string `json:"staging_id"`
+	ManifestSHA256 string `json:"manifest_sha256"`
 }
