@@ -70,6 +70,22 @@ func testMailProvisioner(t *testing.T, reloader SiteServiceReloader) *MailProvis
 	})
 }
 
+func TestMailConfigDisablesStalwart011AccountCache(t *testing.T) {
+	p := testMailProvisioner(t, &recordingPhase6Reloader{})
+	if _, err := p.ConfigureMail(context.Background(), types.ConfigureMailReq{Hostname: "mail.node.test"}); err != nil {
+		t.Fatal(err)
+	}
+	config, err := os.ReadFile(p.configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{`"cache.*"`, "[cache.account]\nsize = 0\ncapacity = 0\n"} {
+		if !strings.Contains(string(config), required) {
+			t.Fatalf("generated config lacks the Stalwart 0.11 mailbox visibility safeguard: %s", required)
+		}
+	}
+}
+
 func TestConfigureMailIsIdempotentAndKeepsDKIMKeys(t *testing.T) {
 	t.Parallel()
 	reloader := &recordingPhase6Reloader{}

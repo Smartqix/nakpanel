@@ -66,6 +66,13 @@ func (e *Engine) Prepare(ctx context.Context, id string) error {
 	if err != nil {
 		return errors.New("source discovery failed; check the source layout, limits and permissions")
 	}
+	var messageCount int
+	for _, folder := range folders {
+		messageCount += len(folder.Messages)
+	}
+	if messageCount == 0 {
+		return errors.New("no source messages were found; verify the account and folder visibility before importing")
+	}
 	if capacity, ok := target.(interface {
 		AvailableBytes(context.Context) (int64, error)
 	}); ok {
@@ -258,6 +265,9 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 	if err = e.active(ctx, id, revision); err != nil {
 		return nil
 	}
+	if err = e.verifyFreshConnection(ctx, job); err != nil {
+		return e.attention(ctx, id, revision, "Destination verification failed on a fresh connection. The copied mail is retained; review folder visibility before resuming.")
+	}
 	if err = e.Store.SetState(ctx, id, revision, "complete", ""); err != nil {
 		return err
 	}
@@ -265,6 +275,42 @@ func (e *Engine) Run(ctx context.Context, id string, revision int64) error {
 		return err
 	}
 	return e.Cleanup(ctx, id)
+}
+
+func (e *Engine) verifyFreshConnection(ctx context.Context, job Job) error {
+	source, target, err := e.Factory.Open(ctx, job)
+	if err != nil {
+		return err
+	}
+	defer source.Close()
+	defer target.Close()
+	records, err := e.Store.Messages(ctx, job.ID)
+	if err != nil {
+		return err
+	}
+	if len(records) == 0 {
+		return errors.New("no messages were discovered")
+	}
+	for _, record := range records {
+		if record.State == "excluded" {
+			continue
+		}
+		if err = e.active(ctx, job.ID, job.Revision); err != nil {
+			return err
+		}
+		if record.State != "verified" || record.Hash == "" {
+			return errors.New("message has no verified receipt")
+		}
+		receipts, err := target.FindReceipt(ctx, record.Receipt.Folder, record.Token)
+		if err != nil || len(receipts) != 1 || receipts[0] != record.Receipt {
+			return errors.New("destination receipt is not visible")
+		}
+		got, err := target.Read(ctx, transport.MessageIdentity{Folder: record.Receipt.Folder, UID: record.Receipt.UID, UIDValidity: record.Receipt.UIDValidity})
+		if err != nil || transport.ContentHash(got.Body) != record.Hash || !sameMetadata(record.Message, got) {
+			return errors.New("destination message changed")
+		}
+	}
+	return nil
 }
 func (e *Engine) active(ctx context.Context, id string, revision int64) error {
 	ok, err := e.Store.Current(ctx, id, revision)
@@ -280,7 +326,10 @@ func (e *Engine) attention(ctx context.Context, id string, revision int64, messa
 	return e.Store.SetState(ctx, id, revision, "attention_required", message)
 }
 func sameMessage(want, got transport.Message) bool {
-	if transport.ContentHash(want.Body) != transport.ContentHash(got.Body) || want.InternalDate.Unix() != got.InternalDate.Unix() {
+	return transport.ContentHash(want.Body) == transport.ContentHash(got.Body) && sameMetadata(want, got)
+}
+func sameMetadata(want, got transport.Message) bool {
+	if want.InternalDate.Unix() != got.InternalDate.Unix() {
 		return false
 	}
 	flags := map[string]bool{}

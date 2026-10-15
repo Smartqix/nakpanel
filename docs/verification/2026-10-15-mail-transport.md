@@ -14,6 +14,20 @@ flags, persistent receipt keywords, UIDPLUS receipts, and receipt searches.
 All copied messages remain in their new QA folder. This was a transport check,
 not a completed importer acceptance test.
 
+The expanded test then exposed a Stalwart 0.11.8 account-cache problem:
+CREATE updated the session's folder list, but a later APPEND child-state update
+could advance an older cached list. The messages remained visible through
+JMAP/storage while fresh IMAP connections omitted the folders. A controlled
+service restart restored visibility without modifying data. Nakpanel now
+renders `cache.account.size = 0` and `capacity = 0` for its pinned Stalwart
+configuration. A new native test fails without this setting and passes with
+it, including fresh-login receipt lookup and Sent-folder role discovery.
+This is a compatibility safeguard, not a Stalwart version upgrade.
+
+Import completion now requires independent verification through a fresh
+destination connection. Empty source discovery is rejected before the import
+can start; explicitly excluded source messages remain an intentional outcome.
+
 Unit and race tests also cover an acknowledgement lost after the server
 persisted the message: reconnecting finds its receipt instead of appending a
 second copy. TLS trust failures, prohibited source addresses and changed

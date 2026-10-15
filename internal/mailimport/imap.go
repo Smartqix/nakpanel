@@ -130,7 +130,7 @@ func (c *IMAP) Discover(ctx context.Context) ([]Folder, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	defer c.bounded(ctx)()
-	list, err := c.client.List("", "*", nil).Collect()
+	list, err := c.client.List("", "*", &imap.ListOptions{ReturnSpecialUse: c.client.Caps().Has(imap.CapSpecialUse)}).Collect()
 	if err != nil {
 		return nil, errors.New("cannot list source folders")
 	}

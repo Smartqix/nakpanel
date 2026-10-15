@@ -325,7 +325,7 @@ func (p *MailProvisioner) renderConfig(req types.ConfigureMailReq) string {
 	var b strings.Builder
 	b.WriteString("# Managed by nakpanel (configure_mail). Do not edit: regenerated from panel intent.\n\n")
 	b.WriteString("[config]\n")
-	b.WriteString(`local-keys = ["store.*", "directory.*", "tracer.*", "!server.blocked-ip.*", "!server.allowed-ip.*", "server.*", "certificate.*", "config.local-keys.*", "authentication.fallback-admin.*", "storage.*", "lookup.*", "signature.*", "auth.*", "session.*", "queue.*", "remote.*", "report.*"]` + "\n\n")
+	b.WriteString(`local-keys = ["store.*", "directory.*", "tracer.*", "cache.*", "!server.blocked-ip.*", "!server.allowed-ip.*", "server.*", "certificate.*", "config.local-keys.*", "authentication.fallback-admin.*", "storage.*", "lookup.*", "signature.*", "auth.*", "session.*", "queue.*", "remote.*", "report.*"]` + "\n\n")
 
 	fmt.Fprintf(&b, "[server]\nhostname = %s\n\n", tomlString(req.Hostname))
 	b.WriteString(`[server.listener."smtp"]
@@ -356,6 +356,9 @@ protocol = "http"
 
 `)
 	fmt.Fprintf(&b, "[storage]\ndata = \"rocksdb\"\nfts = \"rocksdb\"\nblob = \"rocksdb\"\nlookup = \"rocksdb\"\ndirectory = \"nakpanel\"\n\n")
+	// Stalwart 0.11 can cache the pre-CREATE folder list after an APPEND.
+	// Disable this cache so new IMAP sessions always see committed mailboxes.
+	b.WriteString("[cache.account]\nsize = 0\ncapacity = 0\n\n")
 	fmt.Fprintf(&b, "[store.\"rocksdb\"]\ntype = \"rocksdb\"\npath = %s\ncompression = \"lz4\"\n\n", tomlString(p.dataDir))
 	fmt.Fprintf(&b, "[store.\"nakpanel\"]\ntype = \"postgresql\"\nhost = %s\nport = %d\ndatabase = %s\nuser = %s\npassword = %s\ntimeout = \"15s\"\n\n",
 		tomlString(p.databaseHost), p.databasePort, tomlString(p.databaseName), tomlString(p.databaseUser), tomlString("%{file:"+p.pgPasswordPath+"}%"))

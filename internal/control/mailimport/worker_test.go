@@ -72,6 +72,48 @@ func TestUnsupportedFlagWarning(t *testing.T) {
 	}
 }
 func TestUnknownReceiptCannotComplete(t *testing.T) { testImportRecovery(t, false) }
+
+func TestImportVerifiesThroughFreshDestinationConnection(t *testing.T) {
+	for _, missing := range []bool{false, true} {
+		t.Run(map[bool]string{false: "persistent", true: "session-only"}[missing], func(t *testing.T) {
+			store := newMemoryJobStore()
+			factory := &reopeningFactory{source: &memorySource{messages: []transport.Message{testMessage("one")}}, target: &memoryTarget{receipts: map[string]transport.Message{}}, missing: missing}
+			if err := (&Engine{Store: store, Factory: factory}).Run(context.Background(), "import", 1); err != nil {
+				t.Fatal(err)
+			}
+			want := "complete"
+			if missing {
+				want = "attention_required"
+			}
+			if factory.opens < 2 || store.state != want {
+				t.Fatalf("fresh-connection check: opens=%d state=%s, want %s", factory.opens, store.state, want)
+			}
+		})
+	}
+}
+
+func TestImportRejectsEmptyDiscovery(t *testing.T) {
+	store := newMemoryJobStore()
+	engine := Engine{Store: store, Factory: memoryFactory{&memorySource{}, &memoryTarget{}}}
+	if err := engine.Prepare(context.Background(), "import"); err == nil {
+		t.Fatal("empty discovery accepted as an importable source")
+	}
+}
+
+type reopeningFactory struct {
+	source  *memorySource
+	target  *memoryTarget
+	missing bool
+	opens   int
+}
+
+func (f *reopeningFactory) Open(context.Context, Job) (Source, Target, error) {
+	f.opens++
+	if f.opens > 1 && f.missing {
+		return f.source, &memoryTarget{receipts: map[string]transport.Message{}}, nil
+	}
+	return f.source, f.target, nil
+}
 func testMessage(key string) transport.Message {
 	return transport.Message{Identity: transport.MessageIdentity{Folder: "INBOX", UIDValidity: 1, UID: uint32(len(key)), Key: key}, Body: []byte(key), InternalDate: time.Unix(100, 0), Size: int64(len(key))}
 }

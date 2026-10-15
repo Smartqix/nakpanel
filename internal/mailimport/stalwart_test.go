@@ -24,7 +24,9 @@ func TestStalwartCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Close()
-	if remaining,err:=c.AvailableBytes(ctx);err!=nil||remaining<=0{t.Fatalf("destination quota preflight failed: %d %v",remaining,err)}
+	if remaining, err := c.AvailableBytes(ctx); err != nil || remaining <= 0 {
+		t.Fatalf("destination quota preflight failed: %d %v", remaining, err)
+	}
 	folder := "Import QA/" + time.Now().UTC().Format("20060102T150405.000000000")
 	if err = c.EnsureFolder(ctx, folder); err != nil {
 		t.Fatal(err)
@@ -59,5 +61,25 @@ func TestStalwartCompatibility(t *testing.T) {
 			}
 		}
 		t.Logf("message %d: content, attachment, date, flags and persistent receipt verified", i+1)
+	}
+	c.Close()
+	reopened, err := DialIMAP(ctx, IMAPConfig{Host: host, Username: os.Getenv("NAKPANEL_TEST_IMAP_USER"), Password: string(password)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if receipts, err := reopened.FindReceipt(ctx, folder, ReceiptToken(folder, "first")); err != nil || len(receipts) != 1 {
+		t.Fatalf("receipt did not survive a fresh connection: %d %v", len(receipts), err)
+	}
+	folders, err := reopened.Discover(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundSent := false
+	for _, entry := range folders {
+		foundSent = foundSent || entry.SpecialUse == `\Sent`
+	}
+	if !foundSent {
+		t.Fatal("source discovery lost the Sent folder role")
 	}
 }

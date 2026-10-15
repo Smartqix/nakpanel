@@ -106,6 +106,9 @@ func main() {
 			}
 		}
 		folder := "Native fixture"
+		if value := os.Getenv("NAKPANEL_MAIL_VERIFY_FOLDER"); value != "" {
+			folder = value
+		}
 		if err = client.EnsureFolder(ctx, folder); err != nil {
 			fail(err)
 		}
