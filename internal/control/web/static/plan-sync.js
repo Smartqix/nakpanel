@@ -56,7 +56,7 @@
       rows.replaceChildren();
       (value.subscriptions || []).forEach(function (item) {
         var row = document.createElement("div"), link = document.createElement("a"), state = document.createElement("span");
-        row.className = "np-object-row";
+        row.className = "np-plan-sync-row";
         link.textContent = item.name || "Subscription " + item.id;
         if (Number.isSafeInteger(item.id) && item.id > 0) link.href = "/subscriptions/" + item.id;
         state.textContent = stateLabel(item);

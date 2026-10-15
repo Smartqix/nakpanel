@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const ui = require('./static/plan-sync.js');
+const fs = require('node:fs');
+
+test('sync rows use a two-column layout rather than icon-slot object rows', () => {
+  const source = fs.readFileSync(__dirname + '/static/plan-sync.js', 'utf8');
+  assert.match(source, /row.className = "np-plan-sync-row"/);
+});
 
 test('WordPress validation rejects enabled zero capacity without changing input', () => {
   const value = {enabled:true, limit:0, unlimited:false, lifecycle:'active'};

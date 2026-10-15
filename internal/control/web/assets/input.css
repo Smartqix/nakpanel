@@ -6668,6 +6668,10 @@
 }
 
 .np-dialog.np-site-removal-dialog { width: min(760px, calc(100% - 32px)); max-width: 760px; max-height: calc(100dvh - 32px); margin: auto; padding: 0; overflow: hidden; }
+.np-plan-sync-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; padding: 12px 16px; border-top: 1px solid var(--np-border); }
+.np-plan-sync-row a { min-width: 0; overflow-wrap: anywhere; }
+.np-plan-sync-row span { text-align: right; }
+[data-np-sync-summary] { padding: 8px 16px; }
 .np-dialog.np-site-removal-dialog[open] { display: flex; flex-direction: column; }
 .np-dialog.np-site-removal-dialog .np-dialog-head { flex: 0 0 auto; }
 .np-dialog.np-site-removal-dialog .np-dialog-form.np-removal-form { display: flex; flex-direction: column; flex-wrap: nowrap; align-items: stretch; width: 100%; min-width: 0; gap: 0; padding: 0; overflow: hidden; min-height: 0; }
