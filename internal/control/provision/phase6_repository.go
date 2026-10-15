@@ -258,7 +258,14 @@ JOIN dns_zones zone ON zone.site_id=CASE
 WHERE site.id=$1 FOR UPDATE OF zone`, siteID).Scan(&zoneID, &zoneOwnerSiteID); err != nil {
 		return err
 	}
-	res, err := tx.ExecContext(ctx, `DELETE FROM dns_records
+	res, err := tx.ExecContext(ctx, `WITH preserved_deletion AS (
+INSERT INTO dns_template_deletions(zone_id,owner_site_id,template_record_key)
+SELECT zone_id,COALESCE(owner_site_id,$4),template_record_key FROM dns_records
+WHERE id=$1 AND zone_id=$2 AND origin='template' AND template_record_key<>''
+AND (owner_site_id=$3 OR $3=$4)
+ON CONFLICT DO NOTHING
+)
+DELETE FROM dns_records
 WHERE id=$1 AND zone_id=$2 AND origin<>'system' AND (owner_site_id=$3 OR $3=$4)`,
 		recordID, zoneID, siteID, zoneOwnerSiteID)
 	if err != nil {

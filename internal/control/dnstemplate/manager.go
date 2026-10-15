@@ -922,6 +922,9 @@ func (m *Manager) ResetZone(ctx context.Context, actorID, siteID int64, confirma
 		return err
 	}
 	authoritativeZone := zone.SiteID == siteID
+	if _, err := tx.ExecContext(ctx, `DELETE FROM dns_template_deletions WHERE zone_id=$1 AND ($3 OR owner_site_id=$2)`, zone.ID, siteID, authoritativeZone); err != nil {
+		return err
+	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM dns_records
 WHERE zone_id=$1 AND origin<>'system' AND ($3 OR owner_site_id=$2)`, zone.ID, siteID, authoritativeZone); err != nil {
 		return err
@@ -968,6 +971,7 @@ SET dns_template_adoption_completed=true,updated_at=now() WHERE id=$1`, siteID);
 type zoneSnapshot struct {
 	types.DNSZoneView
 	AuthoritativeSiteID int64
+	SuppressedKeys      map[int64]map[string]bool
 	SiteDomain          string
 	ParentDomain        string
 	Hostname            string
@@ -1026,6 +1030,10 @@ func compareZone(template types.DNSTemplateRevision, zone zoneSnapshot) zonePlan
 	}
 	wantedKeys := map[string]bool{}
 	for _, templateRecord := range template.Records {
+		if zone.SuppressedKeys[zone.SiteID][templateRecord.StableKey] {
+			plan.item.OverrideCount++
+			continue
+		}
 		expanded, omit, err := expandTemplateRecord(templateRecord, zone.expansionForSite(zone.SiteID))
 		if err != nil {
 			plan.item.ConflictCount++
@@ -1496,6 +1504,30 @@ FROM dns_records WHERE zone_id=$1 ORDER BY host,record_type,id`, zoneID)
 		zone.Records = append(zone.Records, record)
 	}
 	if err := records.Close(); err != nil {
+		return zone, err
+	}
+	zone.SuppressedKeys = map[int64]map[string]bool{}
+	deletions, err := q.QueryContext(ctx, `SELECT owner_site_id,template_record_key FROM dns_template_deletions WHERE zone_id=$1`, zone.ID)
+	if err != nil {
+		return zone, err
+	}
+	for deletions.Next() {
+		var owner int64
+		var key string
+		if err := deletions.Scan(&owner, &key); err != nil {
+			deletions.Close()
+			return zone, err
+		}
+		if zone.SuppressedKeys[owner] == nil {
+			zone.SuppressedKeys[owner] = map[string]bool{}
+		}
+		zone.SuppressedKeys[owner][key] = true
+	}
+	if err := deletions.Err(); err != nil {
+		deletions.Close()
+		return zone, err
+	}
+	if err := deletions.Close(); err != nil {
 		return zone, err
 	}
 	zone.SubdomainSite = map[int64]siteExpansion{}
