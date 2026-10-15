@@ -60,3 +60,23 @@ An initial empty-discovery diagnostic was cancelled, not counted as a successful
 import. That diagnostic led to the cache correction above. The completion UI
 includes a manual cutover checklist; imports never change MX or retire the old
 mail server automatically.
+
+## Post-Review Recheck
+
+Build `3bd9d67` added durable copied metadata, exact semantic flag comparison,
+retryable terminal cleanup, and desired domain/reseller suspension checks.
+Database-backed regressions reproduced each issue before its fix. Receipt
+recovery preserves the metadata used for the original append. Only the known
+receipt keyword and transient `Recent` flag are excluded from comparison.
+
+Two additional live passes on that build each imported four selected IMAP
+messages and three Maildir messages. All four imports completed with zero
+failed or uncertain messages. Independent IMAP comparisons verified both
+selected source folders; Maildir comparisons verified both mapped folder
+prefixes. Desktop and 390px mobile pages displayed the completion checklist.
+The final visual pass added consistent checklist padding and list spacing.
+
+The five Important findings from independent review were fixed; no Critical
+findings or deferred minor findings were reported. Existing production mail
+remained unchanged. These checks do not claim an external SMTP delivery test,
+which was outside the importer rollout.

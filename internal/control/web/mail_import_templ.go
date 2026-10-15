@@ -453,20 +453,20 @@ func domainMailImports(data types.MailImportWorkspace, view WorkspaceView) templ
 				return templ_7745c5c3_Err
 			}
 			if item.State == "complete" && item.Verified > 0 && item.Failed == 0 && item.Uncertain == 0 && item.Verified+item.Excluded == item.Discovered {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h3>Before switching mail delivery</h3></div><ul><li>Open representative messages and attachments in webmail.</li><li>Review folder counts and any intentional exclusions.</li><li>Confirm MX, SPF, DKIM and DMARC, then test incoming and outgoing mail.</li><li>Keep the old server available through the final delivery check.</li></ul><p class=\"np-muted\">This import did not change DNS or delete source mail. New arrivals after the final scan are not included.</p><a class=\"np-secondary-button\" href=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<section class=\"np-panel\"><div class=\"np-panel-title\"><h3>Before switching mail delivery</h3></div><div class=\"np-mail-import-cutover\"><ul><li>Open representative messages and attachments in webmail.</li><li>Review folder counts and any intentional exclusions.</li><li>Confirm MX, SPF, DKIM and DMARC, then test incoming and outgoing mail.</li><li>Keep the old server available through the final delivery check.</li></ul><p class=\"np-muted\">This import did not change DNS or delete source mail. New arrivals after the final scan are not included.</p><div class=\"np-button-row\"><a class=\"np-secondary-button\" href=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var23 templ.SafeURL
 				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(data.SiteID)+"?tab=dns")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 52, Col: 635}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 57, Col: 150}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\">Review DNS records</a></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\">Review DNS records</a></div></div></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -490,7 +490,7 @@ func domainMailImports(data types.MailImportWorkspace, view WorkspaceView) templ
 				var templ_7745c5c3_Var24 templ.SafeURL
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/" + item.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 60, Col: 102}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 67, Col: 102}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 				if templ_7745c5c3_Err != nil {
@@ -503,7 +503,7 @@ func domainMailImports(data types.MailImportWorkspace, view WorkspaceView) templ
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(item.CreatedAt.UTC().Format("02 Jan 2006 15:04 UTC"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 60, Col: 159}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 67, Col: 159}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
@@ -516,7 +516,7 @@ func domainMailImports(data types.MailImportWorkspace, view WorkspaceView) templ
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.Verified))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 60, Col: 199}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 67, Col: 199}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 				if templ_7745c5c3_Err != nil {
@@ -572,7 +572,7 @@ func mailImportSourceForm(base string, data types.MailImportWorkspace, view Work
 		var templ_7745c5c3_Var28 templ.SafeURL
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/preview"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 67, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 74, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 		if templ_7745c5c3_Err != nil {
@@ -598,7 +598,7 @@ func mailImportSourceForm(base string, data types.MailImportWorkspace, view Work
 			var templ_7745c5c3_Var29 string
 			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(box.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 71, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 78, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 			if templ_7745c5c3_Err != nil {
@@ -621,7 +621,7 @@ func mailImportSourceForm(base string, data types.MailImportWorkspace, view Work
 			var templ_7745c5c3_Var30 string
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(box.Address)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 71, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 78, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {
@@ -668,7 +668,7 @@ func mailImportAction(base, id, action, label string, view WorkspaceView) templ.
 		var templ_7745c5c3_Var32 templ.SafeURL
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(base + "/" + id + "/" + action))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 84, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 91, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 		if templ_7745c5c3_Err != nil {
@@ -689,7 +689,7 @@ func mailImportAction(base, id, action, label string, view WorkspaceView) templ.
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 84, Col: 167}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_import.templ`, Line: 91, Col: 167}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {

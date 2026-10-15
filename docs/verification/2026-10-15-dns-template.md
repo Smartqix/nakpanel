@@ -26,3 +26,9 @@ Saving the global template intentionally marks older existing zones as needing
 review. It does not apply that revision to them. Registrar delegation, glue and
 production MX were not changed. No IPv6 records were generated without a
 configured IPv6 address.
+
+After the review fix for fallback tombstones, both isolated zone passes were
+repeated against build `3bd9d67`. Custom-record fingerprints remained identical,
+the deleted `www` record stayed absent, stale apply returned a conflict, and
+NS/SOA/A answers remained correct. Original production-zone fingerprints were
+again unchanged.

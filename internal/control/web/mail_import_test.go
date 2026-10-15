@@ -42,6 +42,9 @@ func TestMailImportRenderAndBrowserFixtures(t *testing.T) {
 			if strings.Contains(output.String(), "Before switching mail delivery") != (state == "complete") {
 				t.Fatal("mail cutover guidance must follow completed verification")
 			}
+			if state == "complete" && !strings.Contains(output.String(), `class="np-mail-import-cutover"`) {
+				t.Fatal("cutover checklist lacks its padded content wrapper")
+			}
 			if dir := os.Getenv("NAKPANEL_MAIL_UI_FIXTURES"); dir != "" {
 				if err = os.MkdirAll(dir, 0700); err != nil {
 					t.Fatal(err)

@@ -6678,6 +6678,8 @@
 .np-mail-import-counts > div { padding: 16px; display: grid; gap: 8px; }
 .np-mail-import-counts strong { font-size: 20px; }
 .np-mail-import-review { padding: 16px; }
+.np-mail-import-cutover { display: grid; gap: 16px; padding: 16px; }
+.np-mail-import-cutover ul { display: grid; gap: 8px; list-style: disc; padding-left: 20px; }
 .np-mail-import-excluded { padding: 0 16px; }
 .np-mail-import-history-row { grid-template-columns: minmax(0, 1fr) auto auto; }
 .np-mail-import-progress > .np-button-row, .np-mail-import-progress > .np-gate { margin: 16px; }
