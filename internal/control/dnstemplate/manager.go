@@ -748,6 +748,9 @@ SET dns_zone_mode='separate',dns_template_adoption_completed=true,updated_at=now
 WHERE id=$1`, siteID); err != nil {
 		return err
 	}
+	if err := moveDNSDeletionsTx(ctx, tx, parentZoneID, childZoneID, siteID); err != nil {
+		return err
+	}
 	child, err := m.zoneByID(ctx, tx, childZoneID, false)
 	if err != nil {
 		return err
@@ -810,10 +813,22 @@ WHERE id=$1`, siteID); err != nil {
 	if _, err := tx.ExecContext(ctx, `UPDATE dns_zones SET mode='disabled',template_status='pending' WHERE id=$1`, childZoneID); err != nil {
 		return err
 	}
+	if err := moveDNSDeletionsTx(ctx, tx, childZoneID, parentZoneID, siteID); err != nil {
+		return err
+	}
 	if err := m.refreshZoneTemplateStatusTx(ctx, tx, parentZoneID); err != nil {
 		return err
 	}
 	return m.enqueueTwoZonesTx(ctx, tx, parentZoneID, childZoneID, false)
+}
+
+func moveDNSDeletionsTx(ctx context.Context, tx *sql.Tx, fromZone, toZone, owner int64) error {
+	_, err := tx.ExecContext(ctx, `WITH moved AS (
+DELETE FROM dns_template_deletions WHERE zone_id=$1 AND owner_site_id=$3
+RETURNING owner_site_id,template_record_key,created_at)
+INSERT INTO dns_template_deletions(zone_id,owner_site_id,template_record_key,created_at)
+SELECT $2,owner_site_id,template_record_key,created_at FROM moved ON CONFLICT DO NOTHING`, fromZone, toZone, owner)
+	return err
 }
 
 func loadMovableDNSRecords(ctx context.Context, tx *sql.Tx, zoneID, ownerSiteID int64) ([]types.DNSRecord, error) {
@@ -1047,6 +1062,10 @@ func compareZone(template types.DNSTemplateRevision, zone zoneSnapshot) zonePlan
 		expanded.OwnerSiteID = zone.SiteID
 		expanded.TemplateRevision = template.Revision
 		wantedKeys[templateRecord.StableKey] = true
+		if preserveMailRouting(zone.Records, expanded) {
+			plan.item.OverrideCount++
+			continue
+		}
 		if existing, ok := byKey[templateRecord.StableKey]; ok {
 			if existing.LocallyModified {
 				plan.item.OverrideCount++
@@ -1215,6 +1234,21 @@ func systemRecordDisposition(records []types.DNSRecord, wanted types.DNSRecord) 
 		}
 	}
 	return false, conflict
+}
+
+func preserveMailRouting(records []types.DNSRecord, wanted types.DNSRecord) bool {
+	for _, record := range records {
+		if (record.Origin == "template" && !record.LocallyModified) || !strings.EqualFold(record.Host, wanted.Host) || record.Type != wanted.Type {
+			continue
+		}
+		if wanted.Type == "MX" {
+			return true
+		}
+		if wanted.Type == "TXT" && ((strings.HasPrefix(strings.ToLower(strings.TrimSpace(wanted.Value)), "v=spf1") && strings.HasPrefix(strings.ToLower(strings.TrimSpace(record.Value)), "v=spf1")) || strings.Contains(strings.ToLower(wanted.Host), "_domainkey")) {
+			return true
+		}
+	}
+	return false
 }
 
 func recordsEqual(left, right types.DNSRecord) bool {

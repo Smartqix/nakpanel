@@ -38,6 +38,7 @@ func TestDNSSettingsRendersTemplateSOATransfersAndPreview(t *testing.T) {
 	}
 	body := renderDNSPage(t, dashboard.Data{}, view)
 	for _, want := range []string{
+		"SOA &amp; Nameservers", "Apply &amp; History", "Provider nameservers", `action="/tools-settings/dns/template/provider"`,
 		"Zone Records Template", "SOA Template", "Transfer Restrictions", "Synchronization History",
 		"ns1.&lt;domain&gt;", "&lt;ip.web&gt;", "192.0.2.0/24", "APPLY DNS TEMPLATE",
 		"1 override preserved", "data-np-dns-settings-workspace", `role="tablist"`,

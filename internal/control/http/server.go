@@ -155,6 +155,7 @@ type DomainManager interface {
 type DNSTemplateManager interface {
 	View(context.Context, int64) (types.DNSTemplateView, error)
 	SaveSettings(context.Context, int64, types.DNSTemplateSettingsInput) (int64, error)
+	SaveProviderDefaults(context.Context, int64, int64, types.DNSProviderDefaults) (int64, error)
 	UpsertTemplateRecord(context.Context, int64, int64, int64, types.DNSTemplateRecord) (int64, error)
 	DeleteTemplateRecord(context.Context, int64, int64, int64) (int64, error)
 	ResetTemplate(context.Context, int64, int64) (int64, error)

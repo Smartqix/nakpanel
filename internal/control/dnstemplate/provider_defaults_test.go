@@ -96,3 +96,34 @@ func TestStalePreviewLeavesZone(t *testing.T) {
 		t.Fatalf("stale preview queued a mutation: %d %v", jobs, err)
 	}
 }
+
+func TestMoveDeletionKeepsSibling(t *testing.T) {
+	db, _ := dnsFixture(t)
+	parent := removaldb.Site(t, db, 1, "parent.test", nil)
+	child := removaldb.Site(t, db, 1, "child.parent.test", parent)
+	var oldZone, newZone int64
+	if err := db.QueryRow(`INSERT INTO dns_zones(owner_user_id,site_id,domain,address,serial,status,template_revision) VALUES(1,$1,'parent.test','192.0.2.1',1,'active',1) RETURNING id`, parent).Scan(&oldZone); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO dns_zones(owner_user_id,site_id,domain,address,serial,status,template_revision) VALUES(1,$1,'child.parent.test','192.0.2.1',1,'active',1) RETURNING id`, child).Scan(&newZone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO dns_template_deletions(zone_id,owner_site_id,template_record_key) VALUES($1,$2,'www-a'),($1,$3,'www-a')`, oldZone, parent, child); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if err = moveDNSDeletionsTx(context.Background(), tx, oldZone, newZone, child); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err = tx.QueryRow(`SELECT count(*) FROM dns_template_deletions WHERE zone_id=$1 AND owner_site_id=$2`, newZone, child).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("child deletion lost %d %v", count, err)
+	}
+	if err = tx.QueryRow(`SELECT count(*) FROM dns_template_deletions WHERE zone_id=$1 AND owner_site_id=$2`, oldZone, parent).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("sibling deletion changed %d %v", count, err)
+	}
+}

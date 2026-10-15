@@ -355,6 +355,7 @@ func validateDNSRecordSet(records []types.DNSRecord) error {
 	type ownerState struct {
 		total  int
 		cnames int
+		spf    int
 	}
 	owners := make(map[string]ownerState)
 	identities := make(map[string]struct{}, len(records))
@@ -365,6 +366,9 @@ func validateDNSRecordSet(records []types.DNSRecord) error {
 		state.total++
 		if recordType == "CNAME" {
 			state.cnames++
+		}
+		if recordType == "TXT" && strings.HasPrefix(strings.ToLower(strings.TrimSpace(record.Value)), "v=spf1") {
+			state.spf++
 		}
 		owners[host] = state
 
@@ -381,6 +385,9 @@ func validateDNSRecordSet(records []types.DNSRecord) error {
 		identities[identity] = struct{}{}
 	}
 	for host, state := range owners {
+		if state.spf > 1 {
+			return fmt.Errorf("only one SPF policy is allowed at %q", host)
+		}
 		if state.cnames > 0 && state.total != 1 {
 			return fmt.Errorf("CNAME record at %q cannot coexist with another record", host)
 		}

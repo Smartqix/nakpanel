@@ -12,9 +12,20 @@ func TestApplyAllPreservesCustomMXTXTAndDKIM(t *testing.T) {
 		{ID: 2, OwnerSiteID: 10, Host: "@", Type: "TXT", Value: "v=spf1 include:external.test -all", TTL: 3600, Origin: "custom"},
 		{ID: 3, OwnerSiteID: 10, Host: "nak1._domainkey", Type: "TXT", Value: "v=DKIM1; p=actual-key", TTL: 3600, Origin: "system"},
 	}}, AdoptionCompleted: true}
-	plan := compareWholeZone(types.DNSTemplateRevision{Revision: 2}, zone)
-	if len(plan.remove) != 0 || len(plan.update) != 0 || len(plan.adopt) != 0 {
+	template := types.DNSTemplateRevision{Revision: 2, Records: []types.DNSTemplateRecord{
+		{StableKey: "mx", Scope: "root", HostTemplate: "@", Type: "MX", ValueTemplate: "mail.<domain>", Priority: 10, TTL: 3600},
+		{StableKey: "spf", Scope: "root", HostTemplate: "@", Type: "TXT", ValueTemplate: "v=spf1 a -all", TTL: 3600},
+		{StableKey: "dkim", Scope: "root", HostTemplate: "nak1._domainkey", Type: "TXT", ValueTemplate: "v=DKIM1; p=fake-key", TTL: 3600},
+	}}
+	plan := compareWholeZone(template, zone)
+	if len(plan.add) != 0 || len(plan.remove) != 0 || len(plan.update) != 0 || len(plan.adopt) != 0 {
 		t.Fatalf("custom mail records changed: %+v", plan)
+	}
+}
+
+func TestDNSRecordSetRejectsDuplicateSPFPolicies(t *testing.T) {
+	if err := validateDNSRecordSet([]types.DNSRecord{{Host: "@", Type: "TXT", Value: "v=spf1 a -all"}, {Host: "@", Type: "TXT", Value: "v=spf1 mx -all"}}); err == nil {
+		t.Fatal("duplicate SPF policy accepted")
 	}
 }
 

@@ -15,6 +15,8 @@ import (
 
 func (s *Server) registerDNSTemplateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /tools-settings/dns/template/settings", s.handleDNSTemplateSettings)
+	mux.HandleFunc("POST /tools-settings/dns/template/provider", s.handleDNSProviderDefaults)
+	mux.HandleFunc("GET /tools-settings/dns/sync/{runID}", s.handleDNSSyncStatus)
 	mux.HandleFunc("POST /tools-settings/dns/template/records", s.handleDNSTemplateRecord)
 	mux.HandleFunc("POST /tools-settings/dns/template/records/{recordID}/delete", s.handleDeleteDNSTemplateRecord)
 	mux.HandleFunc("POST /tools-settings/dns/template/reset", s.handleResetDNSTemplate)
@@ -28,6 +30,43 @@ func (s *Server) registerDNSTemplateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /sites/{id}/dns-zone/mode", s.handleDNSZoneMode)
 	mux.HandleFunc("POST /sites/{id}/dns-zone/soa", s.handleDNSZoneSOA)
 	mux.HandleFunc("POST /sites/{id}/dns-zone/subdomain-mode", s.handleDNSSubdomainMode)
+}
+
+func (s *Server) handleDNSProviderDefaults(w http.ResponseWriter, r *http.Request) {
+	user, ok := s.requireDNSAdmin(w, r, true)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid provider DNS defaults", 400)
+		return
+	}
+	revision, err := s.dnsTemplates.SaveProviderDefaults(r.Context(), user.ID, parseFormInt64Default(r, "expected_revision", 0), types.DNSProviderDefaults{PrimaryNameserver: r.Form.Get("primary_nameserver"), SecondaryNameserver: r.Form.Get("secondary_nameserver")})
+	if err != nil {
+		writeDNSError(w, r, "Could not save provider defaults", err)
+		return
+	}
+	s.recordAudit(r.Context(), user, 0, 0, "dns.provider_defaults_saved", "dns_template_revision", revision, nil)
+	http.Redirect(w, r, "/tools-settings/dns?notice=dns-template-saved#dns-policy", http.StatusSeeOther)
+}
+
+func (s *Server) handleDNSSyncStatus(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireDNSAdmin(w, r, false); !ok {
+		return
+	}
+	id, err := dnsPathInt64(r, "runID")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	view, err := s.dnsTemplates.View(r.Context(), id)
+	if err != nil || view.Preview == nil {
+		http.NotFound(w, r)
+		return
+	}
+	view.Preview.PreviewToken = ""
+	w.Header().Set("Cache-Control", "no-store")
+	writeSPAJSON(w, 200, map[string]any{"ok": true, "run": view.Preview})
 }
 
 func (s *Server) handleRetryDNSSynchronization(w http.ResponseWriter, r *http.Request) {
@@ -432,6 +471,10 @@ func writeDNSError(w http.ResponseWriter, r *http.Request, prefix string, err er
 	status := http.StatusBadRequest
 	if errors.Is(err, dnstemplate.ErrStalePreview) {
 		status = http.StatusConflict
+	}
+	if wantsSPAJSON(r) {
+		writeSPAJSON(w, status, map[string]any{"ok": false, "error": prefix + ": " + err.Error()})
+		return
 	}
 	http.Error(w, prefix+": "+err.Error(), status)
 }

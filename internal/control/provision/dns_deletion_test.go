@@ -42,6 +42,17 @@ func TestDeletedTemplateRecordLeavesSuppression(t *testing.T) {
 	if err = db.QueryRow(`SELECT count(*) FROM dns_records WHERE id=$1`, record).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("record remained: %d %v", count, err)
 	}
+	tx, err := db.BeginTx(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	if err = instantiateDNSTemplateTx(context.Background(), tx, zone, site, 1, 1, "deleted.example.test", "", "192.0.2.1", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND template_record_key='www-a'`, zone).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("reconciliation recreated a deleted record: %d %v", count, err)
+	}
 }
 
 func TestNewZoneDoesNotInventNameserversOrWebmail(t *testing.T) {

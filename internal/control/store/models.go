@@ -343,6 +343,13 @@ type DnsRecord struct {
 	LocallyModified   bool
 }
 
+type DnsTemplateDeletion struct {
+	ZoneID            int64
+	OwnerSiteID       int64
+	TemplateRecordKey string
+	CreatedAt         time.Time
+}
+
 type DnsTemplateRecord struct {
 	ID            int64
 	RevisionID    int64

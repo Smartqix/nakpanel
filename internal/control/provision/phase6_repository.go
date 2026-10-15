@@ -682,7 +682,9 @@ func instantiateDNSTemplateTx(
 ) error {
 	rows, err := tx.QueryContext(ctx, `SELECT stable_key,scope,host_template,record_type,value_template,
 COALESCE(priority,0),COALESCE(weight,0),COALESCE(port,0),ttl
-FROM dns_template_records WHERE revision_id=$1 ORDER BY id`, templateID)
+FROM dns_template_records WHERE revision_id=$1
+AND stable_key NOT IN (SELECT template_record_key FROM dns_template_deletions WHERE zone_id=$2 AND owner_site_id=$3)
+ORDER BY id`, templateID, zoneID, ownerSiteID)
 	if err != nil {
 		return err
 	}

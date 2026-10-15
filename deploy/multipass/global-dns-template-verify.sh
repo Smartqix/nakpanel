@@ -39,7 +39,7 @@ curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
 
 curl -sk --fail -b "${tmpdir}/admin.cookies" \
   "https://${VM_IP}:7443/tools-settings/dns" -o "${tmpdir}/dns-settings.html"
-for marker in 'Zone Records Template' 'SOA Template' 'Transfer Restrictions' 'Synchronization History'; do
+for marker in 'Zone Records Template' 'SOA Template' 'Transfer Restrictions' 'Synchronization History' 'Provider nameservers' 'Apply &amp; History'; do
   grep -Fq "${marker}" "${tmpdir}/dns-settings.html" || fail "DNS Settings omitted ${marker}"
 done
 
@@ -58,6 +58,7 @@ template_revision="$(db "SELECT revision.revision FROM dns_template_state state 
 zone_id="$(db "SELECT id FROM dns_zones WHERE mode='primary' ORDER BY id LIMIT 1")"
 if [[ -n "${zone_id}" ]]; then
   custom_before="$(db "SELECT count(*) FROM dns_records WHERE zone_id=${zone_id} AND origin='custom'")"
+  custom_fingerprint="$(db "SELECT md5(COALESCE(string_agg(row_to_json(record)::text,',' ORDER BY id),'')) FROM dns_records record WHERE zone_id=${zone_id} AND origin='custom'")"
   curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
     -d 'scope=all' "https://${VM_IP}:7443/tools-settings/dns/sync/preview" -o /dev/null -D "${tmpdir}/preview.headers"
   location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{gsub(/\r/,""); print $2}' "${tmpdir}/preview.headers" | tail -1)"
@@ -103,6 +104,17 @@ wait_for "SELECT status IN ('active','partial') FROM dns_template_sync_runs WHER
 if [[ -n "${zone_id}" ]]; then
   [[ "$(db "SELECT count(*) FROM dns_records WHERE zone_id=${zone_id} AND origin='custom'")" == "${custom_before}" ]] ||
     fail "cleanup synchronization removed a custom DNS record"
+  [[ "$(db "SELECT md5(COALESCE(string_agg(row_to_json(record)::text,',' ORDER BY id),'')) FROM dns_records record WHERE zone_id=${zone_id} AND origin='custom'")" == "${custom_fingerprint}" ]] ||
+    fail "synchronization changed custom DNS record data"
+  zone_domain="$(db "SELECT domain FROM dns_zones WHERE id=${zone_id}")"
+  for record_type in NS SOA A; do
+    answer="$(multipass_exec_short "${VM_NAME}" -- dig @127.0.0.1 "${zone_domain}" "${record_type}" +short)"
+    [[ -n "${answer}" ]] || fail "authoritative ${record_type} answer missing for ${zone_domain}"
+  done
+  zone_ipv6="$(db "SELECT ipv6_address FROM dns_zones WHERE id=${zone_id}")"
+  if [[ -n "${zone_ipv6}" ]]; then
+    multipass_exec_short "${VM_NAME}" -- dig @127.0.0.1 "${zone_domain}" AAAA +short | grep -Fxq "${zone_ipv6}" || fail "authoritative IPv6 answer differs"
+  fi
 fi
 template_revision="$(db "SELECT revision.revision FROM dns_template_state state JOIN dns_template_revisions revision ON revision.id=state.active_revision_id WHERE state.singleton")"
 
