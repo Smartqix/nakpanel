@@ -1,7 +1,8 @@
 (function () {
   'use strict';
   function pending(state) { return state === 'pending' || state === 'running'; }
-  if (typeof module !== 'undefined' && module.exports) module.exports = {pending: pending};
+  function formBody(data) { return new URLSearchParams(data); }
+  if (typeof module !== 'undefined' && module.exports) module.exports = {pending: pending, formBody: formBody};
   if (typeof document === 'undefined') return;
   var workspace = document.querySelector('[data-np-dns-settings-workspace]');
   if (!workspace) return;
@@ -10,7 +11,7 @@
     form.addEventListener('submit', async function (event) {
       event.preventDefault(); event.stopPropagation();
       if (form.dataset.pending === 'true') return;
-      var body = new FormData(form), buttons = Array.from(form.querySelectorAll('[type=submit]'));
+      var body = formBody(new FormData(form)), buttons = Array.from(form.querySelectorAll('[type=submit]'));
       var error = form.querySelector('[data-np-dns-error]');
       if (!error) { error = document.createElement('p'); error.className = 'np-gate is-blocked'; error.setAttribute('role','alert'); error.dataset.npDnsError = ''; form.prepend(error); }
       error.hidden = true; form.dataset.pending = 'true'; buttons.forEach(function (button) { button.disabled = true; });
