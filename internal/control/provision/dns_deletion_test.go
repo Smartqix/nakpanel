@@ -81,3 +81,37 @@ func TestNewZoneDoesNotInventNameserversOrWebmail(t *testing.T) {
 		t.Fatalf("unconfigured webmail published: %d %v", count, err)
 	}
 }
+
+func TestDNSQueuedRevisionDoesNotSuppressNewerChange(t *testing.T) {
+	db := removaldb.New(t, "")
+	driver := riverdatabasesql.New(db)
+	migrator, err := rivermigrate.New(driver, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = migrator.Migrate(context.Background(), rivermigrate.DirectionUp, nil); err != nil {
+		t.Fatal(err)
+	}
+	client, err := river.NewClient(driver, &river.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := client.Insert(context.Background(), ConfigureDNSZoneArgs{ZoneID: 1, DesiredRevision: 1}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := client.Insert(context.Background(), ConfigureDNSZoneArgs{ZoneID: 1, DesiredRevision: 2}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Job.ID == second.Job.ID {
+		t.Fatal("new DNS revision was suppressed by an older queued job")
+	}
+	duplicate, err := client.Insert(context.Background(), ConfigureDNSZoneArgs{ZoneID: 1, DesiredRevision: 2}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if duplicate.Job.ID != second.Job.ID {
+		t.Fatal("same DNS revision was not coalesced")
+	}
+}

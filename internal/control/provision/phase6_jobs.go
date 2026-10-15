@@ -67,7 +67,7 @@ func (RestoreBackupArgs) InsertOpts() river.InsertOpts {
 
 type ConfigureDNSZoneArgs struct {
 	ZoneID          int64             `json:"zone_id" river:"unique"`
-	DesiredRevision int64             `json:"desired_revision,omitempty"`
+	DesiredRevision int64             `json:"desired_revision,omitempty" river:"unique"`
 	Bulk            bool              `json:"bulk,omitempty"`
 	Domain          string            `json:"domain,omitempty"`
 	Address         string            `json:"address,omitempty"`
