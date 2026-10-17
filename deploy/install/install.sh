@@ -375,7 +375,7 @@ EOF
   systemctl restart fail2ban
 }
 
-ensure_admin() {
+ensure_admin() (
   if [[ -z "${ADMIN_EMAIL}" ]]; then
     return 0
   fi
@@ -383,10 +383,27 @@ ensure_admin() {
     echo "--admin-email requires --admin-password-file" >&2
     return 1
   fi
+  if [[ ! -f "${ADMIN_PASSWORD_FILE}" || ! -s "${ADMIN_PASSWORD_FILE}" ]]; then
+    echo "administrator password file must be a non-empty regular file" >&2
+    return 1
+  fi
+  # The operator's file can remain root-only. Only the temporary copy needs
+  # to be readable by the service identity used for PostgreSQL peer auth.
+  admin_stage="$(mktemp -d "${TMPDIR:-/tmp}/nakpanel-admin.XXXXXXXX")"
+  trap 'rm -rf "${admin_stage}"' EXIT
+  install -m 0600 "${ADMIN_PASSWORD_FILE}" "${admin_stage}/password"
+  chown nakpanel:nakpanel "${admin_stage}" "${admin_stage}/password"
+  sudo -u nakpanel psql "${DB_DSN}" -X -v ON_ERROR_STOP=1 \
+    <<'SQL'
+UPDATE users SET login_disabled = true
+WHERE email IN ('admin@nakpanel.test', 'client@nakpanel.test', 'reseller@nakpanel.test');
+SQL
+  # EnsureAdmin normalizes the email and re-enables the chosen identity,
+  # including when an operator explicitly selects a seeded administrator.
   sudo -u nakpanel env NAKPANEL_DATABASE_URL="${DB_DSN}" \
     /usr/local/bin/panelctl --actor installer admin ensure \
-    --email "${ADMIN_EMAIL}" --password-file "${ADMIN_PASSWORD_FILE}"
-}
+    --email "${ADMIN_EMAIL}" --password-file "${admin_stage}/password"
+)
 
 health_gate() {
   local expected_version="$1" body version_re
@@ -467,6 +484,7 @@ fresh_install() {
   prepare_migration_root
   run_goose_up
   run_river_up
+  ensure_admin
 
   run_component_installers
   harden_etc_nakpanel
@@ -474,7 +492,6 @@ fresh_install() {
   bash "${SCRIPT_DIR}/phase18-install.sh"
   ensure_dns_include_target
   setup_fail2ban
-  ensure_admin
 
   systemctl daemon-reload
   systemctl enable nakpanel-agent.service nakpanel.service
