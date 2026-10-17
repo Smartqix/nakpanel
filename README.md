@@ -123,6 +123,19 @@ One command from a checkout on the target server:
 sudo deploy/install/install.sh --yes
 ```
 
+For a public server, provide a real administrator during the fresh install:
+
+```bash
+sudo deploy/install/install.sh --fresh --yes \
+  --admin-email admin@example.com \
+  --admin-password-file /root/nakpanel-admin-password
+```
+
+The password file may remain root-owned with mode `0600`. The installer creates
+the administrator before starting the panel, disables the other known test
+logins, and removes its temporary password copy. Without an explicit
+administrator, migration-seeded logins are for isolated lab testing only.
+
 The installer detects fresh installs versus upgrades (`panelctl version` /
 `/etc/nakpanel/version`). Upgrades take a full pre-upgrade backup set and
 roll back automatically when migrations or the post-upgrade health gate fail;
