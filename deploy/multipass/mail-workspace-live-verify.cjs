@@ -34,7 +34,7 @@ let browser;
   await aliases();let aliasRow=page.locator('.np-mail-table tbody tr').filter({hasText:data.alias});await aliasRow.waitFor();await aliasRow.locator('[title="Edit alias"]').click();dialog=page.locator('dialog[open]');data.aliasID=Number(await dialog.locator('[name=resource_id]').inputValue());await submit(dialog,'/mail-aliases');
   fs.writeFileSync(stateFile,JSON.stringify(data),{mode:0o600});
   await page.goto(target);await page.locator('[data-np-mail-settings]:visible').click();dialog=page.locator('dialog[open]');await submit(dialog,'/mail-domains');
-  await page.locator('.np-domain-mail .np-mail-toolbar-actions a:has-text("Import mail")').click();assert.ok(new URL(page.url()).pathname.endsWith('/mail-imports'));await page.goto(target);
+  await page.locator('.np-domain-mail .np-mail-toolbar-actions a:has-text("Import mail")').click();await page.waitForURL(url=>url.pathname.endsWith('/mail-imports'));await page.goto(target);
   // Support navigation retains the actor identity and the current mailbox context.
   const support=await page.locator('a[href*="/support/customers/"]').first().getAttribute('href').catch(()=>null);
   if(support){await page.goto(new URL(support,base).href);}

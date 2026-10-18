@@ -90,10 +90,6 @@
       }
       form.addEventListener("input", markDirty);
       form.addEventListener("change", markDirty);
-      form.addEventListener("submit", function () {
-        form.dataset.npDirty = "false";
-        if (submit) submit.disabled = false;
-      });
     });
   }
 
@@ -3583,6 +3579,16 @@
     if (!files || !files.length) return;
     var entries = Array.prototype.map.call(files, function (file) { return {file: file, relative: file.name}; });
     uploadFileQueue(manager, entries, null);
+  });
+
+  // Run after document delegates and the navigation controller claim submits.
+  window.addEventListener("submit", function (event) {
+    if (event.defaultPrevented) return;
+    var form = event.target.closest && event.target.closest("[data-np-dirty-guard]");
+    if (!form || form.hasAttribute("data-np-editor-form")) return;
+    form.dataset.npDirty = "false";
+    var submit = form.querySelector("[data-np-dirty-submit]");
+    if (submit) submit.disabled = false;
   });
 
   window.addEventListener("beforeunload", function (event) {

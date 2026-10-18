@@ -233,6 +233,15 @@ test('POST failures preserve values and never offer an automatic POST retry',asy
  await h.windowEvents.submit({target:form,preventDefault(){}});
  assert.equal(calls,1);assert.equal(form.entries[0][1],'kept');assert.match(form.beforeNode.childNodes[0].textContent,/could not finish/i);assert.equal(form.beforeNode.childNodes.some(node=>node.name==='button'),false);assert.deepEqual(h.busy,[true,false]);
 });
+test('a successful enhanced save clears dirty state before a document-only redirect',async()=>{
+ const h=harness(),form=new h.Node('form');
+ form.getAttribute=name=>({method:'post',action:'/save'}[name]??null);form.closest=()=>h.main;
+ form.setAttribute('data-np-dirty-guard','');form.dataset.npDirty='true';
+ h.ui.fetch=async()=>({...response('Editor','https://panel.test/sites/7/files/edit'),redirected:true,text:async()=>envelope('Editor').replace('data-title=', 'data-full-document="true" data-title=')});
+ h.location.assign=url=>{assert.equal(form.dataset.npDirty,'false');h.assignments.push(url);};
+ await h.windowEvents.submit({target:form,preventDefault(){}});
+ assert.deepEqual(h.assignments,['https://panel.test/sites/7/files/edit']);
+});
 test('failed HTML POST preserves the mounted form, values, dirty guard and history',async()=>{
  for(const html of ['<main><h1> File changed </h1><p> Reload before saving. </p></main>',envelope('File changed')]) {
   const h=harness(),form=new h.Node('form');

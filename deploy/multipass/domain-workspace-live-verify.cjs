@@ -136,8 +136,11 @@ let browser;
       await dialog.locator('button[type=submit]').click();
       const response=await removing;assert.equal(response.status(),202);
       const operation=await response.json();assert.ok(operation.status_url);
-      await until(async()=>{const r=await context.request.get(new URL(operation.status_url,base).href);const state=await r.json();if(state.state==='failed')throw Error('Removal failed: '+state.error);return state.state==='completed';},'QA removal',300);
+      let destination;
+      await until(async()=>{const r=await context.request.get(new URL(operation.status_url,base).href);const state=await r.json();if(state.state==='failed')throw Error('Removal failed: '+state.error);if(state.state==='completed'){destination=new URL(state.redirect,base);return true;}return false;},'QA removal',300);
       await until(()=>db(`SELECT count(*) FROM sites WHERE id=${id}`)==='0','site finalization');
+      assert.equal(destination.origin,new URL(base).origin);
+      await page.waitForURL(destination.href,{timeout:60000});
     }
     if(index===0)await remove(childID,child,false);
     await remove(site,domain,index===1);

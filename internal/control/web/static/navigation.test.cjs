@@ -52,8 +52,8 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 function appHarness(withLifecycle = true) {
  const lifecycle = withLifecycle ? nav.createLifecycle() : undefined;
- const bindings = new Map(), intervals = new Map(), documentEvents={}, dialogs=new Map(), opened=[];let nextTimer=0;
- const form = {dataset:{}, hasAttribute:()=>false, querySelector:()=>null,
+ const bindings = new Map(), intervals = new Map(), documentEvents={}, windowEvents={}, dialogs=new Map(), opened=[];let nextTimer=0;
+ const form = {dataset:{}, hasAttribute:()=>false, querySelector:()=>null, closest:()=>form,
   addEventListener(type, listener) {if(!bindings.has(type))bindings.set(type,[]);bindings.get(type).push(listener);}};
  const progress = {};
  function scope() {return {querySelector:()=>null,querySelectorAll(selector) {
@@ -63,10 +63,10 @@ function appHarness(withLifecycle = true) {
  },contains:el=>el===form||el===progress};}
  const document = Object.assign(scope(),{getElementById:id=>dialogs.get(id),documentElement:{classList:{add(){}}},addEventListener(type,listener){(documentEvents[type] ||= []).push(listener);},hidden:false});
  const ui={lifecycle,createDialogController:()=>({prepare(){},unmount(){},prefill(dialog,trigger){opened.push(['prefill',dialog,trigger]);},open(dialog,trigger){opened.push(['open',dialog,trigger]);},top:()=>null}),fetch:async()=>{},setBusy(){}};
- const window={document,NakpanelUI:ui,fetch:async()=>{},addEventListener(){},location:{href:current,search:''},
+ const window={document,NakpanelUI:ui,fetch:async()=>{},addEventListener(type,listener){(windowEvents[type] ||= []).push(listener);},location:{href:current,search:''},
   setTimeout:()=>++nextTimer,clearTimeout(){},setInterval:fn=>{const id=++nextTimer;intervals.set(id,fn);return id;},clearInterval:id=>intervals.delete(id)};
  vm.runInNewContext(fs.readFileSync(require.resolve('./app.js'),'utf8'), {window,document,URL,URLSearchParams,AbortController,WeakMap,Set});
- return {lifecycle,bindings,form,progress,root:scope(),intervals,documentEvents,dialogs,opened};
+ return {lifecycle,bindings,form,progress,root:scope(),intervals,documentEvents,windowEvents,dialogs,opened};
 }
 test('app mounts are idempotent and retain dirty state on repeated mounts', () => {
  const app=appHarness();assert.equal(app.bindings.get('input').length,1);
@@ -79,6 +79,23 @@ test('app mounts are idempotent and retain dirty state on repeated mounts', () =
 });
 test('legacy documents without navigation still initialise once', () => {
  const app=appHarness(false);assert.equal(app.bindings.get('input').length,1);assert.equal(app.intervals.size,1);
+});
+
+test('preview and enhanced submissions retain unsaved state until a real save succeeds', async () => {
+ const app=appHarness();
+ app.bindings.get('input')[0]();
+ const preview={target:app.form,defaultPrevented:false};
+ for(const listener of app.bindings.get('submit')||[]){
+  listener(preview);
+  // Trusted browser events may run microtasks between native listeners.
+  await Promise.resolve();
+ }
+ preview.defaultPrevented=true;
+ (app.windowEvents.submit||[]).forEach(listener=>listener(preview));
+ assert.equal(app.form.dataset.npDirty,'true');
+ const native={target:app.form,defaultPrevented:false};
+ (app.windowEvents.submit||[]).forEach(listener=>listener(native));
+ assert.equal(app.form.dataset.npDirty,'false');
 });
 
 test('dialog triggers prefill and open without instant navigation, preserving missing-dialog fallback and modified clicks',()=>{

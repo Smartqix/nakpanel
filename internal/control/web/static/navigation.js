@@ -388,7 +388,13 @@
     var signal = controller.signal, id = ++sequence, main = document.querySelector('#main-content');
     function current() { return isCurrent(id, sequence, signal); }
     var finishFeedback = feedback(main, action, signal), committed = false, leavingDocument = false;
-    function finish(success) { if (success) committed = true; finishFeedback(success); }
+    function finish(success) {
+      if (success) {
+        committed = true;
+        if (form.hasAttribute('data-np-dirty-guard')) form.dataset.npDirty = 'false';
+      }
+      finishFeedback(success);
+    }
     main.setAttribute('aria-busy', 'true');
     try {
       // Match native encoding so handlers see exactly what a normal submission sends.
