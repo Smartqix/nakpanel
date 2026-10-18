@@ -27,8 +27,9 @@ function fixture() {
       },
       querySelectorAll: () => controls,
       addEventListener: (name, listener) => { listeners[name] = listener; },
+      removeEventListener: name => { delete listeners[name]; },
       showModal() { this.open = true; document.activeElement = controls[0]; },
-      close() { this.open = false; events.push(() => listeners.close()); },
+      close() { this.open = false; const listener = listeners.close; events.push(() => listener?.()); },
       cancel() { const event = {preventDefault() { this.prevented = true; }}; listeners.cancel(event); assert.ok(event.prevented); },
       focus() { document.activeElement = this; }
     };
@@ -53,6 +54,80 @@ test('creation dialogs focus the first visible enabled field, not the close butt
   const f = fixture();
   f.controller.open(f.dialogs.edit, f.opener);
   assert.equal(f.document.activeElement, f.input);
+});
+
+test('unmount closes nested dialogs, unlocks the page and allows preparation again', () => {
+  const f = fixture(), root = {contains: dialog => Object.values(f.dialogs).includes(dialog), querySelectorAll: () => Object.values(f.dialogs)};
+  f.controller.open(f.dialogs.edit, f.opener);
+  f.controller.open(f.dialogs.confirm, f.input);
+  f.controller.unmount(root);
+  f.drain();
+  assert.equal(f.controller.top(), null);
+  assert.equal(f.dialogs.edit.open, false);
+  assert.equal(f.dialogs.confirm.open, false);
+  assert.equal(f.classes.has('np-modal-open'), false);
+  f.controller.open(f.dialogs.edit, f.opener);
+  f.dialogs.edit.cancel(); f.drain();
+  assert.equal(f.controller.top(), null);
+  assert.equal(f.document.activeElement, f.opener);
+});
+
+test('unmount also dismisses a shell confirmation opened from the removed drawer', () => {
+  const f = fixture(), root = {contains: element => element === f.dialogs.edit || element === f.input, querySelectorAll: () => [f.dialogs.edit]};
+  f.controller.open(f.dialogs.edit, f.opener);
+  f.controller.open(f.dialogs.confirm, f.input);
+  f.controller.unmount(root); f.drain();
+  assert.equal(f.controller.top(), null);
+  assert.equal(f.classes.has('np-modal-open'), false);
+  assert.equal(f.dialogs.confirm.open, false);
+});
+
+test('prefill sets named fields and signals dependent controls, ignoring malformed data', () => {
+  const f = fixture(), changes = [];
+  const fields = [{name:'subscription_id', type:'select-one', value:'1'}, {name:'domain', type:'text', value:''}, {name:'enabled', type:'checkbox', value:'true', checked:false}];
+  fields.forEach(field => { field.dispatchEvent = event => changes.push([field.name, event.type]); });
+  const dialog = {querySelectorAll: () => fields};
+  f.controller.prefill(dialog, {getAttribute: () => '{"subscription_id":"42","domain":"example.test","enabled":true}'});
+  assert.equal(fields[0].value, '42'); assert.equal(fields[1].value, 'example.test'); assert.equal(fields[2].checked, true);
+  assert.deepEqual(changes, [['subscription_id','change'],['domain','change'],['enabled','change']]);
+  assert.doesNotThrow(() => f.controller.prefill(dialog, {getAttribute: () => '{bad'}));
+});
+
+test('error recovery reopens the matching drawer and restores safe fields with fresh CSRF', () => {
+  const f = fixture(), dialog = f.dialogs.edit;
+  dialog.matches = selector => selector === 'dialog.np-drawer';
+  const fields = [
+    {name:'name',type:'text',value:'entered'}, {name:'password',type:'password',value:'secret'},
+    {name:'upload',type:'file',value:'private'}, {name:'csrf_token',type:'hidden',value:'old-csrf'},
+    {name:'resource_id',type:'hidden',value:'12'}, {name:'enabled',type:'checkbox',value:'true',checked:false},
+    {name:'destinations',type:'select-multiple',multiple:true,options:[{value:'a',selected:true},{value:'b',selected:false}]}
+  ];
+  const changed = [];
+  fields.forEach(field => { field.dispatchEvent = event => {
+    assert.equal(event.type, 'change'); assert.equal(fields[0].value, 'entered'); assert.equal(fields[5].checked, false);
+    changed.push(field.name);
+  }; });
+  const form = {elements:fields, closest: () => dialog};
+  const snapshot = f.controller.capture(form);
+  assert.ok(!JSON.stringify(snapshot).includes('secret')); assert.ok(!JSON.stringify(snapshot).includes('old-csrf'));
+  // Shell drawers survive swaps, including their original sensitive controls.
+  fields[0].value = ''; fields[3].value = 'fresh-csrf'; fields[4].value = ''; fields[5].checked = true;
+  fields[6].options.forEach(option => { option.selected = !option.selected; });
+  const error = {setAttribute(){}, focus(){this.focused=true;}, cloneNode(){return {...this};}};
+  const body = {prepend(node){this.error=node;}};
+  const query = dialog.querySelector;
+  dialog.querySelector = selector => selector === 'form[method="post"]' ? form : selector === '.np-drawer-body' ? body : query(selector);
+  f.document.querySelectorAll = () => [];
+  const main = {querySelector: () => error};
+  assert.equal(f.controller.restore(snapshot, main), true);
+  assert.equal(dialog.open, true); assert.equal(fields[0].value, 'entered'); assert.equal(fields[1].value, '');
+  assert.equal(fields[2].value, ''); assert.equal(fields[3].value, 'fresh-csrf'); assert.equal(fields[4].value, '12'); assert.equal(fields[5].checked, false);
+  assert.deepEqual(fields[6].options.map(option=>option.selected), [true,false]); assert.equal(body.error.focused, true);
+  assert.deepEqual(changed, ['name','enabled','destinations']);
+  f.controller.close(dialog);
+  assert.equal(f.controller.restore(snapshot, {querySelector:()=>null}), false);
+  delete f.dialogs.edit;
+  assert.equal(f.controller.restore(snapshot, main), false);
 });
 
 test('collapsed impact details never receive invisible initial focus',()=>{

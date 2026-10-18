@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
 	"github.com/nakroteck/nakpanel/internal/control/web"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -19,9 +20,10 @@ type siteSetupReader interface {
 
 func (s *Server) siteSetupTarget(w http.ResponseWriter, r *http.Request) (auth.SessionUser, types.SiteSetupStatus, int64, bool) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := s.currentUser(w, r)
-	if !ok {
+	user, ok := s.currentUser(w, r, func() {
 		writeSPAError(w, http.StatusUnauthorized, "Sign in to check setup.")
+	})
+	if !ok {
 		return user, types.SiteSetupStatus{}, 0, false
 	}
 	id, err := parsePositivePathID(r, "id")
@@ -137,7 +139,7 @@ func (s *Server) handleSiteSetupPage(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, setupPath(supportID, setup.SiteID, "?tab=overview&notice="+setupNotice(setup)), http.StatusSeeOther)
 		return
 	}
-	data, err := s.loadDashboard(r.Context(), user)
+	data, err := s.loadDashboard(dashboard.WithServiceScope(r.Context(), 0, setup.SiteID), user)
 	if err != nil {
 		http.Error(w, "Could not load setup workspace", http.StatusServiceUnavailable)
 		return
@@ -156,5 +158,5 @@ func (s *Server) handleSiteSetupPage(w http.ResponseWriter, r *http.Request) {
 	if supportID > 0 {
 		actionUser.Role = auth.RoleClient
 	}
-	renderPage(w, r, web.RoutedDashboardPage("Website setup", user, data, s.dashboardActions(actionUser), view))
+	s.renderRoutedPage(w, r, "Website setup", user, data, s.dashboardActions(actionUser), view)
 }

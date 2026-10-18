@@ -52,7 +52,6 @@ type fileRequest struct {
 func (s *Server) currentFileRequest(w http.ResponseWriter, r *http.Request) (fileRequest, bool) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return fileRequest{}, false
 	}
 	if s.files == nil {
@@ -119,7 +118,7 @@ func (s *Server) handleFileList(w http.ResponseWriter, r *http.Request) {
 	}
 	view.FileManager = viewData
 	w.Header().Set("Cache-Control", "no-store")
-	renderPage(w, r, web.RoutedDashboardPage("File Manager · "+request.site.Domain, request.user, data, s.dashboardActions(request.user), view))
+	s.renderRoutedPage(w, r, "File Manager · "+request.site.Domain, request.user, data, s.dashboardActions(request.user), view)
 }
 
 func (s *Server) handleFileEdit(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +138,7 @@ func (s *Server) handleFileEdit(w http.ResponseWriter, r *http.Request) {
 	}
 	view.FileEditor = &web.FileEditorView{SiteID: request.siteID, Domain: request.site.Domain, Path: result.Path, Name: path.Base(result.Path), Content: result.Content, SHA256: result.SHA256, Mode: result.Mode}
 	w.Header().Set("Cache-Control", "no-store")
-	renderPage(w, r, web.RoutedDashboardPage("Edit "+path.Base(result.Path), request.user, data, s.dashboardActions(request.user), view))
+	s.renderRoutedPage(w, r, "Edit "+path.Base(result.Path), request.user, data, s.dashboardActions(request.user), view)
 }
 
 func (s *Server) handleFileDownload(w http.ResponseWriter, r *http.Request) {
@@ -379,7 +378,7 @@ func (s *Server) finishFileMutation(w http.ResponseWriter, r *http.Request, requ
 }
 
 func (s *Server) fileWorkspaceData(w http.ResponseWriter, r *http.Request, request fileRequest, route string) (dashboard.Data, web.WorkspaceView, bool) {
-	data, err := s.loadDashboard(r.Context(), request.user)
+	data, err := s.loadDashboard(workspaceServiceContext(r.Context(), route, strconv.FormatInt(request.siteID, 10)), request.user)
 	if err != nil {
 		http.Error(w, "Could not load File Manager", http.StatusInternalServerError)
 		return dashboard.Data{}, web.WorkspaceView{}, false

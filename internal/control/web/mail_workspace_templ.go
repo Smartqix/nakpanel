@@ -1557,20 +1557,33 @@ func mailDomainDialog(subscription types.SubscriptionSummary, domain dashboard.M
 			templ_7745c5c3_Var66 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "<dialog class=\"np-dialog\" id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 149, "<dialog class=\"np-dialog np-drawer\" id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(mailDialogID("domain", subscription.ID, domain.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 205, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 205, Col: 92}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 150, "\" data-np-dialog><div class=\"np-dialog-head\"><span class=\"np-kicker\">Mail domain</span><h2>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var68 string
+		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(mailDomainDialogTitle(domain.ID))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 205, Col: 218}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "</h2><p>The domain is taken from a hosted website owned by this subscription.</p><button type=\"button\" class=\"np-icon-button\" data-np-dialog-close aria-label=\"Close dialog\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1578,20 +1591,7 @@ func mailDomainDialog(subscription types.SubscriptionSummary, domain dashboard.M
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 151, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">Mail domain</span><h2>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var68 string
-		templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(mailDomainDialogTitle(domain.ID))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 205, Col: 314}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "</h2><p>The domain is taken from a hosted website owned by this subscription.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 152, "</button></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1604,7 +1604,7 @@ func mailDomainDialog(subscription types.SubscriptionSummary, domain dashboard.M
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 153, "\"><div class=\"np-drawer-body\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1623,7 +1623,7 @@ func mailDomainDialog(subscription types.SubscriptionSummary, domain dashboard.M
 		var templ_7745c5c3_Var70 string
 		templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(domain.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 206, Col: 273}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 206, Col: 301}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 		if templ_7745c5c3_Err != nil {
@@ -1753,7 +1753,7 @@ func mailDomainDialog(subscription types.SubscriptionSummary, domain dashboard.M
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 175, ">Mail service enabled</label><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">Save mail domain</button></div></form></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 175, ">Mail service enabled</label></div><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">Save mail domain</button></div></form></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1782,20 +1782,46 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 			templ_7745c5c3_Var74 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "<dialog class=\"np-dialog\" id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 176, "<dialog class=\"np-dialog np-drawer\" id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var75 string
 		templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(mailDialogID(mailboxDialogKind(mailbox.ID), subscription.ID, mailboxDialogResourceID(mailbox.ID, domain.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 221, Col: 140}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 221, Col: 150}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 177, "\" data-np-dialog><div class=\"np-dialog-head\"><span class=\"np-kicker\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var76 string
+		templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(domain.Domain)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 221, Col: 235}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "</span><h2>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var77 string
+		templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(mailboxDialogTitle(mailbox.ID))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 221, Col: 280}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "</h2><p>Passwords are write-only. Existing passwords are never returned by Nakpanel.</p><button type=\"button\" class=\"np-icon-button\" data-np-dialog-close aria-label=\"Close dialog\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1803,33 +1829,7 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 178, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var76 string
-		templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(domain.Domain)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 221, Col: 331}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 179, "</span><h2>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var77 string
-		templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinStringErrs(mailboxDialogTitle(mailbox.ID))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 221, Col: 376}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 180, "</h2><p>Passwords are write-only. Existing passwords are never returned by Nakpanel.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 180, "</button></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1842,7 +1842,7 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 181, "\"><div class=\"np-drawer-body\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1861,7 +1861,7 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 		var templ_7745c5c3_Var79 string
 		templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(mailbox.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 271}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 299}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 		if templ_7745c5c3_Err != nil {
@@ -1874,7 +1874,7 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 		var templ_7745c5c3_Var80 string
 		templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(domain.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 348}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 376}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 		if templ_7745c5c3_Err != nil {
@@ -1887,7 +1887,7 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 		var templ_7745c5c3_Var81 string
 		templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(mailLocalPart(mailbox.Address))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 432}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 460}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 		if templ_7745c5c3_Err != nil {
@@ -1900,7 +1900,7 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 		var templ_7745c5c3_Var82 string
 		templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs(mailboxPasswordHint(mailbox.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 525}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 553}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 		if templ_7745c5c3_Err != nil {
@@ -1939,7 +1939,7 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 		var templ_7745c5c3_Var83 string
 		templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs(formatMailboxQuotaInput(mailbox.QuotaMB))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 1072}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 1100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 		if templ_7745c5c3_Err != nil {
@@ -1955,14 +1955,14 @@ func mailboxDialog(subscription types.SubscriptionSummary, domain dashboard.Mail
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, ">Mailbox enabled</label><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 193, ">Mailbox enabled</label></div><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var84 string
 		templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(mailboxSubmitLabel(mailbox.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 1498}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 222, Col: 1532}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 		if templ_7745c5c3_Err != nil {
@@ -1997,20 +1997,46 @@ func mailAliasDialog(subscription types.SubscriptionSummary, domain dashboard.Ma
 			templ_7745c5c3_Var85 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 195, "<dialog class=\"np-dialog\" id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 195, "<dialog class=\"np-dialog np-drawer\" id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var86 string
 		templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinStringErrs(mailDialogID(aliasDialogKind(alias.ID), subscription.ID, aliasDialogResourceID(alias.ID, domain.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 227, Col: 132}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 227, Col: 142}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "\" data-np-dialog><form method=\"dialog\" class=\"np-dialog-close\"><button aria-label=\"Close dialog\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 196, "\" data-np-dialog><div class=\"np-dialog-head\"><span class=\"np-kicker\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var87 string
+		templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(domain.Domain)
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 227, Col: 227}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, "</span><h2>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var88 string
+		templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.JoinStringErrs(aliasDialogTitle(alias.ID))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 227, Col: 268}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var88))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "</h2><p>Destinations must be existing mailboxes in this subscription.</p><button type=\"button\" class=\"np-icon-button\" data-np-dialog-close aria-label=\"Close dialog\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2018,33 +2044,7 @@ func mailAliasDialog(subscription types.SubscriptionSummary, domain dashboard.Ma
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 197, "</button></form><div class=\"np-dialog-head\"><span class=\"np-kicker\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var87 string
-		templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(domain.Domain)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 227, Col: 323}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 198, "</span><h2>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var88 string
-		templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.JoinStringErrs(aliasDialogTitle(alias.ID))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 227, Col: 364}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var88))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, "</h2><p>Destinations must be existing mailboxes in this subscription.</p></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 199, "</button></div><form class=\"np-form np-dialog-form\" method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2057,7 +2057,7 @@ func mailAliasDialog(subscription types.SubscriptionSummary, domain dashboard.Ma
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 200, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 200, "\"><div class=\"np-drawer-body\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2076,7 +2076,7 @@ func mailAliasDialog(subscription types.SubscriptionSummary, domain dashboard.Ma
 		var templ_7745c5c3_Var90 string
 		templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(alias.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 228, Col: 272}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 228, Col: 300}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
 		if templ_7745c5c3_Err != nil {
@@ -2089,7 +2089,7 @@ func mailAliasDialog(subscription types.SubscriptionSummary, domain dashboard.Ma
 		var templ_7745c5c3_Var91 string
 		templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(domain.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 228, Col: 349}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 228, Col: 377}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var91))
 		if templ_7745c5c3_Err != nil {
@@ -2102,7 +2102,7 @@ func mailAliasDialog(subscription types.SubscriptionSummary, domain dashboard.Ma
 		var templ_7745c5c3_Var92 string
 		templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(mailLocalPart(alias.Address))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 228, Col: 431}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 228, Col: 459}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
 		if templ_7745c5c3_Err != nil {
@@ -2115,13 +2115,13 @@ func mailAliasDialog(subscription types.SubscriptionSummary, domain dashboard.Ma
 		var templ_7745c5c3_Var93 string
 		templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(alias.Destinations)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 228, Col: 548}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/mail_workspace.templ`, Line: 228, Col: 576}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 205, "</textarea></label><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">Save alias</button></div></form></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 205, "</textarea></label></div><div class=\"np-dialog-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-dialog-close>Cancel</button><button type=\"submit\">Save alias</button></div></form></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

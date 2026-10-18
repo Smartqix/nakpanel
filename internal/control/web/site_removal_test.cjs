@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const {createSiteRemovalController}=require('./static/site-removal.js');
 const fs=require('node:fs');
 const vm=require('node:vm');
+const {createLifecycle}=require('./static/navigation.js');
 
 function environment(request){let clock=0;const updates=[],redirects=[];return {request,updates,redirects,now:()=>clock,sleep:async ms=>{clock+=ms},update:value=>updates.push(value),redirect:path=>redirects.push(path),baseURL:'https://panel.test'};}
 test('TestSiteRemovalLostResponseDoesNotReplay',async()=>{
@@ -32,10 +33,40 @@ test('closing during acceptance never restarts foreground polling or steals navi
 
 test('mounted failed progress enables Retry instead of leaving the form busy',async()=>{
  const button={disabled:false};const form={dataset:{},querySelector:()=>null};
- const root={dataset:{npRemovalStatus:'/status'},querySelector:selector=>selector.includes('form')?form:null};
- const document={getElementById:()=>null,addEventListener:()=>{},querySelectorAll:()=>[root]};
+ const root={closest:()=>null,dataset:{npRemovalStatus:'/status'},querySelector:selector=>selector.includes('form')?form:null};
+ const document={querySelector:()=>null,getElementById:()=>null,addEventListener:()=>{},querySelectorAll:()=>[root]};
  const window={document,location:{href:'https://panel.test/site-removals/1',pathname:'/site-removals/1',assign:()=>{}},NakpanelUI:{fetch:async()=>({json:async()=>({state:'failed',stage:'remove_hosting',html:'failed retry form'})}),setBusy:(_form,busy)=>{button.disabled=busy}}};
  vm.runInNewContext(fs.readFileSync(require.resolve('./static/site-removal.js'),'utf8'),{window,URL,AbortController,setTimeout,clearTimeout,Date,WeakMap});
  await new Promise(resolve=>setImmediate(resolve));
  assert.equal(button.disabled,false,'authoritative failure must offer a usable Retry');
+});
+
+function previewHarness() {
+ const events={},pending=new Map(),lifecycle=createLifecycle(),body={textContent:''};
+ let root={contains:()=>false};
+ const dialog={open:false,innerHTML:'',dataset:{},closest:()=>null,querySelector:selector=>selector==='.np-removal-body'?body:null,addEventListener:(name,fn)=>{events['dialog:'+name]=fn;}};
+ const document={getElementById:()=>dialog,querySelector:()=>root,querySelectorAll:()=>[],addEventListener:(name,fn)=>{events[name]=fn;}};
+ const ui={lifecycle,dialogs:{open:()=>{dialog.open=true;}},fetch:(url,options)=>new Promise((resolve,reject)=>pending.set(url,{options,resolve:html=>resolve({json:async()=>({html})}),reject}))};
+ const window={document,location:{href:'https://panel.test/sites/1'},NakpanelUI:ui};
+ vm.runInNewContext(fs.readFileSync(require.resolve('./static/site-removal.js'),'utf8'),{window,URL,AbortController,setTimeout,clearTimeout});
+ return {dialog,body,pending,click(domain){const owner=root,link={href:'/sites/'+domain+'/remove',closest:selector=>selector==='[data-np-removal-open]'?link:selector==='#main-content'?owner:null};return events.click({target:link,preventDefault(){}});},navigate(){lifecycle.unmount(root);root={contains:()=>false};dialog.open=false;},close(){dialog.open=false;events['dialog:close']();}};
+}
+for(const mode of ['success','error'])test('removal preview ignores a superseded '+mode+' after navigation',async()=>{
+ const h=previewHarness(),a=h.click(1);h.navigate();const b=h.click(2);
+ h.pending.get('/sites/2/remove/preview').resolve('Domain B removal form');await b;
+ if(mode==='success')h.pending.get('/sites/1/remove/preview').resolve('Domain A removal form');
+ else h.pending.get('/sites/1/remove/preview').reject(new Error('Domain A failed'));
+ await a;assert.equal(h.dialog.innerHTML,'Domain B removal form');assert.equal(h.body.textContent,'');
+});
+test('removal preview generations protect reopening on the same page',async()=>{
+ const h=previewHarness(),a=h.click(1);h.close();const b=h.click(2);
+ h.pending.get('/sites/2/remove/preview').resolve('Domain B removal form');await b;
+ h.pending.get('/sites/1/remove/preview').resolve('Domain A removal form');await a;
+ assert.equal(h.dialog.innerHTML,'Domain B removal form');
+});
+test('unmount aborts a pending removal preview before any replacement opens',async()=>{
+ const h=previewHarness(),a=h.click(1);h.navigate();h.dialog.open=true;
+ h.pending.get('/sites/1/remove/preview').resolve('Stale domain removal form');await a;
+ assert.equal(h.pending.get('/sites/1/remove/preview').options.signal.aborted,true);
+ assert.notEqual(h.dialog.innerHTML,'Stale domain removal form');
 });

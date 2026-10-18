@@ -4,11 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/servertiming"
 	"github.com/nakroteck/nakpanel/internal/control/store"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -16,6 +19,27 @@ import (
 type fakeQuerier struct {
 	sites     []store.Site
 	databases []store.Database
+}
+
+type fakeCapabilityReader struct{}
+
+func (fakeCapabilityReader) RuntimeCapabilities(context.Context) (types.RuntimeCapabilities, error) {
+	return types.RuntimeCapabilities{}, nil
+}
+
+func TestDashboardRecordsCapabilityTiming(t *testing.T) {
+	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleReseller, auth.RoleClient} {
+		t.Run(string(role), func(t *testing.T) {
+			ctx := servertiming.WithRecorder(context.Background())
+			_, err := NewStore(&fakeQuerier{}, WithCapabilityReader(fakeCapabilityReader{})).GetDashboard(ctx, auth.SessionUser{ID: 1, Role: role})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if header := servertiming.Header(ctx); !strings.Contains(header, "caps;dur=") {
+				t.Fatalf("Server-Timing = %q, missing caps", header)
+			}
+		})
+	}
 }
 
 func (q *fakeQuerier) ListSites(ctx context.Context) ([]store.Site, error) {
@@ -31,6 +55,22 @@ type fakeJobReader struct {
 	err    error
 	limit  int
 	called bool
+}
+
+type failingJobCountReader struct{ fakeJobReader }
+
+func (*failingJobCountReader) CountActiveJobs(context.Context) (int, error) {
+	return 0, errors.New("count unavailable")
+}
+
+func TestDashboardActiveCountFailureFallsBackToRecentJobs(t *testing.T) {
+	reader := &failingJobCountReader{fakeJobReader{jobs: []Job{
+		{ID: 1, State: "running"}, {ID: 2, State: "scheduled"}, {ID: 3, State: "completed"},
+	}}}
+	data, err := NewStore(&fakeQuerier{}, WithJobReader(reader)).GetDashboard(context.Background(), auth.SessionUser{Role: auth.RoleAdmin})
+	if err != nil || data.ActiveJobs != 2 || len(data.Jobs) != 3 || data.JobLoadError != "" {
+		t.Fatalf("active=%d jobs=%d loadError=%q err=%v", data.ActiveJobs, len(data.Jobs), data.JobLoadError, err)
+	}
 }
 
 func (r *fakeJobReader) ListRecentJobs(ctx context.Context, limit int) ([]Job, error) {
@@ -51,6 +91,7 @@ func (r *fakePhase6Reader) GetPhase6(ctx context.Context) (Phase6Data, error) {
 }
 
 type fakeQuotaReader struct {
+	mu              sync.Mutex
 	summaries       []controlquota.Summary
 	summary         controlquota.Summary
 	plans           []controlquota.Plan
@@ -74,7 +115,9 @@ func (r *fakeQuotaReader) ListAccountQuotas(ctx context.Context) ([]controlquota
 
 func (r *fakeQuotaReader) GetAccountQuotaSummary(ctx context.Context, userID int64) (controlquota.Summary, error) {
 	r.getCalled = true
+	r.mu.Lock()
 	r.userID = userID
+	r.mu.Unlock()
 	return r.summary, r.err
 }
 
@@ -92,7 +135,9 @@ func (r *fakeQuotaReader) ListSubscriptionSummaries(ctx context.Context) ([]type
 }
 
 func (r *fakeQuotaReader) ListSubscriptionSummariesForUser(ctx context.Context, userID int64) ([]types.SubscriptionSummary, error) {
+	r.mu.Lock()
 	r.userID = userID
+	r.mu.Unlock()
 	return r.subscriptions, r.err
 }
 

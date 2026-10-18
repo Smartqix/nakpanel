@@ -1,3 +1,4 @@
+const installLifecycle = require('./lifecycle_harness.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -5,11 +6,12 @@ const vm = require('node:vm');
 
 function initialize(nav) {
   const source = fs.readFileSync(__dirname + '/static/app.js', 'utf8');
-  const start = source.indexOf('  function initializeSubscriptionTabs()');
+  const start = source.indexOf('  function initializeSubscriptionTabs(root)');
   assert.ok(start >= 0, 'subscription navigation must reveal the active mobile tab');
-  assert.match(source, /initializeSubscriptionTabs\(\);/);
+  assert.match(source, /initializeSubscriptionTabs\(root\);/);
   const end = source.indexOf('\n  function ', start + 1);
-  const context = vm.createContext({document: {}, each: (_, scope, callback) => callback(nav)});
+  const context = vm.createContext({document: {querySelectorAll:()=>[nav]}});
+  installLifecycle(context);
   vm.runInContext(source.slice(start, end) + '\ninitializeSubscriptionTabs();', context);
 }
 

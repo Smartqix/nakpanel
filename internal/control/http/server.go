@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/nakroteck/nakpanel/internal/certificates"
@@ -26,6 +27,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/provision"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
+	"github.com/nakroteck/nakpanel/internal/control/servertiming"
 	"github.com/nakroteck/nakpanel/internal/control/web"
 	"github.com/nakroteck/nakpanel/internal/control/webstatistics"
 	controlwordpress "github.com/nakroteck/nakpanel/internal/control/wordpress"
@@ -249,6 +251,7 @@ type FileManagerService interface {
 }
 
 type ServerOptions struct {
+	DisableInstantNav          bool
 	SiteCreator                SiteCreator
 	DatabaseCreator            DatabaseCreator
 	CertificateIssuer          CertificateIssuer
@@ -281,6 +284,7 @@ type ServerOptions struct {
 }
 
 type Server struct {
+	disableInstantNav  bool
 	users              UserStore
 	sessions           *auth.SessionManager
 	sites              SiteCreator
@@ -318,6 +322,7 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		opts = options[0]
 	}
 	return &Server{
+		disableInstantNav:  opts.DisableInstantNav,
 		users:              users,
 		sessions:           sessions,
 		sites:              opts.SiteCreator,
@@ -478,6 +483,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /subscriptions/{id}/mode", s.handleSetSubscriptionMode)
 	mux.HandleFunc("GET /db", s.handleAdminer)
 	mux.HandleFunc("GET /search", s.handleSearch)
+	mux.HandleFunc("GET /api/workspace/tasks", s.handleTasks)
 	mux.HandleFunc("GET /mail/status", s.handleMailStatus)
 	mux.HandleFunc("GET /email", s.handleEmailRedirect)
 	mux.HandleFunc("GET /dashboard", s.handleWorkspace("dashboard"))
@@ -548,7 +554,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /support/customers/{customerID}/subscriptions/{id}", s.handleSupportObject("subscriptions", ""))
 	mux.HandleFunc("GET /support/customers/{customerID}/{page}", s.handleSupportWorkspace)
 	mux.HandleFunc("GET /", s.handleRoot)
-	return securityHeaders(userFacingErrors(sameOriginPostGuard(limitPostBody(csrfGuard(mux), s.files))))
+	return securityHeaders(prefetchRequests(userFacingErrors(sameOriginPostGuard(limitPostBody(csrfGuard(s.fragmentRequests(mux)), s.files)))))
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
@@ -577,7 +583,6 @@ func (s *Server) handleLoginForm(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 
@@ -627,16 +632,16 @@ func (s *Server) dashboardActions(user auth.SessionUser) web.DashboardActions {
 
 func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		r = r.WithContext(servertiming.WithRecorder(r.Context()))
 		user, ok := s.currentUser(w, r)
 		if !ok {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
 		if !workspaceRouteAllowed(user.Role, route) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		data, err := s.loadDashboard(r.Context(), user)
+		data, err := s.loadDashboard(workspaceServiceContext(r.Context(), route, r.PathValue("id")), user)
 		if err != nil {
 			http.Error(w, "Could not load workspace", http.StatusInternalServerError)
 			return
@@ -670,6 +675,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		view.ProviderFilter = strings.TrimSpace(r.URL.Query().Get("provider"))
 		view.CloneFrom = parseQueryInt64(r, "clone_from")
 		view.Tab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("tab")))
+		view.Drawer = workspaceDrawerID(r.URL.Query().Get("drawer"))
 		view.ApplicationTab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab")))
 		view.WordPressTab = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("wp_tab")))
 		view.LogSource = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source")))
@@ -756,7 +762,7 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 				return
 			}
 		}
-		renderPage(w, r, web.RoutedDashboardPage(routeTitle(route), user, data, s.dashboardActions(user), view))
+		s.renderRoutedPage(w, r, routeTitle(route), user, data, s.dashboardActions(user), view)
 	}
 }
 
@@ -787,7 +793,6 @@ func (s *Server) handleContainerDetail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if s.applicationLogs == nil {
@@ -800,7 +805,7 @@ func (s *Server) handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data, err := s.loadDashboard(r.Context(), user)
+	data, err := s.loadDashboard(dashboard.WithServiceScope(r.Context(), 0, siteID), user)
 	if err != nil {
 		http.Error(w, "Could not load application access", http.StatusInternalServerError)
 		return
@@ -876,6 +881,7 @@ func (s *Server) handleSupportObject(page, toolParam string) http.HandlerFunc {
 }
 
 func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) {
+	r = r.WithContext(servertiming.WithRecorder(r.Context()))
 	user, ok := s.requireAdmin(w, r)
 	if !ok {
 		return
@@ -910,7 +916,7 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
-	data, err := s.loadDashboard(r.Context(), user)
+	data, err := s.loadDashboard(workspaceServiceContext(r.Context(), page, strconv.FormatInt(detailID, 10)), user)
 	if err != nil {
 		http.Error(w, "Could not load support workspace", http.StatusInternalServerError)
 		return
@@ -941,7 +947,7 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 	if !validWorkspaceTab(page, tab) {
 		tab = "overview"
 	}
-	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, ApplicationTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab"))), WordPressTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("wp_tab"))), LogSource: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source"))), CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
+	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, Drawer: workspaceDrawerID(r.URL.Query().Get("drawer")), ApplicationTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab"))), WordPressTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("wp_tab"))), LogSource: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source"))), CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
 	if page == "site-new" {
 		view.SelectedSubscription = parseQueryInt64(r, "subscription_id")
 		view.SiteCreateKind = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))
@@ -974,7 +980,19 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 	}
-	renderPage(w, r, web.RoutedDashboardPage("Support · "+name, user, data, s.dashboardActions(auth.SessionUser{Role: auth.RoleClient}), view))
+	s.renderRoutedPage(w, r, "Support · "+name, user, data, s.dashboardActions(auth.SessionUser{Role: auth.RoleClient}), view)
+}
+
+func workspaceDrawerID(raw string) string {
+	if len(raw) == 0 || len(raw) > 128 {
+		return ""
+	}
+	for _, c := range raw {
+		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
+			return ""
+		}
+	}
+	return raw
 }
 
 func validWorkspaceTab(route, tab string) bool {
@@ -1229,6 +1247,9 @@ func filterDashboardForCustomer(data dashboard.Data, customerID int64) dashboard
 }
 
 func (s *Server) loadDashboard(ctx context.Context, user auth.SessionUser) (dashboard.Data, error) {
+	started := time.Now()
+	defer func() { servertiming.Record(ctx, "load", time.Since(started)) }()
+	servertiming.Record(ctx, "caps", 0)
 	if s.dashboard == nil {
 		return dashboard.Data{}, nil
 	}
@@ -1262,9 +1283,10 @@ func parseQueryInt64(r *http.Request, name string) int64 {
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	user, ok := s.currentUser(w, r)
-	if !ok {
+	user, ok := s.currentUser(w, r, func() {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+	})
+	if !ok {
 		return
 	}
 	if s.workspace == nil {
@@ -1478,7 +1500,6 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if user.Role != auth.RoleAdmin && user.Role != auth.RoleClient && user.Role != auth.RoleReseller {
@@ -1570,7 +1591,6 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	creator, ok := s.sites.(SubdomainCreator)
@@ -1648,7 +1668,6 @@ func (s *Server) handleCreateSubdomain(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if user.Role != auth.RoleAdmin && user.Role != auth.RoleClient && user.Role != auth.RoleReseller {
@@ -1749,7 +1768,6 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleIssueCertificate(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if user.Role != auth.RoleAdmin && user.Role != auth.RoleClient && user.Role != auth.RoleReseller {
@@ -1798,7 +1816,6 @@ func (s *Server) handleIssueCertificate(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleInstallCustomCertificate(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if user.Role != auth.RoleAdmin && user.Role != auth.RoleClient && user.Role != auth.RoleReseller {
@@ -1881,7 +1898,6 @@ func readCertificateUpload(r *http.Request, name string, required bool) ([]byte,
 func (s *Server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if user.Role != auth.RoleAdmin {
@@ -1912,7 +1928,6 @@ func (s *Server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if user.Role != auth.RoleAdmin && user.Role != auth.RoleClient && user.Role != auth.RoleReseller {
@@ -1964,7 +1979,6 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if user.Role != auth.RoleAdmin && user.Role != auth.RoleClient && user.Role != auth.RoleReseller {
@@ -2071,7 +2085,6 @@ func (s *Server) handleConfigureWebmail(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleConfigureDNS(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if user.Role != auth.RoleAdmin && user.Role != auth.RoleClient && user.Role != auth.RoleReseller {
@@ -2132,7 +2145,6 @@ func (s *Server) handleReconcileSystem(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleAdminer(w http.ResponseWriter, r *http.Request) {
 	_, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
@@ -2650,7 +2662,6 @@ func (s *Server) handleSitePHP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSitePHPSettings(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if s.domains == nil {
@@ -2687,7 +2698,6 @@ func (s *Server) handleSitePHPSettings(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleTLSAutoRenew(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if s.domains == nil {
@@ -2715,7 +2725,6 @@ func (s *Server) handleTLSAutoRenew(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSiteSettings(w http.ResponseWriter, r *http.Request, tab string) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if s.domains == nil {
@@ -2743,7 +2752,6 @@ func (s *Server) handleSiteSettings(w http.ResponseWriter, r *http.Request, tab 
 func (s *Server) handleUpsertDNSRecord(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if s.domains == nil {
@@ -2776,7 +2784,6 @@ func (s *Server) handleUpsertDNSRecord(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeleteDNSRecord(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if s.domains == nil {
@@ -3234,7 +3241,6 @@ func parsedCustomEntitlements(r *http.Request, plan controlquota.Plan) types.Sub
 func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) (auth.SessionUser, bool) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return auth.SessionUser{}, false
 	}
 	if user.Role != auth.RoleAdmin {
@@ -3247,7 +3253,6 @@ func (s *Server) requireAdmin(w http.ResponseWriter, r *http.Request) (auth.Sess
 func (s *Server) requireProvider(w http.ResponseWriter, r *http.Request) (auth.SessionUser, bool) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return auth.SessionUser{}, false
 	}
 	if user.Role != auth.RoleAdmin && user.Role != auth.RoleReseller {
@@ -3257,19 +3262,33 @@ func (s *Server) requireProvider(w http.ResponseWriter, r *http.Request) (auth.S
 	return user, true
 }
 
-func (s *Server) currentUser(w http.ResponseWriter, r *http.Request) (auth.SessionUser, bool) {
+// currentUser writes the authentication failure response before returning false.
+// A custom missing-session response preserves endpoint-specific JSON contracts.
+func (s *Server) currentUser(w http.ResponseWriter, r *http.Request, missingSession ...func()) (auth.SessionUser, bool) {
 	cookie, err := r.Cookie(SessionCookieName)
-	if err != nil {
-		return auth.SessionUser{}, false
+	if err == nil {
+		user, err := s.sessions.Authenticate(r.Context(), cookie.Value)
+		if err == nil {
+			return user, true
+		}
+		if !errors.Is(err, auth.ErrSessionNotFound) && !isPrefetchRequest(r) {
+			http.Error(w, "Session authentication is unavailable", http.StatusServiceUnavailable)
+			return auth.SessionUser{}, false
+		}
+		if errors.Is(err, auth.ErrSessionNotFound) && !isPrefetchRequest(r) {
+			clearSessionCookie(w)
+		}
 	}
 
-	user, err := s.sessions.Authenticate(r.Context(), cookie.Value)
-	if err != nil {
-		clearSessionCookie(w)
-		return auth.SessionUser{}, false
+	if r.Header.Get("X-Nakpanel-Fragment") == "main" || isPrefetchRequest(r) {
+		w.Header().Set("X-Nakpanel-Location", "/login")
+		w.WriteHeader(http.StatusUnauthorized)
+	} else if len(missingSession) != 0 {
+		missingSession[0]()
+	} else {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
-
-	return user, true
+	return auth.SessionUser{}, false
 }
 
 func sameOriginPostGuard(next http.Handler) http.Handler {
@@ -3482,6 +3501,10 @@ const formErrorCookieTTL = 30
 // takeFormError reads the message and immediately expires the cookie, so a
 // failure is reported once instead of on every later page view.
 func takeFormError(w http.ResponseWriter, r *http.Request) string {
+	// Intent fetches must leave one-shot state for the real page request.
+	if isPrefetchRequest(r) {
+		return ""
+	}
 	cookie, err := r.Cookie(FormErrorCookieName)
 	if err != nil || strings.TrimSpace(cookie.Value) == "" {
 		return ""
@@ -3694,10 +3717,15 @@ func dashboardTitle(role auth.Role) string {
 }
 
 func renderPage(w http.ResponseWriter, r *http.Request, component templ.Component) {
+	started := time.Now()
 	var body bytes.Buffer
 	if err := component.Render(web.WithPanelHostname(r.Context(), r.Host), &body); err != nil {
 		formFailure(w, r, "Could not render page")
 		return
+	}
+	servertiming.Record(r.Context(), "render", time.Since(started))
+	if timing := servertiming.Header(r.Context()); timing != "" {
+		w.Header().Set("Server-Timing", timing)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_, _ = body.WriteTo(w)

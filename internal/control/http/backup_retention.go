@@ -22,7 +22,6 @@ func (s *Server) handleBackupDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", 303)
 		return
 	}
 	id, err := parsePositivePathID(r, "id")

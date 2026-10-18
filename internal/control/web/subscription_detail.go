@@ -621,6 +621,8 @@ func relativeTo(value, now time.Time) string {
 	switch {
 	case delta < time.Minute:
 		return "just now"
+	case delta < 2*time.Minute:
+		return "a minute ago"
 	case delta < time.Hour:
 		return fmt.Sprintf("%d minutes ago", int(delta.Minutes()))
 	case delta < 24*time.Hour:

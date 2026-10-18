@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/web"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
@@ -282,6 +283,13 @@ func (s *Server) handleFTPAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
+	if r.Header.Get("X-Nakpanel-Fragment") == "main" {
+		w.Header().Add("Vary", "X-Nakpanel-Fragment")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		_ = web.OneTimeSecretFragment("FTPS credential", "FTPS account created", "This password is shown once.", password, continuePath).Render(r.Context(), w)
+		return
+	}
 	if strings.Contains(r.Header.Get("Accept"), "application/json") {
 		writeSPAJSON(w, http.StatusCreated, map[string]any{"id": id, "password": password})
 		return
@@ -328,6 +336,13 @@ func (s *Server) handleValkey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
+	if r.Header.Get("X-Nakpanel-Fragment") == "main" {
+		w.Header().Add("Vary", "X-Nakpanel-Fragment")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		_ = web.OneTimeSecretFragment("Cache credential", "Cache credential rotated", "This password is shown once.", credential, continuePath).Render(r.Context(), w)
+		return
+	}
 	if strings.Contains(r.Header.Get("Accept"), "application/json") {
 		writeSPAJSON(w, http.StatusOK, map[string]string{"username": "app", "password": credential})
 		return
@@ -441,6 +456,13 @@ func (s *Server) handleGitWebhookRotate(w http.ResponseWriter, r *http.Request) 
 	s.recordAudit(r.Context(), user, 0, subscriptionID, "git.webhook_rotated", "site", siteID, nil)
 	continuePath := supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"/git")
 	w.Header().Set("Cache-Control", "no-store")
+	if r.Header.Get("X-Nakpanel-Fragment") == "main" {
+		w.Header().Add("Vary", "X-Nakpanel-Fragment")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		_ = web.OneTimeSecretFragment("Git webhook", "Webhook credential rotated", "This URL is shown once.", "/git/hooks/"+strconv.FormatInt(siteID, 10)+"/"+token, continuePath).Render(r.Context(), w)
+		return
+	}
 	if wantsSPAJSON(r) {
 		writeSPAJSON(w, http.StatusCreated, map[string]any{"ok": true, "webhook_path": "/git/hooks/" + strconv.FormatInt(siteID, 10) + "/" + token, "notice": "Webhook credential rotated. Copy it now; it is shown only once. Configure push events with a unique delivery ID."})
 		return
@@ -833,6 +855,13 @@ func (s *Server) handleProtectedDirectory(w http.ResponseWriter, r *http.Request
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
+	if r.Header.Get("X-Nakpanel-Fragment") == "main" {
+		w.Header().Add("Vary", "X-Nakpanel-Fragment")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusCreated)
+		_ = web.OneTimeSecretFragment("Protected directory credential", "Protected directory saved", "This password is shown once.", password, continuePath).Render(r.Context(), w)
+		return
+	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
 	_, _ = w.Write([]byte("<!doctype html><meta name=\"robots\" content=\"noindex\"><title>Protected directory credential</title><h1>Protected directory saved</h1><p>This password is shown once.</p><pre>" + html.EscapeString(password) + "</pre><p><a href=\"" + html.EscapeString(continuePath) + "\">Continue</a></p>"))

@@ -90,7 +90,7 @@ func gitWorkspace(item dashboard.Site, subscription types.SubscriptionSummary, d
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</noscript></section><dialog id=\"git-connect\" class=\"np-dialog np-dialog-wide\" data-np-dialog aria-labelledby=\"git-connect-title\"><div class=\"np-dialog-head\"><h2 id=\"git-connect-title\">Add Repository</h2><button type=\"button\" class=\"np-icon-button\" data-np-dialog-close title=\"Close\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</noscript></section><dialog id=\"git-connect\" class=\"np-dialog np-drawer np-dialog-wide\" data-np-dialog aria-labelledby=\"git-connect-title\"><div class=\"np-dialog-head\"><h2 id=\"git-connect-title\">Add Repository</h2><button type=\"button\" class=\"np-icon-button\" data-np-dialog-close aria-label=\"Close\" title=\"Close\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -763,7 +763,7 @@ func gitSettingsForm(item dashboard.Site, subscription types.SubscriptionSummary
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "\" data-git-form data-git-action=\"save\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "\" data-git-form data-git-action=\"save\"><div class=\"np-drawer-body\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -967,7 +967,7 @@ func gitSettingsForm(item dashboard.Site, subscription types.SubscriptionSummary
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 99, ">No deployment</option></select></label><p>Default: main branch, public_html, manual deployment. Connecting does not publish files. Automatic updates require a webhook.</p></details><p class=\"np-git-message\" data-git-message role=\"status\" aria-live=\"polite\"></p><div class=\"np-git-actions np-dialog-actions\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 99, ">No deployment</option></select></label><p>Default: main branch, public_html, manual deployment. Connecting does not publish files. Automatic updates require a webhook.</p></details><p class=\"np-git-message\" data-git-message role=\"status\" aria-live=\"polite\"></p></div><div class=\"np-git-actions np-dialog-actions\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

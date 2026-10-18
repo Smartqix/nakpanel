@@ -220,6 +220,10 @@ func (w *ApplyUpdatesWorker) Work(ctx context.Context, job *river.Job[ApplyUpdat
 	}
 	request.OperationID = operation.OperationID
 	result, workErr := agent.ApplyUpdates(ctx, request)
+	if !request.DryRun && w.manager.capabilities != nil {
+		// Packages may have changed even if the update only partially succeeded.
+		w.manager.capabilities.Invalidate()
+	}
 	return w.manager.finishOperation(ctx, operation, result, workErr, "server.updates", "server_updates")
 }
 

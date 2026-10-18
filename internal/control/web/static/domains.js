@@ -68,7 +68,10 @@
   document.addEventListener('click', function (event) {
     document.querySelectorAll('details[data-np-domain-menu][open]').forEach(function (menu) { if (!menu.contains(event.target)) closeMenu(menu, false); });
     var refresh = event.target.closest('[data-np-domain-refresh]');
-    if (refresh) window.location.reload();
+    if (refresh) {
+      if (window.NakpanelUI && window.NakpanelUI.refresh) window.NakpanelUI.refresh();
+      else window.location.reload();
+    }
   });
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Escape' || document.querySelector('dialog[open]')) return;

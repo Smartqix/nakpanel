@@ -56,7 +56,21 @@
   function init(root) {
     if (!root || root.dataset.gitReady) return;
     root.dataset.gitReady = 'true';
+    var lifecycle = window.NakpanelUI && window.NakpanelUI.lifecycle;
+    var signal = lifecycle ? lifecycle.signal(root) : new AbortController().signal;
+    function later(fn, delay) {
+      if (signal.aborted) return;
+      var timer = setTimeout(function () { signal.removeEventListener('abort', cancel); if (!signal.aborted) fn(); }, delay);
+      function cancel() { clearTimeout(timer); }
+      signal.addEventListener('abort', cancel, {once:true}); return timer;
+    }
     var repository = null, loaded = false, busy = false, timer = null, keyTimer = null, attempts = 0, dirty = false, retryKeys = new Map(), preparedURL = '', keyBusy = false, joining = false, working = false;
+    signal.addEventListener('abort', function () { clearTimeout(timer); clearTimeout(keyTimer); }, {once:true});
+    function setDirty(value) {
+      dirty = value;
+      root.querySelectorAll('[data-git-action="save"]').forEach(function (form) { form.setAttribute('data-np-dirty-guard', ''); form.dataset.npDirty = String(value); });
+    }
+    setDirty(false);
     function authenticationFields() {
       root.querySelectorAll('[data-git-action="save"]').forEach(function (form) {
         var remote = form.querySelector('[name="remote_url"]');
@@ -67,7 +81,7 @@
     root.querySelectorAll('dialog').forEach(function(dialog) {
       dialog.addEventListener('close', function() {
         clearTimeout(keyTimer);
-        if (!joining) dirty = false;
+        if (!joining) setDirty(false);
       });
     });
     function text(selector, value) { var node = root.querySelector(selector); if (node) node.textContent = value || ''; }
@@ -77,7 +91,7 @@
       if (!['git-overview','git-deployments','git-history','git-settings'].includes(id)) id = 'git-overview';
       root.querySelectorAll('[data-git-panel]').forEach(function (panel) { panel.hidden = panel.id !== id; });
       root.querySelectorAll('[data-git-tabs] a').forEach(function (tab) { tab.setAttribute('aria-selected', String(tab.hash === '#' + id)); tab.tabIndex = tab.hash === '#' + id ? 0 : -1; });
-      history.replaceState(null, '', location.pathname + location.search + '#' + id);
+      history.replaceState(history.state, '', location.pathname + location.search + '#' + id);
     }
     var tabs = root.querySelector('[data-git-tabs]');
     if (tabs) {
@@ -85,14 +99,17 @@
       tabs.querySelectorAll('a').forEach(function (tab) { tab.setAttribute('role', 'tab'); tab.setAttribute('aria-controls', tab.hash.slice(1)); tab.addEventListener('click', function (event) { event.preventDefault(); selectTab(tab.hash.slice(1)); }); });
       tabs.addEventListener('keydown', function (event) { var links = Array.from(tabs.querySelectorAll('a')); var index = links.indexOf(document.activeElement); if (index < 0) return; if (event.key === 'ArrowRight') index = (index + 1) % links.length; else if (event.key === 'ArrowLeft') index = (index + links.length - 1) % links.length; else if (event.key === 'Home') index = 0; else if (event.key === 'End') index = links.length - 1; else return; event.preventDefault(); links[index].focus(); selectTab(links[index].hash.slice(1)); });
       selectTab(location.hash.slice(1));
-      window.addEventListener('hashchange', function () { if (root.isConnected) selectTab(location.hash.slice(1)); });
+      window.addEventListener('hashchange', function () { if (root.isConnected) selectTab(location.hash.slice(1)); }, {signal:signal});
     }
     async function request(url, options) {
       var controller = new AbortController(), timeout = setTimeout(function () { controller.abort(); }, 15000);
+      var cancel = function () { controller.abort(); };
+      signal.addEventListener('abort', cancel, {once:true});
       try {
+        if (signal.aborted) throw new Error('Workspace closed.');
         var response = await fetch(url, Object.assign({ credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Nakpanel-SPA': 'true', 'X-Requested-With': 'XMLHttpRequest' }, signal: controller.signal }, options));
         return await readResponse(response);
-      } finally { clearTimeout(timeout); }
+      } finally { clearTimeout(timeout); signal.removeEventListener('abort', cancel); }
     }
     function rows(selector, entries, columns) {
       var body = root.querySelector(selector); if (!body) return; body.replaceChildren();
@@ -122,23 +139,27 @@
     }
     async function refresh() {
       clearTimeout(timer);
-      if (!root.isConnected) return;
+      if (signal.aborted || !root.isConnected) return;
       try {
         var state = await request(root.dataset.statusUrl);
         if (removed(state.repository) && !root.querySelector('#git-connect') || joining && state.repository && !pending(state.repository) && state.repository.connection_status === 'connected') {
-          history.replaceState(null,'',location.pathname + location.search + '#git-overview');
+          history.replaceState(history.state,'',location.pathname + location.search + '#git-overview');
           await reloadWorkspace();
           return;
         }
+        if (signal.aborted) return;
         render(state);
         if (joining && repository && repository.convergence_status === 'failed') { joining = false; message(connectionError(repository.last_error || 'Connection failed. Check repository access and retry.')); }
-        if (pending(repository)) { working = true; attempts++; if (attempts < 150) timer = setTimeout(refresh, 2000); else message('Operation is still pending after five minutes. Use Refresh status to check again; do not resubmit.'); }
+        if (pending(repository)) { working = true; attempts++; if (attempts < 150) timer = later(refresh, 2000); else message('Operation is still pending after five minutes. Use Refresh status to check again; do not resubmit.'); }
         else { attempts = 0; if (working) { working = false; message(repository && repository.convergence_status === 'failed' ? connectionError(repository.last_error || 'Operation failed. Retry after checking the error.') : 'Operation completed.'); } }
       } catch (error) { message('Status could not refresh. ' + error.message + ' Use Refresh status to retry.'); }
     }
     async function reloadWorkspace() {
       var controller = new AbortController(), timeout = setTimeout(function () { controller.abort(); }, 15000);
+      var cancel = function () { controller.abort(); };
+      signal.addEventListener('abort', cancel, {once:true});
       try {
+        if (signal.aborted) throw new Error('Workspace closed.');
         var response = await fetch(location.href, { credentials: 'same-origin', headers:{Accept:'text/html'}, signal: controller.signal }); if (!response.ok) throw new Error('Workspace refresh failed.');
         var parsed = new DOMParser().parseFromString(await response.text(), 'text/html'), next = parsed.querySelector('[data-np-git]');
         if (!next) throw new Error('Workspace refresh failed.'); clearTimeout(timer);
@@ -146,9 +167,11 @@
         // inside noscript would otherwise block enhanced form submissions.
         next.querySelectorAll('noscript').forEach(function(node) { node.remove(); });
         root.querySelectorAll('dialog[open]').forEach(function(dialog) { dialog.close(); });
+        if (signal.aborted) return;
+        if (lifecycle) lifecycle.unmount(root);
         root.replaceWith(next); init(next);
         var focus = next.querySelector('[data-git-panel]:not([hidden]) button'); if (focus) focus.focus();
-      } finally { clearTimeout(timeout); }
+      } finally { clearTimeout(timeout); signal.removeEventListener('abort', cancel); }
     }
     async function submit(form, override) {
       if (!loaded || busy || keyBusy || pending(repository)) return;
@@ -173,8 +196,13 @@
           preview.set('idempotency_key',crypto.randomUUID());
           await request(url.replace(/\/deploy$/, '/preview'),{method:'POST',body:new URLSearchParams(preview)});
           var completed = false;
-          for (var check = 0; check < 150 && root.isConnected; check++) {
-            await new Promise(function(resolve) { setTimeout(resolve,2000); });
+          for (var check = 0; check < 150 && root.isConnected && !signal.aborted; check++) {
+            await new Promise(function(resolve) {
+              var timer = setTimeout(done, 2000);
+              function done() { clearTimeout(timer); signal.removeEventListener('abort', done); resolve(); }
+              signal.addEventListener('abort', done, {once:true});
+            });
+            if (signal.aborted) return;
             render(await request(root.dataset.statusUrl));
             if (!pending(repository)) { completed = true; break; }
           }
@@ -187,7 +215,7 @@
         }
         var result = await request(url, { method: 'POST', body: new URLSearchParams(data) });
         retryKeys.delete(retry.identity);
-        if (action === 'save' || action === 'disconnect') dirty = false;
+        if (action === 'save' || action === 'disconnect') setDirty(false);
         if (action === 'webhook' && result.webhook_path) { text('[data-git-webhook]', new URL(result.webhook_path, location.origin).href); message('Webhook URL shown once. Store it securely at your Git provider.'); return; }
         joining = action === 'save';
         message(action === 'save' ? 'Connecting and fetching repository...' : action === 'disconnect' ? 'Removing repository access. Your website stays unchanged...' : 'Operation accepted. Checking status...'); attempts = 0;
@@ -199,14 +227,14 @@
     root.addEventListener('input', function (event) {
       var form = event.target.closest('[data-git-action="save"]');
       if (!form) return;
-      dirty = true; authenticationFields();
+      setDirty(true); authenticationFields();
       if (event.target.name === 'remote_url') {
         clearTimeout(keyTimer);
         var value = event.target.value.trim();
         if (value !== preparedURL) {
           form.querySelector('[data-git-prepared]').hidden = true;
           form.querySelector('[data-git-prepare]').hidden = false;
-          if (sshRemote(value)) keyTimer = setTimeout(function() { prepareKey(form); },600);
+          if (sshRemote(value)) keyTimer = later(function() { prepareKey(form); },600);
         }
       }
     });
@@ -240,7 +268,7 @@
       if (!form || !sshRemote(value) || value === preparedURL) return;
       prepareKey(form);
     });
-    window.addEventListener('beforeunload', function (event) { if (root.isConnected && dirty) { event.preventDefault(); event.returnValue = ''; } });
+    window.addEventListener('beforeunload', function (event) { if (root.isConnected && dirty && root.querySelector('[data-np-dirty="true"]')) { event.preventDefault(); event.returnValue = ''; } }, {signal:signal});
     root.addEventListener('click', async function (event) {
       if (event.target.closest('[data-git-prepare]')) prepareKey(event.target.closest('form'));
       var copy = event.target.closest('[data-git-copy-prepared], [data-git-copy-prepared-title]');
@@ -263,5 +291,9 @@
     refresh();
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = {actionDisabled, operationFields, operationKey, safeError, logOutput, readResponse, sshRemote, preparationFields, removed, repositoryName, connectionError};
-  if (typeof document !== 'undefined') document.querySelectorAll('[data-np-git]').forEach(init);
+  if (typeof document !== 'undefined') {
+    function mount(scope) { scope.querySelectorAll('[data-np-git]').forEach(init); }
+    if (window.NakpanelUI && window.NakpanelUI.lifecycle) window.NakpanelUI.lifecycle.onMount(mount);
+    mount(document);
+  }
 })();

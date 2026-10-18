@@ -3,7 +3,9 @@ package web
 import "github.com/nakroteck/nakpanel/internal/types"
 
 templ dnsSettingsFocus(view WorkspaceView) {
-	<script defer src="/assets/dns-template.js"></script>
+	if !view.Fragment {
+		<script defer src="/assets/dns-template.js"></script>
+	}
 	<div class="np-settings-focus-head">
 		<div><span class="np-kicker">Web &amp; PHP</span><h3 id="settings-focus-title">DNS Settings</h3><p>Versioned defaults for new authoritative zones, safe synchronization, SOA policy, and transfer restrictions.</p></div>
 		if view.DNSSettings.Template.ID > 0 {
@@ -179,7 +181,7 @@ templ dnsSettingsFocus(view WorkspaceView) {
 		<dialog class="np-dialog np-dns-authorization-dialog" id="dns-authorization-dialog" data-np-dialog aria-labelledby="dns-authorization-title">
 			<form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form>
 			<div class="np-dialog-head"><span class="np-kicker">Protected DNS controls</span><h2 id="dns-authorization-title">Authorize DNS changes</h2><p>Global synchronization, reset, SOA, and transfer-policy changes require a recent administrator password confirmation.</p></div>
-			<form class="np-settings-reauth np-dialog-form" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form><label><span>Administrator password</span><input type="password" name="password" autocomplete="current-password" required/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Authorize for 10 minutes</button></div><p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p></form>
+			<form class="np-settings-reauth np-dialog-form" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form data-np-full-nav><label><span>Administrator password</span><input type="password" name="password" autocomplete="current-password" required/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Authorize for 10 minutes</button></div><p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p></form>
 		</dialog>
 		<dialog class="np-dialog" id="dns-template-reset-dialog" data-np-dialog aria-labelledby="dns-template-reset-title">
 			<form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form>

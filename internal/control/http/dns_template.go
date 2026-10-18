@@ -407,7 +407,6 @@ func (s *Server) requireDNSAdmin(w http.ResponseWriter, r *http.Request, recent 
 func (s *Server) requireSiteDNS(w http.ResponseWriter, r *http.Request) (auth.SessionUser, int64, bool) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return auth.SessionUser{}, 0, false
 	}
 	if s.dnsTemplates == nil {

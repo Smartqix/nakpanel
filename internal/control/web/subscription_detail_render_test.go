@@ -236,6 +236,7 @@ func TestRelativeLabelReadsAsProse(t *testing.T) {
 	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
 	cases := map[time.Time]string{
 		now.Add(-30 * time.Second):   "just now",
+		now.Add(-70 * time.Second):   "a minute ago",
 		now.Add(-5 * time.Minute):    "5 minutes ago",
 		now.Add(-1 * time.Hour):      "an hour ago",
 		now.Add(-5 * time.Hour):      "5 hours ago",
@@ -288,5 +289,21 @@ func TestByteLimitRowKeepsSmallUsageVisible(t *testing.T) {
 	over := byteLimitRow("Storage", "Disk", "disk_mb", 2*1024*1024*1024, 1024)
 	if over.Tone != limitToneOver {
 		t.Fatalf("usage past the limit must read as over, got %q", over.Tone)
+	}
+}
+
+// An all-unlimited plan leaves nothing for the rail to show; it must say so
+// rather than render an empty card.
+func TestSubscriptionRailSaysWhenThereIsNothingToTrack(t *testing.T) {
+	data := detailFixture()
+	s := &data.Subscriptions[0]
+	s.MaxSites, s.MaxDatabases, s.MaxBackups, s.DiskMB, s.BandwidthMB = -1, -1, -1, -1, -1
+	s.MaxSubdomains, s.MaxDomainAliases, s.MaxMailboxes, s.MaxFTPAccounts, s.BackupStorageMB = -1, -1, -1, -1, -1
+	var body bytes.Buffer
+	if err := routedSubscriptionDetail(auth.SessionUser{Role: auth.RoleAdmin}, data, DashboardActions{}, WorkspaceView{Route: "/subscriptions/42", DetailID: 42, Tab: "overview"}).Render(context.Background(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(body.String(), "No limits to track") {
+		t.Fatalf("an all-unlimited subscription must explain its empty rail")
 	}
 }

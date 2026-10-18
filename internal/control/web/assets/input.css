@@ -6706,3 +6706,139 @@
   .np-dialog.np-site-removal-dialog .np-dialog-actions > button { flex: 0 0 auto; }
   .np-dialog.np-site-removal-dialog .np-dialog-actions > button[type="submit"] { flex: 1 1 auto; }
 }
+
+@layer components {
+  .np-nav-progress { display: none; }
+  [data-np-nav="on"] .np-nav-progress { display: block; position: fixed; inset: 0 0 auto; height: 3px; background: var(--np-primary); opacity: 0; transform: scaleX(0); transform-origin: left; pointer-events: none; z-index: 100; }
+  [data-np-nav="on"] .np-nav-progress.is-pending { opacity: 1; transform: scaleX(.72); transition: transform 8s cubic-bezier(.1,.7,.1,1); }
+  [data-np-nav="on"] .np-nav-progress.is-complete { opacity: 0; transform: scaleX(1); transition: transform 100ms ease-out, opacity 100ms 100ms ease-out; }
+  .np-nav-loading { position: relative; min-height: 320px; }
+  .np-nav-loading > :not(.np-nav-skeleton) { visibility: hidden; }
+  .np-nav-skeleton { position: absolute; inset: 0; padding: 24px; display: grid; gap: 20px; align-content: start; background: var(--np-surface); border: 1px solid var(--np-border); border-radius: var(--np-radius); }
+  .np-nav-skeleton-heading, .np-nav-skeleton-bar, .np-nav-skeleton-block { background: var(--np-border-soft); border-radius: var(--np-radius); }
+  .np-nav-skeleton-heading { width: 38%; height: 24px; }
+  .np-nav-skeleton-bar { width: 70%; height: 14px; }
+  .np-nav-skeleton-block { width: 100%; height: 64px; }
+  [data-np-nav="on"] #main-content { view-transition-name: np-main; }
+  [data-np-nav="on"] .np-routed-side { view-transition-name: np-sidebar; }
+  [data-np-nav="on"] .np-routed-top { view-transition-name: np-topbar; }
+  ::view-transition-group(root), ::view-transition-group(np-sidebar), ::view-transition-group(np-topbar),
+  ::view-transition-old(root), ::view-transition-new(root), ::view-transition-old(np-sidebar), ::view-transition-new(np-sidebar), ::view-transition-old(np-topbar), ::view-transition-new(np-topbar) { animation: none; }
+  ::view-transition-group(np-main), ::view-transition-old(np-main), ::view-transition-new(np-main) { animation-duration: 140ms; }
+  .np-nav-secret { padding: 24px; display: grid; gap: 20px; }
+  .np-nav-secret h1 { font-size: 22px; font-weight: 600; }
+  .np-nav-secret pre { background: var(--np-bg); border: 1px solid var(--np-border); border-radius: var(--np-radius); padding: 16px; overflow-wrap: anywhere; white-space: pre-wrap; user-select: all; }
+  .np-nav-response { white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (prefers-reduced-motion: reduce) {
+    [data-np-nav="on"] .np-nav-progress.is-pending, [data-np-nav="on"] .np-nav-progress.is-complete { transition: none; }
+    ::view-transition-group(np-main), ::view-transition-old(np-main), ::view-transition-new(np-main) { animation: none; }
+  }
+}
+
+@layer components {
+  /* The ID selectors also override the later domain/Git asset's modal sizes. */
+  .np-git-settings > .np-drawer-body > label { display: grid; gap: var(--np-space-2); margin: var(--np-space-4) 0; }
+  dialog.np-dialog.np-drawer, dialog#site-dialog.np-drawer, dialog#git-connect.np-drawer {
+    position: fixed;
+    inset: 0 0 0 auto;
+    margin: 0;
+    width: min(560px, 100vw);
+    max-width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    max-height: 100dvh;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-left: 1px solid var(--np-border);
+    border-radius: var(--np-radius) 0 0 var(--np-radius);
+    background: var(--np-surface);
+    color: var(--np-ink);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  dialog.np-dialog.np-drawer[open] { display: flex; flex-direction: column; animation: np-drawer-enter 160ms ease-out; }
+  dialog.np-dialog.np-drawer > .np-dialog-form, dialog#git-connect.np-drawer > form.np-git-settings {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    min-height: 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  dialog.np-dialog.np-drawer .np-dialog-head {
+    position: sticky;
+    top: 0;
+    flex: 0 0 auto;
+    display: block;
+    padding: var(--np-space-4) 64px var(--np-space-4) var(--np-space-4);
+    background: var(--np-surface);
+    border-bottom: 1px solid var(--np-border);
+    z-index: 2;
+  }
+  dialog.np-dialog.np-drawer .np-dialog-head > button[data-np-dialog-close] { position: absolute; top: 12px; right: 12px; height: 36px; width: 36px; min-height: 36px; }
+  dialog.np-dialog.np-drawer .np-dialog-head h2 { margin: 0; font-size: 18px; line-height: 1.4; font-weight: 600; }
+  dialog.np-dialog.np-drawer .np-dialog-head p { margin: var(--np-space-2) 0 0; font-size: 13px; }
+  dialog.np-dialog.np-drawer .np-drawer-body {
+    display: grid;
+    align-content: start;
+    flex: 1 1 auto;
+    gap: var(--np-space-4);
+    min-height: 0;
+    min-width: 0;
+    padding: var(--np-space-4);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  dialog.np-dialog.np-drawer .np-drawer-body > label:not(.np-check) { display: grid; gap: var(--np-space-2); margin: 0; }
+  dialog.np-dialog.np-drawer .np-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--np-space-4); padding: 0; }
+  dialog.np-dialog.np-drawer :is(label, input, select, textarea, button) { font-size: 13px; }
+  dialog.np-dialog.np-drawer :is(h3, h4, strong, label, button, summary) { font-weight: 600; }
+  dialog.np-dialog.np-drawer .np-dialog-actions, dialog#git-connect.np-drawer .np-dialog-actions {
+    position: sticky;
+    bottom: 0;
+    flex: 0 0 auto;
+    margin: 0;
+    padding: var(--np-space-4);
+    border-top: 1px solid var(--np-border);
+    background: var(--np-surface);
+    z-index: 2;
+  }
+  dialog.np-dialog.np-drawer > .np-setup-tracker { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  @keyframes np-drawer-enter { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @media (max-width: 720px) {
+    dialog.np-dialog.np-drawer, dialog#site-dialog.np-drawer, dialog#git-connect.np-drawer { width: 100vw; max-height: 100dvh; border: 0; border-radius: 0; }
+    dialog.np-dialog.np-drawer .np-form-grid { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    dialog.np-dialog.np-drawer[open] { animation: none; }
+  }
+}
+
+@layer components {
+  .np-tasks { position: relative; }
+  .np-tasks [hidden] { display: none !important; }
+  /* The panel's head and footer stay put; only the list scrolls. */
+  .np-tasks-panel { position: absolute; right: 0; top: calc(100% + 6px); z-index: 70; width: min(380px, calc(100vw - 32px)); max-height: 70vh; overflow: hidden; padding: 0; border: 1px solid var(--np-border); border-radius: var(--np-radius); background: var(--np-surface); box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12); }
+  .np-tasks-panel:not([hidden]) { display: flex; flex-direction: column; }
+  .np-tasks-panel h2 { border-bottom: 1px solid var(--np-border-soft); flex: none; font-size: 14px; font-weight: 600; margin: 0; padding: 10px 14px; }
+  .np-tasks-panel [data-np-tasks-items] { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+  .np-tasks-panel [data-np-tasks-error] { flex: none; margin: 0; padding: 8px 14px; }
+  .np-task { align-items: center; border-bottom: 1px solid var(--np-border-soft); display: grid; gap: 2px 8px; grid-template-columns: auto minmax(0, 1fr) auto; padding: 8px 14px; }
+  .np-task:last-child { border-bottom: 0; }
+  .np-task strong { font-size: 13px; font-weight: 600; grid-column: 1 / 3; grid-row: 1; overflow-wrap: anywhere; }
+  .np-task > span:not(.np-status-pill) { color: var(--np-muted); font-size: 12px; grid-column: 1; grid-row: 2; max-width: 170px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-task time { color: var(--np-muted); font-size: 12px; grid-column: 2; grid-row: 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-task time::before { content: "· "; }
+  .np-task .np-status-pill { grid-column: 3; grid-row: 1 / 3; }
+  .np-task p { color: var(--np-danger); font-size: 12px; grid-column: 1 / -1; grid-row: 3; margin: 2px 0 0; overflow-wrap: anywhere; }
+  .np-usage-empty { margin: 0; padding: 12px 14px; }
+  .np-tasks-panel footer { border-top: 1px solid var(--np-border-soft); flex: none; font-size: 12px; padding: 8px 14px; }
+  .np-task-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 100; display: grid; gap: 8px; max-width: calc(100vw - 32px); }
+  .np-task-toast { align-items: center; background: var(--np-surface); border: 1px solid var(--np-border); border-radius: var(--np-radius); box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12); display: flex; flex-wrap: wrap; font-size: 13px; gap: 12px; padding: 10px 14px; }
+}

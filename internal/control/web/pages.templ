@@ -1220,7 +1220,7 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 					</div>
 					<details class="np-service-auth-details">
 						<summary>Authorize actions</summary>
-						<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+						<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form data-np-full-nav>
 							<label><span>Administrator password</span><input type="password" name="password" autocomplete="current-password" required/></label>
 							<button type="submit" class="np-secondary-button">Authorize for 10 minutes</button>
 							<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>
@@ -1253,7 +1253,7 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 					</div>
 					<details class="np-service-auth-details">
 						<summary>Authorize installation</summary>
-						<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+						<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form data-np-full-nav>
 							<label><span>Administrator password</span><input type="password" name="password" autocomplete="current-password" required/></label>
 							<button type="submit" class="np-secondary-button">Authorize for 10 minutes</button>
 							<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>
@@ -1292,7 +1292,7 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 					</div>
 					<p class="np-update-empty" data-np-update-empty hidden>No packages match this filter.</p>
 				</section>
-				<form id="np-update-install-form" class="np-update-install-panel" method="post" action="/tools-settings/operations/updates" data-np-update-install-form>
+				<form id="np-update-install-form" class="np-update-install-panel" method="post" action="/tools-settings/operations/updates" data-np-update-install-form data-np-full-nav>
 					<div class="np-update-install-copy">
 						<span class="np-settings-category-icon">@icon("download")</span>
 						<div><strong>Install selected updates</strong><p><span data-np-update-selected-count>0 packages selected</span>. Installations run through the serialized system operation queue.</p></div>
@@ -1416,7 +1416,7 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 				</div>
 			case "databases":
 				<div class="np-settings-focus-head"><div><span class="np-kicker">Applications &amp; Databases</span><h3 id="settings-focus-title">MariaDB Administration</h3><p>Live health and tracked database checks. Names and principals come only from Nakpanel records.</p></div><span class="np-pill np-pill-susp" data-np-database-state>checking</span></div>
-					<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+					<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form data-np-full-nav>
 						<label><span>Confirm administrator password before rotating credentials or changing roles</span><input type="password" name="password" autocomplete="current-password" required/></label>
 						<button type="submit" class="np-secondary-button">Reauthenticate</button>
 						<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>
@@ -1455,7 +1455,7 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 				</div>
 			case "operations":
 				<div class="np-settings-focus-head"><div><span class="np-kicker">Server Management</span><h3 id="settings-focus-title">Host Operations</h3><p>Disruptive operations run on the single-worker system queue and require recent authentication plus typed confirmation.</p></div><span class="np-pill np-pill-pend">guarded</span></div>
-					<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+					<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form data-np-full-nav>
 						<label><span>Confirm administrator password for host operations</span><input type="password" name="password" autocomplete="current-password" required/></label>
 						<button type="submit" class="np-secondary-button">Reauthenticate</button>
 						<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>
@@ -1467,7 +1467,7 @@ templ settingsFocusPanel(data dashboard.Data, view WorkspaceView) {
 					<button type="button" class="np-danger-button" data-np-power-action="shutdown">Shut down host</button>
 				</div>
 					<dialog class="np-dialog" id="host-power-dialog" data-np-dialog aria-labelledby="host-power-title" aria-describedby="host-power-copy">
-					<form method="post" action="/tools-settings/operations/power" class="np-dialog-form" data-np-power-form>
+					<form method="post" action="/tools-settings/operations/power" class="np-dialog-form" data-np-power-form data-np-full-nav>
 							<div class="np-dialog-head"><span class="np-kicker">Guarded host operation</span><h2 id="host-power-title" data-np-power-title>Confirm host operation</h2><p id="host-power-copy" data-np-power-copy>Reauthenticate first, then type the required confirmation.</p></div>
 						<input type="hidden" name="action"/>
 						<label>Typed confirmation<input name="confirmation" autocomplete="off" required data-np-power-confirmation/></label>
@@ -1522,7 +1522,7 @@ templ mailSettingsDialog(view WorkspaceView) {
 		<dialog class="np-dialog np-mail-settings-dialog" id="mail-settings-dialog" data-np-dialog aria-labelledby="mail-settings-title" aria-describedby="mail-settings-copy">
 		<form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form>
 			<div class="np-dialog-head"><span class="np-kicker">Server management</span><h2 id="mail-settings-title">Mail server settings</h2><p id="mail-settings-copy">Configure Stalwart identity, outbound relay, queue alerts, and service convergence.</p></div>
-		<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>
+		<form class="np-settings-reauth" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form data-np-full-nav>
 				<label><span>Confirm administrator password before relay or service changes</span><input type="password" name="password" autocomplete="current-password" required/></label>
 				<button type="submit" class="np-secondary-button">Reauthenticate</button>
 				<p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p>

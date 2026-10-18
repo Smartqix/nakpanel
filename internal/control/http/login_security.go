@@ -753,7 +753,6 @@ func (s *Server) handleTOTPChallenge(w http.ResponseWriter, r *http.Request) {
 func (s *Server) requireRecentAuth(w http.ResponseWriter, r *http.Request) (auth.SessionUser, bool) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return auth.SessionUser{}, false
 	}
 	if !s.sessions.RecentlyAuthenticated(user, 10*time.Minute) {
@@ -766,7 +765,6 @@ func (s *Server) requireRecentAuth(w http.ResponseWriter, r *http.Request) (auth
 func (s *Server) handleTwoFactorPage(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	record, exists, err := s.getUserTOTP(r.Context(), user.ID)

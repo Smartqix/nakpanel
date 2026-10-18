@@ -246,3 +246,16 @@ func TestSubdomainCreateJSONReturnsProgressInsteadOfParentRedirect(t *testing.T)
 		t.Fatalf("accepted response = %d %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestPendingSiteSetupReturnsFragmentWithoutDocumentRefresh(t *testing.T) {
+	creator := &fakeSetupCreator{fakeSiteCreator: &fakeSiteCreator{}, setup: types.SiteSetupStatus{SiteID: 7, ParentID: 1, Domain: "blog.example.test", State: "pending", StartedAt: time.Now()}}
+	handler, cookie := setupTestHandler(t, auth.RoleAdmin, creator)
+	req := httptest.NewRequest("GET", "https://panel.test/sites/7/setup", nil)
+	req.AddCookie(cookie)
+	req.Header.Set("X-Nakpanel-Fragment", "main")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `data-np-fragment="main"`) || strings.Contains(rec.Body.String(), `data-full-document="true"`) || strings.Contains(rec.Body.String(), `http-equiv="refresh"`) {
+		t.Fatalf("pending fragment: %d %s", rec.Code, rec.Body.String())
+	}
+}
