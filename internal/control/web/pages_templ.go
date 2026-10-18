@@ -4461,14 +4461,14 @@ func settingsFocusPanel(data dashboard.Data, view WorkspaceView) templ.Component
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 433, "<div class=\"np-form-grid\"><label>Name<input name=\"name\" required></label><label>Slug<input name=\"slug\" pattern=\"[a-z][a-z0-9-]{1,47}\" required></label><input type=\"hidden\" name=\"runtime\" value=\"oci\"><label class=\"np-wide-field\">Digest-pinned OCI image<input name=\"image_ref\" placeholder=\"docker.io/vendor/image@sha256:...\" required></label><label>Container port<input type=\"number\" name=\"container_port\" min=\"1\" max=\"65535\" value=\"8080\" required></label><label>Health check<select name=\"health_kind\"><option value=\"http\">HTTP</option><option value=\"tcp\">TCP</option></select></label><label>Health path<input name=\"health_path\" value=\"/healthz\"></label><label>Readiness timeout<input type=\"number\" name=\"health_timeout_seconds\" min=\"1\" max=\"300\" value=\"30\"></label><label class=\"np-wide-field\">Provider-declared volume slots<textarea name=\"volumes\" rows=\"4\" spellcheck=\"false\" placeholder=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 433, "<div class=\"np-form-grid\"><label>Name<input name=\"name\" required></label><label>Slug<input name=\"slug\" pattern=\"[a-z][a-z0-9\\-]{1,47}\" required></label><input type=\"hidden\" name=\"runtime\" value=\"oci\"><label class=\"np-wide-field\">Digest-pinned OCI image<input name=\"image_ref\" placeholder=\"docker.io/vendor/image@sha256:...\" required></label><label>Container port<input type=\"number\" name=\"container_port\" min=\"1\" max=\"65535\" value=\"8080\" required></label><label>Health check<select name=\"health_kind\"><option value=\"http\">HTTP</option><option value=\"tcp\">TCP</option></select></label><label>Health path<input name=\"health_path\" value=\"/healthz\"></label><label>Readiness timeout<input type=\"number\" name=\"health_timeout_seconds\" min=\"1\" max=\"300\" value=\"30\"></label><label class=\"np-wide-field\">Provider-declared volume slots<textarea name=\"volumes\" rows=\"4\" spellcheck=\"false\" placeholder=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var182 string
 			templ_7745c5c3_Var182, templ_7745c5c3_Err = templ.JoinStringErrs("[{\"name\":\"data\",\"target\":\"/data\",\"size_mb\":1024,\"read_only\":false}]")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1446, Col: 983}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/pages.templ`, Line: 1446, Col: 984}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var182))
 			if templ_7745c5c3_Err != nil {

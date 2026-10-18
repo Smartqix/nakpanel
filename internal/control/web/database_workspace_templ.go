@@ -31,7 +31,7 @@ func databasePasswordInput() templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<label>Password<input type=\"password\" name=\"password\" minlength=\"16\" maxlength=\"128\" pattern=\"[A-Za-z0-9_-]{16,128}\" title=\"16-128 letters, digits, underscores or hyphens\" autocomplete=\"new-password\" required data-np-db-password></label><div class=\"np-password-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-db-generate>Generate password</button><button type=\"button\" class=\"np-icon-button\" data-np-db-reveal aria-label=\"Show password\" title=\"Show password\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<label>Password<input type=\"password\" name=\"password\" minlength=\"16\" maxlength=\"128\" pattern=\"[A-Za-z0-9_\\-]{16,128}\" title=\"16-128 letters, digits, underscores or hyphens\" autocomplete=\"new-password\" required data-np-db-password></label><div class=\"np-password-actions\"><button type=\"button\" class=\"np-secondary-button\" data-np-db-generate>Generate password</button><button type=\"button\" class=\"np-icon-button\" data-np-db-reveal aria-label=\"Show password\" title=\"Show password\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

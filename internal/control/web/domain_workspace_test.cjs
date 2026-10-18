@@ -1,6 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const {removalReady, normalizeSubdomainLabel, menuOpensUp} = require('./static/domains.js');
+
+test('HTML validation patterns compile under modern Unicode sets semantics', () => {
+  for (const name of fs.readdirSync(__dirname).filter(name=>name.endsWith('.templ'))) {
+    const source=fs.readFileSync(path.join(__dirname,name),'utf8');
+    for(const match of source.matchAll(/\bpattern="([^"]+)"/g)) {
+      assert.doesNotThrow(()=>new RegExp(match[1],'v'),name+': invalid HTML pattern '+match[1]);
+    }
+  }
+});
 
 function form(name, children, loss, busy = false) {
   const controls = {

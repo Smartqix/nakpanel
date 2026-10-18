@@ -7,13 +7,14 @@ const cp=require('node:child_process');
 const crypto=require('node:crypto');
 const base=process.env.NAKPANEL_QA_URL;
 const parent=process.env.NAKPANEL_QA_PARENT;
+const fixtureSuffix=process.env.NAKPANEL_QA_DOMAIN_SUFFIX||parent;
 const sub=Number(process.env.NAKPANEL_QA_SUBSCRIPTION_ID);
 const primary=Number(process.env.NAKPANEL_QA_PRIMARY_ID);
 const ssh=process.env.NAKPANEL_QA_SSH_TARGET;
 const known=process.env.NAKPANEL_QA_KNOWN_HOSTS;
 const run=process.env.NAKPANEL_QA_RUN;
 const output=process.env.NAKPANEL_QA_SCREENSHOT_DIR||'/tmp/nakpanel-domain-live';
-if(process.env.NAKPANEL_QA_MUTATIONS!=='allow-new-fixtures'||!base||!parent||!ssh||!known||!/^\d{8,14}$/.test(run||'')||!Number.isSafeInteger(sub)||sub<1||!Number.isSafeInteger(primary)||primary<1||!/^[a-z0-9.-]+$/.test(parent))throw Error('Explicit mutation opt-in, URL, parent, IDs, SSH trust file and dated run required');
+if(process.env.NAKPANEL_QA_MUTATIONS!=='allow-new-fixtures'||!base||!parent||!ssh||!known||!/^\d{8,14}$/.test(run||'')||!Number.isSafeInteger(sub)||sub<1||!Number.isSafeInteger(primary)||primary<1||!/^[a-z0-9.-]+$/.test(parent)||!/^[a-z0-9.-]+$/.test(fixtureSuffix))throw Error('Explicit mutation opt-in, URL, parent, IDs, SSH trust file and dated run required');
 const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
 function db(sql){
   assert.match(sql,/^SELECT /);
@@ -42,9 +43,11 @@ let browser;
   }
   const results=[];
   for(const [index,word]of ['one','two'].entries()){
-    const domain=`figma-${word}-${run}.${parent}`,child='child.'+domain,name=`figma_${word}_${run}`;
-    assert.equal(db(`SELECT count(*) FROM sites WHERE domain IN ('${domain}','${child}')`),'0','fixture already exists; do not duplicate');
+    const domain=`figma-${word}-${run}.${fixtureSuffix}`,child='child.'+domain,name=`figma_${word}_${run}`;
+    if(process.env.NAKPANEL_QA_RESUME!=='1')assert.equal(db(`SELECT count(*) FROM sites WHERE domain IN ('${domain}','${child}')`),'0','fixture already exists; do not duplicate');
     console.log('Pass '+(index+1)+': creating isolated QA domain '+domain);
+    let site=Number(db(`SELECT id FROM sites WHERE domain='${domain}' AND subscription_id=${sub}`));
+    if(!site){
     await page.goto(base+'/sites');
     await page.locator('[data-np-dialog-open="site-dialog"]').click();
     const create=page.locator('#site-dialog');
@@ -54,10 +57,14 @@ let browser;
     await create.locator('[name=secure_with_ssl]').check();
     const created=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/sites');
     await create.locator('[data-np-create-submit]').click();
-    const createdResponse=await created;assert.equal(createdResponse.status(),202);
-    const accepted=await createdResponse.json(),site=Number(accepted.site_id);
+    const createdResponse=await created;assert.equal(createdResponse.status(),202,await createdResponse.text());
+    const accepted=await createdResponse.json();site=Number(accepted.site_id);
     assert.ok(site>primary);
     await page.waitForURL(url=>url.pathname==='/sites/'+site&&url.searchParams.get('notice')==='website-secured',{timeout:360000});
+    }else{
+      assert.equal(process.env.NAKPANEL_QA_RESUME,'1');
+      await page.goto(base+'/sites/'+site);
+    }
     assert.equal(db(`SELECT status||'|'||tls_status||'|'||https_redirect FROM sites WHERE id=${site}`),'active|active|true');
     assert.equal((await context.request.get('https://'+domain)).status(),200,'trusted QA HTTPS');
     const http=await context.request.get('http://'+domain,{maxRedirects:0});assert.ok([301,302,307,308].includes(http.status()));
@@ -70,11 +77,17 @@ let browser;
     await childDialog.locator('[name=label]').fill('child.'+domain);
     await childDialog.locator('[name=label]').blur();
     assert.equal(await childDialog.locator('[name=label]').inputValue(),'child');
+    let childID=Number(db(`SELECT id FROM sites WHERE domain='${child}' AND subscription_id=${sub} AND parent_site_id=${site}`));
+    if(!childID){
     const childCreated=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===`/sites/${site}/subdomains`);
     await childDialog.locator('[data-np-create-submit]').click();
     const childResponse=await childCreated;assert.equal(childResponse.status(),202);
-    const childAccepted=await childResponse.json(),childID=Number(childAccepted.site_id);
+    const childAccepted=await childResponse.json();childID=Number(childAccepted.site_id);
     await page.waitForURL(url=>url.pathname==='/sites/'+childID&&url.searchParams.get('notice')==='website-secured',{timeout:360000});
+    }else{
+      assert.equal(process.env.NAKPANEL_QA_RESUME,'1');
+      await page.keyboard.press('Escape');await page.goto(base+'/sites/'+childID);
+    }
     assert.equal(await page.locator('.np-domain-header-actions button:has-text("Add subdomain")').count(),0);
     assert.equal((await context.request.get('https://'+child)).status(),200);
     await post(`/sites/${childID}/subdomains`,{label:'nested',secure_with_ssl:'false'},[400]);
@@ -87,10 +100,12 @@ let browser;
     await page.locator(`[data-np-dialog-open="database-create-dialog-${site}"]`).click();
     const database=page.locator(`#database-create-dialog-${site}`);
     await database.locator('[name=db_name]').fill(name);await database.locator('[name=db_user]').fill(name);
-    await database.locator('[name=password]').fill('QA!'+crypto.randomBytes(24).toString('base64url'));
+    await database.locator('[name=password]').fill('Invalid!PasswordForQA');
+    assert.equal(await database.locator('[name=password]').evaluate(e=>e.checkValidity()),false,'invalid password must be caught before submission');
+    await database.locator('[name=password]').fill(crypto.randomBytes(24).toString('base64url'));
     const databaseCreated=page.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/databases');
     await database.locator('button[type=submit]').click();
-    const dbResponse=await databaseCreated;assert.equal(dbResponse.status(),202);
+    const dbResponse=await databaseCreated;assert.equal(dbResponse.status(),202,await dbResponse.text());
     const dbID=Number((await dbResponse.json()).database_id);
     await page.locator(`[data-np-db-id="${dbID}"][data-np-db-state="active"]`).waitFor({timeout:180000});
     const launch=await post(`/databases/${dbID}/manager`,{},[303]);
