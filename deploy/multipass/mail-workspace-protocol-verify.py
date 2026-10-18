@@ -2,6 +2,7 @@
 import email.message
 import imaplib
 import json
+import os
 import smtplib
 import ssl
 import sys
@@ -9,7 +10,7 @@ import time
 
 state = json.load(sys.stdin)
 assert state["address"].startswith(state["prefix"] + "@")
-host = "mail.nakpanel.com"
+host = os.environ.get("NAKPANEL_QA_MAIL_HOST", "mail.nakpanel.com")
 context = ssl.create_default_context()
 for attempt in range(30):
     try:

@@ -1,11 +1,13 @@
 /* Mail workspace: shared domain geometry, compact resources and single-column forms. */
-.np-domain-mail { --mail-muted:#526174; --mail-border:#d8e0eb; color:#202631; font-size:14px; }
+.np-domain-mail { --mail-muted:#526174; --mail-border:#d8e0eb; color:#202631; font-size:14px; display:block; }
 .np-domain-mail [hidden],.np-mail-client-view [hidden],.np-mail-address-list [hidden] { display:none!important; }
 .np-mail-toolbar { display:flex; justify-content:space-between; align-items:center; gap:16px; margin:0 0 24px; }
 .np-mail-toolbar h2 { font-size:20px; line-height:28px; font-weight:600; margin:0; }
 .np-mail-toolbar p { color:var(--mail-muted); margin:4px 0 0; }
 .np-mail-toolbar-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
 .np-mail-toolbar-actions>button,.np-mail-toolbar-actions>.np-primary-link { align-items:center; display:inline-flex; gap:8px; min-height:44px; }
+.np-mail-mobile-import,.np-mail-mobile-settings,.np-mail-mobile-count {display:none!important;}
+.np-mail-label-mobile {display:none;}
 .np-mail-service-strip { display:flex; align-items:center; flex-wrap:wrap; gap:20px 28px; background:#fff; margin:0 0 20px; padding:12px; min-height:46px; }
 .np-mail-service-strip>div { align-items:center; display:flex; gap:10px; }
 .np-mail-service-strip dt { color:var(--mail-muted); font-size:12px; }
@@ -90,6 +92,7 @@
 .np-mail-copy-status:not(:empty) {margin-top:12px;min-height:20px;}
 .np-mail-manual-copy {width:100%;min-height:180px;font-size:13px;}
 .np-dialog.np-mail-dialog .np-mail-client-footer {bottom:0;padding:16px 24px;}
+.np-dialog.np-mail-dialog .np-mail-client-footer>button.np-secondary-button {background:white;color:#334155;border:1px solid #d8e0eb;}
 .np-mail-mobile-segments {display:none;}
 .np-mail-connection-page {max-width:640px;}
 .np-mail-connection-page>.np-mail-client-view {background:white;border:1px solid #d8e0eb;border-radius:6px;}
@@ -116,23 +119,41 @@
  .np-mail-address-table td:first-child {width:26%;}
 }
 @media (max-width:700px) {
- .np-mail-toolbar {align-items:stretch;flex-direction:column;gap:16px;}
- .np-mail-toolbar-actions {display:grid;grid-template-columns:44px minmax(0,1fr);}
- .np-mail-toolbar-actions>button,.np-mail-toolbar-actions>.np-primary-link {grid-column:1/-1;justify-content:center;}
- .np-mail-service-strip {gap:12px;display:grid;grid-template-columns:1fr 1fr;}
- .np-mail-service-strip>div {align-items:flex-start;flex-direction:column;gap:4px;}
+ .np-mail-page .np-domain-header-actions>.np-domain-add-child,.np-mail-page .np-domain-header-actions>.np-domain-open-website,.np-mail-page .np-domain-status-strip {display:none;}
+ .np-mail-page .np-domain-header-actions {display:block;margin:0;}
+ .np-mail-page .np-domain-identity p {font-size:12px;}
+ .np-mail-page .np-domain-identity h1 {margin-bottom:6px;}
+ .np-mail-page .np-domain-primary-nav {min-height:48px;margin-bottom:16px;}
+ .np-mail-toolbar {display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;margin-bottom:12px;}
+ .np-mail-toolbar p {display:none;}
+ .np-mail-toolbar-actions {display:contents;}
+ .np-mail-toolbar-actions>.np-primary-link {grid-column:2;grid-row:1;justify-content:center;font-size:13px;padding:10px;}
+ .np-domain-mail .np-mail-toolbar-actions>[data-np-mail-settings],.np-domain-mail .np-mail-toolbar-actions>.np-mail-import-link {display:none;}
+ .np-mail-label-desktop {display:none;}
+ .np-mail-label-mobile {display:inline;}
+ .np-domain-mail .np-mail-mobile-import {display:inline-flex!important;margin-top:16px;}
+ .np-domain-mail .np-mail-mobile-settings {display:inline-flex!important;margin-left:auto;}
+ .np-mail-mobile-count {display:inline!important;font-size:12px;color:#526174;}
+ .np-mail-service-row {display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+ .np-mail-service-strip {gap:10px;display:flex;background:transparent;padding:0;margin:0;min-height:44px;}
+ .np-mail-service-strip>div {gap:6px;}
+ .np-mail-service-strip>div:nth-child(n+2) {display:none;}
+ .np-mail-service-strip dt {position:absolute;clip:rect(0,0,0,0);width:1px;height:1px;overflow:hidden;}
  .np-mail-list-tools {align-items:stretch;flex-direction:column;gap:8px;}
+ .np-mail-list-tools>[data-np-mail-count] {display:none;}
  .np-domain-mail .np-mail-search {width:100%;}
  .np-mail-address-table,.np-mail-address-table tbody {display:block;}
  .np-mail-address-table thead {display:none;}
- .np-mail-address-table tr {display:grid;grid-template-columns:1fr auto;background:white;border:1px solid #d8e0eb;border-radius:6px;padding:16px;margin:0 0 12px;gap:12px;}
+ .np-mail-address-table tr {display:grid;grid-template-columns:1fr auto;background:white;border:1px solid #d8e0eb;border-radius:6px;padding:16px;margin:0 0 12px;gap:12px;position:relative;}
  .np-mail-address-table td {padding:0;border:0;min-width:0;}
- .np-mail-address-table td:first-child {grid-column:1/-1;width:100%;}
+ .np-mail-address-table td:first-child {grid-column:1/-1;width:100%;padding-right:44px;}
  .np-mail-address-table td:nth-child(2):before {content:'Mailbox quota';display:block;font-size:12px;color:#526174;margin-bottom:4px;}
  .np-mail-address-table td:nth-child(2)>small {display:none;}
  .np-mail-address-table td:last-child {grid-column:1/-1;border-top:1px solid #d8e0eb;padding-top:12px;}
  .np-mail-row-actions {flex-wrap:wrap;justify-content:flex-start;gap:8px;}
- .np-mail-row-actions .np-mail-actions {margin-left:auto;}
+ .np-mail-row-actions .np-mail-actions {position:static;margin:0;}
+ .np-mail-row-actions .np-mail-actions>summary {position:absolute;right:10px;top:10px;}
+ .np-mail-actions .np-domain-actions-menu {right:10px;top:56px;}
  .np-mail-help-band {flex-direction:column;gap:12px;}
  .np-mail-help-band>a {width:100%;}
  .np-dialog.np-mail-dialog {max-width:calc(100vw - 16px);width:640px;max-height:calc(100dvh - 16px);}

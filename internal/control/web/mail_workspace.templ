@@ -112,10 +112,10 @@ templ domainMail(user auth.SessionUser, site dashboard.Site, subscription types.
 				<a class="np-icon-button np-secondary-button" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"settings")) } data-np-mail-settings={ mailDialogID("domain",subscription.ID,domain.ID) } title="Mail domain settings" aria-label="Mail domain settings">@icon("settings")</a>
 			}
 			if user.Role==auth.RoleAdmin || user.Role==auth.RoleReseller {
-				<a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID)+"/mail-imports")) }>@icon("upload") Import mail</a>
+				<a class="np-secondary-button np-mail-import-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID)+"/mail-imports")) }>@icon("upload") Import mail</a>
 			}
 			if domain,found:=mailDomainForSite(data.SubscriptionServices.MailDomains,site); found && subscriptionMailEnabled(subscription,data.SubscriptionServices) && subscription.Status=="active" {
-				<a class="np-primary-link" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"create-address")) } data-np-dialog-open={ mailDialogID("mailbox",subscription.ID,domain.ID) }>@icon("plus") Create email address</a>
+				<a class="np-primary-link" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"create-address")) } aria-label="Create email address" data-np-dialog-open={ mailDialogID("mailbox",subscription.ID,domain.ID) }>@icon("plus")<span class="np-mail-label-desktop">Create email address</span><span class="np-mail-label-mobile">Create address</span></a>
 			}
 		</div></div>
 		if !subscriptionMailEnabled(subscription, data.SubscriptionServices) || subscription.Status != "active" {
@@ -145,6 +145,9 @@ templ domainMail(user auth.SessionUser, site dashboard.Site, subscription types.
 				<section class="np-panel np-mail-empty-domain"><div class="np-mail-section-head"><div><h3>Mail service is not configured</h3><p>Enable Stalwart mail service for this hosted domain before creating mailboxes.</p></div><a class="np-primary-link" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"enable-domain")) } data-np-dialog-open={ mailDialogID("domain", subscription.ID, 0) }>@icon("plus")<span>Enable mail</span></a></div></section>
 			}
 			@mailDomainDialog(subscription, dashboard.MailDomain{SiteID: site.ID, Domain: site.Domain}, data, view, "site-mail", site.ID)
+		}
+		if user.Role==auth.RoleAdmin || user.Role==auth.RoleReseller {
+			<a class="np-secondary-button np-mail-mobile-import" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(site.ID)+"/mail-imports")) }>@icon("upload") Import mail</a>
 		}
 	</section>
 }
