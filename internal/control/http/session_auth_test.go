@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/store"
 )
 
 type unavailableSessionStore struct{ fakeSessionStore }
@@ -100,6 +102,86 @@ func TestInvalidSessionExpiresCookie(t *testing.T) {
 			cookies := rec.Result().Cookies()
 			if len(cookies) != 1 || cookies[0].Name != SessionCookieName || cookies[0].Value != "" || cookies[0].MaxAge >= 0 {
 				t.Errorf("invalid session cookies = %v, want expired session cookie", cookies)
+			}
+		})
+	}
+}
+
+type recordingSessionStore struct {
+	auth.SessionStore
+	getSessionErr error
+}
+
+func (s *recordingSessionStore) GetSession(ctx context.Context, tokenHash string, now time.Time) (auth.SessionUser, error) {
+	user, err := s.SessionStore.GetSession(ctx, tokenHash, now)
+	s.getSessionErr = err
+	return user, err
+}
+
+func TestInvalidRoleSessionRequiresLogin(t *testing.T) {
+	now := time.Date(2026, 10, 18, 12, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		name           string
+		fragment       bool
+		prefetchHeader string
+	}{
+		{name: "full"},
+		{name: "fragment", fragment: true},
+		{name: "Purpose/full", prefetchHeader: "Purpose"},
+		{name: "Purpose/fragment", prefetchHeader: "Purpose", fragment: true},
+		{name: "Sec-Purpose/full", prefetchHeader: "Sec-Purpose"},
+		{name: "Sec-Purpose/fragment", prefetchHeader: "Sec-Purpose", fragment: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			mock.ExpectQuery(`-- name: GetSessionUser :one`).
+				WithArgs(auth.TokenHash("invalid-role-token"), now).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "email", "role", "authenticated_at", "last_seen_at"}).
+					AddRow(int64(42), "client@nakpanel.test", "unusable-role", now, now))
+			sessionStore := &recordingSessionStore{SessionStore: store.NewAuthStore(store.New(db))}
+			sessions := auth.NewSessionManager(sessionStore, auth.SessionOptions{Now: func() time.Time { return now }})
+			req := httptest.NewRequest(http.MethodGet, "https://panel.test/dashboard", nil)
+			req.AddCookie(&http.Cookie{Name: SessionCookieName, Value: "invalid-role-token"})
+			if tc.fragment {
+				req.Header.Set("X-Nakpanel-Fragment", "main")
+			}
+			if tc.prefetchHeader != "" {
+				req.Header.Set(tc.prefetchHeader, "prefetch")
+			}
+			rec := httptest.NewRecorder()
+			NewServer(nil, sessions).Handler().ServeHTTP(rec, req)
+
+			// Check the store classification even for prefetch, whose response also
+			// requires login when the session backend is unavailable.
+			if !errors.Is(sessionStore.getSessionErr, auth.ErrSessionNotFound) {
+				t.Errorf("session store error = %v, want ErrSessionNotFound", sessionStore.getSessionErr)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Error(err)
+			}
+			if tc.fragment || tc.prefetchHeader != "" {
+				if rec.Code != http.StatusUnauthorized || rec.Header().Get("X-Nakpanel-Location") != "/login" {
+					t.Errorf("invalid role response = %d %v, want 401 and login location", rec.Code, rec.Header())
+				}
+				if location := rec.Header().Get("Location"); location != "" {
+					t.Errorf("invalid role redirected to %q, want fragment login navigation", location)
+				}
+			} else if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
+				t.Errorf("invalid role response = %d %v, want login redirect", rec.Code, rec.Header())
+			}
+			if tc.prefetchHeader != "" {
+				if cookies := rec.Result().Header.Values("Set-Cookie"); len(cookies) != 0 {
+					t.Errorf("prefetch changed cookies: %v", cookies)
+				}
+			} else {
+				cookies := rec.Result().Cookies()
+				if len(cookies) != 1 || cookies[0].Name != SessionCookieName || cookies[0].Value != "" || cookies[0].MaxAge >= 0 {
+					t.Errorf("invalid role cookies = %v, want expired session cookie", cookies)
+				}
 			}
 		})
 	}
