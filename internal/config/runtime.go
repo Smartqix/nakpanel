@@ -79,3 +79,15 @@ func positiveInt64(value string, fallback int64) int64 {
 	}
 	return parsed
 }
+
+// InternalPHPVersionFromEnv selects the interpreter for panel-owned tools.
+func InternalPHPVersionFromEnv() (string, error) {
+	version := strings.TrimSpace(os.Getenv("NAKPANEL_INTERNAL_PHP_VERSION"))
+	if version == "" {
+		return "8.3", nil
+	}
+	if version != "8.3" && version != "8.5" {
+		return "", fmt.Errorf("NAKPANEL_INTERNAL_PHP_VERSION must be 8.3 or 8.5")
+	}
+	return version, nil
+}

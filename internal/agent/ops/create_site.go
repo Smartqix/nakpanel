@@ -41,6 +41,7 @@ type PHPConfigTester interface {
 }
 
 type SitePathConfig struct {
+	RuntimeResolver       PHPRuntimeResolver
 	HomeRoot              string
 	NginxAvailableDir     string
 	NginxEnabledDir       string
@@ -62,6 +63,7 @@ type SitePathConfig struct {
 }
 
 type SitePlan struct {
+	runtime                PHPRuntimeDescriptor
 	SiteID                 int64
 	Username               string
 	Domain                 string
@@ -180,6 +182,10 @@ func NewSitePlan(req types.CreateSiteReq, paths SitePathConfig) (SitePlan, error
 		return SitePlan{}, err
 	}
 
+	runtime, err := resolvePHPRuntime(paths.RuntimeResolver, normalized.PHPVersion)
+	if err != nil {
+		return SitePlan{}, err
+	}
 	customPHPFPMPoolDir := paths.PHPFPMPoolDir
 	customNginxAvailableDir := paths.NginxAvailableDir
 	customNginxConfDir := paths.NginxConfDir
@@ -190,7 +196,7 @@ func NewSitePlan(req types.CreateSiteReq, paths SitePathConfig) (SitePlan, error
 	customSystemdUnitDir := paths.SystemdUnitDir
 	paths = fillSitePathDefaults(paths)
 	if customPHPFPMPoolDir == "" {
-		paths.PHPFPMPoolDir = filepath.Join("/etc/php", normalized.PHPVersion, "fpm", "pool.d")
+		paths.PHPFPMPoolDir = runtime.PoolDir
 	}
 	if customNginxConfDir == "" && customNginxAvailableDir != "" {
 		paths.NginxConfDir = filepath.Join(filepath.Dir(customNginxAvailableDir), "conf.d")
@@ -232,6 +238,7 @@ func NewSitePlan(req types.CreateSiteReq, paths SitePathConfig) (SitePlan, error
 	}
 
 	return SitePlan{
+		runtime:                runtime,
 		SiteID:                 normalized.SiteID,
 		Username:               normalized.Username,
 		Domain:                 normalized.Domain,
@@ -1006,14 +1013,23 @@ daemonize = no
 const phpSessionDirectory = "/var/lib/php/sessions"
 
 func RenderPHPFPMUnit(plan SitePlan) string {
+	runtime := plan.runtime
+	if runtime.Version == "" {
+		var err error
+		runtime, err = resolvePHPRuntime(nil, plan.PHPVersion)
+		if err != nil {
+			return ""
+		}
+	}
+	command, environment := runtime.fpmUnitCommand()
 	return fmt.Sprintf(`[Unit]
 Description=Nakpanel PHP-FPM for site %d
 After=network.target
 
 [Service]
 Type=simple
-ExecStartPre=/usr/sbin/php-fpm%s -t -y %s
-ExecStart=/usr/sbin/php-fpm%s --nodaemonize -y %s
+%sExecStartPre=%s -t -y %s
+ExecStart=%s --nodaemonize -y %s
 Restart=on-failure
 RestartSec=2s
 NoNewPrivileges=yes
@@ -1029,7 +1045,7 @@ TasksMax=128
 
 [Install]
 WantedBy=multi-user.target
-	`, plan.SiteID, plan.PHPVersion, plan.PHPFPMConfig, plan.PHPVersion, plan.PHPFPMConfig, plan.Docroot, filepath.Dir(plan.PHPFPMErrorLog), filepath.Dir(plan.PHPFPMSocket), phpSessionDirectory, phpFPMUnitMemoryMaxMB(plan))
+	`, plan.SiteID, environment, command, plan.PHPFPMConfig, command, plan.PHPFPMConfig, plan.Docroot, filepath.Dir(plan.PHPFPMErrorLog), filepath.Dir(plan.PHPFPMSocket), phpSessionDirectory, phpFPMUnitMemoryMaxMB(plan))
 }
 
 func phpFPMUnitMemoryMaxMB(plan SitePlan) int {
@@ -1453,7 +1469,21 @@ func waitForUnixSocket(ctx context.Context, path string, timeout time.Duration) 
 
 func (p *SiteProvisioner) validateSiteConfig(ctx context.Context, plan SitePlan, withPHP bool) error {
 	if withPHP && plan.SiteID > 0 && p.phpTest != nil {
-		if err := p.phpTest.TestPHPConfig(ctx, plan.PHPVersion, plan.PHPFPMConfig); err != nil {
+		var err error
+		if tester, ok := p.phpTest.(interface {
+			TestPHPRuntimeConfig(context.Context, PHPRuntimeDescriptor, string) error
+		}); ok {
+			runtime := plan.runtime
+			if runtime.Version == "" {
+				runtime, err = resolvePHPRuntime(p.paths.RuntimeResolver, plan.PHPVersion)
+			}
+			if err == nil {
+				err = tester.TestPHPRuntimeConfig(ctx, runtime, plan.PHPFPMConfig)
+			}
+		} else {
+			err = p.phpTest.TestPHPConfig(ctx, plan.PHPVersion, plan.PHPFPMConfig)
+		}
+		if err != nil {
 			return err
 		}
 	}

@@ -103,7 +103,11 @@ func (p *execRuntimeCapabilityProcess) Output() []byte {
 	return append([]byte(nil), p.output.Bytes()...)
 }
 
-func probePHPRuntimes(ctx context.Context, probe RuntimeCapabilityProbe) ([]types.PHPRuntimeCapability, []string) {
+func probePHPRuntimes(ctx context.Context, probe RuntimeCapabilityProbe, resolvers ...PHPRuntimeResolver) ([]types.PHPRuntimeCapability, []string) {
+	var resolver PHPRuntimeResolver
+	if len(resolvers) > 0 {
+		resolver = resolvers[0]
+	}
 	type result struct {
 		runtime    types.PHPRuntimeCapability
 		discovered bool
@@ -114,7 +118,7 @@ func probePHPRuntimes(ctx context.Context, probe RuntimeCapabilityProbe) ([]type
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i].runtime, results[i].discovered = probePHPRuntime(ctx, probe, supported.version, supported.status)
+			results[i].runtime, results[i].discovered = probePHPRuntimeWithResolver(ctx, probe, resolver, supported.version, supported.status)
 		}()
 	}
 	wg.Wait()
@@ -134,10 +138,29 @@ func probePHPRuntimes(ctx context.Context, probe RuntimeCapabilityProbe) ([]type
 }
 
 func probePHPRuntime(ctx context.Context, probe RuntimeCapabilityProbe, version string, status types.PHPSupportStatus) (types.PHPRuntimeCapability, bool) {
+	return probePHPRuntimeWithResolver(ctx, probe, nil, version, status)
+}
+func probePHPRuntimeWithResolver(ctx context.Context, probe RuntimeCapabilityProbe, resolver PHPRuntimeResolver, version string, status types.PHPSupportStatus) (types.PHPRuntimeCapability, bool) {
 	runtime := types.PHPRuntimeCapability{Version: version, SupportStatus: status}
 	fpmHealthy := false
-	phpPath, phpErr := probe.LookPath("php" + version)
-	fpmPath, fpmErr := probe.LookPath("php-fpm" + version)
+	descriptor, err := resolvePHPRuntime(resolver, version)
+	if err != nil {
+		runtime.ValidationErrors = append(runtime.ValidationErrors, err.Error())
+		return runtime, false
+	}
+	phpName, fpmName := "php"+version, "php-fpm"+version
+	if descriptor.Provider != "distro" {
+		phpName, fpmName = descriptor.CLIPath, descriptor.FPMPath
+	}
+	phpPath, phpErr := probe.LookPath(phpName)
+	fpmPath, fpmErr := probe.LookPath(fpmName)
+	if phpErr == nil && filepath.Clean(phpPath) != descriptor.CLIPath {
+		phpErr = errors.New("untrusted PHP CLI path")
+	}
+	if fpmErr == nil && filepath.Clean(fpmPath) != descriptor.FPMPath {
+		fpmErr = errors.New("untrusted PHP-FPM path")
+	}
+	probe = descriptorRuntimeProbe{RuntimeCapabilityProbe: probe, runtime: descriptor}
 	if phpErr != nil && fpmErr != nil {
 		return runtime, false
 	}
@@ -422,3 +445,27 @@ func probeToolVersion(ctx context.Context, probe RuntimeCapabilityProbe, name st
 }
 
 var _ RuntimeCapabilityProbe = systemRuntimeCapabilityProbe{}
+
+// Apply private runtime INI/extension configuration to every probe invocation.
+type descriptorRuntimeProbe struct {
+	RuntimeCapabilityProbe
+	runtime PHPRuntimeDescriptor
+}
+
+func (p descriptorRuntimeProbe) command(name string, args []string) (string, []string) {
+	if name == p.runtime.CLIPath {
+		return p.runtime.CLICommand(args...)
+	}
+	if name == p.runtime.FPMPath {
+		return p.runtime.FPMCommand(args...)
+	}
+	return name, args
+}
+func (p descriptorRuntimeProbe) Run(ctx context.Context, name string, args ...string) ([]byte, error) {
+	name, args = p.command(name, args)
+	return p.RuntimeCapabilityProbe.Run(ctx, name, args...)
+}
+func (p descriptorRuntimeProbe) Start(ctx context.Context, name string, args ...string) (RuntimeCapabilityProcess, error) {
+	name, args = p.command(name, args)
+	return p.RuntimeCapabilityProbe.Start(ctx, name, args...)
+}

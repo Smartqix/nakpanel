@@ -8,8 +8,12 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/platform.sh"
+nakpanel_require_platform
 
 apt-get update
+webmail_packages=()
+if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]]; then webmail_packages+=(roundcube); fi
 apt-get install -y \
   adminer \
   bind9 \
@@ -17,11 +21,9 @@ apt-get install -y \
   curl \
   mariadb-server \
   nginx \
-  php8.3-fpm \
-  postgresql \
-  postgresql-contrib \
-  roundcube \
-  ufw
+  "php${NAKPANEL_INTERNAL_PHP_VERSION}-fpm" \
+  "${NAKPANEL_POSTGRES_PACKAGES[@]}" \
+  ufw "${webmail_packages[@]}"
 
 bash "${SCRIPT_DIR}/nginx-server-names-install.sh"
 
@@ -36,7 +38,7 @@ install -d -o nakpanel -g nakpanel -m 0750 /var/lib/nakpanel/backups
 install -d -m 0755 /etc/bind/nakpanel/zones
 install -d -m 0755 /etc/bind/nakpanel/zones.d
 
-systemctl enable --now postgresql mariadb nginx php8.3-fpm named.service
+systemctl enable --now postgresql mariadb nginx "php${NAKPANEL_INTERNAL_PHP_VERSION}-fpm" named.service
 
 if command -v ufw >/dev/null 2>&1; then
   ufw allow 7443/tcp

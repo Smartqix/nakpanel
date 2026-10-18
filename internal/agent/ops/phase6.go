@@ -643,6 +643,8 @@ func normalizeBackupRequest(req types.CreateBackupReq, defaultOutputDir, homeRoo
 }
 
 type WebmailProvisionerOptions struct {
+	PHPFPMVersion       string
+	RuntimeResolver     PHPRuntimeResolver
 	NginxAvailableDir   string
 	NginxEnabledDir     string
 	RoundcubeRoot       string
@@ -657,6 +659,8 @@ type WebmailProvisionerOptions struct {
 }
 
 type WebmailProvisioner struct {
+	phpFPMVersion       string
+	runtimeResolver     PHPRuntimeResolver
 	availableDir        string
 	enabledDir          string
 	roundcubeRoot       string
@@ -696,6 +700,7 @@ func NewWebmailProvisioner(opts WebmailProvisionerOptions) *WebmailProvisioner {
 		phpGroup = "www-data"
 	}
 	return &WebmailProvisioner{
+		phpFPMVersion: opts.PHPFPMVersion, runtimeResolver: opts.RuntimeResolver,
 		availableDir: availableDir, enabledDir: enabledDir, roundcubeRoot: root,
 		roundcubeConfigPath: roundcubeConfigPath, desKeyPath: desKeyPath, phpGroup: phpGroup,
 		reloader: opts.Reloader, mailTLSHostname: strings.TrimSpace(opts.MailTLSHostname),
@@ -704,6 +709,9 @@ func NewWebmailProvisioner(opts WebmailProvisionerOptions) *WebmailProvisioner {
 }
 
 func (p *WebmailProvisioner) ConfigureWebmail(ctx context.Context, req types.ConfigureWebmailReq) (types.ConfigureWebmailResult, error) {
+	if _, err := p.internalRuntime(); err != nil {
+		return types.ConfigureWebmailResult{}, err
+	}
 	if p.mailTLSHostname != "" && site.ValidateDomain(p.mailTLSHostname) != nil {
 		return types.ConfigureWebmailResult{}, errors.New("invalid mail TLS hostname")
 	}
@@ -711,7 +719,10 @@ func (p *WebmailProvisioner) ConfigureWebmail(ctx context.Context, req types.Con
 	if err != nil {
 		return types.ConfigureWebmailResult{}, err
 	}
-	rendered := RenderWebmailNginxConfig(normalized)
+	rendered, err := p.renderWebmailConfig(normalized, false, "", "")
+	if err != nil {
+		return types.ConfigureWebmailResult{}, err
+	}
 	if p.tlsHostname != "" {
 		if site.ValidateDomain(p.tlsHostname) != nil {
 			return types.ConfigureWebmailResult{}, errors.New("invalid webmail TLS hostname")
@@ -738,7 +749,10 @@ func (p *WebmailProvisioner) ConfigureWebmail(ctx context.Context, req types.Con
 			if _, err = certificates.Validate(normalized.Hostname, certificates.Bundle{CertificatePEM: pem.EncodeToMemory(leaf), ChainPEM: chain, PrivateKeyPEM: key}); err != nil {
 				return types.ConfigureWebmailResult{}, fmt.Errorf("validate webmail TLS: %w", err)
 			}
-			rendered = renderWebmailTLSNginxConfig(normalized, p.tlsCertPath, p.tlsKeyPath)
+			rendered, err = p.renderWebmailConfig(normalized, true, p.tlsCertPath, p.tlsKeyPath)
+			if err != nil {
+				return types.ConfigureWebmailResult{}, err
+			}
 		}
 	}
 	configPath := filepath.Join(p.availableDir, normalized.Hostname+".conf")
@@ -830,6 +844,9 @@ $config['smtp_conn_options'] = %s;
 }
 
 func RenderWebmailNginxConfig(req types.ConfigureWebmailReq) string {
+	return renderWebmailNginxConfig(req, distroPHPRuntime("8.3").ManagedSocket)
+}
+func renderWebmailNginxConfig(req types.ConfigureWebmailReq, socket string) string {
 	return fmt.Sprintf(`server {
     listen 80;
     listen [::]:80;
@@ -843,13 +860,16 @@ func RenderWebmailNginxConfig(req types.ConfigureWebmailReq) string {
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:%[3]s;
     }
 }
-`, req.Hostname, req.RoundcubeRoot)
+`, req.Hostname, req.RoundcubeRoot, socket)
 }
 
 func renderWebmailTLSNginxConfig(req types.ConfigureWebmailReq, certPath, keyPath string) string {
+	return renderWebmailTLSNginxConfigWithSocket(req, certPath, keyPath, distroPHPRuntime("8.3").ManagedSocket)
+}
+func renderWebmailTLSNginxConfigWithSocket(req types.ConfigureWebmailReq, certPath, keyPath, socket string) string {
 	return fmt.Sprintf(`server {
     listen 80;
     listen [::]:80;
@@ -870,10 +890,31 @@ server {
     }
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:%[5]s;
     }
 }
-`, req.Hostname, req.RoundcubeRoot, certPath, keyPath)
+`, req.Hostname, req.RoundcubeRoot, certPath, keyPath, socket)
+}
+
+func (p *WebmailProvisioner) internalRuntime() (PHPRuntimeDescriptor, error) {
+	version := p.phpFPMVersion
+	if version == "" {
+		version = "8.3"
+	}
+	if version != "8.3" && version != "8.5" {
+		return PHPRuntimeDescriptor{}, errors.New("internal PHP version must be 8.3 or 8.5")
+	}
+	return resolvePHPRuntime(p.runtimeResolver, version)
+}
+func (p *WebmailProvisioner) renderWebmailConfig(req types.ConfigureWebmailReq, tls bool, cert, key string) (string, error) {
+	runtime, err := p.internalRuntime()
+	if err != nil {
+		return "", err
+	}
+	if tls {
+		return renderWebmailTLSNginxConfigWithSocket(req, cert, key, runtime.ManagedSocket), nil
+	}
+	return renderWebmailNginxConfig(req, runtime.ManagedSocket), nil
 }
 
 func normalizeWebmailRequest(req types.ConfigureWebmailReq, defaultRoot string) (types.ConfigureWebmailReq, error) {

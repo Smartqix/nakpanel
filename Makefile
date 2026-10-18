@@ -1,4 +1,4 @@
-.PHONY: build generate sqlc-generate templ-generate tailwind-download tailwind-build test security goose-up goose-down goose-status river-up river-down river-status
+.PHONY: release release-test build generate sqlc-generate templ-generate tailwind-download tailwind-build test security goose-up goose-down goose-status river-up river-down river-status
 
 DB_DSN ?= $(if $(NAKPANEL_DATABASE_URL),$(NAKPANEL_DATABASE_URL),postgres://postgres@localhost:5432/nakpanel?sslmode=disable)
 VERSION ?= $(shell cat VERSION 2>/dev/null || echo dev)
@@ -71,3 +71,10 @@ river-down:
 
 river-status:
 	go run github.com/riverqueue/river/cmd/river@v0.19.0 migrate-list --line main --database-url "$(DB_DSN)"
+
+# Signed portable release bundles; source-build/migration targets remain available.
+release:
+	./deploy/release/build.sh $(RELEASE_OUTPUT)
+
+release-test:
+	python3 -m unittest discover -s deploy/release -p 'test_*.py' -v

@@ -132,21 +132,30 @@ cat "${capture_path}"
 
 echo "phase30: install and prove the current worktree"
 sync_repo "${ROOT_DIR}"
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" <<'REMOTE'
 set -euo pipefail
 src="$1"
 cd "${src}"
 # Phase 29 deliberately installs a synthetic 29.0.2 version. The verifier now
 # installs the actual worktree; --allow-downgrade is required when VERSION is
 # lower than that synthetic drill version.
-timeout 45m deploy/install/install.sh --yes --allow-downgrade --force
+export NAKPANEL_RELEASE_ALLOW_DEVELOPMENT="${2:-0}"
+if [[ -d /tmp/nakpanel-release/bin ]]; then
+  args=(--yes --allow-downgrade --force --bundle /tmp/nakpanel-release --release-public-key /tmp/nakpanel-release-public.pem)
+  if [[ "${2:-0}" == 1 ]]; then args+=(--allow-development-bundle); fi
+  timeout 45m deploy/install/install.sh "${args[@]}"
+else
+  timeout 45m deploy/install/install.sh --yes --allow-downgrade --force
+fi
 timeout 15m go build -o /usr/local/lib/nakpanel/phase30-agentprobe ./deploy/multipass/agentprobe
 chmod 0755 /usr/local/lib/nakpanel/phase30-agentprobe
 for artifact in panel agent panelctl; do
   installed="/usr/local/bin/${artifact}"
   [[ "${artifact}" == panel ]] && installed=/usr/local/bin/nakpanel-panel
   [[ "${artifact}" == agent ]] && installed=/usr/local/bin/nakpanel-agent
-  test "$(sha256sum "bin/${artifact}" | awk '{print $1}')" = "$(sha256sum "${installed}" | awk '{print $1}')"
+  binary_root=bin
+  if [[ -d /tmp/nakpanel-release/bin ]]; then binary_root=/tmp/nakpanel-release/bin; fi
+  test "$(sha256sum "${binary_root}/${artifact}" | awk '{print $1}')" = "$(sha256sum "${installed}" | awk '{print $1}')"
 done
 systemctl is-active --quiet nakpanel.service
 systemctl is-active --quiet nakpanel-agent.service
@@ -164,16 +173,17 @@ curl --connect-timeout 5 --max-time 30 -skf "https://${VM_IP}:7443/healthz" >/de
 # ready-only list and must not contain a degraded runtime.
 multipass exec "${VM_NAME}" --working-directory / -- sudo -u nakpanel /usr/local/lib/nakpanel/phase30-agentprobe \
   -op runtime_capabilities >"${tmpdir}/runtime.json"
-python3 - "${tmpdir}/runtime.json" <<'PY'
+python3 - "${tmpdir}/runtime.json" "${NAKPANEL_PHP_VERSIONS}" <<'PY'
 import json, sys
 outer = json.load(open(sys.argv[1], encoding="utf-8"))
 assert outer.get("ok") is True, outer
 data = outer["data"]
-assert data["php_versions"] == ["8.5", "8.4", "8.3"], data["php_versions"]
+expected_versions = sys.argv[2].split(",")
+assert data["php_versions"] == expected_versions, data["php_versions"]
 assert data["composer_available"] and data["composer_version"] == "2.8.11"
 assert data["wp_cli_available"] and data["wp_cli_version"] == "2.12.0"
 required_extensions = {"bcmath","curl","dom","exif","fileinfo","gd","imagick","intl","mbstring","mysqli","openssl","redis","simplexml","soap","xml","zip","zend opcache"}
-for version in ("8.3", "8.4", "8.5"):
+for version in expected_versions:
     runtime = next(item for item in data["php_runtimes"] if item["version"] == version)
     loaded = {item.lower() for item in runtime["extensions"]}
     assert runtime["ready"] and runtime["cli_available"] and runtime["fpm_available"]
@@ -182,9 +192,10 @@ for version in ("8.3", "8.4", "8.5"):
     assert required_extensions <= loaded, (version, required_extensions - loaded)
 PY
 
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_PHP_VERSIONS}" <<'REMOTE'
 set -euo pipefail
-for version in 8.3 8.4 8.5; do
+IFS=, read -ra versions <<<"$1"
+for version in "${versions[@]}"; do
 	command -v "php${version}" >/dev/null
 	command -v "php-fpm${version}" >/dev/null
 	php_modules="$("php${version}" -m)"
@@ -228,8 +239,8 @@ curl --connect-timeout 5 --max-time 30 -sk --fail -c "${tmpdir}/admin.cookies" -
   "https://${VM_IP}:7443/login" -o "${tmpdir}/admin.html"
 grep -q 'data-np-role="admin"' "${tmpdir}/admin.html" || fail "admin login failed"
 
-explicit83_site="$(db "SELECT id FROM sites WHERE desired_php_version='8.3' AND php_version='8.3' ORDER BY id LIMIT 1")"
-[[ "${explicit83_site}" =~ ^[0-9]+$ ]] || fail "an existing explicit PHP 8.3 site is required"
+explicit_baseline_site="$(db "SELECT id FROM sites WHERE desired_php_version='${NAKPANEL_BASELINE_PHP}' AND php_version='${NAKPANEL_BASELINE_PHP}' ORDER BY id LIMIT 1")"
+[[ "${explicit_baseline_site}" =~ ^[0-9]+$ ]] || fail "an existing explicit PHP ${NAKPANEL_BASELINE_PHP} site is required"
 
 plan_id="$(db "SELECT id FROM plans WHERE reseller_id IS NULL AND name='Phase30 Production PHP'")"
 plan_args=(
@@ -238,7 +249,7 @@ plan_args=(
   -d 'disk_mb=2048' -d 'max_sites=4' -d 'max_databases=4' -d 'bandwidth_mb=-1'
   -d 'max_mailboxes=0' -d 'backup_retention_days=7' -d 'max_backups=12'
   -d 'backup_storage_mb=2048' -d 'site_disk_quota_mb=512'
-  -d 'php_allowlist=8.4,8.5,8.3' -d 'default_php_version=8.4'
+  -d "php_allowlist=${NAKPANEL_PHP_VERSIONS}" -d "default_php_version=${NAKPANEL_FIXTURE_PHP}"
   -d 'php_max_children=3' -d 'php_memory_mb=256' -d 'max_php_workers=2'
   -d 'max_php_releases=5' -d 'hosting_enabled=true' -d 'allow_tls=true'
   -d 'allow_backups=true' -d 'allow_php_settings=true' -d 'allow_git=true'
@@ -271,8 +282,8 @@ username="$(db "SELECT username FROM subscription_system_accounts WHERE subscrip
 
 post_as phase30-classic-site sites -d "subscription_id=${subscription_id}" -d 'domain=phase30-classic.test'
 classic_site_id="$(db "SELECT id FROM sites WHERE domain='phase30-classic.test'")"
-wait_for "Classic site provisioning" "SELECT status||':'||php_version FROM sites WHERE id=${classic_site_id}" "active:8.4"
-[[ "$(db "SELECT php_version FROM sites WHERE id=${explicit83_site}")" == "8.3" ]] || fail "existing explicit PHP 8.3 site was rewritten"
+wait_for "Classic site provisioning" "SELECT status||':'||php_version FROM sites WHERE id=${classic_site_id}" "active:${NAKPANEL_FIXTURE_PHP}"
+[[ "$(db "SELECT php_version FROM sites WHERE id=${explicit_baseline_site}")" == "${NAKPANEL_BASELINE_PHP}" ]] || fail "existing explicit PHP ${NAKPANEL_BASELINE_PHP} site was rewritten"
 
 database_id="$(db "SELECT id FROM databases WHERE subscription_id=${subscription_id} AND db_name='np_phase30_wp'")"
 if [[ -z "${database_id}" ]]; then
@@ -332,7 +343,7 @@ cli ssl set-custom phase30-classic.test --cert /tmp/nakpanel-phase30-certs/site.
   --key /tmp/nakpanel-phase30-certs/site.key --yes >/dev/null
 wait_for "custom certificate installation" "SELECT tls_issuer||':'||tls_status FROM sites WHERE id=${classic_site_id}" "custom:active"
 post_as phase30-classic-redirect "sites/${classic_site_id}/hosting" -d 'desired_status=active' \
-  -d 'desired_php_version=8.4' -d 'desired_https_redirect=true'
+  -d "desired_php_version=${NAKPANEL_FIXTURE_PHP}" -d 'desired_https_redirect=true'
 wait_for "Classic HTTPS redirect" "SELECT https_redirect::text||':'||settings_status FROM sites WHERE id=${classic_site_id}" "true:in_sync"
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
@@ -534,7 +545,7 @@ REMOTE
 
 post_as phase30-managed-site sites -d "subscription_id=${subscription_id}" -d 'domain=phase30-managed.test'
 managed_site_id="$(db "SELECT id FROM sites WHERE domain='phase30-managed.test'")"
-wait_for "Managed site provisioning" "SELECT status||':'||php_version FROM sites WHERE id=${managed_site_id}" "active:8.4"
+wait_for "Managed site provisioning" "SELECT status||':'||php_version FROM sites WHERE id=${managed_site_id}" "active:${NAKPANEL_FIXTURE_PHP}"
 # New hosted repositories remain unavailable in the simplified Git UI. This
 # controlled legacy fixture proves preserved managed-PHP compatibility.
 repository_id="$(db "SELECT id FROM git_repositories WHERE site_id=${managed_site_id}")"
@@ -588,7 +599,7 @@ git -C "${work}" push -q --force origin main
 REMOTE
 
 post_as phase30-managed-config "sites/${managed_site_id}/php-application" \
-  -d 'hosting_mode=managed' -d 'php_version=8.4' -d "repository_id=${repository_id}" \
+  -d 'hosting_mode=managed' -d "php_version=${NAKPANEL_FIXTURE_PHP}" -d "repository_id=${repository_id}" \
   -d 'repository_ref=main' -d 'framework_profile=plain' -d 'public_path=public' \
   -d 'health_path=/healthz' -d 'release_retention=3' -d 'composer_install=true' \
   -d 'composer_allow_scripts=false' -d 'composer_allow_plugins=false'
@@ -727,7 +738,7 @@ done
 
 echo "phase30: suspend, reactivate, reboot, and reconcile"
 post_as phase30-managed-suspend "sites/${managed_site_id}/hosting" -d 'desired_status=suspended' \
-  -d 'desired_php_version=8.4' -d 'desired_https_redirect=false'
+  -d "desired_php_version=${NAKPANEL_FIXTURE_PHP}" -d 'desired_https_redirect=false'
 wait_for "managed suspension" "SELECT desired_state||':'||observed_state FROM php_applications WHERE id=${managed_application_id}" "active:suspended"
 wait_for_site_http "managed unavailable response" phase30-managed.test 503
 assert_unit_state "managed FPM while suspended" "nakpanel-php-fpm@${managed_site_id}.service" inactive
@@ -736,7 +747,7 @@ wait_for "desired-stopped worker during suspension" "SELECT desired_state||':'||
 assert_worker_inactive "desired-stopped worker during suspension" "${stopped_worker_id}"
 
 post_as phase30-managed-active "sites/${managed_site_id}/hosting" -d 'desired_status=active' \
-  -d 'desired_php_version=8.4' -d 'desired_https_redirect=false'
+  -d "desired_php_version=${NAKPANEL_FIXTURE_PHP}" -d 'desired_https_redirect=false'
 wait_for "managed reactivation" "SELECT desired_state||':'||observed_state||':'||convergence_status FROM php_applications WHERE id=${managed_application_id}" "active:healthy:in_sync"
 wait_for "desired-active worker restoration" "SELECT desired_state||':'||observed_state FROM php_workers WHERE id=${worker_id}" "running:running"
 assert_worker_active "desired-running worker after reactivation" "${worker_id}"
@@ -761,6 +772,8 @@ PRE_REBOOT_JOURNAL="$(stop_phase30_journal_capture)"
 
 multipass restart "${VM_NAME}"
 wait_for_cloud_init "${VM_NAME}"
+# Persistence is observed before application or system reconciliation.
+multipass_exec_short "${VM_NAME}" -- sudo bash -c 'set -euo pipefail; findmnt --target /home; quotaon -p "$(findmnt -n -o TARGET --target /home)" 2>/dev/null | grep "user quota .* is on" >/dev/null'
 VM_IP="$(vm_ip)"
 for _ in $(seq 1 120); do curl --connect-timeout 5 --max-time 30 -skf "https://${VM_IP}:7443/healthz" >/dev/null && break; sleep 2; done
 cli site reconcile phase30-classic.test >/dev/null
@@ -793,7 +806,10 @@ curl --connect-timeout 5 --max-time 30 -sk --fail -b "${tmpdir}/admin.cookies" "
 for marker in 'PHP Application' 'Classic'; do grep -Fq "${marker}" "${tmpdir}/classic-app.html" || fail "Classic PHP UI is missing ${marker}"; done
 for marker in 'PHP Application' 'Managed' 'Workers'; do grep -Fq "${marker}" <<<"${MANAGED_APPLICATION_HTML}" || fail "Managed PHP UI is missing ${marker}"; done
 # Runtime inventory is provider-only and must expose detailed readiness.
-for marker in 'PHP Runtime Inventory' 'PHP 8.3' 'PHP 8.4' 'PHP 8.5' 'FPM validation' 'OPcache' 'Composer 2.8.11' 'WP-CLI 2.12.0'; do
+for version in ${NAKPANEL_PHP_VERSIONS//,/ }; do
+  grep -Fq "PHP ${version}" "${tmpdir}/php-runtime.html" || fail "runtime inventory is missing PHP ${version}"
+done
+for marker in 'PHP Runtime Inventory' 'FPM validation' 'OPcache' 'Composer 2.8.11' 'WP-CLI 2.12.0'; do
   grep -Fq "${marker}" "${tmpdir}/php-runtime.html" || fail "runtime inventory is missing ${marker}"
 done
 for marker in 'Managed PHP deployments' 'PHP workers'; do grep -Fq "${marker}" "${tmpdir}/plan.html" || fail "plan controls are missing ${marker}"; done
@@ -847,6 +863,6 @@ final_secret_non_disclosure_sweep(){
 }
 final_secret_non_disclosure_sweep
 
-[[ "$(db "SELECT php_version FROM sites WHERE id=${explicit83_site}")" == "8.3" ]] || fail "explicit PHP 8.3 site changed during Phase 30"
+[[ "$(db "SELECT php_version FROM sites WHERE id=${explicit_baseline_site}")" == "${NAKPANEL_BASELINE_PHP}" ]] || fail "explicit PHP ${NAKPANEL_BASELINE_PHP} site changed during Phase 30"
 PHASE30_COMPLETE=1
 echo "Phase 30 production PHP, WordPress 7.1, managed release, worker, isolation, and reboot verification passed on ${VM_NAME} (${VM_IP})."

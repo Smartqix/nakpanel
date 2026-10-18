@@ -34,7 +34,7 @@ post(){
 }
 get_json(){ curl -skf --max-time 30 -b "${tmpdir}/cookies" -H 'Accept: application/json' "${base}/$1"; }
 create_site(){
-  post sites -d "subscription_id=${subscription_id}" -d "domain=$1" -d php_version=8.4 -d issue_certificate=false
+  post sites -d "subscription_id=${subscription_id}" -d "domain=$1" -d php_version=${NAKPANEL_FIXTURE_PHP} -d issue_certificate=false
   SITE_ID="$(db "SELECT id FROM sites WHERE subscription_id=${subscription_id} AND domain='$1'")"
   [[ "${SITE_ID}" =~ ^[0-9]+$ ]] || fail 'created site ID missing'
   wait_for "SELECT status FROM sites WHERE id=${SITE_ID}" active
@@ -70,7 +70,7 @@ plan="Removal ${run_id}"
 post plans -d plan_id=0 -d "name=${plan}" -d lifecycle_status=active -d change_reason=RemovalQA \
   -d disk_mb=-1 -d bandwidth_mb=-1 -d max_sites=4 -d max_subdomains=5 -d max_databases=5 \
   -d max_mailboxes=0 -d max_backups=5 -d backup_storage_mb=-1 -d site_disk_quota_mb=-1 \
-  -d php_allowlist=8.4 -d php_versions=8.4 -d default_php_version=8.4 -d php_max_children=2 \
+  -d php_allowlist=${NAKPANEL_FIXTURE_PHP} -d php_versions=${NAKPANEL_FIXTURE_PHP} -d default_php_version=${NAKPANEL_FIXTURE_PHP} -d php_max_children=2 \
   -d php_memory_mb=256 -d hosting_enabled=true -d allow_backups=true -d allow_dns=true -d allow_tls=true \
   -d overuse_policy=block -d validity_days=-1
 plan_id="$(db "SELECT id FROM plans WHERE name='${plan}' AND reseller_id IS NULL")"
@@ -120,10 +120,10 @@ post restores -d "backup_id=${backup_id}" -d "target_site_id=${replacement_id}"
 restore_id="$(db "SELECT id FROM restore_runs WHERE backup_id=${backup_id} ORDER BY id DESC LIMIT 1")"
 wait_for "SELECT status FROM restore_runs WHERE id=${restore_id}" active
 # Replay the stale native RPC as the allowed panel UID; it must fail before dispatch.
-multipass exec "${VM_NAME}" -- sudo -u nakpanel python3 - "${stale_id}" "${subscription_id}" "${customer_id}" "${username}" "${addon}" <<'PY'
+multipass exec "${VM_NAME}" -- sudo -u nakpanel python3 - "${stale_id}" "${subscription_id}" "${customer_id}" "${username}" "${addon}" "${NAKPANEL_FIXTURE_PHP}" <<'PY'
 import json,socket,sys
 s=socket.socket(socket.AF_UNIX);s.settimeout(10);s.connect('/run/nakpanel/agent.sock')
-data=dict(site_id=int(sys.argv[1]),subscription_id=int(sys.argv[2]),username=sys.argv[4],domain=sys.argv[5],php_version='8.4')
+data=dict(site_id=int(sys.argv[1]),subscription_id=int(sys.argv[2]),username=sys.argv[4],domain=sys.argv[5],php_version=sys.argv[6])
 s.sendall((json.dumps(dict(op='create_site',id='removal-stale-native-'+sys.argv[1],data=data))+'\n').encode())
 result=json.loads(s.makefile().read()); assert not result['ok'] and ('removed' in result.get('error','') or 'retired' in result.get('error','')),result
 PY

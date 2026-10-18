@@ -7,6 +7,9 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 export DEBIAN_FRONTEND=noninteractive
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/platform.sh"
+nakpanel_require_platform
 
 apt-get update
 apt-get install -y \
@@ -15,7 +18,7 @@ apt-get install -y \
   mariadb-client \
   netcat-openbsd \
   openssh-server \
-  php8.3-cli \
+  "php${NAKPANEL_INTERNAL_PHP_VERSION}-cli" \
   podman \
   uidmap \
   slirp4netns \
@@ -92,6 +95,7 @@ set_agent_env() {
 }
 set_agent_env NAKPANEL_FTPS_TLS_CERT "${NAKPANEL_FTPS_TLS_CERT:-/var/lib/nakpanel/tls/panel.crt}"
 set_agent_env NAKPANEL_FTPS_TLS_KEY "${NAKPANEL_FTPS_TLS_KEY:-/var/lib/nakpanel/tls/panel.key}"
+set_agent_env NAKPANEL_INTERNAL_PHP_VERSION "${NAKPANEL_INTERNAL_PHP_VERSION}"
 if [[ -n "${NAKPANEL_FTPS_PUBLIC_ADDRESS:-}" ]]; then
   set_agent_env NAKPANEL_FTPS_PUBLIC_ADDRESS "${NAKPANEL_FTPS_PUBLIC_ADDRESS}"
 fi

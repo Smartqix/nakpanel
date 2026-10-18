@@ -75,6 +75,7 @@ func lockSiteContentMutations(siteIDs ...int64) func() {
 }
 
 type HostingToolkitOptions struct {
+	RuntimeResolver    PHPRuntimeResolver
 	HomeRoot           string
 	NginxLogRoot       string
 	FTPSConfigDir      string
@@ -94,6 +95,7 @@ type HostingToolkitOptions struct {
 }
 
 type HostingToolkitProvisioner struct {
+	runtimeResolver    PHPRuntimeResolver
 	homeRoot           string
 	nginxLogRoot       string
 	ftpsConfigDir      string
@@ -152,7 +154,8 @@ func NewHostingToolkitProvisioner(opts HostingToolkitOptions) *HostingToolkitPro
 		opts.Runner = ExecRunner{}
 	}
 	return &HostingToolkitProvisioner{
-		homeRoot: filepath.Clean(opts.HomeRoot), nginxLogRoot: filepath.Clean(opts.NginxLogRoot),
+		runtimeResolver: opts.RuntimeResolver,
+		homeRoot:        filepath.Clean(opts.HomeRoot), nginxLogRoot: filepath.Clean(opts.NginxLogRoot),
 		ftpsConfigDir: filepath.Clean(opts.FTPSConfigDir), ftpsService: opts.FTPSService,
 		ftpsLogDir:     "/var/log/proftpd",
 		systemdUnitDir: filepath.Clean(opts.SystemdUnitDir), valkeyConfigRoot: filepath.Clean(opts.ValkeyConfigRoot),
@@ -1384,14 +1387,16 @@ func (p *HostingToolkitProvisioner) RunScheduledTask(ctx context.Context, req ty
 		if filepath.IsAbs(script) || script == ".." || strings.HasPrefix(script, ".."+string(filepath.Separator)) {
 			return types.RunScheduledTaskResult{}, errors.New("PHP task script escapes the site")
 		}
-		binary, err := scheduledPHPBinary(req.PHPVersion)
+		runtime, err := resolvePHPRuntime(p.runtimeResolver, req.PHPVersion)
+		binary := runtime.CLIPath
 		if err != nil {
 			return types.RunScheduledTaskResult{}, err
 		}
 		if info, err := os.Stat(binary); err != nil || !info.Mode().IsRegular() {
 			return types.RunScheduledTaskResult{}, fmt.Errorf("scheduled PHP runtime %s is unavailable", req.PHPVersion)
 		}
-		command = exec.CommandContext(taskCtx, "runuser", "-u", req.Username, "--", binary, filepath.Join(root, script))
+		name, args := runtime.CLICommand(filepath.Join(root, script))
+		command = exec.CommandContext(taskCtx, "runuser", append([]string{"-u", req.Username, "--", name}, args...)...)
 	default:
 		return types.RunScheduledTaskResult{}, errors.New("unsupported scheduled task kind")
 	}
@@ -1424,7 +1429,8 @@ func scheduledPHPBinary(version string) (string, error) {
 	if !regexp.MustCompile(`^[0-9]+\.[0-9]+$`).MatchString(version) {
 		return "", errors.New("scheduled PHP runtime is invalid")
 	}
-	return filepath.Join("/usr/bin", "php"+version), nil
+	runtime, err := resolvePHPRuntime(nil, version)
+	return runtime.CLIPath, err
 }
 
 type limitedWriter struct {

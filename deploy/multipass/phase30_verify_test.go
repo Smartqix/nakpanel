@@ -28,7 +28,7 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 			"deploy/install/install.sh --yes", "--allow-downgrade --force", "/usr/local/bin/nakpanel-panel", "/usr/local/bin/nakpanel-agent",
 		},
 		"runtime_inventory": {
-			"8.3", "8.4", "8.5", `"php${version}-fpm"`,
+			"NAKPANEL_PHP_VERSIONS", "expected_versions", "NAKPANEL_BASELINE_PHP", `"php${version}-fpm"`,
 			"PHPVersions", "validation_errors", "required_extensions", "opcache",
 			"Composer version 2.8.11", "composer self-update", "wp --version --allow-root", "WP-CLI 2.12.0", "freshclam", "clamscan",
 		},

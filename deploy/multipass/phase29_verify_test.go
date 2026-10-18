@@ -254,3 +254,15 @@ func TestFail2BanFilterMatchesThePanelAuthLine(t *testing.T) {
 		}
 	}
 }
+
+func TestPhase29RoundcubeCanaryRunsBeforeBackupAndAfterBothRestoreBoots(t *testing.T) {
+	script := readExecutableScript(t, "phase29-verify.sh")
+	seed := strings.Index(script, `roundcube_canary "${VM_NAME}" seed`)
+	backup := strings.Index(script, `create_server_backup >/dev/null`)
+	if seed < 0 || backup < seed {
+		t.Fatal("real Roundcube contact/preference canary must be seeded before server archive")
+	}
+	if strings.Count(script, `roundcube_canary "${DR_VM_NAME}" assert`) != 2 {
+		t.Fatal("Roundcube contents must be asserted after restore and second reboot")
+	}
+}

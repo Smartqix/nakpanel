@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "ubuntu-24.04": {
+    "internal_php": "8.3",
+    "hosting_php": [
+      "8.3",
+      "8.4",
+      "8.5"
+    ],
+    "composer": "2.8.11",
+    "wp_cli": "2.12.0",
+    "roundcube": "distribution"
+  },
+  "ubuntu-26.04-native": {
+    "experimental": true,
+    "internal_php": "8.5",
+    "hosting_php": [
+      "8.5"
+    ],
+    "composer": "2.10.3",
+    "wp_cli": "2.12.0",
+    "roundcube": {
+      "version": "1.6.19",
+      "kind": "complete",
+      "url": "https://github.com/roundcube/roundcubemail/releases/download/1.6.19/roundcubemail-1.6.19-complete.tar.gz",
+      "sha256": "c47fd99cd7cbb7aee2557d8ca614a4c51e91f6fa3767ca4ce32c6126f9ebff5b",
+      "key_url": "https://roundcube.net/download/pubkey.asc",
+      "key_sha256": "6cd4ac8548ca5a374408d0b45b652d97014a6674ddf467b06d969a9e7e3e312b",
+      "source": "https://roundcube.net/download/"
+    }
+  },
+  "ubuntu-26.04-sury": {
+    "experimental": true,
+    "internal_php": "8.5",
+    "hosting_php": [
+      "8.3",
+      "8.4",
+      "8.5"
+    ],
+    "composer": "2.10.3",
+    "wp_cli": "2.12.0",
+    "roundcube": {
+      "version": "1.6.19",
+      "kind": "complete",
+      "url": "https://github.com/roundcube/roundcubemail/releases/download/1.6.19/roundcubemail-1.6.19-complete.tar.gz",
+      "sha256": "c47fd99cd7cbb7aee2557d8ca614a4c51e91f6fa3767ca4ce32c6126f9ebff5b",
+      "key_url": "https://roundcube.net/download/pubkey.asc",
+      "key_sha256": "6cd4ac8548ca5a374408d0b45b652d97014a6674ddf467b06d969a9e7e3e312b",
+      "source": "https://roundcube.net/download/"
+    },
+    "php_provider": {
+      "uri": "https://packages.sury.org/php/",
+      "suite": "resolute",
+      "key_fingerprint": "15058500A0235D97F5D10063B188E2B695BD4743",
+      "public_key_sha256": "b486fd5488185c4c46467960fa69c53d5085fec492cf76b9eaf3db33561c9d7c",
+      "keyring_package_sha256": "7511384559c9ddf1d5ce5f60be429ae9d4e7d01d9480d6f1b7a30c0810cf8b60",
+      "enrollment": "explicit-fresh-only"
+    }
+  }
+}

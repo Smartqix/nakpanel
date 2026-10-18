@@ -2,7 +2,10 @@ package ops
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -275,5 +278,126 @@ func TestReadApplicationLogEnforcesByteLimit(t *testing.T) {
 	}
 	if !strings.Contains(joined, strings.Repeat("y", 40)) {
 		t.Fatalf("bounded log did not retain the newest complete line: %q", joined)
+	}
+}
+
+func TestApplicationUnitEnforcesPolicyResourcesInParentCgroup(t *testing.T) {
+	for _, tc := range []struct {
+		name               string
+		memory, cpu, tasks int
+		want               []string
+		absent             []string
+	}{
+		{name: "finite policy", memory: 256, cpu: 50, tasks: 128, want: []string{"MemoryMax=256M", "CPUQuota=50%", "TasksMax=128"}},
+		{name: "larger policy", memory: 1024, cpu: 200, tasks: 256, want: []string{"MemoryMax=1024M", "CPUQuota=200%", "TasksMax=256"}},
+		{name: "zero memory and CPU retain inherited defaults", want: []string{"TasksMax=128"}, absent: []string{"MemoryMax=", "CPUQuota="}},
+		{name: "nonpositive task limit keeps safe default", tasks: -1, want: []string{"TasksMax=128"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := validApplicationGenerationRequest()
+			req.Policy.Resources.MemoryMB = tc.memory
+			req.Policy.Resources.CPUPercent = tc.cpu
+			req.Policy.Resources.MaxTasks = tc.tasks
+			unit := renderApplicationUnit(req, applicationIdentity{}, "nakpanel-app-4-g3")
+			for _, want := range tc.want {
+				if !strings.Contains(unit, "\n"+want+"\n") {
+					t.Fatalf("parent unit lacks %q: %s", want, unit)
+				}
+			}
+			for _, absent := range tc.absent {
+				if strings.Contains(unit, absent) {
+					t.Fatalf("parent unit changed unconstrained policy with %q: %s", absent, unit)
+				}
+			}
+		})
+	}
+}
+
+type applicationResourceDeployRunner struct {
+	unitDir     string
+	calls       []string
+	enabledUnit string
+}
+
+func (r *applicationResourceDeployRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	r.calls = append(r.calls, name+" "+strings.Join(args, " "))
+	if name == "systemctl" && len(args) == 3 && args[0] == "enable" && args[1] == "--now" {
+		contents, err := os.ReadFile(filepath.Join(r.unitDir, args[2]))
+		if err != nil {
+			return nil, err
+		}
+		r.enabledUnit = string(contents)
+	}
+	return nil, nil
+}
+
+func TestDeployApplicationEnablesResourceBoundSupervisorBeforeRouting(t *testing.T) {
+	account, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !accountUsernameRE.MatchString(account.Username) {
+		t.Skip("current account does not match supported Linux application username policy")
+	}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(root, "home")
+	req := validApplicationGenerationRequest()
+	req.Username = account.Username
+	req.Policy.Permissions.Applications = true
+	req.Policy.Applications.Rootless = true
+	req.Policy.Applications.AllowedRegistries = []string{"docker.io"}
+	req.Policy.Resources.MemoryMB = 256
+	req.Policy.Resources.CPUPercent = 50
+	req.Policy.Resources.MaxTasks = 128
+	req.Health = types.ApplicationHealthSpec{Kind: types.ApplicationHealthTCP, TimeoutSeconds: 1}
+	var listener net.Listener
+	for port := 25000; port < 25100; port++ {
+		listener, err = net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+		if err == nil {
+			req.Endpoint.HostPort = port - 5000
+			break
+		}
+	}
+	if listener == nil {
+		t.Fatal("no available local candidate test port")
+	}
+	defer listener.Close()
+	siteRoot := filepath.Join(home, req.Username, "domains", req.Domain, "public_html")
+	if err := os.MkdirAll(siteRoot, 0750); err != nil {
+		t.Fatal(err)
+	}
+	subIDs := filepath.Join(root, "subids")
+	if err := os.WriteFile(subIDs, []byte(req.Username+":100000:65536\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	unitDir := filepath.Join(root, "systemd")
+	runner := &applicationResourceDeployRunner{unitDir: unitDir}
+	p := NewPodmanProvisioner(PodmanProvisionerOptions{HomeRoot: home, StateRoot: filepath.Join(root, "state"), RuntimeRoot: filepath.Join(root, "run"), SystemdUnitDir: unitDir, NginxConfigDir: filepath.Join(root, "nginx"), SubUIDPath: subIDs, SubGIDPath: subIDs, Runner: runner})
+	result, err := p.DeployApplicationGeneration(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ObservedState != "healthy" || result.UnitName != "nakpanel-app-4-g3.service" {
+		t.Fatalf("deployment result=%+v", result)
+	}
+	for _, want := range []string{"MemoryMax=256M", "CPUQuota=50%", "TasksMax=128", "User=" + req.Username, "ExecStart=/usr/bin/podman start --attach nakpanel-app-4-g3"} {
+		if !strings.Contains(runner.enabledUnit, "\n"+want+"\n") {
+			t.Fatalf("enabled supervisor lacks %q: %s", want, runner.enabledUnit)
+		}
+	}
+	calls := strings.Join(runner.calls, "\n")
+	reloadAt := strings.Index(calls, "systemctl daemon-reload")
+	startAt := strings.Index(calls, "systemctl enable --now nakpanel-app-4-g3.service")
+	routeAt := strings.Index(calls, "systemctl reload nginx")
+	if reloadAt < 0 || startAt < 0 || routeAt < 0 || reloadAt > startAt || routeAt < startAt {
+		t.Fatalf("supervisor was not loaded before activation/routing: %s", calls)
+	}
+	for _, want := range []string{"--pids-limit 128", "--memory 256m", "--cpus 0.50", "--cap-drop=all", "--security-opt=no-new-privileges", "--read-only"} {
+		if !strings.Contains(calls, want) {
+			t.Fatalf("container creation lost %q: %s", want, calls)
+		}
 	}
 }

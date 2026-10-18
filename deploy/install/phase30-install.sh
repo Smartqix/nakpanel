@@ -6,20 +6,13 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
-if [[ ! -r /etc/os-release ]]; then
-  echo "phase30-install.sh requires Ubuntu 24.04" >&2
-  exit 1
-fi
-# shellcheck disable=SC1091
-. /etc/os-release
-if [[ "${ID:-}" != "ubuntu" || "${VERSION_ID:-}" != "24.04" ]]; then
-  echo "phase30-install.sh supports Ubuntu 24.04 only (detected ${ID:-unknown} ${VERSION_ID:-unknown})" >&2
-  exit 1
-fi
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/platform.sh"
+nakpanel_require_platform
 
 export DEBIAN_FRONTEND=noninteractive
 
-readonly -a PHP_VERSIONS=(8.3 8.4 8.5)
+readonly -a PHP_VERSIONS=("${NAKPANEL_HOSTING_PHP_VERSIONS[@]}")
 
 apt-get update
 apt-get install -y acl ca-certificates clamav clamav-freshclam curl gnupg software-properties-common
@@ -42,6 +35,7 @@ systemctl enable --now clamav-freshclam.service >/dev/null 2>&1 || {
   echo "ClamAV signature updates could not be enabled" >&2
   exit 1
 }
+if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]]; then
 add-apt-repository --yes ppa:ondrej/php
 
 # Ubuntu 24.04 writes PPA sources in deb822 format. Refuse a source that does
@@ -50,6 +44,8 @@ ppa_source="$(grep -Rils 'ppa.launchpadcontent.net/ondrej/php' /etc/apt/sources.
 if [[ -z "${ppa_source}" ]] || ! grep -qsE '^(Signed-By:|deb .*signed-by=)' "${ppa_source}"; then
   echo "ppa:ondrej/php was added without a Signed-By key binding" >&2
   exit 1
+fi
+nakpanel_validate_ppa_source "${ppa_source}"
 fi
 
 apt-get update
@@ -61,7 +57,9 @@ apt-get update
 # for every runtime either way.
 apt_package_has_candidate() {
   local candidate
-  candidate="$(apt-cache policy "$1" | awk '/^[[:space:]]*Candidate:/ { print $2; exit }')"
+  local policy
+  policy="$(apt-cache policy "$1")"
+  candidate="$(awk '/^[[:space:]]*Candidate:/ { print $2; exit }' <<<"${policy}")"
   [[ -n "${candidate}" && "${candidate}" != "(none)" ]]
 }
 
@@ -93,6 +91,7 @@ done
 apt-get install -y "${packages[@]}"
 
 COMPOSER_VERSION=2.8.11
+if [[ "${NAKPANEL_OS_VERSION}" == 26.04 ]]; then COMPOSER_VERSION=2.10.3; fi
 WP_CLI_VERSION=2.12.0
 artifact_dir="$(mktemp -d /tmp/nakpanel-phase30-artifacts.XXXXXX)"
 cleanup() {
@@ -160,6 +159,9 @@ exec /usr/bin/php /usr/local/lib/nakpanel/wp-cli.phar "$@"
 EOF
 chown root:root /usr/local/bin/wp
 chmod 0755 /usr/local/bin/wp
+
+# These wrappers serve internal tools. Tenant commands use their own descriptor.
+sed -i "s#exec /usr/bin/php #exec /usr/bin/php${NAKPANEL_INTERNAL_PHP_VERSION} #" /usr/local/bin/composer /usr/local/bin/wp
 
 cat >/etc/wp-cli/config.yml <<'EOF'
 color: false

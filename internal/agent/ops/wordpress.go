@@ -36,6 +36,7 @@ var (
 )
 
 type WordPressProvisionerOptions struct {
+	RuntimeResolver PHPRuntimeResolver
 	HomeRoot        string
 	WPBinary        string
 	Runner          CommandRunner
@@ -45,6 +46,7 @@ type WordPressProvisionerOptions struct {
 }
 
 type WordPressProvisioner struct {
+	runtimeResolver    PHPRuntimeResolver
 	homeRoot           string
 	wpBinary           string
 	runner             CommandRunner
@@ -59,7 +61,7 @@ func NewWordPressProvisioner(opts WordPressProvisionerOptions) *WordPressProvisi
 		opts.HomeRoot = DefaultSitePathConfig().HomeRoot
 	}
 	if opts.WPBinary == "" {
-		opts.WPBinary = "/usr/local/bin/wp"
+		opts.WPBinary = "/usr/local/lib/nakpanel/wp-cli.phar"
 	}
 	if opts.Runner == nil {
 		opts.Runner = ExecRunner{}
@@ -71,7 +73,8 @@ func NewWordPressProvisioner(opts WordPressProvisionerOptions) *WordPressProvisi
 		opts.Chown = os.Chown
 	}
 	return &WordPressProvisioner{
-		homeRoot: filepath.Clean(opts.HomeRoot), wpBinary: opts.WPBinary, runner: opts.Runner,
+		runtimeResolver: opts.RuntimeResolver,
+		homeRoot:        filepath.Clean(opts.HomeRoot), wpBinary: opts.WPBinary, runner: opts.Runner,
 		lookupUser: opts.LookupUser, chown: opts.Chown, commandOutputLimit: defaultWordPressOutputLimit,
 		databaseRemover: opts.DatabaseRemover,
 	}
@@ -483,7 +486,12 @@ func (p *WordPressProvisioner) runWPAtPathInput(ctx context.Context, spec types.
 	if !ok {
 		return nil, errors.New("WordPress command runner does not support protected input")
 	}
-	command := []string{"-u", spec.Username, "--", p.wpBinary, "--path=" + root, "--no-color"}
+	runtime, runtimeErr := resolvePHPRuntime(p.runtimeResolver, spec.PHPVersion)
+	if runtimeErr != nil {
+		return nil, runtimeErr
+	}
+	executable, phpArgs := runtime.CLICommand(p.wpBinary, "--path="+root, "--no-color")
+	command := append([]string{"-u", spec.Username, "--", executable}, phpArgs...)
 	command = append(command, args...)
 	output, err := runner.RunInput(ctx, input, "runuser", command...)
 	if len(output) > p.commandOutputLimit {
@@ -497,7 +505,12 @@ func (p *WordPressProvisioner) runWPAtPath(ctx context.Context, spec types.WordP
 	if err != nil {
 		return nil, err
 	}
-	command := []string{"-u", spec.Username, "--", p.wpBinary, "--path=" + root, "--no-color"}
+	runtime, runtimeErr := resolvePHPRuntime(p.runtimeResolver, spec.PHPVersion)
+	if runtimeErr != nil {
+		return nil, runtimeErr
+	}
+	executable, phpArgs := runtime.CLICommand(p.wpBinary, "--path="+root, "--no-color")
+	command := append([]string{"-u", spec.Username, "--", executable}, phpArgs...)
 	command = append(command, args...)
 	output, err := p.runner.Run(ctx, "runuser", command...)
 	if len(output) > p.commandOutputLimit {

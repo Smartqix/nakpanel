@@ -40,10 +40,17 @@ post(){
 
 echo 'phase34: install the current report implementation'
 sync_repo "${ROOT_DIR}"
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" <<'REMOTE'
 set -euo pipefail
 cd "$1"
-timeout 45m deploy/install/install.sh --yes --allow-downgrade --force
+export NAKPANEL_RELEASE_ALLOW_DEVELOPMENT="${2:-0}"
+if [[ -d /tmp/nakpanel-release/bin ]]; then
+  args=(--yes --allow-downgrade --force --bundle /tmp/nakpanel-release --release-public-key /tmp/nakpanel-release-public.pem)
+  if [[ "${2:-0}" == 1 ]]; then args+=(--allow-development-bundle); fi
+  timeout 45m deploy/install/install.sh "${args[@]}"
+else
+  timeout 45m deploy/install/install.sh --yes --allow-downgrade --force
+fi
 goaccess --version
 systemctl is-active --quiet nakpanel.service
 systemctl is-active --quiet nakpanel-agent.service
@@ -62,8 +69,8 @@ customer_email="phase34-${run_id}@nakpanel.test"
 post plans -d 'plan_id=0' -d "name=${plan_name}" -d 'lifecycle_status=active' \
   -d 'change_reason=GoAccess acceptance' -d 'disk_mb=-1' -d 'bandwidth_mb=-1' \
   -d 'max_sites=1' -d 'max_databases=0' -d 'max_mailboxes=0' -d 'max_backups=0' \
-  -d 'backup_storage_mb=0' -d 'site_disk_quota_mb=-1' -d 'php_allowlist=8.4' \
-  -d 'php_versions=8.4' -d 'default_php_version=8.4' -d 'php_max_children=2' \
+  -d 'backup_storage_mb=0' -d 'site_disk_quota_mb=-1' -d "php_allowlist=${NAKPANEL_FIXTURE_PHP}" \
+  -d "php_versions=${NAKPANEL_FIXTURE_PHP}" -d "default_php_version=${NAKPANEL_FIXTURE_PHP}" -d 'php_max_children=2' \
   -d 'php_memory_mb=256' -d 'hosting_enabled=true' -d 'allow_logs=true' \
   -d 'allow_web_statistics=true' -d 'logs_statistics_engine=goaccess' \
   -d 'logs_retention_days=14' -d 'logs_rotation_enabled=true' \

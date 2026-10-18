@@ -78,6 +78,9 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		}
 		return runSecretKey(args[1:], stdout, stderr)
 	}
+	if args[0] == "platform" {
+		return runPlatform(ctx, databaseURL, agentSocket, actor, args[1:], stdout, stderr)
+	}
 	if args[0] == "restore-server" {
 		// Dispatched before the operator service opens: this command drops
 		// and recreates the database it would otherwise connect to.
@@ -99,6 +102,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	defer service.Close()
 
 	switch args[0] {
+	case "runtime-provider-in-use":
+		return runRuntimeProviderInUse(ctx, service, args[1:], stdout, stderr)
 	case "create-admin":
 		return runCreateAdmin(ctx, service, args[1:], stdin, stdout, stderr)
 	case "admin":
@@ -936,6 +941,7 @@ Commands:
   ssl renew DOMAIN [--yes] | ssl set-custom DOMAIN --cert FILE --key FILE [--chain FILE] [--yes]
   backup create DOMAIN | backup list [DOMAIN] | restore BACKUP-ID --yes
   plan list | subscription list [--customer EMAIL]
+  platform bootstrap-plans --profile ubuntu-26.04-native [--discard-demo-subscriptions]
   api-key create --name NAME [--cidrs CIDR,...] [--rate-limit N] [--expires DURATION|RFC3339]
   api-key list | api-key revoke PREFIX --yes
   mail enable DOMAIN [--dkim=false] [--dmarc POLICY] | mail add ADDRESS [--quota-mb N]

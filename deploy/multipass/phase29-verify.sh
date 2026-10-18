@@ -13,6 +13,10 @@ VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 DR_VM_NAME="${NAKPANEL_MULTIPASS_DR_VM:-${NAKPANEL_MULTIPASS_VM}-dr}"
 REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
+# Reject collisions before prior phases, sync or any destructive helper.
+assert_distinct_vm_names "${VM_NAME}" "${DR_VM_NAME}"
+assert_current_vm_identity
+export NAKPANEL_MULTIPASS_SOURCE_VM="${VM_NAME}"
 
 fail(){ echo "phase29: $*" >&2; exit 1; }
 db(){ multipass_exec_short "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "$1" | tr -d '\r'; }
@@ -164,10 +168,26 @@ ORDER BY CASE WHEN lower(mailbox.local_part)='phase29' THEN 0 ELSE 1 END, mailbo
 LIMIT 1")"
 [[ -n "${mailbox_local}" ]] || mailbox_local="phase29"
 mailbox_address="${mailbox_local}@${domain}"
+if [[ -n "${NAKPANEL_CELL_REPORT_DIR:-}" ]]; then
+  printf '%s\t%s\n' "${site_id}" "${mailbox_address}" >"${NAKPANEL_CELL_REPORT_DIR}/phase29-fixtures.tsv"
+fi
 mailbox_output="$(cli mail add "${mailbox_address}" --password 'Phase29Mail!2026' 2>&1)" \
   || fail "could not provision the phase29 mailbox fixture: ${mailbox_output}"
 grep -qi "created\|saved" <<<"${mailbox_output}" \
   || fail "unexpected phase29 mailbox result: ${mailbox_output}"
+
+# Store a real message through Stalwart IMAP before the server archive. Auth
+# alone cannot prove that mailbox contents survived restore.
+multipass_exec_short "${VM_NAME}" -- python3 -c '
+import imaplib, ssl, sys
+client=imaplib.IMAP4_SSL("127.0.0.1",993,ssl_context=ssl._create_unverified_context(),timeout=20)
+try:
+    client.login(sys.argv[1],sys.argv[2])
+    status,_=client.append("INBOX",None,None,b"Subject: Nakpanel phase29 durable mail canary\r\n\r\nphase29-restored-message-content\r\n")
+    assert status=="OK",status
+finally:
+    client.logout()
+' "${mailbox_address}" 'Phase29Mail!2026'
 
 
 assert_baseline(){ # LABEL TARGET-IP EXPECTED-VERSION
@@ -193,6 +213,11 @@ assert_mariadb_canary(){ # LABEL VM
   local label="$1" target="$2" value
   value="$(multipass_exec_short "${target}" -- sudo mariadb -N -B "${canary_db}" -e "SELECT v FROM phase29_canary" | tr -d '\r')"
   [[ "${value}" == "phase29-mariadb-canary" ]] || fail "${label}: mariadb canary is ${value}"
+}
+
+roundcube_canary(){
+  multipass exec "$1" -- sudo -u www-data "/usr/bin/php${NAKPANEL_BASELINE_PHP}" \
+    "${REMOTE_SRC}/deploy/multipass/roundcube-dr-canary.php" "$2" "${mailbox_address}"
 }
 
 assert_baseline "pre-upgrade" "${VM_IP}" ""
@@ -450,15 +475,14 @@ multipass restart "${VM_NAME}"
 wait_for_cloud_init
 VM_IP="$(vm_ip)"
 BASE_URL="https://${VM_IP}:7443"
-# Disk quotas do not survive a VM reboot until the kernel module is present.
+# Observe persistence before reconcile or any repair. A lost quota mount is a
+# product failure; repairing it here would turn a broken reboot into a pass.
 multipass exec "${VM_NAME}" -- sudo bash -se <<'REMOTE'
 set -euo pipefail
-if ! quotaon -p / 2>/dev/null | grep -q 'user quota .* is on'; then
-  modprobe quota_v2 2>/dev/null || true
-  mount -o remount,usrquota,grpquota / 2>/dev/null || true
-  quotacheck -ugm / 2>/dev/null || quotacheck -cugm / 2>/dev/null || true
-  quotaon -uv / 2>/dev/null || true
-fi
+findmnt --target /home
+quotaon -p "$(findmnt -n -o TARGET --target /home)"
+quotaon -p "$(findmnt -n -o TARGET --target /home)" 2>/dev/null | grep -q 'user quota .* is on'
+systemctl --failed --no-legend --plain --no-pager
 REMOTE
 for _ in $(seq 1 90); do curl -skf "${BASE_URL}/healthz" >/dev/null && break; sleep 2; done
 for service in nakpanel nakpanel-agent nginx mariadb named stalwart-mail fail2ban; do
@@ -482,6 +506,7 @@ echo "phase29: leg 4 - disaster recovery onto a fresh VM"
 
 # --force so a rerun on the same VM re-keys instead of aborting; destination
 # add is an upsert. Both must be re-runnable or the gate cannot be retried.
+roundcube_canary "${VM_NAME}" seed
 backup_key="$(cli backup-server key init --force | grep -o 'nkbk1-[A-Z2-7]*' | head -1)"
 [[ -n "${backup_key}" ]] || fail "backup key init did not print the key"
 cli backup-server destination add --name phase29-local --kind local --retention-count 3 >/dev/null
@@ -519,7 +544,7 @@ multipass transfer "${tmpdir}/agent" "${DR_VM_NAME}:/tmp/agent"
 multipass transfer "${tmpdir}/panelctl" "${DR_VM_NAME}:/tmp/panelctl"
 
 # Fresh install with the lab's binaries (29.0.2), then restore the archive.
-multipass exec "${DR_VM_NAME}" -- sudo bash -se -- "${REMOTE_SRC}" <<'REMOTE'
+multipass exec "${DR_VM_NAME}" -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" <<'REMOTE'
 set -euo pipefail
 src="$1"
 echo '29.0.2' > "${src}/VERSION"
@@ -528,7 +553,9 @@ for artifact in panel agent panelctl; do
   install -m 0755 "/tmp/${artifact}" "/tmp/nakpanel-bin/${artifact}"
 done
 cd "${src}"
-deploy/install/install.sh --fresh --bin-dir /tmp/nakpanel-bin --yes
+args=(--fresh --bin-dir /tmp/nakpanel-bin --yes)
+if [[ "$2" == sury ]]; then args+=(--php-provider sury); fi
+deploy/install/install.sh "${args[@]}"
 REMOTE
 restore_entrypoint || fail "restore-server failed on the DR VM"
 
@@ -538,6 +565,7 @@ dr_db(){ multipass_exec_short "${DR_VM_NAME}" -- sudo -u postgres psql -Atqd nak
 for _ in $(seq 1 90); do curl -skf "https://${DR_IP}:7443/healthz" >/dev/null && break; sleep 2; done
 assert_baseline "disaster-recovery" "${DR_IP}" "29.0.2"
 assert_mariadb_canary "disaster-recovery" "${DR_VM_NAME}"
+roundcube_canary "${DR_VM_NAME}" assert
 curl -sk --fail -c "${tmpdir}/dr.cookies" -L -d 'email=admin@nakpanel.test' \
   -d 'password=NakpanelAdmin!2026' "https://${DR_IP}:7443/login" -o "${tmpdir}/dr-login.html"
 assert_admin_workspace "${tmpdir}/dr-login.html" "restored admin credentials"
@@ -550,6 +578,11 @@ import imaplib, ssl, sys
 client = imaplib.IMAP4_SSL("127.0.0.1", 993, ssl_context=ssl._create_unverified_context(), timeout=20)
 try:
     client.login(sys.argv[1], sys.argv[2])
+    assert client.select("INBOX")[0] == "OK"
+    status, messages = client.search(None, "SUBJECT", "durable")
+    assert status == "OK" and messages[0], "restored mailbox canary missing"
+    status, payload = client.fetch(messages[0].split()[-1], "(RFC822)")
+    assert status == "OK" and any(isinstance(p, tuple) and b"phase29-restored-message-content" in p[1] for p in payload)
 finally:
     client.logout()
 ' "${mailbox_address}" 'Phase29Mail!2026' >/dev/null || fail "restored mailbox IMAP login failed"
@@ -560,6 +593,18 @@ for _ in $(seq 1 120); do
 done
 [[ "${dr_status:-}" == "active" ]] || fail "DR reconciliation did not converge (status ${dr_status:-none})"
 assert_no_failed_units "${DR_VM_NAME}" "disaster-recovery deployment"
+
+# A second boot catches restore-time repairs that were never made durable.
+multipass restart "${DR_VM_NAME}"
+wait_for_cloud_init "${DR_VM_NAME}"
+assert_vm_identity "${DR_VM_NAME}" "${IMAGE}" "${NAKPANEL_MULTIPASS_ARCH}" "${NAKPANEL_RUN_TOKEN}"
+DR_IP="$(multipass info "${DR_VM_NAME}" | awk '/IPv4/{print $2; exit}')"
+for _ in $(seq 1 90); do curl -skf "https://${DR_IP}:7443/healthz" >/dev/null && break; sleep 2; done
+assert_baseline "disaster-recovery second reboot" "${DR_IP}" "29.0.2"
+assert_mariadb_canary "disaster-recovery second reboot" "${DR_VM_NAME}"
+roundcube_canary "${DR_VM_NAME}" assert
+assert_no_failed_units "${DR_VM_NAME}" "disaster-recovery second reboot"
+multipass_exec_short "${DR_VM_NAME}" -- sudo bash -c 'set -euo pipefail; quotaon -p "$(findmnt -n -o TARGET --target /home)" 2>/dev/null | grep "user quota .* is on" >/dev/null'
 
 destroy_vm "${DR_VM_NAME}"
 

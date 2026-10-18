@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# nakpanel unified installer for Ubuntu 24.04.
+# nakpanel unified installer for qualified Ubuntu platform profiles.
 #
 #   Fresh install:  sudo deploy/install/install.sh
 #   Upgrade:        sudo deploy/install/install.sh --yes        (auto-detected)
@@ -34,7 +34,13 @@ UPGRADE_BACKUP_ROOT="/var/lib/nakpanel/upgrade-backups"
 UPGRADE_BACKUPS_KEPT=5
 
 MODE=""
+REQUESTED_PHP_PROVIDER=""
 BIN_DIR=""
+BUNDLE_DIR=""
+RELEASE_PUBLIC_KEY=""
+ALLOW_DEVELOPMENT_BUNDLE=0
+SEALED_BUNDLE_DIR=""
+NEW_PANEL_DATABASE=0
 RESTORE_ARCHIVE=""
 BACKUP_KEY_FILE=""
 ADMIN_EMAIL=""
@@ -47,8 +53,10 @@ APT_TIMERS_RESTART=()
 
 usage() {
   cat <<'USAGE'
-Usage: install.sh [--fresh|--upgrade] [--bin-dir DIR] [--restore ARCHIVE --backup-key-file FILE]
+Usage: install.sh [--fresh|--upgrade] [--bin-dir DIR | --bundle DIR --release-public-key FILE]
+                  [--restore ARCHIVE --backup-key-file FILE]
                   [--admin-email EMAIL --admin-password-file FILE]
+                  [--php-provider native|sury] (fresh Ubuntu 26.04 opt-in)
                   [--force] [--allow-downgrade] [--yes] [--rollback-schema auto|manual]
 USAGE
 }
@@ -57,7 +65,11 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --fresh) MODE="fresh" ;;
     --upgrade) MODE="upgrade" ;;
+    --php-provider) REQUESTED_PHP_PROVIDER="$2"; shift ;;
     --bin-dir) BIN_DIR="$2"; shift ;;
+    --bundle) BUNDLE_DIR="$2"; shift ;;
+    --release-public-key) RELEASE_PUBLIC_KEY="$2"; shift ;;
+    --allow-development-bundle) ALLOW_DEVELOPMENT_BUNDLE=1 ;;
     --restore) RESTORE_ARCHIVE="$2"; shift ;;
     --backup-key-file) BACKUP_KEY_FILE="$2"; shift ;;
     --admin-email) ADMIN_EMAIL="$2"; shift ;;
@@ -81,16 +93,33 @@ if [[ -n "${RESTORE_ARCHIVE}" && -z "${BACKUP_KEY_FILE}" ]]; then
   exit 1
 fi
 
-if [[ -r /etc/os-release ]]; then
-  # shellcheck disable=SC1091
-  . /etc/os-release
-  if [[ "${ID:-}" != "ubuntu" ]]; then
-    echo "install.sh supports Ubuntu 24.04 (detected ${ID:-unknown})" >&2
+source "${SCRIPT_DIR}/platform.sh"
+nakpanel_require_platform "${REQUESTED_PHP_PROVIDER}"
+PLATFORM_BOOTSTRAP_PENDING="$(nakpanel_platform_bootstrap_pending)"
+
+if [[ -n "${BUNDLE_DIR}" ]]; then
+  if [[ -n "${BIN_DIR}" || -z "${RELEASE_PUBLIC_KEY}" ]]; then
+    echo 'platform: --bundle requires --release-public-key and excludes --bin-dir' >&2
     exit 1
   fi
-  if [[ "${VERSION_ID:-}" != "24.04" ]]; then
-    echo "warning: tested on Ubuntu 24.04, detected ${VERSION_ID:-unknown}" >&2
+  BUNDLE_DIR="$(cd "${BUNDLE_DIR}" && pwd -P)"
+  # Copy first, then authenticate the private root-owned copy. Never execute
+  # assets from an operator-writable download directory after verification.
+  SEALED_BUNDLE_DIR="$(python3 "${ROOT_DIR}/deploy/install/stage_bundle.py" "${BUNDLE_DIR}")"
+  trap 'status=$?; rm -rf "${SEALED_BUNDLE_DIR}"; exit "${status}"' EXIT
+  BUNDLE_DIR="${SEALED_BUNDLE_DIR}"
+  bundle_version="$(tr -d '[:space:]' <"${BUNDLE_DIR}/VERSION")"
+  verify_args=(--bundle "${BUNDLE_DIR}" --public-key "${RELEASE_PUBLIC_KEY}" --version "${bundle_version}" --architecture "${NAKPANEL_PLATFORM_ARCH}")
+  if [[ "${ALLOW_DEVELOPMENT_BUNDLE}" == 1 ]]; then
+    [[ "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" == 1 ]] || { echo 'development bundle requires explicit test-run environment opt-in' >&2; exit 1; }
+    verify_args+=(--allow-development)
   fi
+  python3 "${ROOT_DIR}/deploy/release/verify.py" "${verify_args[@]}"
+  # All later component, migration and unit assets must match the signed bundle.
+  ROOT_DIR="${BUNDLE_DIR}"
+  SCRIPT_DIR="${BUNDLE_DIR}/deploy/install"
+  BIN_DIR="${BUNDLE_DIR}/bin"
+  cd "${ROOT_DIR}"
 fi
 
 TARGET_VERSION="$(tr -d '[:space:]' <"${ROOT_DIR}/VERSION")"
@@ -124,6 +153,10 @@ if [[ -z "${MODE}" ]]; then
 fi
 if [[ "${MODE}" == "fresh" && "${have_binaries}" == "1" && "${FORCE}" != "1" ]]; then
   echo "an existing installation was detected; use --upgrade (or --force to reinstall fresh)" >&2
+  exit 1
+fi
+if [[ "${REQUESTED_PHP_PROVIDER}" == sury && ! -e /etc/nakpanel/platform.json && "${MODE}" != fresh ]]; then
+  echo 'platform: new Surý provider enrollment requires a fresh installation' >&2
   exit 1
 fi
 
@@ -202,20 +235,35 @@ ensure_build_prereqs() {
 }
 
 ensure_go_toolchain() {
-  local arch goarch
+  local arch goarch go_version archive checksum
   arch="$(uname -m)"
   case "${arch}" in
     x86_64) goarch="amd64" ;;
     aarch64|arm64) goarch="arm64" ;;
     *) echo "unsupported architecture: ${arch}" >&2; return 1 ;;
   esac
-  if ! command -v go >/dev/null 2>&1 || ! go version | grep -Eq 'go1\.(23|24|25|26)'; then
-    curl -fsSL --retry 3 --retry-delay 2 "https://go.dev/dl/go1.23.12.linux-${goarch}.tar.gz" -o /tmp/go.tgz
+  go_version="$(tr -d '[:space:]' <"${ROOT_DIR}/deploy/release/GO_VERSION")"
+  [[ "${go_version}" =~ ^1\.[0-9]+\.[0-9]+$ ]] || { echo 'invalid pinned Go release' >&2; return 1; }
+  if ! command -v go >/dev/null 2>&1 || [[ "$(go version | awk '{print $3}')" != "go${go_version}" ]]; then
+    archive="$(mktemp /tmp/nakpanel-go.XXXXXX.tar.gz)"
+    curl -fsSL --retry 3 --retry-delay 2 "https://go.dev/dl/go${go_version}.linux-${goarch}.tar.gz" -o "${archive}"
+    checksum="$(python3 - "${go_version}" "${goarch}" <<'PY'
+import json, sys, urllib.request
+version, arch = sys.argv[1:]
+with urllib.request.urlopen('https://go.dev/dl/?mode=json&include=all', timeout=30) as response:
+    releases = json.load(response)
+name = 'go' + version + '.linux-' + arch + '.tar.gz'
+digests = [item['sha256'] for release in releases for item in release['files'] if item['filename'] == name]
+if len(digests) != 1: sys.exit('pinned Go artifact missing from official release metadata')
+print(digests[0])
+PY
+)"
+    printf '%s  %s\n' "${checksum}" "${archive}" | sha256sum --check --status
     rm -rf /usr/local/go
-    tar -C /usr/local -xzf /tmp/go.tgz
+    tar -C /usr/local -xzf "${archive}"
     ln -sf /usr/local/go/bin/go /usr/local/bin/go
     ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
-    rm -f /tmp/go.tgz
+    rm -f "${archive}"
   fi
 }
 
@@ -301,7 +349,7 @@ harden_etc_nakpanel() {
 # the component installers start the panel service.
 prepare_panel_prerequisites() {
   apt-get update
-  apt-get install -y postgresql postgresql-contrib
+  apt-get install -y "${NAKPANEL_POSTGRES_PACKAGES[@]}"
   systemctl enable --now postgresql
   if ! id nakpanel >/dev/null 2>&1; then
     useradd --system --home-dir /var/lib/nakpanel --create-home --shell /usr/sbin/nologin nakpanel
@@ -315,6 +363,33 @@ bootstrap_postgres() {
   fi
   if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'nakpanel'" | grep -qx 1; then
     sudo -u postgres createdb -O nakpanel nakpanel
+    NEW_PANEL_DATABASE=1
+  fi
+}
+
+prepare_platform_install() {
+  # The local check precedes the same-version no-op above. Network/package
+  # preparation runs only when a real installation/update was requested.
+  if [[ "${MODE}" == fresh && "${NAKPANEL_OS_VERSION}" == 26.04 ]] && command -v psql >/dev/null 2>&1; then
+    if sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='nakpanel'" 2>/dev/null | grep -qx 1; then
+      echo 'platform: fresh Resolute bootstrap requires a new panel database; use --upgrade or explicit restore' >&2
+      return 1
+    fi
+  fi
+  nakpanel_prepare_package_sources
+  if [[ "${NAKPANEL_OS_VERSION}" == 26.04 ]]; then
+    source "${SCRIPT_DIR}/roundcube.sh"
+    nakpanel_prepare_roundcube_artifact
+  fi
+}
+
+bootstrap_native_plans() {
+  if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-26.04-native && "${PLATFORM_BOOTSTRAP_PENDING}" == true && -z "${RESTORE_ARCHIVE}" ]]; then
+    sudo -u nakpanel env NAKPANEL_DATABASE_URL="${DB_DSN}" \
+      /usr/local/bin/panelctl --actor installer platform bootstrap-plans \
+      --profile ubuntu-26.04-native --discard-demo-subscriptions
+    nakpanel_write_platform_state false
+    PLATFORM_BOOTSTRAP_PENDING=false
   fi
 }
 
@@ -436,6 +511,8 @@ cleanup_stages() {
   if [[ -n "${migration_stage}" ]]; then
     rm -rf "${migration_stage}"
   fi
+  if [[ -n "${NAKPANEL_ROUNDCUBE_STAGE:-}" ]]; then rm -rf "${NAKPANEL_ROUNDCUBE_STAGE}"; fi
+  if [[ -n "${SEALED_BUNDLE_DIR}" ]]; then rm -rf "${SEALED_BUNDLE_DIR}"; fi
 }
 
 # ---------------------------------------------------------------------------
@@ -444,6 +521,7 @@ cleanup_stages() {
 fresh_install() {
   trap 'status=$?; cleanup_stages; exit "${status}"' EXIT
 
+  prepare_platform_install
   pause_apt_background
   ensure_build_prereqs
   ensure_go_toolchain
@@ -463,6 +541,13 @@ fresh_install() {
   prepare_panel_prerequisites
   harden_etc_nakpanel
   bootstrap_postgres
+  if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-26.04-native && "${NEW_PANEL_DATABASE}" == 1 && -z "${RESTORE_ARCHIVE}" ]]; then
+    PLATFORM_BOOTSTRAP_PENDING=true
+    systemctl stop nakpanel.service 2>/dev/null || true
+    nakpanel_write_platform_state true
+  else
+    nakpanel_write_platform_state false
+  fi
   bootstrap_secret_key
   prepare_migration_root
   run_goose_up
@@ -474,6 +559,8 @@ fresh_install() {
   bash "${SCRIPT_DIR}/phase18-install.sh"
   ensure_dns_include_target
   setup_fail2ban
+  systemctl restart nakpanel-agent.service
+  bootstrap_native_plans
   ensure_admin
 
   systemctl daemon-reload
@@ -618,6 +705,10 @@ rollback_database_from_dump() {
 
 cleanup_upgrade() {
   local status=$?
+  if [[ "${APP_TRANSACTION_STARTED:-0}" != 1 ]]; then
+    cleanup_stages
+    exit "${status}"
+  fi
   if [[ "${completed}" != "1" ]]; then
     echo "install.sh: upgrade failed; applying automatic recovery" >&2
     if [[ "${schema_migrated}" == "0" ]]; then
@@ -675,8 +766,9 @@ cleanup_upgrade() {
 }
 
 upgrade_install() {
+  trap 'status=$?; cleanup_stages; exit "${status}"' EXIT
+  prepare_platform_install
   trap cleanup_upgrade EXIT
-
   pause_apt_background
   ensure_build_prereqs
   ensure_go_toolchain
@@ -693,7 +785,9 @@ upgrade_install() {
   # taken before minutes of live customer writes would silently discard them
   # if the rollback ever replayed it.
   take_upgrade_backup
+  nakpanel_write_platform_state "${PLATFORM_BOOTSTRAP_PENDING}"
 
+  APP_TRANSACTION_STARTED=1
   systemctl stop nakpanel.service 2>/dev/null || true
   install_agent_and_ctl
   systemctl daemon-reload
@@ -730,6 +824,7 @@ upgrade_install() {
 
   install_panel_binary
   systemctl enable nakpanel-agent.service nakpanel.service
+  bootstrap_native_plans
   systemctl restart nakpanel.service
 
   if ! health_gate "${TARGET_VERSION}"; then

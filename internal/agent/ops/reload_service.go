@@ -51,7 +51,10 @@ type CommandNginxConfigTester struct {
 	runner CommandRunner
 }
 
-type CommandPHPConfigTester struct{ runner CommandRunner }
+type CommandPHPConfigTester struct {
+	runner          CommandRunner
+	RuntimeResolver PHPRuntimeResolver
+}
 
 func NewCommandPHPConfigTester(runner CommandRunner) *CommandPHPConfigTester {
 	if runner == nil {
@@ -64,7 +67,19 @@ func (t *CommandPHPConfigTester) TestPHPConfig(ctx context.Context, version, con
 	if !regexp.MustCompile(`^[0-9]+\.[0-9]+$`).MatchString(version) {
 		return fmt.Errorf("invalid PHP version %q", version)
 	}
-	output, err := t.runner.Run(ctx, "php-fpm"+version, "-t", "-y", configPath)
+	runtime, err := resolvePHPRuntime(t.RuntimeResolver, version)
+	if err != nil {
+		return err
+	}
+	return t.TestPHPRuntimeConfig(ctx, runtime, configPath)
+}
+
+func (t *CommandPHPConfigTester) TestPHPRuntimeConfig(ctx context.Context, runtime PHPRuntimeDescriptor, configPath string) error {
+	if err := runtime.Validate(); err != nil {
+		return err
+	}
+	name, args := runtime.FPMCommand("-t", "-y", configPath)
+	output, err := t.runner.Run(ctx, name, args...)
 	if err != nil {
 		return fmt.Errorf("test PHP-FPM configuration: %w: %s", err, strings.TrimSpace(string(output)))
 	}

@@ -69,7 +69,7 @@ func TestPhaseVerifiersUseSingleDefaultVM(t *testing.T) {
 	}
 }
 
-func TestDeploymentVerifierResetsOneCanonicalVM(t *testing.T) {
+func TestDeploymentVerifierUsesOneOwnedVM(t *testing.T) {
 	const path = "deployment-verify.sh"
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -85,9 +85,8 @@ func TestDeploymentVerifierResetsOneCanonicalVM(t *testing.T) {
 	script := string(data)
 	for _, want := range []string{
 		"common.sh",
-		"destroy_legacy_phase_vms",
-		"require_nakpanel_vm_name \"${NAKPANEL_MULTIPASS_VM}\"",
-		"destroy_vm \"${NAKPANEL_MULTIPASS_VM}\"",
+		"init_qualification_run",
+		"init_qualification_run",
 		"ensure_vm 4 6G 48G",
 		"security-verify.sh",
 		"phase28-verify.sh",
@@ -96,7 +95,6 @@ func TestDeploymentVerifierResetsOneCanonicalVM(t *testing.T) {
 		"phase31-verify.sh",
 		"phase32-verify.sh",
 		"phase33-verify.sh",
-		"nakpanel-lab",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("%s is missing %q", path, want)

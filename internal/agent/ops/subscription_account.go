@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/nakroteck/nakpanel/internal/config"
 	"github.com/nakroteck/nakpanel/internal/control/policy"
 	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -1108,7 +1109,20 @@ func renderTaskService(base, username, home string, task types.ScheduledTask) st
 	case "url":
 		execStart = "/usr/bin/curl --fail --silent --show-error --max-time " + strconv.Itoa(task.TimeoutSeconds) + " " + systemdQuote(task.URL)
 	case "php":
-		execStart = "/usr/bin/php " + systemdQuote(filepath.Join(root, filepath.Clean(task.Script)))
+		version, err := config.InternalPHPVersionFromEnv()
+		if err != nil {
+			return ""
+		}
+		runtime, err := resolvePHPRuntime(nil, version)
+		if err != nil {
+			return ""
+		}
+		name, args := runtime.CLICommand(filepath.Join(root, filepath.Clean(task.Script)))
+		quoted := []string{name}
+		for _, arg := range args {
+			quoted = append(quoted, systemdQuote(arg))
+		}
+		execStart = strings.Join(quoted, " ")
 	}
 	return fmt.Sprintf("[Unit]\nDescription=Nakpanel scheduled task %s\n\n[Service]\nType=oneshot\nUser=%s\nWorkingDirectory=%s\nTimeoutStartSec=%d\nNoNewPrivileges=yes\nPrivateTmp=yes\nProtectSystem=strict\nReadWritePaths=%s\nExecStart=%s\n", systemdEscape(task.Name), username, work, task.TimeoutSeconds, root, execStart)
 }

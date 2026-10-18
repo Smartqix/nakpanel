@@ -5,23 +5,29 @@ production-shaped nakpanel installation stay healthy for weeks under real
 timers, real certificate renewals, real scheduled backups, and repeated
 in-place upgrades?
 
-The harness is `deploy/multipass/soak-verify.sh`. It operates on a dedicated
-VM (`nakpanel-soak` by default, override with `NAKPANEL_SOAK_VM`) that is
-deliberately **not** part of `NAKPANEL_MULTIPASS_VM` or the legacy destroy
-list: `deployment-verify.sh` and the phase chain can never purge it, and the
-lint suite enforces that the soak script itself contains no destructive VM
-calls.
+The harness is `deploy/multipass/soak-verify.sh`. Initialization creates a
+dedicated uniquely owned run and records its identity in `run.env`. The
+historical `nakpanel-soak` guest remains protected. Ordinary verification does
+not sweep old guests; cleanup requires matching host and guest ownership plus
+actual release/architecture. Preserve soak run identities separately and do
+not supply them to disposable qualification cleanup.
 
 ## Starting the soak
 
 ```bash
-./deploy/multipass/soak-verify.sh --init
+NAKPANEL_MULTIPASS_IMAGE=24.04 ./deploy/multipass/soak-verify.sh --init
+# Start a separate run for the experimental native Resolute profile:
+NAKPANEL_MULTIPASS_IMAGE=26.04 ./deploy/multipass/soak-verify.sh --init
 ```
 
-This launches the VM (2 CPU / 3 GB / 20 GB), runs the one-command installer
+This launches the VM (2 CPU / 3 GB / 32 GB), runs the one-command installer
 (`deploy/install/install.sh --yes`), generates the backup archive key (stored
-once in `~/.nakpanel-soak/backup-key.txt` - move it somewhere safe), and
-configures a daily scheduled local server backup.
+once in the run-specific directory printed by the initializer; move it
+somewhere safe), and configures a scheduled local server backup. Initialization
+first proves that the actual scheduler creates and verifies an archive, then
+sets its daily schedule. A manually queued archive cannot satisfy this check.
+Source the printed `run.env` before later sweeps so the run's release,
+architecture, VM and ownership token remain explicit.
 
 Optionally populate a tenant through the panel or the provisioning API so the
 soak covers hosted workloads, then note the date: the window ends 30-60 days
@@ -32,11 +38,11 @@ later.
 Schedule the sweep every 6 hours on the host, for example with cron:
 
 ```
-0 */6 * * * /path/to/nakpanel/deploy/multipass/soak-verify.sh >> ~/.nakpanel-soak/cron.log 2>&1
+0 */6 * * * bash -c 'source /absolute/path/to/run.env; /path/to/nakpanel/deploy/multipass/soak-verify.sh' >> /absolute/path/to/soak/cron.log 2>&1
 ```
 
 Each sweep is non-destructive and appends one line to
-`~/.nakpanel-soak/soak.log`. It checks:
+the run's `soak.log`. It checks:
 
 - `/healthz` responds `ok` and reports the installed version;
 - no failed systemd units;
@@ -73,4 +79,6 @@ The soak passes when, over the full 30-60 day window:
    `deploy/install/install.sh --fresh`, `panelctl restore-server`) - the same
    flow `phase29-verify.sh` automates.
 
-Only after the final drill is the soak VM allowed to be deleted.
+Only after the final drill is the soak VM allowed to be deleted through a
+deliberate ownership-checked cleanup. Starting a soak or passing one sweep does
+not complete the 30–60 day evidence window.

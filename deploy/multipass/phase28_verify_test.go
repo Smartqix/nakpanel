@@ -48,3 +48,33 @@ func TestPhase28VerifierHasValidShellSyntax(t *testing.T) {
 		t.Fatalf("bash -n phase28-verify.sh: %v\n%s", err, output)
 	}
 }
+
+func TestPhase28PrivateLeafAllowsParentTraversalButDeniesOtherUIDAccess(t *testing.T) {
+	data, err := os.ReadFile("phase28-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	function := shellFixtureFunction(t, string(data), "assert_private_application_paths", true)
+	for _, mode := range []string{"private", "parent readable", "leaf traversable", "secret readable"} {
+		t.Run(mode, func(t *testing.T) {
+			script := `set -euo pipefail
+base=/fixture;application_id=1;revision=2
+runuser(){
+ case "$*" in
+ *'test -x /fixture/apps') return 0;;
+ *'test -r /fixture/apps') [[ "$MODE" == 'parent readable' ]];;
+ *'test -x /fixture/apps/1/generations/2/secrets') [[ "$MODE" == 'leaf traversable' ]];;
+ *'test -r /fixture/apps/1/generations/2/secrets/TEST_PASSWORD') [[ "$MODE" == 'secret readable' ]];;
+ *) echo "unexpected permission probe: $*" >&2;return 70;;
+ esac
+}
+` + function + `assert_private_application_paths`
+			cmd := exec.Command("bash", "-c", script)
+			cmd.Env = append(os.Environ(), "MODE="+mode)
+			out, err := cmd.CombinedOutput()
+			if (err == nil) != (mode == "private") {
+				t.Fatalf("permission mode %s: %s %v", mode, out, err)
+			}
+		})
+	}
+}

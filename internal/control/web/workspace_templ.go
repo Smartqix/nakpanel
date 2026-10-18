@@ -31074,9 +31074,9 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1439 string
-		templ_7745c5c3_Var1439, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(stringInSlice(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist), controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion))))
+		templ_7745c5c3_Var1439, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(stringInSlice(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist), subscriptionDefaultPHPVersion(subscription, capabilities))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3783, Col: 632}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3783, Col: 591}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1439))
 		if templ_7745c5c3_Err != nil {
@@ -31212,9 +31212,9 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var1449 string
-		templ_7745c5c3_Var1449, templ_7745c5c3_Err = templ.JoinStringErrs(displayFallback(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion), "Not available"))
+		templ_7745c5c3_Var1449, templ_7745c5c3_Err = templ.JoinStringErrs(displayFallback(subscriptionDefaultPHPVersion(subscription, capabilities), "Not available"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3793, Col: 232}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3793, Col: 191}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1449))
 		if templ_7745c5c3_Err != nil {
@@ -31253,7 +31253,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if !stringInSlice(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist), controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion)) {
+		if !stringInSlice(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist), subscriptionDefaultPHPVersion(subscription, capabilities)) {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2802, " disabled")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
@@ -31578,9 +31578,9 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var1466 string
-			templ_7745c5c3_Var1466, templ_7745c5c3_Err = templ.JoinStringErrs(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist, subscription.DefaultPHPVersion))
+			templ_7745c5c3_Var1466, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionDefaultPHPVersion(subscription, capabilities))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3832, Col: 820}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3832, Col: 779}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1466))
 			if templ_7745c5c3_Err != nil {
@@ -31593,7 +31593,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1467 string
 			templ_7745c5c3_Var1467, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSelectLabel(subscription))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3832, Col: 862}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3832, Col: 821}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1467))
 			if templ_7745c5c3_Err != nil {

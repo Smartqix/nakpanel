@@ -2,6 +2,7 @@ package backup
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -23,8 +24,16 @@ import (
 // through the standard CLI tools so the engine works before the panel is up.
 
 type RestoreOptions struct {
+	SourceProvenanceReview func() (io.ReadCloser, error)
+	Mode                   RestoreMode
+	TargetPlatform         *PlatformProvenance
+	// ReadyPHPVersions must use the trusted profile, full extension checks and isolated FPM readiness.
+	ReadyPHPVersions ReadyPHPCollector
+	// RegenerateTargetConfiguration must synchronously regenerate and validate native configuration.
+	// Forward migration is unavailable without this capability.
+	RegenerateTargetConfiguration func(context.Context) error
 	// OpenArchive returns a fresh reader over the archive from the beginning.
-	// It is called twice: once for the manifest preflight, once to extract.
+	// It is reopened for manifest, full integrity preflight and extraction.
 	OpenArchive func() (io.ReadCloser, error)
 	Key         []byte
 	// PostgresDSN for pg_restore, run as the nakpanel role.
@@ -75,10 +84,12 @@ var restoreUnitStartOrder = []string{
 	"nakpanel-proftpd.service",
 }
 
+var restoreEffectiveUID = os.Geteuid
+
 func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error) {
 	summary := RestoreSummary{}
 	started := time.Now()
-	if os.Geteuid() != 0 {
+	if restoreEffectiveUID() != 0 {
 		return summary, errors.New("restore-server must run as root")
 	}
 	if len(opts.Key) != KeySize {
@@ -102,11 +113,50 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 	if err != nil {
 		return summary, fmt.Errorf("read manifest: %w", err)
 	}
+	if opts.SourceProvenanceReview != nil {
+		review, err := opts.SourceProvenanceReview()
+		if err != nil {
+			return summary, err
+		}
+		manifest, err = ApplyProvenanceReview(manifest, opts.Mode, review, opts.OpenArchive)
+		review.Close()
+		if err != nil {
+			return summary, err
+		}
+	}
 	summary.Manifest = manifest
 	if manifest.KeyFingerprint != "" && manifest.KeyFingerprint != Fingerprint(opts.Key) {
 		return summary, fmt.Errorf("archive was encrypted with a different key (archive fingerprint %s)", manifest.KeyFingerprint)
 	}
 
+	target := opts.TargetPlatform
+	if target == nil {
+		observed, err := CollectPlatformProvenance(ctx, opts.PostgresDSN)
+		if err != nil {
+			return summary, err
+		}
+		target = &observed
+	}
+	if opts.ReadyPHPVersions != nil {
+		ready, err := opts.ReadyPHPVersions(ctx)
+		if err != nil {
+			return summary, fmt.Errorf("load trusted ready PHP inventory: %w", err)
+		}
+		copyTarget := *target
+		copyTarget.HostingPHPVersions = ready
+		target = &copyTarget
+	} else if opts.Mode == RestoreForwardMigration || (manifest.Platform != nil && len(manifest.Platform.RequiredPHPVersions) > 0) {
+		return summary, errors.New("restore requires an authoritative ready PHP inventory collector")
+	}
+	if err := CheckRoundcubeRestoreTarget(manifest, *target, opts.Mode); err != nil {
+		return summary, err
+	}
+	if err := CheckRestoreCompatibility(manifest, *target, opts.Mode); err != nil {
+		return summary, err
+	}
+	if opts.Mode == RestoreForwardMigration && opts.RegenerateTargetConfiguration == nil {
+		return summary, errors.New("forward-migration mutation is not qualified: synchronous target-native regeneration and validation capability is unavailable")
+	}
 	opts.log("step: check schema versions")
 	installedGoose := currentGooseVersion(ctx)
 	switch {
@@ -118,6 +168,17 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 			return summary, fmt.Errorf("archive schema version %d is older than the installed migrations (%d); rerun with --allow-schema-mismatch and run migrations afterwards", manifest.GooseVersion, installedGoose)
 		}
 		opts.log("warning: archive schema (%d) is older than installed migrations (%d); run goose up after the restore", manifest.GooseVersion, installedGoose)
+	}
+
+	opts.log("step: authenticate complete archive before mutation")
+	verifiedSource, err := opts.OpenArchive()
+	if err != nil {
+		return summary, err
+	}
+	err = CheckArchiveIntegrity(verifiedSource, opts.Key)
+	verifiedSource.Close()
+	if err != nil {
+		return summary, err
 	}
 
 	// --- Stop the world (except the database engines) --------------------
@@ -147,6 +208,7 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 		return summary, err
 	}
 	var identity SystemIdentity
+	var roundcubeSnapshot string
 	var pgDumpPath string
 	var mariaDumps []string
 	identityApplied := false
@@ -174,6 +236,14 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 			summary.UsersCreated = created
 			summary.Identity = &identity
 			identityApplied = true
+		case header.Name == RoundcubeSQLiteDumpName:
+			if manifest.RoundcubeSQLitePath == "" || roundcubeSnapshot != "" {
+				return summary, errors.New("unexpected duplicate or unlisted Roundcube SQLite snapshot")
+			}
+			roundcubeSnapshot = filepath.Join(workDir, "roundcube.sqlite")
+			if err := writeFileFrom(reader, roundcubeSnapshot, 0600); err != nil {
+				return summary, err
+			}
 		case header.Name == PostgresDumpName:
 			pgDumpPath = filepath.Join(workDir, "nakpanel.dump")
 			if err := writeFileFrom(reader, pgDumpPath, 0o600); err != nil {
@@ -190,12 +260,33 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 			}
 			mariaDumps = append(mariaDumps, target)
 		case strings.HasPrefix(header.Name, TreePrefix):
+			if preserveTargetNativeEntry(header.Name, opts.Mode) {
+				continue
+			}
 			if !identityApplied && len(identity.Users) == 0 {
 				// users.json is written before any tree; tolerate archives
 				// without it (nothing to map).
 				identityApplied = true
 			}
-			if err := extractTreeEntry(header, reader); err != nil {
+			var content io.Reader = reader
+			if opts.Mode == RestoreForwardMigration && filepath.Clean("/"+strings.TrimPrefix(header.Name, TreePrefix)) == "/etc/nakpanel/agent.env" {
+				if header.Typeflag != tar.TypeReg || header.Size > 1<<20 {
+					return summary, errors.New("invalid archived agent environment")
+				}
+				sourceEnv, err := io.ReadAll(io.LimitReader(reader, 1<<20))
+				if err != nil {
+					return summary, err
+				}
+				nativeEnv, err := forwardAgentEnvironment(sourceEnv, target.InternalPHPVersion)
+				if err != nil {
+					return summary, err
+				}
+				copyHeader := *header
+				copyHeader.Size = int64(len(nativeEnv))
+				header = &copyHeader
+				content = bytes.NewReader(nativeEnv)
+			}
+			if err := extractTreeEntry(header, content); err != nil {
 				return summary, err
 			}
 			summary.ExtractedEntries++
@@ -211,6 +302,10 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 	}
 	if pgDumpPath == "" {
 		return summary, errors.New("archive has no postgres dump")
+	}
+
+	if manifest.RoundcubeSQLitePath != "" && roundcubeSnapshot == "" {
+		return summary, errors.New("archive is missing its declared Roundcube SQLite snapshot")
 	}
 
 	// --- Postgres ---------------------------------------------------------
@@ -238,9 +333,28 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 		}
 		summary.MariaDBRestored = append(summary.MariaDBRestored, base)
 	}
+	if roundcubeSnapshot != "" {
+		destination, _ := RoundcubeSQLiteDestination(manifest.RoundcubeSQLitePath, opts.Mode)
+		unit := "php" + target.InternalPHPVersion + "-fpm.service"
+		if err := runQuiet(ctx, "systemctl", "stop", unit); err != nil {
+			return summary, err
+		}
+		if err := restoreRoundcubeSQLite(ctx, roundcubeSnapshot, destination); err != nil {
+			return summary, err
+		}
+		if err := runQuiet(ctx, "systemctl", "start", unit); err != nil {
+			return summary, err
+		}
+	}
 	if opts.AfterDatabasesRestored != nil {
 		if err := opts.AfterDatabasesRestored(ctx, summary.MariaDBRestored); err != nil {
 			return summary, fmt.Errorf("restore database ownership: %w", err)
+		}
+	}
+
+	if opts.Mode == RestoreForwardMigration {
+		if err := opts.RegenerateTargetConfiguration(ctx); err != nil {
+			return summary, fmt.Errorf("target-native configuration: %w", err)
 		}
 	}
 
@@ -456,6 +570,9 @@ func extractTreeEntry(header *tar.Header, r io.Reader) error {
 		}
 	}
 	target := filepath.Clean("/" + rel)
+	if target == "/etc/nakpanel/platform.json" {
+		return nil
+	}
 	if target == "/" {
 		return fmt.Errorf("unsafe archive path %q", header.Name)
 	}
@@ -763,4 +880,39 @@ func shouldStartRestoredInstanceUnit(unit string) bool {
 		return false
 	}
 	return true
+}
+
+// Native package/application configuration is regenerated from restored intent.
+// The installer-owned platform identity is never restored, including legacy mode.
+func preserveTargetNativeEntry(name string, mode RestoreMode) bool {
+	path := filepath.Clean("/" + strings.TrimPrefix(name, TreePrefix))
+	if path == "/etc/nakpanel/platform.json" {
+		return true
+	}
+	if mode != RestoreForwardMigration {
+		return false
+	}
+	for _, prefix := range []string{"/etc/roundcube", "/etc/nginx/sites-available", "/etc/nginx/sites-enabled"} {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return path == "/etc/systemd/system/nakpanel-proftpd.service" || path == "/etc/systemd/system/multi-user.target.wants/nakpanel-proftpd.service"
+}
+
+// Restore source settings/secrets while retaining the observed native tool
+// selector. Treat the file strictly as data; never source its assignments.
+func forwardAgentEnvironment(source []byte, nativePHP string) ([]byte, error) {
+	if matched, _ := regexp.MatchString(`^[0-9]+\.[0-9]+$`, nativePHP); !matched {
+		return nil, errors.New("invalid target internal PHP version")
+	}
+	var lines []string
+	for _, line := range strings.Split(string(source), "\n") {
+		key, _, assignment := strings.Cut(strings.TrimSpace(line), "=")
+		if assignment && strings.TrimSpace(key) == "NAKPANEL_INTERNAL_PHP_VERSION" {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return []byte(strings.TrimRight(strings.Join(lines, "\n"), "\n") + "\nNAKPANEL_INTERNAL_PHP_VERSION=" + nativePHP + "\n"), nil
 }

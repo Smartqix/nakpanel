@@ -1,0 +1,36 @@
+[Unit]
+Description=Isolated Nakpanel phpMyAdmin PHP runtime
+After=network.target mariadb.service
+
+[Service]
+Type=simple
+User=nakpanel-dbmgr
+Group=nakpanel-dbmgr
+RuntimeDirectory=nakpanel-database-manager
+RuntimeDirectoryMode=0700
+StateDirectory=nakpanel-database-manager
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=@PHP_FPM_BINARY@ --nodaemonize --fpm-config /etc/nakpanel-database-manager/php-fpm.conf
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=localhost
+InaccessiblePaths=-/etc/nakpanel -/var/lib/nakpanel -/run/nakpanel-agent -/run/postgresql -/var/www -/srv
+ReadWritePaths=/var/lib/nakpanel-database-manager /run/nakpanel-database-manager
+CapabilityBoundingSet=
+LockPersonality=true
+TasksMax=16
+MemoryMax=640M
+
+[Install]
+WantedBy=multi-user.target

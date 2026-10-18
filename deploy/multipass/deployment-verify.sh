@@ -3,16 +3,17 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
+init_qualification_run
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 
-echo "Preparing single Nakpanel deployment VM: ${VM_NAME} (${IMAGE}); default is nakpanel-lab"
-require_nakpanel_vm_name "${NAKPANEL_MULTIPASS_VM}"
-destroy_legacy_phase_vms
-destroy_vm "${NAKPANEL_MULTIPASS_VM}"
-# A crashed Phase 29 disaster-recovery leg must not leak its second VM.
-destroy_vm "${NAKPANEL_MULTIPASS_VM}-dr"
+echo "Preparing owned Nakpanel deployment VM: ${VM_NAME} (${IMAGE})"
+# A clean qualification requires a fresh run; never delete an existing guest.
+if multipass info "${VM_NAME}" >/dev/null 2>&1; then
+  echo "qualification requires a fresh VM name/run token" >&2
+  exit 1
+fi
 # Current native PHP/container and disaster-recovery gates need build/backup headroom.
 ensure_vm 4 6G 48G
 

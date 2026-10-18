@@ -26,15 +26,17 @@ soak_exec(){ multipass_exec_short "${SOAK_VM}" -- "$@"; }
 soak_db(){ soak_exec sudo -u postgres psql -Atqd nakpanel -c "$1" | tr -d '\r'; }
 
 if [[ "${1:-}" == "--init" ]]; then
-  if multipass info "${SOAK_VM}" >/dev/null 2>&1; then
-    fail "${SOAK_VM} already exists; delete it manually before re-initializing"
-  fi
-  multipass launch --name "${SOAK_VM}" --cpus 2 --memory 3G --disk 20G "${NAKPANEL_MULTIPASS_IMAGE}"
-  (
-    export NAKPANEL_MULTIPASS_VM="${SOAK_VM}"
-    wait_for_cloud_init
-    sync_repo "${ROOT_DIR}"
-  )
+  # Owned endurance environments never claim the historical protected name.
+  if [[ -n "${NAKPANEL_SOAK_VM:-}" ]]; then export NAKPANEL_MULTIPASS_VM="${NAKPANEL_SOAK_VM}"; fi
+  init_qualification_run
+  SOAK_VM="${NAKPANEL_MULTIPASS_VM}"
+  SOAK_LOG_DIR="${NAKPANEL_SOAK_LOG_DIR:-${HOME}/.nakpanel-soak/${NAKPANEL_MULTIPASS_IMAGE}-${NAKPANEL_MULTIPASS_ARCH}-${NAKPANEL_RUN_TOKEN}}"
+  mkdir -p "${SOAK_LOG_DIR}"
+  chmod 700 "${SOAK_LOG_DIR}"
+  if multipass info "${SOAK_VM}" >/dev/null 2>&1; then fail "owned soak initialization requires a fresh unique name"; fi
+  ensure_vm 2 3G 32G
+  sync_repo "${ROOT_DIR}"
+  (umask 077; printf 'export NAKPANEL_SOAK_LOG_DIR=%q NAKPANEL_SOAK_VM=%q NAKPANEL_MULTIPASS_VM=%q NAKPANEL_MULTIPASS_IMAGE=%q NAKPANEL_MULTIPASS_ARCH=%q NAKPANEL_RUN_TOKEN=%q NAKPANEL_OWNERSHIP_DIR=%q\n' "${SOAK_LOG_DIR}" "${SOAK_VM}" "${SOAK_VM}" "${NAKPANEL_MULTIPASS_IMAGE}" "${NAKPANEL_MULTIPASS_ARCH}" "${NAKPANEL_RUN_TOKEN}" "${NAKPANEL_OWNERSHIP_DIR}" >"${SOAK_LOG_DIR}/run.env")
   multipass exec "${SOAK_VM}" -- sudo bash -se -- "${REMOTE_SRC}" <<'REMOTE'
 set -euo pipefail
 cd "$1"
@@ -50,11 +52,25 @@ REMOTE
   chmod 600 "${SOAK_LOG_DIR}/backup-key.txt"
   soak_exec sudo -u nakpanel env NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' \
     NAKPANEL_SECRET_KEY_FILE='/etc/nakpanel/secret-keys.json' \
-    panelctl --actor soak backup-server destination add --name soak-local --kind local --retention-count 7
-  echo "Soak VM ${SOAK_VM} initialized. Store ${SOAK_LOG_DIR}/backup-key.txt safely and schedule this script per docs/SOAK.md."
+    panelctl --actor soak backup-server destination add --name soak-local --kind local --retention-count 7 --schedule '* * * * *'
+  # Verify the scheduler itself creates and verifies an archive. A manual
+  # backup cannot stand in for this evidence. Then retain the daily schedule.
+  scheduled_ready=0
+  for _ in $(seq 1 180); do
+    scheduled="$(soak_db "SELECT count(*) FROM server_backups backup JOIN server_backup_destinations destination ON destination.id=backup.destination_id WHERE destination.name='soak-local' AND backup.scheduled AND backup.status='active' AND backup.verified_at IS NOT NULL")"
+    if [[ "${scheduled}" =~ ^[0-9]+$ && "${scheduled}" -gt 0 ]]; then scheduled_ready=1; break; fi
+    sleep 5
+  done
+  [[ "${scheduled_ready}" == 1 ]] || fail "scheduler did not create a real verified backup within 15 minutes"
+  soak_exec sudo -u nakpanel env NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' \
+    NAKPANEL_SECRET_KEY_FILE='/etc/nakpanel/secret-keys.json' \
+    panelctl --actor soak backup-server destination update --name soak-local --kind local --retention-count 7 --schedule '0 2 * * *'
+  printf '%s scheduler-created verified backup observed\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"${SOAK_LOG_DIR}/soak.log"
+  echo "Source ${SOAK_LOG_DIR}/run.env before subsequent sweeps. Soak VM ${SOAK_VM} initialized. Store ${SOAK_LOG_DIR}/backup-key.txt safely and schedule this script per docs/SOAK.md."
   exit 0
 fi
 
+assert_vm_identity "${SOAK_VM}" "${NAKPANEL_MULTIPASS_IMAGE}" "${NAKPANEL_MULTIPASS_ARCH}" "${NAKPANEL_RUN_TOKEN:-}"
 multipass info "${SOAK_VM}" >/dev/null 2>&1 || fail "${SOAK_VM} does not exist; run --init first"
 SOAK_IP="$(multipass info "${SOAK_VM}" | awk '/IPv4/{print $2; exit}')"
 [[ -n "${SOAK_IP}" ]] || fail "could not determine ${SOAK_VM} address"

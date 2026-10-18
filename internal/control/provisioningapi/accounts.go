@@ -394,41 +394,11 @@ func (s *AccountService) readyPHPVersion(ctx context.Context, plan selectedPlan)
 	if err != nil {
 		return "", &accountError{503, "runtime_capabilities_unavailable", "server runtime capabilities are unavailable", nil}
 	}
-	ready := make(map[string]bool)
-	if len(capabilities.PHPRuntimes) > 0 {
-		for _, runtime := range capabilities.PHPRuntimes {
-			version := strings.TrimSpace(runtime.Version)
-			if version != "" && runtime.Ready {
-				ready[version] = true
-			}
-		}
-	} else {
-		for _, version := range capabilities.PHPVersions {
-			if version = strings.TrimSpace(version); version != "" {
-				ready[version] = true
-			}
-		}
+	version, err := controlquota.ResolveReadyPHPVersion(controlquota.Limits{PHPAllowlist: plan.PHPAllowlist, DefaultPHPVersion: plan.DefaultPHP}, "", controlquota.ReadyPHPVersions(capabilities))
+	if err != nil {
+		return "", &accountError{409, "runtime_unavailable", "the plan has no ready permitted PHP runtime", nil}
 	}
-	var permitted []string
-	for _, version := range strings.Split(plan.PHPAllowlist, ",") {
-		if version = strings.TrimSpace(version); version != "" && ready[version] {
-			permitted = append(permitted, version)
-		}
-	}
-	for _, preferred := range []string{"8.4", strings.TrimSpace(plan.DefaultPHP)} {
-		if preferred == "" {
-			continue
-		}
-		for _, version := range permitted {
-			if version == preferred {
-				return version, nil
-			}
-		}
-	}
-	if len(permitted) > 0 {
-		return permitted[0], nil
-	}
-	return "", &accountError{409, "runtime_unavailable", "the plan has no ready permitted PHP runtime", nil}
+	return version, nil
 }
 
 type selectedPlan struct {

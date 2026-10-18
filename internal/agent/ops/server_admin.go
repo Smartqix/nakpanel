@@ -87,8 +87,6 @@ type managedServiceDescriptor struct {
 type phpHandlerDescriptor struct {
 	id        string
 	version   string
-	cliBinary string
-	fpmBinary string
 	serviceID string
 	unit      string
 }
@@ -123,11 +121,11 @@ var managedServiceDescriptors = []managedServiceDescriptor{
 }
 
 var phpHandlerDescriptors = []phpHandlerDescriptor{
-	{id: "php81", version: "8.1", cliBinary: "/usr/bin/php8.1", fpmBinary: "/usr/sbin/php-fpm8.1", serviceID: "php-8.1", unit: "php8.1-fpm.service"},
-	{id: "php82", version: "8.2", cliBinary: "/usr/bin/php8.2", fpmBinary: "/usr/sbin/php-fpm8.2", serviceID: "php-8.2", unit: "php8.2-fpm.service"},
-	{id: "php83", version: "8.3", cliBinary: "/usr/bin/php8.3", fpmBinary: "/usr/sbin/php-fpm8.3", serviceID: "php-8.3", unit: "php8.3-fpm.service"},
-	{id: "php84", version: "8.4", cliBinary: "/usr/bin/php8.4", fpmBinary: "/usr/sbin/php-fpm8.4", serviceID: "php-8.4", unit: "php8.4-fpm.service"},
-	{id: "php85", version: "8.5", cliBinary: "/usr/bin/php8.5", fpmBinary: "/usr/sbin/php-fpm8.5", serviceID: "php-8.5", unit: "php8.5-fpm.service"},
+	{id: "php81", version: "8.1", serviceID: "php-8.1", unit: "php8.1-fpm.service"},
+	{id: "php82", version: "8.2", serviceID: "php-8.2", unit: "php8.2-fpm.service"},
+	{id: "php83", version: "8.3", serviceID: "php-8.3", unit: "php8.3-fpm.service"},
+	{id: "php84", version: "8.4", serviceID: "php-8.4", unit: "php8.4-fpm.service"},
+	{id: "php85", version: "8.5", serviceID: "php-8.5", unit: "php8.5-fpm.service"},
 }
 
 var filesystemDescriptors = []struct {
@@ -541,7 +539,12 @@ func (i *ServerAdminInspector) inspectPHPHandler(ctx context.Context, descriptor
 		ID: descriptor.id, Version: descriptor.version, SAPI: "fpm-fcgi",
 		ServiceID: descriptor.serviceID, State: "not_installed", CheckedAt: checkedAt,
 	}
-	versionOutput, versionErr := i.run(ctx, descriptor.cliBinary, "--version")
+	runtime, runtimeErr := resolvePHPRuntime(nil, descriptor.version)
+	if runtimeErr != nil {
+		return handler, nil
+	}
+	cli, cliArgs := runtime.CLICommand("--version")
+	versionOutput, versionErr := i.run(ctx, cli, cliArgs...)
 	service, serviceErr := i.inspectSystemdUnit(ctx, managedServiceDescriptor{
 		id: descriptor.serviceID, displayName: "PHP " + descriptor.version + " FPM",
 		unit: descriptor.unit, allowedActions: []string{"reload", "restart", "start", "stop"},
@@ -578,7 +581,8 @@ func (i *ServerAdminInspector) inspectPHPHandler(ctx context.Context, descriptor
 	default:
 		handler.State = "inactive"
 	}
-	moduleOutput, err := i.run(ctx, descriptor.cliBinary, "-m")
+	cli, cliArgs = runtime.CLICommand("-m")
+	moduleOutput, err := i.run(ctx, cli, cliArgs...)
 	if err != nil {
 		return handler, fmt.Errorf("PHP %s extension inspection unavailable", descriptor.version)
 	}
@@ -588,7 +592,8 @@ func (i *ServerAdminInspector) inspectPHPHandler(ctx context.Context, descriptor
 			Name: extension, Installed: true, Enabled: true, Protected: protected,
 		})
 	}
-	if _, err := i.run(ctx, descriptor.fpmBinary, "-tt"); err != nil {
+	fpm, fpmArgs := runtime.FPMCommand("-tt")
+	if _, err := i.run(ctx, fpm, fpmArgs...); err != nil {
 		handler.ConfigValid = false
 		return handler, fmt.Errorf("PHP %s FPM configuration validation failed", descriptor.version)
 	}

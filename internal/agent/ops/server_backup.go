@@ -153,6 +153,11 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 	}
 	defer os.RemoveAll(workDir)
 
+	platform, err := backup.CollectPlatformProvenance(ctx, p.postgresDSN, ReadyBackupPHPVersions)
+	if err != nil {
+		return result, fmt.Errorf("collect backup platform: %w", err)
+	}
+
 	// 1. Postgres dump (custom format) as the nakpanel role.
 	pgDumpPath := filepath.Join(workDir, "nakpanel.dump")
 	if err := p.dumpPostgres(ctx, pgDumpPath); err != nil {
@@ -171,6 +176,18 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 			return result, err
 		}
 		dumpFiles = append(dumpFiles, normalized)
+	}
+
+	roundcubePath, err := roundcubeSQLitePath("/etc/roundcube")
+	if err != nil {
+		return result, err
+	}
+	var roundcubeSnapshot string
+	if roundcubePath != "" {
+		roundcubeSnapshot = filepath.Join(workDir, "roundcube.sqlite")
+		if err := snapshotRoundcubeSQLite(ctx, roundcubePath, roundcubeSnapshot); err != nil {
+			return result, err
+		}
 	}
 
 	// 3. System identities.
@@ -200,17 +217,22 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 	}
 
 	manifest := backup.Manifest{
-		FormatVersion:    1,
-		CreatedAt:        started.UTC(),
-		PanelVersion:     req.PanelVersion,
-		GooseVersion:     req.GooseVersion,
-		KeyFingerprint:   backup.Fingerprint(req.ArchiveKey),
-		TenantDatabases:  dumpFiles,
-		Trees:            serverBackupTrees,
-		SystemdUnits:     units,
-		IncludeMailData:  req.IncludeMailData,
-		StalwartPausedMS: stalwartPaused.Milliseconds(),
-		Excluded:         serverBackupExcluded,
+		RoundcubeSQLitePath: roundcubePath,
+		Platform:            &platform,
+		FormatVersion:       1,
+		CreatedAt:           started.UTC(),
+		PanelVersion:        req.PanelVersion,
+		GooseVersion:        req.GooseVersion,
+		KeyFingerprint:      backup.Fingerprint(req.ArchiveKey),
+		TenantDatabases:     dumpFiles,
+		Trees:               serverBackupTrees,
+		SystemdUnits:        units,
+		IncludeMailData:     req.IncludeMailData,
+		StalwartPausedMS:    stalwartPaused.Milliseconds(),
+		Excluded:            serverBackupExcluded,
+	}
+	if roundcubeSnapshot != "" {
+		manifest.FormatVersion = 2
 	}
 	manifest.Hostname, _ = os.Hostname()
 	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
@@ -240,6 +262,11 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 		}
 		if err := writer.AddFileFrom(backup.PostgresDumpName, pgDumpPath); err != nil {
 			return err
+		}
+		if roundcubeSnapshot != "" {
+			if err := writer.AddFileFrom(backup.RoundcubeSQLiteDumpName, roundcubeSnapshot); err != nil {
+				return err
+			}
 		}
 		for _, database := range dumpFiles {
 			if err := writer.AddFileFrom(backup.MariaDBPrefix+database+".sql.gz", filepath.Join(workDir, "mariadb-"+database+".sql.gz")); err != nil {
@@ -324,7 +351,7 @@ func (p *ServerBackupProvisioner) dumpMariaDB(ctx context.Context, database, tar
 	}
 	defer file.Close()
 	gz := gzip.NewWriter(file)
-	cmd := exec.CommandContext(ctx, "mariadb-dump", "--single-transaction", "--databases", database)
+	cmd := exec.CommandContext(ctx, "mariadb-dump", "--single-transaction", "--routines", "--events", "--triggers", "--databases", database)
 	cmd.Stdout = gz
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
@@ -707,4 +734,88 @@ func (p *ServerBackupProvisioner) TestBackupDestination(ctx context.Context, req
 		return result, nil
 	}
 	return result, nil
+}
+
+// ReadyBackupPHPVersions shares the agent's trusted installed-profile resolver,
+// CLI extensions and isolated FPM startup checks. It runs locally as root for
+// recovery, without depending on a running panel database or peer-gated RPC.
+func ReadyBackupPHPVersions(ctx context.Context) ([]string, error) {
+	return readyBackupPHPVersions(ctx, systemRuntimeCapabilityProbe{}, nil)
+}
+
+// roundcubeSQLitePath reads literal package-managed database configuration as
+// data; it never sources PHP (which can contain credentials and executable code).
+func roundcubeSQLitePath(configDir string) (string, error) {
+	for _, name := range []string{"debian-db-roundcube.php", "debian-db.php"} {
+		data, err := os.ReadFile(filepath.Join(configDir, name))
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return "", err
+		}
+		text := string(data)
+		if name == "debian-db-roundcube.php" {
+			assignment := regexp.MustCompile(`(?m)^\s*\$config\[['"]db_dsnw['"]\]\s*=\s*['"]([^'"\r\n]*)['"]\s*;`).FindStringSubmatch(text)
+			if len(assignment) < 2 {
+				continue
+			}
+			if !strings.HasPrefix(assignment[1], "sqlite:") {
+				return "", nil
+			}
+			path := filepath.Clean("/" + strings.TrimLeft(strings.TrimPrefix(assignment[1], "sqlite:"), "/"))
+			if !backup.IsRoundcubeSQLitePath(path) {
+				return "", errors.New("Roundcube SQLite configuration uses an unsupported backup path")
+			}
+			return path, nil
+		}
+		values := map[string]string{}
+		for _, assignment := range regexp.MustCompile(`(?m)^\s*\$(dbtype|dbbasepath|basepath|dbname)\s*=\s*['"]([^'"\r\n]*)['"]\s*;`).FindAllStringSubmatch(text, -1) {
+			values[assignment[1]] = assignment[2]
+		}
+		if values["dbtype"] != "sqlite3" && values["dbtype"] != "sqlite" {
+			return "", nil
+		}
+		base := values["dbbasepath"]
+		if base == "" {
+			base = values["basepath"]
+		}
+		path := filepath.Join(base, values["dbname"])
+		if !backup.IsRoundcubeSQLitePath(path) {
+			return "", errors.New("Roundcube SQLite configuration uses an unsupported backup path")
+		}
+		return path, nil
+	}
+	return "", nil
+}
+
+func snapshotRoundcubeSQLite(ctx context.Context, source, destination string) error {
+	if strings.ContainsAny(destination, "'\r\n") {
+		return errors.New("unsafe SQLite snapshot destination")
+	}
+	info, err := os.Stat(source)
+	if err != nil {
+		return fmt.Errorf("inspect Roundcube SQLite database: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return errors.New("Roundcube SQLite source is not a regular database")
+	}
+	// SQLite's online backup API includes committed WAL contents in a consistent
+	// snapshot while webmail continues serving requests. Never copy the live file.
+	if output, err := exec.CommandContext(ctx, "sqlite3", "-readonly", source, ".timeout 10000", ".backup '"+destination+"'").CombinedOutput(); err != nil {
+		return fmt.Errorf("Roundcube SQLite online backup failed: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	if err = os.Chmod(destination, 0600); err != nil {
+		return err
+	}
+	output, err := exec.CommandContext(ctx, "sqlite3", "-readonly", destination, "PRAGMA quick_check;").Output()
+	if err != nil || strings.TrimSpace(string(output)) != "ok" {
+		return errors.New("Roundcube SQLite snapshot integrity check failed")
+	}
+	return nil
+}
+
+func readyBackupPHPVersions(ctx context.Context, probe RuntimeCapabilityProbe, resolver PHPRuntimeResolver) ([]string, error) {
+	_, ready := probePHPRuntimes(ctx, probe, resolver)
+	return ready, nil
 }

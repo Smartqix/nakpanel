@@ -98,14 +98,23 @@ set_plan_form(){
 
 echo "phase31: install the current plan-contract build"
 sync_repo "${ROOT_DIR}"
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" <<'REMOTE'
 set -euo pipefail
 src="$1"
 cd "${src}"
-timeout 45m deploy/install/install.sh --yes --allow-downgrade --force
+export NAKPANEL_RELEASE_ALLOW_DEVELOPMENT="${2:-0}"
+if [[ -d /tmp/nakpanel-release/bin ]]; then
+  args=(--yes --allow-downgrade --force --bundle /tmp/nakpanel-release --release-public-key /tmp/nakpanel-release-public.pem)
+  if [[ "${2:-0}" == 1 ]]; then args+=(--allow-development-bundle); fi
+  timeout 45m deploy/install/install.sh "${args[@]}"
+else
+  timeout 45m deploy/install/install.sh --yes --allow-downgrade --force
+fi
 systemctl is-active --quiet nakpanel.service
 systemctl is-active --quiet nakpanel-agent.service
-test "$(sha256sum bin/panel | awk '{print $1}')" = "$(sha256sum /usr/local/bin/nakpanel-panel | awk '{print $1}')"
+binary_root=bin
+if [[ -d /tmp/nakpanel-release/bin ]]; then binary_root=/tmp/nakpanel-release/bin; fi
+test "$(sha256sum "${binary_root}/panel" | awk '{print $1}')" = "$(sha256sum /usr/local/bin/nakpanel-panel | awk '{print $1}')"
 REMOTE
 
 VM_IP="$(vm_ip)"
@@ -153,7 +162,7 @@ if grep -Fq ">${draft_name}</option>" "${tmpdir}/subscription-new.html"; then
 fi
 
 echo "phase31: create a ready plan and immutable initial revision"
-set_plan_form 0 "${active_name}" active 2 8.4 'Initial production activation'
+set_plan_form 0 "${active_name}" active 2 ${NAKPANEL_FIXTURE_PHP} 'Initial production activation'
 post_as phase31-active plans "${plan_form[@]}"
 plan_id="$(db "SELECT id FROM plans WHERE reseller_id IS NULL AND name='${active_name}'")"
 [[ "${plan_id}" =~ ^[0-9]+$ ]] || fail "active plan was not saved"
@@ -179,7 +188,7 @@ site_id="$(db "SELECT id FROM sites WHERE domain='${domain}'")"
 wait_for 'contract site provisioning' "SELECT status FROM sites WHERE id=${site_id}" 'active'
 
 echo "phase31: preview and apply a non-destructive over-limit revision"
-set_plan_form "${plan_id}" "${active_name}" active 0 8.4 'Lower site limit acceptance'
+set_plan_form "${plan_id}" "${active_name}" active 0 ${NAKPANEL_FIXTURE_PHP} 'Lower site limit acceptance'
 post_expect 200 phase31-preview plans/preview -H 'X-Nakpanel-SPA: true' "${plan_form[@]}"
 python3 - "${tmpdir}/phase31-preview.out" "${subscription_id}" <<'PY'
 import json, sys
@@ -201,12 +210,12 @@ compliance_error="$(db "SELECT compliance_error FROM subscriptions WHERE id=${su
 echo "phase31: refresh measured usage and restore compliance"
 multipass_exec_short "${VM_NAME}" -- sudo systemctl restart nakpanel
 wait_for 'fresh usage collection' "SELECT COALESCE(is_complete,false)::text FROM subscription_usage_current WHERE subscription_id=${subscription_id}" 'true'
-set_plan_form "${plan_id}" "${active_name}" active 2 8.4 'Restore compliant site limit'
+set_plan_form "${plan_id}" "${active_name}" active 2 ${NAKPANEL_FIXTURE_PHP} 'Restore compliant site limit'
 post_as phase31-restore-limit plans "${plan_form[@]}"
 wait_for 'compliance recovery' "SELECT sync_status||':'||compliance_status||':'||(compliance_error='')::text FROM subscriptions WHERE id=${subscription_id}" 'in_sync:compliant:true'
 
 echo "phase31: prove background measurement refreshes compliance"
-set_plan_form "${plan_id}" "${active_name}" active 2 8.4 'Enable measured compliance acceptance' 16 normal
+set_plan_form "${plan_id}" "${active_name}" active 2 ${NAKPANEL_FIXTURE_PHP} 'Enable measured compliance acceptance' 16 normal
 post_as phase31-measured-limit plans "${plan_form[@]}"
 wait_for 'measured-limit synchronization' "SELECT sync_status||':'||compliance_status FROM subscriptions WHERE id=${subscription_id}" 'in_sync:compliant'
 document_root="$(db "SELECT document_root FROM sites WHERE id=${site_id}")"

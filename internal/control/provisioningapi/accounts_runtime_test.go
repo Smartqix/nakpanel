@@ -90,3 +90,27 @@ func TestAccountServiceSelectsReadyPermittedPHP(t *testing.T) {
 		t.Fatalf("capability failure returned %q, %v; want fail closed", got, err)
 	}
 }
+
+func TestAccountDefaultMatchesReadyBrowserProfiles(t *testing.T) {
+	plan := selectedPlan{PHPAllowlist: "8.4,8.5,8.3", DefaultPHP: "8.3"}
+	for _, tt := range []struct {
+		name      string
+		inventory types.RuntimeCapabilities
+		want      string
+		fail      bool
+	}{
+		{"noble", types.RuntimeCapabilities{PHPVersions: []string{"8.3", "8.4", "8.5"}}, "8.4", false},
+		{"native", types.RuntimeCapabilities{PHPVersions: []string{"8.5"}}, "8.5", false},
+		{"configured fallback", types.RuntimeCapabilities{PHPVersions: []string{"8.3", "8.5"}}, "8.3", false},
+		{"empty", types.RuntimeCapabilities{}, "", true},
+		{"detailed readiness overrides stale summary", types.RuntimeCapabilities{PHPVersions: []string{"8.4", "8.5"}, PHPRuntimes: []types.PHPRuntimeCapability{{Version: "8.4", Ready: false}, {Version: "8.5", Ready: true}}}, "8.5", false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &AccountService{Capabilities: fakeAccountRuntimeCapabilities{value: tt.inventory}}
+			got, err := service.readyPHPVersion(context.Background(), plan)
+			if (err != nil) != tt.fail || got != tt.want {
+				t.Fatalf("default=%q err=%v; want %q fail=%v", got, err, tt.want, tt.fail)
+			}
+		})
+	}
+}

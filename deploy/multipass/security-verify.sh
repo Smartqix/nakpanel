@@ -31,11 +31,13 @@ VM_IP="$(vm_ip)"
 multipass exec "${VM_NAME}" -- bash -se <<REMOTE
 set -euo pipefail
 cd /tmp/nakpanel-src
-make build
+if ! sudo test -d /tmp/nakpanel-release/bin; then make build; fi
 go build -o bin/agentprobe ./deploy/multipass/agentprobe
-sudo install -m 0755 bin/panel /usr/local/bin/nakpanel-panel
-sudo install -m 0755 bin/agent /usr/local/bin/nakpanel-agent
-sudo install -m 0755 bin/panelctl /usr/local/bin/panelctl
+binary_root=bin
+if sudo test -d /tmp/nakpanel-release/bin; then binary_root=/tmp/nakpanel-release/bin; fi
+sudo install -m 0755 "\${binary_root}/panel" /usr/local/bin/nakpanel-panel
+sudo install -m 0755 "\${binary_root}/agent" /usr/local/bin/nakpanel-agent
+sudo install -m 0755 "\${binary_root}/panelctl" /usr/local/bin/panelctl
 sudo install -m 0755 bin/agentprobe /usr/local/bin/agentprobe
 sudo -u nakpanel env DB_DSN='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' make goose-up
 sudo mkdir -p /etc/systemd/system/nakpanel.service.d
@@ -65,6 +67,7 @@ tmpdir="$(mktemp -d)"
 STAMP="$(date +%s)"
 FAILS=0
 cleanup() {
+  local exit_status=$?
   rm -rf "${tmpdir}"
   # Purge the adversarial tenants while the webhook sink and suite key are
   # still available.
@@ -99,6 +102,7 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl restart nakpanel.service
 REMOTE
+  exit "${exit_status}"
 }
 trap cleanup EXIT
 
@@ -107,7 +111,7 @@ ok()   { echo "  ok: $*"; }
 part() { echo; echo "== $* =="; }
 
 db()  { multipass_exec_short "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "$1" | tr -d '\r'; }
-cli() { multipass_exec_short "${VM_NAME}" -- sudo -u nakpanel env NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' NAKPANEL_AGENT_SOCKET='/run/nakpanel/agent.sock' panelctl --actor security-suite "$@"; }
+cli() { multipass_exec_short "${VM_NAME}" -- sudo -u nakpanel env NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' NAKPANEL_AGENT_SOCKET='/run/nakpanel/agent.sock' NAKPANEL_SECRET_KEY_FILE='/etc/nakpanel/secret-keys.json' panelctl --actor security-suite "$@"; }
 api() { curl -skS -H "Authorization: Bearer ${API_KEY}" -H 'Content-Type: application/json' "$@"; }
 mysql_root() { multipass_exec_short "${VM_NAME}" -- sudo mysql -N -B -e "$1"; }
 
@@ -130,11 +134,18 @@ curl -skf -o /dev/null "https://${VM_IP}:7443/login" || { echo "panel unreachabl
 curl -sk --fail -c "${tmpdir}/admin.cookies" -L -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' "https://${VM_IP}:7443/login" >/dev/null
 ADMIN_CSRF="$(csrf_token "${tmpdir}/admin.cookies")"
 
-key_out="$(cli api-key create --name security-suite --cidrs '192.168.252.0/24,127.0.0.0/8' --rate-limit 600)"
+key_out="$(cli api-key create --name security-suite --cidrs "${VM_IP%.*}.0/24,127.0.0.0/8" --rate-limit 600)"
 API_KEY="$(printf '%s\n' "${key_out}" | grep '^npk_' | tail -1)"
 [[ "${API_KEY}" == npk_* ]] || { echo "no API key" >&2; exit 1; }
 PLAN_SLUG="$(db "SELECT api_slug FROM plans WHERE reseller_id IS NULL AND is_active ORDER BY id LIMIT 1")"
 [[ -n "${PLAN_SLUG}" ]] || { echo "no active admin plan" >&2; exit 1; }
+
+require_fixture_id() {
+  [[ "$2" =~ ^[1-9][0-9]*$ ]] || { fail "required $1 fixture has no valid ID"; return 1; }
+}
+require_fixture_http() {
+  [[ "$2" == 202 || "$2" == 303 ]] || { fail "required $1 fixture request returned HTTP $2"; return 1; }
+}
 
 # --- Provision tenants A and B ---------------------------------------------
 provision_tenant() { # LABEL -> exports <LABEL>_ACC/_SUB/_USER/_DOMAIN/_SITE
@@ -161,23 +172,36 @@ provision_tenant B
 # Give each tenant a database, a DNS zone+record, a mailbox, and a backup
 # (admin acts on their behalf; the cross-tenant attacks come later as A).
 provision_resources() { # LABEL
-  local label="$1" lc sub dom site dbname dbuser
+  local label="$1" lc sub dom site dbname dbuser code database_id zone_id mailbox_id backup_id backup_output
   lc="$(printf '%s' "${label}" | tr 'A-Z' 'a-z')"
   eval "sub=\${${label}_SUB}; dom=\${${label}_DOMAIN}; site=\${${label}_SITE}"
-  dbname="db${lc}${STAMP}"   # the handler lowercases db_name/db_user
+  dbname="db${lc}${STAMP}"
   dbuser="dbu${lc}${STAMP}"
-  admin_post databases -d "subscription_id=${sub}" -d "site_id=${site}" -d "db_name=${dbname}" -d "db_user=${dbuser}" >/dev/null
-  admin_post dns -d "domain=${dom}" -d "address=${VM_IP}" >/dev/null
-  cli mail enable "${dom}" --dmarc quarantine >/dev/null 2>&1 || true
-  cli mail add "user@${dom}" --password "TenantMbx-${label}-2026" >/dev/null 2>&1 || true
-  cli backup create "${dom}" >/dev/null 2>&1 || true
+  code="$(admin_post databases -d "subscription_id=${sub}" -d "site_id=${site}" -d "db_name=${dbname}" -d "db_user=${dbuser}" -d 'password=SecurityDatabase_2026')"
+  require_fixture_http "${label} database" "${code}"
+  database_id="$(db "SELECT id FROM databases WHERE subscription_id=${sub} AND db_name='${dbname}'")"
+  require_fixture_id "${label} database" "${database_id}"
+  wait_for "SELECT status FROM databases WHERE id=${database_id}" active
+  code="$(admin_post dns -d "domain=${dom}" -d "site_id=${site}" -d "address=${VM_IP}")"
+  require_fixture_http "${label} DNS" "${code}"
+  zone_id="$(db "SELECT id FROM dns_zones WHERE site_id=${site} AND domain='${dom}'")"
+  require_fixture_id "${label} DNS" "${zone_id}"
+  wait_for "SELECT status FROM dns_zones WHERE id=${zone_id}" active
+  cli mail enable "${dom}" --dmarc quarantine >/dev/null
+  cli mail add "user@${dom}" --password "TenantMbx-${label}-2026" >/dev/null
+  mailbox_id="$(db "SELECT mailbox.id FROM mailboxes mailbox JOIN mail_domains domain ON domain.id=mailbox.mail_domain_id WHERE domain.subscription_id=${sub} AND domain.domain='${dom}' AND mailbox.local_part='user'")"
+  require_fixture_id "${label} mailbox" "${mailbox_id}"
+  backup_output="$(cli backup create "${dom}")"
+  backup_id="$(sed -nE 's/^Backup queued \(backup ([0-9]+)\)\.$/\1/p' <<<"${backup_output}")"
+  require_fixture_id "${label} backup queue" "${backup_id}"
+  wait_for "SELECT status FROM backups WHERE id=${backup_id} AND subscription_id=${sub}" active
   eval "${label}_DB=\"${dbname}\"; ${label}_DBUSER=\"${dbuser}\""
 }
 provision_resources A
 provision_resources B
 # Wait for the databases + a DNS zone to converge so the isolation checks have
 # real objects to attack.
-wait_for "SELECT count(*) FROM databases WHERE db_name='${A_DB}' AND status='active'" 1 || true
+wait_for "SELECT count(*) FROM databases WHERE db_name='${A_DB}' AND status='active'" 1
 A_DBUSER="$(db "SELECT db_user FROM databases WHERE db_name='${A_DB}'")"
 
 # --- Tenant A's real browser session (via the provisioning-API SSO link) ----
@@ -198,16 +222,16 @@ assert_rejected() { # LABEL JSON
 }
 
 for d in '../../etc' '/etc/passwd' 'a.b\nc.d' 'x.gh;}server{listen 80;root /etc;}' 'a.b c.d' "$(printf 'a.b%s.c' '\\u0000')"; do
-  r="$(probe create_site "{\"username\":\"npprobe1\",\"domain\":\"${d}\",\"php_version\":\"8.3\"}")"
+  r="$(probe create_site "{\"username\":\"npprobe1\",\"domain\":\"${d}\",\"php_version\":\"${NAKPANEL_BASELINE_PHP}\"}")"
   assert_rejected "create_site hostile domain [${d}]" "${r}"
 done
-r="$(probe create_site "{\"username\":\"npprobe1\",\"domain\":\"$(printf 'a%.0s' {1..64}).test\",\"php_version\":\"8.3\"}")"
+r="$(probe create_site "{\"username\":\"npprobe1\",\"domain\":\"$(printf 'a%.0s' {1..64}).test\",\"php_version\":\"${NAKPANEL_BASELINE_PHP}\"}")"
 assert_rejected "create_site overlong label" "${r}"
 for u in 'root' 'mysql' 'nakpanel' '../root' 'ROOT' 'ro' 'a;b'; do
-  r="$(probe create_site "{\"username\":\"${u}\",\"domain\":\"probe.example.test\",\"php_version\":\"8.3\"}")"
+  r="$(probe create_site "{\"username\":\"${u}\",\"domain\":\"probe.example.test\",\"php_version\":\"${NAKPANEL_BASELINE_PHP}\"}")"
   assert_rejected "create_site hostile username [${u}]" "${r}"
 done
-r="$(probe create_site '{"username":"npprobe1","domain":"probe.example.test","php_version":"8.3","docroot":"/etc"}')"
+r="$(probe create_site "{\"username\":\"npprobe1\",\"domain\":\"probe.example.test\",\"php_version\":\"${NAKPANEL_BASELINE_PHP}\",\"docroot\":\"/etc\"}")"
 assert_rejected "create_site client-supplied docroot" "${r}"
 
 # Symlink swap: plant a symlink to /etc inside tenant A's tree, force a
@@ -292,13 +316,14 @@ code="$(a_post "subscriptions/${B_SUB}/mailboxes" -d "mail_domain_id=$(db "SELEC
 # SQL to A's subscription, so B's row must survive regardless of the HTTP code
 # the (idempotent) delete handler returns.
 B_MBX="$(db "SELECT mb.id FROM mailboxes mb JOIN mail_domains md ON md.id=mb.mail_domain_id WHERE md.subscription_id=${B_SUB} ORDER BY mb.id DESC LIMIT 1")"
+require_fixture_id "B cross-tenant mailbox" "${B_MBX}"
 if [[ -n "${B_MBX}" ]]; then
   a_post "subscriptions/${A_SUB}/services/mailbox/${B_MBX}/delete" >/dev/null
   a_post "subscriptions/${B_SUB}/services/mailbox/${B_MBX}/delete" >/dev/null
   still="$(db "SELECT count(*) FROM mailboxes WHERE id=${B_MBX}")"
   [[ "${still}" == 1 ]] && ok "A cannot delete B's mailbox by id (row survives)" || fail "A deleted B's mailbox by id (row gone)"
 else
-  echo "  (skip: B has no mailbox to target)"
+  fail "required B mailbox disappeared before isolation assertion"; exit 1
 fi
 
 # DNS: A's session cannot edit B's zone records.
@@ -306,12 +331,13 @@ code="$(a_post "sites/${B_SITE}/dns-records" -d "host=evil" -d "record_type=A" -
 [[ "${code}" == 404 || "${code}" == 403 ]] && ok "A cannot write DNS records on B's site (${code})" || fail "A wrote a DNS record on B's site: HTTP ${code}"
 
 # Backups: A's session cannot restore B's backup.
-B_BACKUP="$(db "SELECT id FROM backups WHERE subscription_id=${B_SUB} ORDER BY id DESC LIMIT 1")"
+B_BACKUP="$(db "SELECT id FROM backups WHERE subscription_id=${B_SUB} AND status='active' ORDER BY id DESC LIMIT 1")"
+require_fixture_id "B cross-tenant backup" "${B_BACKUP}"
 if [[ -n "${B_BACKUP}" ]]; then
   code="$(a_post restores -d "backup_id=${B_BACKUP}")"
   [[ "${code}" == 404 || "${code}" == 403 ]] && ok "A cannot restore B's backup (${code})" || fail "A restored B's backup: HTTP ${code}"
 else
-  echo "  (skip: B has no backup row yet)"
+  fail "required B backup disappeared before isolation assertion"; exit 1
 fi
 
 ##############################################################################
@@ -348,14 +374,24 @@ else
 fi
 
 # change-plan downgrade below current usage → plan_downgrade_conflict.
-db "INSERT INTO plans(name,is_active,max_sites,max_databases,max_mailboxes,disk_mb,bandwidth_mb,php_allowlist) VALUES('security-tiny-${STAMP}',true,0,0,0,10,1024,'8.3')" >/dev/null 2>&1 || true
-TINY_SLUG="$(db "SELECT COALESCE(api_slug,'') FROM plans WHERE name='security-tiny-${STAMP}'")"
-if [[ -n "${TINY_SLUG}" ]]; then
-  code="$(api -X POST -d "{\"plan\":\"${TINY_SLUG}\"}" "https://${VM_IP}:7443/api/v1/accounts/${A_ACC}/change-plan" -o "${tmpdir}/downgrade.json" -w '%{http_code}')"
-  if [[ "${code}" == 409 ]] && grep -Fq 'plan_downgrade_conflict' "${tmpdir}/downgrade.json"; then ok "downgrade below usage → 409 plan_downgrade_conflict"; else fail "downgrade below usage was not blocked: HTTP ${code} $(cat "${tmpdir}/downgrade.json")"; fi
-else
-  echo "  (skip downgrade: could not create a constrained target plan)"
-fi
+provision_downgrade_plan() {
+  local code plan_id
+  code="$(admin_post plans -d plan_id=0 -d "name=security-tiny-${STAMP}" -d lifecycle_status=active \
+    -d change_reason=SecurityDowngradeFixture -d disk_mb=10 -d max_sites=0 -d max_databases=0 \
+    -d max_mailboxes=0 -d max_backups=0 -d backup_storage_mb=0 -d site_disk_quota_mb=-1 \
+    -d bandwidth_mb=1024 -d "php_allowlist=${NAKPANEL_BASELINE_PHP}" -d "php_versions=${NAKPANEL_BASELINE_PHP}" \
+    -d "default_php_version=${NAKPANEL_BASELINE_PHP}" -d php_max_children=2 -d php_memory_mb=128 \
+    -d hosting_enabled=true -d allow_tls=true -d allow_dns=true -d allow_backups=false \
+    -d overuse_policy=block -d validity_days=-1)"
+  require_fixture_http "constrained active plan" "${code}"
+  plan_id="$(db "SELECT id FROM plans WHERE name='security-tiny-${STAMP}' AND reseller_id IS NULL AND lifecycle_status='active' AND is_active")"
+  require_fixture_id "constrained active plan" "${plan_id}"
+  TINY_SLUG="$(db "SELECT api_slug FROM plans WHERE id=${plan_id}")"
+  [[ "${TINY_SLUG}" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { fail "constrained active plan has no API slug"; return 1; }
+}
+provision_downgrade_plan
+code="$(api -X POST -d "{\"plan\":\"${TINY_SLUG}\"}" "https://${VM_IP}:7443/api/v1/accounts/${A_ACC}/change-plan" -o "${tmpdir}/downgrade.json" -w '%{http_code}')"
+if [[ "${code}" == 409 ]] && grep -Fq 'plan_downgrade_conflict' "${tmpdir}/downgrade.json"; then ok "downgrade below usage → 409 plan_downgrade_conflict"; else fail "downgrade below usage was not blocked: HTTP ${code} $(cat "${tmpdir}/downgrade.json")"; fi
 
 # oversell_policy=cap: assigning past server capacity → ErrOversellCap.
 db "UPDATE settings SET oversell_policy='cap', server_disk_capacity_mb=10 WHERE id=true" >/dev/null

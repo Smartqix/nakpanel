@@ -857,12 +857,17 @@ func phpVersionsFromCapabilities(capabilities types.RuntimeCapabilities, allowli
 		allowed[version] = true
 	}
 	var result []string
-	for _, version := range capabilities.PHPVersions {
+	for _, version := range controlquota.ReadyPHPVersions(capabilities) {
 		if allowed[version] {
 			result = append(result, version)
 		}
 	}
 	return result
+}
+
+func subscriptionDefaultPHPVersion(subscription types.SubscriptionSummary, capabilities types.RuntimeCapabilities) string {
+	version, _ := controlquota.ResolveReadyPHPVersion(controlquota.Limits{PHPAllowlist: subscription.PHPAllowlist, DefaultPHPVersion: subscription.DefaultPHPVersion}, "", controlquota.ReadyPHPVersions(capabilities))
+	return version
 }
 
 func routeTitle(route string) string {
@@ -986,9 +991,9 @@ func planTabURL(view WorkspaceView, tab string) string {
 }
 
 func planEditorDefault(capabilities types.RuntimeCapabilities) controlquota.Plan {
-	phpVersions := append([]string(nil), capabilities.PHPVersions...)
+	phpVersions := controlquota.ReadyPHPVersions(capabilities)
 	phpAllowlist := strings.Join(phpVersions, ",")
-	phpVersion := controlquota.PreferredNewSitePHPVersion(phpAllowlist, "")
+	phpVersion, _ := controlquota.ResolveReadyPHPVersion(controlquota.Limits{PHPAllowlist: phpAllowlist}, "", phpVersions)
 	return controlquota.Plan{Name: "", DiskMB: 5120, MaxSites: 1, MaxDatabases: 2, BandwidthMB: 102400,
 		MaxMailboxes: 0, BackupRetentionDays: 7, PHPAllowlist: phpAllowlist, DefaultPHPVersion: phpVersion,
 		PHPFPMMaxChildren: 3, PHPMemoryMB: 128, SiteDiskQuotaMB: 5120, MaxBackups: 7,
@@ -1345,7 +1350,7 @@ func planEditorSaveHint(plan controlquota.Plan, addon bool) string {
 
 func planPHPVersions(plan controlquota.Plan, capabilities types.RuntimeCapabilities) []string {
 	if plan.PHPAllowlist == "" && plan.ID == 0 {
-		return append([]string(nil), capabilities.PHPVersions...)
+		return controlquota.ReadyPHPVersions(capabilities)
 	}
 	return phpVersionsFromCapabilities(capabilities, plan.PHPAllowlist)
 }
@@ -1370,7 +1375,7 @@ func subscriptionPHPVersions(items []types.SubscriptionSummary, capabilities typ
 			}
 		}
 	}
-	if preferred := controlquota.PreferredNewSitePHPVersion(strings.Join(out, ","), ""); preferred != "" {
+	if preferred, err := controlquota.ResolveReadyPHPVersion(controlquota.Limits{PHPAllowlist: strings.Join(out, ",")}, "", out); err == nil {
 		for index, version := range out {
 			if version == preferred {
 				copy(out[1:index+1], out[0:index])

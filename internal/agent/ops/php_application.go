@@ -37,6 +37,7 @@ func (defaultPHPReleaseExporter) Export(ctx context.Context, runner CommandRunne
 }
 
 type PHPApplicationProvisionerOptions struct {
+	RuntimeResolver   PHPRuntimeResolver
 	HomeRoot          string
 	GitRoot           string
 	StateRoot         string
@@ -54,6 +55,7 @@ type PHPApplicationProvisionerOptions struct {
 }
 
 type PHPApplicationProvisioner struct {
+	runtimeResolver   PHPRuntimeResolver
 	homeRoot          string
 	gitRoot           string
 	stateRoot         string
@@ -138,7 +140,7 @@ func NewPHPApplicationProvisioner(opts PHPApplicationProvisionerOptions) *PHPApp
 			if version == "8.3" {
 				status = types.PHPSupportSecuritySupported
 			}
-			runtime, discovered := probePHPRuntime(ctx, systemRuntimeCapabilityProbe{}, version, status)
+			runtime, discovered := probePHPRuntimeWithResolver(ctx, systemRuntimeCapabilityProbe{}, opts.RuntimeResolver, version, status)
 			if !discovered || !runtime.Ready {
 				return fmt.Errorf("PHP %s is not ready: %s", version, strings.Join(runtime.ValidationErrors, "; "))
 			}
@@ -149,7 +151,8 @@ func NewPHPApplicationProvisioner(opts PHPApplicationProvisionerOptions) *PHPApp
 		opts.Probe = probePHPHTTP
 	}
 	return &PHPApplicationProvisioner{
-		homeRoot: filepath.Clean(opts.HomeRoot), gitRoot: filepath.Clean(opts.GitRoot), stateRoot: filepath.Clean(opts.StateRoot),
+		runtimeResolver: opts.RuntimeResolver,
+		homeRoot:        filepath.Clean(opts.HomeRoot), gitRoot: filepath.Clean(opts.GitRoot), stateRoot: filepath.Clean(opts.StateRoot),
 		systemdUnitDir: filepath.Clean(opts.SystemdUnitDir), phpConfigDir: filepath.Clean(opts.PHPConfigDir),
 		phpRunDir: filepath.Clean(opts.PHPRunDir), nginxAvailableDir: filepath.Clean(opts.NginxAvailableDir),
 		nginxCandidateDir: filepath.Clean(opts.NginxCandidateDir), composerBinary: opts.ComposerBinary,
@@ -412,6 +415,10 @@ func renderPHPEnvironmentFile(environment []types.PHPEnvironmentPayload) (string
 	totalBytes := 0
 	var builder strings.Builder
 	for _, entry := range environment {
+		// These bindings affect the privileged FPM master before pool isolation.
+		if entry.Name == "PHPRC" || entry.Name == "PHP_INI_SCAN_DIR" || strings.HasPrefix(entry.Name, "LD_") || strings.HasPrefix(entry.Name, "DYLD_") {
+			return "", fmt.Errorf("PHP environment binding %q is reserved for the runtime", entry.Name)
+		}
 		if !environmentKeyRE.MatchString(entry.Name) || len(entry.Value) > 65536 || len(entry.Secret) > 65536 ||
 			strings.ContainsRune(entry.Value, '\x00') || strings.ContainsRune(entry.Secret, '\x00') || (entry.Value != "" && entry.Secret != "") {
 			return "", fmt.Errorf("invalid PHP environment binding %q", entry.Name)
@@ -434,7 +441,7 @@ func renderPHPEnvironmentFile(environment []types.PHPEnvironmentPayload) (string
 	return builder.String(), nil
 }
 
-func renderPHPWorkerUnit(spec types.PHPApplicationSpec, worker types.PHPWorker, release, environmentFile string) (string, error) {
+func renderPHPWorkerUnit(spec types.PHPApplicationSpec, worker types.PHPWorker, release, environmentFile string, resolvers ...PHPRuntimeResolver) (string, error) {
 	if worker.ID <= 0 || worker.ApplicationID != spec.ApplicationID || worker.SubscriptionID != spec.SubscriptionID ||
 		!phpWorkerNameRE.MatchString(worker.Name) || worker.Processes < 1 || worker.Processes > 64 ||
 		(worker.DesiredState != "running" && worker.DesiredState != "stopped") {
@@ -450,8 +457,16 @@ func renderPHPWorkerUnit(spec types.PHPApplicationSpec, worker types.PHPWorker, 
 	if len(worker.Arguments) > 64 {
 		return "", errors.New("at most 64 PHP worker arguments are permitted")
 	}
-	executable := "/usr/bin/php" + spec.PHPVersion
-	arguments := []string{executable, filepath.Join(release, filepath.FromSlash(worker.Script))}
+	var resolver PHPRuntimeResolver
+	if len(resolvers) > 0 {
+		resolver = resolvers[0]
+	}
+	runtime, err := resolvePHPRuntime(resolver, spec.PHPVersion)
+	if err != nil {
+		return "", err
+	}
+	executable, phpArgs := runtime.CLICommand(filepath.Join(release, filepath.FromSlash(worker.Script)))
+	arguments := append([]string{executable}, phpArgs...)
 	argumentBytes := 0
 	for _, argument := range worker.Arguments {
 		if len(argument) > 4096 || strings.ContainsAny(argument, "\x00\r\n") {
@@ -1052,6 +1067,11 @@ func (p *PHPApplicationProvisioner) scanReleaseForMalware(ctx context.Context, s
 }
 
 func (p *PHPApplicationProvisioner) runComposer(ctx context.Context, spec types.PHPApplicationSpec, release, domainRoot string, environment []types.PHPEnvironmentPayload) (string, error) {
+	runtime, err := resolvePHPRuntime(p.runtimeResolver, spec.PHPVersion)
+	if err != nil {
+		return "", err
+	}
+	phpExecutable, phpArgs := runtime.CLICommand(p.composerBinary)
 	if _, err := os.Stat(filepath.Join(release, "composer.json")); os.IsNotExist(err) {
 		return "not required", nil
 	} else if err != nil {
@@ -1081,7 +1101,8 @@ func (p *PHPApplicationProvisioner) runComposer(ctx context.Context, spec types.
 			"--property=ProtectHome=read-only", "--property=MemoryMax=1G", "--property=TasksMax=128", "--property=RuntimeMaxSec=900",
 			"--property=ReadWritePaths=" + release + " " + cache + " " + tmp,
 			"--setenv=HOME=" + filepath.Join(p.homeRoot, spec.Username), "--setenv=COMPOSER_CACHE_DIR=" + cache, "--setenv=TMPDIR=" + tmp,
-			"--working-directory=" + release, "/usr/bin/php" + spec.PHPVersion, p.composerBinary}
+			"--working-directory=" + release, phpExecutable}
+		args = append(args, phpArgs...)
 		args = append(args, command...)
 		output, err := p.runner.Run(ctx, "systemd-run", args...)
 		if index == len(commands)-1 {
@@ -1353,6 +1374,10 @@ func (p *PHPApplicationProvisioner) resetCandidateArtifacts(ctx context.Context,
 }
 
 func (p *PHPApplicationProvisioner) startCandidate(ctx context.Context, spec types.PHPApplicationSpec, deploymentID int64, resolvedRevision, release, environmentPath string, port int, environment []types.PHPEnvironmentPayload) error {
+	runtime, runtimeErr := resolvePHPRuntime(p.runtimeResolver, spec.PHPVersion)
+	if runtimeErr != nil {
+		return runtimeErr
+	}
 	siteConfigMutationMu.Lock()
 	defer siteConfigMutationMu.Unlock()
 	if port < 31000 || port > 31999 {
@@ -1382,14 +1407,14 @@ func (p *PHPApplicationProvisioner) startCandidate(ctx context.Context, spec typ
 	if err := writeFileAtomic(fpmConfig, []byte(renderManagedFPMConfig(spec, documentRoot, socket)), 0o600); err != nil {
 		return err
 	}
-	if err := writeFileAtomic(unitPath, []byte(renderManagedFPMUnit(spec, fpmConfig, environmentPath, release, socket, true)), 0o644); err != nil {
+	if err := writeFileAtomic(unitPath, []byte(renderManagedFPMUnit(spec, fpmConfig, environmentPath, release, socket, true, p.runtimeResolver)), 0o644); err != nil {
 		return err
 	}
 	if err := writeFileAtomic(nginxPath, []byte(renderCandidatePHPNginx(spec, documentRoot, socket, port)), 0o600); err != nil {
 		return err
 	}
 	commands := [][]string{
-		{"php-fpm" + spec.PHPVersion, "-t", "-y", fpmConfig},
+		runtimeFPMCommand(runtime, "-t", "-y", fpmConfig),
 		{"systemctl", "daemon-reload"},
 		{"systemctl", "restart", unitName},
 		{"nginx", "-t"},
@@ -1473,6 +1498,11 @@ func (p *PHPApplicationProvisioner) stopPHPCandidates(ctx context.Context, spec 
 }
 
 func (p *PHPApplicationProvisioner) activateRelease(ctx context.Context, spec types.PHPApplicationSpec, marker phpObservedMarker, environmentPath string, environment []types.PHPEnvironmentPayload) (err error) {
+	runtime, runtimeErr := resolvePHPRuntime(p.runtimeResolver, spec.PHPVersion)
+	if runtimeErr != nil {
+		return runtimeErr
+	}
+
 	siteConfigMutationMu.Lock()
 	defer siteConfigMutationMu.Unlock()
 	resolvedHome, homeErr := filepath.EvalSymlinks(p.homeRoot)
@@ -1536,14 +1566,14 @@ func (p *PHPApplicationProvisioner) activateRelease(ctx context.Context, spec ty
 	if err := writeFileAtomic(slicePath, []byte(renderPHPApplicationSlice(spec)), 0o644); err != nil {
 		return rollback(err)
 	}
-	if err := writeFileAtomic(unitPath, []byte(renderManagedFPMUnit(spec, fpmConfig, environmentPath, marker.ReleasePath, filepath.Join(p.phpRunDir, fmt.Sprintf("site-%d.sock", spec.SiteID)), false)), 0o644); err != nil {
+	if err := writeFileAtomic(unitPath, []byte(renderManagedFPMUnit(spec, fpmConfig, environmentPath, marker.ReleasePath, filepath.Join(p.phpRunDir, fmt.Sprintf("site-%d.sock", spec.SiteID)), false, p.runtimeResolver)), 0o644); err != nil {
 		return rollback(err)
 	}
 	if err := writeFileAtomic(nginxPath, managedNginx, 0o644); err != nil {
 		return rollback(err)
 	}
 	for _, command := range [][]string{
-		{"php-fpm" + spec.PHPVersion, "-t", "-y", fpmConfig},
+		runtimeFPMCommand(runtime, "-t", "-y", fpmConfig),
 		{"systemctl", "daemon-reload"},
 		{"systemctl", "restart", unitName},
 		{"nginx", "-t"},
@@ -1620,7 +1650,16 @@ php_admin_flag[log_errors] = on
 		socket, maxChildren, maxRequests, releaseRoot, sharedRoot, memory)
 }
 
-func renderManagedFPMUnit(spec types.PHPApplicationSpec, fpmConfig, environmentFile, release, socket string, candidate bool) string {
+func renderManagedFPMUnit(spec types.PHPApplicationSpec, fpmConfig, environmentFile, release, socket string, candidate bool, resolvers ...PHPRuntimeResolver) string {
+	var resolver PHPRuntimeResolver
+	if len(resolvers) > 0 {
+		resolver = resolvers[0]
+	}
+	runtime, err := resolvePHPRuntime(resolver, spec.PHPVersion)
+	if err != nil {
+		return ""
+	}
+	command, environment := runtime.fpmUnitCommand()
 	memory := spec.Policy.Resources.MemoryMB
 	if memory <= 0 {
 		memory = 512
@@ -1643,8 +1682,8 @@ After=network.target
 [Service]
 Type=simple
 %sEnvironmentFile=%s
-ExecStartPre=/usr/sbin/php-fpm%s -t -y %s
-ExecStart=/usr/sbin/php-fpm%s --nodaemonize -y %s
+%sExecStartPre=%s -t -y %s
+ExecStart=%s --nodaemonize -y %s
 Restart=on-failure
 RestartSec=2s
 NoNewPrivileges=yes
@@ -1661,7 +1700,7 @@ TasksMax=%d
 
 [Install]
 WantedBy=multi-user.target
-`, description, slice, environmentFile, spec.PHPVersion, fpmConfig, spec.PHPVersion, fpmConfig,
+`, description, slice, environmentFile, environment, command, fpmConfig, command, fpmConfig,
 		filepath.Join(filepath.Dir(filepath.Dir(release)), "shared"), "/var/log/php-fpm", filepath.Dir(socket), phpSessionDirectory, memory,
 		effectivePHPCPUPercent(spec.Policy.Resources.CPUPercent), tasks)
 }
@@ -1714,7 +1753,7 @@ func replaceManagedNginxRuntime(config []byte, documentRoot, socket string) ([]b
 func (p *PHPApplicationProvisioner) resumeSuspendedManagedNginx(spec types.PHPApplicationSpec, config []byte, documentRoot, socket string) ([]byte, error) {
 	plan, err := NewSitePlan(types.CreateSiteReq{SiteID: spec.SiteID, SubscriptionID: spec.SubscriptionID, Username: spec.Username, Domain: spec.Domain, PHPVersion: spec.PHPVersion, SharedAccount: true, Limits: siteLimitsFromPolicy(spec.Policy)}, SitePathConfig{
 		HomeRoot: p.homeRoot, NginxAvailableDir: p.nginxAvailableDir,
-		PHPFPMDedicatedDir: p.phpConfigDir, PHPFPMDedicatedRunDir: p.phpRunDir, SystemdUnitDir: p.systemdUnitDir,
+		RuntimeResolver: p.runtimeResolver, PHPFPMDedicatedDir: p.phpConfigDir, PHPFPMDedicatedRunDir: p.phpRunDir, SystemdUnitDir: p.systemdUnitDir,
 	})
 	if err != nil {
 		return nil, err
@@ -2208,7 +2247,7 @@ func (p *PHPApplicationProvisioner) reconcileWorkerRecords(ctx context.Context, 
 		if info, statErr := os.Stat(resolvedScript); statErr != nil || !info.Mode().IsRegular() {
 			return result, errors.New("PHP worker script must be a regular file")
 		}
-		unit, err := renderPHPWorkerUnit(spec, worker, release, environmentPath)
+		unit, err := renderPHPWorkerUnit(spec, worker, release, environmentPath, p.runtimeResolver)
 		if err != nil {
 			return result, err
 		}

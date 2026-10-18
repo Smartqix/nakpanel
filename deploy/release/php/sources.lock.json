@@ -1,0 +1,89 @@
+{
+  "architectures": [
+    "amd64",
+    "arm64"
+  ],
+  "codename": "resolute",
+  "distribution": "ubuntu",
+  "extensions": {
+    "apcu": {
+      "license": "PHP-3.01",
+      "sha256": "ca9c1820810a168786f8048a4c3f8c9e3fd941407ad1553259fb2e30b5f057bf",
+      "url": "https://pecl.php.net/get/apcu-5.1.28.tgz",
+      "verification": "HTTPS upstream PECL archive; SHA256 frozen on 2026-10-18, no independent upstream signature available",
+      "version": "5.1.28"
+    },
+    "imagick": {
+      "license": "PHP-3.01",
+      "sha256": "3a3587c0a524c17d0dad9673a160b90cd776e836838474e173b549ed864352ee",
+      "url": "https://pecl.php.net/get/imagick-3.8.1.tgz",
+      "verification": "HTTPS upstream PECL archive; SHA256 frozen on 2026-10-18, no independent upstream signature available",
+      "version": "3.8.1"
+    },
+    "redis": {
+      "license": "PHP-3.01",
+      "sha256": "0d5141f634bd1db6c1ddcda053d25ecf2c4fc1c395430d534fd3f8d51dd7f0b5",
+      "url": "https://pecl.php.net/get/redis-6.3.0.tgz",
+      "verification": "HTTPS upstream PECL archive; SHA256 frozen on 2026-10-18, no independent upstream signature available",
+      "version": "6.3.0"
+    }
+  },
+  "patches": [],
+  "php": {
+    "8.3": {
+      "digest_source": "https://www.php.net/releases/index.php?json&version=8.3",
+      "license": "PHP-3.01 AND Zend-2.0",
+      "sha256": "ff4630fbbbd94359134b7d3c223db59329905bdc4f5a9ef93d257b48e358619a",
+      "signature_url": "https://www.php.net/distributions/php-8.3.35.tar.xz.asc",
+      "signer_fingerprints": [
+        "1198C0117593497A5EC5C199286AF1F9897469DC",
+        "AFD8691FDAEDF03BDF6E460563F15A9B715376CA",
+        "C28D937575603EB4ABB725861C0779DC5C0A9DE4"
+      ],
+      "url": "https://www.php.net/distributions/php-8.3.35.tar.xz",
+      "version": "8.3.35"
+    },
+    "8.4": {
+      "digest_source": "https://www.php.net/releases/index.php?json&version=8.4",
+      "license": "PHP-3.01 AND Zend-2.0",
+      "sha256": "32a2de53862ad44ed4a5005244ce4f1b50c271e74dced215449a4443b40569f1",
+      "signature_url": "https://www.php.net/distributions/php-8.4.26.tar.xz.asc",
+      "signer_fingerprints": [
+        "AFD8691FDAEDF03BDF6E460563F15A9B715376CA",
+        "9D7F99A0CB8F05C8A6958D6256A97AF7600A39A6",
+        "0616E93D95AF471243E26761770426E17EBBB3DD"
+      ],
+      "url": "https://www.php.net/distributions/php-8.4.26.tar.xz",
+      "version": "8.4.26"
+    }
+  },
+  "php_signer_fingerprint_source": "https://www.php.net/downloads.php?source=Y#gpg-8.4",
+  "qualified": false,
+  "refreshed": "2026-10-18",
+  "required_extensions": [
+    "bcmath",
+    "curl",
+    "dom",
+    "exif",
+    "fileinfo",
+    "gd",
+    "imagick",
+    "intl",
+    "mbstring",
+    "mysqli",
+    "openssl",
+    "redis",
+    "SimpleXML",
+    "soap",
+    "xml",
+    "zip",
+    "Zend OPcache",
+    "apcu",
+    "pdo_mysql",
+    "pdo_pgsql",
+    "pdo_sqlite",
+    "readline"
+  ],
+  "schema_version": 1,
+  "version_id": "26.04"
+}

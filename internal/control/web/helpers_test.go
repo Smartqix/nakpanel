@@ -378,3 +378,21 @@ func TestSiteCreationRouteTitle(t *testing.T) {
 		t.Fatalf("site-new title = %q", got)
 	}
 }
+
+func TestSubscriptionDefaultPHPUsesReadyInventory(t *testing.T) {
+	subscription := types.SubscriptionSummary{PHPAllowlist: "8.4,8.5,8.3", DefaultPHPVersion: "8.4"}
+	if got := subscriptionDefaultPHPVersion(subscription, types.RuntimeCapabilities{PHPVersions: []string{"8.5"}}); got != "8.5" {
+		t.Fatalf("default=%q", got)
+	}
+	if got := subscriptionDefaultPHPVersion(subscription, types.RuntimeCapabilities{}); got != "" {
+		t.Fatalf("empty inventory default=%q", got)
+	}
+}
+
+func TestPlanSelectablePHPUsesAuthoritativeDetailedInventory(t *testing.T) {
+	capabilities := types.RuntimeCapabilities{PHPVersions: []string{"8.4", "8.5"}, PHPRuntimes: []types.PHPRuntimeCapability{{Version: "8.4", Ready: false}, {Version: "8.5", Ready: true}}}
+	got := planPHPVersions(controlquota.Plan{}, capabilities)
+	if len(got) != 1 || got[0] != "8.5" {
+		t.Fatalf("selectable PHP=%v", got)
+	}
+}

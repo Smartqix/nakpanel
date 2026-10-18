@@ -35,18 +35,20 @@ const TreePrefix = "files/"
 
 // Manifest describes an archive's contents and provenance.
 type Manifest struct {
-	FormatVersion    int       `json:"format_version"`
-	CreatedAt        time.Time `json:"created_at"`
-	Hostname         string    `json:"hostname"`
-	PanelVersion     string    `json:"panel_version,omitempty"`
-	GooseVersion     int64     `json:"goose_version,omitempty"`
-	KeyFingerprint   string    `json:"key_fingerprint"`
-	TenantDatabases  []string  `json:"tenant_databases,omitempty"`
-	Trees            []string  `json:"trees,omitempty"`
-	SystemdUnits     []string  `json:"systemd_units,omitempty"`
-	IncludeMailData  bool      `json:"include_mail_data"`
-	StalwartPausedMS int64     `json:"stalwart_paused_ms,omitempty"`
-	Excluded         []string  `json:"excluded,omitempty"`
+	RoundcubeSQLitePath string              `json:"roundcube_sqlite_path,omitempty"`
+	Platform            *PlatformProvenance `json:"platform,omitempty"`
+	FormatVersion       int                 `json:"format_version"`
+	CreatedAt           time.Time           `json:"created_at"`
+	Hostname            string              `json:"hostname"`
+	PanelVersion        string              `json:"panel_version,omitempty"`
+	GooseVersion        int64               `json:"goose_version,omitempty"`
+	KeyFingerprint      string              `json:"key_fingerprint"`
+	TenantDatabases     []string            `json:"tenant_databases,omitempty"`
+	Trees               []string            `json:"trees,omitempty"`
+	SystemdUnits        []string            `json:"systemd_units,omitempty"`
+	IncludeMailData     bool                `json:"include_mail_data"`
+	StalwartPausedMS    int64               `json:"stalwart_paused_ms,omitempty"`
+	Excluded            []string            `json:"excluded,omitempty"`
 }
 
 // SystemIdentity is the users.json payload.
@@ -301,8 +303,33 @@ func ReadManifest(src io.Reader, key []byte) (Manifest, error) {
 	if err := decoder.Decode(&manifest); err != nil {
 		return manifest, fmt.Errorf("backup: manifest: %w", err)
 	}
-	if manifest.FormatVersion != 1 {
+	if manifest.FormatVersion != 1 && manifest.FormatVersion != 2 {
 		return manifest, fmt.Errorf("backup: unsupported archive format version %d", manifest.FormatVersion)
 	}
+	if manifest.RoundcubeSQLitePath != "" && manifest.FormatVersion < 2 {
+		return manifest, errors.New("backup: Roundcube SQLite snapshots require archive format version 2")
+	}
 	return manifest, nil
+}
+
+// CheckArchiveIntegrity authenticates every encrypted chunk and gzip trailer
+// without extracting anything. Restore invokes it before any service stop.
+func CheckArchiveIntegrity(src io.Reader, key []byte) error {
+	reader, err := NewArchiveReader(src, key)
+	if err != nil {
+		return err
+	}
+	for {
+		_, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("archive integrity: %w", err)
+		}
+		if _, err := io.Copy(io.Discard, reader); err != nil {
+			return fmt.Errorf("archive integrity: %w", err)
+		}
+	}
+	return reader.Finish()
 }

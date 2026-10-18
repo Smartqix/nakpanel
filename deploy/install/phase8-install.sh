@@ -8,6 +8,8 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
+source "${SCRIPT_DIR}/platform.sh"
+nakpanel_require_platform
 cd "${ROOT_DIR}"
 
 "${SCRIPT_DIR}/phase7-install.sh"
@@ -79,7 +81,7 @@ if ! grep -Eq 'user quota .* is on' <<<"${quota_state}"; then
   quotaon -uv "${quota_target}"
 fi
 
-systemctl start nginx php8.3-fpm
+systemctl start nginx "php${NAKPANEL_INTERNAL_PHP_VERSION}-fpm"
 systemctl restart nakpanel-agent.service nakpanel.service
 
 echo "Phase 8 quota tooling is installed and nakpanel services restarted."

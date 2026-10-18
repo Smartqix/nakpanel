@@ -215,6 +215,17 @@ func WithHostingToolkitAgent(agent HostingToolkitAgent) ManagerOption {
 	return func(m *Manager) { m.hostingToolkitAgent = agent }
 }
 
+func (m *Manager) resolveReadyPHPVersion(ctx context.Context, limits controlquota.Limits, requested string) (string, error) {
+	if m.capabilities == nil {
+		return controlquota.ResolvePHPVersion(limits, requested)
+	}
+	capabilities, err := m.capabilities.RuntimeCapabilities(ctx)
+	if err != nil {
+		return "", fmt.Errorf("load agent PHP capabilities: %w", err)
+	}
+	return controlquota.ResolveReadyPHPVersion(limits, requested, controlquota.ReadyPHPVersions(capabilities))
+}
+
 func (m *Manager) validateInstalledPHP(ctx context.Context, version string) error {
 	if m.capabilities == nil {
 		return nil
@@ -223,7 +234,7 @@ func (m *Manager) validateInstalledPHP(ctx context.Context, version string) erro
 	if err != nil {
 		return fmt.Errorf("load agent PHP capabilities: %w", err)
 	}
-	for _, installed := range capabilities.PHPVersions {
+	for _, installed := range controlquota.ReadyPHPVersions(capabilities) {
 		if strings.TrimSpace(installed) == strings.TrimSpace(version) {
 			return nil
 		}
@@ -483,7 +494,7 @@ func (m *Manager) CreateSiteFor(ctx context.Context, actor auth.SessionUser, res
 		}
 		if hasEntitlement {
 			normalized.SubscriptionID = entitlement.SubscriptionID
-			normalized.PHPVersion, err = controlquota.ResolvePHPVersion(entitlement, normalized.PHPVersion)
+			normalized.PHPVersion, err = m.resolveReadyPHPVersion(ctx, entitlement, normalized.PHPVersion)
 			if err != nil {
 				return 0, err
 			}
@@ -525,7 +536,7 @@ func (m *Manager) CreateSiteForSubscription(ctx context.Context, actor auth.Sess
 	if err != nil {
 		return 0, err
 	}
-	normalized.PHPVersion, err = controlquota.ResolvePHPVersion(entitlement, normalized.PHPVersion)
+	normalized.PHPVersion, err = m.resolveReadyPHPVersion(ctx, entitlement, normalized.PHPVersion)
 	if err != nil {
 		return 0, err
 	}

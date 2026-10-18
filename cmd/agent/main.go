@@ -20,6 +20,10 @@ import (
 )
 
 func main() {
+	internalPHPVersion, err := config.InternalPHPVersionFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -53,7 +57,8 @@ func main() {
 		PHPTester:        ops.NewCommandPHPConfigTester(nil),
 	})
 	webmailProvisioner := ops.NewWebmailProvisioner(ops.WebmailProvisionerOptions{
-		Reloader: reloader, MailTLSHostname: os.Getenv("NAKPANEL_MAIL_TLS_HOSTNAME"),
+		PHPFPMVersion: internalPHPVersion,
+		Reloader:      reloader, MailTLSHostname: os.Getenv("NAKPANEL_MAIL_TLS_HOSTNAME"),
 		TLSHostname: os.Getenv("NAKPANEL_WEBMAIL_TLS_HOSTNAME"), TLSCertPath: os.Getenv("NAKPANEL_WEBMAIL_TLS_CERT"), TLSKeyPath: os.Getenv("NAKPANEL_WEBMAIL_TLS_KEY"),
 	})
 	dnsProvisioner := ops.NewDNSProvisioner(ops.DNSProvisionerOptions{Reloader: reloader})

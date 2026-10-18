@@ -70,3 +70,33 @@ func TestWebmailInvalidTLSRetainsPreviousConfiguration(t *testing.T) {
 		t.Fatal("previous configuration overwritten")
 	}
 }
+
+func TestWebmailProvisionerUsesSelectedInternalPHPForHTTPAndHTTPS(t *testing.T) {
+	req := types.ConfigureWebmailReq{Domain: "example.test", Hostname: "webmail.example.test", RoundcubeRoot: "/usr/share/roundcube"}
+	for _, tls := range []bool{false, true} {
+		p := NewWebmailProvisioner(WebmailProvisionerOptions{PHPFPMVersion: "8.5"})
+		config, err := p.renderWebmailConfig(req, tls, "/root/cert.pem", "/root/key.pem")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(config, "fastcgi_pass unix:/run/php/php8.5-fpm.sock;") || strings.Contains(config, "php8.3") {
+			t.Fatalf("selected internal runtime missing: %s", config)
+		}
+	}
+	legacy := RenderWebmailNginxConfig(req)
+	if !strings.Contains(legacy, "fastcgi_pass unix:/run/php/php8.3-fpm.sock;") {
+		t.Fatal("legacy wrapper changed")
+	}
+}
+
+func TestWebmailRejectsInvalidInternalPHPBeforeWriting(t *testing.T) {
+	root := t.TempDir()
+	p := NewWebmailProvisioner(WebmailProvisionerOptions{PHPFPMVersion: "8.4", NginxAvailableDir: root})
+	if _, err := p.ConfigureWebmail(context.Background(), types.ConfigureWebmailReq{Domain: "example.test", Hostname: "webmail.example.test"}); err == nil {
+		t.Fatal("invalid internal PHP accepted")
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("wrote files for invalid PHP: %v %v", entries, err)
+	}
+}

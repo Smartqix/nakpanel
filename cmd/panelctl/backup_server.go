@@ -277,6 +277,10 @@ func runBackupDestination(ctx context.Context, service *operator.Service, args [
 func runRestoreServer(ctx context.Context, actor string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	set := flag.NewFlagSet("restore-server", flag.ContinueOnError)
 	set.SetOutput(stderr)
+	modeFlag := set.String("mode", string(backup.RestoreSamePlatform), "same-platform or forward-migration")
+	experimentalForward := set.Bool("experimental-forward-migration", false, "enable unqualified forward migration for isolated rehearsals")
+	checkOnly := set.Bool("check-only", false, "check platform compatibility without mutation")
+	sourcePlatformFile := set.String("source-platform-file", "", "reviewed, archive-SHA256-bound provenance reconstruction for legacy forward migration")
 	archivePath := set.String("archive", "", "path to the .nkbk archive")
 	keyFile := set.String("backup-key-file", "", "file containing the nkbk1- archive key")
 	allowSchemaMismatch := set.Bool("allow-schema-mismatch", false, "proceed when the archive schema is older than the installed migrations")
@@ -284,6 +288,10 @@ func runRestoreServer(ctx context.Context, actor string, args []string, stdin io
 	jsonOut := set.Bool("json", false, "print a JSON summary")
 	skipConverge := set.Bool("skip-converge", false, "skip the post-restore reconcile and health checks")
 	if err := set.Parse(args); err != nil {
+		return err
+	}
+	mode := backup.RestoreMode(*modeFlag)
+	if err := validateRestoreMode(mode, *experimentalForward, *skipConverge, *checkOnly); err != nil {
 		return err
 	}
 	if *archivePath == "" || *keyFile == "" {
@@ -312,6 +320,41 @@ func runRestoreServer(ctx context.Context, actor string, args []string, stdin io
 	if err != nil {
 		return fmt.Errorf("read archive manifest: %w", err)
 	}
+	var openReview func() (io.ReadCloser, error)
+	if *sourcePlatformFile != "" {
+		openReview = func() (io.ReadCloser, error) { return os.Open(*sourcePlatformFile) }
+		review, err := openReview()
+		if err != nil {
+			return err
+		}
+		manifest, err = backup.ApplyProvenanceReview(manifest, mode, review, openArchive)
+		review.Close()
+		if err != nil {
+			return err
+		}
+	}
+	target, err := backup.CollectPlatformProvenance(ctx, "", ops.ReadyBackupPHPVersions)
+	if err != nil {
+		return err
+	}
+	if err := backup.CheckRestoreCompatibility(manifest, target, mode); err != nil {
+		return err
+	}
+	if err := backup.CheckRoundcubeRestoreTarget(manifest, target, mode); err != nil {
+		return err
+	}
+	if *checkOnly {
+		verifiedSource, err := openArchive()
+		if err != nil {
+			return err
+		}
+		err = backup.CheckArchiveIntegrity(verifiedSource, key)
+		verifiedSource.Close()
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(stdout).Encode(map[string]any{"compatible": true, "mode": mode, "manifest": manifest, "target": target, "migration_qualified": false})
+	}
 	fmt.Fprintf(stderr, "Archive: host %s, created %s, panel %s, schema %d, %d tenant databases, mail data: %t\n",
 		manifest.Hostname, manifest.CreatedAt.Format(time.RFC3339), manifest.PanelVersion,
 		manifest.GooseVersion, len(manifest.TenantDatabases), manifest.IncludeMailData)
@@ -324,11 +367,34 @@ func runRestoreServer(ctx context.Context, actor string, args []string, stdin io
 		}
 	}
 
+	var regenerate func(context.Context) error
+	if mode == backup.RestoreForwardMigration {
+		regenerate = func(ctx context.Context) error {
+			// Start the installed control plane and native bootstrap services. The
+			// tenant vhosts are regenerated from SQL intent by reconciliation.
+			for _, unit := range []string{"nakpanel-agent.service", "nakpanel.service", "nginx.service", "named.service", "stalwart-mail.service", "nakpanel-proftpd.service"} {
+				cmd := exec.CommandContext(ctx, "systemctl", "start", unit)
+				cmd.Stdout = stderr
+				cmd.Stderr = stderr
+				if err := cmd.Run(); err != nil {
+					return fmt.Errorf("start target service %s: %w", unit, err)
+				}
+			}
+			if err := runRestorePostCommand(ctx, actor, manifest.Hostname, 0, true, stderr); err != nil {
+				return err
+			}
+			return validateForwardRestoredServices(ctx, stderr)
+		}
+	}
 	summary, err := backup.RunRestore(ctx, backup.RestoreOptions{
-		OpenArchive:            openArchive,
-		Key:                    key,
-		AllowSchemaMismatch:    *allowSchemaMismatch,
-		AfterDatabasesRestored: restoreDatabaseOwnership,
+		Mode:                          mode,
+		ReadyPHPVersions:              ops.ReadyBackupPHPVersions,
+		SourceProvenanceReview:        openReview,
+		RegenerateTargetConfiguration: regenerate,
+		OpenArchive:                   openArchive,
+		Key:                           key,
+		AllowSchemaMismatch:           *allowSchemaMismatch,
+		AfterDatabasesRestored:        restoreDatabaseOwnership,
 		Log: func(format string, args ...any) {
 			fmt.Fprintf(stderr, format+"\n", args...)
 		},
@@ -337,37 +403,9 @@ func runRestoreServer(ctx context.Context, actor string, args []string, stdin io
 		return err
 	}
 
-	if !*skipConverge {
-		// The post-restore steps need the panel database over the local
-		// socket (peer auth) and the agent socket (peer-UID gated), both of
-		// which reject root — so drop to the nakpanel user for them.
-		self, err := os.Executable()
-		if err != nil {
-			return fmt.Errorf("restore finished but the post-restore step could not start: %w", err)
-		}
-		databaseURL := strings.TrimSpace(os.Getenv("NAKPANEL_DATABASE_URL"))
-		if databaseURL == "" {
-			databaseURL = "postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable"
-		}
-		agentSocket := strings.TrimSpace(os.Getenv("NAKPANEL_AGENT_SOCKET"))
-		if agentSocket == "" {
-			agentSocket = config.AgentSocket
-		}
-		secretKeyFile := strings.TrimSpace(os.Getenv("NAKPANEL_SECRET_KEY_FILE"))
-		if secretKeyFile == "" {
-			secretKeyFile = config.DefaultSecretKeyFile
-		}
-		post := exec.CommandContext(ctx, "runuser", "-u", "nakpanel", "--", "env",
-			"NAKPANEL_DATABASE_URL="+databaseURL,
-			"NAKPANEL_AGENT_SOCKET="+agentSocket,
-			"NAKPANEL_SECRET_KEY_FILE="+secretKeyFile,
-			self, "--actor", actor, "restore-server-post",
-			"--archive-host", manifest.Hostname,
-			"--entries", fmt.Sprintf("%d", summary.ExtractedEntries))
-		post.Stdout = stderr
-		post.Stderr = stderr
-		if err := post.Run(); err != nil {
-			return fmt.Errorf("post-restore convergence failed: %w", err)
+	if !*skipConverge && mode != backup.RestoreForwardMigration {
+		if err := runRestorePostCommand(ctx, actor, manifest.Hostname, summary.ExtractedEntries, false, stderr); err != nil {
+			return err
 		}
 	}
 
@@ -393,6 +431,7 @@ func runRestoreServer(ctx context.Context, actor string, args []string, stdin io
 func runRestoreServerPost(ctx context.Context, service *operator.Service, args []string, stdout, stderr io.Writer) error {
 	set := flag.NewFlagSet("restore-server-post", flag.ContinueOnError)
 	set.SetOutput(stderr)
+	strict := set.Bool("strict", false, "require completed regeneration and healthy resources")
 	archiveHost := set.String("archive-host", "", "archive source hostname (audit metadata)")
 	entries := set.Int("entries", 0, "extracted entry count (audit metadata)")
 	if err := set.Parse(args); err != nil {
@@ -404,21 +443,45 @@ func runRestoreServerPost(ctx context.Context, service *operator.Service, args [
 	if err != nil {
 		return err
 	}
+	if *strict && len(credWarnings) > 0 {
+		return fmt.Errorf("restore credentials reported %d warnings", len(credWarnings))
+	}
 	warnings = append(warnings, credWarnings...)
 
 	fmt.Fprintln(stderr, "step: wait for the panel to become healthy")
 	if err := waitPanelHealthy(ctx, 120*time.Second); err != nil {
+		if *strict {
+			return err
+		}
 		warnings = append(warnings, err.Error())
 	}
 	if err := service.AgentPing(ctx); err != nil {
+		if *strict {
+			return err
+		}
 		warnings = append(warnings, fmt.Sprintf("agent ping failed: %v", err))
 	}
 
 	fmt.Fprintln(stderr, "step: queue system reconciliation")
 	if runID, err := service.ReconcileSystem(ctx); err != nil {
+		if *strict {
+			return err
+		}
 		warnings = append(warnings, fmt.Sprintf("queue reconcile: %v", err))
 	} else {
 		fmt.Fprintf(stderr, "reconciliation run %d queued\n", runID)
+		if *strict {
+			requiredJobs, err := service.QueueRestoreResources(ctx)
+			if err != nil {
+				return err
+			}
+			if err := service.WaitRestoreConvergence(ctx, runID, 15*time.Minute, requiredJobs...); err != nil {
+				return err
+			}
+			if err := service.ValidateRestoredDatabases(ctx); err != nil {
+				return err
+			}
+		}
 	}
 	_ = service.RecordRestoreAudit(ctx, map[string]any{
 		"archive_host":     *archiveHost,
@@ -458,4 +521,61 @@ func waitPanelHealthy(ctx context.Context, timeout time.Duration) error {
 		case <-time.After(2 * time.Second):
 		}
 	}
+}
+
+func validateRestoreMode(mode backup.RestoreMode, experimental, skip, check bool) error {
+	if mode != backup.RestoreSamePlatform && mode != backup.RestoreForwardMigration {
+		return fmt.Errorf("unknown restore mode %q", mode)
+	}
+	if mode == backup.RestoreForwardMigration {
+		if skip {
+			return errors.New("forward-migration requires convergence; --skip-converge is unavailable")
+		}
+		if !check && !experimental {
+			return errors.New("forward-migration is not yet qualified; isolated rehearsals require --experimental-forward-migration")
+		}
+	}
+	return nil
+}
+
+func runRestorePostCommand(ctx context.Context, actor, host string, entries int, strict bool, stderr io.Writer) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	databaseURL := strings.TrimSpace(os.Getenv("NAKPANEL_DATABASE_URL"))
+	if databaseURL == "" {
+		databaseURL = "postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable"
+	}
+	agentSocket := strings.TrimSpace(os.Getenv("NAKPANEL_AGENT_SOCKET"))
+	if agentSocket == "" {
+		agentSocket = config.AgentSocket
+	}
+	secretKeyFile := strings.TrimSpace(os.Getenv("NAKPANEL_SECRET_KEY_FILE"))
+	if secretKeyFile == "" {
+		secretKeyFile = config.DefaultSecretKeyFile
+	}
+	args := []string{"-u", "nakpanel", "--", "env", "NAKPANEL_DATABASE_URL=" + databaseURL, "NAKPANEL_AGENT_SOCKET=" + agentSocket, "NAKPANEL_SECRET_KEY_FILE=" + secretKeyFile, self, "--actor", actor, "restore-server-post", "--archive-host", host, "--entries", fmt.Sprint(entries)}
+	if strict {
+		args = append(args, "--strict")
+	}
+	cmd := exec.CommandContext(ctx, "runuser", args...)
+	cmd.Stdout = stderr
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("post-restore convergence failed: %w", err)
+	}
+	return nil
+}
+
+func validateForwardRestoredServices(ctx context.Context, stderr io.Writer) error {
+	for _, args := range [][]string{{"nginx", "-t"}, {"named-checkconf"}, {"sshd", "-t"}, {"proftpd", "-t", "-c", "/etc/nakpanel/proftpd/proftpd.conf"}, {"systemctl", "is-active", "--quiet", "nakpanel.service", "nakpanel-agent.service", "nginx.service", "named.service", "stalwart-mail.service", "nakpanel-proftpd.service"}} {
+		cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+		cmd.Stdout = stderr
+		cmd.Stderr = stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("forward-migration validation %s failed: %w", args[0], err)
+		}
+	}
+	return nil
 }

@@ -108,7 +108,7 @@ func TestInstallWordPressNeverPlacesCredentialsInCommandArgumentsAndCleansBootst
 		t.Fatal(err)
 	}
 	stage := filepath.Join(filepath.Dir(root), ".nakpanel-wordpress-install-11")
-	versionCommand := []string{"-u", spec.Username, "--", p.wpBinary, "--path=" + stage, "--no-color", "core", "version"}
+	versionCommand := []string{"-u", spec.Username, "--", "/usr/bin/php8.4", p.wpBinary, "--path=" + stage, "--no-color", "core", "version"}
 	runner.outputs[wordpressCommandKey("runuser", versionCommand)] = []byte("7.1\n")
 	request := types.WordPressOperationReq{OperationID: 11, Action: types.WordPressActionInstall, Site: spec,
 		RequestedVersion: "7.1", Credentials: &types.WordPressCredentials{
@@ -210,7 +210,7 @@ func TestInstallWordPressStagesFailedDownloadWithoutPollutingLiveRoot(t *testing
 		t.Fatal(err)
 	}
 	stage := filepath.Join(filepath.Dir(root), ".nakpanel-wordpress-install-19")
-	download := []string{"-u", spec.Username, "--", p.wpBinary, "--path=" + stage, "--no-color", "core", "download", "https://wordpress.org/wordpress-7.1.zip", "--force"}
+	download := []string{"-u", spec.Username, "--", "/usr/bin/php8.4", p.wpBinary, "--path=" + stage, "--no-color", "core", "download", "https://wordpress.org/wordpress-7.1.zip", "--force"}
 	runner.fail[wordpressCommandKey("runuser", download)] = errors.New("download interrupted")
 	runner.onRun = func(_ string, args []string) {
 		if slices.Contains(args, "download") {
@@ -614,7 +614,7 @@ func TestWordPressPasswordResetUsesProtectedInputWithoutCredentialFile(t *testin
 
 func (p *WordPressProvisioner) setTestWPOutput(runner *wordpressRunner, spec types.WordPressSiteSpec, args []string, output []byte) {
 	root, _ := p.documentRoot(spec)
-	full := []string{"-u", spec.Username, "--", p.wpBinary, "--path=" + root, "--no-color"}
+	full := []string{"-u", spec.Username, "--", "/usr/bin/php8.4", p.wpBinary, "--path=" + root, "--no-color"}
 	full = append(full, args...)
 	runner.outputs[wordpressCommandKey("runuser", full)] = output
 }

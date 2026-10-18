@@ -48,6 +48,8 @@ func TestRepositorySyncExportsSourcesWithoutIgnoredPrivateState(t *testing.T) {
 	cmd := exec.Command("bash", "-se", "--", common, root, archive)
 	cmd.Stdin = strings.NewReader(`source "$1"
 capture="$3"
+# Ownership is tested at the transport boundary in platform_identity_test.go.
+assert_current_vm_identity(){ return 0; }
 multipass_exec_short(){ return 0; }
 multipass(){ if [[ "$1" == transfer ]]; then cp "$2" "${capture}"; fi; }
 wait_for_repo_sync(){ return 0; }

@@ -31,10 +31,12 @@ cd "${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
 sudo deploy/install/phase21-25-install.sh
 command -v podman newuidmap newgidmap slirp4netns >/dev/null
 sudo test -x /usr/lib/nakpanel/slirp4netns
-make build
+if ! sudo test -d /tmp/nakpanel-release/bin; then make build; fi
 sudo -u nakpanel env DB_DSN='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' make goose-up
-sudo install -m 0755 bin/agent /usr/local/bin/nakpanel-agent
-sudo install -m 0755 bin/panel /usr/local/bin/nakpanel-panel
+binary_root=bin
+if sudo test -d /tmp/nakpanel-release/bin; then binary_root=/tmp/nakpanel-release/bin; fi
+sudo install -m 0755 "$binary_root/agent" /usr/local/bin/nakpanel-agent
+sudo install -m 0755 "$binary_root/panel" /usr/local/bin/nakpanel-panel
 sudo systemctl restart nakpanel-agent.service nakpanel.service
 REMOTE
 
@@ -70,6 +72,8 @@ jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(hosting_po
 '{applications,rootless}','true'::jsonb,true),
 '{resources,max_applications}','3'::jsonb,true)
 WHERE subscription_id=${subscription_id}" >/dev/null
+
+db "UPDATE subscription_entitlements SET hosting_policy=jsonb_set(jsonb_set(jsonb_set(hosting_policy,'{resources,memory_mb}','256'::jsonb,true),'{resources,cpu_percent}','50'::jsonb,true),'{resources,max_tasks}','128'::jsonb,true) WHERE subscription_id=${subscription_id}" >/dev/null
 
 # Pre-cache one immutable test image in the subscription user's dedicated
 # rootless store. Runtime deployment itself never pulls mutable or missing
@@ -116,6 +120,37 @@ multipass_exec_short "${VM_NAME}" -- sudo grep -Fq \
   'network_cmd_path="/usr/lib/nakpanel/slirp4netns"' \
   "/var/lib/nakpanel/containers/sub-${subscription_id}/config/containers/containers.conf" ||
   fail "rootless Podman does not use the managed network compatibility command"
+
+assert_rootless_resources() {
+  local container
+  container="$(db "SELECT generation.container_name FROM application_generations generation JOIN application_instances app ON app.id=generation.application_id AND app.active_generation=generation.desired_revision WHERE app.id=${application_id}")"
+  multipass exec "${VM_NAME}" -- sudo bash -se -- "${username}" "${subscription_id}" "${container}" "${application_id}" "${active_revision}" <<'RESOURCE'
+set -euo pipefail
+cd /
+username="$1"; subscription_id="$2"; container="$3"; application_id="$4"; revision="$5"
+base="/var/lib/nakpanel/containers/sub-${subscription_id}"
+runtime="/run/nakpanel-containers/sub-${subscription_id}"
+pid="$(runuser -u "$username" -- env HOME="$base/home" XDG_DATA_HOME="$base/data" XDG_CONFIG_HOME="$base/config" XDG_RUNTIME_DIR="$runtime" podman inspect "$container" --format '{{.State.Pid}}')"
+test "$pid" -gt 1
+test "$(awk '/^Uid:/{print $2}' /proc/"$pid"/status)" = "$(id -u "$username")"
+cgroup="$(awk -F: '$1==0 {print $3}' /proc/"$pid"/cgroup)"
+test "$(cat /sys/fs/cgroup"$cgroup"/memory.max)" = 268435456
+test "$(cat /sys/fs/cgroup"$cgroup"/pids.max)" = 128
+read -r quota period </sys/fs/cgroup"$cgroup"/cpu.max
+test "$quota" != max
+test "$((quota * 100 / period))" = 50
+# Root-owned parents are deliberately0711 so the correct tenant can reach
+# its0700 private leaf. Other UIDs must not list parents or enter secrets.
+assert_private_application_paths() {
+  if runuser -u nobody -- test -r "$base/apps"; then echo "unrelated UID can list application parents" >&2; return 1; fi
+  if runuser -u nobody -- test -x "$base/apps/$application_id/generations/$revision/secrets"; then echo "unrelated UID can traverse private secrets" >&2; return 1; fi
+  if runuser -u nobody -- test -r "$base/apps/$application_id/generations/$revision/secrets/TEST_PASSWORD"; then echo "unrelated UID can read private secret" >&2; return 1; fi
+  return 0
+}
+assert_private_application_paths
+RESOURCE
+}
+assert_rootless_resources
 
 curl -s --fail --resolve "${domain}:80:${VM_IP}" "http://${domain}/phase28/" -o "${tmpdir}/application.html"
 grep -Fq "Welcome to nginx" "${tmpdir}/application.html" || fail "container is not reachable through tenant nginx"
@@ -199,6 +234,8 @@ generation_count="$(multipass_exec_short "${VM_NAME}" -- sudo bash -c \
   fail "retired application secret generations remain after healthy rollout"
 multipass restart "${VM_NAME}"
 wait_for_cloud_init
+assert_current_vm_identity
+assert_rootless_resources
 VM_IP="$(vm_ip)"
 for _ in $(seq 1 90); do
   curl -s --fail --resolve "${domain}:80:${VM_IP}" "http://${domain}/phase28/" >/dev/null && break

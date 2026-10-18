@@ -358,3 +358,34 @@ func TestManagerUpsertsQuotaForAdminsOnly(t *testing.T) {
 		t.Fatalf("upserted limits = %#v, want %#v", quotas.upserted, limits)
 	}
 }
+
+func TestManagerNewSiteSelectsOnlyReadyPermittedPHP(t *testing.T) {
+	for _, tt := range []struct {
+		name, requested, want string
+		ready                 []string
+		fail                  bool
+	}{
+		{"native implicit", "", "8.5", []string{"8.5"}, false},
+		{"noble implicit", "", "8.4", []string{"8.3", "8.4", "8.5"}, false},
+		{"explicit unavailable", "8.3", "", []string{"8.5"}, true},
+		{"explicit legacy", "8.3", "8.3", []string{"8.3", "8.4", "8.5"}, false},
+		{"none ready", "", "", nil, true},
+		{"disallowed", "8.2", "", []string{"8.2", "8.5"}, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &fakeSiteRepository{}
+			quotas := &fakeQuotaStore{hasLimits: true, limits: controlquota.Limits{PHPAllowlist: "8.4,8.5,8.3", DefaultPHPVersion: "8.4", HostingEnabled: true, SiteDiskQuotaMB: 5120, PHPFPMMaxChildren: 3, PHPMemoryMB: 128, OverusePolicy: types.PlanOveruseNormal}}
+			manager := NewManager(repo, WithQuotaStore(quotas), WithRuntimeCapabilities(fakeRuntimeCapabilities{result: types.RuntimeCapabilities{PHPVersions: tt.ready}}))
+			_, err := manager.CreateSiteFor(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 2, types.CreateSiteReq{Username: "npdemo", Domain: "example.test", PHPVersion: tt.requested})
+			if (err != nil) != tt.fail || repo.req.PHPVersion != tt.want {
+				t.Fatalf("stored PHP=%q error=%v, want %q fail=%v", repo.req.PHPVersion, err, tt.want, tt.fail)
+			}
+			repo.req = types.CreateSiteReq{}
+			_, err = manager.CreateSiteForSubscription(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, 44, types.CreateSiteReq{Domain: "subscription.test", PHPVersion: tt.requested})
+			if (err != nil) != tt.fail || repo.req.PHPVersion != tt.want {
+				t.Fatalf("subscription PHP=%q error=%v, want %q fail=%v", repo.req.PHPVersion, err, tt.want, tt.fail)
+			}
+
+		})
+	}
+}

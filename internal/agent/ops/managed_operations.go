@@ -54,23 +54,23 @@ var managedServiceRegistry = map[string]managedServiceSpec{
 		actions: actionSet("reload", "restart", "start", "stop"),
 	},
 	"php-8.1": {
-		unit: "php8.1-fpm", validator: []string{"php-fpm8.1", "-t"},
+		unit:    "php8.1-fpm",
 		actions: actionSet("reload", "restart", "start", "stop"),
 	},
 	"php-8.2": {
-		unit: "php8.2-fpm", validator: []string{"php-fpm8.2", "-t"},
+		unit:    "php8.2-fpm",
 		actions: actionSet("reload", "restart", "start", "stop"),
 	},
 	"php-8.3": {
-		unit: "php8.3-fpm", validator: []string{"php-fpm8.3", "-t"},
+		unit:    "php8.3-fpm",
 		actions: actionSet("reload", "restart", "start", "stop"),
 	},
 	"php-8.4": {
-		unit: "php8.4-fpm", validator: []string{"php-fpm8.4", "-t"},
+		unit:    "php8.4-fpm",
 		actions: actionSet("reload", "restart", "start", "stop"),
 	},
 	"php-8.5": {
-		unit: "php8.5-fpm", validator: []string{"php-fpm8.5", "-t"},
+		unit:    "php8.5-fpm",
 		actions: actionSet("reload", "restart", "start", "stop"),
 	},
 }
@@ -126,6 +126,13 @@ func (m *ManagedOperations) ControlManagedService(ctx context.Context, req types
 	}
 	if _, ok := spec.actions[req.Action]; !ok {
 		return types.ControlManagedServiceResult{}, errors.New("managed service action is not allowed")
+	}
+	if version, isPHP := strings.CutPrefix(req.ServiceID, "php-"); isPHP {
+		runtime, err := resolvePHPRuntime(nil, version)
+		if err != nil {
+			return types.ControlManagedServiceResult{}, err
+		}
+		spec.validator = runtimeFPMCommand(runtime, "-t")
 	}
 	var before types.ManagedService
 	if m.services != nil {

@@ -72,6 +72,8 @@ management, and migration-sensitive control-plane behavior.
   domain, DNS, TLS, PHP, mail, and unrelated databases.
 - Adminer SSO for database access from the authenticated panel.
 - Single-VM Ubuntu 24.04 Multipass deployment verification.
+- Explicit experimental Ubuntu 26.04 profiles and owned, native OS/architecture
+  qualification. [Current evidence and limits](docs/verification/2026-10-18-ubuntu-platform-implementation.md).
 
 The WordPress Toolkit deliberately stops short of cloning, staging, automatic
 update policies, multisite orchestration, or plugin/theme installation from
@@ -103,7 +105,7 @@ privileged operations.
 
 For local development:
 
-- Go `1.23+`
+- Go `1.26.9` (the pinned release toolchain)
 - PostgreSQL
 - [Task](https://taskfile.dev/)
 - A shell environment that can run the Go test suite
@@ -119,6 +121,17 @@ For full deployment verification:
 The realistic end-to-end target is Ubuntu 24.04. Some agent operations are
 Linux-specific and cannot be fully exercised on macOS.
 
+| Server profile | Internal PHP | Available hosting PHP | Status |
+| --- | --- | --- | --- |
+| Ubuntu 24.04 | 8.3 | 8.3, 8.4, 8.5 | Existing lab default |
+| Ubuntu 26.04 native | 8.5 | 8.5 | Experimental qualification |
+| Ubuntu 26.04 Surý | 8.5 | 8.3, 8.4, 8.5 | Experimental, explicit fresh opt-in |
+
+Ready runtime discovery determines actual availability. Full native, recovery
+and soak evidence is required before production promotion. Existing Ubuntu
+24.04 installations retain their PHP choices and provider. An in-place Ubuntu
+release upgrade is unsupported. See [platform qualification](docs/PLATFORM_QUALIFICATION.md).
+
 ## Production Installation (Ubuntu 24.04)
 
 One command from a checkout on the target server:
@@ -126,6 +139,19 @@ One command from a checkout on the target server:
 ```bash
 sudo deploy/install/install.sh --yes
 ```
+
+On a genuinely fresh Ubuntu 26.04 host this selects native PHP 8.5. To request
+the separate, signed Resolute Surý PHP source on a fresh host explicitly:
+
+```bash
+sudo deploy/install/install.sh --yes --php-provider sury
+```
+
+An installed provider is read from trusted platform metadata on subsequent
+updates. Changing a populated host's provider requires a separately reviewed
+migration; the installer rejects a mismatching provider request. Signed bundles
+may be supplied with `--bundle DIR --release-public-key FILE`; obtain the public
+key independently. Development signing keys cannot establish production trust.
 
 The installer detects fresh installs versus upgrades (`panelctl version` /
 `/etc/nakpanel/version`). Upgrades take a full pre-upgrade backup set and
@@ -170,8 +196,8 @@ Run the single-VM deployment verifier:
 deploy/multipass/deployment-verify.sh
 ```
 
-This creates a fresh `nakpanel-lab` Ubuntu 24.04 Multipass VM, removes old
-Nakpanel phase VMs, installs the service stack, runs migrations, builds the
+This creates a fresh, uniquely named owned Ubuntu 24.04 Multipass VM,
+installs the service stack, runs migrations, builds the
 panel, agent, and CLI, installs systemd units, and retains the Phase 28 and
 adversarial security gates before Phase 29 reliability/disaster recovery.
 Phase 30 then installs the current worktree and proves
@@ -191,14 +217,15 @@ pre-drop failure recovery. Phase 34 is the final gate: it generates real nginx
 traffic, checks GoAccess reports through the authenticated panel, verifies URL
 privacy filtering, and proves customer report isolation.
 
-The verifier intentionally refuses to delete Multipass VMs whose names do not
-start with `nakpanel-`. Non-Nakpanel VMs such as unrelated local test machines
-are left alone.
+Every reuse, sync and deletion requires matching host and root-owned guest
+records for the current run, actual Ubuntu release and architecture. Existing
+lab/soak and unrelated VMs are protected; ordinary verification does not sweep
+historical phase VMs. A name prefix alone never authorizes deletion.
 
 To override the lab VM name or Ubuntu image:
 
 ```bash
-NAKPANEL_MULTIPASS_VM=nakpanel-lab NAKPANEL_MULTIPASS_IMAGE=24.04 deploy/multipass/deployment-verify.sh
+NAKPANEL_MULTIPASS_IMAGE=24.04 deploy/multipass/deployment-verify.sh
 ```
 
 After a successful verification, open:

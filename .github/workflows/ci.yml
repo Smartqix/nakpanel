@@ -4,6 +4,28 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      qualify_native:
+        description: Run all four native Ubuntu qualification cells (requires configured signed artifacts)
+        type: boolean
+        default: false
+      qualification_artifacts:
+        description: Optional per-architecture artifact JSON (otherwise repository variable NAKPANEL_QUALIFICATION_ARTIFACTS)
+        type: string
+        required: false
+      allow_development_artifacts:
+        description: Explicitly permit development signatures; resulting evidence cannot promote
+        type: boolean
+        default: false
+      verify_database_manager:
+        description: Require optional database manager FastCGI and browser qualification
+        type: boolean
+        default: false
+      build_private_php:
+        description: Build unqualified private PHP candidates on isolated native runners
+        type: boolean
+        default: false
 
 # The security suite is a required gate: no production deploy until both jobs
 # below are green. Mark `unit` and `security-suite` as required status checks
@@ -16,12 +38,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: deploy/release/GO_VERSION
           cache: true
       - name: Verify generated code is committed (templ/sqlc)
         run: |
           make generate
           git diff --exit-code || { echo "generated code is stale; run 'make generate'"; exit 1; }
+      - name: Release manifest and private package policies
+        run: make release-test
       - name: go vet
         run: go vet ./...
       - name: go test (includes the in-process security guards)
@@ -37,16 +61,321 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.22'
+          go-version-file: deploy/release/GO_VERSION
+      - name: Initialize unique owned security guests
+        shell: bash
+        run: |
+          set -euo pipefail
+          source deploy/multipass/common.sh
+          export NAKPANEL_RUN_TOKEN="ci-security-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          init_qualification_run
+          export NAKPANEL_CI_OWNERSHIP_READY=1
+          python3 - <<'PYENV'
+          import os, uuid
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              for key, value in sorted(os.environ.items()):
+                  if key.startswith('NAKPANEL_'):
+                      delimiter = uuid.uuid4().hex
+                      output.write(f'{key}<<{delimiter}\n{value}\n{delimiter}\n')
+          PYENV
+          ensure_vm 4 6G 48G
       - name: Run the adversarial validation suite (Parts A-H)
-        run: ./deploy/multipass/security-verify.sh
-        env:
-          NAKPANEL_MULTIPASS_VM: nakpanel-security-ci
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/security-evidence"
+          ./deploy/multipass/security-verify.sh 2>&1 | tee "${RUNNER_TEMP}/security-evidence/security.log"
       - name: Run the Phase 29 reliability gate (upgrade, reboot, DR)
-        # Reuses the VM the security suite just provisioned; the disaster
-        # recovery leg brings up (and destroys) a second short-lived VM.
-        run: ./deploy/multipass/phase29-verify.sh
+        shell: bash
         env:
-          NAKPANEL_MULTIPASS_VM: nakpanel-security-ci
-          NAKPANEL_MULTIPASS_DR_VM: nakpanel-relgate-dr-ci
           NAKPANEL_SKIP_PRIOR_PHASES: '1'
+        run: |
+          set -euo pipefail
+          ./deploy/multipass/phase29-verify.sh 2>&1 | tee "${RUNNER_TEMP}/security-evidence/phase29.log"
+      - name: Clean up only this run's owned guests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          source deploy/multipass/common.sh
+          expected_token="ci-security-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [[ "${NAKPANEL_CI_OWNERSHIP_READY:-}" != 1 || "${NAKPANEL_RUN_TOKEN:-}" != "${expected_token}" ]]; then exit 0; fi
+          status=0
+          # Enumerate only this run's host ownership records, never the VM inventory.
+          for record in "${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}"/nakpanel-*; do
+            [[ -f "${record}" && "${record}" != *.image.json ]] || continue
+            destroy_owned_vm "$(basename "${record}")" "${NAKPANEL_RUN_TOKEN}" || status=1
+          done
+          exit "${status}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/security-evidence/
+          if-no-files-found: warn
+
+  release-build:
+    name: static release build policy (both architectures)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: deploy/release/GO_VERSION
+          cache: true
+      # Ephemeral CI key exercises signing; these are explicitly test artifacts.
+      # Production uses build.sh with the separately managed release key.
+      - name: Build and inspect application bundles
+        run: |
+          set -euo pipefail
+          openssl genrsa -out "${RUNNER_TEMP}/release-test-key.pem" 3072
+          # A tracked README marker makes this an explicit development build
+          # without changing the application's comparable VERSION contract.
+          printf '\n<!-- CI development qualification %s -->\n' "${GITHUB_RUN_ID}" >> README.md
+          NAKPANEL_RELEASE_ALLOW_DIRTY=1 NAKPANEL_RELEASE_SIGNING_KEY="${RUNNER_TEMP}/release-test-key.pem" ./deploy/release/build.sh "${RUNNER_TEMP}/release"
+      - name: Remove ephemeral release signing key
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/release-test-key.pem"
+
+  private-php-candidates:
+    if: github.event_name == 'workflow_dispatch' && inputs.build_private_php
+    name: private PHP candidates (${{ matrix.architecture }})
+    strategy:
+      fail-fast: false
+      matrix:
+        architecture: [amd64, arm64]
+    # These dedicated ephemeral native Resolute runners must be provisioned with
+    # build-dependencies.txt. Candidates are installed only into this disposable
+    # builder for smoke tests; no repository is published.
+    runs-on: [self-hosted, isolated-php-builder, resolute, "${{ matrix.architecture }}"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native 8.3 and 8.4 candidates with upstream verification
+        env:
+          PHP_RELEASE_KEYRING_BASE64: ${{ secrets.PHP_RELEASE_KEYRING_BASE64 }}
+          NAKPANEL_BUILDER_ID: ${{ vars.PHP_BUILDER_ID }}
+          NAKPANEL_BUILDER_IMAGE_DIGEST: ${{ vars.PHP_BUILDER_IMAGE_DIGEST }}
+          NAKPANEL_BUILD_INVOCATION_ID: ${{ github.run_id }}-${{ matrix.architecture }}
+        run: |
+          printf '%s' "$PHP_RELEASE_KEYRING_BASE64" | base64 --decode > "${RUNNER_TEMP}/php-release-keyring.gpg"
+          export PHP_RELEASE_KEYRING="${RUNNER_TEMP}/php-release-keyring.gpg"
+          export NAKPANEL_ISOLATED_PHP_BUILDER=1
+          for minor in 8.3 8.4; do
+            sudo env NAKPANEL_ISOLATED_PHP_BUILDER=1 \
+              NAKPANEL_BUILDER_ID="$NAKPANEL_BUILDER_ID" \
+              NAKPANEL_BUILDER_IMAGE_DIGEST="$NAKPANEL_BUILDER_IMAGE_DIGEST" \
+              NAKPANEL_BUILD_INVOCATION_ID="$NAKPANEL_BUILD_INVOCATION_ID" \
+              PHP_RELEASE_KEYRING="$PHP_RELEASE_KEYRING" \
+              ./deploy/release/php/build-native.sh "$minor" "${RUNNER_TEMP}/php-candidates"
+            sudo dpkg -i "${RUNNER_TEMP}/php-candidates/nakpanel-php${minor//./}_"*.deb
+            sudo env NAKPANEL_ISOLATED_PHP_BUILDER=1 \
+              ./deploy/release/php/smoke-native.sh "$minor" \
+              "${RUNNER_TEMP}/php-candidates/evidence-${minor}-${{ matrix.architecture }}"
+          done
+      - name: Sign candidate inventory with managed release key
+        env:
+          PHP_CANDIDATE_SIGNING_KEY: ${{ secrets.PHP_CANDIDATE_SIGNING_KEY }}
+        run: |
+          umask 077
+          printf '%s' "$PHP_CANDIDATE_SIGNING_KEY" > "${RUNNER_TEMP}/php-signing-key.pem"
+          sudo env NAKPANEL_RELEASE_SIGNING_KEY="${RUNNER_TEMP}/php-signing-key.pem" ./deploy/release/php/sign-candidates.sh "${RUNNER_TEMP}/php-candidates"
+          rm -f "${RUNNER_TEMP}/php-signing-key.pem"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-private-php-${{ matrix.architecture }}
+          path: ${{ runner.temp }}/php-candidates/
+      - name: Remove temporary trust/signing files
+        if: always()
+        run: rm -f "${RUNNER_TEMP}/php-release-keyring.gpg" "${RUNNER_TEMP}/php-signing-key.pem"
+
+  native-qualification:
+    if: github.event_name == 'workflow_dispatch' && inputs.qualify_native
+    name: native Ubuntu ${{ matrix.release }} / ${{ matrix.architecture }}
+    runs-on: [self-hosted, multipass, nakpanel-qualification, "${{ matrix.architecture }}"]
+    timeout-minutes: 360
+    concurrency:
+      group: native-qualification-${{ matrix.architecture }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        include:
+          - release: '24.04'
+            architecture: amd64
+          - release: '24.04'
+            architecture: arm64
+          - release: '26.04'
+            architecture: amd64
+          - release: '26.04'
+            architecture: arm64
+    env:
+      NAKPANEL_MULTIPASS_IMAGE: ${{ matrix.release }}
+      NAKPANEL_MULTIPASS_ARCH: ${{ matrix.architecture }}
+      NAKPANEL_RELEASE_ALLOW_DEVELOPMENT: ${{ inputs.allow_development_artifacts && '1' || '0' }}
+      NAKPANEL_PRIOR_RELEASE_ALLOW_DEVELOPMENT: ${{ inputs.allow_development_artifacts && '1' || '0' }}
+      NAKPANEL_VERIFY_DATABASE_MANAGER: ${{ inputs.verify_database_manager && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: deploy/release/GO_VERSION
+      - name: Validate configured signed artifacts before VM work
+        shell: bash
+        env:
+          QUALIFICATION_ARTIFACTS_JSON: ${{ inputs.qualification_artifacts || vars.NAKPANEL_QUALIFICATION_ARTIFACTS }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCONFIG'
+          import json, os, pathlib, re, subprocess, sys, uuid
+          arch = os.environ['NAKPANEL_MULTIPASS_ARCH']
+          release = os.environ['NAKPANEL_MULTIPASS_IMAGE']
+          report = pathlib.Path(os.environ['RUNNER_TEMP'], f'native-preflight-{release}-{arch}.json')
+          status = dict(release=release, architecture=arch, status='FAIL', promotion_eligible=False)
+          try:
+              raw = os.environ.get('QUALIFICATION_ARTIFACTS_JSON', '')
+              if not raw:
+                  raise ValueError('Configure qualification_artifacts or repository variable NAKPANEL_QUALIFICATION_ARTIFACTS; signed current/prior bundles, trust anchors and exact versions are required')
+              config = json.loads(raw)[arch]
+              exports = {}
+              for prefix, key in [('NAKPANEL_RELEASE_', 'current'), ('NAKPANEL_PRIOR_RELEASE_', 'prior')]:
+                  artifact = config[key]
+                  for field, suffix in [('bundle', 'BUNDLE'), ('public_key', 'PUBLIC_KEY'), ('version', 'VERSION')]:
+                      value = artifact.get(field)
+                      if not isinstance(value, str) or not value or any(ord(c) < 32 for c in value):
+                          raise ValueError(f'{arch}.{key}.{field} is required and must be a nonempty string')
+                      exports[prefix + suffix] = value
+                  bundle, public_key = pathlib.Path(artifact['bundle']), pathlib.Path(artifact['public_key'])
+                  if not bundle.is_absolute() or not bundle.is_dir() or not public_key.is_absolute() or not public_key.is_file():
+                      raise ValueError(f'{arch}.{key}: absolute pre-staged bundle directory and out-of-band public key file are required on the native runner')
+                  if not re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+([+-][A-Za-z0-9.-]+)?', artifact['version']):
+                      raise ValueError(f'{arch}.{key}.version must be an exact application version')
+                  args = [sys.executable, 'deploy/release/verify.py', '--bundle', str(bundle), '--public-key', str(public_key), '--version', artifact['version'], '--architecture', arch]
+                  if os.environ['NAKPANEL_RELEASE_ALLOW_DEVELOPMENT'] == '1':
+                      args.append('--allow-development')
+                  subprocess.run(args, check=True)
+              for version, prefix in [(release, 'NAKPANEL_MULTIPASS_IMAGE_'), ('24.04', 'NAKPANEL_PRIOR_MULTIPASS_IMAGE_')]:
+                  image = config.get('images', {}).get(version, {})
+                  source, digest = image.get('source', ''), image.get('sha256', '')
+                  if bool(source) != bool(digest):
+                      raise ValueError(f'{arch}.images.{version} requires both source and sha256')
+                  if source:
+                      if not pathlib.Path(source).is_absolute() or not pathlib.Path(source).is_file() or not re.fullmatch(r'[a-fA-F0-9]{64}', digest):
+                          raise ValueError(f'{arch}.images.{version} requires an absolute local image and exact SHA256')
+                      exports[prefix + 'SOURCE'] = source
+                      exports[prefix + 'SHA256'] = digest
+              with open(os.environ['GITHUB_ENV'], 'a') as output:
+                  for key, value in sorted(exports.items()):
+                      delimiter = uuid.uuid4().hex
+                      output.write(f'{key}<<{delimiter}\n{value}\n{delimiter}\n')
+              status.update(status='PASS', configured_architecture=arch, development_opt_in=os.environ['NAKPANEL_RELEASE_ALLOW_DEVELOPMENT']=='1')
+          except Exception as error:
+              status['error'] = str(error)
+              print('Native qualification configuration failed: ' + str(error), file=sys.stderr)
+              report.write_text(json.dumps(status, indent=2) + '\n')
+              raise SystemExit(1)
+          report.write_text(json.dumps(status, indent=2) + '\n')
+          PYCONFIG
+      - name: Initialize unique owned native cell
+        shell: bash
+        run: |
+          set -euo pipefail
+          source deploy/multipass/common.sh
+          export NAKPANEL_RUN_TOKEN="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${NAKPANEL_MULTIPASS_IMAGE//./-}-${NAKPANEL_MULTIPASS_ARCH}"
+          init_qualification_run
+          export NAKPANEL_CI_OWNERSHIP_READY=1
+          export NAKPANEL_CELL_REPORT_DIR="${RUNNER_TEMP}/native-evidence-${NAKPANEL_MULTIPASS_IMAGE}-${NAKPANEL_MULTIPASS_ARCH}"
+          python3 - <<'PYENV'
+          import os, uuid
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              for key, value in sorted(os.environ.items()):
+                  if key.startswith('NAKPANEL_'):
+                      delimiter = uuid.uuid4().hex
+                      output.write(f'{key}<<{delimiter}\n{value}\n{delimiter}\n')
+          PYENV
+      - name: Run every required native product and security gate
+        shell: bash
+        run: ./deploy/multipass/ubuntu-platform-verify.sh
+      - name: Clean up only this cell's owned guests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          source deploy/multipass/common.sh
+          expected_token="ci-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${NAKPANEL_MULTIPASS_IMAGE//./-}-${NAKPANEL_MULTIPASS_ARCH}"
+          if [[ "${NAKPANEL_CI_OWNERSHIP_READY:-}" != 1 || "${NAKPANEL_RUN_TOKEN:-}" != "${expected_token}" ]]; then exit 0; fi
+          status=0
+          # Enumerate only this run's host ownership records, never the VM inventory.
+          for record in "${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}"/nakpanel-*; do
+            [[ -f "${record}" && "${record}" != *.image.json ]] || continue
+            destroy_owned_vm "$(basename "${record}")" "${NAKPANEL_RUN_TOKEN}" || status=1
+          done
+          exit "${status}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-${{ matrix.release }}-${{ matrix.architecture }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/native-evidence-${{ matrix.release }}-${{ matrix.architecture }}/
+            ${{ runner.temp }}/native-preflight-${{ matrix.release }}-${{ matrix.architecture }}.json
+          if-no-files-found: error
+
+  native-qualification-summary:
+    if: always() && github.event_name == 'workflow_dispatch' && inputs.qualify_native
+    name: complete native qualification evidence
+    needs: [unit, security-suite, release-build, native-qualification]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*-${{ github.run_id }}-${{ github.run_attempt }}
+          path: native-results
+      - name: Require complete cells and identical per-architecture release manifests
+        env:
+          BASELINE_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYSUMMARY'
+          import hashlib, json, os, pathlib, sys
+          root = pathlib.Path('native-results')
+          expected = {(release, arch) for release in ('24.04', '26.04') for arch in ('amd64', 'arm64')}
+          cells, manifests, errors = {}, {}, []
+          for path in root.rglob('report.json'):
+              report = json.loads(path.read_text())
+              cell = (report['release'], report['architecture'])
+              if cell in cells:
+                  errors.append('duplicate cell report: ' + '/'.join(cell))
+              cells[cell] = report
+              manifest = path.parent / 'release-manifest.json'
+              if not manifest.is_file():
+                  errors.append('signed release manifest missing: ' + '/'.join(cell))
+              else:
+                  manifests[cell] = hashlib.sha256(manifest.read_bytes()).hexdigest()
+              if report.get('qualification_passed') is not True:
+                  errors.append('required cell gates did not pass: ' + '/'.join(cell))
+          for cell in expected - cells.keys():
+              errors.append('missing complete cell report: ' + '/'.join(cell))
+          for cell in cells.keys() - expected:
+              errors.append('unexpected cell report: ' + '/'.join(cell))
+          for arch in ('amd64', 'arm64'):
+              noble, resolute = manifests.get(('24.04', arch)), manifests.get(('26.04', arch))
+              if noble is None or noble != resolute:
+                  errors.append('current signed artifact differs or is missing across releases: ' + arch)
+          baseline = json.loads(os.environ['BASELINE_RESULTS'])
+          for job in ('unit', 'security-suite', 'release-build', 'native-qualification'):
+              if baseline.get(job, {}).get('result') != 'success':
+                  errors.append('required job did not pass: ' + job)
+          result = dict(qualification_passed=not errors,
+                        promotion_eligible=not errors and all(r.get('promotion_eligible') is True for r in cells.values()),
+                        manifest_sha256={'/'.join(k):v for k,v in manifests.items()}, errors=errors)
+          pathlib.Path('native-summary.json').write_text(json.dumps(result, indent=2) + '\n')
+          for error in errors:
+              print(error, file=sys.stderr)
+          if errors:
+              raise SystemExit(1)
+          PYSUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-summary-${{ github.run_id }}-${{ github.run_attempt }}
+          path: native-summary.json
+          if-no-files-found: error

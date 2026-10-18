@@ -560,6 +560,17 @@ func (p *PodmanProvisioner) rebuildApplicationNginx(siteID int64) error {
 }
 
 func renderApplicationUnit(req types.EnsureApplicationReq, identity applicationIdentity, container string) string {
+	// Rootless Podman can lack delegated resource controllers and ignore its
+	// container limits. The root-managed supervisor cgroup bounds the whole
+	// application, including the container and its helper processes.
+	var limits strings.Builder
+	fmt.Fprintf(&limits, "TasksMax=%s\n", positiveLimit(req.Policy.Resources.MaxTasks, 128))
+	if req.Policy.Resources.MemoryMB > 0 {
+		fmt.Fprintf(&limits, "MemoryMax=%dM\n", req.Policy.Resources.MemoryMB)
+	}
+	if req.Policy.Resources.CPUPercent > 0 {
+		fmt.Fprintf(&limits, "CPUQuota=%d%%\n", req.Policy.Resources.CPUPercent)
+	}
 	return fmt.Sprintf(`[Unit]
 Description=Nakpanel application %d generation %d
 After=network-online.target
@@ -567,7 +578,7 @@ After=network-online.target
 [Service]
 User=%s
 Group=%s
-Environment=HOME=%s
+%sEnvironment=HOME=%s
 Environment=XDG_DATA_HOME=%s
 Environment=XDG_CONFIG_HOME=%s
 Environment=XDG_RUNTIME_DIR=%s
@@ -583,7 +594,7 @@ TimeoutStopSec=30
 
 [Install]
 WantedBy=multi-user.target
-`, req.ApplicationID, req.DesiredRevision, req.Username, req.Username,
+`, req.ApplicationID, req.DesiredRevision, req.Username, req.Username, limits.String(),
 		identity.stateHome, identity.dataHome, identity.configHome, identity.runtimeHome, identity.runtimeHome,
 		req.SubscriptionID,
 		"/usr/bin/podman", container, "/usr/bin/podman", container)

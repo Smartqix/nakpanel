@@ -306,7 +306,12 @@ func (p *SiteTeardownProvisioner) removeHostingArtifacts(ctx context.Context, re
 			return errors.New("invalid legacy PHP service")
 		}
 		if err := p.removalCheckpoint(journalPath, journal, "legacy-php-reloaded:"+version, func() error {
-			if _, err := p.options.Runner.Run(ctx, "php-fpm"+version, "-t"); err != nil {
+			runtime, err := resolvePHPRuntime(nil, version)
+			if err != nil {
+				return err
+			}
+			name, args := runtime.FPMCommand("-t")
+			if _, err := p.options.Runner.Run(ctx, name, args...); err != nil {
 				return errors.New("legacy PHP configuration validation failed")
 			}
 			loaded, err := (&SubscriptionTeardownProvisioner{runner: p.options.Runner}).systemdUnitLoaded(ctx, "php"+version+"-fpm.service")

@@ -1,0 +1,9 @@
+# Install with a separately verified repository key scoped through signed-by.
+Package: nakpanel-php83 nakpanel-php84
+Pin: release o=Nakpanel,n=resolute
+Pin-Priority: 700
+
+# This origin must never replace global system libraries or distro PHP.
+Package: *
+Pin: release o=Nakpanel
+Pin-Priority: -1

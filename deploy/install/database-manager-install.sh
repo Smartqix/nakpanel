@@ -5,8 +5,9 @@ umask 077
 # Standalone opt-in installer. Does not alter the panel or public nginx services.
 [[ ${EUID} -eq 0 ]] || { echo 'Run as root.' >&2; exit 1; }
 [[ ${1:-} == --yes ]] || { echo 'Usage: database-manager-install.sh --yes' >&2; exit 1; }
-source /etc/os-release
-[[ ${ID} == ubuntu && ${VERSION_ID} == 24.04 ]] || { echo 'Ubuntu 24.04 required.' >&2; exit 1; }
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/platform.sh"
+nakpanel_require_platform
 command -v nginx >/dev/null || { echo 'Install the panel nginx runtime first.' >&2; exit 1; }
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 VERSION=5.2.3
@@ -14,7 +15,7 @@ SHA256=57881348297c4412f86c410547cf76b4d8a236574dd2c6b7d6a2beebe7fc44e3
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 apt-get update
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl xz-utils openssl php8.3-fpm php8.3-mysql php8.3-mbstring php8.3-xml php8.3-curl php8.3-zip
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl xz-utils openssl "php${NAKPANEL_INTERNAL_PHP_VERSION}-fpm" "php${NAKPANEL_INTERNAL_PHP_VERSION}-mysql" "php${NAKPANEL_INTERNAL_PHP_VERSION}-mbstring" "php${NAKPANEL_INTERNAL_PHP_VERSION}-xml" "php${NAKPANEL_INTERNAL_PHP_VERSION}-curl" "php${NAKPANEL_INTERNAL_PHP_VERSION}-zip"
 getent group nakpanel-dbmgr >/dev/null || groupadd --system nakpanel-dbmgr
 id nakpanel-dbmgr >/dev/null 2>&1 || useradd --system --gid nakpanel-dbmgr --home-dir /nonexistent --shell /usr/sbin/nologin nakpanel-dbmgr
 id nakpanel >/dev/null
@@ -49,13 +50,14 @@ if [[ ! -f /etc/nakpanel-database-manager/cookie.key ]]; then
     openssl rand -hex 16 > "$WORK/cookie.key"
     install -o root -g nakpanel-dbmgr -m 0640 "$WORK/cookie.key" /etc/nakpanel-database-manager/cookie.key
 fi
-install -m 0644 "$ROOT/deploy/systemd/nakpanel-database-manager.service" /etc/systemd/system/
+sed "s#@PHP_FPM_BINARY@#/usr/sbin/php-fpm${NAKPANEL_INTERNAL_PHP_VERSION}#g" "$ROOT/deploy/systemd/nakpanel-database-manager.service.tmpl" > "$WORK/nakpanel-database-manager.service"
+install -m 0644 "$WORK/nakpanel-database-manager.service" /etc/systemd/system/
 install -m 0644 "$ROOT/deploy/systemd/nakpanel-database-manager-http.service" /etc/systemd/system/
 install -d -m 0755 /etc/systemd/system/nakpanel.service.d
 install -m 0644 "$ROOT/deploy/database-manager/panel-runtime.conf" /etc/systemd/system/nakpanel.service.d/database-manager.conf
 install -m 0644 "$ROOT/deploy/database-manager/tmpfiles.conf" /etc/tmpfiles.d/nakpanel-database-manager.conf
 systemd-tmpfiles --create /etc/tmpfiles.d/nakpanel-database-manager.conf
-/usr/sbin/php-fpm8.3 --test --fpm-config /etc/nakpanel-database-manager/php-fpm.conf
+"/usr/sbin/php-fpm${NAKPANEL_INTERNAL_PHP_VERSION}" --test --fpm-config /etc/nakpanel-database-manager/php-fpm.conf
 systemctl daemon-reload
 systemctl enable --now nakpanel-database-manager.service nakpanel-database-manager-http.service
 printf '%s\n' 'Runtime installed at 127.0.0.1:9082. Configure the panel bridge/key and restart the panel separately.'

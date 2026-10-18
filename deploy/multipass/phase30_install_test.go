@@ -111,8 +111,8 @@ func TestPhase30InstallerPinsAndValidatesProductionPHPToolchain(t *testing.T) {
 	}
 	script := string(data)
 	for _, want := range []string{
-		`VERSION_ID:-`, `24.04`, `ppa:ondrej/php`, `Signed-By`,
-		`PHP_VERSIONS=(8.3 8.4 8.5)`,
+		`source "${SCRIPT_DIR}/platform.sh"`, `nakpanel_require_platform`, `ubuntu-24.04`, `ppa:ondrej/php`, `Signed-By`,
+		`PHP_VERSIONS=("${NAKPANEL_HOSTING_PHP_VERSIONS[@]}")`,
 		`php${version}-cli`, `php${version}-fpm`, `php${version}-bcmath`,
 		`php${version}-curl`, `php${version}-gd`, `php${version}-imagick`,
 		`php${version}-intl`, `php${version}-mbstring`, `php${version}-mysql`,

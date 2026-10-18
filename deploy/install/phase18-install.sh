@@ -10,6 +10,8 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+source "${SCRIPT_DIR}/platform.sh"
+nakpanel_require_platform
 STALWART_VERSION="v0.11.8"
 
 case "$(uname -m)" in
@@ -73,12 +75,21 @@ sudo -u postgres psql -d nakpanel -tAc "SELECT COUNT(*) FROM pg_views WHERE view
 # from earlier Nakpanel releases working when dbconfig already selected
 # MariaDB for Roundcube sessions and preferences.
 export DEBIAN_FRONTEND=noninteractive
+if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]]; then
 echo "roundcube-core roundcube-core/dbconfig-install boolean true" | debconf-set-selections
 echo "roundcube-core roundcube-core/database-type select sqlite3" | debconf-set-selections
-apt-get install -y roundcube roundcube-core roundcube-sqlite3 \
-  php8.3-mbstring php8.3-intl php8.3-xml php8.3-sqlite3 php8.3-mysql >/dev/null
+apt-get install -y roundcube roundcube-core roundcube-sqlite3 sqlite3 \
+  "php${NAKPANEL_INTERNAL_PHP_VERSION}-mbstring" "php${NAKPANEL_INTERNAL_PHP_VERSION}-intl" "php${NAKPANEL_INTERNAL_PHP_VERSION}-xml" "php${NAKPANEL_INTERNAL_PHP_VERSION}-sqlite3" "php${NAKPANEL_INTERNAL_PHP_VERSION}-mysql" >/dev/null
 if ! grep -q "dbtype='sqlite3'" /etc/roundcube/debian-db.php 2>/dev/null; then
   dpkg-reconfigure -fnoninteractive roundcube-core >/dev/null 2>&1 || true
+fi
+else
+  apt-get install -y --no-install-recommends sqlite3 \
+    "php${NAKPANEL_INTERNAL_PHP_VERSION}-mbstring" "php${NAKPANEL_INTERNAL_PHP_VERSION}-intl" \
+    "php${NAKPANEL_INTERNAL_PHP_VERSION}-xml" "php${NAKPANEL_INTERNAL_PHP_VERSION}-sqlite3" \
+    "php${NAKPANEL_INTERNAL_PHP_VERSION}-mysql" >/dev/null
+  source "${SCRIPT_DIR}/roundcube.sh"
+  nakpanel_install_roundcube
 fi
 # Roundcube may pull in Apache through Ubuntu's recommended packages. Nakpanel
 # serves webmail through nginx, so keep Apache from competing for ports 80/443
@@ -87,7 +98,7 @@ if systemctl list-unit-files apache2.service >/dev/null 2>&1; then
   systemctl disable --now apache2.service >/dev/null 2>&1 || true
   systemctl reset-failed apache2.service >/dev/null 2>&1 || true
 fi
-systemctl restart php8.3-fpm
+systemctl restart "php${NAKPANEL_INTERNAL_PHP_VERSION}-fpm"
 
 install -m 0644 "${SCRIPT_DIR}/../systemd/stalwart-mail.service" /etc/systemd/system/stalwart-mail.service
 systemctl daemon-reload

@@ -28,12 +28,13 @@ var (
 )
 
 type UsageCollector struct {
-	homeRoot      string
-	logRoot       string
-	mariaDSN      string
-	containerRoot string
-	runtimeProbe  RuntimeCapabilityProbe
-	acmeAvailable bool
+	homeRoot        string
+	logRoot         string
+	mariaDSN        string
+	containerRoot   string
+	runtimeProbe    RuntimeCapabilityProbe
+	runtimeResolver PHPRuntimeResolver
+	acmeAvailable   bool
 }
 
 type UsageCollectorOption func(*UsageCollector)
@@ -139,7 +140,7 @@ func (c *UsageCollector) RuntimeCapabilities(ctx context.Context) (types.Runtime
 	if probe == nil {
 		probe = systemRuntimeCapabilityProbe{}
 	}
-	runtimes, versions := probePHPRuntimes(ctx, probe)
+	runtimes, versions := probePHPRuntimes(ctx, probe, c.runtimeResolver)
 	_, quotaErr := probe.LookPath("setquota")
 	capabilities := types.RuntimeCapabilities{
 		ACMEAvailable: c.acmeAvailable,
@@ -353,4 +354,8 @@ func (c *UsageCollector) databaseBytes(ctx context.Context, names []string) (int
 		return 0, fmt.Errorf("measure mariadb usage: %w", err)
 	}
 	return total.Int64, nil
+}
+
+func WithPHPRuntimeResolver(resolver PHPRuntimeResolver) UsageCollectorOption {
+	return func(collector *UsageCollector) { collector.runtimeResolver = resolver }
 }

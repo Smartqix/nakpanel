@@ -93,11 +93,18 @@ post_json(){
 
 echo "phase33: install the current safe-uninstall build"
 sync_repo "${ROOT_DIR}"
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" <<'REMOTE'
 set -euo pipefail
 src="$1"
 cd "${src}"
-timeout 45m deploy/install/install.sh --yes --allow-downgrade --force
+export NAKPANEL_RELEASE_ALLOW_DEVELOPMENT="${2:-0}"
+if [[ -d /tmp/nakpanel-release/bin ]]; then
+  args=(--yes --allow-downgrade --force --bundle /tmp/nakpanel-release --release-public-key /tmp/nakpanel-release-public.pem)
+  if [[ "${2:-0}" == 1 ]]; then args+=(--allow-development-bundle); fi
+  timeout 45m deploy/install/install.sh "${args[@]}"
+else
+  timeout 45m deploy/install/install.sh --yes --allow-downgrade --force
+fi
 systemctl is-active --quiet nakpanel.service
 systemctl is-active --quiet nakpanel-agent.service
 systemctl is-active --quiet mariadb.service
@@ -133,8 +140,8 @@ post_as phase33-plan plans \
   -d 'lifecycle_status=active' -d 'change_reason=Phase 33 acceptance' \
   -d 'disk_mb=-1' -d 'bandwidth_mb=-1' -d 'max_sites=2' -d 'max_databases=2' \
   -d 'max_mailboxes=0' -d 'max_backups=6' -d 'backup_storage_mb=6144' \
-  -d 'site_disk_quota_mb=-1' -d 'php_allowlist=8.4' -d 'php_versions=8.4' \
-  -d 'default_php_version=8.4' -d 'php_max_children=4' -d 'php_memory_mb=256' \
+  -d 'site_disk_quota_mb=-1' -d "php_allowlist=${NAKPANEL_FIXTURE_PHP}" -d "php_versions=${NAKPANEL_FIXTURE_PHP}" \
+  -d "default_php_version=${NAKPANEL_FIXTURE_PHP}" -d 'php_max_children=4' -d 'php_memory_mb=256' \
   -d 'hosting_enabled=true' -d 'allow_tls=true' -d 'allow_backups=true' \
   -d 'allow_php_settings=true' -d 'allow_logs=true' -d 'php_opcache_enabled=true' \
   -d 'php_log_errors=true' -d 'allow_wordpress_toolkit=true' -d 'max_wordpress_sites=2' \
