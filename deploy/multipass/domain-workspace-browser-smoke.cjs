@@ -49,6 +49,15 @@ async function screenshot(page,label) {await page.screenshot({path:path.join(out
   assert.equal(new URL(page.url()).pathname,'/sites','add-domain dialog navigated away');
   await page.locator('#site-dialog').waitFor({state:'visible'});
   await page.keyboard.press('Escape');
+  // The same shared dialog also opens from subscriptions and the dashboard.
+  await page.evaluate(()=>document.body.classList.remove('np-domains'));
+  await page.locator('[data-np-dialog-open="site-dialog"]').click();
+  const sharedDialog=await page.locator('#site-dialog').boundingBox();
+  assert.ok(sharedDialog.width<=640,'shared creation dialog loses design outside domain pages');
+  const sharedClose=await page.locator('#site-dialog .np-dialog-head button').boundingBox();
+  assert.ok(sharedClose.height>=44&&sharedClose.width>=44,'shared dialog Close loses its touch target outside domain pages');
+  await page.keyboard.press('Escape');
+  await page.evaluate(()=>document.body.classList.add('np-domains'));
   await page.locator('[data-np-list-search]').fill(parent);
   assert.ok(await page.locator('[data-np-list-row]:visible').count()>0);
   await page.locator('[data-np-list-search]').fill('does-not-exist-qa');
@@ -66,6 +75,7 @@ async function screenshot(page,label) {await page.screenshot({path:path.join(out
   assert.equal(await primary.locator('summary').evaluate(e=>e===document.activeElement),true);
   await page.setViewportSize({width:1440,height:620});
   await page.locator('.np-domain-more summary').click();
+  await page.waitForFunction(()=>document.querySelector('.np-domain-more-menu').style.maxHeight!=='');
   const more=await page.locator('.np-domain-more-menu').boundingBox();
   assert.ok(more.y>=0&&more.y+more.height<=620,'More menu exceeds short desktop viewport');
   await page.keyboard.press('Escape');
