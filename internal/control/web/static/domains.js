@@ -18,10 +18,12 @@
     var label = normalizeSubdomainLabel(value, parent);
     return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(label) ? '' : 'Enter 1–63 letters, numbers or hyphens, starting and ending with a letter or number.';
   }
-  function menuOpensUp(rect, viewportHeight) {
-    return rect.bottom > viewportHeight - 12 && rect.top - rect.height > 12;
+  function menuLayout(anchor, height, viewportHeight) {
+    var below=Math.max(0,viewportHeight-anchor.bottom-18), above=Math.max(0,anchor.top-18);
+    var up=height>below && above>below;
+    return {up:up,maxHeight:Math.floor(up?above:below)};
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = {removalReady:removalReady, normalizeSubdomainLabel:normalizeSubdomainLabel, menuOpensUp:menuOpensUp, subdomainError:subdomainError};
+  if (typeof module !== 'undefined' && module.exports) module.exports = {removalReady:removalReady, normalizeSubdomainLabel:normalizeSubdomainLabel, menuLayout:menuLayout, subdomainError:subdomainError};
   if (typeof window === 'undefined') return;
   var document = window.document;
   function updateRemovalGate(root) {
@@ -48,14 +50,21 @@
     menu.classList.remove('np-domain-menu-up');
     if (restoreFocus) menu.querySelector('summary').focus();
   }
+  function fitMenu(menu) {
+    var content=menu.querySelector('.np-domain-actions-menu,.np-domain-more-menu');
+    if (!content) return;
+    var layout=menuLayout(menu.querySelector('summary').getBoundingClientRect(),content.scrollHeight+2,window.innerHeight);
+    menu.classList.toggle('np-domain-menu-up',layout.up);
+    content.style.maxHeight=layout.maxHeight+'px';
+  }
   document.addEventListener('toggle', function (event) {
     var menu = event.target;
     if (!menu.matches || !menu.matches('details[data-np-domain-menu]') || !menu.open) return;
     document.querySelectorAll('details[data-np-domain-menu][open]').forEach(function (other) { if (other !== menu) closeMenu(other, false); });
-    menu.classList.remove('np-domain-menu-up');
-    var content = menu.querySelector('.np-domain-actions-menu,.np-domain-more-menu');
-    if (content && menuOpensUp(content.getBoundingClientRect(), window.innerHeight)) menu.classList.add('np-domain-menu-up');
+    fitMenu(menu);
   }, true);
+  window.addEventListener('resize',function(){document.querySelectorAll('details[data-np-domain-menu][open]').forEach(fitMenu);});
+  document.addEventListener('scroll',function(event){if(event.target===document)document.querySelectorAll('details[data-np-domain-menu][open]').forEach(fitMenu);},true);
   document.addEventListener('click', function (event) {
     document.querySelectorAll('details[data-np-domain-menu][open]').forEach(function (menu) { if (!menu.contains(event.target)) closeMenu(menu, false); });
     var refresh = event.target.closest('[data-np-domain-refresh]');

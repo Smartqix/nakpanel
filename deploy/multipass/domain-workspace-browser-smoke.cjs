@@ -64,6 +64,12 @@ async function screenshot(page,label) {await page.screenshot({path:path.join(out
   await page.keyboard.press('Escape');
   assert.equal(await primary.getAttribute('open'),null);
   assert.equal(await primary.locator('summary').evaluate(e=>e===document.activeElement),true);
+  await page.setViewportSize({width:1440,height:620});
+  await page.locator('.np-domain-more summary').click();
+  const more=await page.locator('.np-domain-more-menu').boundingBox();
+  assert.ok(more.y>=0&&more.y+more.height<=620,'More menu exceeds short desktop viewport');
+  await page.keyboard.press('Escape');
+  await page.setViewportSize({width:1440,height:1000});
   const opener=page.locator('.np-domain-header-actions [data-np-dialog-open]').first();
   await opener.click();
   const create=page.locator('dialog.np-subdomain-dialog');

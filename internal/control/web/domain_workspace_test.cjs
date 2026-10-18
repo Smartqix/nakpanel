@@ -2,7 +2,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {removalReady, normalizeSubdomainLabel, menuOpensUp} = require('./static/domains.js');
+const {removalReady, normalizeSubdomainLabel} = require('./static/domains.js');
+
+test('long menus use the larger available viewport side and scroll within it', () => {
+  const {menuLayout}=require('./static/domains.js');
+  assert.deepEqual(menuLayout({top:300,bottom:344},600,620),{up:true,maxHeight:282});
+  assert.deepEqual(menuLayout({top:100,bottom:144},600,620),{up:false,maxHeight:458});
+  assert.deepEqual(menuLayout({top:300,bottom:344},120,620),{up:false,maxHeight:258});
+});
 
 test('HTML validation patterns compile under modern Unicode sets semantics', () => {
   for (const name of fs.readdirSync(__dirname).filter(name=>name.endsWith('.templ'))) {
@@ -54,9 +61,4 @@ test('matching full subdomain input is shortened without accepting nested labels
   assert.equal(normalizeSubdomainLabel('api.blog.example.test','example.test'),'api.blog.example.test');
   assert.equal(normalizeSubdomainLabel('blog.other.test','example.test'),'blog.other.test');
   assert.equal(normalizeSubdomainLabel('blog_dev','example.test'),'blog_dev');
-});
-test('menus flip only when there is room above', () => {
-  assert.equal(menuOpensUp({top:680,bottom:950,height:270},800),true);
-  assert.equal(menuOpensUp({top:30,bottom:950,height:920},800),false);
-  assert.equal(menuOpensUp({top:80,bottom:350,height:270},800),false);
 });
