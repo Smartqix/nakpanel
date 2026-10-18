@@ -1,0 +1,73 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/types"
+)
+
+templ domainInventory(sites []dashboard.Site, subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
+	<div class="np-domain-breadcrumbs" aria-label="Websites &amp; Domains"><span>Hosting services</span>@icon("chevron-right")<span>Domains</span></div>
+	<header class="np-domain-object-header"><div class="np-domain-identity"><h1>Domains</h1><p>{ domainInventorySummary(sites) } across your subscriptions</p></div>
+		if actions.CanCreateSite {
+			<a class="np-primary-link" href={ templ.SafeURL(siteCreateBasePath(view)) } data-np-dialog-open="site-dialog" data-np-domain-create-trigger>@icon("plus")<span>Add domain</span></a>
+		}
+	</header>
+	<section class="np-domain-inventory np-list" data-np-list data-np-list-page-size="25" data-np-list-noun="websites" data-np-list-noun-one="website">
+		<div class="np-domain-list-filters">
+			<label>Subscription<select data-np-list-filter="subscription"><option value="">All subscriptions</option>
+				for _, subscription := range subscriptions {
+					<option value={ formatJobID(subscription.ID) }>{ subscription.SubscriptionName }</option>
+				}
+			</select></label>
+			<label>Status<select data-np-list-filter="status"><option value="">All statuses</option>
+				for _, status := range siteStatusOptions(sites) {
+					<option value={ status }>{ status }</option>
+				}
+			</select></label>
+			<label class="np-domain-find">Find a domain<input type="search" placeholder="Search domain name..." autocomplete="off" data-np-list-search/></label>
+			<label class="np-domain-health-filter"><span class="np-sr-only">Health</span><select data-np-list-filter="health"><option value="">All websites</option><option value="attention">Needs attention</option><option value="healthy">Healthy</option></select></label>
+			<button type="button" class="np-icon-button" data-np-domain-refresh aria-label="Refresh domains" title="Refresh domains">@icon("refresh-cw")</button>
+		</div>
+		<div class="np-table-scroll"><table class="np-table np-list-table np-domain-inventory-table"><thead><tr><th><button type="button" data-np-list-sort="0">Domain</button></th><th>Service status</th><th><button type="button" data-np-list-sort="2">Subscription</button></th><th><button type="button" data-np-list-sort="3">PHP</button></th><th><span class="np-sr-only">Actions</span></th></tr></thead>
+			<tbody data-np-list-body>
+				for _, item := range sitesInDomainOrder(sites) {
+					{{ health := siteHealthOf(item) }}
+					<tr data-np-list-row data-status={ item.Status } data-health={ healthFilterValue(health) } data-subscription={ formatJobID(item.SubscriptionID) } data-subdomain?={ item.ParentSiteID>0 }>
+						<td data-label="Domain"><div class="np-domain-inventory-identity">
+							if item.ParentSiteID>0 {
+								@icon("git-branch")
+							} else {
+								@icon("globe")
+							}
+							<div><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID))) }><strong>{ item.Domain }</strong></a><small>
+								if parent:=parentDomain(sites,item);parent!="" {
+									Subdomain of { parent }
+								} else if isPrimarySite(item,subscriptions) {
+									Primary domain
+								} else {
+									Add-on domain
+								}
+							</small></div>
+						</div></td>
+						<td data-label="Service status">
+							if health.NeedsAttention() {
+								@tonePill("Needs attention","pend")
+							} else {
+								@siteLifecyclePill(item)
+							}
+							<small class={ "np-domain-tls-"+domainTLSTone(item) }>SSL { domainTLSLabel(item) }</small>
+						</td>
+						<td data-label="Subscription"><a href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(item.SubscriptionID))) }>{ siteSubscriptionName(subscriptions,item) }</a><small>{ siteSubscriptionPlan(subscriptions,item) }</small></td>
+						<td data-label="PHP">{ item.PHPVersion }</td>
+						<td data-label="Actions">@siteRemovalActions(item,isPrimarySite(item,subscriptions),view)</td>
+					</tr>
+				}
+			</tbody></table></div>
+		<div class="np-domain-list-footer"><span data-np-list-count aria-live="polite"></span><span>Subdomains are grouped beneath their parent domain.</span></div>
+		<div class="np-list-foot" data-np-list-foot hidden><span data-np-list-status></span><button type="button" class="np-secondary-button" data-np-list-more>Show more</button></div>
+		<p class="np-empty" data-np-list-empty hidden>No domains match these filters.</p>
+		if len(sites)==0 {
+			<div class="np-domain-empty"><h2>No domains yet</h2><p>Add a domain under an active subscription to start hosting.</p></div>
+		}
+	</section>
+}

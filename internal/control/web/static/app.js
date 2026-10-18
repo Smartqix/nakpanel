@@ -402,7 +402,7 @@
       var shortName = fullName ? label.slice(0, -suffix.length) : label;
       var invalidName = label && (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(shortName) || (label.includes(".") && !fullName));
       var preview = form.querySelector("[data-np-subdomain-preview]");
-      if (preview) preview.textContent = (shortName || "blog") + suffix;
+      if (preview) preview.textContent = invalidName ? "Name is not valid" : (shortName || "blog") + suffix;
       var max = parseInt(form.dataset.npMaxSubdomains || "-1", 10);
       var used = parseInt(form.dataset.npSubdomainsUsed || "0", 10);
       var overuse = form.dataset.npOverusePolicy === "normal" || form.dataset.npOverusePolicy === "notify";
@@ -416,7 +416,7 @@
       }
       if (!blocked && invalidName) {
         blocked = true;
-        if (message) message.textContent = "Enter one name under " + parent + ", such as blog or blog." + parent + ".";
+        if (message) message.textContent = "Enter 1–63 letters, numbers or hyphens, starting and ending with a letter or number.";
       }
       if (message) message.classList.toggle("is-blocked", blocked);
       var submit = form.querySelector("[data-np-create-submit]");
@@ -2947,7 +2947,13 @@
     if (legacy && !legacy.disabled) setLegacyView(legacy.getAttribute("data-np-view"));
     var opener = event.target.closest("[data-np-dialog-open]");
     if (opener) {
+      event.preventDefault();
       openDialog(opener.getAttribute("data-np-dialog-open"), opener);
+      if (opener.hasAttribute('data-np-domain-ssl-review')) {
+        var sslDialog = document.getElementById(opener.getAttribute('data-np-dialog-open'));
+        var sslTracker = sslDialog && sslDialog.querySelector('[data-np-setup-tracker]');
+        if (sslTracker) trackSiteSetup(sslTracker, {site_id:sslTracker.dataset.npSetupSiteId,status_url:sslTracker.dataset.npSetupStatusUrl});
+      }
       var openerMenu = opener.closest(".np-dns-action-menu");
       if (openerMenu) openerMenu.open = false;
     }

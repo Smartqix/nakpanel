@@ -80,10 +80,13 @@
         if (['signin','uncertain'].includes(value.state)) form.dataset.npRemovalUncertain='true';
         if (value.state==='validation') {var target=form.querySelector('[name="confirm_domain"]');if(target)target.focus();}
       }
+      if (window.NakpanelDomains) window.NakpanelDomains.updateRemovalGate(root);
       if (value.progress_url) root.dataset.npRemovalProgressURL=value.progress_url;
       if (value.state==='background' && root.querySelector('[data-np-removal-message]')) root.querySelector('[data-np-removal-message]').textContent=value.message;
     }});
-    controllers.set(root,controller);return controller;
+    controllers.set(root,controller);
+    if (window.NakpanelDomains) window.NakpanelDomains.updateRemovalGate(root);
+    return controller;
   }
   function rootFor(element){return element.closest('.np-site-removal-dialog,.np-removal-page');}
   document.addEventListener('click',async function(event){

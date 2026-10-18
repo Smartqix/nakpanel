@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed static/app.css static/app.js static/interaction.js static/git.js static/git.css static/site-removal.js static/plan-sync.js static/mail-import.js static/dns-template.js static/icons.svg static/ace/*
+//go:embed static/app.css static/app.js static/interaction.js static/git.js static/git.css static/domains.css static/domains.js static/fonts/* static/domain-icons/* static/site-removal.js static/plan-sync.js static/mail-import.js static/dns-template.js static/icons.svg static/ace/*
 var staticFiles embed.FS
 
 var appCSS = mustReadStatic("static/app.css")
@@ -24,6 +24,18 @@ func StaticHandler() http.Handler {
 			return
 		}
 		switch r.URL.Path {
+		case "domain-icons/server.svg", "/domain-icons/server.svg", "domain-icons/terminal.svg", "/domain-icons/terminal.svg", "domain-icons/chart.svg", "/domain-icons/chart.svg":
+			w.Header().Set("Content-Type", "image/svg+xml")
+			http.ServeContent(w, r, path.Base(r.URL.Path), time.Time{}, bytes.NewReader(mustReadStatic("static/"+strings.TrimPrefix(r.URL.Path, "/"))))
+		case "domains.css", "/domains.css":
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			http.ServeContent(w, r, "domains.css", time.Time{}, bytes.NewReader(mustReadStatic("static/domains.css")))
+		case "domains.js", "/domains.js":
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			http.ServeContent(w, r, "domains.js", time.Time{}, bytes.NewReader(mustReadStatic("static/domains.js")))
+		case "fonts/inter-variable.woff2", "/fonts/inter-variable.woff2":
+			w.Header().Set("Content-Type", "font/woff2")
+			http.ServeContent(w, r, "inter-variable.woff2", time.Time{}, bytes.NewReader(mustReadStatic("static/fonts/inter-variable.woff2")))
 		case "dns-template.js", "/dns-template.js":
 			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 			http.ServeContent(w, r, "dns-template.js", time.Time{}, bytes.NewReader(mustReadStatic("static/dns-template.js")))

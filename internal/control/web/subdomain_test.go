@@ -19,7 +19,7 @@ func TestSubdomainDialogKeepsParentAndSubscriptionServerSelected(t *testing.T) {
 	if err := routedSubdomainDialog(parent, subscription, capabilities, WorkspaceView{}).Render(context.Background(), &out); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`action="/sites/9/subdomains"`, `name="label"`, `data-np-subdomain-preview`, `example.test`, `1/2`, `PHP starts with`, `data-np-setup-tracker`, `data-np-setup-background`, `data-np-setup-message`, `aria-live="polite"`} {
+	for _, want := range []string{`action="/sites/9/subdomains"`, `name="label"`, `data-np-subdomain-preview`, `example.test`, `1/2`, `Inherited from subscription`, `data-np-setup-tracker`, `data-np-setup-background`, `data-np-setup-message`, `aria-live="polite"`} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("missing %q from subdomain dialog", want)
 		}
@@ -41,8 +41,8 @@ func TestChildDomainCannotOfferNestedSubdomainCreation(t *testing.T) {
 	if !strings.Contains(out.String(), "Parent domain:") || !strings.Contains(out.String(), `href="/sites/1"`) {
 		t.Fatal("child lost parent context")
 	}
-	if count := strings.Count(out.String(), "<h2>Subdomain setup</h2>"); count != 1 {
-		t.Fatalf("child has %d duplicated setup summaries", count)
+	if strings.Contains(out.String(), "<h2>Subdomain setup</h2>") || strings.Count(out.String(), "np-domain-status-strip") != 1 {
+		t.Fatal("child must use one shared status strip, not duplicate setup summaries")
 	}
 }
 

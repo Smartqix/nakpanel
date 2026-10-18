@@ -32,7 +32,7 @@ func TestSiteRemovalPreviewChildrenAndDefaultCheckboxes(t *testing.T) {
 	if err := SiteRemovalPreviewContent(WorkspaceView{}, SiteRemovalView{Preview: &p}).Render(context.Background(), &html); err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"child.addon.test", "include_children", "acknowledge_permanent", "confirm_domain", "Databases and backups are kept by default", "shared_db will be kept"} {
+	for _, want := range []string{"child.addon.test", "include_children", "acknowledge_permanent", "confirm_domain", "Databases and backups are kept by default", "shared_db will be kept", "Will be removed", "Will be kept", "np-domain-removal-impact"} {
 		if !strings.Contains(strings.ReplaceAll(html.String(), "</strong>", ""), want) {
 			t.Fatal("missing", want)
 		}

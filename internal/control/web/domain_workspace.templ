@@ -1,0 +1,206 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/types"
+)
+
+templ domainWorkspaceHeader(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	<div class="np-domain-breadcrumbs" aria-label="Breadcrumb">
+		<a href={ templ.SafeURL(workspacePath(view,"/sites")) }>Domains</a>@icon("chevron-right")
+		if parent, ok := siteByID(data.Sites,item.ParentSiteID); ok {
+			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(parent.ID))) }>{ parent.Domain }</a>@icon("chevron-right")
+		}
+		<span aria-current="page">{ item.Domain }</span>
+	</div>
+	<header class="np-domain-object-header" data-np-domain-context>
+		<div class="np-domain-identity"><h1 id="np-domain-title">{ item.Domain }</h1><p><a href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(subscription.ID))) }>{ subscription.SubscriptionName }</a><span aria-hidden="true">/</span><span>{ domainKind(item,subscription) }</span></p></div>
+		<div class="np-domain-header-actions">
+			if domainCanAddChild(item,subscription,actions) {
+				<button type="button" class="np-secondary-button np-domain-add-child" data-np-dialog-open={ "subdomain-dialog-"+formatJobID(item.ID) }>@icon("plus")<span>Add subdomain</span></button>
+			}
+			if item.Status == "active" && !removalBusy(item) {
+				<a class="np-primary-link np-domain-open-website" href={ templ.SafeURL(siteWebsiteURL(item)) } target="_blank" rel="noopener noreferrer">@icon("external-link")<span>Open website</span></a>
+			}
+			@siteRemovalActions(item,item.ID==subscription.PrimarySiteID,view)
+		</div>
+	</header>
+	<div class="np-domain-status-strip" aria-label="Domain service status">
+		<a href={ templ.SafeURL(domainToolURL(item.ID,"hosting",view)) } class={ "np-domain-service np-domain-service-"+domainStateTone(item.Status) }>@icon("globe")<span>Hosting</span><strong>{ displayFallback(item.Status,"Not ready") }</strong></a>
+		<a href={ templ.SafeURL(domainToolURL(item.ID,"php",view)) } class="np-domain-service">@icon("file-code")<span>PHP</span><strong>{ displayFallback(item.PHPVersion,"Not configured") }</strong></a>
+		<a href={ templ.SafeURL(domainToolURL(item.ID,"ssl",view)) } class={ "np-domain-service np-domain-service-"+domainTLSTone(item) }>@icon("shield-check")<span>SSL</span><strong>{ domainTLSLabel(item) }</strong></a>
+		<a href={ templ.SafeURL(domainToolURL(item.ID,"dns",view)) } class="np-domain-service">@icon("globe")<span>DNS</span><strong>{ domainDNSLabel(item,data.Phase6) }</strong></a>
+	</div>
+}
+
+templ domainWorkspaceTool(siteID int64, tool string, label string, iconName string, view WorkspaceView) {
+	<a class="np-domain-hub-tool" href={ templ.SafeURL(domainToolURL(siteID,tool,view)) }>@domainDesignIcon(iconName)<strong>{ label }</strong></a>
+}
+
+templ domainDesignIcon(name string) {
+	if name=="server" || name=="terminal" || name=="chart" {
+		<img class="np-icon" width="20" height="20" src={ "/assets/domain-icons/"+name+".svg" } alt="" aria-hidden="true"/>
+	} else {
+		@icon(name)
+	}
+}
+
+templ domainDrawerTool(siteID int64, tool string, label string, iconName string, current string, view WorkspaceView) {
+	<a class={ domainTabActive(current,tool) } href={ templ.SafeURL(domainToolURL(siteID,tool,view)) } aria-current={ ariaCurrent(domainTabActive(current,tool)) }>@domainDesignIcon(iconName)<span>{ label }</span></a>
+}
+
+templ domainDrawerGroups(siteID int64, current string, view WorkspaceView, canUseFileManager bool) {
+	<section class="np-domain-drawer-group"><h3>Hosting &amp; security</h3>
+		@domainDrawerTool(siteID,"overview","Overview","home",current,view)
+		@domainDrawerTool(siteID,"web-server","Hosting settings","server",current,view)
+		@domainDrawerTool(siteID,"php","PHP settings","file-code",current,view)
+		@domainDrawerTool(siteID,"ssl","SSL/TLS certificates","shield-check",current,view)
+		@domainDrawerTool(siteID,"dns","DNS settings","globe",current,view)
+		@domainDrawerTool(siteID,"mail","Mail accounts","mail",current,view)
+	</section>
+	<section class="np-domain-drawer-group"><h3>Files &amp; access</h3>
+		if canUseFileManager {
+			@domainDrawerTool(siteID,"files","File Manager","folder",current,view)
+		}
+		@domainDrawerTool(siteID,"access","FTP / SFTP access","terminal",current,view)
+		@domainDrawerTool(siteID,"git","Git deployment","git-branch",current,view)
+	</section>
+	<section class="np-domain-drawer-group"><h3>Applications &amp; data</h3>
+		@domainDrawerTool(siteID,"wordpress","WordPress Toolkit","layers",current,view)
+		@domainDrawerTool(siteID,"databases","Databases","database",current,view)
+		@domainDrawerTool(siteID,"backups","Backups & restore","archive",current,view)
+		@domainDrawerTool(siteID,"applications","PHP applications","file-code",current,view)
+		@domainDrawerTool(siteID,"containers","Containers","layers",current,view)
+		@domainDrawerTool(siteID,"staging","Staging","git-branch",current,view)
+		@domainDrawerTool(siteID,"redis","Valkey cache","database",current,view)
+	</section>
+	<section class="np-domain-drawer-group"><h3>Developer tools</h3>
+		@domainDrawerTool(siteID,"logs","Logs","file-code",current,view)
+		@domainDrawerTool(siteID,"scheduled-tasks","Scheduled tasks","activity",current,view)
+		@domainDrawerTool(siteID,"statistics","Statistics","chart",current,view)
+	</section>
+}
+
+templ domainSSLRecovery(item dashboard.Site, view WorkspaceView) {
+	<div class="np-domain-attention" role="status">@icon("shield-check")<div><strong>Website is available; SSL needs attention</strong><p>{ item.TLSLastError }</p></div><a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/setup")) } data-np-dialog-open={ "domain-ssl-review-"+formatJobID(item.ID) } data-np-domain-ssl-review>Review SSL validation</a></div>
+	<dialog class="np-dialog np-domain-create-dialog" id={ "domain-ssl-review-"+formatJobID(item.ID) } data-np-dialog aria-labelledby={ "domain-ssl-title-"+formatJobID(item.ID) }>
+		<div class="np-dialog-head"><div><h2 id={ "domain-ssl-title-"+formatJobID(item.ID) }>SSL validation</h2><p>{ item.Domain }</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close SSL validation" aria-label="Close SSL validation">@icon("x")</button></div>
+		@siteSetupProgress(types.SiteSetupStatus{SiteID:item.ID,Domain:item.Domain,Kind:mapSiteKind(item),State:"failed",Message:item.TLSLastError,SSLRequested:true},view,true)
+		<div class="np-dialog-actions"><a class="np-secondary-link" href={ templ.SafeURL(domainToolURL(item.ID,"dns",view)) }>View DNS settings</a><a class="np-secondary-link" href={ templ.SafeURL(domainToolURL(item.ID,"ssl",view)) }>Manage certificate</a></div>
+	</dialog>
+}
+
+templ domainWorkspaceOverview(item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	if wp:=siteOverviewWordPressState(view.WordPress);wp=="installing" || wp=="failed" || wp=="removing" {
+		<div class="np-domain-attention" role="status">@icon("layers")<div><strong>{ siteOverviewHeading(item,view.WordPress) }</strong>
+			if wp=="installing" {
+				<p>Hosting is ready. WordPress installation is still running.</p>
+			} else if wp=="failed" {
+				<p>WordPress installation needs attention. Open the Toolkit to review or retry it.</p>
+			} else {
+				<p>WordPress removal is in progress. Website hosting remains in place.</p>
+			}
+		</div><a class="np-secondary-link" href={ templ.SafeURL(domainToolURL(item.ID,"wordpress",view)) }>WordPress Toolkit</a></div>
+	}
+	if item.ParentSiteID>0 {
+		{{ zone, found := dnsZoneForSiteWorkspace(data.Phase6.DNSZones,data.Phase6.DNSRecords,item) }}
+		if subdomainDNSState(item,zone,found,data.Phase6.DNSRecords)=="missing" {
+			<div class="np-domain-attention" role="status">@icon("globe")<div><strong>DNS needs attention</strong><p>No address record points this subdomain to its hosting address.</p></div><a class="np-secondary-link" href={ templ.SafeURL(domainToolURL(item.ID,"dns",view)) }>Review DNS</a></div>
+		}
+	}
+	if health:=siteHealthOf(item);health.NeedsAttention() {
+		for _, issue := range health.Issues {
+			if issue.Title=="Certificate could not be issued" && item.Status=="active" {
+				@domainSSLRecovery(item,view)
+			} else {
+				<div class="np-domain-attention" role="status">@icon("triangle-alert")<div><strong>{ issue.Title }</strong><p>{ issue.Detail }</p></div><a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,issue.ActionTo)) }>{ displayFallback(issue.Action,"Review") }</a></div>
+			}
+		}
+	} else if item.Status != "active" {
+		<div class="np-domain-attention" role="status">@icon("activity")<div><strong>Hosting is { item.Status }</strong><p>Review hosting status before making changes.</p></div><a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"/setup")) }>View setup</a></div>
+	}
+	<div class="np-domain-overview-layout">
+		<div class="np-domain-main-tools">
+			<div class="np-domain-mobile-quick-tools" aria-label="Website tools">
+				if actions.CanUseFileManager {
+					@domainWorkspaceTool(item.ID,"files","File Manager","folder",view)
+				}
+				@domainWorkspaceTool(item.ID,"php","PHP settings","file-code",view)
+				@domainWorkspaceTool(item.ID,"ssl","SSL/TLS","shield-check",view)
+				@domainWorkspaceTool(item.ID,"databases","Databases","database",view)
+				if actions.CanUseWordPress {
+					@domainWorkspaceTool(item.ID,"wordpress","WordPress Toolkit","layers",view)
+				}
+				@domainWorkspaceTool(item.ID,"backups","Backups","archive",view)
+				<button type="button" class="np-domain-all-tools" data-np-dialog-open={ "domain-tools-"+formatJobID(item.ID) }>@icon("chevron-right")<span>All domain tools</span></button>
+			</div>
+			<div class="np-domain-overview-tools">
+				<section class="np-domain-hub-group"><h2>Files &amp; access</h2>
+					if actions.CanUseFileManager {
+						@domainWorkspaceTool(item.ID,"files","File Manager","folder",view)
+					}
+					@domainWorkspaceTool(item.ID,"access","FTP / SFTP access","terminal",view)
+					@domainWorkspaceTool(item.ID,"git","Git deployment","git-branch",view)
+				</section>
+				<section class="np-domain-hub-group"><h2>Hosting &amp; security</h2>
+					@domainWorkspaceTool(item.ID,"web-server","Hosting settings","server",view)
+					@domainWorkspaceTool(item.ID,"php","PHP settings","file-code",view)
+					@domainWorkspaceTool(item.ID,"ssl","SSL/TLS certificates","shield-check",view)
+				</section>
+				<section class="np-domain-hub-group"><h2>Applications &amp; data</h2>
+					if actions.CanUseWordPress {
+						@domainWorkspaceTool(item.ID,"wordpress","WordPress Toolkit","layers",view)
+					}
+					@domainWorkspaceTool(item.ID,"databases","Databases","database",view)
+					@domainWorkspaceTool(item.ID,"backups","Backups & restore","archive",view)
+				</section>
+				<section class="np-domain-hub-group"><h2>Domain services</h2>
+					@domainWorkspaceTool(item.ID,"dns","DNS settings","globe",view)
+					@domainWorkspaceTool(item.ID,"mail","Mail accounts","mail",view)
+					@domainWorkspaceTool(item.ID,"statistics","Logs & statistics","chart",view)
+				</section>
+			</div>
+			if item.ParentSiteID > 0 {
+				<div class="np-domain-parent-context">@icon("git-branch")<div><strong>Parent domain: <a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ParentSiteID))) }>{ parentDomain(data.Sites,item) }</a></strong><p>Separate website files. Shared subscription account and quota.</p></div><a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ParentSiteID))) }><span>View parent domain</span>@icon("external-link")</a></div>
+			} else {
+				<section class="np-domain-children" data-np-domain-subdomains><header><h2>Subdomains</h2>
+					if domainCanAddChild(item,subscription,actions) {
+						<button type="button" class="np-domain-text-button" data-np-dialog-open={ "subdomain-dialog-"+formatJobID(item.ID) }>@icon("plus")<span>Add subdomain</span></button>
+					}
+				</header>
+				if len(childSites(data.Sites,item.ID))==0 {
+					<p class="np-domain-empty">No subdomains yet.</p>
+				}
+				for _, child := range childSites(data.Sites,item.ID) {
+					<a class="np-domain-child-row" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(child.ID))) }>@icon("git-branch")<span><strong>{ child.Domain }</strong><small>{ domainTLSLabel(child) }</small></span>@siteLifecyclePill(child)@icon("chevron-right")</a>
+				}
+				</section>
+			}
+		</div>
+		<aside class="np-domain-subscription-context" aria-label="Subscription and resource usage">
+			<section><h2>Subscription</h2><dl><div><dt>Subscription</dt><dd>{ subscription.SubscriptionName }</dd></div><div><dt>Customer</dt><dd>{ domainCustomerName(subscription) }</dd></div><div><dt>Service plan</dt><dd>{ subscription.PlanName }</dd></div></dl><a class="np-domain-context-link" href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(subscription.ID))) }>@icon("external-link")<span>Manage subscription</span></a></section>
+			<section><h2>Resource usage</h2>
+				<div class="np-domain-usage"><span>Subscription disk</span>
+					if usage, ok := subscriptionCollectedUsage(subscription,data); ok && usage.Complete {
+						<strong>{ formatBytes(usage.DiskBytes) } / { formatPlanLimitMB(subscription.DiskMB) }</strong>
+						@tableMeter(int(usage.DiskBytes/(1024*1024)),subscription.DiskMB,true)
+						<small>Last measured { formatTime(usage.CollectedAt) }</small>
+					} else {
+						<strong>Not measured</strong><small>Allowance: { formatPlanLimitMB(subscription.DiskMB) }</small>
+					}
+				</div>
+				<div class="np-domain-usage"><span>Domains</span><strong>{ formatQuotaCompactCount(subscription.DomainsUsed,subscription.MaxSites,true) }</strong>@tableMeter(subscription.DomainsUsed,subscription.MaxSites,true)</div>
+				<p class="np-domain-caption">Shared across this subscription. This is not an isolated per-domain disk quota.</p>
+			</section>
+			<section><dl><div><dt>SSL certificate</dt><dd>{ domainTLSLabel(item) }
+				if item.TLSStatus=="active" && item.TLSExpiresAt.Valid {
+					<small>Expires { formatNullableTime(item.TLSExpiresAt) } · auto-renew { yesNo(item.TLSAutoRenew) }</small>
+				}
+			</dd></div>
+			if usage, ok := usageForSite(data.SubscriptionServices.SiteUsage,item.ID); ok {
+				<div><dt>Site files</dt><dd>{ formatBytes(usage.DocumentRootBytes) }</dd></div><div><dt>Monthly traffic</dt><dd>{ formatBytes(usage.TrafficBytes) }</dd></div>
+			}
+			<div><dt>Document root</dt><dd><code>{ displayFallback(item.DocumentRoot,"Not available") }</code></dd></div><div><dt>System account</dt><dd>{ displayFallback(item.Username,"Not available") }</dd></div></dl></section>
+		</aside>
+	</div>
+}

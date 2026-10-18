@@ -5,12 +5,10 @@ import (
 )
 
 templ siteRemovalActions(site dashboard.Site,primary bool,view WorkspaceView) {
-	if primary {
-		<span class="np-status-pill susp">Primary website</span>
-	}
-	<details class="np-domain-actions"><summary class="np-secondary-button">@icon("ellipsis")<span>Actions</span></summary><div class="np-domain-actions-menu">
+	<details class="np-domain-actions" data-np-domain-menu><summary class="np-secondary-button" aria-label={ "Actions for "+site.Domain } title={ "Actions for "+site.Domain }>@icon("ellipsis")<span class="np-sr-only">Actions</span></summary><div class="np-domain-actions-menu">
+		<a href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(site.SubscriptionID))) }>@icon("card")<span>View subscription</span></a>
 		if primary {
-			<p>The primary website belongs to the subscription and cannot be removed individually.</p>
+			<p>Primary website: manage this domain with its subscription. It cannot be removed individually.</p>
 		} else if removalBusy(site) {
 			<a href={ templ.SafeURL(removalActionPath(site,view)) }>View removal progress</a>
 		} else {
@@ -47,16 +45,15 @@ templ SiteRemovalPreviewContent(view WorkspaceView,model SiteRemovalView) {
 				}
 			</ul><a class="np-secondary-button" href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(p.SubscriptionID))) }>Back to subscription</a></div>
 		} else {
-			<form class="np-form np-dialog-form np-removal-form" method="post" action={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(p.SiteID)+"/remove")) } data-np-removal-form data-np-removal-lookup={ workspacePath(view,"/site-removals/lookup")+"?request_id="+model.RequestID }>
+			<form class="np-form np-dialog-form np-removal-form" method="post" action={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(p.SiteID)+"/remove")) } data-np-removal-form data-np-confirm-domain={ p.Domain } data-np-removal-lookup={ workspacePath(view,"/site-removals/lookup")+"?request_id="+model.RequestID }>
 				@csrfInput(view)<input type="hidden" name="approval" value={ model.Approval }/><input type="hidden" name="request_id" value={ model.RequestID }/>
 				<div class="np-removal-body">
-					<div class="np-removal-summary"><div><strong>{ formatPlanLimit(len(p.Snapshot.Sites)) }</strong><span>Websites and subdomains</span></div><div><strong>{ formatPlanLimit(removalResourceCount(*p,"mailbox")) }</strong><span>Mailboxes and their messages</span></div><div><strong>{ formatPlanLimit(len(p.Snapshot.Databases)) }</strong><span>Databases kept</span></div><div><strong>{ formatPlanLimit(len(p.Snapshot.Backups)) }</strong><span>Backups kept</span></div></div>
-					<details class="np-removal-impact"><summary>What will be removed</summary><ul>
+					<section class="np-domain-removal-impact"><h3>@icon("trash")<span>Will be removed</span></h3><ul>
 						for _,site:=range p.Snapshot.Sites {
 							<li><strong>{ site.Domain }</strong> - website files, PHP runtime, certificates and domain logs</li>
 						}
-						<li>Domain Git deployments, containers, scheduled tasks and domain-scoped access</li><li>Domain mailboxes, messages, aliases, signing and webmail configuration</li><li>Managed domain DNS records and statistics; external DNS must be updated separately</li></ul></details>
-					<p class="np-callout"><strong>Databases and backups are kept by default.</strong> They remain available under this subscription. Retained backups can restore to an active replacement website with the same domain.</p>
+						<li>Domain Git deployments, containers, scheduled tasks and domain-scoped access</li><li>{ formatPlanLimit(removalResourceCount(*p,"mailbox")) } domain mailboxes and their messages, aliases, signing and webmail configuration</li><li>Managed domain DNS records and statistics; external DNS must be updated separately</li></ul></section>
+					<section class="np-domain-removal-impact is-kept"><h3>@icon("shield-check")<span>Will be kept</span></h3><p><strong>Databases and backups are kept by default.</strong></p><ul><li>{ formatPlanLimit(len(p.Snapshot.Databases)) } databases and { formatPlanLimit(len(p.Snapshot.Backups)) } backups stay in this subscription.</li><li>Sibling websites, the subscription account and shared services.</li></ul><p>Retained backups can restore to an active replacement website with the same domain.</p></section>
 					for _,group:=range removalImpactGroups(*p) {
 						<details class="np-removal-impact"><summary>{ group.Title } ({ formatPlanLimit(len(group.Items)) })</summary><ul>
 							for _,name:=range group.Items {
@@ -79,7 +76,7 @@ templ SiteRemovalPreviewContent(view WorkspaceView,model SiteRemovalView) {
 						<label class="np-check"><input type="checkbox" name="include_children" value="true" checked?={ model.IncludeChildren } required/>Also remove all { formatPlanLimit(len(p.Snapshot.Sites)-1) } child subdomains listed above</label>
 					}
 					if p.RequiresHostnameConfirmation {
-						<label>Type <strong>{ p.Domain }</strong> to confirm<input name="confirm_domain" value={ model.ConfirmDomain } autocomplete="off" spellcheck="false" maxlength="253" required/></label>
+						<label><span>Type <strong>{ p.Domain }</strong> to confirm</span><input name="confirm_domain" value={ model.ConfirmDomain } autocomplete="off" spellcheck="false" maxlength="253" required/></label>
 					} else {
 						<input type="hidden" name="confirm_domain" value={ p.Domain }/>
 					}

@@ -24,8 +24,9 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<title>{ title }</title>
 			<link rel="stylesheet" href="/assets/app.css"/>
 			<link rel="stylesheet" href="/assets/git.css"/>
+			<link rel="stylesheet" href="/assets/domains.css"/>
 		</head>
-		<body class="np-app np-routed" data-np-role={ string(user.Role) }>
+		<body class={ domainWorkspaceClass(view) } data-np-role={ string(user.Role) }>
 			<div class="np-routed-layout">
 				@routedSidebar(user, data, view)
 				<div class="np-routed-main">
@@ -54,6 +55,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			@confirmationDialog()
 			<dialog class="np-dialog np-site-removal-dialog" id="np-site-removal-dialog" data-np-dialog></dialog>
 			<script defer src="/assets/interaction.js"></script>
+			<script defer src="/assets/domains.js"></script>
 			<script defer src="/assets/app.js"></script>
 			<script defer src="/assets/git.js"></script>
 			<script defer src="/assets/site-removal.js"></script>
@@ -444,103 +446,7 @@ templ subscriptionUsageRows(items []types.SubscriptionSummary, details bool, vie
 }
 
 templ routedSites(user auth.SessionUser, sites []dashboard.Site, subscriptions []types.SubscriptionSummary, actions DashboardActions, view WorkspaceView) {
-	@pageHead("Hosting services", "Websites & Domains", "Manage hosting, PHP, certificates, DNS and backups from each website. Add subdomains from their parent domain.") {
-		if actions.CanCreateSite {
-			<a class="np-primary-link" href={ templ.SafeURL(siteCreateBasePath(view)) }>Add website</a>
-		}
-	}
-	if len(sites) == 0 {
-		<section class="np-panel">@siteRows(sites, view)</section>
-	} else {
-		<section class="np-panel np-list" data-np-list data-np-list-page-size="25" data-np-list-noun="websites" data-np-list-noun-one="website">
-			<div class="np-list-toolbar">
-				<label class="np-list-search">
-					<span class="np-sr-only">Filter domains</span>
-					@icon("search")
-					<input type="search" placeholder="Filter domains…" autocomplete="off" data-np-list-search/>
-				</label>
-				<label class="np-list-filter">
-					<span class="np-sr-only">Status</span>
-					<select data-np-list-filter="status">
-						<option value="">All statuses</option>
-						for _, status := range siteStatusOptions(sites) {
-							<option value={ status }>{ status }</option>
-						}
-					</select>
-				</label>
-				<label class="np-list-filter">
-					<span class="np-sr-only">Health</span>
-					<select data-np-list-filter="health">
-						<option value="">All websites</option>
-						<option value="attention">Needs attention</option>
-						<option value="healthy">Healthy</option>
-					</select>
-				</label>
-				<span class="np-list-count" data-np-list-count aria-live="polite"></span>
-			</div>
-			<div class="np-table-scroll">
-				<table class="np-table np-list-table">
-					<thead>
-						<tr>
-							<th><button type="button" data-np-list-sort="0">Domain</button></th>
-							<th><button type="button" data-np-list-sort="1">Subscription</button></th>
-							<th><button type="button" data-np-list-sort="2">PHP</button></th>
-							<th><button type="button" data-np-list-sort="3">TLS</button></th>
-							<th><button type="button" data-np-list-sort="4">Status</button></th>
-							<th><button type="button" data-np-list-sort="5">Health</button></th>
-							<th>Actions</th>
-						</tr>
-					</thead>
-					<tbody data-np-list-body>
-						for _, item := range sitesInDomainOrder(sites) {
-							{{ health := siteHealthOf(item) }}
-							<tr data-np-list-row data-status={ item.Status } data-health={ healthFilterValue(health) } data-subdomain?={ item.ParentSiteID>0 }>
-								<td data-label="Domain">
-									<a href={ templ.SafeURL(workspacePath(view, "/sites/" + formatJobID(item.ID))) }><strong>{ item.Domain }</strong></a>
-									<small>
-										if parent := parentDomain(sites,item); parent != "" {
-											Subdomain of { parent }
-										} else {
-											if isPrimarySite(item,subscriptions) {
-												Primary website
-											} else {
-												Additional website
-											}
-										}
-									</small>
-								</td>
-								<td data-label="Subscription">
-									{ siteSubscriptionName(subscriptions, item) }
-									<small>{ siteSubscriptionPlan(subscriptions, item) }</small>
-								</td>
-								<td data-label="PHP">{ item.PHPVersion }</td>
-								<td data-label="TLS">@tlsCell(item)</td>
-								<td data-label="Status">@siteLifecyclePill(item)</td>
-								<td data-label="Health">
-									if health.NeedsAttention() {
-										<span class={ "np-pill " + severityPillClass(health.Severity) }>{ health.Summary }</span>
-									} else {
-										<span class="np-muted">&#8212;</span>
-									}
-								</td>
-								<td data-label="Actions">
-									@siteRemovalActions(item,isPrimarySite(item,subscriptions),view)
-									if !removalBusy(item) && activeSubscriptionForSite(subscriptions,item) && actions.CanCreateSite && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
-										<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(item.ID)+"?add=subdomain")) }>Add subdomain</a>
-									}
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			</div>
-			<div class="np-list-foot" data-np-list-foot hidden>
-				<span data-np-list-status></span>
-				<button type="button" class="np-secondary-button" data-np-list-more>Show more</button>
-			</div>
-			<p class="np-empty" data-np-list-empty hidden>No websites match these filters.</p>
-		</section>
-	}
+	@domainInventory(sites,subscriptions,actions,view)
 }
 
 // tlsCell states certificate condition in the list, so an expiring certificate
@@ -556,28 +462,17 @@ templ tlsCell(item dashboard.Site) {
 templ routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
 	if item, ok := siteByID(data.Sites, view.DetailID); ok {
 		if subscription, hasSubscription := subscriptionForSite(data.Subscriptions, item); hasSubscription {
-			{{ kind:="Website"; if item.ParentSiteID>0 {kind="Subdomain"} }}
-			@pageHead(kind, item.Domain, subscription.SubscriptionName + " · " + subscription.PlanName) {
-				@siteRemovalActions(item,item.ID==subscription.PrimarySiteID,view)
-				if !removalBusy(item) && actions.CanCreateSite && subscription.Status == "active" && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
-					<button type="button" data-np-dialog-open={ "subdomain-dialog-"+formatJobID(item.ID) }>@icon("plus")<span>Add subdomain</span></button>
-				}
-				<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/subscriptions/" + formatJobID(item.SubscriptionID))) }>Back to subscription</a>
-			}
-			if !removalBusy(item) && actions.CanCreateSite && subscription.Status == "active" && item.Status == "active" && item.DesiredStatus == "active" && item.ParentSiteID == 0 {
+			@domainWorkspaceHeader(item,subscription,data,actions,view)
+			if domainCanAddChild(item,subscription,actions) {
 				@routedSubdomainDialog(item,subscription,data.Capabilities,view)
 			}
-			<div class="np-domain-commandbar">
-				<div>@siteLifecyclePill(item)<span>PHP { item.PHPVersion }</span><span>{ formatTLSStatus(item) }</span></div>
-				<a href={ templ.SafeURL(siteWebsiteURL(item)) } target="_blank" rel="noreferrer">@icon("globe")<span>Open website</span></a>
-			</div>
-			@domainNavigation(item.ID,view.Tab,view,actions.CanUseFileManager)
+			@domainNavigation(item.ID,view.Tab,view,actions.CanUseFileManager,item.Domain)
 			if removalBusy(item) {
 				<section class="np-panel"><h2>Website removal is { item.RemovalState }</h2><p>Hosting tools are unavailable while this approved removal is incomplete. Databases and backups remain under the subscription.</p><a class="np-secondary-button" href={ templ.SafeURL(removalActionPath(item,view)) }>View removal progress</a></section>
 			} else if data.ServiceLoadError != "" && siteServiceTab(view.Tab) {
 				<p class="np-gate is-blocked">Hosting service policy could not be loaded. Mutating tools are unavailable until the panel can verify this subscription.</p>
 			} else if view.Tab == "overview" {
-				@domainOverview(item,subscription,data,actions,view)
+				@domainWorkspaceOverview(item,subscription,data,actions,view)
 			} else if view.Tab == "hosting" {
 				<section class="np-panel np-domain-settings"><div class="np-panel-title"><h2>Hosting settings</h2>@statusPill(item.SettingsStatus)</div>
 					if item.SettingsError != "" {
@@ -1444,7 +1339,7 @@ templ pageSectionHead(title string, copy string) {
 	<div class="np-section-heading"><div><h2>{ title }</h2><p>{ copy }</p></div></div>
 }
 
-templ domainNavigation(siteID int64, current string, view WorkspaceView, canUseFileManager bool) {
+templ domainNavigation(siteID int64, current string, view WorkspaceView, canUseFileManager bool, domain string) {
 	<nav class="np-domain-tabs np-domain-primary-nav" aria-label="Domain workspace">
 		<div class="np-domain-primary-links">
 			@domainTab(siteID, "overview", "Overview", current, view)
@@ -1453,7 +1348,7 @@ templ domainNavigation(siteID int64, current string, view WorkspaceView, canUseF
 			@domainTab(siteID, "mail", "Mail", current, view)
 			@domainTab(siteID, "dns", "DNS", current, view)
 			@domainTab(siteID, "ssl", "SSL/TLS", current, view)
-			<details class="np-domain-more">
+			<details class="np-domain-more" data-np-domain-menu>
 				<summary class={ domainMoreActive(current) }>{ domainToolLabel(current) } @icon("chevron-right")</summary>
 				<div class="np-domain-more-menu">
 					<strong>Files &amp; Access</strong>
@@ -1480,31 +1375,12 @@ templ domainNavigation(siteID int64, current string, view WorkspaceView, canUseF
 		</div>
 		<button type="button" class="np-domain-tools-trigger" data-np-dialog-open={ "domain-tools-"+formatJobID(siteID) }>@icon("layout-grid")<span>Domain tools</span><strong>{ domainCurrentLabel(current) }</strong>@icon("chevron-down")</button>
 	</nav>
-	<dialog class="np-dialog np-domain-tools-dialog" id={ "domain-tools-"+formatJobID(siteID) } data-np-dialog>
-		<div class="np-dialog-head"><div><h2>Domain tools</h2><p>Hosting, security, data, and developer workspaces.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div>
+	<dialog class="np-dialog np-domain-tools-dialog" id={ "domain-tools-"+formatJobID(siteID) } data-np-dialog aria-labelledby={ "domain-tools-title-"+formatJobID(siteID) }>
+		<div class="np-dialog-head"><div><h2 id={ "domain-tools-title-"+formatJobID(siteID) }>Domain tools</h2><p>{ domain }</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close domain tools" aria-label="Close domain tools">@icon("x")</button></div>
 		<div class="np-domain-tools-drawer">
-			@domainTab(siteID,"overview","Overview",current,view)
-			<a class={ domainHostingActive(current) } href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(siteID)+"/web-server")) }>Hosting</a>
-			@domainTab(siteID,"php","PHP",current,view)
-			@domainTab(siteID,"mail","Mail",current,view)
-			@domainTab(siteID,"dns","DNS",current,view)
-			@domainTab(siteID,"ssl","SSL/TLS",current,view)
-			if canUseFileManager {
-				<a class={ domainTabActive(current,"files") } href={ templ.SafeURL(fileBasePath(view,siteID)) }>File Manager</a>
-			}
-			@domainDeepTab(siteID,"access","FTP & SFTP",current,view)
-			@domainTab(siteID,"databases","Databases",current,view)
-			@domainTab(siteID,"backups","Backups",current,view)
-			@domainDeepTab(siteID,"logs","Logs",current,view)
-			@domainDeepTab(siteID,"scheduled-tasks","Scheduled Tasks",current,view)
-			@domainDeepTab(siteID,"statistics","Statistics",current,view)
-			@domainDeepTab(siteID,"git","Git",current,view)
-			@domainDeepTab(siteID,"wordpress","WordPress Toolkit",current,view)
-			@domainDeepTab(siteID,"applications","Applications",current,view)
-			@domainDeepTab(siteID,"containers","Containers",current,view)
-			@domainDeepTab(siteID,"staging","Staging",current,view)
-			@domainDeepTab(siteID,"redis","Valkey Cache",current,view)
+			@domainDrawerGroups(siteID,current,view,canUseFileManager)
 		</div>
+		<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>@icon("arrow-left")<span>Back to website</span></button></div>
 	</dialog>
 }
 
@@ -1731,7 +1607,7 @@ templ routedFileManager(view WorkspaceView) {
 			<div><span class="np-status-pill ok">active</span><span>{ data.Domain }</span><span>public_html</span></div>
 			<a href={ templ.SafeURL(workspacePath(view,"/sites/"+formatJobID(data.SiteID))) }>@icon("arrow-left")<span>Website overview</span></a>
 		</div>
-		@domainNavigation(data.SiteID,"files",view,true)
+		@domainNavigation(data.SiteID,"files",view,true,data.Domain)
 		<section class="np-file-manager" data-np-file-manager data-np-file-unavailable?={ data.Error != "" }>
 			<div class="np-file-toolbar">
 				<div class="np-file-toolbar-actions">
@@ -1864,7 +1740,7 @@ templ routedFileEditor(view WorkspaceView) {
 			<div><span class="np-status-pill ok">active</span><span>{ data.Domain }</span><span>Editing public_html/{ data.Path }</span></div>
 			<a href={ templ.SafeURL(fileManagerPath(view,data.SiteID,fileParent(data.Path))) }>@icon("arrow-left")<span>File Manager</span></a>
 		</div>
-		@domainNavigation(data.SiteID,"files",view,true)
+		@domainNavigation(data.SiteID,"files",view,true,data.Domain)
 		<form class="np-code-editor" method="post" action={ templ.SafeURL(fileBasePath(view,data.SiteID)+"/save") } data-np-editor-form>
 			@csrfInput(view)<input type="hidden" name="path" value={ data.Path }/><input type="hidden" name="sha256" value={ data.SHA256 }/>
 			<div class="np-editor-toolbar"><div>@icon("file-code")<strong>{ data.Name }</strong><code>{ fileMode(data.Mode) }</code></div><div><a class="np-secondary-link" href={ templ.SafeURL(fileEntryPath(view,data.SiteID,"download",data.Path)) }>@icon("download")<span>Download</span></a><button type="submit">@icon("save")<span>Save</span></button></div></div>
@@ -3835,32 +3711,51 @@ templ statisticsEngineSelect(logs types.LogsPreset) {
 templ planPreviewDialog(plan controlquota.Plan, view WorkspaceView) { <dialog class="np-dialog np-plan-preview-dialog" id="plan-preview-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Contract review</span><h2>Review activation and synchronization</h2><p>Activation requires a deliverable runtime. Synced subscriptions receive a new immutable snapshot; locked and custom subscriptions retain their current contract.</p></div><dl class="np-preview-facts"><div><dt>Synced subscriptions</dt><dd data-np-preview-synced>-</dd></div><div><dt>Locked subscriptions</dt><dd data-np-preview-locked>-</dd></div><div><dt>Custom subscriptions</dt><dd data-np-preview-custom>-</dd></div><div><dt>Server committed disk</dt><dd data-np-preview-disk>-</dd></div><div data-np-preview-reseller-row hidden><dt>Reseller allocation</dt><dd data-np-preview-reseller>-</dd></div></dl><div class="np-preview-section"><h3>Contract changes</h3><div class="np-preview-list" data-np-preview-changes><p class="np-empty">No entitlement changes.</p></div></div><div class="np-preview-section"><h3>Affected subscriptions</h3><div class="np-preview-list" data-np-preview-impacts><p class="np-empty">No synchronized subscriptions are affected.</p></div></div><div class="np-preview-section"><h3>Server readiness</h3><div class="np-preview-list" data-np-preview-capabilities><p class="np-empty">Capability checks passed.</p></div></div><div class="np-preview-list is-blocked" data-np-preview-blockers hidden></div><div class="np-preview-list" data-np-preview-warnings hidden></div><p class="np-gate" data-np-preview-warning></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="button" data-np-plan-confirm-submit>{ planEditorSubmitLabel(plan,false) }</button></div></dialog> }
 
 templ routedSubdomainDialog(parent dashboard.Site, subscription types.SubscriptionSummary, capabilities types.RuntimeCapabilities, view WorkspaceView) {
-	<dialog class="np-dialog np-subdomain-dialog" id={ "subdomain-dialog-"+formatJobID(parent.ID) } data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">{ parent.Domain }</span><h2>Add subdomain</h2><p>Creates separate website files under this subscription.</p></div>
+	<dialog class="np-dialog np-subdomain-dialog np-domain-create-dialog" id={ "subdomain-dialog-"+formatJobID(parent.ID) } data-np-dialog aria-labelledby={ "subdomain-title-"+formatJobID(parent.ID) }>
+		<div class="np-dialog-head"><div><h2 id={ "subdomain-title-"+formatJobID(parent.ID) }>Add subdomain</h2><p>{ parent.Domain } · { subscription.SubscriptionName }</p></div><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close add subdomain" title="Close">@icon("x")</button></div>
 		<form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(parent.ID)+"/subdomains") } data-np-create-subdomain-form data-np-parent-domain={ parent.Domain } data-np-max-subdomains={ formatPlanLimitFormValue(subscription.MaxSubdomains) } data-np-subdomains-used={ formatPlanLimitFormValue(subscription.SubdomainsUsed) } data-np-overuse-policy={ string(subscription.OverusePolicy) } data-np-php-ready={ formatBool(stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion))) }>
 			@csrfInput(view)
-			<label>Subdomain name<input name="label" maxlength="253" placeholder="blog" autocapitalize="none" autocomplete="off" spellcheck="false" required/></label>
-			<p class="np-subdomain-preview">Address: <strong data-np-subdomain-preview>blog.{ parent.Domain }</strong></p>
-			@creationSSLChoice(subscription.AllowTLS,capabilities.ACMEAvailable,view)
-			<p class="np-form-help">Enter <strong>blog</strong> to create blog.{ parent.Domain }. The matching full address also works.</p>
-			<p class="np-form-help">Subscription allowance: { formatQuotaCompactCount(subscription.SubdomainsUsed,subscription.MaxSubdomains,true) } subdomains. The document root is created automatically.</p>
-			<p class="np-form-help">PHP starts with { displayFallback(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion),"the subscription default") }. Change it on the new domain after creation.</p>
-			if !stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion)) {
-				<p class="np-gate is-blocked">The subscription default PHP version is not available on this server. Update the plan or PHP installation first.</p>
-			}
-			<p class="np-gate" data-np-subdomain-gate aria-live="polite"></p>
-			<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites")) } data-np-subdomain-check-existing hidden>Check Websites</a>
-			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit disabled?={ !stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion)) }>Create subdomain</button></div>
+			<div class="np-domain-form-body">
+				<p class="np-gate" data-np-subdomain-gate aria-live="polite" role="status"></p>
+				<label for={ "subdomain-name-"+formatJobID(parent.ID) }>Subdomain name
+					<span class="np-domain-name-field"><input id={ "subdomain-name-"+formatJobID(parent.ID) } name="label" maxlength="253" placeholder="blog" autocapitalize="none" autocomplete="off" spellcheck="false" aria-describedby={ "subdomain-hint-"+formatJobID(parent.ID)+" subdomain-error-"+formatJobID(parent.ID) } required data-np-autofocus/><span data-np-subdomain-suffix aria-hidden="true">.{ parent.Domain }</span></span>
+					<span class="np-form-help" id={ "subdomain-hint-"+formatJobID(parent.ID) }>Your website address: <strong data-np-subdomain-preview>blog.{ parent.Domain }</strong></span>
+					<span class="np-domain-field-error" id={ "subdomain-error-"+formatJobID(parent.ID) } data-np-subdomain-field-error hidden></span>
+				</label>
+				<div class="np-domain-form-field"><span>Parent domain</span><div class="np-domain-readonly-value">{ parent.Domain }</div><p class="np-form-help">Shared subscription. Allowance: { formatQuotaCompactCount(subscription.SubdomainsUsed,subscription.MaxSubdomains,true) } subdomains.</p></div>
+				<div class="np-domain-form-field"><span>PHP version</span><div class="np-domain-readonly-value">{ displayFallback(controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion),"Not available") } · Inherited from subscription</div></div>
+				@creationSSLChoice(subscription.AllowTLS,capabilities.ACMEAvailable,view)
+				<div class="np-domain-dialog-notice">@icon("folder")<div><strong>Separate website files</strong><p>The document root is created automatically. Your parent website is unchanged.</p></div></div>
+				<a class="np-secondary-link" href={ templ.SafeURL(workspacePath(view,"/sites")) } data-np-subdomain-check-existing hidden>Check Websites</a>
+			</div>
+			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit disabled?={ !stringInSlice(phpVersionsFromCapabilities(capabilities,subscription.PHPAllowlist),controlquota.PreferredNewSitePHPVersion(subscription.PHPAllowlist,subscription.DefaultPHPVersion)) }>@icon("plus")<span>Create subdomain</span></button></div>
 		</form>
 		@siteSetupProgress(types.SiteSetupStatus{Kind:"subdomain",State:"pending",Message:"Creating subdomain."},view,true)
 	</dialog>
 }
 
 templ routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities, view WorkspaceView) {
-	<dialog class="np-dialog" id="site-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Hosting services</span><h2>Add website</h2><p>Use this for an independent domain. Add subdomains from their parent website.</p></div><form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>@csrfInput(view)@routedSubscriptionSelect(subscriptions,capabilities)<label>Domain<input name="domain" required/></label><input type="hidden" name="username" value="npsystem"/><label>PHP<select name="php_version" data-np-site-php>
-		for _, version := range subscriptionPHPVersions(subscriptions,capabilities) {
-			<option value={ version }>{ version }</option>
-		}
-	</select></label>@creationSSLChoice(creationSubscriptionTLS(subscriptions,0),capabilities.ACMEAvailable,view)<p class="np-gate" data-np-customer-gate></p><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit>Create website</button></div></form>@siteSetupProgress(types.SiteSetupStatus{Kind:"website",State:"pending",Message:"Creating website."},view,true)</dialog>
+	<dialog class="np-dialog np-domain-create-dialog" id="site-dialog" data-np-dialog aria-labelledby="site-dialog-title">
+		<div class="np-dialog-head"><div><h2 id="site-dialog-title">Add domain</h2><p>Create an independent website under a subscription.</p></div><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close add domain" title="Close">@icon("x")</button></div>
+		<form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>
+			@csrfInput(view)
+			<div class="np-domain-form-body">
+				<p class="np-gate" data-np-customer-gate aria-live="polite" role="status"></p>
+				<label>Domain name<input name="domain" placeholder="example.com" autocomplete="off" autocapitalize="none" spellcheck="false" required data-np-autofocus/><span class="np-form-help">Do not include https:// or a path.</span></label>
+				@routedSubscriptionSelect(subscriptions,capabilities)
+				<input type="hidden" name="username" value="npsystem"/>
+				<label>PHP version<select name="php_version" data-np-site-php>
+					for _, version := range subscriptionPHPVersions(subscriptions,capabilities) {
+						<option value={ version }>{ version }</option>
+					}
+				</select></label>
+				@creationSSLChoice(creationSubscriptionTLS(subscriptions,0),capabilities.ACMEAvailable,view)
+				<div class="np-domain-dialog-notice">@icon("folder")<div><strong>Separate website files</strong><p>This website uses the selected subscription's system account and quota.</p></div></div>
+			</div>
+			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" data-np-create-submit>@icon("plus")<span>Create domain</span></button></div>
+		</form>
+		@siteSetupProgress(types.SiteSetupStatus{Kind:"website",State:"pending",Message:"Creating website."},view,true)
+	</dialog>
 }
 
 

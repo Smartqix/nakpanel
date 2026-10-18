@@ -106,9 +106,9 @@ func TestWebsiteOverviewDistinguishesWordPressProgressAndFailure(t *testing.T) {
 		name, observed, desired, version, heading, description string
 	}{
 		{"pending", "pending", "present", "", "Installing WordPress", "installation is still running"},
-		{"healthy", "healthy", "present", "7.1", "Website is active", "configured for PHP"},
+		{"healthy", "healthy", "present", "7.1", "np-domain-status-strip", "PHP settings"},
 		{"failed", "failed", "present", "", "WordPress needs attention", "WordPress installation needs attention"},
-		{"removed", "removed", "absent", "", "Website is active", "configured for PHP"},
+		{"removed", "removed", "absent", "", "np-domain-status-strip", "PHP settings"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			workspace := controlwordpress.Workspace{Instance: &controlwordpress.Instance{ObservedState: tc.observed, DesiredState: tc.desired, InstalledVersion: tc.version}}
