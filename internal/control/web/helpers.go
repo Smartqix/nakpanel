@@ -84,6 +84,12 @@ type WorkspaceView struct {
 	FileEditor           *FileEditorView
 	MailSettings         types.MailSettingsView
 	MailSettingsError    string
+	MailView             string
+	MailEditID           int64
+	MailClient           types.MailClientProfile
+	MailClientError      string
+	MailClientAddress    string
+	MailClientSiteID     int64
 	DNSSettings          types.DNSTemplateView
 	DNSSettingsError     string
 	DNSPreview           *types.DNSSyncRun

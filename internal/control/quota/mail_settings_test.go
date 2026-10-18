@@ -37,6 +37,22 @@ func TestUpdateMailSettingsDoesNotTouchSecretWhenBeginFails(t *testing.T) {
 	}
 }
 
+func TestMailClientHostnameReadsNoRelayCredentials(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectQuery(regexp.QuoteMeta(`SELECT mail_hostname FROM mail_settings WHERE id`)).WillReturnRows(sqlmock.NewRows([]string{"mail_hostname"}).AddRow("mail.example.test"))
+	host, err := NewSQLStore(db).MailClientHostname(context.Background())
+	if err != nil || host != "mail.example.test" {
+		t.Fatalf("host=%q err=%v", host, err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestUpdateMailSettingsRollsBackEncryptedSecretWithSettings(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {

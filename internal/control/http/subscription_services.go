@@ -599,8 +599,8 @@ func (s *Server) handleMailDomain(w http.ResponseWriter, r *http.Request) {
 	}
 	input := types.MailDomainInput{
 		ID: parseFormInt64Default(r, "resource_id", 0), SiteID: parseFormInt64Default(r, "site_id", 0),
-		Enabled: formBoolDefault(r, "enabled", true),
-		DKIM:    formBoolDefault(r, "dkim", true), DMARCPolicy: policy, CatchAll: strings.TrimSpace(r.Form.Get("catch_all")),
+		Enabled: formBoolDefault(r, "enabled", r.Form.Get("mail_form") != "true"),
+		DKIM:    formBoolDefault(r, "dkim", r.Form.Get("mail_form") != "true"), DMARCPolicy: policy, CatchAll: strings.TrimSpace(r.Form.Get("catch_all")),
 	}
 	if input.SiteID <= 0 {
 		http.Error(w, "A hosted domain is required", http.StatusBadRequest)
@@ -623,7 +623,7 @@ func (s *Server) handleMailbox(w http.ResponseWriter, r *http.Request) {
 	input := types.MailboxInput{
 		ID: parseFormInt64Default(r, "resource_id", 0), MailDomainID: parseFormInt64Default(r, "mail_domain_id", 0),
 		LocalPart: strings.TrimSpace(r.Form.Get("local_part")), Password: r.Form.Get("password"),
-		QuotaMB: int(parseFormInt64Default(r, "quota_mb", 0)), Enabled: formBoolDefault(r, "enabled", true),
+		QuotaMB: int(parseFormInt64Default(r, "quota_mb", 0)), Enabled: formBoolDefault(r, "enabled", r.Form.Get("mail_form") != "true"),
 	}
 	id, err := services.UpsertMailbox(r.Context(), user, subscriptionID, input)
 	if err != nil {
