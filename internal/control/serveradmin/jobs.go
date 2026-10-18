@@ -76,10 +76,11 @@ func (ControlServiceArgs) InsertOpts() river.InsertOpts {
 }
 
 type Manager struct {
-	store *Store
-	river riverInserter
-	agent Agent
-	now   func() time.Time
+	store        *Store
+	river        riverInserter
+	agent        Agent
+	now          func() time.Time
+	capabilities interface{ Invalidate() }
 }
 
 func NewManager(store *Store, client *river.Client[*sql.Tx], agent Agent) *Manager {
@@ -88,6 +89,11 @@ func NewManager(store *Store, client *river.Client[*sql.Tx], agent Agent) *Manag
 
 func (m *Manager) SetRiverClient(client *river.Client[*sql.Tx]) {
 	m.river = client
+}
+
+// SetCapabilityInvalidator configures display cache invalidation before workers start.
+func (m *Manager) SetCapabilityInvalidator(invalidator interface{ Invalidate() }) {
+	m.capabilities = invalidator
 }
 
 func (m *Manager) Store() *Store {
@@ -278,6 +284,10 @@ func (w *ControlServiceWorker) Work(ctx context.Context, job *river.Job[ControlS
 	}
 
 	result, err := w.manager.agent.ControlManagedService(ctx, request)
+	if w.manager.capabilities != nil {
+		// Service actions include PHP-FPM changes and agent restarts.
+		w.manager.capabilities.Invalidate()
+	}
 	if err != nil {
 		_, finishErr := w.manager.store.FinishOperation(ctx, FinishOperationParams{
 			UpdateOperationParams: UpdateOperationParams{

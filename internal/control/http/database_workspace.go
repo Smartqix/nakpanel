@@ -119,9 +119,10 @@ func safeDatabaseStatus(db dashboard.Database) databaseStatusResponse {
 
 func (s *Server) handleDatabaseStatus(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := s.currentUser(w, r)
-	if !ok {
+	user, ok := s.currentUser(w, r, func() {
 		http.Error(w, "Unauthorized", 401)
+	})
+	if !ok {
 		return
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -215,9 +216,10 @@ func (s *Server) handleScopedDatabasePassword(w http.ResponseWriter, r *http.Req
 
 func (s *Server) databaseWorkspaceTarget(w http.ResponseWriter, r *http.Request) (auth.SessionUser, dashboard.Database, bool) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := s.currentUser(w, r)
-	if !ok {
+	user, ok := s.currentUser(w, r, func() {
 		http.Error(w, "Unauthorized", 401)
+	})
+	if !ok {
 		return user, dashboard.Database{}, false
 	}
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)

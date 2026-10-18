@@ -18,6 +18,7 @@ import (
 )
 
 type fakeRuntimeCapabilityProbe struct {
+	mu            sync.Mutex
 	paths         map[string]string
 	outputs       map[string][]byte
 	errors        map[string]error
@@ -80,6 +81,8 @@ func (p *fakeRuntimeCapabilityProbe) LookPath(name string) (string, error) {
 }
 
 func (p *fakeRuntimeCapabilityProbe) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	key := strings.Join(append([]string{name}, args...), "\x00")
 	if strings.Contains(filepath.Base(name), "php-fpm") && len(args) == 3 && args[0] == "-t" && args[1] == "-y" {
 		config, err := os.ReadFile(args[2])
@@ -93,6 +96,8 @@ func (p *fakeRuntimeCapabilityProbe) Run(_ context.Context, name string, args ..
 }
 
 func (p *fakeRuntimeCapabilityProbe) Start(ctx context.Context, name string, args ...string) (RuntimeCapabilityProcess, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	key := runtimeCommandKey(name, "-F", "-y")
 	if err := p.startErrors[key]; err != nil {
 		return nil, err

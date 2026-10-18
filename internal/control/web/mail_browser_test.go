@@ -38,7 +38,22 @@ func TestMailWorkspaceBrowserPreview(t *testing.T) {
 	mux.Handle("/assets/", http.StripPrefix("/assets", StaticHandler()))
 	mux.HandleFunc("POST /__stop", func(w http.ResponseWriter, r *http.Request) { once.Do(func() { close(stop) }); w.WriteHeader(204) })
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		view := WorkspaceView{Route: "site-detail", Tab: "mail", DetailID: 1, CSRFToken: "fixture", MailView: r.URL.Query().Get("mail_view")}
+		if r.Method == http.MethodPost {
+			http.Redirect(w, r, "/sites/1?tab=mail&fixture_validation_error=1", http.StatusSeeOther)
+			return
+		}
+		pageData := data
+		if r.URL.Query().Get("fixture_validation_error") == "1" {
+			pageData.Notice, pageData.NoticeKind = "This email address already exists.", "error"
+		}
+		view := WorkspaceView{Route: "site-detail", Tab: r.URL.Query().Get("tab"), DetailID: 1, CSRFToken: "fixture", MailView: r.URL.Query().Get("mail_view")}
+		if view.Tab == "" {
+			view.Tab = "overview"
+		}
+		if r.URL.Path == "/dashboard" {
+			view.Route = "dashboard"
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if r.URL.Query().Get("support") == "1" {
 			view.SupportCustomerID = 88
 			view.SupportCustomerName = "Example Customer"
@@ -56,7 +71,14 @@ func TestMailWorkspaceBrowserPreview(t *testing.T) {
 				return
 			}
 		}
-		if err := RoutedDashboardPage("Mail", auth.SessionUser{Role: auth.RoleAdmin, Email: "admin@example.test"}, data, actions, view).Render(r.Context(), w); err != nil {
+		user := auth.SessionUser{Role: auth.RoleAdmin, Email: "admin@example.test"}
+		if r.Header.Get("X-Nakpanel-Fragment") == "main" {
+			if err := RoutedFragment("Mail", user, pageData, actions, view).Render(r.Context(), w); err != nil {
+				t.Error(err)
+			}
+			return
+		}
+		if err := RoutedDashboardPage("Mail", user, pageData, actions, view).Render(r.Context(), w); err != nil {
 			t.Error(err)
 		}
 	})

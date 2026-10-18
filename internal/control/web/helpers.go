@@ -54,6 +54,8 @@ type DashboardActions struct {
 }
 
 type WorkspaceView struct {
+	InstantNavDisabled   bool
+	Fragment             bool
 	SiteRemoval          *SiteRemovalView
 	Route                string
 	Title                string
@@ -80,6 +82,7 @@ type WorkspaceView struct {
 	ProviderFilter       string
 	CloneFrom            int64
 	Tab                  string
+	Drawer               string
 	FileManager          *FileManagerView
 	FileEditor           *FileEditorView
 	MailSettings         types.MailSettingsView
@@ -1950,6 +1953,10 @@ func subscriptionTabPath(view WorkspaceView, subscriptionID int64, tab string) t
 	return templ.SafeURL(workspacePath(view, "/subscriptions/"+formatJobID(subscriptionID)) + "?tab=" + tab)
 }
 
+func subscriptionDrawerPath(view WorkspaceView, subscriptionID int64, drawer string) templ.SafeURL {
+	return templ.SafeURL(string(subscriptionTabPath(view, subscriptionID, view.Tab)) + "&drawer=" + url.QueryEscape(drawer))
+}
+
 func subscriptionTabClass(active, tab string) string {
 	if active == tab {
 		return "is-active"
@@ -3270,4 +3277,9 @@ func restoreUnavailableReason(backup dashboard.Backup) string {
 		return "This backup has no stored archive to restore from."
 	}
 	return "Only a completed backup can be restored; this one is " + backup.Status + "."
+}
+
+// These pages need document-owned scripts, unique shell forms, or refresh metadata.
+func workspaceRequiresDocument(view WorkspaceView) bool {
+	return view.FileEditor != nil || view.Route == "site-new"
 }

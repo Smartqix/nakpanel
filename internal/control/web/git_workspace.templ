@@ -24,7 +24,7 @@ templ gitWorkspace(item dashboard.Site, subscription types.SubscriptionSummary, 
     <section id="git-deployments" data-git-panel><h3>Deployments</h3><p>No deployments yet.</p></section>
     <section id="git-history" data-git-panel><h3>Commit History</h3><p>Connect and fetch a repository to view commits.</p></section>
     <section id="git-settings" data-git-panel><h3>Settings</h3><p>No repository connected.</p><noscript>@gitSettingsForm(item,subscription,gitNewRepository(data.SubscriptionServices.Git,item.ID),view)</noscript></section>
-    <dialog id="git-connect" class="np-dialog np-dialog-wide" data-np-dialog aria-labelledby="git-connect-title"><div class="np-dialog-head"><h2 id="git-connect-title">Add Repository</h2><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div>@gitSettingsForm(item,subscription,gitNewRepository(data.SubscriptionServices.Git,item.ID),view)</dialog>
+    <dialog id="git-connect" class="np-dialog np-drawer np-dialog-wide" data-np-dialog aria-labelledby="git-connect-title"><div class="np-dialog-head"><h2 id="git-connect-title">Add Repository</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close" title="Close">@icon("x")</button></div>@gitSettingsForm(item,subscription,gitNewRepository(data.SubscriptionServices.Git,item.ID),view)</dialog>
    }
   }
  </div>
@@ -73,7 +73,7 @@ templ gitAction(item dashboard.Site, subscription types.SubscriptionSummary, rep
 }
 
 templ gitSettingsForm(item dashboard.Site, subscription types.SubscriptionSummary, repository types.GitRepository, view WorkspaceView) {
- <form class="np-form np-git-settings" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/git") } data-git-form data-git-action="save">
+ <form class="np-form np-git-settings" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/git") } data-git-form data-git-action="save"><div class="np-drawer-body">
   @csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><input type="hidden" name="resource_id" value={ formatJobID(repository.ID) }/><input type="hidden" name="expected_revision" value={ formatJobID(repository.OperationRevision) }/><input type="hidden" name="mode" value={ repository.Mode }/><input type="hidden" name="return_to" value="site-git"/>
   <input type="hidden" name="connect" value="yes"/>
   <label>Repository URL<input name="remote_url" type="text" value={ repository.RemoteURL } placeholder="git@github.com:team/website.git" required?={ repository.Mode!="hosted" } autocomplete="off"/></label>
@@ -84,7 +84,7 @@ templ gitSettingsForm(item dashboard.Site, subscription types.SubscriptionSummar
   </div>
   <details open?={ repository.RemoteURL!="" }><summary>@icon("chevron-right") Deployment options</summary><div class="np-form-grid"><label>Branch<input name="branch" value={ repository.Branch } list="git-branches" required/><datalist id="git-branches" data-git-branches></datalist></label><label>Directory under public_html<input name="deploy_target" value={ repository.DeployTarget } required/></label></div><label>Deployment mode<select name="deployment_mode"><option value="manual" selected?={ repository.DeploymentMode=="manual" || repository.DeploymentMode=="" && !repository.Automatic }>Manual</option><option value="automatic" selected?={ repository.DeploymentMode=="automatic" || repository.Automatic }>Automatic</option><option value="disabled" selected?={ repository.DeploymentMode=="disabled" }>No deployment</option></select></label><p>Default: main branch, public_html, manual deployment. Connecting does not publish files. Automatic updates require a webhook.</p></details>
   <p class="np-git-message" data-git-message role="status" aria-live="polite"></p>
-  <div class="np-git-actions np-dialog-actions">
+  </div><div class="np-git-actions np-dialog-actions">
   if repository.RemoteURL=="" {
    <button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button>
   }

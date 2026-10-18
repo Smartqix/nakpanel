@@ -7,8 +7,11 @@ import (
 	"log"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/servertiming"
 	"github.com/nakroteck/nakpanel/internal/control/store"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -101,6 +104,7 @@ const (
 type Data struct {
 	Sites                []Site
 	Databases            []Database
+	ActiveJobs           int
 	Jobs                 []Job
 	JobLoadError         string
 	Phase6               Phase6Data
@@ -424,197 +428,228 @@ func NewStore(queries Querier, options ...StoreOption) *Store {
 	return s
 }
 
+// WithServiceScope narrows service reads while leaving shared shell data intact.
+// A site scope is resolved from the role-scoped sites already read by the loader.
+func WithServiceScope(ctx context.Context, subscriptionID, siteID int64) context.Context {
+	return context.WithValue(ctx, serviceScopeKey{}, serviceScope{subscriptionID, siteID})
+}
+
+type serviceScopeKey struct{}
+type serviceScope struct{ subscriptionID, siteID int64 }
+type scopedSubscriptionServiceReader interface {
+	ListSubscriptionServicesFor(context.Context, auth.SessionUser, int64) (SubscriptionServicesData, error)
+}
+
+func timedRead(ctx context.Context, name string, read func()) {
+	started := time.Now()
+	defer func() {
+		if name != "" {
+			servertiming.Record(ctx, name, time.Since(started))
+		}
+	}()
+	read()
+}
+
 func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, error) {
-	if user.Role != auth.RoleAdmin {
-		data := Data{}
-		if s.scoped != nil {
-			data.Sites, _ = s.scoped.ListSitesForUser(ctx, user.ID)
-			data.Databases, _ = s.scoped.ListDatabasesForUser(ctx, user.ID)
-			data.Phase6, _ = s.scoped.GetPhase6ForUser(ctx, user.ID)
-		}
-		if s.quotas != nil {
-			summary, err := s.quotas.GetAccountQuotaSummary(ctx, user.ID)
-			if err != nil {
-				data.QuotaLoadError = "account quotas unavailable"
-			} else {
-				data.Quotas = []controlquota.Summary{summary}
-			}
-			subscriptions, err := s.quotas.ListSubscriptionSummariesForUser(ctx, user.ID)
-			if err == nil {
-				data.Subscriptions = subscriptions
-			}
-			if user.Role == auth.RoleReseller {
-				if provider, ok := s.quotas.(ProviderReader); ok {
-					data.Customers, _ = provider.ListCustomersForUser(ctx, user.ID)
-					data.Plans, _ = provider.ListPlansForUser(ctx, user.ID)
-					data.ResellerPlans, _ = provider.ListResellerPlansForUser(ctx, user.ID)
-					data.Resellers, _ = provider.ListResellersForUser(ctx, user.ID)
-					data.AddonPlans, _ = provider.ListAddonPlansForUser(ctx, user.ID)
-				}
-			}
-			if usage, ok := s.quotas.(UsageReader); ok {
-				data.SubscriptionUsage, _ = usage.ListSubscriptionUsage(ctx, user)
-				data.UsageAlerts, _ = usage.ListUsageAlerts(ctx, user, 25)
-			}
-		}
-		if s.capabilities != nil {
-			var err error
-			data.Capabilities, err = s.capabilities.RuntimeCapabilities(ctx)
-			if err != nil {
-				data.CapabilityLoadError = "runtime capabilities unavailable"
-			}
-		}
-		if services, ok := s.scoped.(SubscriptionServiceReader); ok {
-			var err error
-			data.SubscriptionServices, err = services.ListSubscriptionServices(ctx, user)
-			if err != nil {
-				// The message shown in the panel stays generic; the detail says
-				// which query lost its data and belongs in the server log.
-				log.Printf("dashboard: %v", err)
-				data.ServiceLoadError = "hosting service policy unavailable"
-			}
-		}
-		return data, nil
-	}
-	if s.queries == nil {
+	return s.getDashboard(ctx, user, 4)
+}
+
+func (s *Store) getDashboard(ctx context.Context, user auth.SessionUser, concurrency int) (Data, error) {
+	if user.Role == auth.RoleAdmin && s.queries == nil {
 		return Data{}, errors.New("dashboard queries are not configured")
 	}
-
-	sites, err := s.queries.ListSites(ctx)
-	if err != nil {
-		return Data{}, err
-	}
-	databases, err := s.queries.ListDatabases(ctx)
-	if err != nil {
-		return Data{}, err
-	}
-	jobs := []Job(nil)
-	jobLoadError := ""
-	if s.jobs != nil {
-		jobs, err = s.jobs.ListRecentJobs(ctx, DefaultRecentJobLimit)
-		if err != nil {
-			jobs = nil
-			jobLoadError = "recent jobs unavailable"
+	var data Data
+	var group errgroup.Group
+	group.SetLimit(concurrency)
+	run := func(name string, read func()) { group.Go(func() error { timedRead(ctx, name, read); return nil }) }
+	scope, scoped := ctx.Value(serviceScopeKey{}).(serviceScope)
+	loadServices := func() {
+		services, ok := s.scoped.(SubscriptionServiceReader)
+		if !ok {
+			return
 		}
-	}
-	phase6 := Phase6Data{}
-	phase6Error := ""
-	if s.phase6 != nil {
-		phase6, err = s.phase6.GetPhase6(ctx)
-		if err != nil {
-			phase6 = Phase6Data{}
-			phase6Error = "phase6 operations unavailable"
-		}
-	}
-	quotas := []controlquota.Summary(nil)
-	quotaLoadError := ""
-	if s.quotas != nil {
-		quotas, err = s.quotas.ListAccountQuotas(ctx)
-		if err != nil {
-			quotas = nil
-			quotaLoadError = "account quotas unavailable"
-		}
-	}
-	usageItems := []types.SubscriptionUsage(nil)
-	usageAlerts := []types.UsageAlert(nil)
-	if usage, ok := s.quotas.(UsageReader); ok {
-		usageItems, _ = usage.ListSubscriptionUsage(ctx, user)
-		usageAlerts, _ = usage.ListUsageAlerts(ctx, user, 25)
-	}
-	capabilities := types.RuntimeCapabilities{}
-	capabilityLoadError := ""
-	if s.capabilities != nil {
-		capabilities, err = s.capabilities.RuntimeCapabilities(ctx)
-		if err != nil {
-			capabilityLoadError = "runtime capabilities unavailable"
-		}
-	}
-	plans := []controlquota.Plan(nil)
-	settings := controlquota.Settings{}
-	committedDiskMB := 0
-	planLoadError := ""
-	if s.quotas != nil {
-		plans, err = s.quotas.ListPlans(ctx)
-		if err != nil {
-			plans = nil
-			planLoadError = "plans unavailable"
-		} else if settings, err = s.quotas.GetSettings(ctx); err != nil {
-			planLoadError = "plan settings unavailable"
-		} else if committedDiskMB, err = s.quotas.CommittedAllocationMB(ctx); err != nil {
-			planLoadError = "committed allocation unavailable"
-		}
-	}
-	customers := []types.Customer(nil)
-	subscriptions := []types.SubscriptionSummary(nil)
-	if s.quotas != nil {
-		customers, err = s.quotas.ListCustomers(ctx)
-		if err != nil {
-			customers = nil
-			if planLoadError == "" {
-				planLoadError = "customers unavailable"
+		var err error
+		if narrowed, ok := services.(scopedSubscriptionServiceReader); ok && scoped {
+			id := scope.subscriptionID
+			if scope.siteID > 0 {
+				id = 0
+				for _, site := range data.Sites {
+					if site.ID == scope.siteID {
+						id = site.SubscriptionID
+						break
+					}
+				}
 			}
+			// Zero also narrows (to no subscription), never falls back to all services.
+			data.SubscriptionServices, err = narrowed.ListSubscriptionServicesFor(ctx, user, id)
+		} else {
+			data.SubscriptionServices, err = services.ListSubscriptionServices(ctx, user)
 		}
-		subscriptions, err = s.quotas.ListSubscriptionSummaries(ctx)
-		if err != nil {
-			subscriptions = nil
-			if planLoadError == "" {
-				planLoadError = "subscriptions unavailable"
-			}
-		}
-	}
-	auditEvents := []types.AuditEvent(nil)
-	if s.audit != nil {
-		auditEvents, _ = s.audit.ListAudit(ctx, user, 50)
-	}
-	resellers := []types.Reseller(nil)
-	resellerPlans := []types.ResellerPlan(nil)
-	addonPlans := []types.AddonPlan(nil)
-	if provider, ok := s.quotas.(ProviderReader); ok {
-		resellers, _ = provider.ListResellers(ctx)
-		resellerPlans, _ = provider.ListResellerPlans(ctx)
-		addonPlans, _ = provider.ListAddonPlans(ctx)
-	}
-	planRevisions := []types.PlanRevision(nil)
-	if revisions, ok := s.quotas.(PlanRevisionReader); ok {
-		if user.Role == auth.RoleAdmin {
-			planRevisions, _ = revisions.ListPlanRevisions(ctx, 200)
-		} else if user.Role == auth.RoleReseller {
-			planRevisions, _ = revisions.ListPlanRevisionsForUser(ctx, user.ID, 200)
-		}
-	}
-
-	data := Data{
-		Sites:               make([]Site, 0, len(sites)),
-		Databases:           make([]Database, 0, len(databases)),
-		Jobs:                jobs,
-		JobLoadError:        jobLoadError,
-		Phase6:              phase6,
-		Phase6Error:         phase6Error,
-		Quotas:              quotas,
-		QuotaLoadError:      quotaLoadError,
-		Plans:               plans,
-		PlanRevisions:       planRevisions,
-		Customers:           customers,
-		Subscriptions:       subscriptions,
-		Settings:            settings,
-		CommittedDiskMB:     committedDiskMB,
-		PlanLoadError:       planLoadError,
-		AuditEvents:         auditEvents,
-		Resellers:           resellers,
-		ResellerPlans:       resellerPlans,
-		AddonPlans:          addonPlans,
-		SubscriptionUsage:   usageItems,
-		UsageAlerts:         usageAlerts,
-		Capabilities:        capabilities,
-		CapabilityLoadError: capabilityLoadError,
-	}
-	if services, ok := s.scoped.(SubscriptionServiceReader); ok {
-		data.SubscriptionServices, err = services.ListSubscriptionServices(ctx, user)
 		if err != nil {
 			log.Printf("dashboard: %v", err)
 			data.ServiceLoadError = "hosting service policy unavailable"
 		}
 	}
+	// Site service reads depend on the mapped sites. Other service reads are independent.
+	if !scoped || scope.siteID == 0 {
+		run("services", loadServices)
+	}
+	if s.capabilities != nil {
+		run("caps", func() {
+			var err error
+			data.Capabilities, err = s.capabilities.RuntimeCapabilities(ctx)
+			if err != nil {
+				data.CapabilityLoadError = "runtime capabilities unavailable"
+			}
+		})
+	}
+	if user.Role != auth.RoleAdmin {
+		if s.scoped != nil {
+			run("sites", func() { data.Sites, _ = s.scoped.ListSitesForUser(ctx, user.ID) })
+			run("databases", func() { data.Databases, _ = s.scoped.ListDatabasesForUser(ctx, user.ID) })
+			run("phase6", func() { data.Phase6, _ = s.scoped.GetPhase6ForUser(ctx, user.ID) })
+		}
+		if s.quotas != nil {
+			run("quotas", func() {
+				summary, err := s.quotas.GetAccountQuotaSummary(ctx, user.ID)
+				if err != nil {
+					data.QuotaLoadError = "account quotas unavailable"
+				} else {
+					data.Quotas = []controlquota.Summary{summary}
+				}
+			})
+			run("subscriptions", func() {
+				subscriptions, err := s.quotas.ListSubscriptionSummariesForUser(ctx, user.ID)
+				if err == nil {
+					data.Subscriptions = subscriptions
+				}
+			})
+			if user.Role == auth.RoleReseller {
+				if provider, ok := s.quotas.(ProviderReader); ok {
+					run("customers", func() { data.Customers, _ = provider.ListCustomersForUser(ctx, user.ID) })
+					run("plans", func() { data.Plans, _ = provider.ListPlansForUser(ctx, user.ID) })
+					run("resellerplans", func() { data.ResellerPlans, _ = provider.ListResellerPlansForUser(ctx, user.ID) })
+					run("resellers", func() { data.Resellers, _ = provider.ListResellersForUser(ctx, user.ID) })
+					run("addons", func() { data.AddonPlans, _ = provider.ListAddonPlansForUser(ctx, user.ID) })
+				}
+			}
+		}
+		if usage, ok := s.quotas.(UsageReader); ok {
+			run("usage", func() { data.SubscriptionUsage, _ = usage.ListSubscriptionUsage(ctx, user) })
+			run("alerts", func() { data.UsageAlerts, _ = usage.ListUsageAlerts(ctx, user, 25) })
+		}
+		_ = group.Wait()
+		if scoped && scope.siteID > 0 {
+			timedRead(ctx, "services", loadServices)
+		}
+		return data, nil
+	}
+	var sites []store.Site
+	var databases []store.Database
+	var siteErr, databaseErr, jobCountErr error
+	run("sites", func() { sites, siteErr = s.queries.ListSites(ctx) })
+	run("databases", func() { databases, databaseErr = s.queries.ListDatabases(ctx) })
+	if counter, ok := s.jobs.(activeJobReader); ok {
+		run("jobcount", func() { data.ActiveJobs, jobCountErr = counter.CountActiveJobs(ctx) })
+	}
+	if s.jobs != nil {
+		run("jobs", func() {
+			var err error
+			data.Jobs, err = s.jobs.ListRecentJobs(ctx, DefaultRecentJobLimit)
+			if err != nil {
+				data.Jobs = nil
+				data.JobLoadError = "recent jobs unavailable"
+			}
+		})
+	}
+	if s.phase6 != nil {
+		run("phase6", func() {
+			var err error
+			data.Phase6, err = s.phase6.GetPhase6(ctx)
+			if err != nil {
+				data.Phase6 = Phase6Data{}
+				data.Phase6Error = "phase6 operations unavailable"
+			}
+		})
+	}
+	var customerErr, subscriptionErr error
+	if s.quotas != nil {
+		run("quotas", func() {
+			var err error
+			data.Quotas, err = s.quotas.ListAccountQuotas(ctx)
+			if err != nil {
+				data.Quotas = nil
+				data.QuotaLoadError = "account quotas unavailable"
+			}
+		})
+		// Preserve short-circuiting and error precedence of this chain.
+		run("", func() {
+			var err error
+			timedRead(ctx, "plans", func() { data.Plans, err = s.quotas.ListPlans(ctx) })
+			if err != nil {
+				data.Plans = nil
+				data.PlanLoadError = "plans unavailable"
+				return
+			}
+			timedRead(ctx, "settings", func() { data.Settings, err = s.quotas.GetSettings(ctx) })
+			if err != nil {
+				data.PlanLoadError = "plan settings unavailable"
+				return
+			}
+			timedRead(ctx, "committed", func() { data.CommittedDiskMB, err = s.quotas.CommittedAllocationMB(ctx) })
+			if err != nil {
+				data.PlanLoadError = "committed allocation unavailable"
+			}
+		})
+		run("customers", func() {
+			data.Customers, customerErr = s.quotas.ListCustomers(ctx)
+			if customerErr != nil {
+				data.Customers = nil
+			}
+		})
+		run("subscriptions", func() {
+			data.Subscriptions, subscriptionErr = s.quotas.ListSubscriptionSummaries(ctx)
+			if subscriptionErr != nil {
+				data.Subscriptions = nil
+			}
+		})
+	}
+	if usage, ok := s.quotas.(UsageReader); ok {
+		run("usage", func() { data.SubscriptionUsage, _ = usage.ListSubscriptionUsage(ctx, user) })
+		run("alerts", func() { data.UsageAlerts, _ = usage.ListUsageAlerts(ctx, user, 25) })
+	}
+	if s.audit != nil {
+		run("audit", func() { data.AuditEvents, _ = s.audit.ListAudit(ctx, user, 50) })
+	}
+	if provider, ok := s.quotas.(ProviderReader); ok {
+		run("resellers", func() { data.Resellers, _ = provider.ListResellers(ctx) })
+		run("resellerplans", func() { data.ResellerPlans, _ = provider.ListResellerPlans(ctx) })
+		run("addons", func() { data.AddonPlans, _ = provider.ListAddonPlans(ctx) })
+	}
+	if revisions, ok := s.quotas.(PlanRevisionReader); ok {
+		run("revisions", func() { data.PlanRevisions, _ = revisions.ListPlanRevisions(ctx, 200) })
+	}
+	_ = group.Wait()
+	if _, ok := s.jobs.(activeJobReader); !ok || jobCountErr != nil {
+		data.ActiveJobs = ActiveJobs(data.Jobs)
+	}
+	// Return the original first fatal error, regardless of completion order.
+	if siteErr != nil {
+		return Data{}, siteErr
+	}
+	if databaseErr != nil {
+		return Data{}, databaseErr
+	}
+	if data.PlanLoadError == "" {
+		if customerErr != nil {
+			data.PlanLoadError = "customers unavailable"
+		} else if subscriptionErr != nil {
+			data.PlanLoadError = "subscriptions unavailable"
+		}
+	}
+	data.Sites = make([]Site, 0, len(sites))
+	data.Databases = make([]Database, 0, len(databases))
+
 	for _, site := range sites {
 		data.Sites = append(data.Sites, Site{
 			RemovalState:         site.RemovalState,
@@ -656,6 +691,9 @@ func (s *Store) GetDashboard(ctx context.Context, user auth.SessionUser) (Data, 
 			CustomerID:     database.CustomerID,
 			SiteID:         database.SiteID.Int64,
 		})
+	}
+	if scoped && scope.siteID > 0 {
+		timedRead(ctx, "services", loadServices)
 	}
 	return data, nil
 }

@@ -1,3 +1,4 @@
+const installLifecycle = require('./lifecycle_harness.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -5,7 +6,7 @@ const vm = require('node:vm');
 
 function tlsRefreshHarness(options = {}) {
   const source = fs.readFileSync(__dirname + '/static/app.js', 'utf8');
-  const start = source.indexOf('  function initTLSRefresh()');
+  const start = source.indexOf('  function initTLSRefresh(root)');
   assert(start >= 0, 'TLS refresh initializer exists');
   const end = source.indexOf('\n  function databaseActionForm', start);
   assert(end > start);
@@ -48,6 +49,7 @@ function tlsRefreshHarness(options = {}) {
     }
   });
   context.window.fetch = context.fetch;
+  installLifecycle(context);
   vm.runInContext(source.slice(start, end) + '\ninitTLSRefresh();', context);
   return {
     feedback, document, timers,

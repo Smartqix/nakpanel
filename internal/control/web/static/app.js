@@ -5,6 +5,8 @@
   document.documentElement.classList.add("nakpanel-js");
   var planSubmitBypass = false;
   var pendingPlanForm = null;
+  var pendingPlanSignal = null;
+  var planPreviewGenerations = new WeakMap();
   var confirmationResolver = null;
   var serverInventoryHostname = "";
   var dialogs = window.NakpanelUI.createDialogController({document: document, onClose: function (dialog) {
@@ -20,15 +22,54 @@
     Array.prototype.forEach.call((scope || document).querySelectorAll(selector), callback);
   }
 
+  // Legacy dashboard documents have no navigation controller.
+  var lifecycle = window.NakpanelUI.lifecycle || {onMount:function () {}, signal:function () { return new AbortController().signal; }};
+  var initialized = new WeakMap();
+  function claim(element, key) {
+    if (!element) return false;
+    var keys = initialized.get(element);
+    if (!keys) { keys = new Set(); initialized.set(element, keys); }
+    if (keys.has(key)) return false;
+    keys.add(key); return true;
+  }
+  function mountEach(selector, root, callback) {
+    var elements = Array.prototype.slice.call((root || document).querySelectorAll(selector));
+    if (root && root.matches && root.matches(selector)) elements.unshift(root);
+    elements.forEach(function (element) { if (claim(element, selector)) callback(element); });
+  }
+  function lifetime(element) {
+    // Shell dialogs survive a content swap; work started in them belongs to the
+    // currently mounted page and must stop when that page is left.
+    var dialog = element.closest && element.closest('dialog');
+    var root = dialog && !dialog.closest('#main-content') ? document.querySelector('#main-content') : element;
+    return lifecycle.signal(root || element);
+  }
+  function later(element, callback, delay) {
+    if (element.isConnected === false) return;
+    var signal = lifetime(element);
+    if (signal.aborted) return;
+    var timer = window.setTimeout(function () {
+      signal.removeEventListener('abort', cancel);
+      if (!signal.aborted) return callback();
+    }, delay);
+    function cancel() { window.clearTimeout(timer); }
+    signal.addEventListener('abort', cancel, {once:true});
+    return timer;
+  }
+  function refreshPage() {
+    if (window.NakpanelUI.refresh) return window.NakpanelUI.refresh();
+    window.location.reload();
+  }
+
   function csrfToken() {
     var meta = document.querySelector('meta[name="nakpanel-csrf"]');
     return meta ? meta.content : "";
   }
 
-  function prepareForms() {
+  function prepareForms(root) {
     var token = csrfToken();
     if (!token) return;
-    each('form[method="post"], form[method="POST"]', document, function (form) {
+    mountEach('form[method="post"], form[method="POST"]', root, function (form) {
       if (form.querySelector('input[name="csrf_token"]')) return;
       var input = document.createElement("input");
       input.type = "hidden";
@@ -38,8 +79,8 @@
     });
   }
 
-  function initializeDirtyForms() {
-    each('[data-np-dirty-guard]', document, function (form) {
+  function initializeDirtyForms(root) {
+    mountEach('[data-np-dirty-guard]', root, function (form) {
       if (form.hasAttribute("data-np-editor-form")) return;
       form.dataset.npDirty = "false";
       var submit = form.querySelector("[data-np-dirty-submit]");
@@ -56,8 +97,8 @@
     });
   }
 
-  function initializeSubscriptionTabs() {
-    each(".np-subscription-tabs", document, function (nav) {
+  function initializeSubscriptionTabs(root) {
+    mountEach(".np-subscription-tabs", root, function (nav) {
       var active = nav.querySelector('[aria-current="page"]');
       if (!active || nav.scrollWidth <= nav.clientWidth) return;
       var tab = active.getBoundingClientRect();
@@ -68,8 +109,8 @@
     });
   }
 
-  function initializePHPApplicationWorkspace() {
-    each("[data-np-php-environment-form]", document, function (form) {
+  function initializePHPApplicationWorkspace(root) {
+    mountEach("[data-np-php-environment-form]", root, function (form) {
       var toggle = form.querySelector("[data-np-php-secret-toggle]");
       var plain = form.querySelector("[data-np-php-plain-field]");
       var secret = form.querySelector("[data-np-php-secret-field]");
@@ -89,7 +130,7 @@
       update();
     });
 
-    each("[data-np-php-setup]", document, function (form) {
+    mountEach("[data-np-php-setup]", root, function (form) {
       var profile = form.querySelector("[data-np-php-profile]");
       var publicPath = form.querySelector("[data-np-php-public]");
       var healthPath = form.querySelector("[data-np-php-health]");
@@ -195,7 +236,7 @@
       showStep(0, false);
     });
 
-    each(".np-php-app form[method='post']", document, function (form) {
+    mountEach(".np-php-app form[method='post']", root, function (form) {
       if (form.hasAttribute("data-np-confirm") || form.querySelector('input[name="confirm"]')) return;
       form.addEventListener("submit", function (event) {
         if (!window.fetch || form.dataset.npNativeSubmit === "true") return;
@@ -212,7 +253,7 @@
             notice.textContent = "PHP application operation queued successfully.";
             var workspace = form.closest(".np-php-app");
             if (workspace) workspace.insertBefore(notice, workspace.firstChild);
-            window.setTimeout(function () { window.location.reload(); }, 500);
+            later(form, refreshPage, 500);
           })
           .catch(function (error) {
             var notice = form.querySelector("[data-np-php-form-error]");
@@ -229,8 +270,8 @@
     });
   }
 
-  function initializeWordPressUninstall() {
-    each("[data-np-wordpress-uninstall]", document, function (form) {
+  function initializeWordPressUninstall(root) {
+    mountEach("[data-np-wordpress-uninstall]", root, function (form) {
       var backup = form.querySelector("[data-np-uninstall-backup]");
       var database = form.querySelector("[data-np-uninstall-database]");
       if (!backup || !database) return;
@@ -245,8 +286,8 @@
     });
   }
 
-  function initializeDNSFilters() {
-    each("[data-np-dns-workspace]", document, function (workspace) {
+  function initializeDNSFilters(root) {
+    mountEach("[data-np-dns-workspace]", root, function (workspace) {
       var search = workspace.querySelector("[data-np-dns-search]");
       var type = workspace.querySelector("[data-np-dns-type]");
       if (!search || !type) return;
@@ -271,8 +312,8 @@
     });
   }
 
-  function initializeDNSSettingsTabs() {
-    each("[data-np-dns-settings-workspace]", document, function (workspace) {
+  function initializeDNSSettingsTabs(root) {
+    mountEach("[data-np-dns-settings-workspace]", root, function (workspace) {
       var tabs = Array.prototype.slice.call(workspace.querySelectorAll("[data-np-dns-settings-tab]"));
       var panels = Array.prototype.slice.call(workspace.querySelectorAll("[data-np-dns-settings-panel]"));
       if (!tabs.length || !panels.length) return;
@@ -313,7 +354,7 @@
           event.preventDefault();
           var name = tab.getAttribute("data-np-dns-settings-tab");
           activate(name, false);
-          window.history.replaceState(null, "", tab.getAttribute("href"));
+          window.history.replaceState(window.history.state, "", tab.getAttribute("href"));
         });
         tab.addEventListener("keydown", function (event) {
           if (event.key !== "ArrowRight" && event.key !== "ArrowLeft" && event.key !== "Home" && event.key !== "End") return;
@@ -325,14 +366,14 @@
           if (event.key === "End") next = tabs.length - 1;
           var nextTab = tabs[next];
           activate(nextTab.getAttribute("data-np-dns-settings-tab"), true);
-          window.history.replaceState(null, "", nextTab.getAttribute("href"));
+          window.history.replaceState(window.history.state, "", nextTab.getAttribute("href"));
         });
       });
       each("[data-np-dns-settings-jump]", workspace, function (link) {
         link.addEventListener("click", function (event) {
           event.preventDefault();
           activate(link.getAttribute("data-np-dns-settings-jump"), false);
-          window.history.replaceState(null, "", link.getAttribute("href"));
+          window.history.replaceState(window.history.state, "", link.getAttribute("href"));
           var menu = link.closest("details");
           if (menu) menu.open = false;
         });
@@ -341,12 +382,12 @@
       window.addEventListener("hashchange", function () {
         var name = tabFromHash();
         if (name) activate(name, false);
-      });
+      }, {signal:lifetime(workspace)});
     });
   }
 
-  function initializeDNSRecordForms() {
-    each("[data-np-dns-record-form]", document, function (form) {
+  function initializeDNSRecordForms(root) {
+    mountEach("[data-np-dns-record-form]", root, function (form) {
       var type = form.querySelector('select[name="record_type"]');
       if (!type) return;
       function updateFields() {
@@ -465,7 +506,8 @@
 
   function openDialog(id, trigger) {
     var dialog = document.getElementById(id);
-    if (!dialog || !dialog.showModal) return;
+    if (!dialog || !dialog.showModal) return false;
+    dialogs.prefill(dialog, trigger);
 	if (trigger && trigger.dataset.npSubscriptionId) {
 	  var subscription = dialog.querySelector('select[name="subscription_id"]');
 	  if (subscription) subscription.value = trigger.dataset.npSubscriptionId;
@@ -474,6 +516,7 @@
     updateSubdomainGate(dialog);
     dialogs.open(dialog, trigger);
     initSiteSetupProgress(dialog);
+    return true;
   }
 
   function closeDialog(dialog) {
@@ -623,12 +666,13 @@
   function runSearch(value) {
     window.clearTimeout(searchTimer);
     var panel = document.querySelector("[data-np-search-results]");
+    if (!panel) return;
     if (!value.trim()) { if (panel) panel.hidden = true; return; }
-    searchTimer = window.setTimeout(function () {
-      fetch("/search?q=" + encodeURIComponent(value.trim()), { credentials: "same-origin" })
+    searchTimer = later(panel, function () {
+      fetch("/search?q=" + encodeURIComponent(value.trim()), { credentials: "same-origin", signal:lifetime(panel) })
         .then(function (response) { return response.json(); })
-        .then(function (data) { renderSearch(data.results || []); })
-        .catch(function () { renderSearch([]); });
+        .then(function (data) { if (!lifetime(panel).aborted && panel.isConnected) renderSearch(data.results || []); })
+        .catch(function () { if (panel.isConnected) renderSearch([]); });
     }, 180);
   }
 
@@ -680,17 +724,21 @@
   function loadServerInventory() {
     var target = document.querySelector("[data-np-settings-inventory]");
     if (!target || !window.fetch) return Promise.resolve();
+    var pageSignal = lifetime(target);
     var setText = function (selector, value) {
       each(selector, document, function (element) { element.textContent = value; });
     };
-    return fetch("/tools-settings/inventory", { credentials: "same-origin", headers: { "Accept": "application/json" } })
+    return fetch("/tools-settings/inventory", { credentials: "same-origin", signal: pageSignal, headers: { "Accept": "application/json" } })
       .then(function (response) {
+        if (pageSignal.aborted) return;
         return response.json().then(function (data) {
+          if (pageSignal.aborted) return;
           if (!response.ok || !data.ok || !data.inventory) throw new Error("inventory unavailable");
           return data;
         });
       })
       .then(function (payload) {
+        if (pageSignal.aborted) return;
         var inventory = payload.inventory;
         var cached = payload.cached === true;
         serverInventoryHostname = cached ? "" : (inventory.hostname || "");
@@ -894,6 +942,7 @@
                 actions.method = "post";
                 actions.action = "/tools-settings/services/action";
                 actions.setAttribute("data-np-service-form", "");
+                actions.setAttribute("data-np-full-nav", "");
                 var idInput = document.createElement("input");
                 idInput.type = "hidden";
                 idInput.name = "service_id";
@@ -932,6 +981,7 @@
         }
       })
       .catch(function () {
+        if (pageSignal.aborted) return;
         var state = document.querySelector("[data-np-server-inventory-state]");
         var indicator = target.querySelector(".np-health-indicator");
         if (state) { state.textContent = "unavailable"; state.className = "np-pill np-pill-fail"; }
@@ -964,32 +1014,34 @@
 
   function pollServerOperation(operationID, status, onSuccess) {
     if (!operationID || !status || !window.fetch) return;
+    var signal = lifetime(status);
     var attempts = 0;
     var terminal = {succeeded: true, failed: true, rolled_back: true, cancelled: true};
     function poll() {
-      if (status.isConnected === false) return;
+      if (signal.aborted || status.isConnected === false) return;
       attempts += 1;
       fetch("/tools-settings/operations/" + encodeURIComponent(operationID), {
         credentials: "same-origin",
-        headers: {"Accept": "application/json"}
+        headers: {"Accept": "application/json"}, signal: signal
       }).then(function (response) {
         return response.json().then(function (payload) {
           if (!response.ok || !payload.ok || !payload.operation) throw new Error(payload.error || "Operation status is unavailable");
           return payload.operation;
         });
       }).then(function (operation) {
+        if (signal.aborted) return;
         var state = operation.status || "pending";
         status.hidden = false;
         status.textContent = operationID + " · " + state.replace(/_/g, " ") + (operation.error ? " · " + operation.error : "");
         status.setAttribute("role", state === "failed" ? "alert" : "status");
         if (state === "succeeded" && onSuccess) onSuccess();
-        if (!terminal[state] && attempts < 40) window.setTimeout(poll, 1500);
+        if (!terminal[state] && attempts < 40) later(status, poll, 1500);
         else if (!terminal[state]) status.textContent += ' · Automatic checking paused. Refresh this view to check progress; do not submit the operation again.';
       }).catch(function () {
-        if (attempts < 10) window.setTimeout(poll, 2000);
+        if (attempts < 10) later(status, poll, 2000);
       });
     }
-    window.setTimeout(poll, 600);
+    later(status, poll, 600);
   }
 
   function submitServerAdminForm(form, submitter) {
@@ -1036,6 +1088,7 @@
   function loadServerJournal(form) {
     var target = document.querySelector("[data-np-journal-entries]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     form = form || document.querySelector("[data-np-journal-filter]");
     if (!form) return;
     var status = document.querySelector("[data-np-journal-state]");
@@ -1048,14 +1101,17 @@
     loadingRow.appendChild(loadingCell);
     target.appendChild(loadingRow);
     fetch("/tools-settings/journal?" + params.toString(), {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.result) throw new Error(payload.error || "Journal is unavailable");
         return payload.result;
       });
     }).then(function (result) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       (result.entries || []).forEach(function (entry) {
         var row = document.createElement("tr");
@@ -1085,6 +1141,7 @@
         status.textContent = (result.entries || []).length + " bounded entries loaded" + (result.truncated ? " (messages truncated)" : "") + ".";
       }
     }).catch(function (error) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       var row = document.createElement("tr");
       var cell = document.createElement("td");
@@ -1235,12 +1292,13 @@
   function loadServerUpdates(dryRun) {
     var target = document.querySelector("[data-np-update-packages]");
     if (!target || !window.fetch) return Promise.resolve(false);
+    var pageSignal = lifetime(target);
     var operation = document.querySelector("[data-np-update-operation]");
     var button = document.querySelector("[data-np-update-dry-run]");
     var refresh = document.querySelector("[data-np-update-refresh]");
     var request = {
       method: dryRun ? "POST" : "GET",
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     };
     if (dryRun) request.headers["X-Nakpanel-CSRF"] = csrfToken();
@@ -1249,12 +1307,15 @@
     if (operation) { operation.hidden = false; operation.textContent = dryRun ? "Running package simulation..." : "Loading update inventory..."; }
     return fetch(dryRun ? "/tools-settings/updates/dry-run" : "/tools-settings/updates/inventory", request)
       .then(function (response) {
+        if (pageSignal.aborted) return;
         return response.json().then(function (payload) {
+          if (pageSignal.aborted) return;
           if (!response.ok || !payload.ok || (!payload.updates && !payload.operation_id)) throw new Error(payload.error || "Update inventory is unavailable");
           return payload;
         });
       })
       .then(function (payload) {
+        if (pageSignal.aborted) return;
         if (payload.operation_id) {
           if (operation) {
             operation.hidden = false;
@@ -1267,12 +1328,14 @@
         return true;
       })
       .catch(function (error) {
+        if (pageSignal.aborted) return;
         if (operation) { operation.hidden = false; operation.textContent = error.message; }
         var badge = document.querySelector("[data-np-update-state]");
         if (badge) { badge.textContent = "unavailable"; badge.className = "np-pill np-pill-fail"; }
         return false;
       })
       .then(function (success) {
+        if (pageSignal.aborted) return;
         if (button) button.disabled = false;
         if (refresh) refresh.disabled = false;
         return success;
@@ -1282,9 +1345,11 @@
   function loadMailStatus() {
     var status = document.querySelector("[data-np-mail-status]");
     if (!status || !window.fetch) return;
-    fetch("/mail/status", { credentials: "same-origin" })
+    var signal = lifetime(status);
+    fetch("/mail/status", { credentials: "same-origin", signal: signal })
       .then(function (response) { return response.json().then(function (data) { if (!response.ok || !data.ok) throw new Error("status unavailable"); return data.status; }); })
       .then(function (data) {
+        if (signal.aborted) return;
         var state = document.querySelector("[data-np-mail-state]");
         var version = document.querySelector("[data-np-mail-version]");
         var listeners = document.querySelector("[data-np-mail-listeners]");
@@ -1301,6 +1366,7 @@
 		if (error) { error.textContent = data.last_error || ""; error.hidden = !data.last_error; }
       })
       .catch(function () {
+        if (signal.aborted) return;
         var state = document.querySelector("[data-np-mail-state]");
         var version = document.querySelector("[data-np-mail-version]");
         var healthCopy = document.querySelector("[data-np-mail-health-copy]");
@@ -1317,15 +1383,19 @@
   function loadServerSecurity() {
     var state = document.querySelector("[data-np-security-state]");
     if (!state || !window.fetch) return;
+    var pageSignal = lifetime(state);
     fetch("/tools-settings/security/status", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.policy) throw new Error(payload.error || "Security inspection is unavailable");
         return payload;
       });
     }).then(function (payload) {
+      if (pageSignal.aborted) return;
       var policy = payload.policy;
       var capabilities = payload.capabilities || {};
       var firewall = policy.firewall || {};
@@ -1347,16 +1417,20 @@
       if (tlsCopy) tlsCopy.textContent = policy.tls && policy.tls.profile ? policy.tls.profile : "Unknown";
       loadSecurityBans();
     }).catch(function () {
+      if (pageSignal.aborted) return;
       state.textContent = "unavailable";
       state.className = "np-pill np-pill-fail";
     });
   }
 
   async function securityAction(url, body, successMessage, confirmMessage) {
+    var pageSignal = lifetime(document.querySelector('#main-content'));
     if (confirmMessage && !await askConfirmation(confirmMessage, document.activeElement)) return;
+    if (pageSignal.aborted) return;
     var status = document.querySelector("[data-np-security-action-state]");
     fetch(url, {
       method: "POST",
+      signal: pageSignal,
       credentials: "same-origin",
       headers: {
         "Accept": "application/json",
@@ -1365,16 +1439,20 @@
       },
       body: JSON.stringify(body || {})
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (response.status === 428) throw new Error("Recent authentication is required: confirm your password first.");
         if (!response.ok || !payload.ok) throw new Error(payload.error || "The security action failed.");
         return payload;
       });
     }).then(function (payload) {
+      if (pageSignal.aborted) return;
       if (status) { status.textContent = successMessage || "Done."; status.hidden = false; }
       if (payload.operation_id) trackSecurityOperation(payload.operation_id);
       loadSecurityBans();
     }).catch(function (err) {
+      if (pageSignal.aborted) return;
       if (status) { status.textContent = err && err.message ? err.message : "The security action failed."; status.hidden = false; }
     });
   }
@@ -1392,15 +1470,19 @@
   function loadSecurityBans() {
     var target = document.querySelector("[data-np-security-bans]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     fetch("/tools-settings/security/bans", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Ban list unavailable");
         return payload.bans || {};
       });
     }).then(function (bans) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       if (!bans.running) {
         replaceTableWithMessage(target, 3, "Fail2ban is not running on this server.");
@@ -1434,13 +1516,14 @@
         target.appendChild(row);
       });
     }).catch(function () {
+      if (pageSignal.aborted) return;
       replaceTableWithMessage(target, 3, "Jail status is unavailable.");
     });
   }
 
-  function bindSecurityControls() {
-    var fail2banButton = document.querySelector("[data-np-security-fail2ban-defaults]");
-    if (fail2banButton) {
+  function bindSecurityControls(root) {
+    var fail2banButton = root.querySelector("[data-np-security-fail2ban-defaults]");
+    if (fail2banButton && claim(fail2banButton, "bindSecurityControls")) {
       fail2banButton.addEventListener("click", function () {
         securityAction("/tools-settings/security/fail2ban", {
           policy: {
@@ -1453,17 +1536,17 @@
         }, "Fail2ban policy queued.");
       });
     }
-    var confirmButton = document.querySelector("[data-np-security-op-confirm]");
-    if (confirmButton) {
+    var confirmButton = root.querySelector("[data-np-security-op-confirm]");
+    if (confirmButton && claim(confirmButton, "bindSecurityControls")) {
       confirmButton.addEventListener("click", function () {
-        var input = document.querySelector('[data-np-security-op-form] input[name="operation_id"]');
+        var input = root.querySelector('[data-np-security-op-form] input[name="operation_id"]');
         if (input && input.value) securityAction("/tools-settings/security/firewall/confirm", {operation_id: input.value}, "Firewall change confirmed.");
       });
     }
-    var revertButton = document.querySelector("[data-np-security-op-revert]");
-    if (revertButton) {
+    var revertButton = root.querySelector("[data-np-security-op-revert]");
+    if (revertButton && claim(revertButton, "bindSecurityControls")) {
       revertButton.addEventListener("click", function () {
-        var input = document.querySelector('[data-np-security-op-form] input[name="operation_id"]');
+        var input = root.querySelector('[data-np-security-op-form] input[name="operation_id"]');
         if (input && input.value) securityAction("/tools-settings/security/firewall/revert", {operation_id: input.value}, "Firewall change reverted.");
       });
     }
@@ -1472,15 +1555,19 @@
   function loadServerBackups() {
     var state = document.querySelector("[data-np-backup-state]");
     if (!state || !window.fetch) return;
+    var pageSignal = lifetime(state);
     fetch("/tools-settings/backups/status", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Server backups are unavailable");
         return payload;
       });
     }).then(function (payload) {
+      if (pageSignal.aborted) return;
       state.textContent = payload.key_present ? "configured" : "key missing";
       state.className = "np-pill " + (payload.key_present ? "np-pill-ok" : "np-pill-fail");
       var keyCopy = document.querySelector("[data-np-backup-key]");
@@ -1546,6 +1633,7 @@
         });
       }
     }).catch(function (err) {
+      if (pageSignal.aborted) return;
       state.textContent = "unavailable";
       state.className = "np-pill np-pill-fail";
       var error = document.querySelector("[data-np-backup-error]");
@@ -1555,8 +1643,10 @@
 
   function backupAction(url, body, successMessage) {
     var error = document.querySelector("[data-np-backup-error]");
+    var signal = lifetime(error || document.querySelector('#main-content'));
     fetch(url, {
       method: "POST",
+      signal: signal,
       credentials: "same-origin",
       headers: {
         "Accept": "application/json",
@@ -1571,6 +1661,7 @@
         return payload;
       });
     }).then(function (payload) {
+      if (signal.aborted) return;
       if (payload.key) {
         var output = document.querySelector("[data-np-backup-key-output]");
         if (output) {
@@ -1581,13 +1672,14 @@
       if (error) { error.textContent = successMessage || "Done."; error.hidden = false; }
       loadServerBackups();
     }).catch(function (err) {
+      if (signal.aborted) return;
       if (error) { error.textContent = err && err.message ? err.message : "The backup action failed."; error.hidden = false; }
     });
   }
 
-  function bindBackupControls() {
-    var keyButton = document.querySelector("[data-np-backup-key-init]");
-    if (keyButton) {
+  function bindBackupControls(root) {
+    var keyButton = root.querySelector("[data-np-backup-key-init]");
+    if (keyButton && claim(keyButton, "bindBackupControls")) {
       keyButton.addEventListener("click", function () {
         backupAction("/tools-settings/backups/key/init", {}, "Archive key generated - copy it now.");
       });
@@ -1608,19 +1700,23 @@
   function loadMailQueue(form) {
     var target = document.querySelector("[data-np-mail-queue-rows]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     form = form || document.querySelector("[data-np-mail-queue-filter]");
     var status = document.querySelector("[data-np-mail-queue-state]");
     var params = form ? new URLSearchParams(new FormData(form)) : new URLSearchParams("limit=50");
     replaceTableWithMessage(target, 6, "Loading queue metadata...");
     fetch("/tools-settings/mail/queue?" + params.toString(), {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.queue) throw new Error(payload.error || "Mail queue is unavailable");
         return payload.queue;
       });
     }).then(function (queue) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       (queue.messages || []).forEach(function (message) {
         var recipients = 0;
@@ -1647,6 +1743,7 @@
         status.textContent = String(queue.total || 0) + " queued messages reported" + (queue.truncated ? " (result capped)" : "") + ".";
       }
     }).catch(function (error) {
+      if (pageSignal.aborted) return;
       replaceTableWithMessage(target, 6, "Mail queue metadata could not be loaded.");
       if (status) { status.hidden = false; status.textContent = error.message; }
     });
@@ -1655,18 +1752,22 @@
   function loadMailLogs(form) {
     var target = document.querySelector("[data-np-mail-log-rows]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     form = form || document.querySelector("[data-np-mail-log-filter]");
     var params = form ? new URLSearchParams(new FormData(form)) : new URLSearchParams("since_minutes=60&limit=100");
     replaceTableWithMessage(target, 3, "Loading bounded mail logs...");
     fetch("/tools-settings/mail/logs?" + params.toString(), {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.logs) throw new Error(payload.error || "Mail logs are unavailable");
         return payload.logs;
       });
     }).then(function (logs) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       (logs.entries || []).forEach(function (entry) {
         var row = document.createElement("tr");
@@ -1684,25 +1785,27 @@
       });
       if (!target.children.length) replaceTableWithMessage(target, 3, "No mail log entries matched this window.");
     }).catch(function () {
+      if (pageSignal.aborted) return;
       replaceTableWithMessage(target, 3, "Mail logs could not be loaded.");
     });
   }
 
-  function initTLSRefresh() {
-    var panel = document.querySelector('[data-np-tls-workspace]');
-    if (!panel || panel.dataset.npTlsState !== 'pending') return;
+  function initTLSRefresh(root) {
+    var panel = (root || document).querySelector('[data-np-tls-workspace]');
+    if (!panel || panel.dataset.npTlsState !== 'pending' || !claim(panel, 'tls')) return;
+    var signal = lifetime(panel);
     var statusURL = window.location.href;
     var attempts = 0;
     var submitting = false;
     // Progressive form handlers run first; only native navigation stops polling.
     document.addEventListener('submit', function (event) {
       if (!event.defaultPrevented && panel.contains(event.target) && event.target.method.toLowerCase() === 'post') submitting = true;
-    });
+    }, {signal:signal});
     function busy() {
       return document.hidden || document.querySelector('dialog[open], [data-np-dirty-guard][data-np-dirty="true"]');
     }
     function current() {
-      return !submitting && document.querySelector('[data-np-tls-workspace]') === panel && window.location.href === statusURL;
+      return !signal.aborted && !submitting && document.querySelector('[data-np-tls-workspace]') === panel && window.location.href === statusURL;
     }
     async function refresh() {
       if (!current()) return;
@@ -1716,6 +1819,8 @@
       }
       if (!busy()) {
         var controller = new AbortController();
+        var cancelRequest = function () { controller.abort(); };
+        signal.addEventListener('abort', cancelRequest, {once:true});
         var timeout = window.setTimeout(function () { controller.abort(); }, 10000);
         try {
           var response = await window.fetch(statusURL, {method: 'GET', credentials: 'same-origin', cache: 'no-store', headers: {Accept: 'text/html'}, signal: controller.signal});
@@ -1732,11 +1837,12 @@
           if (!current()) return;
         } finally {
           window.clearTimeout(timeout);
+          signal.removeEventListener('abort', cancelRequest);
         }
       }
-      window.setTimeout(refresh, 5000);
+      later(panel, refresh, 5000);
     }
-    window.setTimeout(refresh, 600);
+    later(panel, refresh, 600);
   }
 
   function databaseActionForm(action, databaseID, label) {
@@ -1744,6 +1850,7 @@
     form.method = "post";
     form.action = "/tools-settings/databases/" + databaseID + "/" + action;
     form.setAttribute("data-np-database-form", "");
+    form.setAttribute("data-np-full-nav", "");
     if (action === "role") {
       var role = document.createElement("select");
       role.name = "role";
@@ -1775,12 +1882,13 @@
     return form;
   }
 
-  function initDatabaseRefresh() {
-    var panel = document.querySelector('[data-np-domain-databases]');
-    if (!panel) return;
+  function initDatabaseRefresh(root) {
+    var panel = root && root.matches && root.matches('[data-np-domain-databases]') ? root : (root || document).querySelector('[data-np-domain-databases]');
+    if (!panel || !claim(panel, 'database')) return;
+    var signal = lifetime(panel);
     var attempts = 0;
     async function refresh() {
-      if (document.querySelector('[data-np-domain-databases]') !== panel) return;
+      if (signal.aborted || document.querySelector('[data-np-domain-databases]') !== panel) return;
       if (++attempts > 150) {
         var feedback = panel.querySelector('[data-np-db-feedback]');
         if (feedback) { feedback.hidden = false; feedback.textContent = 'Still processing. Refresh this page to check again; do not create a duplicate database.'; }
@@ -1789,7 +1897,7 @@
       var pending = false;
       if (!document.hidden && !panel.querySelector('dialog[open]')) {
         try {
-          var response = await fetch(panel.dataset.npDbStatusUrl, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'application/json'}});
+          var response = await fetch(panel.dataset.npDbStatusUrl, {credentials: 'same-origin', cache: 'no-store', headers: {'Accept': 'application/json'}, signal:signal});
           if (response.redirected || response.status === 401 || response.status === 403 || response.status === 404) {
             var feedback = panel.querySelector('[data-np-db-feedback]');
             if (feedback) {feedback.hidden=false;feedback.textContent='Status checks stopped. Refresh this page to check your session and database access.';}
@@ -1797,7 +1905,7 @@
           }
           if (!response.ok) throw new Error('Database status is temporarily unavailable.');
           var payload = await response.json();
-          if (document.querySelector('[data-np-domain-databases]') !== panel) return;
+          if (signal.aborted || document.querySelector('[data-np-domain-databases]') !== panel) return;
           var changed = false;
           (payload.databases || []).forEach(function(database) {
             var row = panel.querySelector('[data-np-db-id="'+database.id+'"]');
@@ -1813,24 +1921,29 @@
           if (changed) {await reloadDatabasePanel();return;}
         } catch (_) {pending=true;}
       } else {pending=true;}
-      if (pending) window.setTimeout(refresh, 2000);
+      if (pending) later(panel, refresh, 2000);
     }
-    window.setTimeout(refresh, 600);
+    later(panel, refresh, 600);
   }
 
   async function reloadDatabasePanel() {
     var panel = document.querySelector('[data-np-domain-databases]');
     if (!panel || panel.querySelector('dialog[open]')) return;
-    var response = await fetch(window.location.href, {credentials:'same-origin',cache:'no-store',headers:{Accept:'text/html'}});
+    var signal = lifetime(panel);
+    var response = await fetch(window.location.href, {credentials:'same-origin',cache:'no-store',headers:{Accept:'text/html'},signal:signal});
     if (!response.ok || response.redirected) throw new Error('Refresh this page to see the latest database status.');
     var next = new DOMParser().parseFromString(await response.text(),'text/html').querySelector('[data-np-domain-databases]');
     if (!next) throw new Error('Refresh this page to see the latest database status.');
+    if (!panel.isConnected || signal.aborted) return;
+    if (window.NakpanelUI.lifecycle) window.NakpanelUI.lifecycle.unmount(panel);
     panel.replaceWith(next);
-    initDatabaseRefresh();
+    if (window.NakpanelUI.lifecycle) window.NakpanelUI.lifecycle.mount(next);
+    else initDatabaseRefresh(document);
   }
 
   async function submitDomainDatabase(form) {
     if (form.dataset.npSubmitting === 'true') return;
+    var pageSignal = lifetime(document.querySelector('#main-content') || form);
     var error = form.querySelector('[data-np-db-form-error]');
     if (new URL(form.action).pathname === '/databases' && !form.querySelector('[name="idempotency_key"]')) {
       var requestKey = document.createElement('input');
@@ -1842,14 +1955,16 @@
     setFormBusy(form,true);
     if (error) error.hidden = true;
     try {
-      var response = await fetch(form.action,{method:'POST',credentials:'same-origin',body:body,headers:{'X-Nakpanel-SPA':'true','X-Nakpanel-CSRF':csrfToken(),'Accept':'application/json'}});
+      var response = await fetch(form.action,{method:'POST',credentials:'same-origin',body:body,headers:{'X-Nakpanel-SPA':'true','X-Nakpanel-CSRF':csrfToken(),'Accept':'application/json'},signal:pageSignal});
       var payload = await response.json();
+      if (pageSignal.aborted) return;
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'The database operation could not be completed.');
       var dialog = form.closest('dialog');
       if (dialog) closeDialog(dialog);
       clearSensitiveInputs(form);
       var refreshFailed = false;
       try {await reloadDatabasePanel();} catch (_) {refreshFailed = true;}
+      if (pageSignal.aborted) return;
       var feedback = document.querySelector('[data-np-db-feedback]');
       if (feedback) {
         feedback.hidden=false;
@@ -1857,6 +1972,7 @@
           (refreshFailed ? ' The operation was accepted, but the list could not refresh. Refresh this page to check progress; do not submit again.' : '');
       }
     } catch (failure) {
+      if (pageSignal.aborted) return;
       if (error) {error.hidden=false;error.textContent=failure.message;}
     } finally {form.dataset.npSubmitting='false';setFormBusy(form,false);}
   }
@@ -1870,17 +1986,21 @@
   function loadDatabaseAdmin() {
     var target = document.querySelector("[data-np-database-rows]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     var state = document.querySelector("[data-np-database-state]");
     var summary = document.querySelector("[data-np-database-summary]");
     fetch("/tools-settings/databases/status", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.database_admin) throw new Error(payload.error || "Database administration is unavailable");
         return payload.database_admin;
       });
     }).then(function (snapshot) {
+      if (pageSignal.aborted) return;
       var server = snapshot.server || {};
       if (state) {
         state.textContent = server.available ? "available" : "unavailable";
@@ -1915,8 +2035,9 @@
         target.appendChild(row);
       });
       if (!target.children.length) replaceTableWithMessage(target, 5, "No MariaDB databases are tracked.");
-      prepareForms();
+      prepareForms(document);
     }).catch(function (error) {
+      if (pageSignal.aborted) return;
       if (state) { state.textContent = "unavailable"; state.className = "np-pill np-pill-fail"; }
       if (summary) summary.textContent = error.message;
       replaceTableWithMessage(target, 5, "Database administration could not be loaded.");
@@ -1926,16 +2047,20 @@
   function loadApplicationCatalog() {
     var target = document.querySelector("[data-np-application-rows]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     var state = document.querySelector("[data-np-application-state]");
     fetch("/tools-settings/operations/application-catalog", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Application catalog is unavailable");
         return payload.catalog || [];
       });
     }).then(function (catalog) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       catalog.forEach(function (item) {
         var row = document.createElement("tr");
@@ -1958,6 +2083,7 @@
       if (!target.children.length) replaceTableWithMessage(target, 7, "No application catalog instances are tracked.");
       if (state) { state.textContent = "current"; state.className = "np-pill np-pill-ok"; }
     }).catch(function () {
+      if (pageSignal.aborted) return;
       replaceTableWithMessage(target, 7, "Application catalog inventory could not be loaded.");
       if (state) { state.textContent = "unavailable"; state.className = "np-pill np-pill-fail"; }
     });
@@ -1985,7 +2111,7 @@
       if (operationID) {
         pollServerOperation(operationID, status, form.matches("[data-np-database-form]") ? loadDatabaseAdmin : (form.matches("[data-np-update-install-form]") ? function () { loadServerUpdates(false); } : null));
       } else if (form.matches("[data-np-database-form]")) {
-        window.setTimeout(loadDatabaseAdmin, 500);
+        later(form, loadDatabaseAdmin, 500);
       }
       if (form.matches("[data-np-power-form]")) closeDialog(form.closest("dialog"));
     }).catch(function (error) {
@@ -2033,7 +2159,10 @@
     });
   }
 
+  var siteSetupRuns = new WeakMap();
   function trackSiteSetup(panel, data) {
+    var previous = siteSetupRuns.get(panel);
+    if (previous) previous();
     var siteID = Number(data.site_id), statusURL, base;
     try {
       statusURL = new URL(data.status_url, window.location.href);
@@ -2050,8 +2179,19 @@
     panel.dataset.npSetupRedirect = data.redirect || base + '?tab=overview&notice=subdomain-created';
     var token = String(Number(panel.dataset.npSetupRun || 0) + 1);
     panel.dataset.npSetupRun = token;
-    var dialog = panel.closest('dialog'), cancelled = false, started = Date.now(), attempts = 0, pageURL = window.location.href;
-    if (dialog) dialog.addEventListener('close', function () { cancelled = true; }, {once:true});
+    var signal = lifetime(panel);
+    var dialog = panel.closest('dialog'), cancelled = false, started = Date.now(), attempts = 0, pageURL = window.location.href, timer, requestController;
+    function stop() {
+      cancelled = true;
+      window.clearTimeout(timer);
+      if (requestController) requestController.abort();
+      if (siteSetupRuns.get(panel) === stop) siteSetupRuns.delete(panel);
+      if (dialog) dialog.removeEventListener('close', stop);
+      signal.removeEventListener('abort', stop);
+    }
+    siteSetupRuns.set(panel, stop);
+    signal.addEventListener('abort', stop, {once:true});
+    if (dialog) dialog.addEventListener('close', stop, {once:true});
     var view = panel.querySelector('[data-np-setup-view]');
     if (view) view.href = base + '?tab=overview';
     var check = panel.querySelector('[data-np-setup-check]');
@@ -2059,54 +2199,67 @@
 	var retry = panel.querySelector('[data-np-setup-retry]');
 	if (retry) retry.action = base + '/setup/retry-ssl';
     renderSiteSetupProgress(panel, {state:'pending', message:'Setting up hosting and domain services. Setup continues in the background.'});
-    function current() { return !cancelled && panel.isConnected !== false && panel.dataset.npSetupRun === token && window.location.href === pageURL && (!dialog || dialog.open); }
+    function current() { return !signal.aborted && !cancelled && panel.isConnected !== false && panel.dataset.npSetupRun === token && window.location.href === pageURL && (!dialog || dialog.open); }
     async function poll() {
-      if (!current()) return;
-      if (Date.now() - started >= 300000 || ++attempts > 150) {
-        renderSiteSetupProgress(panel, {state:'timeout', message:'Setup is taking longer than expected. It continues in the background. Check its status again when ready.'});
-        return;
+      try {
+        if (!current()) return;
+        if (Date.now() - started >= 300000 || ++attempts > 150) {
+          renderSiteSetupProgress(panel, {state:'timeout', message:'Setup is taking longer than expected. It continues in the background. Check its status again when ready.'});
+          return;
+        }
+        if (!document.hidden) {
+          var controller = requestController = new AbortController();
+          var cancelRequest = function () { controller.abort(); };
+          signal.addEventListener('abort', cancelRequest, {once:true});
+          var timeout = window.setTimeout(function () { controller.abort(); }, 10000);
+          try {
+            var response = await window.fetch(statusURL.href, {method:'GET', credentials:'same-origin', cache:'no-store', headers:{Accept:'application/json'}, signal:controller.signal});
+            if (!current()) return;
+            if (response.redirected || response.status === 401 || response.status === 403 || response.status === 404) {
+              renderSiteSetupProgress(panel, {state:'attention',message:'Setup status is no longer accessible. Sign in or check Websites. Do not submit creation again.'});
+              return;
+            }
+            if (!response.ok) throw new Error('Temporary status failure');
+            var next = await response.json();
+            if (!current()) return;
+            if (!next.ok || Number(next.site_id) !== siteID || ['pending','ready','failed','attention'].indexOf(next.state) === -1) {
+              renderSiteSetupProgress(panel, {state:'attention',message:'Setup status could not be confirmed. Check Websites before trying again.'});
+              return;
+            }
+            renderSiteSetupProgress(panel, next);
+            if (next.state === 'ready') {
+              var target = new URL(next.redirect || panel.dataset.npSetupRedirect, window.location.href);
+              if (target.origin === window.location.origin && target.pathname === base && panel.dataset.npSetupHold !== 'true' && !document.querySelector('[data-np-dirty-guard][data-np-dirty="true"]')) {
+                if (window.NakpanelUI && window.NakpanelUI.navigate) window.NakpanelUI.navigate(target.href);
+                else window.location.assign(target.href);
+              }
+              return;
+            }
+            if (next.state !== 'pending') return;
+          } catch (_) {
+            if (!current()) return;
+            renderSiteSetupProgress(panel, {state:'pending', message:'Setup is continuing. Reconnecting to check its status...'});
+          } finally { window.clearTimeout(timeout);
+            signal.removeEventListener('abort', cancelRequest); }
+        }
+        if (current()) timer = later(panel, poll, 2000);
+      } finally {
+        if (!current() || panel.dataset.npSetupState !== 'pending') stop();
       }
-      if (!document.hidden) {
-        var controller = new AbortController();
-        var timeout = window.setTimeout(function () { controller.abort(); }, 10000);
-        try {
-          var response = await window.fetch(statusURL.href, {method:'GET', credentials:'same-origin', cache:'no-store', headers:{Accept:'application/json'}, signal:controller.signal});
-          if (!current()) return;
-          if (response.redirected || response.status === 401 || response.status === 403 || response.status === 404) {
-            renderSiteSetupProgress(panel, {state:'attention',message:'Setup status is no longer accessible. Sign in or check Websites. Do not submit creation again.'});
-            return;
-          }
-          if (!response.ok) throw new Error('Temporary status failure');
-          var next = await response.json();
-          if (!current()) return;
-          if (!next.ok || Number(next.site_id) !== siteID || ['pending','ready','failed','attention'].indexOf(next.state) === -1) {
-            renderSiteSetupProgress(panel, {state:'attention',message:'Setup status could not be confirmed. Check Websites before trying again.'});
-            return;
-          }
-          renderSiteSetupProgress(panel, next);
-          if (next.state === 'ready') {
-            var target = new URL(next.redirect || panel.dataset.npSetupRedirect, window.location.href);
-            if (target.origin === window.location.origin && target.pathname === base && panel.dataset.npSetupHold !== 'true' && !document.querySelector('[data-np-dirty-guard][data-np-dirty="true"]')) window.location.assign(target.href);
-            return;
-          }
-          if (next.state !== 'pending') return;
-        } catch (_) {
-          if (!current()) return;
-          renderSiteSetupProgress(panel, {state:'pending', message:'Setup is continuing. Reconnecting to check its status...'});
-        } finally { window.clearTimeout(timeout); }
-      }
-      if (current()) window.setTimeout(poll, 2000);
     }
-    window.setTimeout(poll, 400);
+    if (current()) timer = later(panel, poll, 400); else stop();
   }
 
   function initSiteSetupProgress(scope) {
-    each('[data-np-setup-tracker]', scope || document, function (panel) {
-      if (panel.dataset.npSetupStatusUrl && panel.dataset.npSetupState === 'pending' && !panel.hasAttribute('data-np-setup-timed-out')) trackSiteSetup(panel, {site_id:panel.dataset.npSetupSiteId,status_url:panel.dataset.npSetupStatusUrl,redirect:panel.dataset.npSetupRedirect});
+    var panels = Array.prototype.slice.call((scope || document).querySelectorAll('[data-np-setup-tracker]'));
+    if (scope && scope.matches && scope.matches('[data-np-setup-tracker]')) panels.unshift(scope);
+    panels.forEach(function (panel) {
+      if (!siteSetupRuns.has(panel) && panel.dataset.npSetupStatusUrl && panel.dataset.npSetupState === 'pending' && !panel.hasAttribute('data-np-setup-timed-out')) trackSiteSetup(panel, {site_id:panel.dataset.npSetupSiteId,status_url:panel.dataset.npSetupStatusUrl,redirect:panel.dataset.npSetupRedirect});
     });
   }
 
   function submitSite(form) {
+    var pageSignal = window.NakpanelUI && window.NakpanelUI.lifecycle ? lifetime(form) : null;
     if (form.dataset.npSubmitting === 'true') return;
     var subdomain = form.matches('[data-np-create-subdomain-form]'), confirmedRejection = false;
     form.dataset.npSubmitting = 'true';
@@ -2130,6 +2283,7 @@
         return data;
       });
     }).then(function (data) {
+      if (form.isConnected === false || pageSignal && pageSignal.aborted) return;
       {
         var dialog = form.closest('dialog');
         var panel = dialog && dialog.querySelector('[data-np-setup-tracker]');
@@ -2153,6 +2307,7 @@
         return;
       }
     }).catch(function (error) {
+      if (form.isConnected === false || pageSignal && pageSignal.aborted) return;
       if ([400,401,403,404,409,422,429].indexOf(error.status) !== -1) confirmedRejection = true;
       var uncertain = !confirmedRejection;
       if (gate) { gate.textContent = uncertain ? 'The creation result could not be confirmed. Check Websites before trying again; setup may already be running.' : error.message; gate.classList.add("is-blocked"); }
@@ -2180,6 +2335,7 @@
   }
 
   function submitWebsiteV2(form) {
+    var pageSignal = window.NakpanelUI && window.NakpanelUI.lifecycle ? lifetime(form) : null;
 	if (form.dataset.npSubmitting === 'true') return;
 	form.dataset.npSubmitting = 'true';
 	var confirmedRejection = false;
@@ -2204,6 +2360,7 @@
         return data;
       });
     }).then(function (data) {
+      if (form.isConnected === false || pageSignal && pageSignal.aborted) return;
       var page = form.closest(".np-v2-create");
       var result = page && page.querySelector("[data-np-v2-live-result]");
       if (!result) { window.location.assign(data.redirect || "/sites"); return; }
@@ -2240,6 +2397,7 @@
       if (title) title.focus && title.focus();
       result.scrollIntoView({ block: "start" });
     }).catch(function (error) {
+      if (form.isConnected === false || pageSignal && pageSignal.aborted) return;
 	  if ([400,401,403,404,409,422,429].indexOf(error.status) !== -1) confirmedRejection = true;
 	  form.dataset.npSubmitting = confirmedRejection ? 'false' : 'true';
       updateV2CreateGate(form);
@@ -2275,7 +2433,7 @@
     if (updateURL && window.history && window.history.replaceState) {
       var url = new URL(window.location.href);
       url.searchParams.set("tab", tab);
-      window.history.replaceState({}, "", url.pathname + url.search);
+      window.history.replaceState(window.history.state, "", url.pathname + url.search);
     }
   }
 
@@ -2430,7 +2588,15 @@
   }
 
   function reviewPlan(form) {
+    var signal = lifetime(form);
+    if (signal.aborted || form.isConnected === false) return;
+    var generation = (planPreviewGenerations.get(form) || 0) + 1;
+    planPreviewGenerations.set(form, generation);
     pendingPlanForm = form;
+    pendingPlanSignal = signal;
+    function current() {
+      return !signal.aborted && form.isConnected !== false && pendingPlanForm === form && planPreviewGenerations.get(form) === generation;
+    }
     var submit = form.querySelector("[data-np-plan-submit]");
     if (submit) submit.disabled = true;
     clearPlanPreview();
@@ -2438,23 +2604,26 @@
       method: "POST",
       body: new FormData(form),
       credentials: "same-origin",
-      headers: { "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken() }
+      headers: { "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken() },
+      signal: signal
     }).then(function (response) {
       return response.json().then(function (data) {
         if (!response.ok || !data.ok) throw new Error(data.error || "Plan preview failed");
         return data.preview;
       });
     }).then(function (preview) {
+      if (!current()) return;
       populatePlanPreview(preview);
       openDialog("plan-preview-dialog", submit);
     }).catch(function (error) {
+      if (!current() || error.name === "AbortError") return;
       var warning = document.querySelector("[data-np-preview-warning]");
       if (warning) { warning.textContent = error.message; warning.classList.add("is-blocked"); }
       var confirm = document.querySelector("[data-np-plan-confirm-submit]");
       if (confirm) confirm.disabled = true;
       openDialog("plan-preview-dialog", submit);
     }).finally(function () {
-      if (submit) submit.disabled = false;
+      if (current() && submit) submit.disabled = false;
     });
   }
 
@@ -2534,6 +2703,7 @@
     if (progress) progress.hidden = false;
 
     function finish(error) {
+      if (manager.isConnected === false) return;
       manager.dataset.npUploading = "false";
       if (input) input.value = "";
       if (error) {
@@ -2543,10 +2713,11 @@
       if (label) label.textContent = entries.length + " of " + entries.length;
       if (bar) bar.style.width = "100%";
       if (redirect) window.location.assign(redirect);
-      else window.location.reload();
+      else refreshPage();
     }
 
     function send(index, overwrite) {
+      if (manager.isConnected === false) return;
       if (index >= entries.length) {
         finish("");
         return;
@@ -2598,10 +2769,10 @@
     send(0, false);
   }
 
-  function initializeCodeEditor() {
-    var textarea = document.querySelector("[data-np-code-editor]");
+  function initializeCodeEditor(root) {
+    var textarea = root.querySelector("[data-np-code-editor]");
     var form = textarea && textarea.closest("[data-np-editor-form]");
-    if (!textarea || !form) return;
+    if (!textarea || !form || !claim(textarea, "code-editor")) return;
     form.setAttribute("data-np-dirty-guard", "");
     form.dataset.npDirty = "false";
     if (!window.ace) {
@@ -2615,6 +2786,7 @@
     textarea.parentNode.insertBefore(host, textarea);
     window.ace.config.set("basePath", "/assets/ace");
     var editor = window.ace.edit(host);
+    lifetime(textarea).addEventListener("abort", function () { editor.destroy(); }, {once:true});
     editor.setValue(textarea.value, -1);
     editor.setOptions({fontSize: "14px", showPrintMargin: false, useWorker: false, tabSize: 2});
     var extension = (textarea.closest("form").querySelector('input[name="path"]').value.split(".").pop() || "text").toLowerCase();
@@ -2753,6 +2925,7 @@
   }
 
   function submitSitePolicyForm(form, submitter) {
+    var pageSignal = window.NakpanelUI && window.NakpanelUI.lifecycle ? lifetime(form) : null;
     if (form.getAttribute("aria-busy") === "true") return;
     clearSitePolicyError(form);
     var body = new URLSearchParams(new window.FormData(form));
@@ -2764,10 +2937,11 @@
       method: "POST", body: body, credentials: "same-origin", allowPageResponse: true,
       headers: {"Accept": "application/json", "X-Nakpanel-SPA": "true", "X-Nakpanel-CSRF": csrfToken()}
     }).then(function (response) {
+      if (form.isConnected === false || pageSignal && pageSignal.aborted) return;
       if (response.ok) {
         form.dataset.npDirty = "false";
         if (response.redirected) window.location.assign(response.url);
-        else window.location.reload();
+        else refreshPage();
         return null;
       }
       return response.json().catch(function () {
@@ -2776,6 +2950,7 @@
         showSitePolicyError(form, payload);
       });
     }).catch(function (error) {
+      if (form.isConnected === false || pageSignal && pageSignal.aborted) return;
       showSitePolicyError(form, error.payload || {error: error.message || "The panel could not be reached. Check status before trying again."});
     }).then(function () {
       form.removeAttribute("aria-busy");
@@ -2786,6 +2961,7 @@
   }
 
   async function submitDialogForm(form, submitter) {
+    var pageSignal = window.NakpanelUI && window.NakpanelUI.lifecycle ? lifetime(form) : null;
     if (form.getAttribute("aria-busy") === "true") return;
     clearSitePolicyError(form);
     var body = new FormData(form);
@@ -2795,19 +2971,21 @@
     try {
       var response = await fetch(form.action, {method: "POST", body: body, allowPageResponse: true,
         headers: {Accept: "application/json", "X-Nakpanel-SPA": "true"}});
+      if (form.isConnected === false || pageSignal && pageSignal.aborted) return;
       form.dataset.npDirty = "false";
       if (response.redirected && response.url) window.location.assign(response.url);
-      else window.location.reload();
+      else refreshPage();
     } catch (error) {
+      if (form.isConnected === false || pageSignal && pageSignal.aborted) return;
       showSitePolicyError(form, error.payload || {error: error.message});
     } finally {
       window.NakpanelUI.setBusy(form, false);
     }
   }
 
-  function initSiteLogs() {
+  function initSiteLogs(root) {
     var allowedSiteLogSources = ["nginx_access", "nginx_error", "php_fpm", "php_deployment", "php_worker", "application", "task"];
-    each("[data-np-site-logs]", document, function (workspace) {
+    mountEach("[data-np-site-logs]", root, function (workspace) {
       var form = workspace.querySelector("[data-np-site-log-filter]");
       var sourceSelect = form && form.elements.source;
       var requestedLogSource = new URLSearchParams(window.location.search).get("source");
@@ -2840,8 +3018,8 @@
     });
   }
 
-  function initContainerLogs() {
-    each("[data-np-container-logs]", document, function (workspace) {
+  function initContainerLogs(root) {
+    mountEach("[data-np-container-logs]", root, function (workspace) {
       var output = workspace.querySelector("[data-np-container-log-output]");
       var refresh = workspace.querySelector("[data-np-container-log-refresh]");
       var truncated = workspace.querySelector("[data-np-container-log-truncated]");
@@ -2870,8 +3048,8 @@
     });
   }
 
-  function initContainerDeployForms() {
-    each("[data-np-container-deploy]", document, function (form) {
+  function initContainerDeployForms(root) {
+    mountEach("[data-np-container-deploy]", root, function (form) {
       var catalog = form.querySelector("[data-np-container-catalog]");
       var customImageField = form.querySelector("[data-np-custom-image-field]");
       var customImage = form.elements.image_ref;
@@ -2904,7 +3082,7 @@
       [catalog, route, health].forEach(function (control) {
         if (control) control.addEventListener("change", sync);
       });
-      each("[data-np-json-object]", form, function (field) {
+      mountEach("[data-np-json-object]", form, function (field) {
         function validateJSON() {
           field.setCustomValidity("");
           if (!field.value.trim()) return;
@@ -2946,9 +3124,8 @@
     var legacy = event.target.closest("[data-np-view]");
     if (legacy && !legacy.disabled) setLegacyView(legacy.getAttribute("data-np-view"));
     var opener = event.target.closest("[data-np-dialog-open]");
-    if (opener) {
+    if (opener && !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button > 0) && openDialog(opener.getAttribute("data-np-dialog-open"), opener)) {
       event.preventDefault();
-      openDialog(opener.getAttribute("data-np-dialog-open"), opener);
       if (opener.hasAttribute('data-np-domain-ssl-review')) {
         var sslDialog = document.getElementById(opener.getAttribute('data-np-dialog-open'));
         var sslTracker = sslDialog && sslDialog.querySelector('[data-np-setup-tracker]');
@@ -3042,13 +3219,19 @@
         generatedInput.dispatchEvent(new Event("input", { bubbles: true }));
       }
     }
+    var secretCopy = event.target.closest("[data-np-copy-secret]");
+    if (secretCopy) {
+      var secret = secretCopy.closest("[data-np-secret-panel]").querySelector("pre");
+      if (secret && navigator.clipboard) navigator.clipboard.writeText(secret.textContent).then(function () { secretCopy.textContent = "Copied"; }).catch(function () { secretCopy.textContent = "Select the secret to copy"; });
+      else secretCopy.textContent = "Select the secret to copy";
+    }
     var copier = event.target.closest("[data-np-copy-password]");
     if (copier) {
       var copyInput = passwordInput(copier);
       if (copyInput && copyInput.value && navigator.clipboard) {
         navigator.clipboard.writeText(copyInput.value).then(function () {
           copier.setAttribute("title", "Copied");
-          window.setTimeout(function () { copier.setAttribute("title", "Copy password"); }, 1500);
+          later(copier, function () { copier.setAttribute("title", "Copy password"); }, 1500);
         });
       }
     }
@@ -3076,7 +3259,7 @@
     if (rowAction) openFileRowDialog(rowAction);
     if (event.target.closest("[data-np-file-tree-open]")) document.body.classList.add("np-file-tree-open");
     if (event.target.closest("[data-np-file-tree-close]")) document.body.classList.remove("np-file-tree-open");
-    if (event.target.closest("[data-np-plan-confirm-submit]") && pendingPlanForm) {
+    if (event.target.closest("[data-np-plan-confirm-submit]") && pendingPlanForm && pendingPlanForm.isConnected !== false && !pendingPlanSignal.aborted) {
       planSubmitBypass = true;
       pendingPlanForm.dataset.npDirty = "false";
       closeDialog(document.getElementById("plan-preview-dialog"));
@@ -3088,7 +3271,10 @@
     if (event.target.matches('[data-np-create-site-form] select[name="subscription_id"]')) updateCreateGate(event.target.closest("form"));
     if (event.target.matches('[data-np-v2-create-site-form] select[name="subscription_id"]')) updateV2CreateGate(event.target.closest("form"));
     if (event.target.matches('input[name="customer_mode"], [data-np-create-first-site], [data-np-onboarding-plan]')) updateOnboarding();
-    if (event.target.matches("[data-np-subscription-nav]") && event.target.value) window.location.assign(event.target.value);
+    if (event.target.matches("[data-np-subscription-nav]") && event.target.value) {
+      if (window.NakpanelUI.navigate) window.NakpanelUI.navigate(event.target.value);
+      else window.location.assign(event.target.value);
+    }
     if (event.target.matches("[data-np-bulk-all]")) {
       var bulkForm = event.target.closest("[data-np-bulk-form]");
       each("[data-np-bulk-check]", bulkForm, function (input) { input.checked = event.target.checked; });
@@ -3209,7 +3395,6 @@
     applyList(list);
   }
 
-  each("[data-np-list]", document, function (list) { applyList(list); });
 
   document.addEventListener("input", function (event) {
     var list = event.target.closest ? event.target.closest("[data-np-list]") : null;
@@ -3293,7 +3478,7 @@
 	if (policyForm) buildHostingPolicyPatch(policyForm);
 	var sitePolicyForm = event.target.closest("[data-np-site-policy-builder]");
 	if (sitePolicyForm) buildSitePolicyPatch(sitePolicyForm);
-    prepareForms();
+    prepareForms(document);
 	if (sitePolicyForm && window.fetch) {
 	  event.preventDefault();
 	  submitSitePolicyForm(sitePolicyForm, event.submitter);
@@ -3340,7 +3525,6 @@
     submitSite(form);
   });
 
-  initDatabaseRefresh();
   document.addEventListener("input", function (event) {
     var form = event.target.closest("[data-np-create-subdomain-form]");
     if (form) updateSubdomainGate(form.closest("dialog") || document);
@@ -3377,9 +3561,6 @@
       try {if (!password.value) throw new Error();await navigator.clipboard.writeText(password.value);help.textContent='Password copied. Store it securely.';} catch (_) {help.textContent='Reveal and select the password to copy it manually.';}
     }
   });
-  initSiteLogs();
-  initContainerLogs();
-  initContainerDeployForms();
 
   document.addEventListener("dragover", function (event) {
     var manager = event.target.closest && event.target.closest("[data-np-file-manager]");
@@ -3436,86 +3617,113 @@
     if (results) results.hidden = true;
   });
 
-  prepareForms();
-  each("[data-np-error-back]", document, function (button) {
-    button.addEventListener("click", function () {
-      if (window.history.length > 1) window.history.back();
-      else window.location.assign("/dashboard");
+  function mount(root) {
+    prepareForms(root);
+    mountEach("[data-np-list]", root, applyList);
+    initDatabaseRefresh(root);
+    initSiteLogs(root);
+    initContainerLogs(root);
+    initContainerDeployForms(root);
+    mountEach("[data-np-error-back]", root, function (button) {
+      button.addEventListener("click", function () {
+        if (window.history.length > 1) window.history.back();
+        else window.location.assign("/dashboard");
+      });
     });
-  });
-  each("dialog[data-np-dialog]", document, function (dialog) {
-    dialogs.prepare(dialog);
-  });
-  updateCreateGate(document);
-  updateSubdomainGate(document);
-  each("[data-np-v2-create-site-form]", document, updateV2CreateGate);
-  if (new URLSearchParams(window.location.search).get("add") === "subdomain") {
-    var subdomainDialog = document.querySelector(".np-subdomain-dialog");
-    if (subdomainDialog) {
-      openDialog(subdomainDialog.id, null);
-      var cleanURL = new URL(window.location.href);
-      cleanURL.searchParams.delete("add");
-      window.history.replaceState(null, "", cleanURL.pathname + cleanURL.search + cleanURL.hash);
+    var requestedDrawer = new URLSearchParams(window.location.search).get("drawer");
+    each("dialog[data-np-dialog]", root, function (dialog) {
+      dialogs.prepare(dialog);
+      if (dialog.open && dialog.id === requestedDrawer && claim(dialog, "drawer-fallback")) {
+        // A server-open fallback is nonmodal. Close it before showModal so the
+        // shared controller can own focus, the backdrop and closing behavior.
+        dialog.close();
+        openDialog(dialog.id, null);
+      }
+    });
+    if (root.matches && root.matches('dialog[data-np-dialog]')) dialogs.prepare(root);
+    updateCreateGate(root);
+    updateSubdomainGate(root);
+    mountEach("[data-np-v2-create-site-form]", root, updateV2CreateGate);
+    if (new URLSearchParams(window.location.search).get("add") === "subdomain") {
+      var subdomainDialog = root.querySelector(".np-subdomain-dialog");
+      if (subdomainDialog) {
+        openDialog(subdomainDialog.id, null);
+        var cleanURL = new URL(window.location.href);
+        cleanURL.searchParams.delete("add");
+        window.history.replaceState(window.history.state, "", cleanURL.pathname + cleanURL.search + cleanURL.hash);
+      }
     }
-  }
-  updateOnboarding();
-  each("[data-np-bulk-form]", document, updateBulkForm);
-  each("[data-np-unlimited]", document, updateUnlimited);
-  each("[data-np-file-manager]", document, updateFileSelection);
-  filterSettings("");
-  initializeDirtyForms();
-  initTLSRefresh();
-  initSiteSetupProgress(document);
-  initializeSubscriptionTabs();
-  initializeDNSFilters();
-  initializeDNSSettingsTabs();
-  initializeDNSRecordForms();
-  initializeCodeEditor();
-  initializePHPApplicationWorkspace();
-  initializeWordPressUninstall();
-  if (document.querySelector("[data-np-wordpress-progress]")) {
-    window.setInterval(function () {
-      if (document.hidden || document.querySelector("dialog[open]") || document.querySelector('[data-np-dirty-guard][data-np-dirty="true"]')) return;
-      window.location.reload();
-    }, 8000);
-  }
-  each("[data-np-service-refresh]", document, function (button) {
-    button.addEventListener("click", function () {
-      var label = button.querySelector("[data-np-service-refresh-label]");
-      button.disabled = true;
-      if (label) label.textContent = "Refreshing…";
-      loadServerInventory().then(function () {
-        if (label) label.textContent = "Refreshed";
-        window.setTimeout(function () {
-          if (label) label.textContent = "Refresh";
-        }, 1200);
-      }, function () {
-        if (label) label.textContent = "Try again";
-      }).then(function () {
-        button.disabled = false;
+    if (root === document || root.querySelector("[data-np-customer-mode]")) updateOnboarding();
+    mountEach("[data-np-bulk-form]", root, updateBulkForm);
+    mountEach("[data-np-unlimited]", root, updateUnlimited);
+    mountEach("[data-np-file-manager]", root, updateFileSelection);
+    if (root === document || root.querySelector(".np-settings-page")) filterSettings("");
+    initializeDirtyForms(root);
+    initTLSRefresh(root);
+    initSiteSetupProgress(root);
+    initializeSubscriptionTabs(root);
+    initializeDNSFilters(root);
+    initializeDNSSettingsTabs(root);
+    initializeDNSRecordForms(root);
+    initializeCodeEditor(root);
+    initializePHPApplicationWorkspace(root);
+    initializeWordPressUninstall(root);
+    mountEach('[data-np-wordpress-progress]', root, function (panel) {
+      var signal = lifetime(panel);
+      var timer = window.setInterval(function () {
+        if (signal.aborted || document.hidden || document.querySelector('#main-content[aria-busy="true"]') || document.querySelector("dialog[open]") || document.querySelector('[data-np-dirty-guard][data-np-dirty="true"]')) return;
+        refreshPage();
+      }, 8000);
+      signal.addEventListener('abort', function () { window.clearInterval(timer); }, {once:true});
+    });
+    mountEach("[data-np-service-refresh]", root, function (button) {
+      button.addEventListener("click", function () {
+        var label = button.querySelector("[data-np-service-refresh-label]");
+        button.disabled = true;
+        if (label) label.textContent = "Refreshing…";
+        loadServerInventory().then(function () {
+          if (label) label.textContent = "Refreshed";
+          later(button, function () {
+            if (label) label.textContent = "Refresh";
+          }, 1200);
+        }, function () {
+          if (label) label.textContent = "Try again";
+        }).then(function () {
+          button.disabled = false;
+        });
       });
     });
-  });
-  each("[data-np-update-refresh]", document, function (button) {
-    button.addEventListener("click", function () {
-      var label = button.querySelector("[data-np-update-refresh-label]");
-      if (label) label.textContent = "Refreshing…";
-      loadServerUpdates(false).then(function (success) {
-        if (label) label.textContent = success ? "Inventory refreshed" : "Try again";
-        if (success) window.setTimeout(function () { label.textContent = "Refresh inventory"; }, 1200);
+    mountEach("[data-np-update-refresh]", root, function (button) {
+      button.addEventListener("click", function () {
+        var label = button.querySelector("[data-np-update-refresh-label]");
+        if (label) label.textContent = "Refreshing…";
+        loadServerUpdates(false).then(function (success) {
+          if (label) label.textContent = success ? "Inventory refreshed" : "Try again";
+          if (success) later(button, function () { label.textContent = "Refresh inventory"; }, 1200);
+        });
       });
     });
+    mountEach("[data-np-settings-inventory]", root, function () { loadServerInventory(); });
+    mountEach("[data-np-journal-entries]", root, function () { loadServerJournal(); });
+    mountEach("[data-np-update-packages]", root, function () { loadServerUpdates(false); });
+    mountEach("[data-np-mail-status]", root, function () { loadMailStatus(); });
+    mountEach("[data-np-security-state]", root, function () { loadServerSecurity(); });
+    bindSecurityControls(root);
+    mountEach("[data-np-backup-state]", root, function () { loadServerBackups(); });
+    bindBackupControls(root);
+    mountEach("[data-np-mail-queue-rows]", root, function () { loadMailQueue(); });
+    mountEach("[data-np-mail-log-rows]", root, function () { loadMailLogs(); });
+    mountEach("[data-np-database-rows]", root, function () { loadDatabaseAdmin(); });
+    mountEach("[data-np-application-rows]", root, function () { loadApplicationCatalog(); });
+  }
+  lifecycle.onMount(mount);
+  if (lifecycle.onUnmount) lifecycle.onUnmount(function (root) {
+    if (pendingPlanForm && (pendingPlanSignal.aborted || pendingPlanForm === root || root.contains(pendingPlanForm))) {
+      pendingPlanForm = null;
+      pendingPlanSignal = null;
+      planSubmitBypass = false;
+    }
+    dialogs.unmount(root);
   });
-  loadServerInventory();
-  loadServerJournal();
-  loadServerUpdates(false);
-  loadMailStatus();
-  loadServerSecurity();
-  bindSecurityControls();
-  loadServerBackups();
-  bindBackupControls();
-  loadMailQueue();
-  loadMailLogs();
-  loadDatabaseAdmin();
-  loadApplicationCatalog();
+  mount(document);
 })();

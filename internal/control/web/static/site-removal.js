@@ -15,6 +15,7 @@
         var result;
         try { result = await environment.request(statusURL); }
         catch (error) {
+          if (stopped || own !== generation) return;
           update({state: error.status === 401 ? 'signin' : 'uncertain', message: error.status === 404 ? 'Removal status was not found in your workspace.' : error.message, progress_url: progressURL});
           return;
         }
@@ -30,9 +31,10 @@
       if (!stopped && own === generation) update({state:'background',message:'Removal is continuing in the background. Check its progress before creating a replacement.',progress_url:progressURL});
     }
     async function check(lookupURL) {
-      var result;
+      var result, own=generation;
       try { result = await environment.request(lookupURL); }
-      catch (error) { update({state:error.status===401?'signin':'uncertain',message:error.status===404?'No accepted removal was found. Review the website before making another request.':error.message,progress_url:progressURL}); return; }
+      catch (error) { if(stopped||own!==generation)return; update({state:error.status===401?'signin':'uncertain',message:error.status===404?'No accepted removal was found. Review the website before making another request.':error.message,progress_url:progressURL}); return; }
+      if(stopped||own!==generation)return;
       update(result);
       if (result.status_url) await watch(result.status_url,result.progress_url);
     }
@@ -58,17 +60,26 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = {createSiteRemovalController:createSiteRemovalController};
   if (typeof window === 'undefined' || !window.NakpanelUI) return;
   var ui = window.NakpanelUI, document = window.document, dialog = document.getElementById('np-site-removal-dialog');
-  var controllers = new WeakMap();
+  var controllers = new WeakMap(), previewGeneration = 0;
   async function request(url,options) {
     var controller=new AbortController(), timer=setTimeout(function(){controller.abort();},10000);
     options=Object.assign({},options||{});
+    var signal=options.signal, cancel=function(){controller.abort();};
+    if(signal){if(signal.aborted)cancel();else signal.addEventListener('abort',cancel,{once:true});}
     if(options.body&&typeof options.body.get==='function'&&options.body.get('csrf_token'))options.headers={'X-Nakpanel-CSRF':options.body.get('csrf_token')};
     try {var response=await ui.fetch(url,Object.assign({},options,{signal:controller.signal}));return await response.json();}
-    finally {clearTimeout(timer);}
+    finally {clearTimeout(timer);if(signal)signal.removeEventListener('abort',cancel);}
   }
   function mount(root) {
-    var signature='';
-    var controller=createSiteRemovalController({baseURL:window.location.href,request:request,now:Date.now,sleep:function(ms){return new Promise(function(resolve){setTimeout(resolve,ms);});},redirect:function(path){window.location.assign(path);},update:function(value){
+    var owner=root.closest('#main-content') ? root : document.querySelector('#main-content') || root;
+    var signature='', signal=ui.lifecycle ? ui.lifecycle.signal(owner) : new AbortController().signal;
+    var controller=createSiteRemovalController({baseURL:window.location.href,request:function(url,options){return request(url,Object.assign({},options,{signal:signal}));},now:Date.now,sleep:function(ms){return new Promise(function(resolve){
+      if(signal.aborted){resolve();return;}
+      var timer=setTimeout(done,ms);
+      function done(){clearTimeout(timer);signal.removeEventListener('abort',done);resolve();}
+      signal.addEventListener('abort',done,{once:true});
+    });},redirect:function(path){window.location.assign(path);},update:function(value){
+      if(signal.aborted)return;
       if (value.html && signature!==value.state+':'+value.stage) {root.innerHTML=value.html;signature=value.state+':'+value.stage;}
       var error=root.querySelector('[data-np-removal-error]'), recovery=root.querySelector('[data-np-removal-recovery]'), form=root.querySelector('[data-np-removal-form],[data-np-removal-retry]');
       if (value.message && error && ['validation','signin','uncertain','background'].includes(value.state)) {error.textContent=value.message;error.hidden=false;}
@@ -84,6 +95,7 @@
       if (value.progress_url) root.dataset.npRemovalProgressURL=value.progress_url;
       if (value.state==='background' && root.querySelector('[data-np-removal-message]')) root.querySelector('[data-np-removal-message]').textContent=value.message;
     }});
+    signal.addEventListener('abort', function () { controller.stop(); }, {once:true});
     controllers.set(root,controller);
     if (window.NakpanelDomains) window.NakpanelDomains.updateRemovalGate(root);
     return controller;
@@ -95,10 +107,13 @@
       event.preventDefault();var menu=link.closest('details'),opener=menu?menu.querySelector('summary'):link;if(menu)menu.open=false;
       var previousInput=dialog.open&&dialog.querySelector('[name="confirm_domain"]'),previousValue=previousInput?previousInput.value:null;
       var previous=controllers.get(dialog);if(previous)previous.stop();
+      var owner=link.closest('#main-content') || document.querySelector('#main-content') || dialog;
+      var signal=ui.lifecycle ? ui.lifecycle.signal(owner) : new AbortController().signal, opening=++previewGeneration;
+      function currentPreview(){return opening===previewGeneration && !signal.aborted && dialog.open;}
       dialog.innerHTML='<div class="np-dialog-head"><h2 id="np-site-removal-title">Review removal</h2><button class="np-icon-button" type="button" data-np-dialog-close aria-label="Close"><svg class="np-icon" aria-hidden="true"><use href="/assets/icons.svg#x"></use></svg></button></div><div class="np-removal-body" role="status">Loading the exact domain impact...</div>';
       ui.dialogs.open(dialog,opener);
-      try {var result=await request(link.href+'/preview');if(dialog.open){dialog.innerHTML=result.html;var confirm=dialog.querySelector('[name="confirm_domain"]');if(confirm&&previousValue!==null)confirm.value=previousValue;var current=mount(dialog);var input=dialog.querySelector('[data-np-autofocus]');if(input)input.focus();if(result.status_url)current.watch(result.status_url,result.progress_url);}}
-      catch(error){var body=dialog.querySelector('.np-removal-body');if(body)body.textContent=error.status===404?'This website is not available in your workspace.':error.message;}
+      try {var result=await request(link.href+'/preview',{signal:signal});if(currentPreview()){dialog.innerHTML=result.html;var confirm=dialog.querySelector('[name="confirm_domain"]');if(confirm&&previousValue!==null)confirm.value=previousValue;var current=mount(dialog);var input=dialog.querySelector('[data-np-autofocus]');if(input)input.focus();if(result.status_url)current.watch(result.status_url,result.progress_url);}}
+      catch(error){if(!currentPreview())return;var body=dialog.querySelector('.np-removal-body');if(body)body.textContent=error.status===404?'This website is not available in your workspace.':error.message;}
       return;
     }
     var check=event.target.closest('[data-np-removal-check]');if(check){event.preventDefault();var root=rootFor(check),controller=controllers.get(root)||mount(root);await controller.check(check.href);}
@@ -111,6 +126,11 @@
     if(form.hasAttribute('data-np-removal-retry')) {var prior=controllers.get(root);if(prior)prior.stop();controller=mount(root);}
     ui.setBusy(form,true);await controller.submit(form.action,body,lookup);
   });
-  if(dialog)dialog.addEventListener('close',function(){var controller=controllers.get(dialog);if(controller)controller.stop();});
-  document.querySelectorAll('[data-np-removal-progress]').forEach(function(root){mount(root).watch(root.dataset.npRemovalStatus,window.location.pathname);});
+  if(dialog)dialog.addEventListener('close',function(){previewGeneration++;var controller=controllers.get(dialog);if(controller)controller.stop();});
+  function mountProgress(scope) {
+    scope.querySelectorAll('[data-np-removal-progress]').forEach(function(root){if (!controllers.has(root)) mount(root).watch(root.dataset.npRemovalStatus,window.location.pathname);});
+    if (window.NakpanelDomains) window.NakpanelDomains.updateRemovalGate(scope);
+  }
+  if (ui.lifecycle) ui.lifecycle.onMount(mountProgress);
+  mountProgress(document);
 })();

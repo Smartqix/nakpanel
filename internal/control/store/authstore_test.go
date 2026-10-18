@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -116,5 +117,19 @@ func TestAuthStoreMapsMissingSession(t *testing.T) {
 	_, err := store.GetSession(context.Background(), "missing", time.Now())
 	if !errors.Is(err, auth.ErrSessionNotFound) {
 		t.Fatalf("GetSession error = %v, want ErrSessionNotFound", err)
+	}
+}
+
+func TestAuthStoreMapsInvalidSessionRole(t *testing.T) {
+	store := NewAuthStore(&fakeAuthQuerier{
+		session: GetSessionUserRow{ID: 42, Email: "client@nakpanel.test", Role: "unusable-role"},
+	})
+
+	_, err := store.GetSession(context.Background(), "hash", time.Now())
+	if !errors.Is(err, auth.ErrSessionNotFound) {
+		t.Errorf("GetSession error = %v, want ErrSessionNotFound", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), `"unusable-role"`) {
+		t.Errorf("GetSession error = %v, want invalid role in message", err)
 	}
 }

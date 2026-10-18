@@ -14,10 +14,18 @@ import (
 )
 
 func (s *Store) ListSubscriptionServices(ctx context.Context, actor auth.SessionUser) (dashboard.SubscriptionServicesData, error) {
+	return s.listSubscriptionServices(ctx, actor, nil)
+}
+
+func (s *Store) ListSubscriptionServicesFor(ctx context.Context, actor auth.SessionUser, subscriptionID int64) (dashboard.SubscriptionServicesData, error) {
+	return s.listSubscriptionServices(ctx, actor, &subscriptionID)
+}
+
+func (s *Store) listSubscriptionServices(ctx context.Context, actor auth.SessionUser, subscriptionID *int64) (dashboard.SubscriptionServicesData, error) {
 	if s == nil || s.db == nil {
 		return dashboard.SubscriptionServicesData{}, errorsNewWorkspaceDB()
 	}
-	where, args, err := subscriptionScope(actor)
+	where, args, err := subscriptionServicesScope(actor, subscriptionID)
 	if err != nil {
 		return dashboard.SubscriptionServicesData{}, err
 	}
@@ -338,6 +346,19 @@ WHERE EXISTS (SELECT 1 FROM customers customer WHERE customer.login_user_id=$1
 ORDER BY preset.name`
 		presetArgs = append(presetArgs, actor.ID)
 	}
+	if subscriptionID != nil {
+		presetWhere, presetScopeArgs, scopeErr := subscriptionServicesScope(actor, subscriptionID)
+		if scopeErr != nil {
+			return data, scopeErr
+		}
+		presetQuery = `SELECT preset.id,COALESCE(preset.reseller_id,0),preset.slug,preset.name,preset.runtime,preset.image_ref,preset.active,preset.created_at
+FROM application_presets preset WHERE EXISTS (
+SELECT 1 FROM subscriptions sub JOIN customers customer ON customer.id=sub.customer_id
+LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
+WHERE ` + presetWhere + ` AND ` + presetCatalogScope(actor) + `) ORDER BY preset.name`
+		presetArgs = presetScopeArgs
+	}
+
 	presetRows, err := s.db.QueryContext(ctx, presetQuery, presetArgs...)
 	if err != nil {
 		return data, fmt.Errorf("subscription services: application_presets: %w", err)
@@ -404,3 +425,24 @@ func subscriptionScope(actor auth.SessionUser) (string, []any, error) {
 }
 
 func errorsNewWorkspaceDB() error { return fmt.Errorf("workspace database is not configured") }
+
+// subscriptionServicesScope always ANDs the resource filter with the actor scope.
+func subscriptionServicesScope(actor auth.SessionUser, subscriptionID *int64) (string, []any, error) {
+	where, args, err := subscriptionScope(actor)
+	if err == nil && subscriptionID != nil {
+		args = append(args, *subscriptionID)
+		// Parenthesised so the narrowing still binds if a role scope ever gains an OR.
+		where = fmt.Sprintf("(%s) AND sub.id = $%d", where, len(args))
+	}
+	return where, args, err
+}
+
+func presetCatalogScope(actor auth.SessionUser) string {
+	if actor.Role == auth.RoleAdmin {
+		return "preset.reseller_id IS NULL"
+	}
+	if actor.Role == auth.RoleReseller {
+		return "preset.reseller_id=reseller.id"
+	}
+	return "customer.reseller_id IS NOT DISTINCT FROM preset.reseller_id"
+}

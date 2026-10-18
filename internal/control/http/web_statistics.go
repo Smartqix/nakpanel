@@ -33,7 +33,6 @@ func (s *Server) loadWebStatistics(w http.ResponseWriter, r *http.Request, actor
 func (s *Server) statisticsRequest(w http.ResponseWriter, r *http.Request) (auth.SessionUser, int64, bool) {
 	actor, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return actor, 0, false
 	}
 	id, err := parsePositivePathID(r, "id")
@@ -130,7 +129,10 @@ func (s *Server) statisticsError(w http.ResponseWriter, r *http.Request, err err
 		return
 	}
 	if r.Method == http.MethodPost && r.PathValue("id") != "" {
-		actor, _ := s.currentUser(w, r)
+		actor, ok := s.currentUser(w, r)
+		if !ok {
+			return
+		}
 		http.Redirect(w, r, supportRedirectPath(r, actor, "/sites/"+r.PathValue("id")+"/statistics?statistics_error="+strconv.Itoa(status)), http.StatusSeeOther)
 		return
 	}
@@ -139,7 +141,6 @@ func (s *Server) statisticsError(w http.ResponseWriter, r *http.Request, err err
 func (s *Server) handleStatisticsSettings(w http.ResponseWriter, r *http.Request) {
 	actor, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if actor.Role != auth.RoleAdmin || r.FormValue("support_customer_id") != "" {
@@ -161,12 +162,11 @@ func (s *Server) handleStatisticsSettings(w http.ResponseWriter, r *http.Request
 		return
 	}
 	view := web.WorkspaceView{Route: "tools-settings", SettingsFocus: "web-statistics", CSRFToken: csrfToken(r), StatisticsSettings: &settings}
-	renderPage(w, r, web.RoutedDashboardPage("Web Statistics", actor, data, s.dashboardActions(actor), view))
+	s.renderRoutedPage(w, r, "Web Statistics", actor, data, s.dashboardActions(actor), view)
 }
 func (s *Server) handleSaveStatisticsSettings(w http.ResponseWriter, r *http.Request) {
 	actor, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if actor.Role != auth.RoleAdmin || r.FormValue("support_customer_id") != "" {

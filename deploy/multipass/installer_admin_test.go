@@ -59,7 +59,7 @@ sudo() {
   printf '%s\n' ensure-admin >> "$ORDER"
   if [[ "$BOOTSTRAP_MODE" == self-* ]]; then kill -s "${BOOTSTRAP_MODE#self-}" "$BASHPID"; fi
   if [[ "$BOOTSTRAP_MODE" == TERM || "$BOOTSTRAP_MODE" == HUP ]]; then
-    sh -c 'echo "$PPID" > "$BOOTSTRAP_PID"'
+    sh -c 'echo "$PPID" > "$BOOTSTRAP_PID.tmp"; mv "$BOOTSTRAP_PID.tmp" "$BOOTSTRAP_PID"'
     while true; do sleep 1; done
   fi
   [[ "$BOOTSTRAP_MODE" != failure ]] || return 69

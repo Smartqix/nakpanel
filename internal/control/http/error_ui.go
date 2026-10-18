@@ -163,6 +163,12 @@ func (w *capturedErrorWriter) finish(r *http.Request) {
 	field := userFacingErrorField(rawMessage)
 	title, message := userFacingErrorCopy(w.status, rawMessage)
 	w.Header().Set("Cache-Control", "no-store")
+	if wantsWorkspaceFragment(r) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.target.WriteHeader(w.status)
+		_, _ = w.target.Write([]byte("<p role=\"alert\">" + template.HTMLEscapeString(title+". "+message) + "</p>"))
+		return
+	}
 	if sourceJSON || wantsJSONError(r) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.target.WriteHeader(w.status)

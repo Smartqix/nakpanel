@@ -2,8 +2,9 @@
   'use strict';
   function mailAddressMatches(address, query) { return String(address).toLowerCase().includes(String(query).trim().toLowerCase()); }
   function createMailConnectionLoader(environment) {
-    var generation=0;
-    return {load:async function(url){var own=++generation;try{var value=await environment.request(url);if(own===generation)environment.show(value);}catch(error){if(own===generation)environment.error(error);}},stop:function(){generation++;}};
+    var generation=0,active;
+    function stop(){generation++;if(active)active.abort();active=null;}
+    return {load:async function(url){stop();var own=generation,controller=active=new AbortController();try{var value=await environment.request(url,controller.signal);if(own===generation)environment.show(value);}catch(error){if(own===generation)environment.error(error);}finally{if(own===generation)active=null;}},stop:stop};
   }
   if(typeof module!=='undefined'&&module.exports)module.exports={mailAddressMatches:mailAddressMatches,createMailConnectionLoader:createMailConnectionLoader};
   if(typeof window==='undefined'||!window.NakpanelUI)return;
@@ -12,6 +13,7 @@
     root.querySelectorAll('[data-np-mail-protocol-panel="pop"]').forEach(function(panel){panel.hidden=true;});
     root.querySelectorAll('[data-np-mail-client-view]').forEach(function(view){view.classList.add('is-enhanced');});
   }
+  if(ui.lifecycle)ui.lifecycle.onMount(mount);
   mount(document);
   function message(text){
     dialog.replaceChildren();
@@ -21,16 +23,19 @@
     var body=document.createElement('p');body.className='np-mail-client-body';body.setAttribute('role','status');body.textContent=text;
     dialog.append(head,body);
   }
-  var loader=createMailConnectionLoader({request:async function(url){
+  var loader=createMailConnectionLoader({request:async function(url,signal){
     var controller=new AbortController(),timer=setTimeout(function(){controller.abort();},12000);
+    var abort=function(){controller.abort();};
+    if(signal.aborted)abort();else signal.addEventListener('abort',abort,{once:true});
     try{
       var response=await ui.fetch(url,{headers:{'X-Nakpanel-Mail':'connection','Accept':'text/html'},signal:controller.signal});
       var html=await response.text(),parsed=new DOMParser().parseFromString(html,'text/html'),content=parsed.querySelector('[data-np-mail-client-view]');
       if(!content)throw new Error('Connection settings could not be loaded. Refresh this page and sign in again if needed.');
       return content;
-    }finally{clearTimeout(timer);}
+    }finally{clearTimeout(timer);signal.removeEventListener('abort',abort);}
   },show:function(content){if(!dialog.open)return;dialog.replaceChildren(document.importNode(content,true));mount(dialog);var close=dialog.querySelector('[data-np-dialog-close]');if(close)close.focus();},error:function(error){if(dialog.open)message(error.name==='AbortError'?'The mail service check timed out. Close this dialog and try again.':error.message);}});
-  if(dialog)dialog.addEventListener('close',function(){loader.stop();});
+  if(dialog)dialog.addEventListener('close',function(){if(!dialog.open)loader.stop();});
+  if(ui.lifecycle)ui.lifecycle.onUnmount(function(){loader.stop();if(dialog&&!dialog.open)dialog.replaceChildren();});
   document.addEventListener('input',function(event){
     if(!event.target.matches('[data-np-mail-search]'))return;
     var root=event.target.closest('[data-np-mail-list]'),visible=0;

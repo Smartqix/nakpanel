@@ -9,12 +9,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/config"
 	"github.com/nakroteck/nakpanel/internal/control/agentclient"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/capabilities"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	"github.com/nakroteck/nakpanel/internal/control/databaseadmin"
 	"github.com/nakroteck/nakpanel/internal/control/dnstemplate"
@@ -59,6 +61,11 @@ func main() {
 	if err := db.Ping(); err != nil {
 		log.Fatalf("ping database: %v", err)
 	}
+	// Dashboard reads run concurrently, so one request can hold several
+	// connections; keep them between requests instead of re-dialling Postgres
+	// (database/sql keeps only two idle connections by default).
+	db.SetMaxIdleConns(16)
+	db.SetConnMaxIdleTime(5 * time.Minute)
 
 	queries := store.New(db)
 	authStore := store.NewAuthStore(queries)
@@ -68,10 +75,13 @@ func main() {
 		log.Fatalf("load secret keyring: %v", err)
 	}
 
+	agentCapabilities := agentclient.New(config.AgentSocket)
+	capabilityCache := capabilities.New(agentCapabilities)
 	riverClient, serverAdminManager, databaseAdminManager, dnsTemplateManager, phpApplicationStore, wordpressStore, err := newRiverClient(db, queries, cfg)
 	if err != nil {
 		log.Fatalf("create river client: %v", err)
 	}
+	serverAdminManager.SetCapabilityInvalidator(capabilityCache)
 	if err := riverClient.Start(ctx); err != nil {
 		log.Fatalf("start river client: %v", err)
 	}
@@ -97,7 +107,6 @@ func main() {
 	if err := fileManager.SweepTransfers(time.Hour); err != nil {
 		log.Printf("sweep stale file transfers: %v", err)
 	}
-	agentCapabilities := agentclient.New(config.AgentSocket)
 	phpApplicationManager := controlphpapp.NewManager(phpApplicationStore, workspaceStore, agentCapabilities)
 	dashboardStore := dashboard.NewStore(
 		dashboardQuerier{queries: queries},
@@ -106,7 +115,7 @@ func main() {
 		dashboard.WithQuotaReader(quotaStore),
 		dashboard.WithScopedReader(workspaceStore),
 		dashboard.WithAuditReader(workspaceStore),
-		dashboard.WithCapabilityReader(agentCapabilities),
+		dashboard.WithCapabilityReader(capabilityCache),
 	)
 	siteManager := provision.NewManager(
 		siteRepo,
@@ -141,6 +150,7 @@ func main() {
 		log.Fatalf("start database manager bridge: %v", err)
 	}
 	defer closeDatabaseManager()
+	instantNav := strings.ToLower(strings.TrimSpace(os.Getenv("NAKPANEL_INSTANT_NAV")))
 	uiHandler := panelhttp.NewServer(authStore, sessionManager, panelhttp.ServerOptions{
 		SiteCreator:                siteManager,
 		SiteRemoval:                siteManager,
@@ -164,6 +174,7 @@ func main() {
 		WordPress:                  wordpressManager,
 		MailImports:                mailImportManager,
 		WebStatistics:              webstatistics.New(db, agentclient.New(config.AgentSocket), riverClient),
+		DisableInstantNav:          instantNav == "off" || instantNav == "false" || instantNav == "0",
 		SMTPConfigured:             cfg.SMTPHost != "" && cfg.SMTPFrom != "",
 		SecurityDB:                 db,
 		SecurityKeyring:            securityKeyring,

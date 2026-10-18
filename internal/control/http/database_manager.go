@@ -46,9 +46,10 @@ func NewDatabaseManagerProxy(service DatabaseManagerService, key string) *Databa
 
 func RegisterDatabaseManagerRoutes(mux *http.ServeMux, s *Server, p *DatabaseManagerProxy) {
 	mux.HandleFunc("POST /databases/{id}/manager", func(w http.ResponseWriter, r *http.Request) {
-		actor, ok := s.currentUser(w, r)
-		if !ok {
+		actor, ok := s.currentUser(w, r, func() {
 			http.Error(w, "Authentication required", http.StatusUnauthorized)
+		})
+		if !ok {
 			return
 		}
 		if p == nil || p.service == nil || len(p.key) < 32 {
@@ -110,9 +111,10 @@ func managerCookieAllowed(name string) bool {
 func (s *Server) serveDatabaseManager(p *DatabaseManagerProxy, w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("Referrer-Policy", "same-origin")
-	actor, ok := s.currentUser(w, r)
-	if !ok {
+	actor, ok := s.currentUser(w, r, func() {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
+	})
+	if !ok {
 		return
 	}
 	if p == nil || p.service == nil || len(p.key) < 32 {

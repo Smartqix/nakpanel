@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -103,16 +104,30 @@ func (p *execRuntimeCapabilityProcess) Output() []byte {
 }
 
 func probePHPRuntimes(ctx context.Context, probe RuntimeCapabilityProbe) ([]types.PHPRuntimeCapability, []string) {
-	runtimes := make([]types.PHPRuntimeCapability, 0, len(supportedPHPRuntimes))
-	readyVersions := make([]string, 0, len(supportedPHPRuntimes))
-	for _, supported := range supportedPHPRuntimes {
-		runtime, discovered := probePHPRuntime(ctx, probe, supported.version, supported.status)
-		if !discovered {
+	type result struct {
+		runtime    types.PHPRuntimeCapability
+		discovered bool
+	}
+	results := make([]result, len(supportedPHPRuntimes))
+	var wg sync.WaitGroup
+	for i, supported := range supportedPHPRuntimes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			results[i].runtime, results[i].discovered = probePHPRuntime(ctx, probe, supported.version, supported.status)
+		}()
+	}
+	wg.Wait()
+
+	runtimes := make([]types.PHPRuntimeCapability, 0, len(results))
+	readyVersions := make([]string, 0, len(results))
+	for _, result := range results {
+		if !result.discovered {
 			continue
 		}
-		runtimes = append(runtimes, runtime)
-		if runtime.Ready {
-			readyVersions = append(readyVersions, runtime.Version)
+		runtimes = append(runtimes, result.runtime)
+		if result.runtime.Ready {
+			readyVersions = append(readyVersions, result.runtime.Version)
 		}
 	}
 	return runtimes, readyVersions

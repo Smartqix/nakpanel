@@ -86,7 +86,6 @@ func parseWebsiteCreateInput(r *http.Request) (websiteCreateInput, error) {
 func (s *Server) handleCreateWebsite(w http.ResponseWriter, r *http.Request) {
 	actor, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if actor.Role != auth.RoleAdmin && actor.Role != auth.RoleClient && actor.Role != auth.RoleReseller {
@@ -243,6 +242,8 @@ func (s *Server) renderWebsiteCreatePage(w http.ResponseWriter, r *http.Request,
 			data = filterDashboardForCustomer(data, view.SupportCustomerID)
 		}
 	}
+	view.InstantNavDisabled = s.disableInstantNav
+	w.Header().Add("Vary", "X-Nakpanel-Fragment")
 	var body bytes.Buffer
 	if err := web.RoutedDashboardPage("Add Website", actor, data, s.dashboardActions(actor), view).Render(r.Context(), &body); err != nil {
 		http.Error(w, "Could not render website setup", http.StatusInternalServerError)

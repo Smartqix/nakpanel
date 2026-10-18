@@ -121,3 +121,14 @@ func fmtNumber(value float64) string {
 	}
 	return strconv.FormatFloat(value, 'f', -1, 64)
 }
+
+func (s *SQLJobStore) CountActiveJobs(ctx context.Context) (int, error) {
+	if s.db == nil {
+		return 0, errors.New("job database is not configured")
+	}
+	var count int
+	err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM river_job
+WHERE kind IN ('create_site', 'create_database', 'issue_cert', 'create_backup', 'restore_backup', 'configure_webmail', 'configure_dns_zone', 'reconcile_system')
+AND state IN ('available', 'scheduled', 'running', 'retryable', 'pending')`).Scan(&count)
+	return count, err
+}

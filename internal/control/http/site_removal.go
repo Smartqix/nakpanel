@@ -105,13 +105,14 @@ func (s *Server) registerSiteRemovalRoutes(mux *http.ServeMux) {
 }
 func (s *Server) removalUser(w http.ResponseWriter, r *http.Request) (auth.SessionUser, int64, bool) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := s.currentUser(w, r)
-	if !ok {
+	user, ok := s.currentUser(w, r, func() {
 		if removalWantsJSON(r) || strings.HasSuffix(r.URL.Path, "/status") || strings.HasSuffix(r.URL.Path, "/lookup") {
 			writeSPAError(w, 401, "Sign in to check removal status. Do not submit removal again.")
 		} else {
 			http.Redirect(w, r, "/login", 303)
 		}
+	})
+	if !ok {
 		return user, 0, false
 	}
 	if s.siteRemoval == nil {
@@ -400,7 +401,16 @@ func (s *Server) renderRemovalWorkspace(w http.ResponseWriter, r *http.Request, 
 }
 
 func (s *Server) renderRemovalWorkspaceStatus(w http.ResponseWriter, r *http.Request, user auth.SessionUser, view web.WorkspaceView, status int) {
-	data, err := s.loadDashboard(r.Context(), user)
+	siteID := int64(0)
+	if view.SiteRemoval != nil {
+		if view.SiteRemoval.Preview != nil {
+			siteID = view.SiteRemoval.Preview.SiteID
+		}
+		if view.SiteRemoval.Operation != nil {
+			siteID = view.SiteRemoval.Operation.SiteID
+		}
+	}
+	data, err := s.loadDashboard(dashboard.WithServiceScope(r.Context(), 0, siteID), user)
 	if err != nil {
 		http.Error(w, "Could not load removal workspace", 503)
 		return
@@ -421,7 +431,7 @@ func (s *Server) renderRemovalWorkspaceStatus(w http.ResponseWriter, r *http.Req
 		w.Header().Set("X-Nakpanel-Complete-Error-Page", "1")
 		w.WriteHeader(status)
 	}
-	renderPage(w, r, web.RoutedDashboardPage(view.Title, user, data, s.dashboardActions(user), view))
+	s.renderRoutedPage(w, r, view.Title, user, data, s.dashboardActions(user), view)
 }
 
 func (s *Server) applyRemovalNotice(r *http.Request, user auth.SessionUser, data *dashboard.Data, support int64) {

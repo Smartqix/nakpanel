@@ -189,9 +189,10 @@ func (s *Server) handleManagedServiceAction(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleServerReauthenticate(w http.ResponseWriter, r *http.Request) {
-	user, ok := s.currentUser(w, r)
-	if !ok {
+	user, ok := s.currentUser(w, r, func() {
 		writeSPAError(w, http.StatusUnauthorized, "Session could not be reauthenticated")
+	})
+	if !ok {
 		return
 	}
 	cookie, err := r.Cookie(SessionCookieName)

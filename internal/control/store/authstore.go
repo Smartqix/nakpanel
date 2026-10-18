@@ -72,7 +72,7 @@ func (s *AuthStore) GetSession(ctx context.Context, tokenHash string, now time.T
 
 	role := auth.Role(user.Role)
 	if !role.Valid() {
-		return auth.SessionUser{}, fmt.Errorf("invalid session user role %q", user.Role)
+		return auth.SessionUser{}, fmt.Errorf("invalid session user role %q: %w", user.Role, auth.ErrSessionNotFound)
 	}
 
 	return auth.SessionUser{

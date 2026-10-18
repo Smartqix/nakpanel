@@ -16,7 +16,6 @@ import (
 func (s *Server) handleEmailRedirect(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	target := "/mail"
@@ -31,7 +30,6 @@ func (s *Server) handleEmailRedirect(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleMailWorkspace(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return
 	}
 	if user.Role == auth.RoleAdmin || user.Role == auth.RoleReseller {

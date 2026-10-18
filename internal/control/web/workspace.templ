@@ -27,19 +27,24 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<link rel="stylesheet" href="/assets/domains.css"/>
 			<link rel="stylesheet" href="/assets/mail.css"/>
 		</head>
-		<body class={ domainWorkspaceClass(view) } data-np-role={ string(user.Role) }>
+		<body class={ domainWorkspaceClass(view) } data-np-role={ string(user.Role) }
+			if workspaceRequiresDocument(view) {
+				data-np-document-only
+			}
+			if !view.InstantNavDisabled {
+				data-np-nav="on"
+			}
+		>
 			<div class="np-routed-layout">
 				@routedSidebar(user, data, view)
 				<div class="np-routed-main">
+					<div class="np-nav-progress" aria-hidden="true"></div>
 					@routedTopbar(user, data, view)
 					if view.SupportCustomerID > 0 {
 						@supportBanner(view)
 					}
 					<main class="np-routed-content" id="main-content">
-						if data.Notice != "" {
-							@noticeBanner(data.Notice, data.NoticeKind)
-						}
-						@routedContent(user, data, actions, view)
+						@routedMain(user, data, actions, view)
 					</main>
 				</div>
 			</div>
@@ -57,6 +62,11 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<dialog class="np-dialog np-site-removal-dialog" id="np-site-removal-dialog" data-np-dialog></dialog>
 			<dialog class="np-dialog np-mail-dialog np-mail-connect-dialog" id="np-mail-connect-dialog" aria-labelledby="np-mail-connect-title" data-np-dialog></dialog>
 			<script defer src="/assets/interaction.js"></script>
+			<script defer src="/assets/navigation.js"></script>
+ <script defer src="/assets/tasks.js"></script>
+			if view.SettingsFocus != "dns" {
+				<script defer src="/assets/dns-template.js"></script>
+			}
 			<script defer src="/assets/domains.js"></script>
 			<script defer src="/assets/app.js"></script>
 			<script defer src="/assets/git.js"></script>
@@ -66,6 +76,41 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<script defer src="/assets/mail.js"></script>
 		</body>
 	</html>
+}
+
+// routedMain is shared verbatim by the full document and fragment representations.
+templ routedMain(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	if data.Notice != "" {
+		@noticeBanner(data.Notice, data.NoticeKind)
+	}
+	@routedContent(user, data, actions, view)
+}
+
+templ RoutedFragment(title string, user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
+	{{ view.Fragment = true }}
+	if workspaceRequiresDocument(view) {
+		<template data-np-shell="meta" data-full-document="true" data-title={ title } data-body-class={ domainWorkspaceClass(view) } data-route={ view.Route }></template>
+	} else {
+		<template data-np-shell="meta" data-title={ title } data-body-class={ domainWorkspaceClass(view) } data-route={ view.Route }></template>
+		<template data-np-shell="sidebar">@routedSidebar(user, data, view)</template>
+		<template data-np-shell="topbar">@routedTopbar(user, data, view)</template>
+		<template data-np-shell="support">
+			if view.SupportCustomerID > 0 {
+				@supportBanner(view)
+			}
+		</template>
+		<div data-np-fragment="main">@routedMain(user, data, actions, view)</div>
+	}
+	<template data-np-shell="site-dialog">
+		if actions.CanCreateSite && view.Route != "site-new" {
+			@routedSiteDialog(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID), data.Capabilities, view)
+		}
+	</template>
+	<template data-np-shell="customer-dialog">
+		if (user.Role == auth.RoleAdmin || user.Role == auth.RoleReseller) && actions.CanManageQuotas {
+			@customerDialog(view)
+		}
+	</template>
 }
 
 templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
@@ -158,6 +203,9 @@ templ routedTopbar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 			</div>
 		</div>
 		<div class="np-top-secondary">
+   if user.Role == auth.RoleAdmin {
+    @tasksTray(data)
+   }
 			if user.Role == auth.RoleClient || view.SupportCustomerID > 0 {
 				<label class="np-context-select"><span class="np-sr-only">Subscription</span><select data-np-subscription-nav>
 					<option value={ templ.SafeURL(workspacePath(view, "/dashboard")) }>All subscriptions</option>
@@ -1197,10 +1245,11 @@ templ domainContainers(user auth.SessionUser, item dashboard.Site, subscription 
 }
 
 templ containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
-	<dialog class="np-dialog np-dialog-wide" id="deploy-container-dialog" data-np-dialog aria-labelledby="deploy-container-title">
-		<form class="np-dialog-form np-container-deploy-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/applications") } data-np-container-deploy>
+	<dialog class="np-dialog np-drawer np-dialog-wide" id="deploy-container-dialog" data-np-dialog aria-labelledby="deploy-container-title">
+		<div class="np-dialog-head"><div><span class="np-kicker">Guided OCI deployment</span><h2 id="deploy-container-title">Deploy container</h2><p>Nakpanel allocates the host endpoint and derives all ownership and limits from the selected subscription.</p></div><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close" title="Close">@icon("x")</button></div>
+		<form class="np-dialog-form np-container-deploy-form" method="post" action={ templ.SafeURL("/subscriptions/"+formatJobID(subscription.ID)+"/applications") } data-np-container-deploy><div class="np-drawer-body">
 			@csrfInput(view)<input type="hidden" name="site_id" value={ formatJobID(item.ID) }/><input type="hidden" name="return_to" value="site-containers"/><input type="hidden" name="runtime" value="oci"/><input type="hidden" name="desired_state" value="running"/>
-			<div class="np-dialog-head"><div><span class="np-kicker">Guided OCI deployment</span><h2 id="deploy-container-title">Deploy container</h2><p>Nakpanel allocates the host endpoint and derives all ownership and limits from the selected subscription.</p></div><button type="button" class="np-icon-button" data-np-dialog-close title="Close">@icon("x")</button></div>
+
 			if policy, found := policyForSite(data.SubscriptionServices.SitePolicies,item.ID); !found {
 				<p class="np-gate is-blocked">Container policy is unavailable.</p>
 			} else if !policy.Permissions.Applications {
@@ -1237,6 +1286,10 @@ templ containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscrip
 					<div><span>Container storage</span><strong>{ formatPlanLimitMB(policy.Resources.ContainerStorageMB) }</strong></div>
 				</div>
 				<p class="np-form-help">The image, route, health probe, storage declaration, and subscription limits are validated again before the deployment job is queued.</p>
+
+			}
+			</div>
+			if policy, found := policyForSite(data.SubscriptionServices.SitePolicies,item.ID); found && policy.Permissions.Applications {
 				<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Deploy container</button></div>
 			}
 		</form>
@@ -1629,7 +1682,7 @@ templ routedFileManager(view WorkspaceView) {
 					@icon("search")<input type="search" name="q" value={ data.Query } placeholder="Search filenames" aria-label="Search filenames" disabled?={ data.Error != "" }/><button type="submit" class="np-sr-only" disabled?={ data.Error != "" }>Search</button>
 				</form>
 			</div>
-			<form class="np-file-upload-form" action={ templ.SafeURL(fileActionPath(view,data.SiteID,"upload",data.Path)) } method="post" enctype="multipart/form-data" data-np-file-upload-form hidden>
+			<form class="np-file-upload-form" action={ templ.SafeURL(fileActionPath(view,data.SiteID,"upload",data.Path)) } method="post" enctype="multipart/form-data" data-np-file-upload-form data-np-full-nav hidden>
 				<input type="file" name="files" multiple data-np-file-input="files"/>
 				<input type="file" name="folder" multiple webkitdirectory directory data-np-file-input="folder"/>
 			</form>
@@ -1889,7 +1942,7 @@ templ domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phas
 				<div class="np-domain-dns-reset"><div><strong>Reset this zone</strong><p>System-managed mail and security records remain. Custom records owned by this domain are removed after typed confirmation.</p></div><button type="button" class="np-danger-button" data-np-dialog-open={ "dns-zone-reset-"+formatJobID(item.ID) }>Reset zone</button></div>
 			</details>
 			@dnsRecordDialog(view,item.ID,item.Domain,zone,"dns-record-dialog-"+formatJobID(item.ID),"Add DNS record",types.DNSRecord{Host:"@",TTL:3600})
-			<dialog class="np-dialog np-dns-authorization-dialog" id={ "dns-zone-authorization-"+formatJobID(item.ID) } data-np-dialog aria-labelledby={ "dns-zone-authorization-title-"+formatJobID(item.ID) }><form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Protected DNS controls</span><h2 id={ "dns-zone-authorization-title-"+formatJobID(item.ID) }>Authorize zone changes</h2><p>Zone placement, mode, SOA, transfer, template apply, and reset actions require a recent password confirmation.</p></div><form class="np-settings-reauth np-dialog-form" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form>@csrfInput(view)<label><span>Account password</span><input type="password" name="password" autocomplete="current-password" required/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Authorize for 10 minutes</button></div><p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p></form></dialog>
+			<dialog class="np-dialog np-dns-authorization-dialog" id={ "dns-zone-authorization-"+formatJobID(item.ID) } data-np-dialog aria-labelledby={ "dns-zone-authorization-title-"+formatJobID(item.ID) }><form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Protected DNS controls</span><h2 id={ "dns-zone-authorization-title-"+formatJobID(item.ID) }>Authorize zone changes</h2><p>Zone placement, mode, SOA, transfer, template apply, and reset actions require a recent password confirmation.</p></div><form class="np-settings-reauth np-dialog-form" method="post" action="/tools-settings/reauthenticate" data-np-reauth-form data-np-full-nav>@csrfInput(view)<label><span>Account password</span><input type="password" name="password" autocomplete="current-password" required/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Authorize for 10 minutes</button></div><p class="np-notice" data-np-reauth-status role="status" aria-live="polite" hidden></p></form></dialog>
 			<dialog class="np-dialog" id={ "dns-zone-reset-"+formatJobID(item.ID) } data-np-dialog aria-labelledby={ "dns-zone-reset-title-"+formatJobID(item.ID) }><form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Protected DNS action</span><h2 id={ "dns-zone-reset-title-"+formatJobID(item.ID) }>Reset { item.Domain }</h2><p>Type the authoritative zone name to confirm.</p></div><form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/dns-template/reset") }>@csrfInput(view)<label>Zone name<input name="confirmation" placeholder={ zone.Domain } required autocomplete="off"/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Reset zone</button></div></form></dialog>
 		} else {
 			<div class="np-domain-dns-empty"><span>@icon("network")</span><div><h2>No authoritative zone</h2><p>Initialize DNS to instantiate the current global template for this domain.</p></div></div>
@@ -1980,14 +2033,13 @@ templ domainDatabases(item dashboard.Site, subscription types.SubscriptionSummar
 			</div>
 		}
 		if actions.CanCreateDatabase && !databaseLimitReached(subscription) {
-			<dialog class="np-dialog np-domain-db-dialog" id={ "database-create-dialog-"+formatJobID(item.ID) } data-np-dialog aria-labelledby={ "database-create-title-"+formatJobID(item.ID) }>
-				<form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form>
+			<dialog class="np-dialog np-drawer np-domain-db-dialog" id={ "database-create-dialog-"+formatJobID(item.ID) } data-np-dialog aria-labelledby={ "database-create-title-"+formatJobID(item.ID) }>
 				<div class="np-dialog-head">
 					<span class="np-kicker">Database provisioning</span>
 					<h2 id={ "database-create-title-"+formatJobID(item.ID) }>Create database</h2>
 					<p>The database will belong to { item.Domain } under { subscription.SubscriptionName }.</p>
-				</div>
-				<form class="np-form np-dialog-form np-domain-db-create-form" method="post" action="/databases" data-np-domain-db-form>
+				<button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close dialog">@icon("x")</button></div>
+				<form class="np-form np-dialog-form np-domain-db-create-form" method="post" action="/databases" data-np-domain-db-form><div class="np-drawer-body">
 					@csrfInput(view)
 					<input type="hidden" name="subscription_id" value={ formatJobID(item.SubscriptionID) }/>
 					<input type="hidden" name="site_id" value={ formatJobID(item.ID) }/>
@@ -1996,7 +2048,7 @@ templ domainDatabases(item dashboard.Site, subscription types.SubscriptionSummar
 					<label>Database user<input name="db_user" autocomplete="off" placeholder="application_user" pattern="[a-z][a-z0-9_]{1,47}" maxlength="48" required/></label>
 					@databasePasswordInput()
 					<p class="np-error" data-np-db-form-error role="alert" hidden></p>
-					<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create database</button></div>
+					</div><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create database</button></div>
 				</form>
 			</dialog>
 		}
@@ -2304,7 +2356,7 @@ templ routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Works
 templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
 	if subscription, ok := subscriptionByID(data.Subscriptions, view.DetailID); ok {
 		@subscriptionObjectHead(user, subscription, data, actions, view)
-		<div class="np-detail-split">
+		<div class="np-detail-split" data-np-nav-scope-body>
 			<div class="np-detail-main">
 				if data.ServiceLoadError != "" {
 					<p class="np-gate is-blocked" role="alert">Some hosting service data is unavailable. Resource lists and counts may be incomplete. Refresh the page or contact your provider.</p>
@@ -2392,7 +2444,12 @@ templ subscriptionObjectHead(user auth.SessionUser, subscription types.Subscript
 					}
 				}
 				if actions.CanCreateSite {
-					<a class="np-primary-link" href={ templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")) }>@icon("plus")
+					<a class="np-primary-link" href={ templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")) }
+						if view.Route != "site-new" {
+							data-np-dialog-open="site-dialog"
+							data-np-dialog-prefill={ "{\"subscription_id\":\""+formatJobID(subscription.ID)+"\"}" }
+						}
+					>@icon("plus")
 <span>Add Domain</span></a>
 				}
 			</div>
@@ -2566,11 +2623,16 @@ templ subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subsc
 		</section>
 		<section class="np-panel">
 			<div class="np-panel-title"><h2>Against the plan</h2><a href={ subscriptionTabPath(view, subscription.ID, "resources") }>All limits</a></div>
-			<div class="np-usage-list">
-				for _, row := range subscriptionRailLimits(subscription, data) {
-					@limitRowBlock(row)
-				}
-			</div>
+			{{ railRows := subscriptionRailLimits(subscription, data) }}
+			if len(railRows) == 0 {
+				<p class="np-empty-inline np-usage-empty">No limits to track: this subscription's allowances are unlimited or unused.</p>
+			} else {
+				<div class="np-usage-list">
+					for _, row := range railRows {
+						@limitRowBlock(row)
+					}
+				</div>
+			}
 		</section>
 	</aside>
 }
@@ -2669,8 +2731,9 @@ templ subscriptionSettingsPanel(subscription types.SubscriptionSummary, data das
 			<p class="np-gate is-blocked">Plan compliance: { subscription.ComplianceError }. Existing resources were preserved; new provisioning remains subject to the active snapshot.</p>
 		}
 		@subscriptionLimitsTable(subscription, data)
-		<div class="np-form-split">
-			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status") }>
+		<div class="np-panel-actions">
+			<a class="np-secondary-button" href={ subscriptionDrawerPath(view, subscription.ID, "subscription-plan-dialog-"+formatJobID(subscription.ID)) } data-np-dialog-open={ "subscription-plan-dialog-"+formatJobID(subscription.ID) }>Change plan…</a>
+			<dialog class="np-dialog np-drawer" id={ "subscription-plan-dialog-"+formatJobID(subscription.ID) } data-np-dialog open?={ view.Drawer == "subscription-plan-dialog-"+formatJobID(subscription.ID) }><div class="np-dialog-head"><h2>Change plan</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close dialog">@icon("x")</button></div><form class="np-form np-action-form np-dialog-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status") }><div class="np-drawer-body">
 				@csrfInput(view)
 				<input type="hidden" name="customer_id" value={ formatJobID(subscription.CustomerID) }/><input type="hidden" name="subscription_name" value={ subscription.SubscriptionName }/><input type="hidden" name="sync_mode" value={ subscription.SyncMode }/><input type="hidden" name="status" value={ subscription.Status }/>
 				<label>Service plan<select name="plan_id">
@@ -2680,16 +2743,17 @@ templ subscriptionSettingsPanel(subscription types.SubscriptionSummary, data das
 						}
 					}
 				</select></label>
-				<p class="np-form-help">Moving plans replaces every limit above.</p>
-				<button type="submit" data-np-confirm="Move this subscription onto the selected plan?">Change plan</button>
-			</form>
-			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status") }>
+				<p class="np-form-help">Moving plans replaces every limit on this subscription.</p>
+				</div><div class="np-dialog-actions"><button type="submit" data-np-confirm="Move this subscription onto the selected plan?">Change plan</button></div>
+			</form></dialog>
+			<a class="np-secondary-button" href={ subscriptionDrawerPath(view, subscription.ID, "subscription-status-dialog-"+formatJobID(subscription.ID)) } data-np-dialog-open={ "subscription-status-dialog-"+formatJobID(subscription.ID) }>Change status…</a>
+			<dialog class="np-dialog np-drawer" id={ "subscription-status-dialog-"+formatJobID(subscription.ID) } data-np-dialog open?={ view.Drawer == "subscription-status-dialog-"+formatJobID(subscription.ID) }><div class="np-dialog-head"><h2>Change status</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close dialog">@icon("x")</button></div><form class="np-form np-action-form np-dialog-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status") }><div class="np-drawer-body">
 				@csrfInput(view)
 				<input type="hidden" name="customer_id" value={ formatJobID(subscription.CustomerID) }/><input type="hidden" name="subscription_name" value={ subscription.SubscriptionName }/><input type="hidden" name="sync_mode" value={ subscription.SyncMode }/><input type="hidden" name="plan_id" value={ formatPlanID(subscription.PlanID) }/>
 				<label>Status<select name="status"><option value="active" selected?={ subscription.Status == "active" }>Active</option><option value="suspended" selected?={ subscription.Status == "suspended" }>Suspended — websites stop serving</option><option value="cancelled" selected?={ subscription.Status == "cancelled" }>Cancelled — websites stop, data kept</option></select></label>
 				<p class="np-form-help">Suspending takes { formatPlanLimit(len(sitesForSubscription(data.Sites,subscription.ID))) } website(s) offline immediately.</p>
-				<button type="submit" data-np-confirm="Apply this status change to the subscription and its websites?">Apply status</button>
-			</form>
+				</div><div class="np-dialog-actions"><button type="submit" data-np-confirm="Apply this status change to the subscription and its websites?">Apply status</button></div>
+			</form></dialog>
 		</div>
 		if subscription.SyncMode != "custom" && len(addonsForProvider(data.AddonPlans, subscription.ResellerID)) > 0 {
 			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/addons") }>
@@ -2931,8 +2995,9 @@ templ subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashb
 			</div>
 		}
 		if !subscriptionSFTPBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
-			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sftp") }>@csrfInput(view)
-<div class="np-form-grid"><label>Name<input name="name" required/></label><label>Directory<input name="relative_root" value="." required/></label><label class="np-wide-field">SSH public key<textarea name="public_key" rows="3" required></textarea></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><button type="submit">Add SFTP identity</button></form>
+			<a class="np-primary-link" href={ subscriptionDrawerPath(view, subscription.ID, "subscription-sftp-dialog-"+formatJobID(subscription.ID)) } data-np-dialog-open={ "subscription-sftp-dialog-"+formatJobID(subscription.ID) }>Add identity…</a>
+			<dialog class="np-dialog np-drawer" id={ "subscription-sftp-dialog-"+formatJobID(subscription.ID) } data-np-dialog open?={ view.Drawer == "subscription-sftp-dialog-"+formatJobID(subscription.ID) }><div class="np-dialog-head"><h2>Add SFTP identity</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close dialog">@icon("x")</button></div><form class="np-form np-action-form np-dialog-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sftp") }><div class="np-drawer-body">@csrfInput(view)
+<div class="np-form-grid"><label>Name<input name="name" required/></label><label>Directory<input name="relative_root" value="." required/></label><label class="np-wide-field">SSH public key<textarea name="public_key" rows="3" required></textarea></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div></div><div class="np-dialog-actions"><button type="submit">Add SFTP identity</button></div></form></dialog>
 		}
 	</section>
 	<section class="np-panel">
@@ -2963,8 +3028,9 @@ templ subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashb
 			</div>
 		}
 		if !subscriptionFTPSBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
-			<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/ftp") }>@csrfInput(view)
-<div class="np-form-grid"><label>Login name<input name="name" pattern="[a-z][a-z0-9._\-]{2,31}" required/></label><label>Password<input type="password" name="password" autocomplete="new-password" placeholder="Generate when blank"/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><p class="np-form-help">Only one primary account is allowed. Passwords are shown once and never stored in plaintext.</p><button type="submit">Create or reset FTPS account</button></form>
+			<a class="np-primary-link" href={ subscriptionDrawerPath(view, subscription.ID, "subscription-ftps-dialog-"+formatJobID(subscription.ID)) } data-np-dialog-open={ "subscription-ftps-dialog-"+formatJobID(subscription.ID) }>Create or reset FTPS account…</a>
+			<dialog class="np-dialog np-drawer" id={ "subscription-ftps-dialog-"+formatJobID(subscription.ID) } data-np-dialog open?={ view.Drawer == "subscription-ftps-dialog-"+formatJobID(subscription.ID) }><div class="np-dialog-head"><h2>Create or reset FTPS account</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close dialog">@icon("x")</button></div><form class="np-form np-action-form np-dialog-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/ftp") }><div class="np-drawer-body">@csrfInput(view)
+<div class="np-form-grid"><label>Login name<input name="name" pattern="[a-z][a-z0-9._\-]{2,31}" required/></label><label>Password<input type="password" name="password" autocomplete="new-password" placeholder="Generate when blank"/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label></div><p class="np-form-help">Only one primary account is allowed. Passwords are shown once and never stored in plaintext.</p></div><div class="np-dialog-actions"><button type="submit">Create or reset FTPS account</button></div></form></dialog>
 		}
 	</section>
 }
@@ -3091,7 +3157,8 @@ templ subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashbo
 		}
 		if !subscriptionTasksBlocked(data.SubscriptionServices.Accounts, subscription.ID) {
 			if len(sites) > 0 {
-				<form class="np-form np-action-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks") }>
+				<a class="np-primary-link" href={ subscriptionDrawerPath(view, subscription.ID, "subscription-task-dialog-"+formatJobID(subscription.ID)) } data-np-dialog-open={ "subscription-task-dialog-"+formatJobID(subscription.ID) }>Add task…</a>
+				<dialog class="np-dialog np-drawer" id={ "subscription-task-dialog-"+formatJobID(subscription.ID) } data-np-dialog open?={ view.Drawer == "subscription-task-dialog-"+formatJobID(subscription.ID) }><div class="np-dialog-head"><h2>Add scheduled task</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close dialog">@icon("x")</button></div><form class="np-form np-action-form np-dialog-form" method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks") }><div class="np-drawer-body">
 					@csrfInput(view)
 					<div class="np-form-grid">
 						<label>
@@ -3102,8 +3169,8 @@ templ subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashbo
 								}
 							</select>
 						</label><label>Name<input name="name" required/></label><label>Schedule<input name="schedule" placeholder="0 2 * * *" required/></label><label>Working directory<input name="working_directory" value="." required/></label><label>Timeout seconds<input type="number" min="1" max="86400" name="timeout_seconds" value="300" required/></label><label class="np-wide-field">Command<input name="command" required/></label><label class="np-check"><input type="checkbox" name="enabled" value="true" checked/>Enabled</label>
-					</div><button type="submit">Add scheduled task</button>
-				</form>
+					</div></div><div class="np-dialog-actions"><button type="submit">Add scheduled task</button></div>
+				</form></dialog>
 			} else {
 				<p class="np-empty">Add a hosted domain before creating a scheduled task.</p>
 			}
@@ -3738,11 +3805,11 @@ templ routedSubdomainDialog(parent dashboard.Site, subscription types.Subscripti
 }
 
 templ routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities types.RuntimeCapabilities, view WorkspaceView) {
-	<dialog class="np-dialog np-domain-create-dialog" id="site-dialog" data-np-dialog aria-labelledby="site-dialog-title">
+	<dialog class="np-dialog np-drawer np-domain-create-dialog" id="site-dialog" data-np-dialog aria-labelledby="site-dialog-title">
 		<div class="np-dialog-head"><div><h2 id="site-dialog-title">Add domain</h2><p>Create an independent website under a subscription.</p></div><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close add domain" title="Close">@icon("x")</button></div>
 		<form class="np-form np-dialog-form" method="post" action="/sites" data-np-create-site-form>
 			@csrfInput(view)
-			<div class="np-domain-form-body">
+			<div class="np-domain-form-body np-drawer-body">
 				<p class="np-gate" data-np-customer-gate aria-live="polite" role="status"></p>
 				<label>Domain name<input name="domain" placeholder="example.com" autocomplete="off" autocapitalize="none" spellcheck="false" required data-np-autofocus/><span class="np-form-help">Do not include https:// or a path.</span></label>
 				@routedSubscriptionSelect(subscriptions,capabilities)
@@ -3771,7 +3838,7 @@ templ routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabi
 }
 
 templ customerDialog(view WorkspaceView) {
-	<dialog class="np-dialog" id="customer-dialog" data-np-dialog><form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form><div class="np-dialog-head"><span class="np-kicker">Account management</span><h2>Add customer</h2><p>Create a contact-only customer or enable panel access now.</p></div><form class="np-form np-dialog-form" method="post" action="/customers">@csrfInput(view)<label>Email<input type="email" name="customer_email" required/></label><label>Name<input name="customer_name"/></label><label>Company<input name="company"/></label><label>Notes<input name="notes"/></label><label class="np-check"><input type="checkbox" name="enable_login" value="true"/>Enable panel login</label><label>Password<input type="password" name="password" autocomplete="new-password"/></label><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create customer</button></div></form></dialog>
+	<dialog class="np-dialog np-drawer" id="customer-dialog" data-np-dialog><div class="np-dialog-head"><span class="np-kicker">Account management</span><h2>Add customer</h2><p>Create a contact-only customer or enable panel access now.</p><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close dialog">@icon("x")</button></div><form class="np-form np-dialog-form" method="post" action="/customers"><div class="np-drawer-body">@csrfInput(view)<label>Email<input type="email" name="customer_email" required/></label><label>Name<input name="customer_name"/></label><label>Company<input name="company"/></label><label>Notes<input name="notes"/></label><label class="np-check"><input type="checkbox" name="enable_login" value="true"/>Enable panel login</label><label>Password<input type="password" name="password" autocomplete="new-password"/></label></div><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Create customer</button></div></form></dialog>
 }
 
 templ noticeBanner(message string, kind dashboard.NoticeKind) {
@@ -3837,4 +3904,31 @@ templ emptyState(iconName string, title string, detail string) {
 		}
 		{ children... }
 	</div>
+}
+
+
+templ tasksTray(data dashboard.Data) {
+ <div class="np-tasks" data-np-tasks>
+  <button type="button" class="np-secondary-button" data-np-tasks-toggle aria-expanded="false" aria-controls="np-tasks-panel">Tasks <span class="np-nav-badge" data-np-tasks-count hidden?={ data.ActiveJobs == 0 }>{ formatJobID(int64(data.ActiveJobs)) }</span></button>
+  <section id="np-tasks-panel" class="np-tasks-panel" aria-label="Background tasks" tabindex="-1" hidden>
+   <h2>Tasks</h2>
+   <p data-np-tasks-error role="status" hidden></p>
+   <div data-np-tasks-items>
+    for _, item := range TaskItems(data.Jobs) {
+     <article class="np-task" data-np-task-id={ formatJobID(item.ID) } data-np-task-state={ item.State } data-np-task-label={ item.Label }>
+      <strong>{ item.Label }</strong><span>{ item.Target }</span>
+      @tonePill(item.State, item.Tone)
+      <time datetime={ item.CreatedAt.Format("2006-01-02T15:04:05Z07:00") } title={ formatTime(item.CreatedAt) }>{ formatRelativeLabel(item.CreatedAt) }</time>
+      if item.Tone == "fail" && item.Error != "" {
+ <p>{ item.Error }</p>
+ }
+     </article>
+    }
+    if len(data.Jobs) == 0 {
+ <p>No recent tasks.</p>
+ }
+   </div>
+   <footer><a href="/activity">All activity</a></footer>
+  </section>
+ </div>
 }

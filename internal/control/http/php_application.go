@@ -427,7 +427,6 @@ func (s *Server) handleReconcilePHPApplication(w http.ResponseWriter, r *http.Re
 func (s *Server) phpApplicationMutationRequest(w http.ResponseWriter, r *http.Request) (auth.SessionUser, int64, bool) {
 	actor, ok := s.currentUser(w, r)
 	if !ok {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
 		return auth.SessionUser{}, 0, false
 	}
 	siteID, err := parsePositivePathID(r, "id")

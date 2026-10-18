@@ -44,9 +44,10 @@ func (s *Server) handleGitKey(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) gitWorkspaceTarget(w http.ResponseWriter, r *http.Request) (auth.SessionUser, dashboard.Site, dashboard.Data, bool) {
 	w.Header().Set("Cache-Control", "no-store")
-	user, ok := s.currentUser(w, r)
-	if !ok {
+	user, ok := s.currentUser(w, r, func() {
 		http.Error(w, "Authentication required", http.StatusUnauthorized)
+	})
+	if !ok {
 		return user, dashboard.Site{}, dashboard.Data{}, false
 	}
 	var supportCustomerID int64

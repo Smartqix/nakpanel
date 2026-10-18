@@ -23,6 +23,12 @@ async function dialogBounds(dialog,height){const r=await dialog.boundingBox();as
  if(!fixture){await page.goto(base+'/login');await page.locator('[name=email]').fill(process.env.NAKPANEL_QA_EMAIL||'admin@nakpanel.com');await page.locator('[name=password]').fill(fs.readFileSync(process.env.NAKPANEL_QA_PASSWORD_FILE,'utf8').trim());await page.locator('button[type=submit]').click();await page.waitForURL('**/dashboard');}
  const target=base+'/sites/'+siteID+'?tab=mail';
  await page.goto(target);await snap(page,'01-mail-desktop');
+ if(fixture){
+  await page.evaluate(()=>{window.__npMailShell=document.querySelector('.np-routed-layout');});
+  await page.getByRole('link',{name:'Overview',exact:true}).first().click();await page.waitForURL(url=>url.searchParams.get('tab')==='overview');
+  await page.getByRole('link',{name:'Mail',exact:true}).first().click();await page.waitForURL(url=>url.searchParams.get('tab')==='mail');
+  assert.equal(await page.evaluate(()=>window.__npMailShell===document.querySelector('.np-routed-layout')),true,'Mail must integrate with mounted navigation');
+ }
  assert.equal(await page.locator('.np-domain-mail .np-mail-summary').count(),0);
  assert.ok(await page.locator('[data-np-mail-row]').count()>0);
  const first=page.locator('[data-np-mail-row]').first(),firstAddress=await first.getAttribute('data-np-mail-row');
@@ -43,6 +49,13 @@ async function dialogBounds(dialog,height){const r=await dialog.boundingBox();as
  await page.getByRole('link',{name:'Create email address',exact:true}).click();const create=page.locator('dialog[open]');await create.locator('[name=local_part]').waitFor();assert.equal(await create.locator('[name=local_part]').evaluate(e=>e===document.activeElement),true);
  await create.locator('[data-np-generate-password]').click();assert.ok((await create.locator('[name=password]').inputValue()).length>=12);await create.locator('[name=password]').fill('');
  await snap(page,'03-create-desktop');await page.keyboard.press('Escape');
+ if(fixture){
+  await page.getByRole('link',{name:'Create email address',exact:true}).click();
+  const rejected=page.locator('dialog[open]');await rejected.locator('[name=local_part]').fill('duplicate');await rejected.locator('[name=password]').fill('Fixture-only-password!2026');await rejected.locator('[name=quota_mb]').fill('77');await rejected.locator('[name=enabled]').uncheck();await rejected.locator('button[type=submit]').click();
+  await page.locator('dialog[open] [data-np-drawer-error]').waitFor();
+  const recovered=page.locator('dialog[open]');assert.equal(await recovered.locator('[name=local_part]').inputValue(),'duplicate');assert.equal(await recovered.locator('[name=quota_mb]').inputValue(),'77');assert.equal(await recovered.locator('[name=enabled]').isChecked(),false);assert.equal(await recovered.locator('[name=password]').inputValue(),'');
+  await page.keyboard.press('Escape');await page.goto(target);
+ }
  await first.locator('summary').click();await first.getByRole('link',{name:'Edit email address'}).click();const edit=page.locator('dialog[open]');assert.equal(await edit.locator('[name=password]').inputValue(),'');await page.keyboard.press('Escape');
  await page.locator('[data-np-mail-settings]:visible').click();await snap(page,'04-settings-desktop');await page.keyboard.press('Escape');
  await page.getByRole('link',{name:/Aliases \(/}).click();await page.waitForURL(url=>url.searchParams.get('mail_view')==='aliases');await snap(page,'05-aliases-desktop');
