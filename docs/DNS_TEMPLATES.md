@@ -48,6 +48,11 @@ answer suppresses the corresponding service default instead of producing a
 second, conflicting route. Disabling local mail removes only its managed
 records.
 
+Subdomains sharing their parent's authoritative zone receive mail records
+under their own names (for example, `mail.blog` and `_dmarc.blog`). Updating
+or disabling their mail never changes the parent's mail records. Disabled or
+secondary zones are not rewritten by local mail convergence.
+
 ## Adopting Existing Records
 
 Normal synchronization preserves custom ownership. Select **Adopt matching
@@ -58,9 +63,10 @@ Different addresses, TTL overrides, multi-address custom sets and custom mail
 policies are not adopted. Once adopted, a record can receive future managed
 updates. This is not a zone reset.
 
-Previews are fenced by template revision, zone revision and the exact planned
-record changes. Enabling a service after a preview invalidates the preview if
-it changes the plan. Re-preview rather than applying unreviewed defaults.
+Previews are fenced by template revision, zone revision, service configuration
+and the exact planned record changes. A service-state change invalidates the
+preview even when a custom answer suppresses its default. Re-preview rather
+than applying unreviewed defaults.
 
 The domain workspace shows synchronization state separately from its local
 record count. **Up to date** can coexist with custom records; it does not prove

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"testing"
 
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/testutil/removaldb"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
@@ -58,6 +59,72 @@ func TestDisabledMailPreservesNameserverEndpoint(t *testing.T) {
 	var count int
 	if err := db.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND template_record_key='service-nameserver-mail'`, zone).Scan(&count); err != nil || count != 1 {
 		t.Fatalf("disabling mail removed nameserver address: %d %v", count, err)
+	}
+}
+
+func TestMailDeletionDoesNotRequireActiveDNSZone(t *testing.T) {
+	db, repository, site, zone := serviceDNSFixture(t, "disabled-mail.test")
+	if _, err := db.Exec(`UPDATE dns_zones SET mode='disabled' WHERE id=$1`, zone); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO mail_domains(subscription_id,site_id,domain,enabled,delete_requested) VALUES(1,$1,'disabled-mail.test',false,true)`, site); err != nil {
+		t.Fatal(err)
+	}
+	worker := NewConfigureMailWorker(db, &mailConvergenceAgentStub{})
+	worker.phase6 = repository
+	if err := worker.Work(context.Background(), &river.Job[controlquota.ConfigureMailArgs]{Args: controlquota.NewConfigureMailArgs()}); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM mail_domains WHERE site_id=$1`, site).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("mail deletion stuck without managed DNS: %d %v", count, err)
+	}
+}
+
+func TestChildMailDNSUsesParentZoneWithoutChangingParentMail(t *testing.T) {
+	db, repository, parent, zone := serviceDNSFixture(t, "parent-mail.test")
+	child := removaldb.Site(t, db, 1, "child.parent-mail.test", &parent)
+	if _, err := db.Exec(`UPDATE sites SET dns_zone_mode='parent' WHERE id=$1`, child); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO dns_records(zone_id,owner_site_id,host,record_type,value,priority,ttl,origin) VALUES($1,$2,'@','MX','mail.parent-mail.test',10,3600,'system'),($1,$2,'@','TXT','v=spf1 mx ~all',NULL,3600,'system')`, zone, parent); err != nil {
+		t.Fatal(err)
+	}
+	const fingerprint = `SELECT COALESCE(string_agg(row_to_json(r)::text,',' ORDER BY id),'') FROM dns_records r WHERE zone_id=$1 AND owner_site_id=$2`
+	var before, after string
+	if err := db.QueryRow(fingerprint, zone, parent).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	worker := NewConfigureMailWorker(db, nil)
+	worker.phase6 = repository
+	domain := mailDomainRow{SiteID: child, Domain: "child.parent-mail.test", Enabled: true, DMARCPolicy: "none"}
+	if err := worker.reconcileZoneRecords(context.Background(), domain, mailZoneRecords(domain, "v=DKIM1; p=child")); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND owner_site_id=$2 AND host IN ('child','mail.child','_dmarc.child','nak1._domainkey.child')`, zone, child).Scan(&count); err != nil || count != 5 {
+		t.Fatalf("child mail records missing or outside parent zone: %d %v", count, err)
+	}
+	if _, err := db.Exec(`INSERT INTO dns_records(zone_id,owner_site_id,host,record_type,value,priority,ttl,origin) VALUES($1,$2,'child','MX','mx.external.test',10,300,'custom'),($1,$2,'child','TXT','v=spf1 include:external.test -all',NULL,300,'custom')`, zone, child); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.reconcileZoneRecords(context.Background(), domain, mailZoneRecords(domain, "v=DKIM1; p=child")); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND owner_site_id=$2 AND (record_type='MX' OR value LIKE 'v=spf1%')`, zone, child).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("child routing mixed local and external policies: %d %v", count, err)
+	}
+	if err := worker.reconcileZoneRecords(context.Background(), domain, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(fingerprint, zone, parent).Scan(&after); err != nil || after != before {
+		t.Fatalf("child mail changed parent mail records: %v", err)
+	}
+	if err := db.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND owner_site_id=$2 AND origin='custom'`, zone, child).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("disabled child mail changed external records: %d %v", count, err)
+	}
+	if err := db.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND owner_site_id=$2 AND origin='system'`, zone, child).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("disabled child mail left managed records: %d %v", count, err)
 	}
 }
 

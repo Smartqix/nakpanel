@@ -180,7 +180,7 @@ WHERE id=$1 AND effective_enabled AND `+mailDomainIntentVersionSQL+`=$2`, domain
 	}
 	for _, domain := range domains {
 		if domain.DeleteRequested {
-			if err := w.reconcileZoneRecords(ctx, domain, nil); err != nil {
+			if err := w.reconcileZoneRecords(ctx, domain, nil); err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
 			if _, err := w.db.ExecContext(ctx, `DELETE FROM mail_domains domain WHERE id=$1 AND delete_requested=true AND `+mailDomainIntentVersionSQL+`=$2`, domain.ID, domain.IntentVersion); err != nil {
@@ -246,11 +246,32 @@ func (w *ConfigureMailWorker) reconcileZoneRecords(ctx context.Context, domain m
 	}
 	defer tx.Rollback()
 	var zoneID, siteID int64
-	var address string
-	if err = tx.QueryRowContext(ctx, `SELECT id,site_id,address FROM dns_zones WHERE domain=$1 FOR UPDATE`, domain.Domain).Scan(&zoneID, &siteID, &address); err != nil {
+	var address, zoneDomain string
+	if err = tx.QueryRowContext(ctx, `SELECT zone.id,site.id,zone.address,zone.domain
+FROM sites site LEFT JOIN sites parent ON parent.id=site.parent_site_id
+JOIN dns_zones zone ON zone.site_id=CASE WHEN site.dns_zone_mode='parent' AND parent.id IS NOT NULL THEN parent.id ELSE site.id END
+WHERE site.domain=$1 AND ($2::bigint=0 OR site.id=$2) AND zone.mode='primary'
+FOR UPDATE OF zone`, domain.Domain, domain.SiteID).Scan(&zoneID, &siteID, &address, &zoneDomain); err != nil {
 		return err
 	}
+	prefix := ""
+	if zoneDomain != domain.Domain {
+		prefix = strings.TrimSuffix(domain.Domain, "."+zoneDomain)
+		if prefix == domain.Domain {
+			return errors.New("mail domain is outside its DNS zone")
+		}
+	}
+	host := func(value string) string {
+		if prefix == "" {
+			return value
+		}
+		if value == "@" {
+			return prefix
+		}
+		return value + "." + prefix
+	}
 	for i := range desired {
+		desired[i].Host = host(desired[i].Host)
 		if desired[i].Type == "A" && desired[i].Value == "" {
 			desired[i].Value = address
 		}
@@ -260,8 +281,9 @@ func (w *ConfigureMailWorker) reconcileZoneRecords(ctx context.Context, domain m
 		return err
 	}
 	add, remove, _ := PlanServiceDNSRecords(current, desired, func(record types.DNSRecord) bool {
-		return record.Origin == "system" && !IsEndpointDNSRecord(record) && ((record.Host == "@" && record.Type == "MX") || (record.Host == "mail" && record.Type == "A") ||
-			(record.Type == "TXT" && ((record.Host == "@" && strings.HasPrefix(strings.ToLower(record.Value), "v=spf1")) || record.Host == "_dmarc" || record.Host == "nak1._domainkey")))
+		return record.Origin == "system" && (record.OwnerSiteID == siteID || record.OwnerSiteID == 0) && !IsEndpointDNSRecord(record) &&
+			((record.Host == host("@") && record.Type == "MX") || (record.Host == host("mail") && record.Type == "A") ||
+				(record.Type == "TXT" && ((record.Host == host("@") && strings.HasPrefix(strings.ToLower(record.Value), "v=spf1")) || record.Host == host("_dmarc") || record.Host == host("nak1._domainkey"))))
 	})
 	if len(add)+len(remove) == 0 {
 		return tx.Commit()
