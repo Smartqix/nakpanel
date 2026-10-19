@@ -192,7 +192,20 @@ func (s *Server) handlePreviewDNSSynchronization(w http.ResponseWriter, r *http.
 		http.Error(w, "Invalid DNS synchronization request", http.StatusBadRequest)
 		return
 	}
-	run, err := s.dnsTemplates.Preview(r.Context(), user.ID, strings.TrimSpace(r.Form.Get("scope")), 0)
+	var run types.DNSSyncRun
+	var err error
+	if r.Form.Get("adopt_matching") == "true" {
+		manager, available := s.dnsTemplates.(interface {
+			PreviewWithAdoption(context.Context, int64, string, int64, bool) (types.DNSSyncRun, error)
+		})
+		if !available {
+			http.Error(w, "DNS adoption preview is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		run, err = manager.PreviewWithAdoption(r.Context(), user.ID, strings.TrimSpace(r.Form.Get("scope")), 0, true)
+	} else {
+		run, err = s.dnsTemplates.Preview(r.Context(), user.ID, strings.TrimSpace(r.Form.Get("scope")), 0)
+	}
 	if err != nil {
 		writeDNSError(w, r, "Could not preview DNS synchronization", err)
 		return
@@ -228,7 +241,24 @@ func (s *Server) handlePreviewSiteDNSTemplate(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	run, err := s.dnsTemplates.ApplyZone(r.Context(), user.ID, siteID)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid DNS preview request", http.StatusBadRequest)
+		return
+	}
+	var run types.DNSSyncRun
+	var err error
+	if r.Form.Get("adopt_matching") == "true" {
+		manager, available := s.dnsTemplates.(interface {
+			ApplyZoneWithAdoption(context.Context, int64, int64, bool) (types.DNSSyncRun, error)
+		})
+		if !available {
+			http.Error(w, "DNS adoption preview is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		run, err = manager.ApplyZoneWithAdoption(r.Context(), user.ID, siteID, true)
+	} else {
+		run, err = s.dnsTemplates.ApplyZone(r.Context(), user.ID, siteID)
+	}
 	if err != nil {
 		writeDNSError(w, r, "Could not preview the zone template", err)
 		return

@@ -30,3 +30,39 @@ For a new domain, enable its authoritative DNS zone when using Nakpanel DNS.
 An externally hosted DNS domain need not create a local zone. Set delegation
 and any necessary glue at the registrar separately. The template does not
 automatically publish mail, DKIM or IPv6 service records for unconfigured services.
+
+## Automatic Service Defaults
+
+The effective zone combines the provider template with service-owned records.
+Enabled, converged FTPS accounts receive an `ftp` address; configured webmail
+receives a `webmail` address. Nameserver address records are generated only in
+the authoritative zone containing the nameserver hostname. For example,
+`ns1.nakpanel.com` is an address in the `nakpanel.com` zone, not in every
+customer zone. Registrar glue remains a separate registrar operation.
+
+Local mail convergence generates mail/MX/SPF/DMARC and the domain's generated
+DKIM public key. It updates only system-owned mail records. Custom records,
+external mail routes, external DKIM selectors and unrelated verification TXT
+records survive both template synchronization and mail convergence. A custom
+answer suppresses the corresponding service default instead of producing a
+second, conflicting route. Disabling local mail removes only its managed
+records.
+
+## Adopting Existing Records
+
+Normal synchronization preserves custom ownership. Select **Adopt matching
+records** when creating a preview to transfer exact matching defaults to
+template or service management. The preview lists adoptions separately;
+applying it requires typed confirmation. Record values and TTLs are unchanged.
+Different addresses, TTL overrides, multi-address custom sets and custom mail
+policies are not adopted. Once adopted, a record can receive future managed
+updates. This is not a zone reset.
+
+Previews are fenced by template revision, zone revision and the exact planned
+record changes. Enabling a service after a preview invalidates the preview if
+it changes the plan. Re-preview rather than applying unreviewed defaults.
+
+The domain workspace shows synchronization state separately from its local
+record count. **Up to date** can coexist with custom records; it does not prove
+public DNS propagation or registrar delegation. **Update available** indicates
+a newer provider template, and failed/pending agent changes remain explicit.

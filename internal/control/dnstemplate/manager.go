@@ -255,6 +255,10 @@ revision_id,stable_key,scope,host_template,record_type,value_template,priority,w
 }
 
 func (m *Manager) Preview(ctx context.Context, actorID int64, scope string, zoneID int64) (types.DNSSyncRun, error) {
+	return m.PreviewWithAdoption(ctx, actorID, scope, zoneID, false)
+}
+
+func (m *Manager) PreviewWithAdoption(ctx context.Context, actorID int64, scope string, zoneID int64, adopt bool) (types.DNSSyncRun, error) {
 	if scope != "unmodified" && scope != "all" && scope != "zone" {
 		return types.DNSSyncRun{}, errors.New("synchronization scope is invalid")
 	}
@@ -281,22 +285,24 @@ func (m *Manager) Preview(ctx context.Context, actorID int64, scope string, zone
 	var run types.DNSSyncRun
 	run.TemplateRevision, run.Scope, run.Status = template.Revision, scope, "preview"
 	run.PreviewToken, run.ExpectedStateRevision = token, template.OptimisticRevision
+	run.AdoptMatching = adopt
 	err = tx.QueryRowContext(ctx, `INSERT INTO dns_template_sync_runs(
-template_revision,scope,target_zone_id,status,preview_token,expected_template_state_revision,actor_user_id,total_zones
-) VALUES($1,$2,$3,'preview',$4,$5,$6,$7) RETURNING id,created_at`,
-		template.Revision, scope, nullableID(zoneID), token, template.OptimisticRevision, nullableID(actorID), len(zones)).
+template_revision,scope,target_zone_id,status,preview_token,expected_template_state_revision,actor_user_id,total_zones,adopt_matching
+) VALUES($1,$2,$3,'preview',$4,$5,$6,$7,$8) RETURNING id,created_at`,
+		template.Revision, scope, nullableID(zoneID), token, template.OptimisticRevision, nullableID(actorID), len(zones), adopt).
 		Scan(&run.ID, &run.CreatedAt)
 	if err != nil {
 		return types.DNSSyncRun{}, err
 	}
 	for _, zone := range zones {
+		zone.AdoptMatching = adopt
 		plan := compareWholeZone(template, zone)
 		item := plan.item
 		item.ZoneID, item.Domain = zone.ID, zone.Domain
 		if _, err := tx.ExecContext(ctx, `INSERT INTO dns_template_sync_items(
-run_id,zone_id,owner_site_id,expected_zone_revision,outcome,added_count,updated_count,removed_count,override_count,conflict_count,detail
-) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, run.ID, zone.ID, zone.SiteID, zone.DesiredRevision, item.Outcome, item.AddedCount,
-			item.UpdatedCount, item.RemovedCount, item.OverrideCount, item.ConflictCount, item.Detail); err != nil {
+run_id,zone_id,owner_site_id,expected_zone_revision,outcome,added_count,updated_count,removed_count,override_count,conflict_count,detail,adopted_count,plan_fingerprint
+) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, run.ID, zone.ID, zone.SiteID, zone.DesiredRevision, item.Outcome, item.AddedCount,
+			item.UpdatedCount, item.RemovedCount, item.OverrideCount, item.ConflictCount, item.Detail, item.AdoptedCount, zonePlanFingerprint(plan, zone)); err != nil {
 			return types.DNSSyncRun{}, err
 		}
 		run.Items = append(run.Items, item)
@@ -367,14 +373,15 @@ func (m *Manager) RetryPreview(ctx context.Context, actorID, runID int64) (types
 	var scope string
 	var targetZoneID sql.NullInt64
 	var ownerSiteID int64
+	var adopt bool
 	if err := m.db.QueryRowContext(ctx, `SELECT run.scope,run.target_zone_id,
-COALESCE((SELECT owner_site_id FROM dns_template_sync_items WHERE run_id=run.id LIMIT 1),0)
+COALESCE((SELECT owner_site_id FROM dns_template_sync_items WHERE run_id=run.id LIMIT 1),0),run.adopt_matching
 FROM dns_template_sync_runs run WHERE run.id=$1`, runID).
-		Scan(&scope, &targetZoneID, &ownerSiteID); err != nil {
+		Scan(&scope, &targetZoneID, &ownerSiteID, &adopt); err != nil {
 		return types.DNSSyncRun{}, err
 	}
 	if scope != "zone" {
-		return m.Preview(ctx, actorID, scope, 0)
+		return m.PreviewWithAdoption(ctx, actorID, scope, 0, adopt)
 	}
 	if !targetZoneID.Valid {
 		return types.DNSSyncRun{}, errors.New("the previous DNS synchronization target no longer exists")
@@ -385,21 +392,29 @@ FROM dns_template_sync_runs run WHERE run.id=$1`, runID).
 	}
 	if ownerSiteID > 0 && ownerSiteID != zone.SiteID {
 		zone.SiteID = ownerSiteID
+		zone.AdoptMatching = adopt
+		zone.Services = zone.SubdomainSite[ownerSiteID].Services
 		return m.previewSiteZone(ctx, actorID, zone)
 	}
-	return m.Preview(ctx, actorID, "zone", targetZoneID.Int64)
+	return m.PreviewWithAdoption(ctx, actorID, "zone", targetZoneID.Int64, adopt)
 }
 
 func (m *Manager) ApplyZone(ctx context.Context, actorID, siteID int64) (types.DNSSyncRun, error) {
+	return m.ApplyZoneWithAdoption(ctx, actorID, siteID, false)
+}
+
+func (m *Manager) ApplyZoneWithAdoption(ctx context.Context, actorID, siteID int64, adopt bool) (types.DNSSyncRun, error) {
 	zone, err := m.zoneForSite(ctx, siteID)
 	if err != nil {
 		return types.DNSSyncRun{}, err
 	}
 	if zone.SiteID != siteID {
 		zone.SiteID = siteID
+		zone.AdoptMatching = adopt
+		zone.Services = zone.SubdomainSite[siteID].Services
 		return m.previewSiteZone(ctx, actorID, zone)
 	}
-	return m.Preview(ctx, actorID, "zone", zone.ID)
+	return m.PreviewWithAdoption(ctx, actorID, "zone", zone.ID, adopt)
 }
 
 func (m *Manager) previewSiteZone(ctx context.Context, actorID int64, zone zoneSnapshot) (types.DNSSyncRun, error) {
@@ -417,7 +432,7 @@ func (m *Manager) previewSiteZone(ctx context.Context, actorID int64, zone zoneS
 	run := types.DNSSyncRun{
 		TemplateRevision: template.Revision, Scope: "zone", Status: "preview",
 		PreviewToken: token, ExpectedStateRevision: template.OptimisticRevision,
-		TotalZones: 1, Items: []types.DNSSyncItem{item},
+		TotalZones: 1, Items: []types.DNSSyncItem{item}, AdoptMatching: zone.AdoptMatching,
 	}
 	if item.Outcome != "unchanged" {
 		run.ChangedZones = 1
@@ -428,16 +443,16 @@ func (m *Manager) previewSiteZone(ctx context.Context, actorID int64, zone zoneS
 	}
 	defer tx.Rollback()
 	if err := tx.QueryRowContext(ctx, `INSERT INTO dns_template_sync_runs(
-template_revision,scope,target_zone_id,status,preview_token,expected_template_state_revision,actor_user_id,total_zones,changed_zones
-) VALUES($1,'zone',$2,'preview',$3,$4,$5,1,$6) RETURNING id,created_at`,
-		template.Revision, zone.ID, token, template.OptimisticRevision, nullableID(actorID), run.ChangedZones).
+template_revision,scope,target_zone_id,status,preview_token,expected_template_state_revision,actor_user_id,total_zones,changed_zones,adopt_matching
+) VALUES($1,'zone',$2,'preview',$3,$4,$5,1,$6,$7) RETURNING id,created_at`,
+		template.Revision, zone.ID, token, template.OptimisticRevision, nullableID(actorID), run.ChangedZones, run.AdoptMatching).
 		Scan(&run.ID, &run.CreatedAt); err != nil {
 		return types.DNSSyncRun{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO dns_template_sync_items(
-run_id,zone_id,owner_site_id,expected_zone_revision,outcome,added_count,updated_count,removed_count,override_count,conflict_count,detail
-) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, run.ID, zone.ID, zone.SiteID, zone.DesiredRevision, item.Outcome,
-		item.AddedCount, item.UpdatedCount, item.RemovedCount, item.OverrideCount, item.ConflictCount, item.Detail); err != nil {
+run_id,zone_id,owner_site_id,expected_zone_revision,outcome,added_count,updated_count,removed_count,override_count,conflict_count,detail,adopted_count,plan_fingerprint
+) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, run.ID, zone.ID, zone.SiteID, zone.DesiredRevision, item.Outcome,
+		item.AddedCount, item.UpdatedCount, item.RemovedCount, item.OverrideCount, item.ConflictCount, item.Detail, item.AdoptedCount, zonePlanFingerprint(plan, zone)); err != nil {
 		return types.DNSSyncRun{}, err
 	}
 	return run, tx.Commit()
@@ -858,14 +873,28 @@ ORDER BY id`, zoneID, ownerSiteID)
 }
 
 func applyZonePlanMutationsTx(ctx context.Context, tx *sql.Tx, zoneID, templateRevision int64, plan zonePlan) error {
+	// Remove superseded managed identities before inserting their replacements.
+	if len(plan.remove) > 0 {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM dns_records
+WHERE zone_id=$1 AND id=ANY($2::bigint[]) AND origin IN ('template','system') AND locally_modified=false`,
+			zoneID, postgresIntArray(plan.remove)); err != nil {
+			return err
+		}
+	}
 	for _, record := range plan.add {
+		origin, revision := record.Origin, any(templateRevision)
+		if origin == "system" {
+			revision = nil
+		} else {
+			origin = "template"
+		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO dns_records(
 zone_id,owner_site_id,host,record_type,value,priority,weight,port,ttl,origin,
 template_record_key,template_revision,locally_modified
-) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'template',$10,$11,false)
+) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,false)
 ON CONFLICT DO NOTHING`, zoneID, record.OwnerSiteID, record.Host, record.Type, record.Value,
 			nullablePriority(record.Type, record.Priority), nullableSRV(record.Type, record.Weight),
-			nullableSRV(record.Type, record.Port), record.TTL, record.TemplateRecordKey, templateRevision); err != nil {
+			nullableSRV(record.Type, record.Port), record.TTL, origin, record.TemplateRecordKey, revision); err != nil {
 			return err
 		}
 	}
@@ -880,17 +909,14 @@ WHERE id=$1 AND zone_id=$2 AND origin='template' AND locally_modified=false`,
 		}
 	}
 	for id, record := range plan.adopt {
-		if _, err := tx.ExecContext(ctx, `UPDATE dns_records SET owner_site_id=$3,origin='template',
-template_record_key=$4,template_revision=$5,locally_modified=false,updated_at=now()
-WHERE id=$1 AND zone_id=$2 AND origin='custom'`,
-			id, zoneID, record.OwnerSiteID, record.TemplateRecordKey, templateRevision); err != nil {
-			return err
+		var revision any = templateRevision
+		if record.Origin == "system" {
+			revision = nil
 		}
-	}
-	if len(plan.remove) > 0 {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM dns_records
-WHERE zone_id=$1 AND id=ANY($2::bigint[]) AND origin='template' AND locally_modified=false`,
-			zoneID, postgresIntArray(plan.remove)); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE dns_records SET owner_site_id=$3,origin=$4,
+template_record_key=$5,template_revision=$6,locally_modified=false,updated_at=now()
+WHERE id=$1 AND zone_id=$2 AND origin='custom'`,
+			id, zoneID, record.OwnerSiteID, record.Origin, record.TemplateRecordKey, revision); err != nil {
 			return err
 		}
 	}
@@ -993,6 +1019,8 @@ type zoneSnapshot struct {
 	ParentDomain        string
 	Hostname            string
 	AdoptionCompleted   bool
+	AdoptMatching       bool
+	Services            *provision.DNSServiceState
 	SubdomainSite       map[int64]siteExpansion
 }
 
@@ -1000,6 +1028,7 @@ type siteExpansion struct {
 	Domain            string
 	Subdomain         string
 	AdoptionCompleted bool
+	Services          *provision.DNSServiceState
 }
 
 func (z zoneSnapshot) expansionForSite(siteID int64) expansionContext {
@@ -1086,14 +1115,17 @@ func compareZone(template types.DNSTemplateRevision, zone zoneSnapshot) zonePlan
 		}
 		equivalent, conflict := findEquivalent(zone.Records, expanded, zone.SiteID)
 		if equivalent.ID > 0 {
-			if !zone.AdoptionCompleted {
+			if zone.AdoptMatching && canAdoptDNSRecord(zone.Records, equivalent, expanded) {
 				expanded.ID = equivalent.ID
 				plan.adopt[equivalent.ID] = expanded
+				plan.item.AdoptedCount++
+			} else if !recordsEqual(equivalent, expanded) || !canAdoptDNSRecord(zone.Records, equivalent, expanded) {
+				plan.item.OverrideCount++
 			}
 			continue
 		}
 		if conflict {
-			plan.item.ConflictCount++
+			plan.item.OverrideCount++
 			continue
 		}
 		plan.add = append(plan.add, expanded)
@@ -1113,6 +1145,7 @@ func compareZone(template types.DNSTemplateRevision, zone zoneSnapshot) zonePlan
 		plan.remove = append(plan.remove, existing.ID)
 		plan.item.RemovedCount++
 	}
+	plan = withServiceDefaults(zone, plan)
 	return validateZonePlan(zone, plan)
 }
 
@@ -1128,6 +1161,7 @@ func compareWholeZone(template types.DNSTemplateRevision, zone zoneSnapshot) zon
 		child := zone
 		child.SiteID = siteID
 		child.AdoptionCompleted = zone.SubdomainSite[siteID].AdoptionCompleted
+		child.Services = zone.SubdomainSite[siteID].Services
 		mergeZonePlan(&combined, compareZone(template, child))
 	}
 	return validateZonePlan(zone, combined)
@@ -1147,6 +1181,7 @@ func mergeZonePlan(target *zonePlan, source zonePlan) {
 	target.item.RemovedCount += source.item.RemovedCount
 	target.item.OverrideCount += source.item.OverrideCount
 	target.item.ConflictCount += source.item.ConflictCount
+	target.item.AdoptedCount += source.item.AdoptedCount
 	target.settingsChanged = target.settingsChanged || source.settingsChanged
 	target.retryConvergence = target.retryConvergence || source.retryConvergence
 }
@@ -1163,6 +1198,8 @@ func finalizeZonePlan(plan zonePlan) zonePlan {
 		plan.item.Outcome = "updated"
 	case plan.item.RemovedCount > 0:
 		plan.item.Outcome = "removed"
+	case plan.item.AdoptedCount > 0:
+		plan.item.Outcome = "updated"
 	default:
 		plan.item.Outcome = "unchanged"
 	}
@@ -1178,6 +1215,9 @@ func finalizeZonePlan(plan zonePlan) zonePlan {
 	}
 	if plan.item.OverrideCount > 0 {
 		parts = append(parts, fmt.Sprintf("%d override preserved", plan.item.OverrideCount))
+	}
+	if plan.item.AdoptedCount > 0 {
+		parts = append(parts, fmt.Sprintf("%d adopt (values unchanged)", plan.item.AdoptedCount))
 	}
 	if plan.item.ConflictCount > 0 {
 		parts = append(parts, fmt.Sprintf("%d conflict", plan.item.ConflictCount))
@@ -1211,6 +1251,7 @@ func validateZonePlan(zone zoneSnapshot, plan zonePlan) zonePlan {
 		plan.item.AddedCount = 0
 		plan.item.UpdatedCount = 0
 		plan.item.RemovedCount = 0
+		plan.item.AdoptedCount = 0
 		plan.item.ConflictCount++
 		plan.item.Detail = err.Error()
 	}
@@ -1229,7 +1270,7 @@ func systemRecordDisposition(records []types.DNSRecord, wanted types.DNSRecord) 
 			conflict = true
 		}
 		if strings.EqualFold(record.Host, wanted.Host) &&
-			(record.Type == "CNAME" || wanted.Type == "CNAME") {
+			(record.Type == "CNAME" || wanted.Type == "CNAME" || (record.Type == wanted.Type && record.Type != "NS" && record.Type != "TXT")) {
 			conflict = true
 		}
 	}
@@ -1244,7 +1285,7 @@ func preserveMailRouting(records []types.DNSRecord, wanted types.DNSRecord) bool
 		if wanted.Type == "MX" {
 			return true
 		}
-		if wanted.Type == "TXT" && ((strings.HasPrefix(strings.ToLower(strings.TrimSpace(wanted.Value)), "v=spf1") && strings.HasPrefix(strings.ToLower(strings.TrimSpace(record.Value)), "v=spf1")) || strings.Contains(strings.ToLower(wanted.Host), "_domainkey")) {
+		if wanted.Type == "TXT" && ((strings.HasPrefix(strings.ToLower(strings.TrimSpace(wanted.Value)), "v=spf1") && strings.HasPrefix(strings.ToLower(strings.TrimSpace(record.Value)), "v=spf1")) || strings.Contains(strings.ToLower(wanted.Host), "_domainkey") || strings.EqualFold(wanted.Host, "_dmarc") || strings.HasPrefix(strings.ToLower(wanted.Host), "_dmarc.")) {
 			return true
 		}
 	}
@@ -1256,8 +1297,11 @@ func recordsEqual(left, right types.DNSRecord) bool {
 }
 
 func recordsSameRData(left, right types.DNSRecord) bool {
-	return strings.EqualFold(left.Host, right.Host) && left.Type == right.Type &&
-		strings.EqualFold(strings.TrimSuffix(left.Value, "."), strings.TrimSuffix(right.Value, ".")) &&
+	valueEqual := left.Value == right.Value
+	if left.Type != "TXT" {
+		valueEqual = strings.EqualFold(strings.TrimSuffix(left.Value, "."), strings.TrimSuffix(right.Value, "."))
+	}
+	return strings.EqualFold(left.Host, right.Host) && left.Type == right.Type && valueEqual &&
 		left.Priority == right.Priority && left.Weight == right.Weight && left.Port == right.Port
 }
 
@@ -1275,7 +1319,7 @@ func findEquivalent(records []types.DNSRecord, wanted types.DNSRecord, ownerSite
 			conflict = true
 		}
 		if strings.EqualFold(record.Host, wanted.Host) {
-			if record.Type == "CNAME" || wanted.Type == "CNAME" {
+			if record.Type == "CNAME" || wanted.Type == "CNAME" || (record.Type == wanted.Type && record.Type != "TXT" && record.Origin == "custom") {
 				conflict = true
 			}
 		}
@@ -1386,7 +1430,7 @@ func (m *Manager) templateByRevision(ctx context.Context, q interface {
 
 func (m *Manager) listRuns(ctx context.Context, limit int) ([]types.DNSSyncRun, error) {
 	rows, err := m.db.QueryContext(ctx, `SELECT id,template_revision,scope,status,expected_template_state_revision,
-total_zones,changed_zones,failed_zones,last_error,created_at,completed_at
+total_zones,changed_zones,failed_zones,last_error,created_at,completed_at,adopt_matching
 FROM dns_template_sync_runs ORDER BY created_at DESC LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
@@ -1397,7 +1441,7 @@ FROM dns_template_sync_runs ORDER BY created_at DESC LIMIT $1`, limit)
 		var run types.DNSSyncRun
 		if err := rows.Scan(&run.ID, &run.TemplateRevision, &run.Scope, &run.Status,
 			&run.ExpectedStateRevision, &run.TotalZones, &run.ChangedZones, &run.FailedZones,
-			&run.LastError, &run.CreatedAt, &run.CompletedAt); err != nil {
+			&run.LastError, &run.CreatedAt, &run.CompletedAt, &run.AdoptMatching); err != nil {
 			return nil, err
 		}
 		result = append(result, run)
@@ -1408,16 +1452,16 @@ FROM dns_template_sync_runs ORDER BY created_at DESC LIMIT $1`, limit)
 func (m *Manager) loadRun(ctx context.Context, id int64) (types.DNSSyncRun, error) {
 	var run types.DNSSyncRun
 	err := m.db.QueryRowContext(ctx, `SELECT id,template_revision,scope,status,preview_token,
-expected_template_state_revision,total_zones,changed_zones,failed_zones,last_error,created_at,completed_at
+expected_template_state_revision,total_zones,changed_zones,failed_zones,last_error,created_at,completed_at,adopt_matching
 FROM dns_template_sync_runs WHERE id=$1`, id).Scan(
 		&run.ID, &run.TemplateRevision, &run.Scope, &run.Status, &run.PreviewToken,
 		&run.ExpectedStateRevision, &run.TotalZones, &run.ChangedZones, &run.FailedZones,
-		&run.LastError, &run.CreatedAt, &run.CompletedAt)
+		&run.LastError, &run.CreatedAt, &run.CompletedAt, &run.AdoptMatching)
 	if err != nil {
 		return run, err
 	}
 	rows, err := m.db.QueryContext(ctx, `SELECT item.id,item.zone_id,COALESCE(item.owner_site_id,zone.site_id),zone.domain,item.outcome,item.added_count,
-item.updated_count,item.removed_count,item.override_count,item.conflict_count,item.detail
+item.updated_count,item.removed_count,item.override_count,item.conflict_count,item.detail,item.adopted_count
 FROM dns_template_sync_items item JOIN dns_zones zone ON zone.id=item.zone_id
 WHERE item.run_id=$1 ORDER BY zone.domain`, id)
 	if err != nil {
@@ -1427,7 +1471,7 @@ WHERE item.run_id=$1 ORDER BY zone.domain`, id)
 	for rows.Next() {
 		var item types.DNSSyncItem
 		if err := rows.Scan(&item.ID, &item.ZoneID, &item.OwnerSiteID, &item.Domain, &item.Outcome, &item.AddedCount,
-			&item.UpdatedCount, &item.RemovedCount, &item.OverrideCount, &item.ConflictCount, &item.Detail); err != nil {
+			&item.UpdatedCount, &item.RemovedCount, &item.OverrideCount, &item.ConflictCount, &item.Detail, &item.AdoptedCount); err != nil {
 			return run, err
 		}
 		run.Items = append(run.Items, item)
@@ -1542,6 +1586,11 @@ FROM dns_records WHERE zone_id=$1 ORDER BY host,record_type,id`, zoneID)
 	if err := records.Close(); err != nil {
 		return zone, err
 	}
+	ftps, webmail, err := provision.LoadDNSServiceFlags(ctx, q, zone.SiteID)
+	if err != nil {
+		return zone, err
+	}
+	zone.Services = &provision.DNSServiceState{FTPS: ftps, Webmail: webmail}
 	zone.SuppressedKeys = map[int64]map[string]bool{}
 	deletions, err := q.QueryContext(ctx, `SELECT owner_site_id,template_record_key FROM dns_template_deletions WHERE zone_id=$1`, zone.ID)
 	if err != nil {
@@ -1588,7 +1637,18 @@ WHERE child.parent_site_id=$1 AND child.dns_zone_mode='parent'`, zone.SiteID)
 		sites.Close()
 		return zone, err
 	}
-	return zone, sites.Close()
+	if err := sites.Close(); err != nil {
+		return zone, err
+	}
+	for id, child := range zone.SubdomainSite {
+		ftps, webmail, err := provision.LoadDNSServiceFlags(ctx, q, id)
+		if err != nil {
+			return zone, err
+		}
+		child.Services = &provision.DNSServiceState{FTPS: ftps, Webmail: webmail}
+		zone.SubdomainSite[id] = child
+	}
+	return zone, nil
 }
 
 func expandSOA(settings types.DNSSOASettings, domain, hostname string) types.DNSSOASettings {

@@ -70,6 +70,7 @@ type DNSSyncItem struct {
 	RemovedCount  int    `json:"removed_count"`
 	OverrideCount int    `json:"override_count"`
 	ConflictCount int    `json:"conflict_count"`
+	AdoptedCount  int    `json:"adopted_count"`
 	Detail        string `json:"detail,omitempty"`
 }
 
@@ -87,6 +88,7 @@ type DNSSyncRun struct {
 	CreatedAt             time.Time     `json:"created_at"`
 	CompletedAt           *time.Time    `json:"completed_at,omitempty"`
 	Items                 []DNSSyncItem `json:"items,omitempty"`
+	AdoptMatching         bool          `json:"adopt_matching"`
 }
 
 type DNSTemplateView struct {

@@ -255,42 +255,19 @@ func (w *ConfigureMailWorker) reconcileZoneRecords(ctx context.Context, domain m
 			desired[i].Value = address
 		}
 	}
-	managedFilter := `zone_id=$1 AND ((record_type='MX' AND host='@') OR (record_type='A' AND host='mail')
-OR (record_type='TXT' AND host='@' AND value LIKE 'v=spf1%') OR (record_type='TXT' AND host='_dmarc')
-OR (record_type='TXT' AND host LIKE '%._domainkey'))`
-	rows, err := tx.QueryContext(ctx, `SELECT host,record_type,value,COALESCE(priority,0),ttl FROM dns_records WHERE `+managedFilter+` ORDER BY host,record_type,value`, zoneID)
+	current, err := loadDNSRecordsTx(ctx, tx, zoneID)
 	if err != nil {
 		return err
 	}
-	var current []types.DNSRecord
-	for rows.Next() {
-		var record types.DNSRecord
-		if err := rows.Scan(&record.Host, &record.Type, &record.Value, &record.Priority, &record.TTL); err != nil {
-			rows.Close()
-			return err
-		}
-		current = append(current, record)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	if mailRecordSetsEqual(current, desired) {
+	add, remove, _ := PlanServiceDNSRecords(current, desired, func(record types.DNSRecord) bool {
+		return record.Origin == "system" && !IsEndpointDNSRecord(record) && ((record.Host == "@" && record.Type == "MX") || (record.Host == "mail" && record.Type == "A") ||
+			(record.Type == "TXT" && ((record.Host == "@" && strings.HasPrefix(strings.ToLower(record.Value), "v=spf1")) || record.Host == "_dmarc" || record.Host == "nak1._domainkey")))
+	})
+	if len(add)+len(remove) == 0 {
 		return tx.Commit()
 	}
-	if _, err = tx.ExecContext(ctx, `DELETE FROM dns_records WHERE `+managedFilter, zoneID); err != nil {
+	if err = insertServiceDNSRecordsTx(ctx, tx, zoneID, siteID, add, remove); err != nil {
 		return err
-	}
-	for _, record := range desired {
-		var priority any
-		if record.Type == "MX" {
-			priority = record.Priority
-		}
-		if _, err = tx.ExecContext(ctx, `INSERT INTO dns_records(
-zone_id,owner_site_id,host,record_type,value,priority,ttl,origin
-) VALUES($1,$2,$3,$4,$5,$6,$7,'system')`,
-			zoneID, siteID, record.Host, record.Type, record.Value, priority, record.TTL); err != nil {
-			return err
-		}
 	}
 	// enqueueDNSZoneTx bumps the desired revision and commits the transaction.
 	return w.phase6.enqueueDNSZoneTx(ctx, tx, zoneID, false)

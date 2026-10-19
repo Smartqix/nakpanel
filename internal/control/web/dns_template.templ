@@ -54,6 +54,15 @@ templ dnsSettingsFocus(view WorkspaceView) {
 				for _, record := range template.Records {
 					@dnsTemplateEditDialog(view,template,record)
 				}
+				<details class="np-dns-advanced-group">
+					<summary><span><strong>Automatic service records</strong><small>Defaults follow the services configured for each domain.</small></span>@icon("chevron-right")</summary>
+					<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Service</th><th>Records</th><th>When generated</th></tr></thead><tbody>
+						<tr><td data-label="Service">Nameservers</td><td data-label="Records">Nameserver address records</td><td data-label="When generated">Only in the zone containing the configured nameserver hostname</td></tr>
+						<tr><td data-label="Service">FTPS</td><td data-label="Records"><code>ftp</code> A</td><td data-label="When generated">An enabled FTPS account has converged</td></tr>
+						<tr><td data-label="Service">Webmail</td><td data-label="Records"><code>webmail</code> A</td><td data-label="When generated">Webmail is configured and active</td></tr>
+						<tr><td data-label="Service">Local mail</td><td data-label="Records">Mail A, MX, SPF, DMARC and domain-specific DKIM</td><td data-label="When generated">Local mail is enabled; custom and external routing stays protected</td></tr>
+					</tbody></table></div>
+				</details>
 			</section>
 			<section class="np-dns-template-section" id="dns-policy" role="tabpanel" aria-labelledby="dns-tab-policy" data-np-dns-settings-panel="policy">
 				<header class="np-dns-template-head"><div><h4>Provider nameservers</h4><p>Publish nameserver defaults for new zones. Existing records, delegation and mail routing stay unchanged until a separate preview is applied.</p></div></header>
@@ -107,6 +116,7 @@ templ dnsSettingsFocus(view WorkspaceView) {
 				<form class="np-domain-commandbar np-dns-sync-toolbar" method="post" action="/tools-settings/dns/sync/preview">
 					@csrfInput(view)
 					<label>Scope<select name="scope"><option value="unmodified">Unmodified zones only</option><option value="all">All zones, preserve overrides</option></select></label>
+					<label class="np-check"><input type="checkbox" name="adopt_matching" value="true"/>Adopt matching records</label>
 					<button type="submit">@icon("search")<span>Preview synchronization</span></button>
 				</form>
 				if preview := view.DNSSettings.Preview; preview != nil {
@@ -116,6 +126,7 @@ templ dnsSettingsFocus(view WorkspaceView) {
 						<dl class="np-dns-impact-summary" aria-label="Synchronization impact">
 							<div class="is-add"><dt>Add</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"added")) }</dd></div>
 							<div class="is-update"><dt>Update</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"updated")) }</dd></div>
+							<div class="is-update"><dt>Adopt</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"adopted")) }</dd></div>
 							<div class="is-remove"><dt>Remove</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"removed")) }</dd></div>
 							<div class="is-preserve"><dt>Preserve</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"preserved")) }</dd></div>
 							<div class="is-conflict"><dt>Conflict</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"conflicts")) }</dd></div>

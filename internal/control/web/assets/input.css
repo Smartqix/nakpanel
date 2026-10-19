@@ -5486,8 +5486,9 @@
   .np-dns-policy-actions button { width: auto; }
   .np-dns-sync-toolbar { align-items: end; border: 1px solid var(--np-border-soft); border-radius: var(--np-radius); justify-content: flex-start; margin: 0 0 14px; padding: 12px; }
   .np-dns-sync-toolbar label { display: grid; gap: 4px; min-width: 250px; }
+  .np-dns-sync-toolbar label.np-check { align-items: center; display: flex; min-width: 0; }
   .np-dns-preview { background: var(--np-surface-2); border: 1px solid var(--np-border); border-radius: var(--np-radius); margin: 14px 0; overflow: hidden; padding: 14px; }
-  .np-dns-impact-summary { border: 1px solid var(--np-border-soft); border-radius: var(--np-radius); display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); margin: 0 0 12px; overflow: hidden; }
+  .np-dns-impact-summary { border: 1px solid var(--np-border-soft); border-radius: var(--np-radius); display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); margin: 0 0 12px; overflow: hidden; }
   .np-dns-impact-summary > div { background: var(--np-surface); border-right: 1px solid var(--np-border-soft); display: grid; gap: 2px; padding: 8px 12px; }
   .np-dns-impact-summary > div:last-child { border-right: 0; }
   .np-dns-impact-summary dt { color: var(--np-faint); font-size: 9px; font-weight: 600; text-transform: uppercase; }
@@ -5738,8 +5739,9 @@
     .np-dns-impact-summary > div { border-bottom: 1px solid var(--np-border-soft); }
     .np-dns-impact-summary > div:nth-child(3) { border-right: 0; }
     .np-dns-impact-summary > div:nth-child(4),
-    .np-dns-impact-summary > div:nth-child(5) { border-bottom: 0; }
-    .np-dns-impact-summary > div:nth-child(5) { border-right: 0; }
+    .np-dns-impact-summary > div:nth-child(5),
+    .np-dns-impact-summary > div:nth-child(6) { border-bottom: 0; }
+    .np-dns-impact-summary > div:nth-child(6) { border-right: 0; }
     .np-dns-apply-copy { margin-right: 0; }
     .np-domain-filterbar { align-items: stretch; display: grid; grid-template-columns: 1fr; }
     .np-domain-filterbar select { max-width: none; width: 100%; }

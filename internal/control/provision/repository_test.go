@@ -252,33 +252,6 @@ func TestRefreshDNSSyncRunsBindsZoneID(t *testing.T) {
 	}
 }
 
-func TestEnsureSystemDNSRecordsReplacesProtectedDefaults(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	mock.ExpectBegin()
-	tx, err := db.BeginTx(context.Background(), nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mock.ExpectExec(`DELETE FROM dns_records`).
-		WithArgs(int64(17)).
-		WillReturnResult(sqlmock.NewResult(0, 3))
-	mock.ExpectExec(`INSERT INTO dns_records`).
-		WithArgs(int64(17), int64(23), "ns1.example.test", "192.0.2.10").
-		WillReturnResult(sqlmock.NewResult(0, 3))
-	if err = ensureSystemDNSRecordsTx(context.Background(), tx, 17, 23, "example.test", "192.0.2.10"); err != nil {
-		t.Fatal(err)
-	}
-	mock.ExpectRollback()
-	_ = tx.Rollback()
-	if err = mock.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestMarkDNSActiveCompletesSupersededSyncRevisions(t *testing.T) {
 	t.Parallel()
 	db, mock, err := sqlmock.New()
