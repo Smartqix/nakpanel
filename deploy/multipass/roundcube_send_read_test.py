@@ -421,6 +421,10 @@ fi
                 self.commands.append(("select", mailbox, readonly))
                 return "OK", []
 
+            def noop(self):
+                self.commands.append(("NOOP",))
+                return "OK", []
+
             def uid(self, *args):
                 self.commands.append(args)
                 if args[0] == "SEARCH":
@@ -442,7 +446,7 @@ fi
         self.assertIs(factory.call_args.kwargs["ssl_context"], context)
         self.assertIn(("select", "INBOX", True), client.commands)
         self.assertIn(("FETCH", "41", "(BODY.PEEK[HEADER.FIELDS (SUBJECT MESSAGE-ID TO FROM)])"), client.commands)
-        self.assertEqual([command[0] for command in client.commands], ["login", "select", "SEARCH", "FETCH", "shutdown"])
+        self.assertEqual([command[0] for command in client.commands], ["login", "select", "NOOP", "SEARCH", "FETCH", "shutdown"])
 
     def test_imap_oracle_rejects_wrong_recipient_and_ambiguous_server_headers(self):
         helper = load_helper()
@@ -458,6 +462,7 @@ fi
                 client = mock.Mock()
                 client.login.return_value = ("OK", [])
                 client.select.return_value = ("OK", [])
+                client.noop.return_value = ("OK", [])
                 identifiers = b"41 41" if mode == "duplicate-uid" else b"0" if mode == "zero-uid" else b"41"
                 client.uid.side_effect = [("OK", [identifiers]), ("OK", [(b"headers", headers)])]
                 with mock.patch.object(helper.ssl, "create_default_context", return_value=mock.Mock()), mock.patch.object(helper.imaplib, "IMAP4_SSL", return_value=client):
@@ -471,6 +476,7 @@ fi
         client = mock.Mock()
         client.login.return_value = ("OK", [])
         client.select.return_value = ("OK", [])
+        client.noop.return_value = ("OK", [])
         client.fetches = []
         def uid(command, *args):
             if command == "SEARCH":
@@ -575,6 +581,7 @@ fi
                 client = mock.Mock()
                 client.login.return_value = ("OK", [])
                 client.select.return_value = ("OK", [])
+                client.noop.return_value = ("OK", [])
                 def uid(command, *args):
                     if command == "SEARCH":
                         return "OK", [b"1 41 42" if server.sends and mode == "duplicate-exact" else b"1 41" if server.sends else b"1"]
@@ -600,6 +607,78 @@ fi
                 self.assertIs(state["imap_message_id_verified"], mode == "ready")
                 self.assertEqual(state["send_attempts"], 1)
                 self.assertEqual(len(server.sends), 1)
+
+    def test_stale_selected_imap_session_refreshes_before_search_and_sends_once(self):
+        helper = load_helper()
+        for mode in ["ready", "refresh-status", "refresh-transport"]:
+            with self.subTest(mode=mode):
+                server = RoundcubeServer()
+                self.addCleanup(server.close)
+                client = mock.Mock()
+                client.login.return_value = ("OK", [])
+                client.select.return_value = ("OK", [])
+                visible = [False]
+                commands = []
+                def noop():
+                    commands.append("NOOP")
+                    if server.sends and mode == "refresh-status":
+                        return "NO", []
+                    if server.sends and mode == "refresh-transport":
+                        raise OSError("unit transport unavailable")
+                    # Actual Stalwart selected-session behavior: delivery is
+                    # already present, but SEARCH sees it only after NOOP.
+                    visible[0] = bool(server.sends)
+                    return "OK", []
+                def uid(command, *args):
+                    commands.append(command)
+                    if command == "SEARCH":
+                        return "OK", [b"41" if visible[0] else b""]
+                    self.assertEqual((command, args[1]), ("FETCH", "(BODY.PEEK[HEADER.FIELDS (SUBJECT MESSAGE-ID TO FROM)])"))
+                    return "OK", [(b"headers", ("Subject: " + server.subject + "\r\nMessage-ID: <server41@example.test>\r\nTo: " + MAILBOX + "\r\nFrom: " + MAILBOX + "\r\n\r\n").encode())]
+                client.noop.side_effect = noop
+                client.uid.side_effect = uid
+                with tempfile.TemporaryDirectory() as folder, mock.patch.object(helper.ssl, "create_default_context", return_value=mock.Mock()), mock.patch.object(helper.imaplib, "IMAP4_SSL", return_value=client):
+                    if mode == "ready":
+                        receipt = helper.qualify(server.url, "webmail.example.test", MAILBOX, PASSWORD, folder, timeout=1, poll_interval=.01)
+                    else:
+                        with self.assertRaises(helper.QualificationError):
+                            helper.qualify(server.url, "webmail.example.test", MAILBOX, PASSWORD, folder, timeout=1, poll_interval=.01)
+                        receipt = next(Path(folder).glob("*.json"))
+                    state = json.loads(Path(receipt).read_text())
+                self.assertEqual(state["status"], "PASS" if mode == "ready" else "FAIL")
+                self.assertIs(state["roundcube_body_verified"], mode == "ready")
+                self.assertIs(state["imap_message_id_verified"], mode == "ready")
+                self.assertIs(state["http_send_completed"], True)
+                self.assertEqual(state["send_attempts"], 1)
+                self.assertEqual(len(server.sends), 1)
+                client.select.assert_called_once_with("INBOX", readonly=True)
+                self.assertGreaterEqual(client.noop.call_count, 3 if mode == "ready" else 2)
+                for index, command in enumerate(commands):
+                    if command == "SEARCH":
+                        self.assertEqual(commands[index - 1], "NOOP")
+
+    def test_imap_refresh_failure_or_exhausted_budget_cannot_search(self):
+        helper = load_helper()
+        for mode in ["status", "numeric-status", "transport", "deadline", "already-expired"]:
+            with self.subTest(mode=mode):
+                budget = [5]
+                def remaining():
+                    if budget[0] <= 0:
+                        raise helper.QualificationError("deadline")
+                    return budget[0]
+                inbox, client = self.imap_candidates(b"", {}, remaining)
+                def noop():
+                    if mode == "status": return "NO", []
+                    if mode == "numeric-status": return 1, []
+                    if mode == "transport": raise OSError("unit unavailable")
+                    budget[0] = 0
+                    return "OK", []
+                client.noop.side_effect = noop
+                if mode == "already-expired": budget[0] = 0
+                with self.assertRaises((helper.QualificationError, OSError)):
+                    inbox.find("own-subject")
+                client.uid.assert_not_called()
+                self.assertEqual(client.noop.call_count, 0 if mode == "already-expired" else 1)
 
     def test_supplement_enrichment_binds_actual_proofs_and_refuses_false_success(self):
         helper = load_helper()

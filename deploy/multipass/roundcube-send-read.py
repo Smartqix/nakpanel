@@ -130,6 +130,11 @@ class Inbox:
 
     def find(self, subject):
         self._bound()
+        # Refresh a selected read-only mailbox before every arrival search.
+        # Stalwart may otherwise keep the session's pre-delivery snapshot.
+        if self.client.noop()[0] != "OK":
+            raise QualificationError("imap-refresh")
+        self._bound()
         status, rows = self.client.uid("SEARCH", None, "HEADER", "Subject", '"' + subject + '"')
         if status != "OK" or not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], bytes):
             raise QualificationError("imap-search")
