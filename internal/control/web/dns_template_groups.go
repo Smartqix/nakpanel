@@ -59,7 +59,7 @@ func dnsTemplateGroups(template types.DNSTemplateRevision) []dnsTemplateGroup {
 	service(2, "@", "MX", "10 mail.<domain>", "When enabled", "Local delivery only; external MX is preserved")
 	service(2, "@", "TXT", "v=spf1 mx ~all", "When enabled", "Existing SPF policy is preserved")
 	service(2, "_dmarc", "TXT", "<domain DMARC policy>", "When enabled", "Existing DMARC policy is preserved")
-	service(2, "nak1._domainkey", "TXT", "<domain public key>", "Generated per domain", "Created by the mail service; never shared across domains")
+	service(2, "nak1._domainkey", "TXT", "<domain public key>", "Generated per domain", "DKIM public key; never shared across domains")
 	service(3, "ftp", "A", "<ip.web>", "When enabled", "Enabled FTPS account is in sync")
 	service(4, "<webmail hostname>", "A", "<ip.web>", "When enabled", "Configured webmail host is active")
 	result := []dnsTemplateGroup{}

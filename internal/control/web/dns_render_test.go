@@ -59,7 +59,7 @@ func TestDNSSettingsUnifiesServiceGroupsAndOffersReadOnlyDomainPreview(t *testin
 		Template: types.DNSTemplateRevision{ID: 1, Revision: 4, Records: []types.DNSTemplateRecord{{ID: 7, StableKey: "apex-a", HostTemplate: "@", Type: "A", Scope: "all", ValueTemplate: "<ip.web>", TTL: 3600}}},
 	}}
 	body := renderDNSPage(t, dashboard.Data{}, view)
-	for _, want := range []string{"Website", "Nameservers", "Local mail", "FTPS", "Webmail", "Always", "When enabled", "Generated per domain", "Preview domain", "data-np-dns-group", "dns-domain-preview-dialog", `method="get"`, `name="preview_site"`, "Custom and external mail records are preserved", `data-np-dialog-open="dns-template-edit-7"`} {
+	for _, want := range []string{"Website", "Nameservers", "Local mail", "FTPS", "Webmail", "Always", "When enabled", "Generated per domain", "DKIM public key", "Preview domain", "data-np-dns-group", "dns-domain-preview-dialog", `method="get"`, `name="preview_site"`, "Custom and external mail records are preserved", `data-np-dialog-open="dns-template-edit-7"`} {
 		if !strings.Contains(body, want) {
 			t.Errorf("unified DNS workspace missing %q", want)
 		}
