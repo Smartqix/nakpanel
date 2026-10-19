@@ -698,7 +698,8 @@ profile, observed internal and hosted PHP, selected/desired tenant PHP, actual
 PostgreSQL server/dump/restore versions, MariaDB server/dump/client versions,
 Stalwart version and locally observable rootless image digests. Package names
 and configured PHP lists are not treated as evidence of installed tools.
-Missing observations stay unknown. The destination is probed again immediately
+Missing optional tool observations stay unknown; PHP intent inventory must be
+collected completely. The destination is probed again immediately
 before restore, before services stop or archive state replaces target state.
 The complete encrypted archive is authenticated before that first mutation.
 
@@ -757,6 +758,41 @@ checks, command and confirmation; repacking or a new legacy prompt is not
 required. An archive without provenance cannot be assumed to originate on a
 26.04 host. `/etc/nakpanel/platform.json` always remains the destination's
 installer-owned identity, including during same-platform restoration.
+
+New provenance separates actual execution requirements from offered choices.
+`required_php_versions` remains the complete union of current/desired site PHP,
+PHP applications, active hosting-plan offers and retained entitlement offers.
+That conservative field is unchanged for older restore binaries and for forward
+migration. The same authenticated manifest also records
+`execution_php_versions` and `execution_php_inventory_complete`; both projections
+are collected in one database statement, including active addon offers and both
+subscription and site policy overrides. A subscription override that enables
+hosting retains the inherited base PHP offers; JSON-null override fields inherit
+without erasing those offers. Failed or malformed observations
+abort collection. A complete execution inventory must explicitly contain a list
+(`[]` for no selections), valid unique versions and only entries also present in
+the full required union.
+
+For recovery between explicitly recorded matching known profiles with that
+complete execution inventory, the destination must provide every selected/desired execution runtime **and every
+hosted runtime observed ready on the source**. An offer that was already
+unavailable on the source can remain unavailable, while its plan, entitlement,
+revision and policy data are restored unchanged. A selected or desired runtime
+is still required even if it was unavailable on the source. Target availability
+comes from the trusted CLI/extension/isolated-FPM readiness probe, including when
+there are no selected sites or applications.
+
+A missing or false execution-completeness marker, or an unrecorded/unknown
+installed profile, retains the conservative full `required_php_versions` check.
+Both recorded profiles must match their known Ubuntu release, codename and
+internal PHP contract; missing or inconsistent observations also retain that
+full check. It does not infer an execution list by intersecting
+intent with installed packages. Older readers likewise continue checking the
+unchanged full required union. Existing archives remain readable, but an archive
+without the new execution inventory may still reject an unavailable historical
+offer. Produce a fresh backup from the intact source with the updated collector
+to obtain the narrower same-profile proof; do not edit archived provenance or
+rewrite tenant PHP offers to bypass compatibility.
 
 ## Forward migration rehearsal (not qualified support)
 
@@ -871,6 +907,9 @@ c["oci_image_ref"] = "docker.io/library/nginx@sha256:REPLACE_WITH_REVIEWED_PHASE
 # Default preparation refuses existing 8.3/8.4 tenant intent. Only for this
 # disposable source fixture, explicitly opt in to preparing all-PHP-8.5 intent:
 c["normalize_php85"] = True
+# A stale, unselected/nondefault 8.2 offer also needs its own explicit
+# disposable-fixture opt-in. Leave false for the required rejection probe.
+# c["remediate_stale_php82"] = True
 with open(p, "w") as f:
     json.dump(c, f, indent=2)
 PYFIXTURE
@@ -880,22 +919,59 @@ PYFIXTURE
 
 `normalize_php85` is an explicit source-fixture setup choice; its previous PHP
 intent is retained in the private fixture JSON. Restore never normalizes tenant
-versions. With the explicit fixture flag, active hosting plans are revised
+versions. With the explicit fixture flag, active hosting plans and retired plans
+still referenced by synchronized subscriptions are revised
 through their normal product editor/API before the backup: the preparer retains
 all successful form controls, changes only PHP defaults/allowlists, requires a
 new immutable revision and audit event, verifies earlier history is unchanged,
-and waits for ordinary synchronized subscription updates. Locked/custom
+and waits for ordinary synchronized subscription updates. A retired plan remains
+retired. Compatible source plans with stale synchronized snapshots are refreshed
+only through the product subscription-sync route, with its audit event; the
+preparer verifies subscription identities and all non-PHP contract fields remain
+unchanged. Locked/custom
 subscription snapshots are preserved. A native target rehearsal rejects any
 remaining incompatible offers in those snapshots; use a compatible source or
 the separately selected Surý target. The backup inventory independently retains
 those effective PHP requirements even if every current site uses 8.5. The native variant uses all-8.5 intent. A separate experimental Surý variant
 uses `target_profile=ubuntu-26.04-sury` and `normalize_php85=false` to retain the
-source's exact 8.3/8.4/8.5 site/application choices, active plans and custom/locked
+source's exact 8.3/8.4/8.5 site/application choices, plans and custom/locked
 snapshots. It records the managed worker's actual selected PHP and verifies that
 same interpreter after restoration and reboot. Actual supplied runtime and
 migration evidence is still required for every preserved version; the variant's
-presence does not qualify parity. Choose a separate source preparation per
-variant; never reuse a source already seeded/frozen by the other rehearsal.
+presence does not qualify parity.
+
+Both profiles reject an 8.2 offer by default before login, local output/key
+creation, or seeding. For an owned disposable qualification source only,
+`remediate_stale_php82=true` permits removing an unselected, nondefault 8.2 offer
+through a real plan revision and normal synchronized snapshot updates. This is
+useful for the historical retired `Legacy Unlimited` plan whose subscribers may
+still advertise 8.3/8.2 while the ready runtimes are 8.3/8.4/8.5. First retain the
+default-false rejection evidence. The Surý variant removes only that stale 8.2
+offer and verifies all remaining offers, defaults and selected PHP stay intact;
+the native variant also needs its separate `normalize_php85=true` choice.
+Selected/default 8.2, incompatible locked/custom snapshots, add-on offers and
+subscription/site PHP override offers fail before any preparation edits. The
+stale-offer flag never edits overrides. Inventory includes inherited base offers
+when a subscription override enables hosting on a base entitlement that disabled
+it. Complete target-compatible PHP inventory is required again after preparation
+and before seeding. Restore
+never edits an archive's authenticated PHP intent to make it compatible.
+
+After successful read-only preflight, preparation saves a private
+`preparation-receipt.json` before its first source mutation. It records source
+identity, explicit flags and the before-PHP inventory, then retains status and
+stage on failure as well as success. If a product revision commits but a later
+check fails, keep this receipt and the source for inspection; no final fixture
+or accepted archive is produced by that failed preparation.
+
+Choose a separate source preparation and archive/key/baseline per variant. For
+serial reuse of the same owned disposable VM, take a cold pre-seed checkpoint,
+finish and accept the first rehearsal, preserve its frozen source checkpoint and
+offline evidence, then restore the original checkpoint before the second
+preparation. Revalidate the live two-sided ownership before stopping/checkpoint
+operations, and its marker, actual OS and all three selected binary hashes after
+every restart. Each source epoch has its own source-unchanged proof; plain
+preparation cannot be rerun on an already seeded/frozen source.
 Preparation rejects missing phase fixtures, absent/unreviewed immutable image
 selection, failed convergence or protocol checks. Its dedicated container must
 pull the exact digest and become healthy; source, target and post-reboot checks

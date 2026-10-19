@@ -199,7 +199,7 @@ func TestHostedPreparationAuthorizesOnlyItsRunnerOnTheActualSocket(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"ready", "missing", "symlink", "not-root", "acl-failure"} {
+	for _, mode := range []string{"ready", "delayed-kvm", "reset-kvm", "missing", "symlink", "not-root", "acl-failure", "settle-failure", "missing-kvm", "symlink-kvm", "not-root-kvm", "kvm-acl-failure"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
 			commands := map[string]string{
@@ -218,33 +218,77 @@ printf '%s\n' "$*" >> "$FIXTURE/host-commands"
 socket=/var/snap/multipass/common/multipass_socket
 case "$1" in
  test)
-  test "$3" = "$socket" || exit 91
-  case "$2" in
-   -S)
-    test "$CLIENT_MODE" != missing || exit 1
-    count=0;test ! -f "$FIXTURE/socket-attempts" || count=$(cat "$FIXTURE/socket-attempts")
-    count=$((count+1));echo "$count" > "$FIXTURE/socket-attempts"
-    test "$count" -gt 2
+  case "$3" in
+   "$socket")
+    case "$2" in
+     -S)
+      test "$CLIENT_MODE" != missing || exit 1
+      count=0;test ! -f "$FIXTURE/socket-attempts" || count=$(cat "$FIXTURE/socket-attempts")
+      count=$((count+1));echo "$count" > "$FIXTURE/socket-attempts"
+      test "$count" -gt 2
+      ;;
+     -L) test "$CLIENT_MODE" = symlink;;
+     *) exit 92;;
+    esac
     ;;
-   -L) test "$CLIENT_MODE" = symlink;;
-   *) exit 92;;
+   /dev/kvm)
+    case "$2" in
+     -c) test "$CLIENT_MODE" != missing-kvm && test -f "$FIXTURE/udev-settled";;
+     -L) test "$CLIENT_MODE" = symlink-kvm;;
+     *) exit 92;;
+    esac
+    ;;
+   *) exit 91;;
   esac
   ;;
  stat)
-  test "$*" = "stat -c %u $socket" || exit 93
-  if test "$CLIENT_MODE" = not-root;then echo 1001;else echo 0;fi
+  case "$*" in
+   "stat -c %u $socket")
+    if test "$CLIENT_MODE" = not-root;then echo 1001;else echo 0;fi
+    ;;
+   'stat -c %u /dev/kvm')
+    if test "$CLIENT_MODE" = not-root-kvm;then echo 1001;else echo 0;fi
+    ;;
+   'stat -c uid=%u gid=%g mode=%a type=%F /dev/kvm') echo 'uid=0 gid=108 mode=660 type=character special file';;
+   *) exit 93;;
+  esac
   ;;
  setfacl)
-  test "$*" = "setfacl -m u:1001:rw $socket" || exit 94
-  test "$CLIENT_MODE" != acl-failure || exit 67
-  touch "$FIXTURE/runner-authorized"
+  case "$*" in
+   'setfacl -m u:1001:rw /dev/kvm')
+    test "$CLIENT_MODE" != kvm-acl-failure || exit 69
+    # Delayed creation cannot be authorized before pending udev completes.
+    if test "$CLIENT_MODE" = delayed-kvm;then test -f "$FIXTURE/udev-settled" || exit 70;fi
+    touch "$FIXTURE/kvm-authorized"
+    ;;
+   "setfacl -m u:1001:rw $socket")
+    test "$CLIENT_MODE" != acl-failure || exit 67
+    touch "$FIXTURE/runner-authorized"
+    ;;
+   *) exit 94;;
+  esac
   ;;
  getfacl)
-  test "$*" = "getfacl -n -p $socket" || exit 95
+  case "$*" in
+   "getfacl -n -p $socket"|'getfacl -n -p /dev/kvm') :;;
+   *) exit 95;;
+  esac
   printf '# owner: 0\nuser::rw-\nuser:1001:rw-\ngroup::rw-\nmask::rw-\nother::---\n'
   ;;
+ udevadm)
+  case "$*" in
+   'udevadm settle --timeout=30')
+    test "$CLIENT_MODE" != settle-failure || exit 68
+    # Complete the pending event, including any reset of a previous ACL.
+    if test "$CLIENT_MODE" = reset-kvm;then rm -f "$FIXTURE/kvm-authorized";fi
+    touch "$FIXTURE/udev-settled"
+    ;;
+   'udevadm control --reload-rules'|'udevadm trigger --name-match=kvm') :;;
+   *) exit 98;;
+  esac
+  ;;
  journalctl) echo 'multipassd journal fixture';;
- rm|docker|apt-get|snap|udevadm) :;;
+ rm|docker|apt-get|snap) :;;
  *) exit 96;;
 esac
 `,
@@ -254,9 +298,13 @@ case "$*" in
  'list --format json')
   echo attempt >> "$FIXTURE/client-attempts"
   if test ! -f "$FIXTURE/runner-authorized";then echo 'list failed: multipass socket access denied';exit 2;fi
+  touch "$FIXTURE/daemon-ready"
   printf '{"errors":[],"list":[]}\n'
   ;;
- version) echo 'multipass fixture';;
+ version)
+  if test "$CLIENT_MODE" = reset-kvm;then rm -f "$FIXTURE/kvm-authorized";fi
+  echo 'multipass fixture'
+  ;;
  *) exit 97;;
 esac
 `,
@@ -276,7 +324,8 @@ exec "$@"
 			cmd := exec.Command("bash", helper)
 			cmd.Env = append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "FIXTURE="+root, "FIXTURE_PYTHON="+python, "RUNNER_TEMP="+root, "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "CLIENT_MODE="+mode)
 			output, runErr := cmd.CombinedOutput()
-			if (runErr == nil) != (mode == "ready") {
+			wantReady := mode == "ready" || mode == "delayed-kvm" || mode == "reset-kvm"
+			if (runErr == nil) != wantReady {
 				t.Fatalf("mode=%s preparation err=%v: %s", mode, runErr, output)
 			}
 			commandsLog, _ := os.ReadFile(filepath.Join(root, "host-commands"))
@@ -284,16 +333,27 @@ exec "$@"
 				t.Fatalf("preparation broadened socket permissions: %s", commandsLog)
 			}
 			_, clientErr := os.Stat(filepath.Join(root, "client-attempts"))
-			if mode != "ready" && !os.IsNotExist(clientErr) {
+			badSocket := mode == "missing" || mode == "symlink" || mode == "not-root" || mode == "acl-failure"
+			if badSocket && !os.IsNotExist(clientErr) {
 				t.Fatalf("untrusted/unconfigured socket reached daemon query: %s", commandsLog)
 			}
-			if mode == "ready" {
+			if wantReady {
+				if _, err := os.Stat(filepath.Join(root, "kvm-authorized")); err != nil {
+					t.Fatalf("preparation left KVM inaccessible after pending udev setup: %v", err)
+				}
+				if _, err := os.Stat(filepath.Join(root, "udev-settled")); err != nil {
+					t.Fatalf("preparation left udev events pending: %v", err)
+				}
 				acl, err := os.ReadFile(filepath.Join(root, "hosted-evidence/multipass-socket-acl.log"))
 				if err != nil || !strings.Contains(string(acl), "user:1001:rw-") || !strings.Contains(string(acl), "other::---") {
 					t.Fatalf("runner-only socket access evidence missing: %s %v", acl, err)
 				}
 				if clientErr != nil {
 					t.Fatal("successful preparation did not require the actual client query")
+				}
+				acl, err = os.ReadFile(filepath.Join(root, "hosted-evidence/kvm-device-acl.log"))
+				if err != nil || !strings.Contains(string(acl), "uid=0 gid=108 mode=660") || !strings.Contains(string(acl), "user:1001:rw-") || !strings.Contains(string(acl), "other::---") {
+					t.Fatalf("numeric KVM ownership and runner-only ACL evidence missing: %s %v", acl, err)
 				}
 			}
 		})

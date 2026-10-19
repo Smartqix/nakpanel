@@ -372,6 +372,9 @@ func TestObservedLegacyNobleProfileCanProduceRestorableMySQLBackup(t *testing.T)
 			}
 			return nil, os.ErrNotExist
 		}, command: func(_ context.Context, name string, args ...string) ([]byte, error) {
+			if strings.Contains(strings.Join(args, " "), requiredPHPIntentQuery) {
+				return []byte(`{"required":[],"execution":[]}`), nil
+			}
 			if name == "php8.3" {
 				return []byte(actual.php), nil
 			}

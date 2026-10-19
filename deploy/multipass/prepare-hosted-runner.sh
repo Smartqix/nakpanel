@@ -20,7 +20,6 @@ sudo apt-get install -y acl cpu-checker curl dnsutils jq make openssl python3 ub
 sudo snap install multipass
 sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=kvm
-if [[ -c /dev/kvm ]]; then sudo setfacl -m "u:$(id -u):rw" /dev/kvm; fi
 sudo apt-get clean
 # Multipass restricts its root-owned socket to an administrative group. A
 # hosted runner can have passwordless sudo without membership in that group.
@@ -42,5 +41,17 @@ sudo getfacl -n -p "${multipass_socket}" | tee "${evidence}/multipass-socket-acl
 # A successful bounded daemon query is the readiness condition, never elapsed time.
 python3 "${SCRIPT_DIR}/hosted-multipass-ready.py" --output-dir "${evidence}"
 timeout --kill-after=2s 15s multipass version | tee "${evidence}/multipass.log"
+# Device creation and uaccess rules run asynchronously after udev trigger.
+# Finish those events before granting this UID access, after snap/daemon setup.
+sudo udevadm settle --timeout=30
+if ! sudo test -c /dev/kvm || sudo test -L /dev/kvm || [[ "$(sudo stat -c %u /dev/kvm)" != 0 ]]; then
+  echo 'KVM did not create its root-owned non-symlink character device.' | tee "${evidence}/kvm-device-error.log" >&2
+  exit 1
+fi
+sudo setfacl -m "u:$(id -u):rw" /dev/kvm
+{
+  sudo stat -c 'uid=%u gid=%g mode=%a type=%F' /dev/kvm
+  sudo getfacl -n -p /dev/kvm
+} | tee "${evidence}/kvm-device-acl.log"
 # Diagnostic only; the separate ioctl capacity/KVM preflight is mandatory.
 sudo kvm-ok >"${evidence}/kvm.log" 2>&1 || cat "${evidence}/kvm.log"

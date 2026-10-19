@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 import platform
 import shutil
+import stat
+import subprocess
 
 
 def capacity_errors(architecture, cpu_count, total_memory, available_memory, free_disk, kvm_api):
@@ -40,6 +42,24 @@ def main():
                       free_disk=shutil.disk_usage(args.storage_path).free, kvm_api=None,
                       runner_image=os.environ.get('ImageVersion'), runner_os_image=os.environ.get('ImageOS'),
                       guest_budget=dict(max_simultaneous_guests=2,source_cpus=2,source_memory_gib=5,source_disk_gib=32,dr_cpus=2,dr_memory_gib=3,dr_disk_gib=16))
+        # Capture the device state as the same actor, immediately before the
+        # real open/ioctl checks. A diagnostic snapshot never substitutes for
+        # API-version and VM-creation success below.
+        try:
+            device = os.stat('/dev/kvm', follow_symlinks=False)
+            report['kvm_device'] = dict(uid=device.st_uid, gid=device.st_gid,
+                mode=format(stat.S_IMODE(device.st_mode), '04o'),
+                major=os.major(device.st_rdev), minor=os.minor(device.st_rdev),
+                character_device=stat.S_ISCHR(device.st_mode),
+                runner_uid=os.getuid(), runner_groups=os.getgroups())
+        except OSError as error:
+            report['kvm_device_error'] = str(error)
+        try:
+            acl = subprocess.run(['getfacl', '-n', '-p', '/dev/kvm'],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=5)
+            report['kvm_acl'] = dict(exit_code=acl.returncode, output=acl.stdout)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            report['kvm_acl_error'] = str(error)
         try:
             fd = os.open('/dev/kvm', os.O_RDWR | os.O_CLOEXEC)
             try:

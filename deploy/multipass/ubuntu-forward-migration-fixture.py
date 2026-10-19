@@ -47,7 +47,8 @@ def example_spec():
         'run_token': 'CHANGE-ME', 'target_profile': 'ubuntu-26.04-native',
         'remote_src': '', 'admin_email': 'admin@nakpanel.test',
         'admin_password': 'NakpanelAdmin!2026',
-        'normalize_php85': False, 'site_id': 0, 'worker_id': 0, 'oci_image_ref': '',
+        'normalize_php85': False, 'remediate_stale_php82': False,
+        'site_id': 0, 'worker_id': 0, 'oci_image_ref': '',
         'database_password': secrets.token_urlsafe(30), 'application_secret': secrets.token_urlsafe(30),
         'ftp_password': secrets.token_urlsafe(30), 'mailbox_password': secrets.token_urlsafe(30),
         'tls_hostname': 'forward-fixture.test'}
@@ -64,6 +65,9 @@ def validate_spec(c):
         raise ValueError('fixture requires an owned disposable source VM')
     if c.get('target_profile') not in ('ubuntu-26.04-native', 'ubuntu-26.04-sury'):
         raise ValueError('unknown target profile')
+    for flag in ('normalize_php85','remediate_stale_php82'):
+        if type(c.get(flag,False)) is not bool:
+            raise ValueError('fixture '+flag+' must be a boolean')
     if c.get('oci_image_ref') and not re.fullmatch(r'docker\.io/library/nginx@sha256:[a-f0-9]{64}',c['oci_image_ref']):
         raise ValueError('fixture requires an explicit immutable official nginx image or trusted active catalog')
     expected_source='/var/lib/nakpanel-qualification/'+token+'/source'
@@ -267,28 +271,55 @@ def prepare(spec_path, output):
     output = Path(output).resolve()
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
     os.chmod(output, 0o700)
+    receipt={key:c[key] for key in ('source_vm','run_token','architecture','target_profile')}
+    receipt.update(version=1,normalize_php85=c.get('normalize_php85',False),
+        remediate_stale_php82=c.get('remediate_stale_php82',False),before_php_inventory=c['prior_php_inventory'])
+    def checkpoint(stage,status='running',error_type=None):
+        receipt.update(stage=stage,status=status)
+        if error_type:receipt['error_type']=error_type
+        temporary=output/'.preparation-receipt.next'
+        private_write(temporary,json.dumps(receipt,indent=2)+'\n')
+        with temporary.open('rb') as stream:os.fsync(stream.fileno())
+        os.replace(temporary,output/'preparation-receipt.json')
+    checkpoint('read-only-preflight','passed')
+    try:
+        return prepare_source_fixture(c,output,checkpoint)
+    except Exception as error:
+        checkpoint(receipt['stage'],'failed',type(error).__name__)
+        raise
+
+
+def prepare_source_fixture(c,output,checkpoint):
+    checkpoint('local-input-generation')
     key_path = output / 'sftp-key'
     run(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', key_path])
     c['ssh_identity_file'] = str(key_path)
     c['ssh_public_key'] = Path(str(key_path) + '.pub').read_text().strip()
     c['marker'] = 'forward-canary-' + c['run_token']
     c['guest_ca'] = '/etc/nakpanel/forward-fixture-ca.crt'
+    checkpoint('source-php-preparation-and-seed')
     c = probe(c, c['source_vm'], 'seed')
+    checkpoint('roundcube-canary-seed')
     seed_roundcube(c)
+    checkpoint('fixture-certificates')
     private_write(output / 'fixture-ca.crt', certificates(c))
     c['ca_file'] = str(output / 'fixture-ca.crt')
+    checkpoint('source-live-checks')
     probe(c, c['source_vm'], 'live')
     probe(c, c['source_vm'], 'tls')
     assert_ssh(c, c['source_vm'])
+    checkpoint('freeze-for-backup')
     probe(c, c['source_vm'], 'freeze-for-backup')
     before = probe(c, c['source_vm'], 'snapshot')
     key = secrets.token_bytes(32)
     private_write(output / 'archive.key', 'nkbk1-' + base64.b32encode(key).decode().rstrip('=') + '\n')
+    checkpoint('encrypted-backup')
     created = archive_frozen(c, key)
     run(['multipass', 'exec', c['source_vm'], '--', 'sudo', 'systemctl', 'stop', 'nakpanel-agent.service'])
     probe(c, c['source_vm'], 'frozen')
     c['baseline'] = probe(c, c['source_vm'], 'snapshot')
     compare_snapshots(before, c['baseline'])
+    checkpoint('offline-export')
     archive_path = output / 'source.nkbk'
     with archive_path.open('wb') as destination:
         os.chmod(archive_path, 0o600)
@@ -300,6 +331,7 @@ def prepare(spec_path, output):
     c['backup_key_sha256'] = hashlib.sha256((output / 'archive.key').read_bytes()).hexdigest()
     c['valkey_image'] = guest(c, c['source_vm'], "import json,sys;from pathlib import Path;c=json.load(sys.stdin);print(next((s.split('=',1)[1] for s in Path('/etc/nakpanel/agent.env').read_text().splitlines() if s.startswith('NAKPANEL_VALKEY_IMAGE=')),''))")
     private_write(output / 'fixture.json', json.dumps(c, indent=2) + '\n')
+    checkpoint('complete','passed')
     print('Prepared frozen-source fixture: ' + str(output / 'fixture.json'))
 
 

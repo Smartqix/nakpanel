@@ -279,14 +279,16 @@ class PlanEditor(HTMLParser):
         elif tag=='form':self.forms.append(self.current);self.current=None
 
 
-def normalized_plan_form(html,plan_id):
+def normalized_plan_form(html,plan_id,versions=None,default='8.5',lifecycle='active'):
     parser=PlanEditor();parser.feed(html)
     forms=[values for values in parser.forms if dict(values).get('plan_id')==str(plan_id)]
     if len(forms)!=1:raise RuntimeError('exact plan editor was not returned')
     values=forms[0]
-    if dict(values).get('lifecycle_status')!='active':raise RuntimeError('normalization only revises active hosting plans')
+    if lifecycle not in ('active','retired') or dict(values).get('lifecycle_status')!=lifecycle:raise RuntimeError('plan editor lifecycle changed before fixture revision')
+    versions=['8.5'] if versions is None else versions
+    if not versions or not set(versions)<={'8.3','8.4','8.5'} or default not in versions:raise RuntimeError('invalid prepared plan PHP offers')
     changed={'php_versions','php_allowlist','default_php_version','change_reason'}
-    return [(k,v) for k,v in values if k not in changed]+[('php_versions','8.5'),('php_allowlist','8.5'),('default_php_version','8.5'),('change_reason','Explicit disposable forward-fixture PHP 8.5 preparation')]
+    return [(k,v) for k,v in values if k not in changed]+[('php_versions',v) for v in versions]+[('php_allowlist',','.join(versions)),('default_php_version',default),('change_reason','Explicit disposable forward-fixture PHP offer preparation')]
 
 
 def assert_plan_only_php_changed(before,after):
@@ -301,7 +303,105 @@ def assert_plan_only_php_changed(before,after):
 
 
 def active_php_plans():
-    return json.loads(pg("SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (SELECT id,revision,php_allowlist,default_php_version,hosting_policy FROM plans WHERE lifecycle_status='active' AND hosting_enabled ORDER BY id) q"))
+    # Retired plans remain the source of existing synced snapshots. Preserve
+    # lifecycle while revising them; unrelated retired/draft history is untouched.
+    return json.loads(pg("SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (SELECT p.id,p.revision,p.lifecycle_status,p.php_allowlist,p.default_php_version,p.hosting_policy FROM plans p WHERE p.hosting_enabled AND (p.lifecycle_status='active' OR (p.lifecycle_status='retired' AND EXISTS(SELECT 1 FROM subscriptions s WHERE s.plan_id=p.id AND s.sync_mode='synced'))) ORDER BY p.id) q"))
+
+
+def php_offers(row):
+    policy=row.get('hosting_policy',{})
+    if not isinstance(policy,dict):raise RuntimeError('invalid PHP policy object')
+    policy=policy.get('php')
+    if policy is None:policy={}
+    if not isinstance(policy,dict):raise RuntimeError('invalid PHP override section')
+    allowed=policy.get('allowed_versions')
+    if allowed is None:allowed=[]  # Product policy.Resolve defines null as inherit.
+    if not isinstance(allowed,list) or any(not isinstance(v,str) or not v for v in allowed):raise RuntimeError('invalid PHP allowed_versions override')
+    defaults=(row.get('default_php_version'),policy.get('default_version'))
+    if any(v is not None and not isinstance(v,str) for v in defaults):raise RuntimeError('invalid default PHP override')
+    legacy=row.get('php_allowlist','')
+    if not isinstance(legacy,str):raise RuntimeError('invalid legacy PHP allowlist')
+    return set(v.strip() for v in legacy.split(',') if v.strip())|set(allowed)|{v for v in defaults if v}
+
+
+def fixture_php_inventory():
+    return json.loads(pg("""SELECT json_build_object(
+ 'selected',(SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (
+  SELECT 'site' kind,id,php_version FROM sites UNION ALL SELECT 'site-desired',id,desired_php_version FROM sites UNION ALL SELECT 'application',id,php_version FROM php_applications ORDER BY kind,id) q),
+ 'plans',(SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (
+  SELECT p.id,p.revision,p.lifecycle_status,p.php_allowlist,p.default_php_version,p.hosting_policy FROM plans p WHERE p.hosting_enabled AND (p.lifecycle_status='active' OR (p.lifecycle_status='retired' AND EXISTS(SELECT 1 FROM subscriptions s WHERE s.plan_id=p.id AND s.sync_mode='synced'))) ORDER BY p.id) q),
+ 'subscriptions',(SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (
+  SELECT e.*,s.plan_id,s.sync_mode FROM subscription_entitlements e JOIN subscriptions s ON s.id=e.subscription_id LEFT JOIN subscription_policy_overrides o ON o.subscription_id=s.id WHERE e.hosting_enabled OR o.policy_patch#>'{permissions,hosting}'='true'::jsonb ORDER BY e.subscription_id) q),
+ 'addons',(SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (
+  SELECT DISTINCT a.id,a.php_allowlist,a.hosting_policy FROM addon_plans a JOIN subscription_addons sa ON sa.addon_plan_id=a.id JOIN subscription_entitlements e ON e.subscription_id=sa.subscription_id LEFT JOIN subscription_policy_overrides o ON o.subscription_id=e.subscription_id WHERE e.hosting_enabled OR o.policy_patch#>'{permissions,hosting}'='true'::jsonb ORDER BY a.id) q),
+ 'overrides',(SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (
+  SELECT 'subscription' kind,subscription_id id,policy_patch AS hosting_policy FROM subscription_policy_overrides UNION ALL SELECT 'site',site_id,policy_patch FROM site_policy_overrides ORDER BY kind,id) q))"""))
+
+
+def assert_fixture_php_inventory(c,allow_preparation=False):
+    inventory=fixture_php_inventory()
+    if not isinstance(inventory,dict) or any(not isinstance(inventory.get(key),list) for key in ('selected','plans','subscriptions','addons','overrides')):raise RuntimeError('complete fixture PHP inventory is missing')
+    native=c.get('target_profile','ubuntu-26.04-native')=='ubuntu-26.04-native'
+    target={'8.5'} if native else {'8.3','8.4','8.5'}
+    plans={row['id']:row for row in inventory['plans']}
+    selected={row['php_version'] for row in inventory['selected']}
+    if selected-{'8.3','8.4','8.5'}:raise RuntimeError('selected PHP is unsupported; stale PHP 8.2 remediation never migrates a selected runtime')
+    for row in inventory['overrides']:
+        unsupported=php_offers(row)-target
+        if unsupported:raise RuntimeError('incompatible PHP override offers '+','.join(sorted(unsupported))+' are not rewritten by fixture preparation')
+    for row in inventory['addons']:
+        if php_offers(row)-target:raise RuntimeError('incompatible add-on PHP offers are not rewritten by fixture preparation')
+    for kind in ('plans','subscriptions'):
+        for row in inventory[kind]:
+            policy=row.get('hosting_policy',{}).get('php',{})
+            defaults={v for v in (row.get('default_php_version'),policy.get('default_version')) if v}
+            if defaults-{'8.3','8.4','8.5'}:raise RuntimeError('default PHP is unsupported; stale PHP 8.2 remediation never migrates a default runtime')
+            if len(defaults)>1:raise RuntimeError('inconsistent PHP defaults require explicit source repair')
+            offers=php_offers(row)
+            if kind=='subscriptions' and row.get('sync_mode')!='synced' and offers-target:raise RuntimeError('incompatible locked/custom PHP offers are not rewritten')
+            unknown=offers-{'8.3','8.4','8.5'}
+            if unknown:
+                if not (allow_preparation and unknown=={'8.2'} and c.get('remediate_stale_php82') is True):raise RuntimeError('unsupported PHP '+','.join(sorted(unknown))+' offer; explicit remediate_stale_php82 is required for the owned fixture')
+                if kind=='subscriptions' and row.get('plan_id') not in plans:raise RuntimeError('stale snapshot has no eligible source plan for product synchronization')
+            if offers-target and not (allow_preparation and ((native and c.get('normalize_php85') is True) or (not native and unknown=={'8.2'} and c.get('remediate_stale_php82') is True))):raise RuntimeError('fixture PHP offers require explicit normalize_php85 preparation or compatible target runtimes')
+    if selected-target and not (allow_preparation and native and c.get('normalize_php85') is True):raise RuntimeError('selected PHP requires explicit normalize_php85 fixture preparation')
+    return inventory
+
+
+def assert_snapshot_only_php_changed(before,after,preserve_supported_php=False):
+    def masked(rows):
+        result=json.loads(json.dumps(rows))
+        for row in result:
+            for key in ('php_allowlist','default_php_version','source_revision','updated_at'):row.pop(key,None)
+            row.get('hosting_policy',{}).get('php',{}).pop('default_version',None)
+            row.get('hosting_policy',{}).get('php',{}).pop('allowed_versions',None)
+            row.get('service_presets',{}).get('hosting',{}).pop('default_php_version',None)
+            row.get('service_presets',{}).get('hosting',{}).pop('allowed_php_versions',None)
+        return result
+    if masked(before)!=masked(after):raise RuntimeError('subscription sync changed non-PHP contract or identity')
+    if preserve_supported_php:
+        for old,new in zip(before,after):
+            if old.get('default_php_version')!=new.get('default_php_version') or old.get('hosting_policy',{}).get('php',{}).get('default_version')!=new.get('hosting_policy',{}).get('php',{}).get('default_version'):raise RuntimeError('Surý fixture changed a default PHP selection')
+            if php_offers(old)-{'8.2'}!=php_offers(new):raise RuntimeError('Surý fixture changed remaining PHP 8.3/8.4/8.5 offers')
+
+
+def refresh_synced_php_snapshots(c,post):
+    before=fixture_php_inventory()
+    target={'8.5'} if c.get('target_profile','ubuntu-26.04-native')=='ubuntu-26.04-native' else {'8.3','8.4','8.5'}
+    plans={row['id']:row for row in before['plans']}
+    for row in before['subscriptions']:
+        if not php_offers(row)-target:continue
+        if row.get('sync_mode')!='synced':raise RuntimeError('locked/custom PHP offers are not rewritten')
+        plan=plans.get(row.get('plan_id'))
+        if plan is None or php_offers(plan)-target:raise RuntimeError('snapshot has no compatible plan revision to synchronize')
+        identity=str(int(row['subscription_id']))
+        audit="SELECT count(*) FROM audit_events WHERE action='subscription.synced' AND target_type='subscription' AND target_id="+identity
+        old=int(pg(audit));post('subscriptions/'+identity+'/sync',{})
+        if int(pg(audit))<=old:raise RuntimeError('product subscription sync audit is missing')
+    after=fixture_php_inventory()
+    assert_snapshot_only_php_changed(before['subscriptions'],after['subscriptions'],preserve_supported_php=c.get('target_profile')=='ubuntu-26.04-sury' and not c.get('normalize_php85'))
+    if any(php_offers(row)-target for row in after['subscriptions']):raise RuntimeError('effective subscription PHP offers remain incompatible after product sync')
+    return after
 
 
 def plan_needs_php85(plan):
@@ -319,23 +419,32 @@ def assert_fixture_entitlements(c,locked_only=False):
 
 
 def normalize_active_plans(c,post):
-    plans=[plan for plan in active_php_plans() if plan_needs_php85(plan)]
-    if c.get('target_profile')=='ubuntu-26.04-sury' and not c.get('normalize_php85'):
-        c['prior_plan_php_intent']=plans
+    native=c.get('target_profile','ubuntu-26.04-native')=='ubuntu-26.04-native'
+    observed=active_php_plans()
+    plans=[plan for plan in observed if plan_needs_php85(plan)] if native or c.get('normalize_php85') else [plan for plan in observed if '8.2' in php_offers(plan)]
+    if plans and native and not c.get('normalize_php85'):raise RuntimeError('plan offers require explicit normalize_php85 fixture preparation')
+    if any('8.2' in php_offers(plan) for plan in plans) and not c.get('remediate_stale_php82'):raise RuntimeError('PHP 8.2 offers require explicit remediate_stale_php82 fixture preparation')
+    if not native and not c.get('normalize_php85') and not plans:
+        c['prior_plan_php_intent']=[plan for plan in observed if plan_needs_php85(plan)]
         return []
-    if plans and not c.get('normalize_php85'):raise RuntimeError('active plan offers require explicit normalize_php85 fixture preparation')
     c['prior_plan_php_intent']=plans
     for plan in plans:
+        if native or c.get('normalize_php85'):
+            versions,default=['8.5'],'8.5'
+        else:
+            default=plan['default_php_version']
+            versions=list(dict.fromkeys([v.strip() for v in plan['php_allowlist'].split(',') if v.strip()]+plan.get('hosting_policy',{}).get('php',{}).get('allowed_versions',[])))
+            versions=[v for v in versions if v!='8.2']
         identity=str(int(plan['id']));revision=int(plan['revision'])
         history="SELECT encode(sha256(convert_to(COALESCE(jsonb_agg(to_jsonb(p) ORDER BY revision),'[]'::jsonb)::text,'UTF8')),'hex') FROM plan_revisions p WHERE plan_id="+identity+' AND revision<='+str(revision)
         before_hash=pg(history)
         before=json.loads(pg('SELECT definition::text FROM plan_revisions WHERE plan_id='+identity+' AND revision='+str(revision)))
         audit="SELECT count(*) FROM audit_events WHERE action='plan.saved' AND target_type='plan' AND target_id="+identity
         old_audit=int(pg(audit))
-        values=normalized_plan_form(post.get('service-plans/'+identity),int(identity))
+        values=normalized_plan_form(post.get('service-plans/'+identity),int(identity),versions,default,plan.get('lifecycle_status','active'))
         post('plans',values)
         current=json.loads(pg("SELECT json_build_object('revision',revision,'php_allowlist',php_allowlist,'default_php_version',default_php_version,'hosting_policy',hosting_policy) FROM plans WHERE id="+identity))
-        if current['revision']!=revision+1 or plan_needs_php85(current):raise RuntimeError('product plan revision did not commit PHP 8.5 intent')
+        if current['revision']!=revision+1 or php_offers(current)!=set(versions) or current['default_php_version']!=default:raise RuntimeError('product plan revision did not commit prepared PHP intent')
         after=json.loads(pg('SELECT definition::text FROM plan_revisions WHERE plan_id='+identity+' AND revision='+str(current['revision'])))
         assert_plan_only_php_changed(before,after)
         if pg(history)!=before_hash:raise RuntimeError('immutable prior plan history changed')
@@ -363,6 +472,7 @@ def fixture_catalog_slug(c):
 def source_preflight(c):
     result=roundcube_preflight(c)
     result['oci_image_ref']=fixture_image(c)
+    result['prior_php_inventory']=assert_fixture_php_inventory(c,allow_preparation=True)
     assert_fixture_entitlements(c,locked_only=True)
     if c.get('target_profile','ubuntu-26.04-native')=='ubuntu-26.04-native' and not c.get('normalize_php85') and any(plan_needs_php85(plan) for plan in active_php_plans()):raise RuntimeError('active plan offers require explicit normalize_php85 fixture preparation')
     observed=discover(dict(c))
@@ -396,9 +506,11 @@ def create_fixture_container(c,post,image):
 def seed(c):
     roundcube_preflight(c)
     image=fixture_image(c)
+    prior_php=assert_fixture_php_inventory(c,allow_preparation=True)
     c = discover(c)
     post=login(c)
     normalize_active_plans(c,post)
+    refresh_synced_php_snapshots(c,post)
     assert_fixture_entitlements(c)
     wrong = pg("SELECT count(*) FROM (SELECT php_version v FROM sites UNION ALL SELECT desired_php_version FROM sites UNION ALL SELECT php_version FROM php_applications) q WHERE v<>'8.5'")
     if wrong != '0' and (c.get('target_profile','ubuntu-26.04-native')=='ubuntu-26.04-native' or c.get('normalize_php85')):
@@ -409,6 +521,11 @@ def seed(c):
         cli('reconcile', '--system')
         wait("SELECT count(*) FROM php_applications WHERE convergence_status<>'in_sync' OR desired_revision<>applied_revision OR php_version<>'8.5'", '0')
     c=discover(c)
+    after_php=assert_fixture_php_inventory(c)
+    preserve=c.get('target_profile')=='ubuntu-26.04-sury' and not c.get('normalize_php85')
+    assert_snapshot_only_php_changed(prior_php['subscriptions'],after_php['subscriptions'],preserve_supported_php=preserve)
+    if preserve and prior_php['selected']!=after_php['selected']:raise RuntimeError('Surý fixture changed selected site/application PHP intent')
+    c['prior_php_inventory']=prior_php
     # Fixture setup mirrors the repo's phase28 entitlement preparation. These
     # explicit test-source changes precede the baseline/archive; target restore
     # must retain this resulting intent without further rewriting.
@@ -478,6 +595,8 @@ def snapshot(c):
         'application_manifest_revisions':'id,preset_id,revision,manifest,image_ref,created_by_user_id',
         'databases': 'id,subscription_id,db_name,db_user',
         'subscription_entitlements': 'subscription_id AS id,hosting_policy',
+        'subscription_policy_overrides': 'subscription_id AS id,schema_version,policy_patch',
+        'site_policy_overrides': 'site_id AS id,schema_version,policy_patch',
         'sftp_access_identities': 'id,subscription_id,name,public_key,relative_root,enabled',
         'ftp_accounts': 'id,subscription_id,site_id,name,password_hash,enabled',
         'mail_domains': 'id,subscription_id,domain,enabled,dkim_enabled,dmarc_policy,catch_all',

@@ -16,23 +16,68 @@ import (
 // PlatformProvenance records observed versions, never credentials or dump data.
 // Unknown optional observations remain empty; they cannot qualify a migration.
 type PlatformProvenance struct {
-	OSID                   string            `json:"os_id"`
-	VersionID              string            `json:"version_id"`
-	Codename               string            `json:"codename,omitempty"`
-	Architecture           string            `json:"architecture"`
-	Profile                string            `json:"profile,omitempty"`
-	InternalPHPVersion     string            `json:"internal_php_version,omitempty"`
-	HostingPHPVersions     []string          `json:"hosting_php_versions,omitempty"`
-	RequiredPHPVersions    []string          `json:"required_php_versions,omitempty"`
-	PHPInventoryComplete   bool              `json:"php_inventory_complete"`
-	PostgresServerVersion  string            `json:"postgres_server_version,omitempty"`
-	PostgresDumpVersion    string            `json:"postgres_dump_version,omitempty"`
-	PostgresRestoreVersion string            `json:"postgres_restore_version,omitempty"`
-	MariaDBServerVersion   string            `json:"mariadb_server_version,omitempty"`
-	MariaDBDumpVersion     string            `json:"mariadb_dump_version,omitempty"`
-	MariaDBClientVersion   string            `json:"mariadb_client_version,omitempty"`
-	StalwartVersion        string            `json:"stalwart_version,omitempty"`
-	ImageDigests           map[string]string `json:"image_digests,omitempty"`
+	OSID                 string   `json:"os_id"`
+	VersionID            string   `json:"version_id"`
+	Codename             string   `json:"codename,omitempty"`
+	Architecture         string   `json:"architecture"`
+	Profile              string   `json:"profile,omitempty"`
+	InternalPHPVersion   string   `json:"internal_php_version,omitempty"`
+	HostingPHPVersions   []string `json:"hosting_php_versions,omitempty"`
+	RequiredPHPVersions  []string `json:"required_php_versions,omitempty"`
+	PHPInventoryComplete bool     `json:"php_inventory_complete"`
+	// RequiredPHPVersions remains the conservative union of execution and offers
+	// for older readers. Only an explicitly complete execution list lets a
+	// same-profile restore preserve already-unavailable offers without requiring them.
+	ExecutionPHPVersions          []string                      `json:"execution_php_versions"`
+	ExecutionPHPInventoryComplete phpExecutionInventoryComplete `json:"execution_php_inventory_complete,omitempty"`
+	PostgresServerVersion         string                        `json:"postgres_server_version,omitempty"`
+	PostgresDumpVersion           string                        `json:"postgres_dump_version,omitempty"`
+	PostgresRestoreVersion        string                        `json:"postgres_restore_version,omitempty"`
+	MariaDBServerVersion          string                        `json:"mariadb_server_version,omitempty"`
+	MariaDBDumpVersion            string                        `json:"mariadb_dump_version,omitempty"`
+	MariaDBClientVersion          string                        `json:"mariadb_client_version,omitempty"`
+	StalwartVersion               string                        `json:"stalwart_version,omitempty"`
+	ImageDigests                  map[string]string             `json:"image_digests,omitempty"`
+}
+
+// JSON null is not a completeness assertion. Missing/false markers retain
+// the older conservative contract; a complete empty list must be explicit [].
+type phpExecutionInventoryComplete bool
+
+func (complete *phpExecutionInventoryComplete) UnmarshalJSON(data []byte) error {
+	switch strings.TrimSpace(string(data)) {
+	case "true":
+		*complete = true
+	case "false":
+		*complete = false
+	default:
+		return fmt.Errorf("execution PHP inventory completeness must be a boolean")
+	}
+	return nil
+}
+
+func validateExecutionPHPInventory(p PlatformProvenance) error {
+	if bool(p.ExecutionPHPInventoryComplete) && (p.ExecutionPHPVersions == nil || !p.PHPInventoryComplete) {
+		return fmt.Errorf("complete execution PHP inventory requires an explicit list and complete combined PHP inventory")
+	}
+	if p.ExecutionPHPVersions == nil {
+		return nil
+	}
+	required := make(map[string]bool, len(p.RequiredPHPVersions))
+	for _, version := range p.RequiredPHPVersions {
+		if !phpInventoryVersionRE.MatchString(version) {
+			return fmt.Errorf("invalid required PHP inventory version")
+		}
+		required[version] = true
+	}
+	seen := make(map[string]bool, len(p.ExecutionPHPVersions))
+	for _, version := range p.ExecutionPHPVersions {
+		if !phpInventoryVersionRE.MatchString(version) || seen[version] || !required[version] {
+			return fmt.Errorf("execution PHP inventory must contain unique valid versions within required PHP inventory")
+		}
+		seen[version] = true
+	}
+	return nil
 }
 
 type RestoreMode string
@@ -60,6 +105,12 @@ func CheckRestoreCompatibility(source Manifest, target PlatformProvenance, mode 
 			return nil
 		}
 		return fmt.Errorf("legacy archive has no platform provenance; same-platform recovery is limited to Ubuntu 24.04; cross-release recovery requires reviewed provenance reconstruction")
+	}
+	if err := validateExecutionPHPInventory(*s); err != nil {
+		return err
+	}
+	if err := validateExecutionPHPInventory(target); err != nil {
+		return err
 	}
 	if s.OSID != "ubuntu" || target.OSID != s.OSID {
 		return fmt.Errorf("restore OS mismatch: %q -> %q", s.OSID, target.OSID)
@@ -93,7 +144,23 @@ func CheckRestoreCompatibility(source Manifest, target PlatformProvenance, mode 
 			return fmt.Errorf("forward-migration requires a complete source PHP intent inventory")
 		}
 	}
-	for _, required := range s.RequiredPHPVersions {
+	requiredPHP := append([]string(nil), s.RequiredPHPVersions...)
+	if mode == RestoreSamePlatform {
+		knownSameProfile := s.Profile == target.Profile
+		for _, recorded := range []PlatformProvenance{*s, target} {
+			known := recorded.OSID == "ubuntu" &&
+				((recorded.VersionID == "24.04" && recorded.Codename == "noble" && recorded.Profile == "ubuntu-24.04" && recorded.InternalPHPVersion == "8.3") ||
+					(recorded.VersionID == "26.04" && recorded.Codename == "resolute" && (recorded.Profile == "ubuntu-26.04-native" || recorded.Profile == "ubuntu-26.04-sury") && recorded.InternalPHPVersion == "8.5"))
+			knownSameProfile = knownSameProfile && known
+		}
+		if bool(s.ExecutionPHPInventoryComplete) && knownSameProfile {
+			requiredPHP = append([]string(nil), s.ExecutionPHPVersions...)
+		}
+		// Same-profile recovery must retain every capability actually ready on
+		// the source, even if no site selected it at the time of the archive.
+		requiredPHP = append(requiredPHP, s.HostingPHPVersions...)
+	}
+	for _, required := range requiredPHP {
 		found := false
 		for _, installed := range target.HostingPHPVersions {
 			if installed == required {
@@ -150,22 +217,42 @@ func requireNotOlder(label, target, source string, parts int) error {
 	return nil
 }
 
+// Both projections share one database statement/snapshot. Never derive the
+// execution list by intersecting intent with readiness: a missing selected or
+// desired runtime must still block recovery.
 const requiredPHPIntentQuery = `WITH active_php_plans AS (
  SELECT default_php_version,php_allowlist,hosting_policy FROM plans
  WHERE lifecycle_status='active' AND hosting_enabled
- UNION ALL SELECT default_php_version,php_allowlist,hosting_policy FROM subscription_entitlements WHERE hosting_enabled
-)
-SELECT DISTINCT version FROM (
+ UNION ALL SELECT e.default_php_version,e.php_allowlist,e.hosting_policy
+ FROM subscription_entitlements e LEFT JOIN subscription_policy_overrides o ON o.subscription_id=e.subscription_id
+ WHERE e.hosting_enabled OR o.policy_patch#>'{permissions,hosting}'='true'::jsonb
+ UNION ALL SELECT ''::text,php_allowlist,hosting_policy FROM addon_plans WHERE is_active
+), offered_policies AS (
+ SELECT hosting_policy AS policy FROM active_php_plans
+ UNION ALL SELECT policy_patch FROM subscription_policy_overrides
+ UNION ALL SELECT policy_patch FROM site_policy_overrides
+), execution_php AS (
+ SELECT DISTINCT btrim(version) AS version FROM (
+  SELECT php_version AS version FROM sites
+  UNION SELECT desired_php_version FROM sites
+  UNION SELECT php_version FROM php_applications
+ ) execution_intent WHERE btrim(version) <> ''
+), offered_php AS (
  SELECT btrim(version) AS version FROM (
- SELECT php_version AS version FROM sites
- UNION SELECT desired_php_version FROM sites
- UNION SELECT php_version FROM php_applications
- UNION SELECT default_php_version FROM active_php_plans
- UNION SELECT regexp_split_to_table(php_allowlist,',') FROM active_php_plans
- UNION SELECT hosting_policy#>>'{php,default_version}' FROM active_php_plans
- UNION SELECT jsonb_array_elements_text(COALESCE(hosting_policy#>'{php,allowed_versions}','[]'::jsonb)) FROM active_php_plans
- ) current_intent
-) normalized WHERE version <> '' ORDER BY version`
+  SELECT default_php_version AS version FROM active_php_plans
+  UNION SELECT regexp_split_to_table(php_allowlist,',') FROM active_php_plans
+  UNION SELECT policy#>>'{php,default_version}' FROM offered_policies
+  UNION SELECT jsonb_array_elements_text(COALESCE(NULLIF(policy#>'{php,allowed_versions}','null'::jsonb),'[]'::jsonb)) FROM offered_policies
+ ) offered_intent WHERE btrim(version) <> ''
+), required_php AS (
+ SELECT version FROM execution_php UNION SELECT version FROM offered_php
+)
+SELECT json_build_object(
+ 'required', COALESCE((SELECT json_agg(version ORDER BY version) FROM required_php),'[]'::json),
+ 'execution', COALESCE((SELECT json_agg(version ORDER BY version) FROM execution_php),'[]'::json)
+)`
+
+var phpInventoryVersionRE = regexp.MustCompile(`^[0-9]+\.[0-9]+$`)
 
 var observedVersionRE = regexp.MustCompile(`(?:^|[^0-9])([0-9]+\.[0-9]+(?:\.[0-9]+)?)`)
 
@@ -299,20 +386,28 @@ func collectPlatform(ctx context.Context, dsn string, probe platformProbe) (Plat
 	}
 	// Hosted readiness is supplied by the trusted descriptor/extension/isolated
 	// FPM collector at the caller boundary; stray versioned binaries prove nothing.
-	// Include active/desired site versions and active plan offers: a suspended
-	// site, pending runtime or assignable plan is still tenant intent. Query failure makes migration provenance incomplete.
-	query := requiredPHPIntentQuery
-	out, e := probe.command(ctx, "runuser", "-u", "nakpanel", "--", "psql", "-Atq", dsn, "-c", query)
-	if e == nil {
-		p.PHPInventoryComplete = true
-		for _, v := range strings.Fields(string(out)) {
-			if matched, _ := regexp.MatchString(`^[0-9]+\.[0-9]+$`, v); !matched {
-				p.PHPInventoryComplete = false
-				break
-			}
-			p.RequiredPHPVersions = append(p.RequiredPHPVersions, v)
-		}
+	// Keep complete offer intent for forward migration and older readers while
+	// recording selected/current/desired execution intent independently.
+	out, e := probe.command(ctx, "runuser", "-u", "nakpanel", "--", "psql", "-Atq", dsn, "-c", requiredPHPIntentQuery)
+	if e != nil {
+		return p, fmt.Errorf("read complete PHP intent inventory failed")
 	}
+	var inventory struct {
+		Required  []string `json:"required"`
+		Execution []string `json:"execution"`
+	}
+	if json.Unmarshal(out, &inventory) != nil || inventory.Required == nil || inventory.Execution == nil {
+		return p, fmt.Errorf("invalid complete PHP intent inventory")
+	}
+	observed := p
+	observed.RequiredPHPVersions = inventory.Required
+	observed.ExecutionPHPVersions = inventory.Execution
+	observed.PHPInventoryComplete = true
+	observed.ExecutionPHPInventoryComplete = true
+	if err := validateExecutionPHPInventory(observed); err != nil {
+		return p, err
+	}
+	p = observed
 	p.ImageDigests = collectImageDigests(ctx, dsn, probe)
 	return p, nil
 }

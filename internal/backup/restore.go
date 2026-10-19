@@ -146,7 +146,7 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 		copyTarget := *target
 		copyTarget.HostingPHPVersions = ready
 		target = &copyTarget
-	} else if opts.Mode == RestoreForwardMigration || (manifest.Platform != nil && len(manifest.Platform.RequiredPHPVersions) > 0) {
+	} else if opts.Mode == RestoreForwardMigration || (manifest.Platform != nil && (len(manifest.Platform.RequiredPHPVersions) > 0 || len(manifest.Platform.ExecutionPHPVersions) > 0 || len(manifest.Platform.HostingPHPVersions) > 0)) {
 		return summary, errors.New("restore requires an authoritative ready PHP inventory collector")
 	}
 	if err := CheckRestoreCompatibility(manifest, *target, opts.Mode); err != nil {
