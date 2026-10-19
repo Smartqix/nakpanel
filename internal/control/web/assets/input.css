@@ -5484,9 +5484,10 @@
   .np-dns-policy-actions > span { align-items: center; color: var(--np-faint); display: flex; font-size: 11px; gap: 6px; margin-right: auto; }
   .np-dns-policy-actions .np-icon { height: 15px; width: 15px; }
   .np-dns-policy-actions button { width: auto; }
-  .np-dns-sync-toolbar { align-items: end; border: 1px solid var(--np-border-soft); border-radius: var(--np-radius); justify-content: flex-start; margin: 0 0 14px; padding: 12px; }
+  .np-dns-sync-toolbar { align-items: end; border: 1px solid var(--np-border-soft); border-radius: var(--np-radius); display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-start; margin: 0 0 14px; padding: 12px; }
   .np-dns-sync-toolbar label { display: grid; gap: 4px; min-width: 250px; }
-  .np-dns-sync-toolbar label.np-check { align-items: center; display: flex; min-width: 0; }
+  .np-dns-sync-toolbar label.np-check { align-items: center; display: flex; min-height: 40px; min-width: 0; }
+  .np-dns-sync-toolbar button { align-items: center; display: inline-flex; gap: 8px; justify-content: center; }
   .np-dns-preview { background: var(--np-surface-2); border: 1px solid var(--np-border); border-radius: var(--np-radius); margin: 14px 0; overflow: hidden; padding: 14px; }
   .np-dns-impact-summary { border: 1px solid var(--np-border-soft); border-radius: var(--np-radius); display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); margin: 0 0 12px; overflow: hidden; }
   .np-dns-impact-summary > div { background: var(--np-surface); border-right: 1px solid var(--np-border-soft); display: grid; gap: 2px; padding: 8px 12px; }
@@ -5521,7 +5522,7 @@
   .np-zone-summary strong { color: var(--np-ink-soft); font-size: 13px; overflow-wrap: anywhere; }
   .np-zone-summary small { color: var(--np-faint); font-size: 10px; text-transform: uppercase; }
   .np-domain-dns-preview { border-left: 0; border-radius: 0; border-right: 0; margin: 0; }
-  .np-dns-origin { background: var(--np-border-soft); border-radius: 999px; color: var(--np-muted); display: inline-flex; font-size: 10px; font-weight: 600; padding: 4px 8px; text-transform: uppercase; }
+  .np-dns-origin { background: var(--np-border-soft); border-radius: 999px; color: var(--np-muted); display: inline-flex; font-size: 10px; font-weight: 600; padding: 4px 8px; text-transform: uppercase; white-space: nowrap; }
   .np-dns-origin.is-template { background: #e8f2ff; color: var(--np-run); }
   .np-dns-origin.is-system { background: #e7f5ec; color: #257348; }
   .np-dns-origin.is-custom { background: #fff3dc; color: #8a5a0c; }
