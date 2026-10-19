@@ -98,6 +98,8 @@ function roundcube_canary(string|array $connection, string $mailbox, bool $seed)
             $query = $db->prepare("INSERT INTO users(username, mail_host, created, last_login, language, preferences) VALUES (:username, '127.0.0.1', $now, $now, 'en_US', '')");
             $query->execute([':username' => $mailbox]);
             $user = ['user_id' => $db->lastInsertId(), 'preferences' => ''];
+            $query = $db->prepare("INSERT INTO identities(user_id, changed, del, standard, name, email) VALUES (:id, $now, 0, 1, '', :email)");
+            $query->execute([':id' => (int)$user['user_id'], ':email' => $mailbox]);
         }
         if (!$user) throw new RuntimeException('restored Roundcube user is missing');
         $prefs = ($user['preferences'] ?? '') !== '' ? unserialize($user['preferences'], ['allowed_classes' => false]) : [];

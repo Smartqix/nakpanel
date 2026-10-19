@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+if (( BASH_VERSINFO[0] < 5 )); then
+  builtin printf '%s\n' 'Qualification requires GNU Bash 5 or newer.' \
+    'Install GNU Bash 5+ and invoke the qualification entry point using its explicit executable path.' >&2
+  builtin exit 1
+fi
+
 NAKPANEL_MULTIPASS_VM="${NAKPANEL_MULTIPASS_VM:-nakpanel-lab}"
 NAKPANEL_MULTIPASS_IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-24.04}"
 NAKPANEL_REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-}"

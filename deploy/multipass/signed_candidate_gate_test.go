@@ -92,6 +92,10 @@ multipass_exec_short(){ :; }
 			cmd := exec.CommandContext(ctx, "bash", filepath.Join(dir, script))
 			cmd.WaitDelay = time.Second
 			cmd.Env = append(os.Environ(), "NAKPANEL_SKIP_PRIOR_PHASES=1", "NAKPANEL_RELEASE_BUNDLE=/expected/signed/bundle")
+			if script == "internal-tools-verify.sh" {
+				// Local fixture validation deliberately precedes guest/artifact calls.
+				cmd.Env = append(cmd.Env, "NAKPANEL_INTERNAL_TOOLS_SITE_ID=1", "NAKPANEL_INTERNAL_TOOLS_MAILBOX=phase29@example.test")
+			}
 			out, err := cmd.CombinedOutput()
 			if err == nil || !strings.Contains(string(out), "expected signed bundle missing") || strings.Contains(string(out), "FORBIDDEN_INSTALL") {
 				t.Fatalf("gate reached mutation without expected artifact: %s %v", out, err)

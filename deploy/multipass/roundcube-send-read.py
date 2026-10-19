@@ -498,6 +498,111 @@ def _canonical_publish(path, value):
         os.unlink(temporary)
 
 
+_DIAGNOSTIC_RAW_ERRORS = frozenset((
+    "ambiguous-form", "compose-csrf", "compose-form", "compose-identity", "deadline",
+    "delivery-changed", "delivery-identity", "delivery-message-id", "delivery-self-recipient",
+    "duplicate-delivery", "http-page", "imap-authentication", "imap-candidates", "imap-headers",
+    "imap-inbox", "imap-refresh", "imap-search", "invalid-endpoint", "invalid-local-fixture",
+    "login-csrf", "preexisting-canary", "redirect-limit", "response-size", "roundcube-body-mismatch",
+    "roundcube-login", "send-not-confirmed", "send-result-uncertain", "transport-or-protocol", "unsafe-redirect",
+))
+_DIAGNOSTIC_CANONICAL_ERRORS = frozenset((
+    "canonical-actual-envelope-binding", "canonical-binding", "canonical-child-failed-no-replay",
+    "canonical-committed-byte-proof", "canonical-envelope-bytes", "canonical-execution-proof",
+    "canonical-fresh-output", "canonical-input-changed", "canonical-mailbox-fixture", "canonical-one-actual-flow",
+    "canonical-owned-case", "canonical-private-flow", "canonical-private-input", "canonical-readme-byte-proof",
+    "canonical-receipt-path", "canonical-runtime-commit", "canonical-selected-binaries",
+    "canonical-selected-manifest", "canonical-source-drift", "untrusted-proof-file", "supplement-output",
+    "supplement-binding", "supplement-manifest", "supplement-manifest-binaries", "installed-release-proof",
+    "installed-binary-proof", "supplement-raw-count", "supplement-raw-proof",
+))
+
+
+def _diagnostic_raw(case, old_flows):
+    """Read only one fresh private receipt; never copy arbitrary raw fields."""
+    result = dict(validation="absent", status=None, error_code=None, send_attempts=None)
+    if old_flows is None:
+        result["validation"] = "unknown"
+        return result
+    try:
+        flows = set(case.glob(".roundcube-flow.*")) - old_flows
+        if not flows:
+            return result
+        if len(flows) != 1:
+            raise ValueError("multiple flows")
+        flow = flows.pop()
+        info = flow.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+            raise ValueError("private flow")
+        # Open the directory itself without following a replacement symlink,
+        # then open its one receipt relative to that pinned directory.
+        directory = os.open(flow, os.O_RDONLY | os.O_NOFOLLOW | os.O_DIRECTORY)
+        try:
+            opened = os.fstat(directory)
+            if ((opened.st_dev, opened.st_ino) != (info.st_dev, info.st_ino)
+                    or opened.st_uid != os.getuid() or stat.S_IMODE(opened.st_mode) != 0o700):
+                raise ValueError("flow changed")
+            names = []
+            with os.scandir(directory) as entries:
+                for count, entry in enumerate(entries):
+                    if count >= 32:
+                        raise ValueError("flow entry limit")
+                    if re.fullmatch(r"roundcube-send-read-[A-Za-z0-9_-]+\.json", entry.name):
+                        names.append(entry.name)
+            if not names:
+                return result
+            if len(names) != 1:
+                raise ValueError("multiple receipts")
+            descriptor = os.open(names[0], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+            with os.fdopen(descriptor, "rb") as stream:
+                info = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                        or stat.S_IMODE(info.st_mode) != 0o600 or info.st_size > 16 * 1024):
+                    raise ValueError("private receipt")
+                data = stream.read(16 * 1024 + 1)
+                if len(data) > 16 * 1024:
+                    raise ValueError("receipt size")
+        finally:
+            os.close(directory)
+        raw = json.loads(data)
+        statuses = {"CREATED", "AUTHENTICATED", "SUBMITTING", "SEND_UNCERTAIN", "SENT", "DELIVERED", "PASS", "FAIL"}
+        if (not isinstance(raw, dict) or canonical_json(raw) != data or raw.get("schema") != "nakpanel-roundcube-send-read-v1"
+                or not isinstance(raw.get("status"), str) or raw["status"] not in statuses
+                or type(raw.get("success")) is not bool or type(raw.get("send_attempts")) is not int
+                or raw["send_attempts"] not in (0, 1)
+                or raw.get("qualifier_helper_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+                or raw.get("error") is not None and (not isinstance(raw["error"], str) or raw["error"] not in _DIAGNOSTIC_RAW_ERRORS)):
+            raise ValueError("raw projection")
+        return dict(validation="valid", status=raw["status"], error_code=raw.get("error"), send_attempts=raw["send_attempts"])
+    except (OSError, ValueError, TypeError):
+        result["validation"] = "invalid"
+        return result
+
+
+def _canonical_failure_diagnostic(case, old_flows, child, phase, error_code):
+    """Best-effort diagnosis only; it must never replace the original failure."""
+    if case is None:
+        return
+    try:
+        child = child or {}
+        actual = {name: child.get(name) if type(child.get(name)) is bool else None
+                  for name in ("timed_out", "interrupted", "unexpected_descendants", "owned_group_empty")}
+        actual["exit_code"] = child.get("exit_code") if type(child.get("exit_code")) is int else None
+        actual["termination_signal"] = child.get("termination_signal") if type(child.get("termination_signal")) is int else None
+        value = dict(schema="nakpanel-internal-tools-diagnostic-v1", diagnostic_only=True, success=False,
+                     phase=phase, error_code=error_code if error_code in _DIAGNOSTIC_CANONICAL_ERRORS else None,
+                     child=actual, raw=_diagnostic_raw(case, old_flows))
+        _canonical_publish(case / "internal-tools-diagnostic.json", value)
+    except BaseException:
+        # Diagnosis runs only while propagating an existing failure, after
+        # child custody has finished. Even failed/interrupted receipt I/O or
+        # an unavailable stderr must not replace that original exception.
+        try:
+            print("internal-tools diagnostic=unavailable", file=sys.stderr)
+        except BaseException:
+            pass
+
+
 def _canonical_source(source, manifest, environment):
     def git(*args):
         return subprocess.check_output(["git", "-C", str(source), *args], stderr=subprocess.DEVNULL, timeout=30)
@@ -607,6 +712,8 @@ def execute_canonical(source, manifest_path, case, bindings, *, environment=None
     This is provenance for a real gate subprocess, not all17 authorization.
     Failed/uncertain attempts remain owned evidence and are never replayed.
     """
+    diagnostic_case = old_flows = child_result = None
+    phase = "preflight"
     try:
         source, manifest_path, case = Path(source), Path(manifest_path), Path(case)
         environment = dict(os.environ if environment is None else environment)
@@ -624,6 +731,7 @@ def execute_canonical(source, manifest_path, case, bindings, *, environment=None
                 or not case.is_absolute() or case.resolve() != case or not case.is_dir()
                 or case.stat().st_uid != os.getuid() or stat.S_IMODE(case.stat().st_mode) != 0o700):
             raise QualificationError("canonical-owned-case")
+        diagnostic_case = case
         manifest_bytes = _canonical_read(manifest_path)
         manifest = json.loads(manifest_bytes)
         if (not isinstance(manifest, dict) or not re.fullmatch(r"[0-9a-f]{40}", manifest.get("commit", ""))
@@ -633,7 +741,9 @@ def execute_canonical(source, manifest_path, case, bindings, *, environment=None
         binaries = {name: manifest["files"].get("bin/" + name) for name in ("panel", "agent", "panelctl")}
         if not all(isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) for value in binaries.values()):
             raise QualificationError("canonical-selected-binaries")
+        phase = "source"
         before = _canonical_source(source, manifest, environment)
+        phase = "fixture"
         fixture_path = case / "phase29-fixtures.tsv"
         fixture_bytes = _canonical_read(fixture_path, private=True)
         fixture = fixture_bytes.decode("ascii").splitlines()
@@ -658,7 +768,9 @@ def execute_canonical(source, manifest_path, case, bindings, *, environment=None
         child_env.update({name: bindings[field] for field, name in env_names.items()})
         child_env["NAKPANEL_CELL_REPORT_DIR"] = str(case)
         started = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        phase = "child"
         child_result = _canonical_child(["bash", str(source / "deploy/multipass/internal-tools-verify.sh")], child_env, timeout)
+        phase = "validation"
         exit_code = child_result["exit_code"]
         finished = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         identity = {field: bindings[field] for field in ("source_vm", "run_token", "release", "architecture", "profile", "php_provider")}
@@ -697,9 +809,11 @@ def execute_canonical(source, manifest_path, case, bindings, *, environment=None
                          started_at=started, finished_at=finished)
         _canonical_publish(execution_path, execution)
         return execution
-    except QualificationError:
+    except QualificationError as error:
+        _canonical_failure_diagnostic(diagnostic_case, old_flows, child_result, phase, str(error))
         raise
     except (OSError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
+        _canonical_failure_diagnostic(diagnostic_case, old_flows, child_result, phase, "canonical-execution-proof")
         raise QualificationError("canonical-execution-proof") from None
 
 

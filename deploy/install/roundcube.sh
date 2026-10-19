@@ -60,7 +60,7 @@ nakpanel_install_roundcube() (
   python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/archive_policy.py" "${archive}" "roundcubemail-${NAKPANEL_ROUNDCUBE_VERSION}"
   tar -xzf "${archive}" --strip-components=1 --no-same-owner -C "${unpack}"
   rm -rf "${unpack}/installer"
-  install -d -o root -g root -m 0755 /opt/nakpanel/roundcube /usr/share
+  install -d -o root -g root -m 0755 /opt/nakpanel /opt/nakpanel/roundcube /usr/share
   install -d -o root -g www-data -m 0750 /etc/roundcube
   install -d -o www-data -g www-data -m 0750 /var/lib/roundcube /var/lib/roundcube/temp /var/log/roundcube
   if [[ ! -e "${target}" ]]; then
@@ -88,5 +88,5 @@ PHP
     chmod 0660 /var/lib/roundcube/roundcube.sqlite
   fi
   ln -sfn /etc/roundcube/config.inc.php "${target}/config/config.inc.php"
-  "/usr/bin/php${NAKPANEL_INTERNAL_PHP_VERSION}" -l "${target}/program/lib/Roundcube/bootstrap.php"
+  runuser -u www-data -- "/usr/bin/php${NAKPANEL_INTERNAL_PHP_VERSION}" -l "${target}/program/lib/Roundcube/bootstrap.php"
 )

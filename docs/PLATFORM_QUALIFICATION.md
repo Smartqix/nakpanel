@@ -37,12 +37,21 @@ untrusted pull-request code on runners holding production signing credentials.
 Only public verification keys are needed for this workflow.
 
 Install Multipass and grant the runner account access to its daemon. Provide
-Git, Bash, Python 3, OpenSSL, curl, dig, jq, tar, Make and the build dependencies
+Git, GNU Bash 5 or newer, Python 3, OpenSSL, curl, dig, jq, tar, Make and the build dependencies
 used by the verifier scripts. `actions/setup-go` installs the exact toolchain
 from `deploy/release/GO_VERSION`. Mail workspace qualification requires Node.js, Playwright and Chrome on the
 runner. Set `PLAYWRIGHT_MODULE` to an absolute module path when it is not
 resolvable as `playwright`; optional database-manager coverage uses the same
 browser dependency. The hosted workflow provisions pinned Playwright1.64.1.
+
+The `bash` resolved through the runner's `PATH` must be the qualified modern
+shell for the main verifier and its child scripts. macOS's bundled Bash 3.2 is
+unsupported: its `errexit` behavior can continue after a failed compound
+boolean assertion. `common.sh` rejects that shell before any guest operation,
+including when sourced through a conditional. On macOS, put an independently
+verified Bash 5 installation's `bin` directory first in `PATH`; changing the
+login shell or replacing `/bin/bash` is unnecessary. Ubuntu 24.04 and 26.04
+already provide supported shells.
 
 Allow approximately 20 GB of free RAM and 150 GB of free disk per active cell:
 a source guest, historical-upgrade guest and short-lived DR guest may coexist.

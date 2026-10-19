@@ -135,6 +135,13 @@ current manifests or any result incorrectly marked promotable. A capacity,
 package, registry, VM, feature or timeout failure remains a failed run, with
 its evidence available for diagnosis. Long-running soak remains separate.
 
+Internal-tools logs contain fixed stage markers. On failure, the bounded
+nonhidden `internal-tools-diagnostic.json` records the actual child exit and
+cleanup state, and a strictly validated protocol status/error/send count when
+available. Missing or invalid observations stay unknown. The diagnostic
+contains no credentials, session values or message bodies and never grants
+qualification. Private hidden raw evidence remains excluded from broad uploads.
+
 The Mail workspace gate covers real browser creation/editing/password rotation,
 alias delivery, SMTP TLS/STARTTLS and IMAP retrieval, unrelated-customer denial,
 and QA cleanup. It trusts the installed Stalwart certificate explicitly inside

@@ -33,6 +33,9 @@ install -d -o root -g root -m 0755 /etc/nakpanel
 install -d -o root -g root -m 0700 /etc/nakpanel/proftpd
 install -d -o root -g root -m 0700 /etc/nakpanel/ssh/authorized_keys
 install -d -o root -g root -m 0700 /etc/nakpanel/valkey
+# Name the shared parent explicitly: uutils install leaves implicit ancestors
+# at the caller's umask, which otherwise blocks nginx workers under 077.
+install -d -o root -g root -m 0755 /etc/nginx/nakpanel
 install -d -o root -g www-data -m 0710 /etc/nginx/nakpanel/protected
 install -d -o root -g root -m 0700 /var/lib/nakpanel/git
 install -d -o root -g root -m 0700 /var/lib/nakpanel/staging
@@ -68,7 +71,13 @@ install -d -o root -g root -m 0755 /var/log/nakpanel/applications
 install -d -o root -g root -m 0755 /var/log/nakpanel/tasks
 install -d -o root -g root -m 0755 /var/log/php-fpm
 install -d -o root -g root -m 0755 /var/log/proftpd
+install -d -o root -g root -m 0755 /var/cache/nginx
 install -d -o www-data -g www-data -m 0750 /var/cache/nginx/nakpanel
+
+# Check the actual worker's permissions without creating or reading data.
+runuser -u www-data -- test -x /etc/nginx/nakpanel/protected
+runuser -u www-data -- test -x /var/cache/nginx/nakpanel
+runuser -u www-data -- test -w /var/cache/nginx/nakpanel
 
 if [[ ! -f /etc/nakpanel/mysql-agent.cnf ]]; then
   cat >/etc/nakpanel/mysql-agent.cnf <<'EOF'

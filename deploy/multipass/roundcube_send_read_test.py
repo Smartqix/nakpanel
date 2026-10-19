@@ -154,6 +154,147 @@ def load_helper():
 
 
 class RoundcubeQualificationTest(unittest.TestCase):
+    def test_full_wrapper_boolean_guards_stop_before_later_operations_on_each_host_bash(self):
+        # The system Bash may be 3.2 on macOS; qualified Bash5 is selected by
+        # normal PATH. Test both real interpreters when they differ.
+        interpreters = list(dict.fromkeys(os.path.realpath(path) for path in [shutil.which("bash"), "/bin/bash"] if path and Path(path).is_file()))
+        cases = [("site", 1, 0, 0), ("mailbox", 1, 0, 0), ("domain", 1, 0, 0),
+                 ("file-site", 1, 0, 0), ("file-mailbox", 1, 0, 0), ("http", 1, 0, 0),
+                 ("pending", 1, 120, 0), ("active", 29, 1, 1)]
+        for interpreter in interpreters:
+            for mode, code, queries, flows in cases:
+                with self.subTest(bash=interpreter, mode=mode), tempfile.TemporaryDirectory() as folder:
+                    root = Path(folder)
+                    script = root / "internal-tools-verify.sh"
+                    script.write_bytes((HERE / script.name).read_bytes())
+                    (root / "common.sh").write_text('''NAKPANEL_MULTIPASS_VM=nakpanel-fixture123
+NAKPANEL_MULTIPASS_IMAGE=26.04
+assert_current_vm_identity(){ echo identity >>"$TRACE"; }
+assert_qualification_bundle_staged(){ echo staged >>"$TRACE"; }
+assert_qualification_installed_release(){ printf actual-private-proof; }
+csrf_token(){ printf private-token; }
+vm_ip(){ echo ip >>"$TRACE";echo 192.0.2.10; }
+multipass_exec_short(){
+ if [[ "$*" == *psql* ]];then
+  echo query >>"$TRACE"
+  if [[ "$MODE" == pending ]];then printf '';else printf active;fi
+ else printf public-cert;fi
+}
+''')
+                    programs = {
+                        "curl": '''#!/bin/bash
+set -eu
+output=''
+for ((i=1;i<=$#;i++));do if [[ "${!i}" == -o ]];then j=$((i+1));output="${!j}";fi;done
+if [[ "$*" == *"/login"* ]];then
+ echo login >>"$TRACE"
+ printf '<html data-np-role="admin"></html>' >"$output"
+else
+ echo configure >>"$TRACE"
+ printf private-response >"$output"
+ if [[ "$MODE" == http ]];then printf 500;else printf 303;fi
+fi
+''',
+                        "python3": '#!/bin/bash\necho flow >>"$TRACE"\nexit 29\n',
+                        "sleep": '#!/bin/bash\nexit 0\n',
+                    }
+                    for name, body in programs.items():
+                        path = root / name;path.write_text(body);path.chmod(0o700)
+                    env = dict(os.environ, PATH=str(root) + ":" + os.environ["PATH"], MODE=mode, TRACE=str(root / "trace"),
+                               NAKPANEL_RELEASE_BUNDLE=folder, NAKPANEL_RUN_TOKEN="fixture123", NAKPANEL_RELEASE_VERSION="29.0.0",
+                               NAKPANEL_INTERNAL_TOOLS_RECEIPT=str(root / "result.json"), NAKPANEL_VERIFY_DATABASE_MANAGER="0",
+                               NAKPANEL_INTERNAL_TOOLS_SITE_ID="not-an-id" if mode == "site" else "1",
+                               NAKPANEL_INTERNAL_TOOLS_MAILBOX="invalid-private-mailbox" if mode == "mailbox" else "phase29@invalid/private-domain" if mode == "domain" else MAILBOX)
+                    env.pop("NAKPANEL_CELL_REPORT_DIR", None)
+                    if mode.startswith("file-"):
+                        report = root / "report";report.mkdir(mode=0o700)
+                        (report / "phase29-fixtures.tsv").write_text(("invalid-site" if mode == "file-site" else "1") + "\t" + ("invalid-private-mailbox" if mode == "file-mailbox" else MAILBOX) + "\n")
+                        env["NAKPANEL_CELL_REPORT_DIR"] = str(report)
+                    result = subprocess.run([interpreter, str(script)], env=env, capture_output=True, text=True, timeout=10)
+                    calls = (root / "trace").read_text().splitlines() if (root / "trace").exists() else []
+                    self.assertEqual(result.returncode, code, result.stderr)
+                    self.assertEqual(calls.count("query"), queries)
+                    self.assertEqual(calls.count("flow"), flows)
+                    if mode in {"site", "mailbox", "domain", "file-site", "file-mailbox"}:self.assertEqual(calls, [], "malformed local fixture reached external operations")
+                    if mode == "http":self.assertNotIn("query", calls)
+                    self.assertNotIn("invalid-private-mailbox", result.stdout + result.stderr)
+
+    def test_wrapper_stage_markers_identify_failure_without_exposing_private_inputs(self):
+        cases = [("admin", "admin-login", 17), ("configure", "webmail-configure", 18),
+                 ("readiness", "webmail-readiness", 19), ("flow", "roundcube-flow", 23),
+                 ("enrich", "roundcube-enrich", 24), ("install", "database-manager-install", 25),
+                 ("browser", "database-manager-browser", 26), ("ready", "complete", 0)]
+        for mode, stage, code in cases:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                script = root / "internal-tools-verify.sh"
+                script.write_bytes((HERE / script.name).read_bytes())
+                (root / "common.sh").write_text('''NAKPANEL_MULTIPASS_VM=nakpanel-fixture123
+NAKPANEL_MULTIPASS_IMAGE=26.04
+assert_current_vm_identity(){ :; }
+assert_qualification_bundle_staged(){ :; }
+assert_qualification_installed_release(){ printf actual-private-proof; }
+csrf_token(){ printf PRIVATE_CSRF_SENTINEL; }
+vm_ip(){ echo 192.0.2.10; }
+multipass_exec_short(){
+ if [[ "$*" == *psql* ]];then
+  echo readiness >>"$TRACE"
+  if [[ "$MODE" == readiness ]];then return 19;else echo active;fi
+ else printf public-cert;fi
+}
+''')
+                programs = {
+                    "curl": '''#!/bin/bash
+set -eu
+output=''
+for ((i=1;i<=$#;i++));do if [[ "${!i}" == -o ]];then j=$((i+1));output="${!j}";fi;done
+if [[ "$*" == *"/login"* ]];then
+ echo admin >>"$TRACE"
+ [[ "$MODE" != admin ]] || exit 17
+ printf '<html data-np-role="admin">PRIVATE_RESPONSE_SENTINEL</html>' >"$output"
+else
+ echo configure >>"$TRACE"
+ printf PRIVATE_RESPONSE_SENTINEL >"$output"
+ if [[ "$MODE" == configure ]];then exit 18;else printf 303;fi
+fi
+''',
+                    "python3": '''#!/bin/bash
+set -eu
+if [[ "$2" == enrich ]];then
+ echo enrich >>"$TRACE";[[ "$MODE" != enrich ]] || exit 24
+else
+ echo flow >>"$TRACE";[[ "$MODE" != flow ]] || exit 23
+fi
+''',
+                    "multipass": '#!/bin/bash\ncat >/dev/null\necho install >>"$TRACE"\n[[ "$MODE" != install ]] || exit 25\n',
+                    "node": '#!/bin/bash\necho browser >>"$TRACE"\n[[ "$MODE" != browser ]] || exit 26\n',
+                    "sleep": '#!/bin/bash\nexit 0\n',
+                }
+                for name, body in programs.items():
+                    path = root / name
+                    path.write_text(body)
+                    path.chmod(0o700)
+                env = dict(os.environ, PATH=str(root) + ":" + os.environ["PATH"], MODE=mode,
+                           TRACE=str(root / "trace"), NAKPANEL_RELEASE_BUNDLE=folder, NAKPANEL_RUN_TOKEN="fixture123",
+                           NAKPANEL_INTERNAL_TOOLS_RECEIPT=str(root / "result.json"), NAKPANEL_RELEASE_VERSION="29.0.0",
+                           NAKPANEL_INTERNAL_TOOLS_SITE_ID="1", NAKPANEL_INTERNAL_TOOLS_MAILBOX=MAILBOX,
+                           NAKPANEL_INTERNAL_TOOLS_PASSWORD="PRIVATE_PASSWORD_SENTINEL", NAKPANEL_VERIFY_DATABASE_MANAGER="1",
+                           NAKPANEL_REMOTE_SRC=folder, NAKPANEL_MULTIPASS_ARCH="amd64",
+                           NAKPANEL_QUALIFICATION_PROFILE="ubuntu-26.04-native", NAKPANEL_QUALIFICATION_PHP_PROVIDER="native")
+                env.pop("NAKPANEL_CELL_REPORT_DIR", None)
+                result = subprocess.run(["bash", str(script)], env=env, capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, code, result.stderr + (root / "trace").read_text())
+                self.assertIn("internal-tools stage=" + stage + "\n", result.stdout)
+                self.assertIn("internal-tools exit=" + str(code) + " stage=" + stage, result.stdout)
+                for secret in ("PRIVATE_PASSWORD_SENTINEL", "PRIVATE_CSRF_SENTINEL", "PRIVATE_RESPONSE_SENTINEL", MAILBOX):
+                    self.assertNotIn(secret, result.stdout + result.stderr)
+                calls = (root / "trace").read_text().splitlines()
+                if mode in {"admin", "configure", "readiness"}:
+                    self.assertNotIn("flow", calls)
+                if mode not in {"install", "browser", "ready"}:
+                    self.assertNotIn("install", calls)
+                self.assertEqual(calls.count("flow"), int(mode not in {"admin", "configure", "readiness"}))
+
     def test_internal_tools_requires_workflow_after_login(self):
         text = (HERE / "internal-tools-verify.sh").read_text()
         block = text.split("# Login renders", 1)[1].split('\nif [[ "${NAKPANEL_VERIFY_DATABASE_MANAGER', 1)[0]
@@ -840,6 +981,26 @@ proof=('verified '+m['version']+' linux/'+m['architecture']+' '+m['commit']+'\n'
 for name in ['installed-before.txt','installed-after.txt']:
  p=flow/name;p.write_bytes(proof);p.chmod(0o600)
 raw=dict(schema='nakpanel-roundcube-send-read-v1',status='PASS',success=True,send_attempts=1,http_send_completed=True,self_recipient_verified=True,imap_arrival_verified=True,imap_message_id_verified=True,roundcube_body_verified=True,uid='41',message_id='<owned-test-server@example.test>',subject_sha256='1'*64,body_sha256='2'*64,recipient_sha256=hashlib.sha256(b'phase29@example.test').hexdigest(),qualifier_helper_sha256=hashlib.sha256(helper_path.read_bytes()).hexdigest(),certificate_sha256='3'*64)
+if v['mode'].startswith('diagnostic-'):
+ raw.update(status='FAIL',success=False,error='compose-identity',send_attempts=0,password='PRIVATE_PASSWORD_SENTINEL',message_id='PRIVATE_MESSAGE_SENTINEL')
+ if v['mode']=='diagnostic-error':raw['error']='PRIVATE_EXCEPTION_SENTINEL'
+ if v['mode']=='diagnostic-status':raw['status']='PRIVATE_STATUS_SENTINEL'
+ if v['mode']=='diagnostic-bool':raw['send_attempts']=True
+ if v['mode']=='diagnostic-string':raw['send_attempts']='0'
+ if v['mode']=='diagnostic-success':raw['success']=1
+ if v['mode']=='diagnostic-helper':raw['qualifier_helper_sha256']='0'*64
+ p=flow/'roundcube-send-read-owned.json';p.write_bytes(helper.canonical_json(raw));p.chmod(0o600)
+ if v['mode']=='diagnostic-public':p.chmod(0o644)
+ if v['mode']=='diagnostic-large':p.write_bytes(b' '*(16*1024+1))
+ if v['mode']=='diagnostic-json':p.write_text('{bad JSON')
+ if v['mode']=='diagnostic-duplicate':p.write_bytes(p.read_bytes().replace(b'"status":"FAIL"',b'"status":"PASS","status":"FAIL"'))
+ if v['mode']=='diagnostic-entries':
+  for i in range(33):(flow/('extra-'+str(i))).write_text('')
+ if v['mode']=='diagnostic-multiple':(flow/'roundcube-send-read-second.json').write_bytes(p.read_bytes())
+ if v['mode']=='diagnostic-link':
+  q=flow/'.private';p.rename(q);p.symlink_to(q)
+ if v['mode']=='diagnostic-fifo':p.unlink();os.mkfifo(p,0o600)
+ raise SystemExit(17)
 if v['mode']=='wrong-recipient':raw['recipient_sha256']='0'*64
 p=flow/'roundcube-send-read-owned.json';p.write_bytes(helper.canonical_json(raw));p.chmod(0o600)
 envelope=case/'roundcube-send-read.json'
@@ -889,6 +1050,137 @@ if v['mode'] in {'background','failure-background'}:
                 helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=5)
             self.assertEqual((case / "child-count").read_text().splitlines(), ["invoked"])
 
+    def test_failure_diagnostic_projects_actual_outcome_without_becoming_success_evidence(self):
+        helper = load_helper()
+        for mode, code, validation, status, attempts in [
+                ("early-exit", 17, "absent", None, None),
+                ("diagnostic-ready", 17, "valid", "FAIL", 0),
+                ("raw-uncertain", 0, "valid", "SEND_UNCERTAIN", 1),
+                ("dbmanager-failed", 17, "valid", "PASS", 1),
+                ("hang", -9, "absent", None, None)]:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
+                source, case, manifest, bindings, env, _ = self.fixture(folder, mode)
+                with self.assertRaises(helper.QualificationError):
+                    helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=0.2 if mode == "hang" else 5)
+                path = case / "internal-tools-diagnostic.json"
+                self.assertTrue(path.is_file(), "failed hosted gate omitted its nonhidden safe diagnostic")
+                diagnostic = json.loads(path.read_text())
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+                self.assertIs(diagnostic["diagnostic_only"], True)
+                self.assertIs(diagnostic["success"], False)
+                self.assertEqual(diagnostic["child"]["exit_code"], code)
+                self.assertIs(type(diagnostic["child"]["exit_code"]), int)
+                self.assertIs(diagnostic["child"]["owned_group_empty"], True)
+                self.assertEqual(diagnostic["raw"], dict(validation=validation, status=status,
+                                 error_code="compose-identity" if mode == "diagnostic-ready" else None, send_attempts=attempts))
+                for secret in ("PRIVATE_PASSWORD_SENTINEL", "PRIVATE_MESSAGE_SENTINEL", MAILBOX, "raw_receipt", "message_id"):
+                    self.assertNotIn(secret, path.read_text())
+                self.assertFalse((case / "roundcube-send-read.execution.json").exists())
+                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(helper.QualificationError):
+                    helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=5)
+                self.assertEqual((case / "child-count").read_text().splitlines(), ["invoked"])
+
+    def test_failure_diagnostic_refuses_unsafe_raw_files_types_and_unknown_error_text(self):
+        helper = load_helper()
+        for mode in ["error", "status", "bool", "string", "success", "helper", "public", "large", "json", "duplicate", "entries", "multiple", "link", "fifo"]:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
+                source, case, manifest, bindings, env, _ = self.fixture(folder, "diagnostic-" + mode)
+                with self.assertRaises(helper.QualificationError):
+                    helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=5)
+                path = case / "internal-tools-diagnostic.json"
+                self.assertTrue(path.is_file(), "unsafe raw evidence still needs a bounded unknown diagnostic")
+                diagnostic = json.loads(path.read_text())
+                self.assertEqual(diagnostic["child"]["exit_code"], 17)
+                self.assertEqual(diagnostic["raw"], dict(validation="invalid", status=None, error_code=None, send_attempts=None))
+                self.assertNotIn("PRIVATE_", path.read_text())
+                self.assertLess(len(path.read_bytes()), 4096)
+
+    def test_failure_diagnostic_rechecks_the_opened_flow_directory(self):
+        helper = load_helper()
+        with tempfile.TemporaryDirectory() as folder:
+            source, case, manifest, bindings, env, _ = self.fixture(folder, "diagnostic-ready")
+            original = helper.os.open
+            def changed(path, flags, *args, **kwargs):
+                if str(path).endswith("/.roundcube-flow.canonical"):
+                    Path(path).chmod(0o755)
+                return original(path, flags, *args, **kwargs)
+            with mock.patch.object(helper.os, "open", side_effect=changed), self.assertRaises(helper.QualificationError):
+                helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=5)
+            diagnostic = json.loads((case / "internal-tools-diagnostic.json").read_text())
+            self.assertEqual(diagnostic["raw"], dict(validation="invalid", status=None, error_code=None, send_attempts=None))
+
+    def test_prechild_diagnostics_keep_unknowns_null_and_never_write_to_untrusted_case(self):
+        helper = load_helper()
+        for mode in ["source-drift", "unknown-error", "unsafe-case"]:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
+                source, case, manifest, bindings, env, _ = self.fixture(folder)
+                if mode == "source-drift":(source / "README.md").write_text("unexpected source mutation")
+                if mode == "unsafe-case":case.chmod(0o755)
+                replacement = mock.patch.object(helper, "_canonical_source", side_effect=helper.QualificationError("PRIVATE_EXCEPTION_SENTINEL")) if mode == "unknown-error" else contextlib.nullcontext()
+                with replacement, self.assertRaises(helper.QualificationError):
+                    helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=5)
+                path = case / "internal-tools-diagnostic.json"
+                self.assertFalse((case / "child-count").exists())
+                if mode == "unsafe-case":
+                    self.assertFalse(path.exists())
+                else:
+                    diagnostic = json.loads(path.read_text())
+                    self.assertEqual(diagnostic["error_code"], "canonical-source-drift" if mode == "source-drift" else None)
+                    self.assertTrue(all(value is None for value in diagnostic["child"].values()))
+                    self.assertEqual(diagnostic["raw"], dict(validation="unknown", status=None, error_code=None, send_attempts=None))
+                    self.assertNotIn("PRIVATE_", path.read_text())
+
+    def test_diagnostic_publication_failure_preserves_original_exception_and_existing_bytes(self):
+        helper = load_helper()
+        class BrokenStderr(io.StringIO):
+            def write(self, _value):
+                raise OSError("PRIVATE_STDERR_SENTINEL")
+        for mode in ["existing", "write-failed", "interrupted-write", "stderr-failed"]:
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
+                source, case, manifest, bindings, env, _ = self.fixture(folder, "early-exit")
+                path = case / "internal-tools-diagnostic.json"
+                if mode == "existing":path.write_text("retained-original")
+                original = helper._canonical_publish
+                def publish(target, value):
+                    if Path(target) == path and mode == "interrupted-write":
+                        raise KeyboardInterrupt()
+                    if Path(target) == path and mode in {"write-failed", "stderr-failed"}:
+                        raise OSError("PRIVATE_EXCEPTION_SENTINEL")
+                    return original(target, value)
+                stderr = BrokenStderr() if mode == "stderr-failed" else io.StringIO()
+                error = None
+                with mock.patch.object(helper, "_canonical_publish", side_effect=publish), contextlib.redirect_stderr(stderr):
+                    try:
+                        helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=5)
+                    except BaseException as caught:
+                        error = caught
+                self.assertIsInstance(error, helper.QualificationError)
+                self.assertEqual(str(error), "canonical-child-failed-no-replay")
+                self.assertNotIn("PRIVATE_", stderr.getvalue())
+                if mode == "existing":self.assertEqual(path.read_text(), "retained-original")
+                else:self.assertFalse(path.exists())
+                self.assertEqual((case / "child-count").read_text().splitlines(), ["invoked"])
+
+    def test_diagnostic_child_types_are_strict_and_success_has_no_failure_summary(self):
+        helper = load_helper()
+        with tempfile.TemporaryDirectory() as folder:
+            source, case, manifest, bindings, env, _ = self.fixture(folder, "early-exit")
+            original = helper._canonical_child
+            def malformed(*args):
+                result = original(*args)
+                return dict(result, exit_code=True, timed_out=1, interrupted="false", unexpected_descendants=0,
+                            owned_group_empty="true", termination_signal=True)
+            with mock.patch.object(helper, "_canonical_child", side_effect=malformed):
+                with self.assertRaises(helper.QualificationError):
+                    helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=5)
+            diagnostic = json.loads((case / "internal-tools-diagnostic.json").read_text())
+            self.assertEqual(diagnostic["child"], dict(exit_code=None, timed_out=None, interrupted=None,
+                             unexpected_descendants=None, owned_group_empty=None, termination_signal=None))
+        with tempfile.TemporaryDirectory() as folder:
+            source, case, manifest, bindings, env, _ = self.fixture(folder)
+            helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=5)
+            self.assertFalse((case / "internal-tools-diagnostic.json").exists())
+
     def test_actual_child_failures_never_publish_or_replay(self):
         helper = load_helper()
         modes = ["early-exit", "dbmanager-failed", "failure-background", "hang", "interrupt", "missing-envelope", "raw-partial", "raw-uncertain", "helper-drift", "driver-drift", "readme-drift", "manifest-drift", "extra-flow", "wrong-envelope", "wrong-recipient", "noncanonical-envelope"]
@@ -904,7 +1196,7 @@ if v['mode'] in {'background','failure-background'}:
                 self.assertEqual(outcome["timed_out"], mode == "hang")
                 self.assertEqual(outcome["interrupted"], mode == "interrupt")
                 self.assertIs(outcome["owned_group_empty"], True)
-                with self.assertRaises(helper.QualificationError):
+                with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(helper.QualificationError):
                     helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=5)
                 self.assertEqual((case / "child-count").read_text().splitlines(), ["invoked"])
 

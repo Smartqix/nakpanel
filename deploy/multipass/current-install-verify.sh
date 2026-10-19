@@ -112,75 +112,64 @@ post(){
     echo "current-install: ${path} returned ${code}" >&2; exit 1
   fi
 }
-# The modern native gates need an explicit migrated-runtime/mail/database
-# baseline. Create it through product routes, not historical phase fixtures.
-find_native_mail_plan() {
-  local name_filter=""
-  if [[ -n "${1:-}" ]]; then name_filter="AND name='$1'"; fi
+# Fresh bootstrap mail fixtures own their plan and subscription. Never borrow
+# a seeded tenant snapshot: mail can be enabled while webmail is disabled.
+configure_bootstrap_mail_profile() {
+  [[ "${NAKPANEL_RUN_TOKEN:-}" =~ ^[A-Za-z0-9][A-Za-z0-9-]{5,63}$ ]] || { echo 'current-install: invalid fixture owner token' >&2; return 1; }
+  case "${NAKPANEL_QUALIFICATION_PROFILE}:${IMAGE}" in
+    ubuntu-26.04-native:26.04)
+      bootstrap_default_php=8.5; bootstrap_php_versions=8.5; bootstrap_php_json='["8.5"]'
+      [[ "${NAKPANEL_BASELINE_PHP}" == 8.5 ]] || return 1 ;;
+    ubuntu-24.04:24.04|ubuntu-26.04-sury:26.04)
+      bootstrap_default_php=8.4; bootstrap_php_versions=8.3,8.4,8.5; bootstrap_php_json='["8.3","8.4","8.5"]'
+      [[ "${NAKPANEL_BASELINE_PHP}" == 8.3 ]] || return 1 ;;
+    *) echo 'current-install: unsupported mail fixture profile' >&2; return 1 ;;
+  esac
+  bootstrap_plan_name="Qualification Mail ${NAKPANEL_RUN_TOKEN}"
+  bootstrap_subscription_name="Qualification Bootstrap ${NAKPANEL_RUN_TOKEN}"
+}
+find_bootstrap_mail_plan() {
   db "SELECT id FROM plans
-WHERE reseller_id IS NULL AND lifecycle_status='active' AND is_active AND hosting_enabled
-  AND default_php_version='8.5' AND php_allowlist='8.5'
+WHERE reseller_id IS NULL AND name='${bootstrap_plan_name}'
+  AND lifecycle_status='active' AND is_active AND hosting_enabled
+  AND last_validated_at IS NOT NULL AND readiness_error=''
+  AND default_php_version='${bootstrap_default_php}' AND php_allowlist='${bootstrap_php_versions}'
   AND max_mailboxes >= -1 AND max_mailboxes <> 0
-  AND hosting_policy#>>'{php,default_version}'='8.5'
-  AND hosting_policy#>'{php,allowed_versions}'='[\"8.5\"]'::jsonb
+  AND hosting_policy#>>'{php,default_version}'='${bootstrap_default_php}'
+  AND hosting_policy#>'{php,allowed_versions}'='${bootstrap_php_json}'::jsonb
   AND hosting_policy#>'{permissions,hosting}'='true'::jsonb
   AND hosting_policy#>'{permissions,mail}'='true'::jsonb
   AND hosting_policy#>'{mail,enabled}'='true'::jsonb
+  AND hosting_policy#>'{mail,webmail}'='true'::jsonb
   AND jsonb_typeof(hosting_policy#>'{resources,max_mailboxes}')='number'
   AND COALESCE((hosting_policy#>>'{resources,max_mailboxes}')::integer,0) >= -1
   AND COALESCE((hosting_policy#>>'{resources,max_mailboxes}')::integer,0) <> 0
   AND jsonb_typeof(hosting_policy#>'{mail,mailbox_quota_mb}')='number'
   AND COALESCE((hosting_policy#>>'{mail,mailbox_quota_mb}')::integer,0) >= -1
-  AND COALESCE((hosting_policy#>>'{mail,mailbox_quota_mb}')::integer,0) <> 0
-  ${name_filter}
-ORDER BY id LIMIT 1"
+  AND COALESCE((hosting_policy#>>'{mail,mailbox_quota_mb}')::integer,0) <> 0"
 }
-select_or_create_native_mail_plan() {
-  local selected plan_name
-  selected="$(find_native_mail_plan)" || return 1
-  if [[ -z "${selected}" ]]; then
-    [[ "${NAKPANEL_RUN_TOKEN:-}" =~ ^[A-Za-z0-9][A-Za-z0-9-]{5,63}$ ]] || { echo 'current-install: invalid fixture owner token' >&2; return 1; }
-    plan_name="Qualification Native Mail ${NAKPANEL_RUN_TOKEN}"
-    # Seeded product plans deliberately have no mail quota. Create one owned
-    # qualification row through the same editor route used by an operator.
-    # Never rewrite built-in plan defaults, immutable revisions or snapshots.
-    [[ "$(db "SELECT count(*) FROM plans WHERE reseller_id IS NULL AND name='${plan_name}'")" == 0 ]] || { echo 'current-install: ineligible owned fixture plan already exists' >&2; return 1; }
-    post plans -d plan_id=0 -d "name=${plan_name}" -d 'description=Owned native mail recovery qualification fixture' \
-      -d lifecycle_status=active -d change_reason=NativeMailQualification \
-      -d disk_mb=5120 -d bandwidth_mb=10240 -d max_sites=4 -d max_databases=4 \
-      -d max_mailboxes=4 -d mailbox_quota_mb=64 -d allow_mail=true -d mail_webmail_enabled=true \
-      -d max_backups=8 -d backup_storage_mb=5120 -d backup_retention_days=7 -d site_disk_quota_mb=5120 \
-      -d max_subdomains=2 -d max_domain_aliases=2 -d php_max_children=3 -d php_memory_mb=256 \
-      -d php_allowlist=8.5 -d php_versions=8.5 -d default_php_version=8.5 \
-      -d hosting_enabled=true -d allow_dns=true -d allow_tls=true -d allow_backups=true \
-      -d overuse_policy=block -d validity_days=365 || return 1
-    selected="$(find_native_mail_plan "${plan_name}")" || return 1
-  fi
-  [[ "${selected}" =~ ^[1-9][0-9]*$ ]] || { echo 'current-install: no eligible native PHP 8.5 mail fixture plan' >&2; return 1; }
-  printf '%s\n' "${selected}"
-}
-assert_native_mail_fixture() {
-  [[ "${NAKPANEL_QUALIFICATION_PROFILE}" == ubuntu-26.04-native ]] || return 0
+assert_bootstrap_mail_fixture() {
   local site_filter="" eligible
-  [[ "${subscription_id}" =~ ^[1-9][0-9]*$ ]] || return 1
+  [[ "${subscription_id:-}" =~ ^[1-9][0-9]*$ && "${plan_id:-}" =~ ^[1-9][0-9]*$ && "${customer_id:-}" =~ ^[1-9][0-9]*$ ]] || return 1
   if [[ -n "${site_id:-}" ]]; then
     [[ "${site_id}" =~ ^[1-9][0-9]*$ ]] || return 1
-    site_filter="AND EXISTS(SELECT 1 FROM sites site WHERE site.id=${site_id} AND site.subscription_id=subscription.id AND site.domain='current-bootstrap.test' AND site.status='active' AND site.desired_status='active' AND site.php_version='8.5' AND site.desired_php_version='8.5') AND NOT EXISTS(SELECT 1 FROM site_policy_overrides WHERE site_id=${site_id})"
+    site_filter="AND EXISTS(SELECT 1 FROM sites site WHERE site.id=${site_id} AND site.subscription_id=subscription.id AND site.domain='current-bootstrap.test' AND site.status='active' AND site.desired_status='active' AND site.php_version='${NAKPANEL_BASELINE_PHP}' AND site.desired_php_version='${NAKPANEL_BASELINE_PHP}' AND site.settings_status='in_sync' AND site.removal_state='none') AND NOT EXISTS(SELECT 1 FROM site_policy_overrides WHERE site_id=${site_id})"
   fi
-  # These fresh fixtures have no policy overrides: the checked synced snapshot
-  # is therefore the effective subscription/site policy, rather than a guess
-  # from the plan name or scalar mailbox count alone.
+  # With no overrides, the freshly synced snapshot is the effective policy.
+  # Check its exact source revision as well as all three mail permission bits.
   eligible="$(db "SELECT count(*) FROM subscriptions subscription
-JOIN customers customer ON customer.id=subscription.customer_id AND customer.email='admin@nakpanel.test' AND customer.status='active'
-JOIN subscription_entitlements entitlement ON entitlement.subscription_id=subscription.id
-WHERE subscription.id=${subscription_id} AND subscription.status='active' AND subscription.sync_status='in_sync'
-  AND entitlement.hosting_enabled AND entitlement.default_php_version='8.5' AND entitlement.php_allowlist='8.5'
+JOIN customers customer ON customer.id=subscription.customer_id AND customer.id=${customer_id} AND customer.email='admin@nakpanel.test' AND customer.status='active' AND customer.reseller_id IS NULL
+JOIN plans plan ON plan.id=subscription.plan_id AND plan.id=${plan_id} AND plan.name='${bootstrap_plan_name}' AND plan.reseller_id IS NULL AND plan.lifecycle_status='active' AND plan.is_active AND plan.last_validated_at IS NOT NULL AND plan.readiness_error=''
+JOIN subscription_entitlements entitlement ON entitlement.subscription_id=subscription.id AND entitlement.source_revision=plan.revision AND entitlement.plan_name=plan.name
+WHERE subscription.id=${subscription_id} AND subscription.name='${bootstrap_subscription_name}' AND subscription.status='active' AND subscription.sync_status='in_sync' AND subscription.plan_mode='synced'
+  AND entitlement.hosting_enabled AND entitlement.default_php_version='${bootstrap_default_php}' AND entitlement.php_allowlist='${bootstrap_php_versions}'
   AND entitlement.max_mailboxes >= -1 AND entitlement.max_mailboxes <> 0
-  AND entitlement.hosting_policy#>>'{php,default_version}'='8.5'
-  AND entitlement.hosting_policy#>'{php,allowed_versions}'='[\"8.5\"]'::jsonb
+  AND entitlement.hosting_policy#>>'{php,default_version}'='${bootstrap_default_php}'
+  AND entitlement.hosting_policy#>'{php,allowed_versions}'='${bootstrap_php_json}'::jsonb
   AND entitlement.hosting_policy#>'{permissions,hosting}'='true'::jsonb
   AND entitlement.hosting_policy#>'{permissions,mail}'='true'::jsonb
   AND entitlement.hosting_policy#>'{mail,enabled}'='true'::jsonb
+  AND entitlement.hosting_policy#>'{mail,webmail}'='true'::jsonb
   AND jsonb_typeof(entitlement.hosting_policy#>'{resources,max_mailboxes}')='number'
   AND COALESCE((entitlement.hosting_policy#>>'{resources,max_mailboxes}')::integer,0) >= -1
   AND COALESCE((entitlement.hosting_policy#>>'{resources,max_mailboxes}')::integer,0) <> 0
@@ -189,31 +178,49 @@ WHERE subscription.id=${subscription_id} AND subscription.status='active' AND su
   AND COALESCE((entitlement.hosting_policy#>>'{mail,mailbox_quota_mb}')::integer,0) <> 0
   AND NOT EXISTS(SELECT 1 FROM subscription_policy_overrides WHERE subscription_id=subscription.id)
   ${site_filter}")" || return 1
-  [[ "${eligible}" == 1 ]] || { echo 'current-install: native fixture effective PHP/mail entitlement is unavailable' >&2; return 1; }
+  [[ "${eligible}" == 1 ]] || { echo 'current-install: owned fixture effective PHP/mail/webmail entitlement is unavailable' >&2; return 1; }
 }
-subscription_id="$(db "SELECT s.id FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE c.email='admin@nakpanel.test' AND s.status='active' ORDER BY s.id LIMIT 1")"
-if [[ -z "${subscription_id}" && "${IMAGE}" == 26.04 ]]; then
-  if [[ "${NAKPANEL_QUALIFICATION_PROFILE}" == ubuntu-26.04-native ]]; then
-    plan_id="$(select_or_create_native_mail_plan)"
-  else
-    plan_id="$(db "SELECT id FROM plans WHERE reseller_id IS NULL AND lifecycle_status='active' AND default_php_version='8.5' AND php_allowlist='8.5' ORDER BY id LIMIT 1")"
-  fi
-  customer_id="$(db "SELECT id FROM customers WHERE email='admin@nakpanel.test' AND reseller_id IS NULL ORDER BY id LIMIT 1")"
-  [[ "${plan_id}" =~ ^[0-9]+$ && "${customer_id}" =~ ^[0-9]+$ ]]
-  post subscriptions -d customer_mode=existing -d "customer_id=${customer_id}" -d "plan_id=${plan_id}" -d subscription_name=NativeBootstrap
-  subscription_id="$(db "SELECT id FROM subscriptions WHERE customer_id=${customer_id} AND name='NativeBootstrap'")"
-  wait_for "SELECT sync_status FROM subscriptions WHERE id=${subscription_id}" in_sync
-fi
-[[ "${subscription_id}" =~ ^[0-9]+$ ]]
-assert_native_mail_fixture
-site_id="$(db "SELECT id FROM sites WHERE domain='current-bootstrap.test'")"
-if [[ -z "${site_id}" ]]; then
-  post sites -d "subscription_id=${subscription_id}" -d domain=current-bootstrap.test -d php_version=${NAKPANEL_BASELINE_PHP} -d issue_certificate=false
-  site_id="$(db "SELECT id FROM sites WHERE domain='current-bootstrap.test'")"
-fi
-[[ "${site_id}" =~ ^[0-9]+$ ]]
-wait_for "SELECT status||':'||php_version FROM sites WHERE id=${site_id}" active:${NAKPANEL_BASELINE_PHP}
-assert_native_mail_fixture
+setup_bootstrap_mail_fixture() {
+  configure_bootstrap_mail_profile || return 1
+  local count version query
+  local -a php_args=() bootstrap_versions=()
+  # This is fresh-run setup, not adoption or repair of a partial earlier run.
+  # Refuse all collisions before the first normal product API call.
+  customer_id="$(db "SELECT id FROM customers WHERE email='admin@nakpanel.test' AND reseller_id IS NULL AND status='active'")" || return 1
+  [[ "${customer_id}" =~ ^[1-9][0-9]*$ ]] || return 1
+  for query in \
+    "SELECT count(*) FROM plans WHERE name='${bootstrap_plan_name}'" \
+    "SELECT count(*) FROM subscriptions WHERE name='${bootstrap_subscription_name}'" \
+    "SELECT count(*) FROM sites WHERE domain='current-bootstrap.test'"; do
+    count="$(db "${query}")" || return 1
+    [[ "${count}" == 0 ]] || { echo 'current-install: owned fixture row or bootstrap domain already exists; refusing reuse' >&2; return 1; }
+  done
+  IFS=, read -r -a bootstrap_versions <<<"${bootstrap_php_versions}"
+  for version in "${bootstrap_versions[@]}"; do php_args+=(-d "php_versions=${version}"); done
+  post plans -d plan_id=0 -d "name=${bootstrap_plan_name}" -d 'description=Owned mail recovery qualification fixture' \
+    -d lifecycle_status=active -d change_reason=MailQualification \
+    -d disk_mb=5120 -d bandwidth_mb=10240 -d max_sites=4 -d max_databases=4 \
+    -d max_mailboxes=4 -d mailbox_quota_mb=64 -d allow_mail=true -d mail_webmail_enabled=true \
+    -d max_backups=8 -d backup_storage_mb=5120 -d backup_retention_days=7 -d site_disk_quota_mb=5120 \
+    -d max_subdomains=2 -d max_domain_aliases=2 -d php_max_children=3 -d php_memory_mb=256 \
+    -d "php_allowlist=${bootstrap_php_versions}" "${php_args[@]}" -d "default_php_version=${bootstrap_default_php}" \
+    -d hosting_enabled=true -d allow_dns=true -d allow_tls=true -d allow_backups=true \
+    -d overuse_policy=block -d validity_days=365 || return 1
+  plan_id="$(find_bootstrap_mail_plan)" || return 1
+  [[ "${plan_id}" =~ ^[1-9][0-9]*$ ]] || { echo 'current-install: owned plan is not ready with the required PHP/mail/webmail contract' >&2; return 1; }
+  post subscriptions -d customer_mode=existing -d "customer_id=${customer_id}" -d "plan_id=${plan_id}" -d "subscription_name=${bootstrap_subscription_name}" || return 1
+  subscription_id="$(db "SELECT id FROM subscriptions WHERE customer_id=${customer_id} AND plan_id=${plan_id} AND name='${bootstrap_subscription_name}'")" || return 1
+  [[ "${subscription_id}" =~ ^[1-9][0-9]*$ ]] || return 1
+  wait_for "SELECT sync_status FROM subscriptions WHERE id=${subscription_id}" in_sync || return 1
+  site_id=''
+  assert_bootstrap_mail_fixture || return 1
+  post sites -d "subscription_id=${subscription_id}" -d domain=current-bootstrap.test -d php_version=${NAKPANEL_BASELINE_PHP} -d issue_certificate=false || return 1
+  site_id="$(db "SELECT id FROM sites WHERE domain='current-bootstrap.test'")" || return 1
+  [[ "${site_id}" =~ ^[1-9][0-9]*$ ]] || return 1
+  wait_for "SELECT status||':'||php_version||':'||desired_php_version||':'||settings_status||':'||removal_state FROM sites WHERE id=${site_id}" "active:${NAKPANEL_BASELINE_PHP}:${NAKPANEL_BASELINE_PHP}:in_sync:none" || return 1
+  assert_bootstrap_mail_fixture
+}
+setup_bootstrap_mail_fixture || exit 1
 if [[ "$(db "SELECT count(*) FROM dns_zones WHERE site_id=${site_id}")" == 0 ]]; then
   post dns -d domain=current-bootstrap.test -d "address=${VM_IP}" -d "site_id=${site_id}"
 fi
