@@ -275,7 +275,7 @@ func loadSubscriptionComplianceUsage(ctx context.Context, q queryRower, subscrip
     COALESCE((SELECT COUNT(*) FROM mailboxes mailbox JOIN mail_domains domain ON domain.id=mailbox.mail_domain_id WHERE domain.subscription_id=$1 AND NOT domain.delete_requested),0)::int,
     COALESCE(usage.disk_bytes,0)::bigint,
     COALESCE(usage.traffic_bytes,0)::bigint,
-    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id=$1 AND status='active'),0)::bigint,
+    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id=$1),0)::bigint,
     COALESCE(usage.is_complete,false)
 FROM (SELECT $1::bigint AS subscription_id) selected
 LEFT JOIN subscription_usage_current usage ON usage.subscription_id=selected.subscription_id`, subscriptionID).Scan(

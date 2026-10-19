@@ -26,6 +26,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<link rel="stylesheet" href="/assets/git.css"/>
 			<link rel="stylesheet" href="/assets/domains.css"/>
 			<link rel="stylesheet" href="/assets/mail.css"/>
+			<link rel="stylesheet" href="/assets/backups.css"/>
 		</head>
 		<body class={ domainWorkspaceClass(view) } data-np-role={ string(user.Role) }
 			if workspaceRequiresDocument(view) {
@@ -60,6 +61,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			}
 			@confirmationDialog()
 			<dialog class="np-dialog np-site-removal-dialog" id="np-site-removal-dialog" data-np-dialog></dialog>
+			<dialog class="np-dialog np-backup-dialog" id="np-backup-removal-dialog" aria-labelledby="np-backup-removal-title" data-np-dialog></dialog>
 			<dialog class="np-dialog np-mail-dialog np-mail-connect-dialog" id="np-mail-connect-dialog" aria-labelledby="np-mail-connect-title" data-np-dialog></dialog>
 			<script defer src="/assets/interaction.js"></script>
 			<script defer src="/assets/navigation.js"></script>
@@ -71,6 +73,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<script defer src="/assets/app.js"></script>
 			<script defer src="/assets/git.js"></script>
 			<script defer src="/assets/site-removal.js"></script>
+			<script defer src="/assets/backups.js"></script>
 			<script defer src="/assets/plan-sync.js"></script>
 			<script defer src="/assets/mail-import.js"></script>
 			<script defer src="/assets/mail.js"></script>
@@ -257,6 +260,10 @@ templ routedContent(user auth.SessionUser, data dashboard.Data, actions Dashboar
 		case "site-removal":
 			if view.SiteRemoval!=nil {
 				@SiteRemovalPreviewPage(view,*view.SiteRemoval)
+			}
+		case "backup-removal":
+			if view.BackupRemoval!=nil {
+				<section class="np-panel np-backup-confirmation">@BackupRemovalContent(view,*view.BackupRemoval)</section>
 			}
 		case "site-removal-progress":
 			if view.SiteRemoval!=nil {
@@ -2367,12 +2374,14 @@ templ routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Works
 templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actions DashboardActions, view WorkspaceView) {
 	if subscription, ok := subscriptionByID(data.Subscriptions, view.DetailID); ok {
 		@subscriptionObjectHead(user, subscription, data, actions, view)
-		<div class="np-detail-split" data-np-nav-scope-body>
+		<div class={ templ.KV("np-detail-split",view.Tab!="backups") } data-np-nav-scope-body>
 			<div class="np-detail-main">
 				if data.ServiceLoadError != "" {
 					<p class="np-gate is-blocked" role="alert">Some hosting service data is unavailable. Resource lists and counts may be incomplete. Refresh the page or contact your provider.</p>
 				}
-				@subscriptionAttention(user, subscription, data, view)
+				if view.Tab!="backups" {
+					@subscriptionAttention(user, subscription, data, view)
+				}
 				if view.Tab == "resources" {
 					if user.Role == auth.RoleClient || view.SupportCustomerID > 0 {
 						@subscriptionClientLimits(subscription, data)
@@ -2390,7 +2399,7 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 				} else if view.Tab == "applications" {
 					@subscriptionApplicationsPanel(subscription, data, view)
 				} else if view.Tab == "backups" {
-					@subscriptionBackupsPanel(subscription, data, view)
+					@backupManagerPanel(subscription, data, view)
 				} else if view.Tab == "activity" {
 					@subscriptionActivityPanel(subscription, data, view)
 				} else {
@@ -2398,7 +2407,9 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 					@subscriptionRecentPanel(subscription, data, view)
 				}
 			</div>
-			@subscriptionPropertiesRail(user, subscription, data, view)
+			if view.Tab!="backups" {
+				@subscriptionPropertiesRail(user, subscription, data, view)
+			}
 		</div>
 	} else {
 		<p class="np-empty">Subscription not found.</p>
@@ -2445,7 +2456,7 @@ templ subscriptionObjectHead(user auth.SessionUser, subscription types.Subscript
 				</p>
 			</div>
 			<div class="np-object-head-actions">
-				if provider {
+				if provider && view.Tab!="backups" {
 					<a class="np-secondary-button" href={ subscriptionTabPath(view, subscription.ID, "resources") }>Change plan</a>
 					if subscription.SyncMode != "custom" {
 						<form method="post" action={ templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync") }>
@@ -2454,7 +2465,7 @@ templ subscriptionObjectHead(user auth.SessionUser, subscription types.Subscript
 						</form>
 					}
 				}
-				if actions.CanCreateSite {
+				if actions.CanCreateSite && view.Tab!="backups" {
 					<a class="np-primary-link" href={ templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")) }
 						if view.Route != "site-new" {
 							data-np-dialog-open="site-dialog"

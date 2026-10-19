@@ -1,5 +1,25 @@
 # nakpanel Recovery
 
+## Website Backup Manager
+
+Open a subscription's **Backups** tab to create, download, restore, or remove
+website recovery points, including backups retained after website removal.
+Removal requires selecting the exact recovery points, reviewing their domain,
+date and total size, and explicitly acknowledging permanent deletion.
+Preview and Cancel never change a backup.
+
+Website backup count and storage allowances apply to the entire subscription.
+Queued or failed archive deletion continues to consume storage until the archive
+is removed successfully. Existing recovery points are not automatically purged
+to satisfy a count limit or retention age. The plan's retention age is advisory;
+operators must review and confirm website backup removal. Server disaster-recovery
+backup destinations retain their separately configured retention policy.
+
+If removal fails, review its error and confirm a fresh removal request. Legacy
+unconfirmed deletion jobs are canceled. Maintenance recovers orphaned removal
+states to **Removal failed** without deleting their archives. A backup in use by
+an active restore, backup creation, or website-removal operation cannot be removed.
+
 ## Individual Website Removal
 
 See [Domain Removal](DOMAIN_REMOVAL.md) for durable progress, same-scope retry

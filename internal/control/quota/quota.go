@@ -560,7 +560,7 @@ func (s *SQLStore) GetUsage(ctx context.Context, userID int64) (Usage, error) {
     COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = $1 AND parent_site_id IS NOT NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS subdomains,
     COALESCE((SELECT COUNT(*) FROM databases WHERE owner_user_id = $1 AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE owner_user_id = $1 AND status <> 'failed'), 0)::int AS backups,
-    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = $1 AND status = 'active'), 0)::bigint AS backup_storage_bytes`, userID).Scan(
+    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = $1), 0)::bigint AS backup_storage_bytes`, userID).Scan(
 		&usage.UserID,
 		&usage.Sites,
 		&usage.Domains,
@@ -583,7 +583,7 @@ func (s *SQLStore) GetUsageForSubscription(ctx context.Context, subscriptionID i
     COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = $1 AND parent_site_id IS NOT NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS subdomains,
     COALESCE((SELECT COUNT(*) FROM databases WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE subscription_id = $1 AND status <> 'failed'), 0)::int AS backups,
-    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id = $1 AND status = 'active'), 0)::bigint AS backup_storage_bytes`, subscriptionID).Scan(
+    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id = $1), 0)::bigint AS backup_storage_bytes`, subscriptionID).Scan(
 		&usage.SubscriptionID,
 		&usage.Sites,
 		&usage.Domains,
@@ -693,7 +693,7 @@ const accountQuotaSummarySQL = `SELECT u.id, u.email, u.role,
     COALESCE((SELECT COUNT(*) FROM sites WHERE owner_user_id = u.id AND parent_site_id IS NOT NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int AS subdomains,
     COALESCE((SELECT COUNT(*) FROM databases WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS databases,
     COALESCE((SELECT COUNT(*) FROM backups WHERE owner_user_id = u.id AND status <> 'failed'), 0)::int AS backups,
-    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = u.id AND status = 'active'), 0)::bigint AS backup_storage_bytes
+    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE owner_user_id = u.id), 0)::bigint AS backup_storage_bytes
 FROM users u
 LEFT JOIN subscriptions s ON s.customer_user_id = u.id AND s.status = 'active'
 LEFT JOIN subscription_entitlements e ON e.subscription_id = s.id`

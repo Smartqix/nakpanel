@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -63,6 +64,60 @@ func TestMaintenanceArgsUseIsolatedQueue(t *testing.T) {
 	}
 }
 
+func TestAutomaticPruningPreservesExistingRecoveryPoints(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	service := NewService(db, nil, &deleteAgent{})
+	for _, siteID := range []int64{0, 7} {
+		mock.ExpectExec(`UPDATE backups backup SET status='delete_failed'`).WithArgs(siteID).WillReturnResult(sqlmock.NewResult(0, 0))
+		if err := service.enqueuePrunes(context.Background(), siteID); err != nil {
+			t.Fatalf("automatic pruning must leave recovery points untouched: %v", err)
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLegacyUnconfirmedDeleteJobCannotReachArchive(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	agent := &deleteAgent{}
+	mock.ExpectExec(`UPDATE backups SET status='delete_failed'`).WithArgs(int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
+	err = NewDeleteBackupWorker(NewService(db, nil, agent)).Work(context.Background(), &river.Job[DeleteBackupArgs]{Args: DeleteBackupArgs{BackupID: 7}})
+	if err == nil || !strings.Contains(err.Error(), "confirmation") || len(agent.calls) != 0 {
+		t.Fatalf("legacy job must fail closed before archive access: %v, calls=%v", err, agent.calls)
+	}
+}
+
+func TestForgedBackupDeletionApprovalCannotReachArchive(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	agent := &deleteAgent{}
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT subscription_id FROM backups").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"subscription_id"}).AddRow(int64(3)))
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT provisioning_state").WithArgs(int64(3)).WillReturnRows(sqlmock.NewRows([]string{"provisioning_state"}))
+	mock.ExpectQuery("SELECT backup.archive_path").WithArgs(int64(7), int64(123)).WillReturnRows(sqlmock.NewRows([]string{"archive_path", "customer_id", "subscription_id", "actor_user_id"}))
+	mock.ExpectRollback()
+	err = NewDeleteBackupWorker(NewService(db, nil, agent)).Work(context.Background(), &river.Job[DeleteBackupArgs]{Args: DeleteBackupArgs{BackupID: 7, ApprovalID: 123}})
+	if err == nil || len(agent.calls) != 0 {
+		t.Fatalf("unproven approval reached deletion: %v %v", err, agent.calls)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDeleteBackupUsesTrackedRowPath(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -71,13 +126,15 @@ func TestDeleteBackupUsesTrackedRowPath(t *testing.T) {
 	defer db.Close()
 	agent := &deleteAgent{response: types.Response{OK: true, Data: json.RawMessage(`{"deleted":true}`)}}
 	service := NewService(db, nil, agent)
-	mock.ExpectQuery("SELECT id FROM users").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(99)))
-	mock.ExpectQuery("UPDATE backups backup SET status='deleting'").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"archive_path", "customer_id", "subscription_id"}).AddRow("/var/lib/nakpanel/backups/site.tar.gz", int64(2), int64(3)))
 	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT subscription_id FROM backups").WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"subscription_id"}).AddRow(int64(3)))
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT provisioning_state").WithArgs(int64(3)).WillReturnRows(sqlmock.NewRows([]string{"provisioning_state"}))
+	mock.ExpectQuery("SELECT backup.archive_path").WithArgs(int64(7), int64(11)).WillReturnRows(sqlmock.NewRows([]string{"archive_path", "customer_id", "subscription_id", "actor_user_id"}).AddRow("/var/lib/nakpanel/backups/site.tar.gz", int64(2), int64(3), int64(99)))
 	mock.ExpectExec("DELETE FROM backups").WithArgs(int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("INSERT INTO audit_events").WithArgs(int64(99), int64(2), int64(3), "backup.deleted", "backup", int64(7), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
-	if err = service.deleteBackup(context.Background(), 7); err != nil {
+	if err = service.deleteBackup(context.Background(), 7, 11); err != nil {
 		t.Fatalf("deleteBackup error: %v", err)
 	}
 	if len(agent.calls) != 1 || agent.calls[0].ArchivePath != "/var/lib/nakpanel/backups/site.tar.gz" {
@@ -96,9 +153,10 @@ func TestDeleteBackupCannotReachAgentWithoutTrackedRow(t *testing.T) {
 	defer db.Close()
 	agent := &deleteAgent{}
 	service := NewService(db, nil, agent)
-	mock.ExpectQuery("SELECT id FROM users").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(99)))
-	mock.ExpectQuery("UPDATE backups backup SET status='deleting'").WithArgs(int64(404)).WillReturnRows(sqlmock.NewRows([]string{"archive_path", "customer_id", "subscription_id"}))
-	if err = service.deleteBackup(context.Background(), 404); err != nil {
+	mock.ExpectBegin()
+	mock.ExpectQuery("SELECT subscription_id FROM backups").WithArgs(int64(404)).WillReturnRows(sqlmock.NewRows([]string{"subscription_id"}))
+	mock.ExpectRollback()
+	if err = service.deleteBackup(context.Background(), 404, 11); err != nil {
 		t.Fatalf("deleteBackup error: %v", err)
 	}
 	if len(agent.calls) != 0 {

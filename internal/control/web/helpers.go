@@ -57,6 +57,9 @@ type WorkspaceView struct {
 	InstantNavDisabled   bool
 	Fragment             bool
 	SiteRemoval          *SiteRemovalView
+	BackupRemoval        *BackupRemovalView
+	BackupPage           int
+	BackupHasMore        bool
 	Route                string
 	Title                string
 	SiteCreateError      string
@@ -2533,9 +2536,9 @@ func statusPillClass(state string) string {
 		return "ok"
 	case "pending", "queued", "scheduled":
 		return "pend"
-	case "running", "provisioning", "restoring", "preparing", "validating", "activating":
+	case "running", "provisioning", "restoring", "preparing", "validating", "activating", "removing", "deleting":
 		return "run"
-	case "failed", "discarded", "error", "over_limit", "capability_blocked", "blocked":
+	case "failed", "discarded", "error", "over_limit", "capability_blocked", "blocked", "delete_failed", "removal failed":
 		return "fail"
 	default:
 		return "susp"

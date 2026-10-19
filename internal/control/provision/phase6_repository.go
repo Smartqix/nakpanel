@@ -1192,10 +1192,24 @@ func retainCapturedReconcileIntent(args ReconcileSystemArgs, sites []types.Recon
 
 func (s *SQLPhase6StatusStore) MarkBackupActive(ctx context.Context, id int64, result types.CreateBackupResult, databaseNames []string) error {
 	databaseNames = normalizedDatabaseNames(databaseNames)
-	_, err := s.db.ExecContext(ctx, `UPDATE backups SET status='active',archive_path=$2,size_bytes=$3,
-checksum_sha256=$4,database_names=$5,last_error='',updated_at=now() WHERE id=$1`,
+	updated, err := s.db.ExecContext(ctx, `UPDATE backups SET status='active',archive_path=$2,size_bytes=$3,
+checksum_sha256=$4,database_names=$5,last_error='',updated_at=now() WHERE id=$1 AND status IN('pending','failed','active')`,
 		id, result.ArchivePath, result.SizeBytes, result.SHA256, pq.Array(databaseNames))
-	return err
+	if err != nil {
+		return err
+	}
+	if n, e := updated.RowsAffected(); e != nil {
+		return e
+	} else if n != 1 {
+		return errors.New("backup creation intent changed before completion")
+	}
+	return nil
+}
+
+func (s *SQLPhase6StatusStore) BackupJobAllowed(ctx context.Context, id int64) (bool, error) {
+	var allowed bool
+	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM backups WHERE id=$1 AND status IN('pending','failed'))`, id).Scan(&allowed)
+	return allowed, err
 }
 
 func normalizedDatabaseNames(databaseNames []string) []string {
@@ -1215,7 +1229,7 @@ func normalizedDatabaseNames(databaseNames []string) []string {
 }
 
 func (s *SQLPhase6StatusStore) MarkBackupFailed(ctx context.Context, id int64, message string) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE backups SET status = 'failed', last_error = $2, updated_at = now() WHERE id = $1`, id, message)
+	_, err := s.db.ExecContext(ctx, `UPDATE backups SET status = 'failed', last_error = $2, updated_at = now() WHERE id = $1 AND status IN('pending','failed')`, id, message)
 	return err
 }
 

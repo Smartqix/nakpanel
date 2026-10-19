@@ -774,7 +774,7 @@ const subscriptionSummarySQL = `SELECT
     COALESCE((SELECT COUNT(*) FROM sites WHERE subscription_id = s.id AND parent_site_id IS NOT NULL AND (status <> 'failed' OR removal_state<>'none')), 0)::int,
     COALESCE((SELECT COUNT(*) FROM databases WHERE subscription_id = s.id AND status <> 'failed'), 0)::int,
     COALESCE((SELECT COUNT(*) FROM backups WHERE subscription_id = s.id AND status <> 'failed'), 0)::int,
-    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id = s.id AND status = 'active'), 0)::bigint,
+    COALESCE((SELECT SUM(size_bytes) FROM backups WHERE subscription_id = s.id), 0)::bigint,
     s.created_at,
     s.updated_at,
     COALESCE(c.reseller_id, 0),

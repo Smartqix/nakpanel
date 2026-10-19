@@ -177,6 +177,17 @@ func NewCreateBackupWorker(agent AgentBackupClient, store Phase6StatusStore, rep
 }
 
 func (w *CreateBackupWorker) Work(ctx context.Context, job *river.Job[CreateBackupArgs]) error {
+	if gate, ok := w.store.(interface {
+		BackupJobAllowed(context.Context, int64) (bool, error)
+	}); ok {
+		allowed, err := gate.BackupJobAllowed(ctx, job.Args.BackupID)
+		if err != nil {
+			return err
+		}
+		if !allowed {
+			return river.JobCancel(errors.New("backup creation intent is no longer current"))
+		}
+	}
 	if w.agent == nil {
 		return errors.New("agent backup client is not configured")
 	}
@@ -288,7 +299,9 @@ type ConfigureWebmailWorker struct {
 
 func (w *ConfigureWebmailWorker) SetDNSServiceReconciler(reconciler interface {
 	ReconcileSiteDNS(context.Context, int64) error
-}) { w.dns = reconciler }
+}) {
+	w.dns = reconciler
+}
 
 func NewConfigureWebmailWorker(agent AgentWebmailClient, store Phase6StatusStore) *ConfigureWebmailWorker {
 	return &ConfigureWebmailWorker{agent: agent, store: store}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 
 	"github.com/riverqueue/river/rivertype"
 )
@@ -97,7 +98,30 @@ func (s *SQLJobRetryStore) RetryDiscardedProvisioningJob(ctx context.Context, id
 		return errors.New("job retry database is not configured")
 	}
 
-	result, err := s.db.ExecContext(ctx, retryDiscardedProvisioningJobSQL, id)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	var kind string
+	var backupID int64
+	if err = tx.QueryRowContext(ctx, `SELECT kind,COALESCE(NULLIF(args->>'backup_id','')::bigint,0) FROM river_job WHERE id=$1`, id).Scan(&kind, &backupID); err != nil {
+		return err
+	}
+	if kind == "create_backup" {
+		var subscriptionID int64
+		if err = tx.QueryRowContext(ctx, `SELECT subscription_id FROM backups WHERE id=$1`, backupID).Scan(&subscriptionID); err != nil {
+			return ErrJobNotRetryable
+		}
+		if err = controlquota.LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+			return err
+		}
+		var status string
+		if err = tx.QueryRowContext(ctx, `SELECT status FROM backups WHERE id=$1 FOR UPDATE`, backupID).Scan(&status); err != nil || (status != "pending" && status != "failed") {
+			return ErrJobNotRetryable
+		}
+	}
+	result, err := tx.ExecContext(ctx, retryDiscardedProvisioningJobSQL, id)
 	if err != nil {
 		return err
 	}
@@ -108,7 +132,7 @@ func (s *SQLJobRetryStore) RetryDiscardedProvisioningJob(ctx context.Context, id
 	if rowsAffected != 1 {
 		return fmt.Errorf("%w: state changed before retry", ErrJobNotRetryable)
 	}
-	return nil
+	return tx.Commit()
 }
 
 func isProvisioningJobKind(kind string) bool {
