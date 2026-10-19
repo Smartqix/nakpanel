@@ -57,7 +57,9 @@
  .np-backup-table td:first-child{grid-row:1/5;align-self:start}
  .np-backup-table td[data-label="Size"],.np-backup-table td[data-label="Status"],.np-backup-table td[data-label="Actions"]{grid-column:2}
  .np-backup-row-actions{justify-content:flex-start;flex-wrap:wrap;margin-top:6px}
- .np-backup-row-actions .np-icon-button,.np-backup-row-actions button,.np-backup-retained summary{min-width:44px;min-height:44px}
+ .np-backup-manager .np-backup-row-actions .np-icon-button,.np-backup-manager .np-backup-row-actions button,.np-backup-manager .np-backup-retained summary{min-width:44px;min-height:44px}
+ .np-backup-manager .np-panel-title button,.np-backup-manager .np-backup-toolbar button,.np-backup-dialog .np-dialog-foot button,.np-backup-dialog .np-dialog-foot a{min-height:44px}
+ .np-backup-dialog .np-dialog-head>button[data-np-dialog-close]{width:44px;height:44px;min-height:44px}
  .np-backup-table .np-backup-check-target{width:44px;height:44px}
  .np-backup-table input[type=checkbox]{width:22px;height:22px;min-height:22px;min-width:22px}
  .np-backup-preservation{padding:12px;align-items:flex-start}
