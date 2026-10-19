@@ -205,6 +205,60 @@ m.run_canonical([sys.executable,'-c',child,sys.argv[2]],pathlib.Path(sys.argv[3]
             with (root/'README.md').open('a') as f:f.write('unreviewed\n')
             with self.assertRaises(ValueError):m.source_map(root,['owned.py'],'123')
 
+    def test_normal_python_cli_keeps_clean_committed_source_and_rejects_foreign_cache(self):
+        m=self.module()
+        import shutil
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);checkout=root/'checkout';checkout.mkdir()
+            for relative in m.FROZEN | {'README.md','.gitignore'}:
+                target=checkout/relative;target.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copyfile(m.SOURCE/relative,target)
+            subprocess.run(['git','init','-q',str(checkout)],check=True)
+            subprocess.run(['git','-C',str(checkout),'add','.'],check=True)
+            subprocess.run(['git','-C',str(checkout),'-c','user.name=test','-c','user.email=test@example.test',
+                            'commit','-qm','committed CLI fixture'],check=True)
+            fakebin=root/'bin';fakebin.mkdir();marker=root/'canonical-started';evidence=root/'evidence'
+            driver=root/'canonical.py'
+            driver.write_text('import json,os,pathlib\n'
+                'root=pathlib.Path(os.environ["NAKPANEL_CELL_REPORT_DIR"]);root.mkdir()\n'
+                '(root/"report.json").write_text(os.environ["TEST_CANONICAL_REPORT"])\n'
+                'pathlib.Path(os.environ["TEST_CANONICAL_MARKER"]).write_text("owned fixture only")\n')
+            bash=fakebin/'bash'
+            bash.write_text('#!/bin/sh\nexec "$TEST_CANONICAL_PYTHON" "$TEST_CANONICAL_DRIVER" "$@"\n')
+            bash.chmod(0o755)
+            report=self.report();env=os.environ.copy()
+            for name in ('PYTHONDONTWRITEBYTECODE','PYTHONPYCACHEPREFIX'):env.pop(name,None)
+            env.update(PATH=str(fakebin)+os.pathsep+env['PATH'],GITHUB_RUN_ID='123456',
+                NAKPANEL_MULTIPASS_VM=report['source_vm'],NAKPANEL_RUN_TOKEN=report['run_token'],
+                NAKPANEL_CELL_REPORT_DIR=str(evidence),TEST_CANONICAL_REPORT=json.dumps(report),
+                TEST_CANONICAL_MARKER=str(marker),TEST_CANONICAL_PYTHON=sys.executable,
+                TEST_CANONICAL_DRIVER=str(driver))
+            status=lambda:subprocess.run(['git','-C',str(checkout),'status','--porcelain',
+                '--untracked-files=all'],capture_output=True,text=True,check=True).stdout
+            self.assertEqual(status(),'')
+            receipt=root/'execution.json'
+            # No -B or bytecode-disable environment: use Linux's ordinary local
+            # cache location even on Apple's Python with its global cache default.
+            argv=[sys.executable,'-X','pycache_prefix=',str(checkout/'deploy/multipass/sury-maintenance-prepare.py'),
+                  'qualify','--execution-receipt',str(receipt)]
+            result=subprocess.run(argv,env=env,capture_output=True,text=True)
+            self.assertEqual(result.returncode,0,result.stderr+'\n'+status())
+            self.assertTrue(marker.exists(),'actual canonical subprocess boundary was not reached')
+            proof=json.loads(receipt.read_text())
+            self.assertEqual(proof['status'],'PASS')
+            self.assertIs(proof['process_exited'],True)
+            self.assertIs(proof['process_group_empty'],True)
+            self.assertEqual(status(),'','normal CLI must not dirty its frozen source')
+            marker.unlink()
+            foreign=checkout/'deploy/multipass/__pycache__/foreign.pyc'
+            foreign.parent.mkdir();foreign.write_bytes(b'unreviewed cache file')
+            refused=root/'refused.json';argv[-1]=str(refused)
+            result=subprocess.run(argv,env=env,capture_output=True,text=True)
+            self.assertNotEqual(result.returncode,0)
+            self.assertFalse(marker.exists(),'unreviewed source launched the canonical subprocess')
+            self.assertFalse(refused.exists())
+            self.assertIn('foreign.pyc',status(),'strict source cleanliness must not ignore caches')
+
     def test_capacity_uses_actual_source_disk_and_rejects_before_quiesce(self):
         m=self.module()
         proof=m.check_capacity(32*2**30,35*2**30)

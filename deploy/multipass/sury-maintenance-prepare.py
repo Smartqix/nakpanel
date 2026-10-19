@@ -20,6 +20,9 @@ import sys
 import time
 import urllib.request
 
+# Keep ordinary CLI execution from creating local helper caches before the
+# strict committed-source check. Unreviewed cache files remain disallowed.
+sys.dont_write_bytecode = True
 HERE = Path(__file__).resolve().parent
 SOURCE = HERE.parents[1]
 _spec = importlib.util.spec_from_file_location('maintenance_contract', HERE/'sury-maintenance-drill.py')

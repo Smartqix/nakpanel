@@ -425,7 +425,12 @@ ek="$(cli api-key create --name sec-expire-${STAMP} --cidrs '0.0.0.0/0' --rate-l
 code="$(curl -sk -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${ek}" "https://${VM_IP}:7443/api/v1/ping")"
 [[ "${code}" == 401 ]] && ok "expired key → 401" || fail "expired key returned ${code}"
 # IP allowlist: a key whose CIDR excludes the caller → 403.
-ipk="$(cli api-key create --name sec-ip-${STAMP} --cidrs '10.99.0.0/16' --rate-limit 60 | grep '^npk_' | tail -1)"
+# TEST-NET-1 (RFC 5737) cannot include a private Multipass guest or bridge.
+# Keep a successful-key control on the same endpoint and actual peer; never
+# impersonate a client address through forwarding headers.
+code="$(curl -sk -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${API_KEY}" "https://${VM_IP}:7443/api/v1/ping")"
+[[ "${code}" == 200 ]] && ok "normal key from the actual peer → 200" || fail "IP allowlist control did not allow: ${code}"
+ipk="$(cli api-key create --name sec-ip-${STAMP} --cidrs '192.0.2.1/32' --rate-limit 60 | grep '^npk_' | tail -1)"
 code="$(curl -sk -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${ipk}" "https://${VM_IP}:7443/api/v1/ping")"
 [[ "${code}" == 403 ]] && ok "request from a disallowed IP → 403" || fail "IP allowlist did not deny: ${code}"
 # Cross-surface scope: an API key cannot drive UI/session routes; a session

@@ -447,25 +447,159 @@ fi
     def test_imap_oracle_rejects_wrong_recipient_and_ambiguous_server_headers(self):
         helper = load_helper()
         good = b"Subject: own-subject\r\nMessage-ID: <server41@example.test>\r\nTo: phase29@example.test\r\nFrom: phase29@example.test\r\n\r\n"
-        for mode in ["wrong-to", "wrong-from", "duplicate-to", "wrong-subject", "duplicate-message-id", "missing-message-id", "duplicate-uid", "zero-uid"]:
+        for mode in ["wrong-to", "wrong-from", "duplicate-to", "duplicate-message-id", "missing-message-id", "duplicate-uid", "zero-uid"]:
             with self.subTest(mode=mode):
                 headers = good
                 if mode == "wrong-to": headers = good.replace(b"To: phase29@example.test", b"To: outside@external.invalid")
                 if mode == "wrong-from": headers = good.replace(b"From: phase29@example.test", b"From: outside@external.invalid")
                 if mode == "duplicate-to": headers = good.replace(b"To: phase29@example.test", b"To: phase29@example.test, outside@external.invalid")
-                if mode == "wrong-subject": headers = good.replace(b"own-subject", b"old-subject")
                 if mode == "duplicate-message-id": headers = good.replace(b"Message-ID:", b"Message-ID: <other@example.test>\r\nMessage-ID:")
                 if mode == "missing-message-id": headers = good.replace(b"Message-ID: <server41@example.test>\r\n", b"")
                 client = mock.Mock()
                 client.login.return_value = ("OK", [])
                 client.select.return_value = ("OK", [])
-                identifiers = b"41 42" if mode == "duplicate-uid" else b"0" if mode == "zero-uid" else b"41"
+                identifiers = b"41 41" if mode == "duplicate-uid" else b"0" if mode == "zero-uid" else b"41"
                 client.uid.side_effect = [("OK", [identifiers]), ("OK", [(b"headers", headers)])]
                 with mock.patch.object(helper.ssl, "create_default_context", return_value=mock.Mock()), mock.patch.object(helper.imaplib, "IMAP4_SSL", return_value=client):
                     inbox = helper.Inbox("192.0.2.10", MAILBOX, PASSWORD, Path("owned-stalwart.pem"), lambda: 5)
                     with self.assertRaises(helper.QualificationError):
                         inbox.find("own-subject")
                     inbox.close()
+
+    def imap_candidates(self, identifiers, messages, remaining=lambda: 5):
+        helper = load_helper()
+        client = mock.Mock()
+        client.login.return_value = ("OK", [])
+        client.select.return_value = ("OK", [])
+        client.fetches = []
+        def uid(command, *args):
+            if command == "SEARCH":
+                return "OK", [identifiers]
+            self.assertEqual(command, "FETCH")
+            self.assertEqual(args[1], "(BODY.PEEK[HEADER.FIELDS (SUBJECT MESSAGE-ID TO FROM)])")
+            client.fetches.append(args[0])
+            return "OK", [(b"headers", messages[args[0]])]
+        client.uid.side_effect = uid
+        with mock.patch.object(helper.ssl, "create_default_context", return_value=mock.Mock()), mock.patch.object(helper.imaplib, "IMAP4_SSL", return_value=client):
+            inbox = helper.Inbox("192.0.2.10", MAILBOX, PASSWORD, Path("owned-stalwart.pem"), remaining)
+        self.addCleanup(inbox.close)
+        return inbox, client
+
+    def test_imap_search_candidates_require_exact_subject_before_delivery_identity(self):
+        # Actual candidate12 Stalwart response shape: a new shared-prefix
+        # subject found UID1, whose historical Subject differed and whose
+        # Message-ID/To/From were all absent. It is not our delivery.
+        unrelated = b"Subject: Nakpanel Roundcube historical fixture\r\n\r\n"
+        exact = b"Subject: own-subject\r\nMessage-ID: <server41@example.test>\r\nTo: phase29@example.test\r\nFrom: phase29@example.test\r\n\r\n"
+        for identifiers in [b"1", b"1 41", b"41 1", b""]:
+            with self.subTest(identifiers=identifiers):
+                inbox, client = self.imap_candidates(identifiers, {"1": unrelated, "41": exact})
+                found = inbox.find("own-subject")
+                if b"41" in identifiers.split():
+                    self.assertEqual(found, {"uid": "41", "subject": "own-subject", "message_id": "<server41@example.test>", "self_recipient_verified": True})
+                else:
+                    self.assertIsNone(found)
+                self.assertEqual(client.fetches, [value.decode() for value in identifiers.split()])
+
+    def test_imap_candidate_bounds_and_exact_identity_fail_closed(self):
+        helper = load_helper()
+        good = b"Subject: own-subject\r\nMessage-ID: <server41@example.test>\r\nTo: phase29@example.test\r\nFrom: phase29@example.test\r\n\r\n"
+        unrelated = b"Subject: older-subject\r\n\r\n"
+        bad_headers = {
+            "duplicate-exact": (b"1 41 42", {"1": unrelated, "41": good, "42": good}),
+            "matching-missing-id": (b"1 41", {"1": unrelated, "41": good.replace(b"Message-ID: <server41@example.test>\r\n", b"")}),
+            "matching-wrong-to": (b"1 41", {"1": unrelated, "41": good.replace(b"To: phase29@example.test", b"To: other@example.test")}),
+            "matching-wrong-from": (b"1 41", {"1": unrelated, "41": good.replace(b"From: phase29@example.test", b"From: other@example.test")}),
+            "matching-duplicate-to": (b"41", {"41": good.replace(b"To:", b"To: phase29@example.test\r\nTo:")}),
+            "matching-duplicate-from": (b"41", {"41": good.replace(b"From:", b"From: phase29@example.test\r\nFrom:")}),
+            "unrelated-duplicate-subject": (b"1", {"1": unrelated.replace(b"Subject:", b"Subject: another\r\nSubject:")}),
+            "unrelated-missing-subject": (b"1", {"1": b"Message-ID: <older@example.test>\r\n\r\n"}),
+            "malformed-headers": (b"1", {"1": b"not a header\r\nSubject: older-subject\r\n\r\n"}),
+            "oversized-headers": (b"1", {"1": b"Subject: " + b"x" * 65536 + b"\r\n\r\n"}),
+        }
+        bad_uids = [b"1 1", b"0", b"-1", b"x", b"01", b"4294967296", b"9999999999999999999999999999999", b" ".join(str(i).encode() for i in range(1, 66))]
+        for mode, (identifiers, messages) in list(bad_headers.items()) + [("uids-" + str(i), (ids, {})) for i, ids in enumerate(bad_uids)]:
+            with self.subTest(mode=mode):
+                inbox, client = self.imap_candidates(identifiers, messages)
+                with self.assertRaises(helper.QualificationError):
+                    inbox.find("own-subject")
+                if mode.startswith("uids-"):
+                    self.assertEqual(client.fetches, [], "invalid/overflow UID inventory must fail before fetching")
+        inbox, client = self.imap_candidates(b" ".join(str(i).encode() for i in range(1, 65)), {str(i): unrelated for i in range(1, 65)})
+        self.assertIsNone(inbox.find("own-subject"))
+        self.assertEqual(len(client.fetches), 64)
+
+    def test_imap_candidate_fetches_share_existing_deadline(self):
+        helper = load_helper()
+        clock = [5]
+        def remaining():
+            if clock[0] <= 0:
+                raise helper.QualificationError("deadline")
+            return clock[0]
+        inbox, client = self.imap_candidates(b"1 2", {"1": b"Subject: old\r\n\r\n"}, remaining)
+        fetch = client.uid.side_effect
+        def expire(command, *args):
+            result = fetch(command, *args)
+            if command == "FETCH":
+                clock[0] = 0
+            return result
+        client.uid.side_effect = expire
+        with self.assertRaisesRegex(helper.QualificationError, "deadline"):
+            inbox.find("own-subject")
+        self.assertEqual(client.fetches, ["1"])
+
+    def test_imap_candidates_reject_malformed_subject_and_search_envelopes(self):
+        helper = load_helper()
+        for malformed in [b"Subject: old\x00subject\r\n\r\n", b"Subject: old\x7fsubject\r\n\r\n"]:
+            with self.subTest(headers=malformed):
+                inbox, _ = self.imap_candidates(b"1", {"1": malformed})
+                with self.assertRaises(helper.QualificationError):
+                    inbox.find("own-subject")
+        for response in [("NO", [b""]), ("OK", []), ("OK", [None]), ("OK", [b"", b"1"])]:
+            with self.subTest(response=response):
+                inbox, client = self.imap_candidates(b"", {})
+                client.uid.side_effect = None
+                client.uid.return_value = response
+                with self.assertRaisesRegex(helper.QualificationError, "imap-search"):
+                    inbox.find("own-subject")
+        good = b"Subject: own-subject\r\nMessage-ID: <max@example.test>\r\nTo: phase29@example.test\r\nFrom: phase29@example.test\r\n\r\n"
+        inbox, _ = self.imap_candidates(b"4294967295", {"4294967295": good})
+        self.assertEqual(inbox.find("own-subject")["uid"], "4294967295")
+
+    def test_real_http_flow_ignores_unrelated_imap_candidate_without_replaying_send(self):
+        helper = load_helper()
+        for mode in ["ready", "wrong-to", "wrong-from", "missing-message-id", "duplicate-exact"]:
+            with self.subTest(mode=mode):
+                server = RoundcubeServer()
+                self.addCleanup(server.close)
+                client = mock.Mock()
+                client.login.return_value = ("OK", [])
+                client.select.return_value = ("OK", [])
+                def uid(command, *args):
+                    if command == "SEARCH":
+                        return "OK", [b"1 41 42" if server.sends and mode == "duplicate-exact" else b"1 41" if server.sends else b"1"]
+                    self.assertEqual((command, args[1]), ("FETCH", "(BODY.PEEK[HEADER.FIELDS (SUBJECT MESSAGE-ID TO FROM)])"))
+                    headers = b"Subject: Nakpanel Roundcube historical fixture\r\n\r\n" if args[0] == "1" else ("Subject: " + server.subject + "\r\nMessage-ID: <server41@example.test>\r\nTo: " + MAILBOX + "\r\nFrom: " + MAILBOX + "\r\n\r\n").encode()
+                    if args[0] != "1":
+                        if mode == "wrong-to": headers = headers.replace(b"To: phase29@example.test", b"To: other@example.test")
+                        if mode == "wrong-from": headers = headers.replace(b"From: phase29@example.test", b"From: other@example.test")
+                        if mode == "missing-message-id": headers = headers.replace(b"Message-ID: <server41@example.test>\r\n", b"")
+                    return "OK", [(b"headers", headers)]
+                client.uid.side_effect = uid
+                with tempfile.TemporaryDirectory() as folder, mock.patch.object(helper.ssl, "create_default_context", return_value=mock.Mock()), mock.patch.object(helper.imaplib, "IMAP4_SSL", return_value=client):
+                    if mode == "ready":
+                        receipt = helper.qualify(server.url, "webmail.example.test", MAILBOX, PASSWORD, folder, timeout=5, poll_interval=.01)
+                    else:
+                        with self.assertRaises(helper.QualificationError):
+                            helper.qualify(server.url, "webmail.example.test", MAILBOX, PASSWORD, folder, timeout=5, poll_interval=.01)
+                        receipt = next(Path(folder).glob("*.json"))
+                    state = json.loads(Path(receipt).read_text())
+                self.assertEqual(state["status"], "PASS" if mode == "ready" else "FAIL")
+                self.assertIs(state["success"], mode == "ready")
+                self.assertIs(state["roundcube_body_verified"], mode == "ready")
+                self.assertIs(state["imap_message_id_verified"], mode == "ready")
+                self.assertEqual(state["send_attempts"], 1)
+                self.assertEqual(len(server.sends), 1)
 
     def test_supplement_enrichment_binds_actual_proofs_and_refuses_false_success(self):
         helper = load_helper()

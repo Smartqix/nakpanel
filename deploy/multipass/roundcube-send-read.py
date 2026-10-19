@@ -131,29 +131,43 @@ class Inbox:
     def find(self, subject):
         self._bound()
         status, rows = self.client.uid("SEARCH", None, "HEADER", "Subject", '"' + subject + '"')
-        if status != "OK" or not rows or not isinstance(rows[0], bytes):
+        if status != "OK" or not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], bytes):
             raise QualificationError("imap-search")
         identifiers = rows[0].split()
-        if not identifiers:
-            return None
-        if len(identifiers) != 1 or not identifiers[0].isdigit() or int(identifiers[0]) == 0:
-            raise QualificationError("duplicate-delivery")
-        uid = identifiers[0].decode("ascii")
-        self._bound()
-        status, rows = self.client.uid("FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (SUBJECT MESSAGE-ID TO FROM)])")
-        payloads = [row[1] for row in rows if isinstance(row, tuple) and isinstance(row[1], bytes)]
-        if status != "OK" or len(payloads) != 1:
-            raise QualificationError("imap-headers")
-        headers = email.message_from_bytes(payloads[0], policy=email.policy.default)
-        if len(headers.get_all("Subject", [])) != 1 or str(headers.get("Subject", "")) != subject or len(headers.get_all("Message-ID", [])) != 1:
-            raise QualificationError("delivery-identity")
-        for field in ("To", "From"):
-            if [address.lower() for _, address in email.utils.getaddresses(headers.get_all(field, []))] != [self.mailbox]:
-                raise QualificationError("delivery-self-recipient")
-        message_id = str(headers["Message-ID"])
-        if not re.fullmatch(r"<[^\s<>]{1,220}@[^\s<>]{1,220}>", message_id):
-            raise QualificationError("delivery-message-id")
-        return {"uid": uid, "subject": subject, "message_id": message_id, "self_recipient_verified": True}
+        if len(identifiers) > 64 or len(set(identifiers)) != len(identifiers) or any(
+                not re.fullmatch(rb"[1-9][0-9]{0,9}", uid) or int(uid) > 4294967295 for uid in identifiers):
+            raise QualificationError("imap-candidates")
+        found = None
+        for identifier in identifiers:
+            uid = identifier.decode("ascii")
+            self._bound()
+            status, rows = self.client.uid("FETCH", uid, "(BODY.PEEK[HEADER.FIELDS (SUBJECT MESSAGE-ID TO FROM)])")
+            self.remaining()
+            payloads = [row[1] for row in (rows or []) if isinstance(row, tuple) and len(row) == 2 and isinstance(row[1], bytes)]
+            if status != "OK" or len(payloads) != 1 or len(payloads[0]) > 65536:
+                raise QualificationError("imap-headers")
+            headers = email.message_from_bytes(payloads[0], policy=email.policy.default)
+            subjects = headers.get_all("Subject", [])
+            if headers.defects or len(subjects) != 1 or subjects[0].defects or any(
+                    (ord(char) < 32 and char != "\t") or ord(char) == 127 for char in str(subjects[0])):
+                raise QualificationError("delivery-identity")
+            # SEARCH may return token matches. A different Subject is not our
+            # delivery, even when that historical message lacks other headers.
+            if str(subjects[0]) != subject:
+                continue
+            if found is not None:
+                raise QualificationError("duplicate-delivery")
+            if len(headers.get_all("Message-ID", [])) != 1:
+                raise QualificationError("delivery-identity")
+            for field in ("To", "From"):
+                values = headers.get_all(field, [])
+                if len(values) != 1 or [address.lower() for _, address in email.utils.getaddresses(values)] != [self.mailbox]:
+                    raise QualificationError("delivery-self-recipient")
+            message_id = str(headers["Message-ID"])
+            if not re.fullmatch(r"<[^\s<>]{1,220}@[^\s<>]{1,220}>", message_id):
+                raise QualificationError("delivery-message-id")
+            found = {"uid": uid, "subject": subject, "message_id": message_id, "self_recipient_verified": True}
+        return found
 
     def close(self):
         # No CLOSE/EXPUNGE, flag update, append or SMTP call is allowed here.
