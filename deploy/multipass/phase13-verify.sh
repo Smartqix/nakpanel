@@ -57,6 +57,7 @@ done
 sudo systemctl restart nakpanel-agent.service nakpanel.service
 REMOTE
 
+curl -sk --fail --retry 30 --retry-connrefused --retry-delay 1 --max-time 5 -o /dev/null "https://${VM_IP}:7443/login"
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin.html"
@@ -174,6 +175,7 @@ post_as reseller phase13-owner-restore subscriptions/bulk-subscriber -d "subscri
 post_as reseller phase13-plan-restore subscriptions/bulk-plan -d "subscription_id=${subscription_id}" -d "plan_id=${original_plan_id}"
 post_as reseller phase13-runtime-restore "sites/${site_id}/hosting" -d 'desired_status=active' -d 'desired_php_version=8.3' -d 'desired_https_redirect=false'
 wait_for_value 'fixture runtime restored' "SELECT status||':'||php_version||':'||https_redirect::text FROM sites WHERE id=${site_id}" 'active:8.3:false'
-multipass exec "${VM_NAME}" -- sudo -u postgres psql -v ON_ERROR_STOP=1 -d nakpanel -c "DELETE FROM plans WHERE id=${phase13_plan_id}; DELETE FROM audit_events WHERE customer_id=${target_customer_id}; DELETE FROM customers WHERE id=${target_customer_id}; DELETE FROM users WHERE email='phase13-customer@nakpanel.test';"
+post_as reseller phase13-plan-retire plans/status -d "plan_id=${phase13_plan_id}" -d 'is_active=false'
+multipass exec "${VM_NAME}" -- sudo -u postgres psql -v ON_ERROR_STOP=1 -d nakpanel -c "DELETE FROM audit_events WHERE customer_id=${target_customer_id}; DELETE FROM customers WHERE id=${target_customer_id}; DELETE FROM users WHERE email='phase13-customer@nakpanel.test';"
 
 echo "Phase 13 subscription and domain workspace verification passed for ${VM_NAME} (${VM_IP})."

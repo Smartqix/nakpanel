@@ -106,6 +106,7 @@ zone.status,zone.zone_path,zone.last_error,zone.created_at,zone.site_id,COALESCE
 zone.mode,array_to_string(zone.upstream_primaries,E'\n'),
 array_to_string(COALESCE(zone.transfer_cidrs,revision.transfer_cidrs),E'\n'),
 COALESCE(zone.template_revision,0),zone.template_status,zone.desired_revision,zone.applied_revision,
+(SELECT active.revision FROM dns_template_state state JOIN dns_template_revisions active ON active.id=state.active_revision_id),
 COALESCE(zone.soa_override->>'primary_nameserver',replace(revision.primary_nameserver,'<domain>',zone.domain)),
 COALESCE(zone.soa_override->>'responsible_mailbox',replace(revision.responsible_mailbox,'<domain>',zone.domain)),
 COALESCE(zone.soa_override->>'serial_format',revision.serial_format),
@@ -128,6 +129,7 @@ ORDER BY zone.created_at DESC,zone.id DESC LIMIT 100`)
 			&zone.Status, &zone.ZonePath, &zone.LastError, &zone.CreatedAt, &zone.SiteID,
 			&zone.ParentZoneID, &zone.Mode, &zone.UpstreamPrimaries, &zone.TransferCIDRs,
 			&zone.TemplateRevision, &zone.TemplateStatus, &zone.DesiredRevision, &zone.AppliedRevision,
+			&zone.CurrentTemplateRevision,
 			&zone.SOA.PrimaryNameserver, &zone.SOA.ResponsibleMailbox, &zone.SOA.SerialFormat,
 			&zone.SOA.DefaultTTL, &zone.SOA.RefreshSeconds, &zone.SOA.RetrySeconds,
 			&zone.SOA.ExpireSeconds, &zone.SOA.MinimumTTL); err != nil {

@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Roundcube session, cache and tempfile maintenance
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+Unit=roundcube-gc.service
+
+[Install]
+WantedBy=timers.target

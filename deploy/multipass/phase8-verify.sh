@@ -58,6 +58,7 @@ post_expect_quota_exceeded() {
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
     -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
+    -H 'X-Nakpanel-SPA: true' -H 'Accept: application/json' \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "400" ]]; then
@@ -276,15 +277,21 @@ echo "phase8 backup did not become active" >&2
 exit 1
 REMOTE
 
+quota_subscription_id="$(multipass_exec_short "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "SELECT subscription_id FROM sites WHERE domain='phase8-quota.test'" | tr -d '\r')"
+[[ "${quota_subscription_id}" =~ ^[0-9]+$ ]] || { echo 'quota fixture subscription is missing' >&2; exit 1; }
+
 post_expect_quota_exceeded phase8-site-over sites \
+  -d "subscription_id=${quota_subscription_id}" \
   -d 'username=npq9' \
   -d 'domain=phase8-over.test' \
   -d 'php_version=8.3'
 post_expect_quota_exceeded phase8-db-over databases \
+  -d "subscription_id=${quota_subscription_id}" \
   -d 'engine=mariadb' \
   -d 'db_name=np_phase8_over' \
   -d 'db_user=np_phase8_over_user'
-post_expect_quota_exceeded phase8-backup-over backups -d 'domain=phase8-quota.test'
+post_expect_quota_exceeded phase8-backup-over backups \
+  -d "subscription_id=${quota_subscription_id}" -d 'domain=phase8-quota.test'
 
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/?legacy=1" > "${tmpdir}/phase8-dashboard.html"
 assert_contains "${tmpdir}/phase8-dashboard.html" 'phase8-quota.test'

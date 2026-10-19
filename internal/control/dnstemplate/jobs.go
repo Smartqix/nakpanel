@@ -54,8 +54,9 @@ func (m *Manager) applyRun(ctx context.Context, runID int64) error {
 	var expectedRevision int64
 	var scope, status string
 	var targetZoneID sql.NullInt64
-	err := m.db.QueryRowContext(ctx, `SELECT expected_template_state_revision,scope,status,target_zone_id
-FROM dns_template_sync_runs WHERE id=$1`, runID).Scan(&expectedRevision, &scope, &status, &targetZoneID)
+	var adopt bool
+	err := m.db.QueryRowContext(ctx, `SELECT expected_template_state_revision,scope,status,target_zone_id,adopt_matching
+FROM dns_template_sync_runs WHERE id=$1`, runID).Scan(&expectedRevision, &scope, &status, &targetZoneID, &adopt)
 	if err != nil {
 		return err
 	}
@@ -98,7 +99,7 @@ FROM dns_template_sync_items WHERE run_id=$1 ORDER BY zone_id`, runID)
 		return err
 	}
 	for _, target := range zoneIDs {
-		if err := m.applyZonePlan(ctx, runID, scope, template, target.zoneID, target.ownerSiteID); err != nil {
+		if err := m.applyZonePlan(ctx, runID, scope, template, target.zoneID, target.ownerSiteID, adopt); err != nil {
 			_, _ = m.db.ExecContext(ctx, `UPDATE dns_template_sync_items
 SET outcome='failed',detail=$3,updated_at=now() WHERE run_id=$1 AND zone_id=$2`,
 				runID, target.zoneID, boundedError(err))
@@ -107,19 +108,20 @@ SET outcome='failed',detail=$3,updated_at=now() WHERE run_id=$1 AND zone_id=$2`,
 	return m.refreshRunStatus(ctx, runID)
 }
 
-func (m *Manager) applyZonePlan(ctx context.Context, runID int64, scope string, template types.DNSTemplateRevision, zoneID, ownerSiteID int64) error {
+func (m *Manager) applyZonePlan(ctx context.Context, runID int64, scope string, template types.DNSTemplateRevision, zoneID, ownerSiteID int64, adopt bool) error {
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 	var currentStatus string
+	var fingerprint string
 	var expectedZoneRevision, currentZoneRevision int64
-	if err := tx.QueryRowContext(ctx, `SELECT zone.template_status,item.expected_zone_revision,zone.desired_revision
+	if err := tx.QueryRowContext(ctx, `SELECT zone.template_status,item.expected_zone_revision,zone.desired_revision,item.plan_fingerprint
 FROM dns_zones zone
 JOIN dns_template_sync_items item ON item.zone_id=zone.id AND item.run_id=$2
 WHERE zone.id=$1 FOR UPDATE OF zone,item`, zoneID, runID).
-		Scan(&currentStatus, &expectedZoneRevision, &currentZoneRevision); err != nil {
+		Scan(&currentStatus, &expectedZoneRevision, &currentZoneRevision, &fingerprint); err != nil {
 		return err
 	}
 	if currentZoneRevision != expectedZoneRevision {
@@ -146,8 +148,15 @@ detail='Skipped because this zone has local customizations',updated_at=now() WHE
 	if ownerSiteID > 0 {
 		zone.SiteID = ownerSiteID
 	}
+	zone.AdoptMatching = adopt
 	partialOwnerApply := ownerSiteID > 0 && ownerSiteID != authoritativeSiteID
+	if partialOwnerApply {
+		zone.Services = zone.SubdomainSite[ownerSiteID].Services
+	}
 	plan := zonePlanForApply(template, zone, partialOwnerApply)
+	if fingerprint != zonePlanFingerprint(plan, zone) {
+		return fmt.Errorf("%w: service defaults or record ownership changed; preview again", ErrStalePreview)
+	}
 	if err := applyZonePlanMutationsTx(ctx, tx, zoneID, template.Revision, plan); err != nil {
 		return err
 	}
@@ -178,9 +187,9 @@ SET template_revision=$2,updated_at=now() WHERE id=$1`,
 	if !changed {
 		if _, err := tx.ExecContext(ctx, `UPDATE dns_template_sync_items SET outcome=$3,
 added_count=$4,updated_count=$5,removed_count=$6,override_count=$7,conflict_count=$8,
-detail=$9,updated_at=now() WHERE run_id=$1 AND zone_id=$2`,
+detail=$9,adopted_count=$10,updated_at=now() WHERE run_id=$1 AND zone_id=$2`,
 			runID, zoneID, plan.item.Outcome, plan.item.AddedCount, plan.item.UpdatedCount,
-			plan.item.RemovedCount, plan.item.OverrideCount, plan.item.ConflictCount, plan.item.Detail); err != nil {
+			plan.item.RemovedCount, plan.item.OverrideCount, plan.item.ConflictCount, plan.item.Detail, plan.item.AdoptedCount); err != nil {
 			return err
 		}
 		return tx.Commit()
@@ -196,9 +205,9 @@ last_error='',updated_at=now() WHERE id=$1 RETURNING desired_revision`, zoneID, 
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE dns_template_sync_items SET outcome=$3,desired_revision=$4,
 added_count=$5,updated_count=$6,removed_count=$7,override_count=$8,conflict_count=$9,
-detail=$10,updated_at=now() WHERE run_id=$1 AND zone_id=$2`,
+detail=$10,adopted_count=$11,updated_at=now() WHERE run_id=$1 AND zone_id=$2`,
 		runID, zoneID, plan.item.Outcome, desiredRevision, plan.item.AddedCount, plan.item.UpdatedCount,
-		plan.item.RemovedCount, plan.item.OverrideCount, plan.item.ConflictCount, plan.item.Detail); err != nil {
+		plan.item.RemovedCount, plan.item.OverrideCount, plan.item.ConflictCount, plan.item.Detail, plan.item.AdoptedCount); err != nil {
 		return err
 	}
 	if _, err := m.river.InsertTx(ctx, tx, provision.ConfigureDNSZoneArgs{

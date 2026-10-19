@@ -57,7 +57,12 @@ deploy_git_revision(){
 }
 db "UPDATE subscription_entitlements SET hosting_policy=jsonb_set(jsonb_set(jsonb_set(COALESCE(hosting_policy,'{}'::jsonb),'{permissions,git}','true'::jsonb,true),'{permissions,staging}','true'::jsonb,true),'{permissions,applications}','true'::jsonb,true) WHERE subscription_id=${subscription_id}" >/dev/null
 
+# This legacy hosted fixture represents a repository migrated from Phase 24.
+# New connections are remote-only; keep testing supported existing push repos.
+db "INSERT INTO git_repositories(site_id,mode,branch,deploy_target) VALUES(${site_id},'hosted','main','.') ON CONFLICT(site_id) DO NOTHING" >/dev/null
+repository_revision="$(db "SELECT operation_revision FROM git_repositories WHERE site_id=${site_id}")"
 curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
+  -d "expected_revision=${repository_revision}" \
   -d "subscription_id=${subscription_id}" -d 'mode=hosted' -d 'branch=main' -d 'deploy_target=.' -d 'automatic=true' \
   "https://${VM_IP}:7443/sites/${site_id}/git" -o /dev/null
 wait_for "SELECT convergence_status FROM git_repositories WHERE site_id=${site_id}" "in_sync"

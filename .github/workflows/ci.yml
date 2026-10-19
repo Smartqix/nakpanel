@@ -80,9 +80,16 @@ jobs:
         run: |
           set -euo pipefail
           [[ "${RELEASE_BUILD_RESULT}" == success ]] || { echo 'Required signed application build did not succeed.' >&2; exit 1; }
+      - name: Isolate host Go state
+        shell: bash
+        run: |
+          printf 'GOPATH=%s/nakpanel-go\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'GOCACHE=%s/nakpanel-go-build\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'GOMODCACHE=%s/nakpanel-go/pkg/mod\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-go@v5
         with:
           go-version-file: deploy/release/GO_VERSION
+          cache: false
       - uses: actions/download-artifact@v4
         with:
           name: ci-security-release-${{ github.run_id }}-${{ github.run_attempt }}
@@ -215,6 +222,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate host Go state
+        shell: bash
+        run: |
+          printf 'GOPATH=%s/nakpanel-go\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'GOCACHE=%s/nakpanel-go-build\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'GOMODCACHE=%s/nakpanel-go/pkg/mod\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-go@v5
         with:
           go-version-file: deploy/release/GO_VERSION

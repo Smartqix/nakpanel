@@ -85,6 +85,10 @@ if systemctl list-unit-files apache2.service >/dev/null 2>&1; then
 fi
 systemctl restart "php${NAKPANEL_INTERNAL_PHP_VERSION}-fpm"
 
+# The package's env-php shebang may follow a tenant PHP version. Keep
+# maintenance on the validated internal runtime, with units for upstream26.
+source "${SCRIPT_DIR}/roundcube-maintenance.sh"
+nakpanel_install_roundcube_maintenance
 install -m 0644 "${SCRIPT_DIR}/../systemd/stalwart-mail.service" /etc/systemd/system/stalwart-mail.service
 systemctl daemon-reload
 # The service starts on the first configure_mail run, which renders its config.

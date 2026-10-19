@@ -1,7 +1,9 @@
 package panelhttp
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"strconv"
@@ -10,10 +12,12 @@ import (
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dnstemplate"
+	"github.com/nakroteck/nakpanel/internal/control/web"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
 func (s *Server) registerDNSTemplateRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("GET /tools-settings/dns/domain-preview", s.handleDNSDomainPreview)
 	mux.HandleFunc("POST /tools-settings/dns/template/settings", s.handleDNSTemplateSettings)
 	mux.HandleFunc("POST /tools-settings/dns/template/provider", s.handleDNSProviderDefaults)
 	mux.HandleFunc("GET /tools-settings/dns/sync/{runID}", s.handleDNSSyncStatus)
@@ -30,6 +34,43 @@ func (s *Server) registerDNSTemplateRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /sites/{id}/dns-zone/mode", s.handleDNSZoneMode)
 	mux.HandleFunc("POST /sites/{id}/dns-zone/soa", s.handleDNSZoneSOA)
 	mux.HandleFunc("POST /sites/{id}/dns-zone/subdomain-mode", s.handleDNSSubdomainMode)
+}
+
+type dnsDomainPreviewer interface {
+	PreviewDomains(context.Context) ([]types.DNSPreviewDomain, error)
+	DomainPreview(context.Context, int64) (types.DNSDomainPreview, error)
+}
+
+func (s *Server) handleDNSDomainPreview(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireDNSAdmin(w, r, false); !ok {
+		return
+	}
+	manager, ok := s.dnsTemplates.(dnsDomainPreviewer)
+	if !ok {
+		http.Error(w, "Domain preview is unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	id, err := strconv.ParseInt(r.URL.Query().Get("site_id"), 10, 64)
+	if err != nil || id <= 0 {
+		http.NotFound(w, r)
+		return
+	}
+	preview, err := manager.DomainPreview(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		writeDNSError(w, r, "Could not load domain preview", err)
+		return
+	}
+	var html bytes.Buffer
+	if err := web.DNSDomainPreviewPanel(preview).Render(r.Context(), &html); err != nil {
+		http.Error(w, "Could not render domain preview", 500)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeSPAJSON(w, 200, map[string]any{"ok": true, "preview": preview, "html": html.String()})
 }
 
 func (s *Server) handleDNSProviderDefaults(w http.ResponseWriter, r *http.Request) {
@@ -192,7 +233,20 @@ func (s *Server) handlePreviewDNSSynchronization(w http.ResponseWriter, r *http.
 		http.Error(w, "Invalid DNS synchronization request", http.StatusBadRequest)
 		return
 	}
-	run, err := s.dnsTemplates.Preview(r.Context(), user.ID, strings.TrimSpace(r.Form.Get("scope")), 0)
+	var run types.DNSSyncRun
+	var err error
+	if r.Form.Get("adopt_matching") == "true" {
+		manager, available := s.dnsTemplates.(interface {
+			PreviewWithAdoption(context.Context, int64, string, int64, bool) (types.DNSSyncRun, error)
+		})
+		if !available {
+			http.Error(w, "DNS adoption preview is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		run, err = manager.PreviewWithAdoption(r.Context(), user.ID, strings.TrimSpace(r.Form.Get("scope")), 0, true)
+	} else {
+		run, err = s.dnsTemplates.Preview(r.Context(), user.ID, strings.TrimSpace(r.Form.Get("scope")), 0)
+	}
 	if err != nil {
 		writeDNSError(w, r, "Could not preview DNS synchronization", err)
 		return
@@ -228,7 +282,24 @@ func (s *Server) handlePreviewSiteDNSTemplate(w http.ResponseWriter, r *http.Req
 	if !ok {
 		return
 	}
-	run, err := s.dnsTemplates.ApplyZone(r.Context(), user.ID, siteID)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid DNS preview request", http.StatusBadRequest)
+		return
+	}
+	var run types.DNSSyncRun
+	var err error
+	if r.Form.Get("adopt_matching") == "true" {
+		manager, available := s.dnsTemplates.(interface {
+			ApplyZoneWithAdoption(context.Context, int64, int64, bool) (types.DNSSyncRun, error)
+		})
+		if !available {
+			http.Error(w, "DNS adoption preview is not configured", http.StatusServiceUnavailable)
+			return
+		}
+		run, err = manager.ApplyZoneWithAdoption(r.Context(), user.ID, siteID, true)
+	} else {
+		run, err = s.dnsTemplates.ApplyZone(r.Context(), user.ID, siteID)
+	}
 	if err != nil {
 		writeDNSError(w, r, "Could not preview the zone template", err)
 		return

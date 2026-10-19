@@ -281,7 +281,14 @@ type ConfigureWebmailWorker struct {
 	river.WorkerDefaults[ConfigureWebmailArgs]
 	agent AgentWebmailClient
 	store Phase6StatusStore
+	dns   interface {
+		ReconcileSiteDNS(context.Context, int64) error
+	}
 }
+
+func (w *ConfigureWebmailWorker) SetDNSServiceReconciler(reconciler interface {
+	ReconcileSiteDNS(context.Context, int64) error
+}) { w.dns = reconciler }
 
 func NewConfigureWebmailWorker(agent AgentWebmailClient, store Phase6StatusStore) *ConfigureWebmailWorker {
 	return &ConfigureWebmailWorker{agent: agent, store: store}
@@ -315,7 +322,12 @@ func (w *ConfigureWebmailWorker) Work(ctx context.Context, job *river.Job[Config
 		return err
 	}
 	if w.store != nil {
-		return w.store.MarkWebmailActive(ctx, job.Args.WebmailID, result)
+		if err := w.store.MarkWebmailActive(ctx, job.Args.WebmailID, result); err != nil {
+			return err
+		}
+	}
+	if w.dns != nil && req.SiteID > 0 {
+		return w.dns.ReconcileSiteDNS(ctx, req.SiteID)
 	}
 	return nil
 }

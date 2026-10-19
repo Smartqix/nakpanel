@@ -1,0 +1,22 @@
+[Unit]
+Description=Purge expired Roundcube sessions, caches and tempfiles
+Documentation=https://github.com/roundcube/roundcubemail/wiki/Installation
+After=mariadb.service
+ConditionPathExists=/etc/roundcube/config.inc.php
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+ExecStart=/usr/bin/php@NAKPANEL_INTERNAL_PHP_VERSION@ /usr/share/roundcube/bin/gc.sh
+UMask=0027
+NoNewPrivileges=yes
+PrivateDevices=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelTunables=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/roundcube /var/log/roundcube
