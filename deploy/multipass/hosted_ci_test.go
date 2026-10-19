@@ -187,6 +187,119 @@ func TestHostedPreparationRejectsOtherHostsBeforeMutation(t *testing.T) {
 	}
 }
 
+// Run the complete preparer with only host commands replaced. The actual
+// readiness helper must see the same unprivileged client become usable after
+// a narrowly scoped socket ACL; mere daemon startup cannot make it pass.
+func TestHostedPreparationAuthorizesOnlyItsRunnerOnTheActualSocket(t *testing.T) {
+	helper, err := filepath.Abs("prepare-hosted-runner.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	python, err := exec.LookPath("python3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"ready", "missing", "symlink", "not-root", "acl-failure"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			commands := map[string]string{
+				"uname": `#!/bin/sh
+case "$1" in -s) echo Linux;; -m) echo x86_64;; *) exit 90;; esac
+`,
+				"id": `#!/bin/sh
+test "$1" = -u || exit 90
+echo 1001
+`,
+				"df":    "#!/bin/sh\necho 'disposable hosted disk fixture'\n",
+				"sleep": "#!/bin/sh\nexit 0\n",
+				"sudo": `#!/bin/sh
+set -eu
+printf '%s\n' "$*" >> "$FIXTURE/host-commands"
+socket=/var/snap/multipass/common/multipass_socket
+case "$1" in
+ test)
+  test "$3" = "$socket" || exit 91
+  case "$2" in
+   -S)
+    test "$CLIENT_MODE" != missing || exit 1
+    count=0;test ! -f "$FIXTURE/socket-attempts" || count=$(cat "$FIXTURE/socket-attempts")
+    count=$((count+1));echo "$count" > "$FIXTURE/socket-attempts"
+    test "$count" -gt 2
+    ;;
+   -L) test "$CLIENT_MODE" = symlink;;
+   *) exit 92;;
+  esac
+  ;;
+ stat)
+  test "$*" = "stat -c %u $socket" || exit 93
+  if test "$CLIENT_MODE" = not-root;then echo 1001;else echo 0;fi
+  ;;
+ setfacl)
+  test "$*" = "setfacl -m u:1001:rw $socket" || exit 94
+  test "$CLIENT_MODE" != acl-failure || exit 67
+  touch "$FIXTURE/runner-authorized"
+  ;;
+ getfacl)
+  test "$*" = "getfacl -n -p $socket" || exit 95
+  printf '# owner: 0\nuser::rw-\nuser:1001:rw-\ngroup::rw-\nmask::rw-\nother::---\n'
+  ;;
+ journalctl) echo 'multipassd journal fixture';;
+ rm|docker|apt-get|snap|udevadm) :;;
+ *) exit 96;;
+esac
+`,
+				"multipass": `#!/bin/sh
+set -eu
+case "$*" in
+ 'list --format json')
+  echo attempt >> "$FIXTURE/client-attempts"
+  if test ! -f "$FIXTURE/runner-authorized";then echo 'list failed: multipass socket access denied';exit 2;fi
+  printf '{"errors":[],"list":[]}\n'
+  ;;
+ version) echo 'multipass fixture';;
+ *) exit 97;;
+esac
+`,
+				"python3": `#!/bin/sh
+exec "$FIXTURE_PYTHON" "$@" --timeout 0.2 --attempt-timeout 0.05 --retry-interval 0.01
+`,
+				"timeout": `#!/bin/sh
+shift 2
+exec "$@"
+`,
+			}
+			for name, content := range commands {
+				if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cmd := exec.Command("bash", helper)
+			cmd.Env = append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "FIXTURE="+root, "FIXTURE_PYTHON="+python, "RUNNER_TEMP="+root, "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "CLIENT_MODE="+mode)
+			output, runErr := cmd.CombinedOutput()
+			if (runErr == nil) != (mode == "ready") {
+				t.Fatalf("mode=%s preparation err=%v: %s", mode, runErr, output)
+			}
+			commandsLog, _ := os.ReadFile(filepath.Join(root, "host-commands"))
+			if strings.Contains(string(commandsLog), "chmod ") || strings.Contains(string(commandsLog), "chown ") || strings.Contains(string(commandsLog), "usermod ") {
+				t.Fatalf("preparation broadened socket permissions: %s", commandsLog)
+			}
+			_, clientErr := os.Stat(filepath.Join(root, "client-attempts"))
+			if mode != "ready" && !os.IsNotExist(clientErr) {
+				t.Fatalf("untrusted/unconfigured socket reached daemon query: %s", commandsLog)
+			}
+			if mode == "ready" {
+				acl, err := os.ReadFile(filepath.Join(root, "hosted-evidence/multipass-socket-acl.log"))
+				if err != nil || !strings.Contains(string(acl), "user:1001:rw-") || !strings.Contains(string(acl), "other::---") {
+					t.Fatalf("runner-only socket access evidence missing: %s %v", acl, err)
+				}
+				if clientErr != nil {
+					t.Fatal("successful preparation did not require the actual client query")
+				}
+			}
+		})
+	}
+}
+
 func TestRequiredSecurityGateUsesDisposableHostedRunnerWithoutSkippingBuildFailures(t *testing.T) {
 	data, err := os.ReadFile("../../.github/workflows/ci.yml")
 	if err != nil {

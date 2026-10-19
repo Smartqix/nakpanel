@@ -22,6 +22,22 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=kvm
 if [[ -c /dev/kvm ]]; then sudo setfacl -m "u:$(id -u):rw" /dev/kvm; fi
 sudo apt-get clean
+# Multipass restricts its root-owned socket to an administrative group. A
+# hosted runner can have passwordless sudo without membership in that group.
+# Authorize only this job's existing UID after the daemon creates its socket;
+# keep the client query below as the actual daemon readiness condition.
+multipass_socket=/var/snap/multipass/common/multipass_socket
+for _ in $(seq 1 120); do
+  if sudo test -S "${multipass_socket}"; then break; fi
+  sleep 1
+done
+if ! sudo test -S "${multipass_socket}" || sudo test -L "${multipass_socket}" || [[ "$(sudo stat -c %u "${multipass_socket}")" != 0 ]]; then
+  echo 'Multipass did not create its root-owned non-symlink socket.' | tee "${evidence}/multipass-socket-error.log" >&2
+  sudo journalctl -u snap.multipass.multipassd.service --no-pager -n 100 >"${evidence}/multipass-journal.log" 2>&1 || true
+  exit 1
+fi
+sudo setfacl -m "u:$(id -u):rw" "${multipass_socket}"
+sudo getfacl -n -p "${multipass_socket}" | tee "${evidence}/multipass-socket-acl.log"
 # snap install may return before multipassd has created its root certificate.
 # A successful bounded daemon query is the readiness condition, never elapsed time.
 python3 "${SCRIPT_DIR}/hosted-multipass-ready.py" --output-dir "${evidence}"

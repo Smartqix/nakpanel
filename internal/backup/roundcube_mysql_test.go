@@ -89,6 +89,38 @@ func TestMySQLRoundcubeArchiveRequiresNewFormatAndAuthenticatedPayloadConfig(t *
 	}
 }
 
+// Noble's mariadb-dump rejects the mariadb client's --connect-timeout option.
+// Keep the real dump/gzip/validation path while modeling that external CLI boundary.
+func TestRoundcubeMySQLDumpUsesSupportedMariaDBDumpOptions(t *testing.T) {
+	dir := t.TempDir()
+	script := "#!/bin/sh\nfor arg do\n case \"$arg\" in --connect-timeout=*) echo \"mariadb-dump: unknown variable '$arg'\" >&2; exit 7;; esac\ndone\n/bin/cat <<'SQL'\n-- MariaDB dump 10.19\nCREATE DATABASE IF NOT EXISTS `roundcube`;\nUSE `roundcube`;\nCREATE TABLE `contacts` (email TEXT);\nINSERT INTO `contacts` VALUES ('durable-contact@example.test');\nCREATE TABLE `users` (preferences TEXT);\nINSERT INTO `users` VALUES ('durable-preference');\nSQL\n"
+	if err := os.WriteFile(filepath.Join(dir, "mariadb-dump"), []byte(script), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+	target := filepath.Join(dir, "roundcube.sql.gz")
+	if err := DumpRoundcubeMySQL(context.Background(), *defaultRoundcubeMySQLMetadata(), target); err != nil {
+		t.Fatalf("default local MySQL backup could not produce a valid dump: %v", err)
+	}
+	file, err := os.Open(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	gz, err := gzip.NewReader(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gz.Close()
+	contents, err := io.ReadAll(gz)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(contents, []byte("durable-contact@example.test")) || !bytes.Contains(contents, []byte("durable-preference")) {
+		t.Fatal("dump archive omitted Roundcube contact or preferences")
+	}
+}
+
 func TestMySQLRoundcubeForwardMigrationRejectedBeforeTargetCommands(t *testing.T) {
 	dir := t.TempDir()
 	log := filepath.Join(dir, "commands")

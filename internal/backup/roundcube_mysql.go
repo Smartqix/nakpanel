@@ -409,7 +409,7 @@ func DumpRoundcubeMySQL(ctx context.Context, metadata RoundcubeMySQLMetadata, ta
 	}
 	defer file.Close()
 	gz := gzip.NewWriter(file)
-	args := []string{"--no-defaults", "--protocol=socket", "--socket=" + roundcubeMySQLSocket, "--user=root", "--connect-timeout=10", "--single-transaction", "--routines", "--events", "--triggers", "--hex-blob", "--databases", metadata.Database}
+	args := []string{"--no-defaults", "--protocol=socket", "--socket=" + roundcubeMySQLSocket, "--user=root", "--single-transaction", "--routines", "--events", "--triggers", "--hex-blob", "--databases", metadata.Database}
 	cmd := exec.CommandContext(bounded, "mariadb-dump", args...)
 	cmd.Stdout = gz
 	cmd.Stderr = io.Discard
