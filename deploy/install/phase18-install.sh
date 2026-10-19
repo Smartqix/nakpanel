@@ -89,8 +89,14 @@ if systemctl list-unit-files apache2.service >/dev/null 2>&1; then
 fi
 systemctl restart php8.3-fpm
 
+# The package's env-php shebang follows the newest tenant CLI, which may be
+# newer than Ubuntu's Roundcube supports. Keep maintenance on its web runtime.
+install -d -m 0755 /etc/systemd/system/roundcube-gc.service.d
+install -m 0644 "${SCRIPT_DIR}/../systemd/roundcube-gc.service.d/nakpanel.conf" \
+  /etc/systemd/system/roundcube-gc.service.d/nakpanel.conf
 install -m 0644 "${SCRIPT_DIR}/../systemd/stalwart-mail.service" /etc/systemd/system/stalwart-mail.service
 systemctl daemon-reload
+systemctl start roundcube-gc.service
 # The service starts on the first configure_mail run, which renders its config.
 systemctl enable stalwart-mail.service >/dev/null 2>&1 || true
 
