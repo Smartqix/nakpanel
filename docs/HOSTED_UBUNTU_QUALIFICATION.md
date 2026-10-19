@@ -204,6 +204,11 @@ available. Missing or invalid observations stay unknown. The diagnostic
 contains no credentials, session values or message bodies and never grants
 qualification. Private hidden raw evidence remains excluded from broad uploads.
 
+The database-manager FPM master logs through syslog so it can start with
+systemd's journal-connected stderr. A root `php-fpm --test` does not exercise
+that service startup boundary. The actual dedicated FPM/HTTP units, private
+bridge and authenticated FastCGI health must all pass before browser coverage.
+
 The Mail workspace gate covers real browser creation/editing/password rotation,
 alias delivery, SMTP TLS/STARTTLS and IMAP retrieval, unrelated-customer denial,
 and QA cleanup. It trusts the installed Stalwart certificate explicitly inside

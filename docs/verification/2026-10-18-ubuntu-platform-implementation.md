@@ -296,3 +296,41 @@ retains every history, audit, raw-data and convergence condition. Fresh
 qualification of the new committed and signed candidate is required; neither
 the earlier failed reports nor candidate21's passing CI is transferred to new
 runtime bytes.
+
+## Candidate22 follow-up: dedicated FPM master logging
+
+Candidate22 (`fbcf634e11318af85a14c1cae0e10b256e220d50`) passed its exact-source
+local tests, both architecture development-bundle checks and
+[required CI](https://github.com/Smartqix/nakpanel/actions/runs/39306308847).
+All four original [native](https://github.com/Smartqix/nakpanel/actions/runs/39306300726)
+and [Surý-run](https://github.com/Smartqix/nakpanel/actions/runs/39306720583)
+AMD64 reports passed eleven gates through Phase32, including Phase31. Each
+also passed the strict real Roundcube one-send/read subset before the
+database-manager FPM service failed with exit78. The root FPM configuration
+test succeeded, but the real service failed and HTTP remained inactive. Each
+canonical report retains that failure and five pending gates. Surý maintenance
+was skipped after canonical failure. The original uploads do not retain the
+underlying master error or actual guest configuration bytes.
+
+A separate [isolated hosted diagnostic](https://github.com/Smartqix/nakpanel/actions/runs/39320171872)
+used the selected config and security unit on Ubuntu24/PHP8.3 with owned
+user/paths, the binary and restart policy mapped for observation. An
+exec-preserving Python launcher observed the inherited FD, and explicit
+journal stdout/stderr settings were identical in all cases. The unchanged global log route
+passed the root config test but failed actual startup with exit78 and a
+master-PID/invocation-bound `failed to open error_log` error: reopening
+`/proc/self/fd/2` returned ENXIO. Changing only the global destination to
+`/dev/null` started a healthy listener; changing only that destination to
+`syslog` also started a healthy listener and retained the actual master ready
+message in the journal. Config/unit bytes, original journals, FD observations
+and successful normal cleanup were retained in the API-digest/size-verified
+artifact. Hard interruption cleanup was not tested.
+
+The production correction changes only the FPM master's global log destination
+to `syslog`; the service sandbox and disabled PHP request-error logging remain
+unchanged. This controlled reproduction confirms the logging mechanism on
+Ubuntu24/PHP8.3; it does not recover the original Ubuntu26/PHP8.5 missing error.
+Fresh complete qualification of both Ubuntu versions and providers is required
+for the corrected signed runtime. ARM64, actual forward/legacy recovery,
+scheduled backup, PHP security-version advance and elapsed soak remain separate
+pending gates; this diagnostic grants no platform or production acceptance.
