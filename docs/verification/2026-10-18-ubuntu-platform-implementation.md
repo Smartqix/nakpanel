@@ -334,3 +334,41 @@ Fresh complete qualification of both Ubuntu versions and providers is required
 for the corrected signed runtime. ARM64, actual forward/legacy recovery,
 scheduled backup, PHP security-version advance and elapsed soak remain separate
 pending gates; this diagnostic grants no platform or production acceptance.
+
+## Candidate23 partial result: Go archive HTTP/2 transport
+
+Candidate23 (`d49172d035180c637299c5954012c336f46450c6`) contains the narrow
+syslog correction. Local full tests/vet and both architecture development
+bundle checks passed. Its hosted Linux unit/generated-code and static-policy
+jobs passed. At this checkpoint, the other server jobs remain in progress;
+those partial successes grant no complete platform acceptance.
+
+The original [Surý26 job](https://github.com/Smartqix/nakpanel/actions/runs/39321797134/job/118298945769)
+passed bundle verification, then failed fresh installation with curl exit92,
+an HTTP/2 INTERNAL_ERROR stream failure. Fifteen later canonical gates remain
+pending and maintenance was skipped. The original report and successful owned
+cleanup are preserved. Its log shows successful Surý authentication/package
+resolution and Roundcube signature verification, then make installation and
+the curl error. The next source download is the pinned Go1.26.9 Linux/AMD64
+archive, so source order attributes this boundary to that command. The original
+error does not record its URL, redirect endpoint, HTTP status or retry count.
+
+A real local TLS/HTTP2 regression runs the committed Go archive curl command
+against an owned loopback server, substituting its destination and test CA.
+The server sends partial bytes and resets the stream with INTERNAL_ERROR.
+The original command reproduces exit92 after one request despite `--retry 3`.
+The corrected command recovers after a second request and replaces the partial
+file completely. Further real-curl controls verify persistent resets stop
+after four requests, certificate verification still rejects the fixture without
+its CA, and HTTPS redirects cannot downgrade to HTTP. Failed downloads do not
+reach the subsequent test stage. No installer code that modifies the host Go
+installation or services runs in these regressions.
+
+The follow-up applies `--retry-all-errors` to this public archive GET with three
+retries, a 15-second connection timeout, a 300-second transfer deadline and a
+600-second retry-start window. That window is not an overall transfer deadline.
+The requested pinned URL is logged, and HTTPS-only redirects are enforced.
+Official HTTPS release metadata and exact SHA256 verification still precede
+Go extraction. Other installer, mail and qualification operations are not
+replayed. This controlled reproduction establishes the command's retry behavior;
+fresh qualification is required for the changed signed runtime.

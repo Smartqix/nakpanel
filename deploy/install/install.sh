@@ -273,7 +273,10 @@ ensure_go_toolchain() {
   [[ "${go_version}" =~ ^1\.[0-9]+\.[0-9]+$ ]] || { echo 'invalid pinned Go release' >&2; return 1; }
   if ! command -v go >/dev/null 2>&1 || [[ "$(go version | awk '{print $3}')" != "go${go_version}" ]]; then
     archive="$(mktemp /tmp/nakpanel-go.XXXXXX.tar.gz)"
-    curl -fsSL --retry 3 --retry-delay 2 "https://go.dev/dl/go${go_version}.linux-${goarch}.tar.gz" -o "${archive}"
+    printf 'install.sh: downloading pinned Go archive https://go.dev/dl/go%s.linux-%s.tar.gz\n' "${go_version}" "${goarch}" >&2
+    curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' \
+      --connect-timeout 15 --max-time 300 --retry 3 --retry-all-errors --retry-delay 2 --retry-max-time 600 \
+      "https://go.dev/dl/go${go_version}.linux-${goarch}.tar.gz" -o "${archive}"
     checksum="$(python3 - "${go_version}" "${goarch}" <<'PY'
 import json, sys, urllib.request
 version, arch = sys.argv[1:]
