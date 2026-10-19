@@ -29,7 +29,7 @@ func TestDatabaseManagerUsesSelectedAuthenticatedAssets(t *testing.T) {
 				os.MkdirAll(filepath.Dir(target), 0700)
 				os.WriteFile(target, []byte("#!/bin/bash\nprintf '%s' "+label+" >\"$CALL_LOG\"\n"), 0700)
 			}
-			for name, body := range map[string]string{"timeout": "#!/bin/bash\nshift;exec \"$@\"\n", "systemctl": "#!/bin/bash\nexit 0\n", "curl": "#!/bin/bash\necho 204\n", "node": "#!/bin/bash\nexit 0\n"} {
+			for name, body := range map[string]string{"timeout": "#!/bin/bash\nshift;exec \"$@\"\n", "systemctl": "#!/bin/bash\nexit 0\n", "python3": "#!/bin/bash\nexit 0\n", "node": "#!/bin/bash\nexit 0\n"} {
 				os.WriteFile(filepath.Join(dir, name), []byte(body), 0700)
 			}
 			body := `set -euo pipefail

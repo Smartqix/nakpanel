@@ -97,9 +97,113 @@ if [[ "${NAKPANEL_VERIFY_DATABASE_MANAGER:-0}" == 1 ]]; then
   multipass exec "${VM_NAME}" -- sudo bash -se -- "${tool_assets}" <<'DBMANAGER'
 set -euo pipefail
 timeout 45m "$1/deploy/install/database-manager-install.sh" --yes
-systemctl is-active --quiet nakpanel-database-manager
-code=$(curl -sS --max-time 10 -o /dev/null -w "%{http_code}" http://127.0.0.1:9082/__nakpanel_health)
-test "$code" = 204
+# The opt-in fixture explicitly activates the new key/group/dropin. The
+# standalone installer deliberately leaves this operator action separate.
+python3 - <<'MANAGER_READY'
+import http.client,json,os,stat,subprocess,sys,time
+def manager_remaining(deadline):
+    remaining=deadline-time.monotonic()
+    if remaining<=0:raise ValueError('post-maintenance service/DB-manager readiness timed out')
+    return remaining
+
+def manager_key(deadline):
+    manager_remaining(deadline)
+    try:
+        fd=os.open('/etc/nakpanel/database-manager.key',os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+        try:
+            info=os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid!=0 or stat.S_IMODE(info.st_mode)&0o137 or info.st_size>4096:
+                raise ValueError('database-manager key metadata invalid')
+            data=os.read(fd,4097)
+        finally:os.close(fd)
+        key=data.strip().decode('ascii')
+    except (OSError,UnicodeError):
+        raise ValueError('database-manager private key unavailable') from None
+    manager_remaining(deadline)
+    if not 32<=len(key)<=4096 or len(data)!=info.st_size or any(ord(c)<32 or ord(c)>126 for c in key):
+        raise ValueError('database-manager key format invalid')
+    return key
+
+def manager_bridge():
+    try:
+        info=os.lstat('/run/nakpanel-db-manager/bridge.sock')
+    except OSError:return None
+    return {'socket':stat.S_ISSOCK(info.st_mode),'uid':info.st_uid,'gid':info.st_gid,'mode':oct(stat.S_IMODE(info.st_mode))}
+
+def manager_http(deadline):
+    key=manager_key(deadline)
+    connection=http.client.HTTPConnection('127.0.0.1',9082,timeout=min(2,manager_remaining(deadline)))
+    response=None
+    try:
+        connection.request('GET','/__nakpanel_health',headers={'X-Nakpanel-Manager-Key':key})
+        remaining=manager_remaining(deadline)
+        if connection.sock is not None:connection.sock.settimeout(min(2,remaining))
+        response=connection.getresponse()
+        manager_remaining(deadline)
+        return {'status':response.status,'transport':'connected'}
+    except ConnectionRefusedError:
+        manager_remaining(deadline);return {'status':None,'transport':'refused'}
+    except (TimeoutError,OSError,http.client.HTTPException):
+        manager_remaining(deadline);return {'status':None,'transport':'unavailable'}
+    finally:
+        cleanup_failed=False
+        try:
+            if response is not None:
+                try:response.close()
+                except (OSError,http.client.HTTPException):cleanup_failed=True
+        finally:
+            try:connection.close()
+            except (OSError,http.client.HTTPException):cleanup_failed=True
+        if cleanup_failed:raise ValueError('database-manager connection cleanup failed') from None
+
+def main():
+    deadline=time.monotonic()+120
+    last={'units':{},'bridge':None,'http_status':None,'transport':None}
+    failure='readiness-timeout'
+    try:
+        restart=subprocess.run(['systemctl','restart','nakpanel.service'],capture_output=True,timeout=min(30,manager_remaining(deadline)))
+        manager_remaining(deadline)
+        if restart.returncode:raise ValueError('restart-failed')
+        while True:
+            ready=True
+            for unit in ('nakpanel-database-manager.service','nakpanel-database-manager-http.service'):
+                result=subprocess.run(['systemctl','show','--property=ActiveState,SubState,Result,ExecMainStatus',unit],capture_output=True,text=True,timeout=min(5,manager_remaining(deadline)))
+                manager_remaining(deadline)
+                values=dict(line.split('=',1) for line in result.stdout.splitlines() if '=' in line)
+                projected={}
+                for key,allowed in [('ActiveState',{'active','inactive','activating','deactivating','failed','reloading'}),('SubState',{'running','dead','exited','start','auto-restart','failed'}),('Result',{'success','exit-code','signal','timeout','start-limit-hit','resources'})]:
+                    value=values.get(key);projected[key]=value if value in allowed else None
+                code=values.get('ExecMainStatus','');projected['ExecMainStatus']=int(code) if code.isascii() and code.isdecimal() and len(code)<=3 else None
+                last['units'][unit]=projected
+                ready=(result.returncode==0 and projected['ActiveState']=='active') and ready
+            last['bridge']=manager_bridge();manager_remaining(deadline)
+            ready=ready and last['bridge'] is not None and last['bridge']['socket']
+            if ready:
+                checked=manager_http(deadline);last['http_status']=checked['status'];last['transport']=checked['transport']
+                ready=checked['status']==204
+            manager_remaining(deadline)
+            if ready:
+                print('PASS database manager authenticated FastCGI readiness')
+                return 0
+            time.sleep(min(1,manager_remaining(deadline)))
+    except subprocess.TimeoutExpired:failure='command-timeout'
+    except Exception as error:
+        # Never publish exception messages: a key/file/HTTP parser may contain
+        # private bytes. Only these fixed classifications leave the guest.
+        codes={'restart-failed':'restart-failed',
+               'post-maintenance service/DB-manager readiness timed out':'readiness-timeout',
+               'database-manager private key unavailable':'private-key-unavailable',
+               'database-manager key metadata invalid':'private-key-unavailable',
+               'database-manager key format invalid':'private-key-unavailable',
+               'database-manager connection cleanup failed':'transport-cleanup-failed'}
+        failure=codes.get(str(error),'probe-unavailable') if type(error) is ValueError else 'probe-unavailable'
+    last.update(schema='nakpanel-database-manager-readiness-v1',success=False,error_code=failure)
+    last['listener_reachable']=True if last['http_status'] is not None else False if last['transport']=='refused' else None
+    print(json.dumps(last,sort_keys=True,separators=(',',':')),file=sys.stderr)
+    return 1
+
+sys.exit(main())
+MANAGER_READY
 DBMANAGER
   # The browser suite covers restricted signon, SQL operations, upload,
   # password rotation, session revocation and tenant boundary controls.

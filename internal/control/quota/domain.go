@@ -270,9 +270,9 @@ func (s *SQLStore) ChangeSubscriptionPlans(ctx context.Context, ids []int64, pla
 		if err = LockSubscriptionMutationTx(ctx, tx, id); err != nil {
 			return err
 		}
-		var resellerID int64
-		var status string
-		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(c.reseller_id,0),s.status FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, id).Scan(&resellerID, &status); err != nil {
+		var resellerID, previousPlanID int64
+		var status, previousMode string
+		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(c.reseller_id,0),s.status,COALESCE(s.plan_id,0),s.sync_mode FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, id).Scan(&resellerID, &status, &previousPlanID, &previousMode); err != nil {
 			return err
 		}
 		if resellerID != plan.ResellerID {
@@ -284,7 +284,11 @@ func (s *SQLStore) ChangeSubscriptionPlans(ctx context.Context, ids []int64, pla
 		if _, err = tx.ExecContext(ctx, `UPDATE subscriptions SET plan_id=$2,sync_mode='synced',sync_status='pending',sync_error='',updated_at=now() WHERE id=$1`, id, planID); err != nil {
 			return err
 		}
-		if err = syncSubscriptionTx(ctx, tx, id, true); err != nil {
+		cause := resolvePlanHistory
+		if previousPlanID != planID || previousMode != "synced" {
+			cause = requireFullSync
+		}
+		if err = syncSubscriptionWithCauseTx(ctx, tx, id, true, cause); err != nil {
 			return err
 		}
 		if err = s.markSubscriptionPendingTx(ctx, tx, id); err != nil {

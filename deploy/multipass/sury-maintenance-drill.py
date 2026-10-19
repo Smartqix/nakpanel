@@ -7,6 +7,7 @@ version advance, package-version rollback, application rollback or production up
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import http.client
 import io
 import json
 import lzma
@@ -866,23 +867,93 @@ def parse_tool_results(minor, uid, composer, wp, worker):
     return {'composer_version':composer_version[1],'wp_cli_version':wp_version[1],'worker':observed}
 
 
+def manager_remaining(deadline):
+    remaining=deadline-time.monotonic()
+    if remaining<=0:raise ValueError('post-maintenance service/DB-manager readiness timed out')
+    return remaining
+
+
+def manager_key(deadline):
+    manager_remaining(deadline)
+    try:
+        fd=os.open('/etc/nakpanel/database-manager.key',os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+        try:
+            info=os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid!=0 or stat.S_IMODE(info.st_mode)&0o137 or info.st_size>4096:
+                raise ValueError('database-manager key metadata invalid')
+            data=os.read(fd,4097)
+        finally:os.close(fd)
+        key=data.strip().decode('ascii')
+    except (OSError,UnicodeError):
+        raise ValueError('database-manager private key unavailable') from None
+    manager_remaining(deadline)
+    if not 32<=len(key)<=4096 or len(data)!=info.st_size or any(ord(c)<32 or ord(c)>126 for c in key):
+        raise ValueError('database-manager key format invalid')
+    return key
+
+
+def manager_bridge():
+    try:
+        info=os.lstat('/run/nakpanel-db-manager/bridge.sock')
+    except OSError:return None
+    return {'socket':stat.S_ISSOCK(info.st_mode),'uid':info.st_uid,'gid':info.st_gid,'mode':oct(stat.S_IMODE(info.st_mode))}
+
+
+def manager_http(deadline):
+    key=manager_key(deadline)
+    connection=http.client.HTTPConnection('127.0.0.1',9082,timeout=min(2,manager_remaining(deadline)))
+    response=None
+    try:
+        connection.request('GET','/__nakpanel_health',headers={'X-Nakpanel-Manager-Key':key})
+        remaining=manager_remaining(deadline)
+        if connection.sock is not None:connection.sock.settimeout(min(2,remaining))
+        response=connection.getresponse()
+        manager_remaining(deadline)
+        return {'status':response.status,'transport':'connected'}
+    except ConnectionRefusedError:
+        manager_remaining(deadline);return {'status':None,'transport':'refused'}
+    except (TimeoutError,OSError,http.client.HTTPException):
+        manager_remaining(deadline);return {'status':None,'transport':'unavailable'}
+    finally:
+        cleanup_failed=False
+        try:
+            if response is not None:
+                try:response.close()
+                except (OSError,http.client.HTTPException):cleanup_failed=True
+        finally:
+            try:connection.close()
+            except (OSError,http.client.HTTPException):cleanup_failed=True
+        if cleanup_failed:raise ValueError('database-manager connection cleanup failed') from None
+
+
 def service_wait(before, db_manager):
     deadline=time.monotonic()+120
+    expected={**{'php'+minor+'-fpm.service':'active' for minor in MINORS},**before}
+    if db_manager:expected.update({'nakpanel-database-manager.service':'active','nakpanel-database-manager-http.service':'active'})
     while True:
-        ready=all(service_state('php'+minor+'-fpm.service')=='active' for minor in MINORS)
-        ready=ready and all(service_state(unit)==state for unit,state in before.items())
+        ready=True
+        for unit,state in expected.items():
+            remaining=manager_remaining(deadline)
+            try:
+                result=command(['systemctl','show','--property=ActiveState','--value',unit],check=False,timeout=min(5,remaining))
+            except (OSError,UnicodeError,subprocess.SubprocessError):
+                raise ValueError('post-maintenance service inspection unavailable') from None
+            manager_remaining(deadline)
+            ready=(result.returncode==0 and result.stdout.strip()==state) and ready
         if db_manager:
-            check=command(['curl','-sS','--max-time','5','-o','/dev/null','-w','%{http_code}','http://127.0.0.1:9082/__nakpanel_health'],check=False)
-            ready=ready and service_state('nakpanel-database-manager.service')=='active' and check.returncode==0 and check.stdout=='204'
+            bridge=manager_bridge();manager_remaining(deadline)
+            if bridge is None or not bridge['socket']:ready=False
+            check=manager_http(deadline) if ready else None
+            ready=ready and check is not None and check['status']==204
+        manager_remaining(deadline)
         if ready:return
-        require(time.monotonic()<deadline,'post-maintenance service/DB-manager readiness timed out')
-        time.sleep(1)
+        time.sleep(min(1,manager_remaining(deadline)))
 
 
 def guest_health(root, config, phase, *, reboot=False):
     baseline=json.loads(root_regular(root/'baseline.json'))
     packages=json.loads(root_regular(root/'packages.json'))
-    units=sorted(set(SERVICES)|{'php'+minor+'-fpm.service' for minor in MINORS}|set(baseline['managed_services'])|({'nakpanel-database-manager.service'} if baseline['database_manager'] else set()))
+    units=sorted(set(SERVICES)|{'php'+minor+'-fpm.service' for minor in MINORS}|set(baseline['managed_services'])|({'nakpanel-database-manager.service','nakpanel-database-manager-http.service'} if baseline['database_manager'] else set()))
     # Preserve unassisted postboot state before any wait or smoke operation.
     # Service restoration belongs only to the controlled fault recovery path;
     # a reboot persistence failure must never be repaired by this verifier.

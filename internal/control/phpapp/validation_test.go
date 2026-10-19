@@ -1,6 +1,7 @@
 package phpapp
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -140,5 +141,22 @@ func TestReadyRuntimeRequiresExactReadyRecord(t *testing.T) {
 	}
 	if _, err := readyPHPRuntime(types.RuntimeCapabilities{PHPVersions: []string{"8.4"}}, "8.4"); err == nil {
 		t.Fatal("missing detailed capability was accepted")
+	}
+}
+
+func TestClassicSharedPathsAreAnArrayForNilAndEmptyRequests(t *testing.T) {
+	for _, paths := range [][]string{nil, {}, {"managed-only"}} {
+		input := ConfigureApplicationInput{HostingMode: types.PHPHostingModeClassic, PHPVersion: "8.4", SharedPaths: paths}
+		got, err := validateApplicationConfiguration(input, managedPolicy(), types.PHPHostingModeClassic)
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(got.SharedPaths)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(raw) != "[]" {
+			t.Fatalf("classic shared_paths JSON=%s, want schema-valid []", raw)
+		}
 	}
 }

@@ -158,3 +158,50 @@ Candidate18 (`8396f1a0c9ffd9c867e96ec59ff2655adb6c87c2`) passed the combined42 G
 Hosted Noble and native Resolute AMD64, plus the required security job, independently reported the same SQL error after successful signed installation, physical PostgreSQL readiness and exact installed-binary checks. The local report retains one passed bundle gate, a failed fresh-install gate and fifteen pending gates. No prior allocation, Roundcube send, configured cleanup, snapshot or migration admission occurred. Local Native26 and Surý26 launches were withheld. Other hosted results require their own retained evidence.
 
 The correction must use the real `sync_mode` contract and execute the actual fixture assertions against migration-derived historical schema55 and current schema56. The existing policy and API-boundary cases remain additional coverage. No guest SQL repair or retry converts candidate18 into a pass; a new committed and signed candidate must repeat fresh qualification.
+
+### Candidate19 database-manager qualification boundary
+
+Candidate19 (`17e586b21a5bb9d048319b9741070e9a8cb67764`) corrected the real
+subscription-column assertion. Actual historical schema55 and current schema56
+cases passed for all three profiles, including independent old-script failures
+and corrected race runs. All42 Go packages and vet passed. Both architecture
+development bundles passed signature, exact inventory and static-binary checks.
+
+The [required hosted CI](https://github.com/Smartqix/nakpanel/actions/runs/39263219013)
+passed signed Noble installation, container/adversarial security, populated
+upgrade, reboot and disaster recovery. Its separately signed PR-merge runtime
+has the same Git tree as candidate19; installed binaries are verified against
+that runtime's own manifest. Local Noble ARM64 passed four canonical gates,
+including the genuine populated historical update with retained data canaries.
+The prior guest was reclaimed and the local controller was held before further
+allocations, following the operator's preference to continue hosted testing.
+
+All four original AMD64 matrix cells completed with eleven passed gates through
+Phase32, then failed `internal-tools` at the database-manager check. Both
+[native](https://github.com/Smartqix/nakpanel/actions/runs/39263209225) and
+[Surý](https://github.com/Smartqix/nakpanel/actions/runs/39263424096) workflows
+retain their original failed reports. Each cell's earlier Roundcube flow passed
+login, exactly one send and exact received-body rendering, bound to its actual
+runtime, source and ownership. All four cleanup paths completed. None establishes
+full platform or PHP maintenance acceptance.
+
+Each original log records a successful FPM configuration test and installer
+return followed by a refused loopback9082 health connection. The retained data
+does not establish whether that refusal was a startup race or a persistent
+service error. Source review additionally found that the check omitted the
+required runtime-key header and the explicit panel restart needed to activate
+the newly installed key, supplementary group, drop-in and bridge. The next
+qualifier must activate the owned panel once and wait for authenticated204,
+both isolated runtime services and the real bridge socket within a bounded
+deadline. The standalone opt-in installer retains its separate panel-restart
+contract. Maintenance postchecks must authenticate without repairing services
+before their postboot observations. These corrections require new signed bytes
+and fresh qualification; they do not rewrite candidate19 results.
+
+Forward preparation also exposed legacy defaults that the full-plan editor
+cannot preserve. A narrow PHP-only preview/update and central synchronization
+path is being implemented with immutable revision provenance and raw non-PHP
+preservation. Actual-schema and concurrency tests, independent core review and
+new-runtime acceptance remain required. The required CI unit job now provisions
+separate private fixture databases so real production-schema tests cannot be
+silently skipped or conflict through database-wide advisory locks.

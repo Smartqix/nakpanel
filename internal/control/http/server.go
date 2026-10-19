@@ -410,6 +410,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /customers/bulk-status", s.handleBulkCustomerStatus)
 	mux.HandleFunc("POST /plans", s.handleUpsertPlan)
 	mux.HandleFunc("POST /plans/preview", s.handlePreviewPlan)
+	mux.HandleFunc("POST /plans/{id}/php-versions/preview", s.handlePreviewPlanPHPVersions)
+	mux.HandleFunc("POST /plans/{id}/php-versions", s.handleUpdatePlanPHPVersions)
 	mux.HandleFunc("GET /plans/{id}/sync-status", s.handlePlanSynchronization)
 	mux.HandleFunc("POST /plans/status", s.handleSetPlanStatus)
 	mux.HandleFunc("POST /plans/bulk-status", s.handleBulkPlanStatus)
@@ -3416,7 +3418,12 @@ func csrfGuard(next http.Handler) http.Handler {
 		}
 		provided := strings.TrimSpace(r.Header.Get("X-Nakpanel-CSRF"))
 		if provided == "" {
-			_ = r.ParseForm()
+			// ParseForm caches partial values even on error. The narrow plan API
+			// must reject that first error before a later cached parse hides it.
+			if err := r.ParseForm(); err != nil && isPlanPHPVersionsRequest(r) {
+				writePlanPHPError(w, http.StatusBadRequest, "invalid_php_versions", "Malformed PHP version form", 0)
+				return
+			}
 			provided = strings.TrimSpace(r.Form.Get("csrf_token"))
 		}
 		if subtle.ConstantTimeCompare([]byte(expected), []byte(provided)) != 1 {

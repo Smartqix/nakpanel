@@ -153,7 +153,7 @@ func userFacingErrors(next http.Handler) http.Handler {
 
 func (w *capturedErrorWriter) finish(r *http.Request) {
 	sourceJSON := isJSONContentType(w.Header().Get("Content-Type"))
-	if sourceJSON && w.status < http.StatusInternalServerError {
+	if sourceJSON && (w.status < http.StatusInternalServerError || isSafePlanPHPFailure(r, w.status, w.body.Bytes())) {
 		w.target.WriteHeader(w.status)
 		_, _ = w.target.Write(w.body.Bytes())
 		return

@@ -14,6 +14,8 @@ import (
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
+var ErrSubscriptionTerminating = errors.New("billing account teardown has started")
+
 func (s *SQLStore) CreateCustomer(ctx context.Context, req types.CreateCustomerReq) (types.Customer, error) {
 	if s == nil || s.db == nil {
 		return types.Customer{}, errors.New("quota database is not configured")
@@ -266,7 +268,7 @@ FOR SHARE`, subscriptionID).Scan(&state)
 		return err
 	}
 	if state == "terminating" || state == "terminated" {
-		return errors.New("billing account teardown has started")
+		return ErrSubscriptionTerminating
 	}
 	return nil
 }

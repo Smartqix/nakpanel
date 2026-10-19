@@ -117,6 +117,116 @@ class ForwardFixtureTests(unittest.TestCase):
             self.assertIs(receipt['remediate_stale_php82'],True);self.assertNotIn('admin_password',receipt)
             self.assertFalse((output/'fixture.json').exists())
 
+    def test_same_shape_migrated_plan_comparison_preserves_every_non_php_field(self):
+        before={'plan':{'id':1,'revision':2,'php_allowlist':'8.3,8.4,8.5','default_php_version':'8.4','disk_mb':10,'hosting_policy':{'schema_version':1,'php':{'default_version':'8.4','allowed_versions':['8.3','8.4','8.5']},'unknown':{'keep':True}}},'presets':{'schema_version':1,'php':{'default_version':'8.4','allowed_versions':'8.3,8.4,8.5','memory_limit_mb':128},'hosting':{'web_server':'nginx'}}}
+        after=json.loads(json.dumps(before));after['plan'].update(revision=3,php_allowlist='8.5',default_php_version='8.5');after['plan']['hosting_policy']['php'].update(default_version='8.5',allowed_versions=['8.5']);after['presets']['php'].update(default_version='8.5',allowed_versions='8.5')
+        probe.assert_plan_only_php_changed(before,after)
+        for path,value in [(('plan','disk_mb'),11),(('plan','hosting_policy','unknown','keep'),False),(('presets','php','memory_limit_mb'),256),(('plan','hosting_policy','schema_version'),5)]:
+            changed=json.loads(json.dumps(after));node=changed
+            for part in path[:-1]:node=node[part]
+            node[path[-1]]=value
+            with self.subTest(path=path),self.assertRaisesRegex(RuntimeError,'non-PHP'):probe.assert_plan_only_php_changed(before,changed)
+
+    def test_site_php_preparation_uses_product_api_and_preserves_lifecycle_and_redirect(self):
+        rows=[{'id':1,'php_version':'8.3','desired_php_version':'8.3','desired_status':'suspended','desired_https_redirect':False}, {'id':2,'php_version':'8.4','desired_php_version':'8.5','desired_status':'active','desired_https_redirect':True}]
+        calls=[]
+        def query(sql):
+            if sql.startswith('SELECT'):
+                value=json.loads(json.dumps(rows))
+                if calls:
+                    for row in value:row.update(php_version='8.5',desired_php_version='8.5')
+                return json.dumps(value)
+            raise AssertionError('fixture must not mutate SQL')
+        with patch.object(probe,'pg',side_effect=query),patch.object(probe,'wait') as wait:
+            probe.normalize_site_php({'normalize_php85':True},lambda route,data:calls.append((route,data)))
+        self.assertEqual([x[0] for x in calls],['sites/1/hosting','sites/2/hosting'])
+        self.assertEqual(calls[0][1],{'desired_status':'suspended','desired_php_version':'8.5','desired_https_redirect':'false'})
+        self.assertEqual(calls[1][1]['desired_https_redirect'],'true');self.assertEqual(wait.call_count,3)
+        for status in ('pending','failed','deleting'):
+            bad=json.loads(json.dumps(rows));bad[1]['desired_status']=status
+            with self.subTest(status=status),patch.object(probe,'pg',return_value=json.dumps(bad)):
+                with self.assertRaisesRegex(RuntimeError,'lifecycle'):probe.normalize_site_php({'normalize_php85':True},lambda *args:self.fail('mutated before complete validation'))
+        with patch.object(probe,'pg',return_value=json.dumps(rows)):
+            with self.assertRaisesRegex(RuntimeError,'API failure'):probe.normalize_site_php({'normalize_php85':True},lambda *args:(_ for _ in ()).throw(RuntimeError('API failure')))
+
+    def managed_php_state(self,site_version='8.3',app_version='8.3'):
+        app={'id':11,'site_id':1,'subscription_id':7,'hosting_mode':'managed','php_version':app_version,'repository_id':12,'repository_ref':'release/stable','framework_profile':'custom','public_path':'www','health_path':'/ready','shared_paths':['storage','cache'],'composer_install':True,'composer_allow_scripts':False,'composer_allow_plugins':True,'release_retention':7,'desired_state':'active','active_deployment_id':23,'previous_deployment_id':22,'desired_revision':5,'applied_revision':5,'convergence_status':'in_sync'}
+        return [{'id':1,'php_version':site_version,'desired_php_version':site_version,'desired_status':'active','desired_https_redirect':True,'application':app,'subscription_status':'active','customer_status':'active','provider_active':True,'pending_deployments':0,'related_intent':'a'*64}]
+
+    def test_managed_php_and_application_only_mismatch_use_full_configuration_api(self):
+        for site_version,app_version in [('8.3','8.3'),('8.5','8.4')]:
+            rows=self.managed_php_state(site_version,app_version);saved=json.loads(json.dumps(rows));saved[0].update(php_version='8.5',desired_php_version='8.5');saved[0]['application'].update(php_version='8.5',desired_revision=6,applied_revision=6)
+            calls=[]
+            with self.subTest(site=site_version,app=app_version),patch.object(probe,'pg',return_value=json.dumps(rows)),patch.object(probe,'wait'):
+                # Current v1 misses the application-only case and never calls the
+                # application API. Model only readonly before/after observations.
+                if hasattr(probe,'php_normalization_state'):
+                    with patch.object(probe,'php_normalization_state',side_effect=[rows,saved]):probe.normalize_site_php({'normalize_php85':True},lambda route,data:calls.append((route,data)))
+                else:probe.normalize_site_php({'normalize_php85':True},lambda route,data:calls.append((route,data)))
+            app_calls=[data for route,data in calls if route=='sites/1/php-application']
+            self.assertEqual(len(app_calls),1)
+            data=app_calls[0];self.assertEqual(data['php_version'],'8.5');self.assertEqual(data['hosting_mode'],'managed');self.assertEqual(data['repository_id'],12);self.assertEqual(data['repository_ref'],'release/stable');self.assertEqual(data['shared_path'],['storage','cache']);self.assertEqual(data['release_retention'],7);self.assertEqual(data['composer_allow_plugins'],'true')
+            self.assertEqual([route for route,_ in calls],(['sites/1/hosting'] if site_version!='8.5' else [])+['sites/1/php-application'])
+
+    def test_application_only_php_mismatch_is_not_skipped(self):
+        rows=self.managed_php_state('8.5','8.3');saved=json.loads(json.dumps(rows));saved[0]['application'].update(php_version='8.5',desired_revision=6,applied_revision=6);calls=[]
+        with patch.object(probe,'pg',return_value=json.dumps(rows)),patch.object(probe,'wait'):
+            if hasattr(probe,'php_normalization_state'):
+                with patch.object(probe,'php_normalization_state',side_effect=[rows,saved]):probe.normalize_site_php({'normalize_php85':True},lambda *args:calls.append(args))
+            else:probe.normalize_site_php({'normalize_php85':True},lambda *args:calls.append(args))
+        self.assertEqual([route for route,_ in calls],['sites/1/php-application'])
+
+    def test_managed_php_prevalidates_every_row_and_rejects_non_php_postcondition_drift(self):
+        for change in ('suspended','pending-deploy','classic-nondefault','invalid-shared','inactive-provider'):
+            rows=self.managed_php_state();bad=json.loads(json.dumps(rows[0]));bad['id']=2;bad['application']['site_id']=2
+            if change=='suspended':bad['desired_status']='suspended'
+            elif change=='pending-deploy':bad['pending_deployments']=1
+            elif change=='classic-nondefault':bad['application']['hosting_mode']='classic'
+            elif change=='invalid-shared':bad['application']['shared_paths']='storage'
+            else:bad['provider_active']=False
+            rows.append(bad)
+            with self.subTest(change=change),patch.object(probe,'php_normalization_state',return_value=rows),patch.object(probe,'wait'):
+                with self.assertRaises(RuntimeError):probe.normalize_site_php({'normalize_php85':True},lambda *args:self.fail('mutation before complete validation'))
+        for key in ('repository_ref','active_deployment_id','desired_state','hosting_mode','related_intent'):
+            rows=self.managed_php_state();saved=json.loads(json.dumps(rows));saved[0].update(php_version='8.5',desired_php_version='8.5');saved[0]['application'].update(php_version='8.5',desired_revision=6,applied_revision=6);
+            if key=='related_intent':saved[0][key]='b'*64
+            else:saved[0]['application'][key]='changed'
+            with self.subTest(key=key),patch.object(probe,'php_normalization_state',side_effect=[rows,saved]),patch.object(probe,'wait'):
+                with self.assertRaisesRegex(RuntimeError,'non-PHP'):probe.normalize_site_php({'normalize_php85':True},lambda *args:None)
+
+    def test_fixture_capability_api_preserves_base_entitlements_and_existing_override_php(self):
+        before={'php':{'allowed_versions':['8.3','8.4','8.5'],'default_version':'8.4'},'web':{'index_files':'index.php'},'permissions':{'ssh':False},'applications':{'allowed_catalog_slugs':['existing-app']}}
+        calls=[]
+        with patch.object(probe,'pg',side_effect=lambda sql:'a'*64 if 'sha256' in sql else json.dumps(json.loads(calls[-1][1]['policy_patch']) if calls else before)),patch.object(probe,'wait'):
+            probe.prepare_fixture_capabilities({'subscription_id':7},lambda route,data:calls.append((route,data)),['forward-test'])
+        self.assertEqual(calls[0][0],'subscriptions/7/policy')
+        saved=json.loads(calls[0][1]['policy_patch']);self.assertEqual(saved['php'],before['php']);self.assertEqual(saved['web'],before['web']);self.assertIs(saved['permissions']['ssh'],False)
+        self.assertIs(saved['permissions']['mail'],True);self.assertEqual(saved['resources']['max_mailboxes'],4)
+        self.assertEqual(saved['applications']['allowed_catalog_slugs'],['existing-app','forward-test'])
+        self.assertEqual(before['permissions'],{'ssh':False})
+
+    def test_capability_api_never_rewrites_base_and_rejects_malformed_or_failed_api(self):
+        for value in ({'resources':'bad'},{'applications':{'allowed_catalog_slugs':'bad'}},[]):
+            with self.subTest(value=value),patch.object(probe,'pg',side_effect=lambda sql:'a'*64 if 'sha256' in sql else json.dumps(value)):
+                with self.assertRaises(RuntimeError):probe.prepare_fixture_capabilities({'subscription_id':7},lambda *args:self.fail('write before override validation'),['forward-test'])
+        calls=[]
+        def query(sql):
+            if 'sha256' in sql:return ('b' if calls else 'a')*64
+            return json.dumps(json.loads(calls[-1][1]['policy_patch']) if calls else {})
+        with patch.object(probe,'pg',side_effect=query),patch.object(probe,'wait') as wait:
+            with self.assertRaisesRegex(RuntimeError,'immutable base'):probe.prepare_fixture_capabilities({'subscription_id':7},lambda *args:calls.append(args),['forward-test'])
+            wait.assert_not_called()
+        with patch.object(probe,'pg',side_effect=lambda sql:'a'*64 if 'sha256' in sql else '{}'):
+            with self.assertRaisesRegex(RuntimeError,'API failed'):probe.prepare_fixture_capabilities({'subscription_id':7},lambda *args:(_ for _ in ()).throw(RuntimeError('API failed')),['forward-test'])
+
+    def test_durable_projection_hashes_complete_plan_addon_and_subscription_contracts(self):
+        projections=probe.intent_projections()
+        for table in ('plans','addon_plans','subscriptions','subscription_entitlements','php_applications','php_workers','php_environment_bindings','php_deployments'):
+            self.assertIn('to_jsonb',projections[table]);self.assertNotIn('hosting_policy AS',projections[table])
+        self.assertIn('subscription_addons',projections)
+        self.assertNotIn("- 'plan_id'",projections['subscriptions']);self.assertNotIn("- 'sync_mode'",projections['subscriptions'])
+        self.assertNotIn("- 'php_allowlist'",projections['subscription_entitlements'])
+
     def test_php82_preflight_rejects_both_profiles_before_login_or_mutation(self):
         inventory=self.php_inventory()
         for profile in ('ubuntu-26.04-native','ubuntu-26.04-sury'):
@@ -161,26 +271,28 @@ class ForwardFixtureTests(unittest.TestCase):
                 new=json.loads(json.dumps(old));new['revision']=2;new['resources']['php_allowlist']=','.join(versions);new['presets']['hosting'].update(default_php_version=default,allowed_php_versions=versions);new['hosting_policy']['php'].update(default_version=default,allowed_versions=versions)
                 changed=[]
                 class API:
-                    def get(self,path):
-                        if path!='service-plans/4':raise AssertionError('wrong retired plan editor')
-                        return '<form action="/plans" method="post"><input name="plan_id" value="4"><input name="lifecycle_status" value="retired"><input name="disk_mb" value="-1"></form>'
+                    def get(self,path):raise AssertionError('PHP-only operation must not read the full plan editor')
                     def __call__(self,path,values):
-                        if path!='plans':raise AssertionError('not a product revision')
+                        if path=='plans/4/php-versions/preview':return json.dumps({'ok':True,'plan_id':4,'revision':1,'no_change':False,'preview':{'allowed':True,'changes':[]}}).encode()
+                        if path!='plans/4/php-versions':raise AssertionError('not a PHP-only product revision')
                         changed.append(dict(values))
+                        return json.dumps({'ok':True,'plan_id':4,'revision':2,'changed':True,'sync_state':'pending'}).encode()
                 def query(sql):
                     if 'row_to_json(q)' in sql:
                         self.assertIn("sync_mode='synced'",sql);self.assertIn("retired",sql)
                         return json.dumps([plan])
                     if 'jsonb_agg(to_jsonb(p)' in sql:return 'immutable-history'
-                    if 'definition::text' in sql:return json.dumps(new if 'revision=2' in sql else old)
+                    if 'jsonb_build_object' in sql:
+                        value=json.loads(json.dumps(new if changed else old));presets=value.pop('presets');value['id']=4
+                        return json.dumps({'plan':value,'presets':presets})
                     if 'audit_events' in sql:return str(len(changed))
                     if 'json_build_object' in sql:return json.dumps(dict(plan,revision=2,php_allowlist=','.join(versions),default_php_version=default,hosting_policy=new['hosting_policy']))
                     raise AssertionError('unexpected SQL')
                 config={'target_profile':'ubuntu-26.04-native' if native else 'ubuntu-26.04-sury','normalize_php85':native,'remediate_stale_php82':True}
                 with patch.object(probe,'pg',side_effect=query),patch.object(probe,'wait'):
                     probe.normalize_active_plans(config,API())
-                self.assertEqual(len(changed),1);self.assertEqual(changed[0]['lifecycle_status'],'retired')
-                self.assertEqual(changed[0]['php_allowlist'],','.join(versions));self.assertEqual(changed[0]['default_php_version'],default)
+                self.assertEqual(len(changed),1);self.assertEqual(set(changed[0]),{'expected_revision','php_versions','default_php_version','change_reason'})
+                self.assertEqual(changed[0]['expected_revision'],'1');self.assertEqual(changed[0]['default_php_version'],default)
 
     def test_stale_synced_snapshot_uses_product_sync_without_changing_non_php_contract(self):
         initial=self.php_inventory();initial['plans'][0].update(php_allowlist='8.3',hosting_policy={'php':{'default_version':'8.3','allowed_versions':['8.3']}})
@@ -195,6 +307,39 @@ class ForwardFixtureTests(unittest.TestCase):
         self.assertEqual(changed,[('subscriptions/1/sync',{})])
         bad=json.loads(json.dumps(final));bad['subscriptions'][0]['disk_mb']=10
         with self.assertRaisesRegex(RuntimeError,'non-PHP'):probe.assert_snapshot_only_php_changed(initial['subscriptions'],bad['subscriptions'])
+
+    def test_existing_legacy_snapshot_php_mirrors_are_php_leaves_only(self):
+        before=self.php_inventory()['subscriptions']
+        before[0]['service_presets']={'php':{'allowed_versions':'8.3,8.2','default_version':'8.3','memory_limit_mb':128,'future':{'keep':[None,True]}}}
+        after=json.loads(json.dumps(before));after[0].update(php_allowlist='8.5',default_php_version='8.5',source_revision=2)
+        after[0]['hosting_policy']['php'].update(default_version='8.5',allowed_versions=['8.5'])
+        after[0]['service_presets']['php'].update(allowed_versions='8.5',default_version='8.5')
+        probe.assert_snapshot_only_php_changed(before,after)
+        for mutation in ('memory','unknown','identity'):
+            bad=json.loads(json.dumps(after))
+            if mutation=='memory':bad[0]['service_presets']['php']['memory_limit_mb']=129
+            elif mutation=='unknown':bad[0]['service_presets']['php']['future']['keep']=[None,False]
+            else:bad[0]['plan_id']=999
+            with self.subTest(mutation=mutation),self.assertRaisesRegex(RuntimeError,'non-PHP'):probe.assert_snapshot_only_php_changed(before,bad)
+
+    def test_legacy_snapshot_php_mirror_presence_null_and_types_are_preserved(self):
+        for presets in ({},{'php':None},{'php':{}},{'php':{'allowed_versions':None,'default_version':None}},{'php':{'allowed_versions':'8.3','default_version':'8.3'}}):
+            before=[{'subscription_id':1,'service_presets':presets}]
+            probe.assert_snapshot_only_php_changed(before,json.loads(json.dumps(before)),preserve_supported_php=True)
+            for replacement in ({'php':{'allowed_versions':['8.3'],'default_version':'8.3'}},{'php':{'allowed_versions':'8.3'}},{'php':{}},{'php':None},{}):
+                after=[{'subscription_id':1,'service_presets':replacement}]
+                if replacement==presets:continue
+                with self.subTest(before=presets,after=replacement),self.assertRaises(RuntimeError):probe.assert_snapshot_only_php_changed(before,after)
+
+    def test_sury_preserves_legacy_snapshot_default_and_all_surviving_csv_offers(self):
+        before=self.php_inventory()['subscriptions']
+        before[0]['php_allowlist']='8.3,8.4,8.2';before[0]['hosting_policy']['php']['allowed_versions']=['8.3','8.4','8.2']
+        before[0]['service_presets']={'php':{'allowed_versions':'8.3,8.4,8.2','default_version':'8.3','memory_limit_mb':128}}
+        after=json.loads(json.dumps(before));after[0]['php_allowlist']='8.3,8.4';after[0]['hosting_policy']['php']['allowed_versions']=['8.3','8.4'];after[0]['service_presets']['php']['allowed_versions']='8.4,8.3'
+        probe.assert_snapshot_only_php_changed(before,after,preserve_supported_php=True)
+        for key,value in (('default_version','8.4'),('allowed_versions','8.3'),('allowed_versions','8.3,8.4,8.5')):
+            bad=json.loads(json.dumps(after));bad[0]['service_presets']['php'][key]=value
+            with self.subTest(key=key,value=value),self.assertRaisesRegex(RuntimeError,'Surý'):probe.assert_snapshot_only_php_changed(before,bad,preserve_supported_php=True)
 
     def test_sury_snapshot_refresh_cannot_drop_other_supported_php_or_change_default(self):
         initial=self.php_inventory()['subscriptions'];initial[0]['php_allowlist']='8.3,8.2,8.4'
@@ -217,7 +362,7 @@ CREATE TEMP TABLE php_applications(id bigint,php_version text);
 CREATE TEMP TABLE plans(id bigint,revision int,lifecycle_status text,hosting_enabled bool,php_allowlist text,default_php_version text,hosting_policy jsonb);
 CREATE TEMP TABLE subscriptions(id bigint,plan_id bigint,sync_mode text);
 CREATE TEMP TABLE subscription_entitlements(subscription_id bigint,hosting_enabled bool,php_allowlist text,default_php_version text,hosting_policy jsonb);
-CREATE TEMP TABLE addon_plans(id bigint,php_allowlist text,hosting_policy jsonb);
+CREATE TEMP TABLE addon_plans(id bigint,is_active bool,php_allowlist text,hosting_policy jsonb);
 CREATE TEMP TABLE subscription_addons(subscription_id bigint,addon_plan_id bigint);
 CREATE TEMP TABLE subscription_policy_overrides(subscription_id bigint,policy_patch jsonb);
 CREATE TEMP TABLE site_policy_overrides(site_id bigint,policy_patch jsonb);
@@ -228,6 +373,7 @@ INSERT INTO subscriptions VALUES(1,4,'synced');
 INSERT INTO subscription_entitlements VALUES(1,false,'8.3,8.2','8.3','{"php":{"default_version":"8.3","allowed_versions":["8.3","8.2"]}}');
 INSERT INTO subscription_policy_overrides VALUES(1,'{"permissions":{"hosting":true},"php":{"allowed_versions":["8.2"]}}');
 INSERT INTO site_policy_overrides VALUES(1,'{"php":{"default_version":"8.4"}}');
+INSERT INTO addon_plans VALUES(1,true,'8.2','{}'),(2,true,'8.5','{}'),(3,false,'8.1','{}');
 """
         def query(sql):
             result=subprocess.run([psql,os.environ['NAKPANEL_FORWARD_PHP_TEST_DSN'],'-XAtq','-v','ON_ERROR_STOP=1','-c',prefix+sql+';ROLLBACK;'],check=True,capture_output=True,text=True)
@@ -238,6 +384,7 @@ INSERT INTO site_policy_overrides VALUES(1,'{"php":{"default_version":"8.4"}}');
             self.assertEqual(len(inventory['selected']),3);self.assertEqual(inventory['subscriptions'][0]['sync_mode'],'synced')
             self.assertIs(inventory['subscriptions'][0]['hosting_enabled'],False)
             self.assertEqual(len(inventory['overrides']),2)
+            self.assertEqual([row['id'] for row in inventory['addons']],[1,2])
             with self.assertRaisesRegex(RuntimeError,'8.2'):probe.assert_fixture_php_inventory({'target_profile':'ubuntu-26.04-sury'})
 
     def test_preparation_rejects_unsupported_webmail_before_seed_or_local_state(self):
@@ -343,21 +490,22 @@ INSERT INTO site_policy_overrides VALUES(1,'{"php":{"default_version":"8.4"}}');
             with self.subTest(failure=failure):
                 changed=[]
                 class API:
-                    def get(self,path):
-                        self.path=path
-                        return '<form action="/plans" method="post"><input name="plan_id" value="7"><input name="name" value="Custom"><input name="lifecycle_status" value="active"><input name="php_versions" value="8.4"></form>'
+                    def get(self,path):raise AssertionError('PHP-only operation must not read the full plan editor')
                     def __call__(self,path,values):
-                        if path!='plans' or dict(values)['default_php_version']!='8.5':raise AssertionError('wrong product revision request')
+                        if path=='plans/7/php-versions/preview':return json.dumps({'ok':True,'plan_id':7,'revision':3,'no_change':False,'preview':{'allowed':True,'changes':[]}}).encode()
+                        if path!='plans/7/php-versions' or dict(values)['default_php_version']!='8.5':raise AssertionError('wrong PHP-only product revision request')
                         changed.append(values)
+                        return json.dumps({'ok':True,'plan_id':7,'revision':4,'changed':True,'sync_state':'in_sync'}).encode()
                 api=API()
                 plan={'id':7,'revision':3,'php_allowlist':'8.4','default_php_version':'8.4','hosting_policy':before['hosting_policy']}
                 def query(sql):
                     if 'row_to_json(q)' in sql:return json.dumps([plan])
                     if 'jsonb_agg(to_jsonb(p)' in sql:return 'changed-history' if changed and failure=='history' else 'stable-history'
-                    if 'definition::text' in sql:
-                        value=before if 'revision=3' in sql else json.loads(json.dumps(after))
-                        if changed and failure=='contract' and 'revision=4' in sql:value['resources']['disk_mb']=124
-                        return json.dumps(value)
+                    if 'jsonb_build_object' in sql:
+                        value=json.loads(json.dumps(after if changed else before))
+                        if changed and failure=='contract':value['resources']['disk_mb']=124
+                        presets=value.pop('presets');value['id']=7
+                        return json.dumps({'plan':value,'presets':presets})
                     if 'audit_events' in sql:return '1' if changed and failure!='audit' else '0'
                     if 'json_build_object' in sql:return json.dumps(dict(plan,revision=4,php_allowlist='8.5',default_php_version='8.5',hosting_policy=after['hosting_policy']))
                     raise AssertionError('unexpected SQL boundary')
@@ -367,7 +515,7 @@ INSERT INTO site_policy_overrides VALUES(1,'{"php":{"default_version":"8.4"}}');
                     else:
                         with self.assertRaises(RuntimeError):probe.normalize_active_plans({'normalize_php85':True},api)
                         wait.assert_not_called()
-                self.assertEqual(api.path,'service-plans/7');self.assertEqual(len(changed),1)
+                self.assertEqual(len(changed),1)
 
     def test_roundcube_canary_uses_root_staged_common_helper_not_public_source(self):
         c={'source_vm':'nakpanel-source-fixture-test','run_token':'fixture-test','architecture':'arm64','remote_src':'/var/lib/nakpanel-qualification/fixture-test/source','mailbox':'canary@example.test'}
@@ -395,6 +543,63 @@ INSERT INTO site_policy_overrides VALUES(1,'{"php":{"default_version":"8.4"}}');
             c={'target_profile':'ubuntu-26.04-sury','normalize_php85':False}
             self.assertEqual(probe.normalize_active_plans(c,API()),[])
             self.assertEqual(c['prior_plan_php_intent'],plans)
+
+    def test_product_preview_rejects_semantic_non_php_drift_before_plan_write(self):
+        for value in ({'ok':True,'preview':{'allowed':False}}, {'ok':True,'preview':{'allowed':True,'changes':[{'path':'permissions.mail'}]}}, {'ok':False}, {'ok':True,'preview':{'allowed':True,'changes':'invalid'}}):
+            with self.subTest(value=value),self.assertRaisesRegex(RuntimeError,'preview'):probe.assert_php_only_preview(json.dumps(value))
+        probe.assert_php_only_preview(json.dumps({'ok':True,'preview':{'allowed':True,'changes':[{'path':'php.default_version'},{'path':'php.allowed_versions'}]}}))
+        self.assertNotEqual(probe.plan_form_contract([('disk_mb','1'),('php_versions','8.3')]),probe.plan_form_contract([('disk_mb','2'),('php_versions','8.5')]))
+
+    def test_php_only_plan_form_has_no_full_editor_or_lifecycle_fields(self):
+        values=probe.plan_php_form(7,['8.4','8.3'],'8.4')
+        self.assertEqual([value for key,value in values if key=='php_versions'],['8.3','8.4'])
+        self.assertEqual(dict(values)['expected_revision'],'7')
+        self.assertEqual(dict(values)['default_php_version'],'8.4')
+        self.assertEqual(set(dict(values)),{'expected_revision','php_versions','default_php_version','change_reason'})
+        self.assertIn('qualification',dict(values)['change_reason'])
+
+    def test_php_only_preview_requires_exact_identity_revision_readiness_and_changed_intent(self):
+        good={'ok':True,'plan_id':7,'revision':3,'no_change':False,'preview':{'allowed':True,'changes':[{'path':'php.allowed_versions'}]}}
+        probe.assert_php_only_preview(json.dumps(good),7,3)
+        for patch_value in ({'plan_id':8},{'plan_id':True},{'revision':2},{'revision':True},{'no_change':True},{'no_change':None},{'blockers':[{'code':'php_version_unready'}]},{'ok':False},{'preview':{'allowed':False}},{'preview':{'allowed':True,'changes':[{'path':'permissions.mail'}]}}):
+            with self.subTest(patch=patch_value),self.assertRaisesRegex(RuntimeError,'preview'):
+                probe.assert_php_only_preview(json.dumps(dict(good,**patch_value)),7,3)
+        for bad in ('null','[]','not-json'):
+            with self.subTest(raw=bad),self.assertRaises(RuntimeError):probe.assert_php_only_preview(bad,7,3)
+
+    def test_php_only_commit_requires_exact_changed_revision_and_sync_state(self):
+        good={'ok':True,'plan_id':7,'revision':4,'changed':True,'sync_state':'pending'}
+        for state in ('pending','in_sync'):probe.assert_plan_php_result(json.dumps(dict(good,sync_state=state)),7,4)
+        for patch_value in ({'plan_id':8},{'plan_id':True},{'revision':3},{'revision':True},{'changed':False},{'changed':1},{'sync_state':'failed'},{'ok':False}):
+            with self.subTest(patch=patch_value),self.assertRaises(RuntimeError):probe.assert_plan_php_result(json.dumps(dict(good,**patch_value)),7,4)
+
+    def test_php_only_preview_rejection_never_posts_commit(self):
+        plan={'id':7,'revision':3,'php_allowlist':'8.4','default_php_version':'8.4','hosting_policy':{'php':{'default_version':'8.4','allowed_versions':['8.4']}}}
+        for outcome in ('stale','unready','no-op'):
+            calls=[]
+            def api(route,values):
+                calls.append((route,values))
+                if route!='plans/7/php-versions/preview':raise AssertionError('commit after preview refusal')
+                if outcome=='stale':raise RuntimeError('HTTP 409 stale_revision')
+                return json.dumps({'ok':True,'plan_id':7,'revision':3,'no_change':outcome=='no-op','preview':{'allowed':outcome!='unready'},'blockers':[{'code':'php_version_unready'}] if outcome=='unready' else []})
+            with self.subTest(outcome=outcome),patch.object(probe,'active_php_plans',return_value=[plan]),patch.object(probe,'plan_contract',return_value={'plan':plan,'presets':{}}),patch.object(probe,'pg',return_value='0'),patch.object(probe,'wait') as wait:
+                with self.assertRaises(RuntimeError):probe.normalize_active_plans({'normalize_php85':True},api)
+                wait.assert_not_called()
+            self.assertEqual(len(calls),1);self.assertEqual(calls[0][0],'plans/7/php-versions/preview')
+
+    def test_non_php_product_preview_stops_before_first_plan_revision(self):
+        plan={'id':1,'revision':2,'lifecycle_status':'active','php_allowlist':'8.3,8.4','default_php_version':'8.4','hosting_policy':{'php':{'default_version':'8.4','allowed_versions':['8.3','8.4']}}}
+        calls=[]
+        class API:
+            def get(self,path):raise AssertionError('PHP-only operation must not read the full plan editor')
+            def __call__(self,route,values):
+                calls.append(route)
+                if route!='plans/1/php-versions/preview':raise AssertionError('mutated after failed preview')
+                return json.dumps({'ok':True,'plan_id':1,'revision':2,'no_change':False,'preview':{'allowed':True,'changes':[{'path':'dns.default_ttl'}]}})
+        with patch.object(probe,'active_php_plans',return_value=[plan]),patch.object(probe,'plan_contract',return_value={'plan':plan,'presets':{}}),patch.object(probe,'pg',return_value='0'),patch.object(probe,'wait') as wait:
+            with self.assertRaisesRegex(RuntimeError,'non-PHP'):probe.normalize_active_plans({'normalize_php85':True},API())
+            wait.assert_not_called()
+        self.assertEqual(calls,['plans/1/php-versions/preview'])
 
     def test_worker_discovery_records_actual_php_for_sury_preservation(self):
         results=[json.dumps({'domain':'phase30-managed.test','username':'npfixture','subscription_id':3}),'8.4']

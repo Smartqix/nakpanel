@@ -87,7 +87,7 @@ def login(c):
         response = opener.open(request, timeout=60)
         if response.status not in (200, 202, 303):
             raise RuntimeError('fixture API mutation failed')
-        response.read()
+        return response.read()
     post.get=lambda path:opener.open('https://127.0.0.1:7443/'+path,timeout=60).read().decode()
     return post
 
@@ -291,15 +291,61 @@ def normalized_plan_form(html,plan_id,versions=None,default='8.5',lifecycle='act
     return [(k,v) for k,v in values if k not in changed]+[('php_versions',v) for v in versions]+[('php_allowlist',','.join(versions)),('default_php_version',default),('change_reason','Explicit disposable forward-fixture PHP offer preparation')]
 
 
+def plan_contract(plan_id):
+    # Historical revision definitions have two serializations. Compare the same
+    # complete persisted shape on both sides instead of translating history or
+    # duplicating Go's typed serializer/policy upgrader here. Unknown JSON keys
+    # participate in this comparison as well.
+    result=json.loads(pg("SELECT jsonb_build_object('plan',to_jsonb(p)-'created_at'-'updated_at'-'last_validated_at'-'readiness_error','presets',to_jsonb(ps)-'plan_id'-'updated_at') FROM plans p JOIN plan_service_presets ps ON ps.plan_id=p.id WHERE p.id="+str(int(plan_id))))
+    if not isinstance(result,dict) or not isinstance(result.get('plan'),dict) or not isinstance(result.get('presets'),dict) or result['plan'].get('id')!=int(plan_id):raise RuntimeError('complete persisted plan/preset contract is missing')
+    return result
+
+
 def assert_plan_only_php_changed(before,after):
     def masked(value):
-        result=json.loads(json.dumps(value));result.pop('revision',None)
-        for path in [('resources','php_allowlist'),('presets','hosting','default_php_version'),('presets','hosting','allowed_php_versions'),('hosting_policy','php','default_version'),('hosting_policy','php','allowed_versions')]:
-            node=result
+        result=json.loads(json.dumps(value))
+        root=result.get('plan',result)
+        root.pop('revision',None)
+        for path in [('php_allowlist',),('default_php_version',),('resources','php_allowlist'),('hosting_policy','php','default_version'),('hosting_policy','php','allowed_versions')]:
+            node=root
             for key in path[:-1]:node=node.get(key,{})
             node.pop(path[-1],None)
+        for section,keys in [('hosting',('default_php_version','allowed_php_versions')),('php',('default_version','allowed_versions'))]:
+            for key in keys:result.get('presets',{}).get(section,{}).pop(key,None)
         return result
     if masked(before)!=masked(after):raise RuntimeError('plan revision changed non-PHP contract fields')
+
+
+def plan_form_contract(values):
+    changed={'php_versions','php_allowlist','default_php_version','change_reason','csrf_token'}
+    return sorted((key,value) for key,value in values if key not in changed)
+
+
+def plan_php_form(revision,versions,default):
+    if type(revision) is not int or revision<=0:raise RuntimeError('invalid expected plan revision')
+    versions=sorted(set(versions))
+    if not versions or any(not isinstance(v,str) or not re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)',v) for v in versions) or default not in versions:raise RuntimeError('invalid prepared plan PHP versions')
+    return [('expected_revision',str(revision))]+[('php_versions',v) for v in versions]+[('default_php_version',default),('change_reason','Forward migration qualification fixture PHP preparation')]
+
+
+def plan_php_response(raw):
+    try:result=json.loads(raw)
+    except (TypeError,ValueError) as error:raise RuntimeError('invalid product plan PHP response') from error
+    if not isinstance(result,dict):raise RuntimeError('invalid product plan PHP response')
+    return result
+
+
+def assert_php_only_preview(raw,plan_id=None,revision=None):
+    result=plan_php_response(raw)
+    preview=result.get('preview',{})
+    if result.get('ok') is not True or not isinstance(preview,dict) or preview.get('allowed') is not True or not isinstance(preview.get('changes',[]),list):raise RuntimeError('product plan preview refused PHP preparation')
+    if plan_id is not None and (type(result.get('plan_id')) is not int or result['plan_id']!=plan_id or type(result.get('revision')) is not int or result['revision']!=revision or result.get('no_change') is not False or result.get('blockers',[])!=[]):raise RuntimeError('product plan preview identity/revision/readiness refused PHP preparation')
+    if any(not isinstance(change,dict) or change.get('path') not in ('php.default_version','php.allowed_versions') for change in preview.get('changes',[])):raise RuntimeError('product plan preview changes non-PHP contract fields')
+
+
+def assert_plan_php_result(raw,plan_id,revision):
+    result=plan_php_response(raw)
+    if result.get('ok') is not True or type(result.get('plan_id')) is not int or result['plan_id']!=plan_id or type(result.get('revision')) is not int or result['revision']!=revision or result.get('changed') is not True or result.get('sync_state') not in ('pending','in_sync'):raise RuntimeError('product plan PHP update did not commit the expected changed revision')
 
 
 def active_php_plans():
@@ -333,7 +379,7 @@ def fixture_php_inventory():
  'subscriptions',(SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (
   SELECT e.*,s.plan_id,s.sync_mode FROM subscription_entitlements e JOIN subscriptions s ON s.id=e.subscription_id LEFT JOIN subscription_policy_overrides o ON o.subscription_id=s.id WHERE e.hosting_enabled OR o.policy_patch#>'{permissions,hosting}'='true'::jsonb ORDER BY e.subscription_id) q),
  'addons',(SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (
-  SELECT DISTINCT a.id,a.php_allowlist,a.hosting_policy FROM addon_plans a JOIN subscription_addons sa ON sa.addon_plan_id=a.id JOIN subscription_entitlements e ON e.subscription_id=sa.subscription_id LEFT JOIN subscription_policy_overrides o ON o.subscription_id=e.subscription_id WHERE e.hosting_enabled OR o.policy_patch#>'{permissions,hosting}'='true'::jsonb ORDER BY a.id) q),
+  SELECT a.id,a.php_allowlist,a.hosting_policy FROM addon_plans a WHERE a.is_active ORDER BY a.id) q),
  'overrides',(SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (
   SELECT 'subscription' kind,subscription_id id,policy_patch AS hosting_policy FROM subscription_policy_overrides UNION ALL SELECT 'site',site_id,policy_patch FROM site_policy_overrides ORDER BY kind,id) q))"""))
 
@@ -369,6 +415,9 @@ def assert_fixture_php_inventory(c,allow_preparation=False):
 
 
 def assert_snapshot_only_php_changed(before,after,preserve_supported_php=False):
+    def legacy_php(row):
+        presets=row.get('service_presets')
+        return presets.get('php') if isinstance(presets,dict) else None
     def masked(rows):
         result=json.loads(json.dumps(rows))
         for row in result:
@@ -377,12 +426,26 @@ def assert_snapshot_only_php_changed(before,after,preserve_supported_php=False):
             row.get('hosting_policy',{}).get('php',{}).pop('allowed_versions',None)
             row.get('service_presets',{}).get('hosting',{}).pop('default_php_version',None)
             row.get('service_presets',{}).get('hosting',{}).pop('allowed_php_versions',None)
+            php=legacy_php(row)
+            if isinstance(php,dict):
+                for key in ('allowed_versions','default_version'):
+                    if key in php and php[key] is not None:
+                        if not isinstance(php[key],str):raise RuntimeError('subscription sync has an invalid non-PHP mirror type')
+                        # Retain key presence and string type. Absent/null PHP
+                        # containers or mirrors must never be materialized.
+                        php[key]=('existing-php-version-string',)
         return result
     if masked(before)!=masked(after):raise RuntimeError('subscription sync changed non-PHP contract or identity')
     if preserve_supported_php:
         for old,new in zip(before,after):
             if old.get('default_php_version')!=new.get('default_php_version') or old.get('hosting_policy',{}).get('php',{}).get('default_version')!=new.get('hosting_policy',{}).get('php',{}).get('default_version'):raise RuntimeError('Surý fixture changed a default PHP selection')
             if php_offers(old)-{'8.2'}!=php_offers(new):raise RuntimeError('Surý fixture changed remaining PHP 8.3/8.4/8.5 offers')
+            old_php,new_php=legacy_php(old),legacy_php(new)
+            if isinstance(old_php,dict):
+                if old_php.get('default_version')!=new_php.get('default_version'):raise RuntimeError('Surý fixture changed a legacy default PHP selection')
+                if isinstance(old_php.get('allowed_versions'),str):
+                    offers=lambda value:{v.strip() for v in value.split(',') if v.strip()}
+                    if offers(old_php['allowed_versions'])-{'8.2'}!=offers(new_php['allowed_versions']):raise RuntimeError('Surý fixture changed remaining legacy PHP offers')
 
 
 def refresh_synced_php_snapshots(c,post):
@@ -438,17 +501,19 @@ def normalize_active_plans(c,post):
         identity=str(int(plan['id']));revision=int(plan['revision'])
         history="SELECT encode(sha256(convert_to(COALESCE(jsonb_agg(to_jsonb(p) ORDER BY revision),'[]'::jsonb)::text,'UTF8')),'hex') FROM plan_revisions p WHERE plan_id="+identity+' AND revision<='+str(revision)
         before_hash=pg(history)
-        before=json.loads(pg('SELECT definition::text FROM plan_revisions WHERE plan_id='+identity+' AND revision='+str(revision)))
+        before=plan_contract(identity)
         audit="SELECT count(*) FROM audit_events WHERE action='plan.saved' AND target_type='plan' AND target_id="+identity
         old_audit=int(pg(audit))
-        values=normalized_plan_form(post.get('service-plans/'+identity),int(identity),versions,default,plan.get('lifecycle_status','active'))
-        post('plans',values)
+        values=plan_php_form(revision,versions,default)
+        route='plans/'+identity+'/php-versions'
+        assert_php_only_preview(post(route+'/preview',values),int(identity),revision)
+        assert_plan_php_result(post(route,values),int(identity),revision+1)
         current=json.loads(pg("SELECT json_build_object('revision',revision,'php_allowlist',php_allowlist,'default_php_version',default_php_version,'hosting_policy',hosting_policy) FROM plans WHERE id="+identity))
         if current['revision']!=revision+1 or php_offers(current)!=set(versions) or current['default_php_version']!=default:raise RuntimeError('product plan revision did not commit prepared PHP intent')
-        after=json.loads(pg('SELECT definition::text FROM plan_revisions WHERE plan_id='+identity+' AND revision='+str(current['revision'])))
+        after=plan_contract(identity)
         assert_plan_only_php_changed(before,after)
         if pg(history)!=before_hash:raise RuntimeError('immutable prior plan history changed')
-        if int(pg(audit))<=old_audit:raise RuntimeError('plan normalization product audit is missing')
+        if int(pg(audit))!=old_audit+1:raise RuntimeError('plan normalization product audit count is not exactly one')
         wait("SELECT count(*) FROM subscriptions WHERE plan_id="+identity+" AND sync_mode='synced' AND (sync_status<>'in_sync' OR plan_revision<>"+str(current['revision'])+')','0')
     return plans
 
@@ -503,6 +568,100 @@ def create_fixture_container(c,post,image):
     return c
 
 
+def php_normalization_state():
+    return json.loads(pg("""SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (
+SELECT s.id,s.php_version,s.desired_php_version,s.desired_status,s.desired_https_redirect,
+ sub.status AS subscription_status,c.status AS customer_status,
+ CASE WHEN c.reseller_id IS NULL THEN true ELSE EXISTS(SELECT 1 FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' WHERE r.id=c.reseller_id AND r.status='active') END AS provider_active,
+ CASE WHEN a.id IS NULL THEN NULL ELSE to_jsonb(a)-'created_at'-'updated_at'-'last_reconciled_at'-'observed_message'-'last_error' END AS application,
+ (SELECT count(*) FROM php_deployments d WHERE d.application_id=a.id AND d.status IN ('pending','preparing','validating','activating')) AS pending_deployments,
+ encode(sha256(convert_to(jsonb_build_object(
+ 'workers',(SELECT COALESCE(jsonb_agg(to_jsonb(w)-'created_at'-'updated_at'-'last_reconciled_at'-'observed_state'-'applied_revision'-'convergence_status'-'last_error' ORDER BY w.id),'[]'::jsonb) FROM php_workers w WHERE w.application_id=a.id),
+ 'environment',(SELECT COALESCE(jsonb_agg(to_jsonb(e)-'created_at'-'updated_at' ORDER BY e.id),'[]'::jsonb) FROM php_environment_bindings e WHERE e.application_id=a.id),
+ 'deployments',(SELECT COALESCE(jsonb_agg(to_jsonb(d) ORDER BY d.id),'[]'::jsonb) FROM php_deployments d WHERE d.application_id=a.id))::text,'UTF8')),'hex') AS related_intent
+FROM sites s JOIN subscriptions sub ON sub.id=s.subscription_id JOIN customers c ON c.id=sub.customer_id LEFT JOIN php_applications a ON a.site_id=s.id ORDER BY s.id) q"""))
+
+
+def php_application_form(app):
+    keys=('hosting_mode','repository_ref','framework_profile','public_path','health_path')
+    if app.get('hosting_mode') not in ('managed','classic') or any(not isinstance(app.get(key),str) for key in keys):raise RuntimeError('invalid existing application configuration')
+    if type(app.get('release_retention')) is not int or not 1<=app['release_retention']<=100:raise RuntimeError('invalid application release retention')
+    paths=app.get('shared_paths')
+    if not isinstance(paths,list) or any(not isinstance(path,str) for path in paths):raise RuntimeError('invalid application shared paths')
+    if any(type(app.get(key)) is not bool for key in ('composer_install','composer_allow_scripts','composer_allow_plugins')):raise RuntimeError('invalid application Composer configuration')
+    repository=app.get('repository_id') or 0
+    if type(repository) is not int or repository<0 or (app['hosting_mode']=='managed' and repository==0):raise RuntimeError('invalid application repository identity')
+    if app['hosting_mode']=='classic' and (repository or app['repository_ref']!='main' or app['framework_profile']!='plain' or app['public_path'] or app['health_path']!='/' or paths or app['release_retention']!=5 or any(app[key] for key in ('composer_install','composer_allow_scripts','composer_allow_plugins'))):raise RuntimeError('classic application configuration would be rewritten by the product API')
+    result={key:app[key] for key in keys}
+    result.update(php_version='8.5',repository_id=repository,shared_path=list(paths),release_retention=app['release_retention'])
+    result.update({key:str(app[key]).lower() for key in ('composer_install','composer_allow_scripts','composer_allow_plugins')})
+    return result
+
+
+def normalize_site_php(c,post):
+    rows=php_normalization_state()
+    pending=[row for row in rows if row['php_version']!='8.5' or row['desired_php_version']!='8.5' or (row.get('application') and row['application']['php_version']!='8.5')]
+    if not pending:return
+    if c.get('normalize_php85') is not True:raise RuntimeError('native fixture requires explicit normalize_php85 preparation')
+    forms={}
+    # Check ALL candidates before the first write. ConfigureApplication refuses
+    # inactive applications and cancels pending deployments; never reactivate a
+    # resource or discard release intent to make this qualification pass.
+    for row in pending:
+        if row['desired_status'] not in ('active','suspended') or type(row['desired_https_redirect']) is not bool:raise RuntimeError('source site lifecycle/redirect cannot be preserved by PHP preparation')
+        app=row.get('application')
+        if app and app['php_version']!='8.5':
+            if row['desired_status']!='active' or app.get('desired_state')!='active' or row.get('subscription_status')!='active' or row.get('customer_status')!='active' or row.get('provider_active') is not True or row.get('pending_deployments')!=0:raise RuntimeError('application lifecycle or pending deployment cannot be preserved by PHP preparation')
+            if app.get('site_id')!=row['id'] or app.get('desired_revision')!=app.get('applied_revision') or app.get('convergence_status')!='in_sync':raise RuntimeError('application identity or revision has not converged')
+            forms[row['id']]=php_application_form(app)
+    c['prior_php_intent']=json.loads(json.dumps(rows))
+    for row in pending:
+        identity=str(int(row['id']))
+        if row['php_version']!='8.5' or row['desired_php_version']!='8.5':
+            post('sites/'+identity+'/hosting',{'desired_status':row['desired_status'],'desired_php_version':'8.5','desired_https_redirect':str(row['desired_https_redirect']).lower()})
+        if row['id'] in forms:post('sites/'+identity+'/php-application',forms[row['id']])
+        wait("SELECT count(*) FROM sites WHERE id="+identity+" AND php_version='8.5' AND desired_php_version='8.5' AND desired_status="+quote(row['desired_status'])+" AND status="+quote(row['desired_status'])+" AND desired_https_redirect="+str(row['desired_https_redirect']).lower()+" AND https_redirect=desired_https_redirect AND settings_status='in_sync'",'1')
+    wait("SELECT count(*) FROM php_applications WHERE convergence_status<>'in_sync' OR desired_revision<>applied_revision OR php_version<>'8.5'",'0')
+    after=php_normalization_state()
+    expected=json.loads(json.dumps(rows))
+    for row in expected:
+        if row not in pending:continue
+        row.update(php_version='8.5',desired_php_version='8.5')
+        if row['id'] in forms:
+            row['application']['php_version']='8.5'
+            row['application']['desired_revision']+=1;row['application']['applied_revision']+=1
+    if expected!=after:raise RuntimeError('PHP preparation changed non-PHP application/site/worker/environment/release intent')
+
+
+def prepare_fixture_capabilities(c,post,allowed_slugs):
+    identity=str(int(c['subscription_id']))
+    # The product policy endpoint replaces its patch. Preserve all preexisting
+    # fields, notably PHP intent, rather than editing authenticated snapshots.
+    entitlement_hash=pg("SELECT encode(sha256(convert_to((to_jsonb(e)-'updated_at')::text,'UTF8')),'hex') FROM subscription_entitlements e WHERE subscription_id="+identity)
+    if not re.fullmatch('[0-9a-f]{64}',entitlement_hash):raise RuntimeError('fixture base entitlement is missing')
+    existing=json.loads(pg("SELECT COALESCE((SELECT policy_patch FROM subscription_policy_overrides WHERE subscription_id="+identity+"),'{}'::jsonb)"))
+    if not isinstance(existing,dict):raise RuntimeError('invalid existing fixture policy override')
+    patch=json.loads(json.dumps(existing))
+    additions={'permissions':{'mail':True,'ftps':True,'sftp':True,'applications':True,'custom_oci_images':True,'application_egress':False},
+        'mail':{'enabled':True},'access':{'ftps_enabled':True},
+        'applications':{'catalog_enabled':True,'allowed_catalog_slugs':allowed_slugs,'allowed_runtimes':['oci'],'allowed_registries':['docker.io'],'rootless':True,'egress_enabled':False},
+        'resources':{'max_applications':3,'max_ftp_accounts':4,'max_sftp_identities':4,'max_mailboxes':4,'container_storage_mb':64,'memory_mb':256,'cpu_percent':50,'max_tasks':128}}
+    offered=existing.get('applications') or {}
+    if not isinstance(offered,dict):raise RuntimeError('invalid existing fixture application policy')
+    slugs=offered.get('allowed_catalog_slugs') or []
+    if not isinstance(slugs,list) or any(not isinstance(slug,str) for slug in slugs):raise RuntimeError('invalid existing fixture catalog override')
+    additions['applications']['allowed_catalog_slugs']=sorted(set(allowed_slugs+slugs))
+    for section,fields in additions.items():
+        if patch.get(section) is None:patch[section]={}
+        if not isinstance(patch[section],dict):raise RuntimeError('invalid existing fixture policy section')
+        patch[section].update(fields)
+    post('subscriptions/'+identity+'/policy',{'policy_patch':json.dumps(patch)})
+    saved=json.loads(pg("SELECT policy_patch FROM subscription_policy_overrides WHERE subscription_id="+identity))
+    if saved!=patch:raise RuntimeError('product fixture policy did not preserve requested override')
+    if pg("SELECT encode(sha256(convert_to((to_jsonb(e)-'updated_at')::text,'UTF8')),'hex') FROM subscription_entitlements e WHERE subscription_id="+identity)!=entitlement_hash:raise RuntimeError('product fixture policy changed immutable base entitlement')
+    wait("SELECT count(*) FROM subscription_system_accounts WHERE subscription_id="+identity+" AND convergence_status='in_sync' AND desired_revision=applied_revision",'1')
+
+
 def seed(c):
     roundcube_preflight(c)
     image=fixture_image(c)
@@ -512,34 +671,20 @@ def seed(c):
     normalize_active_plans(c,post)
     refresh_synced_php_snapshots(c,post)
     assert_fixture_entitlements(c)
-    wrong = pg("SELECT count(*) FROM (SELECT php_version v FROM sites UNION ALL SELECT desired_php_version FROM sites UNION ALL SELECT php_version FROM php_applications) q WHERE v<>'8.5'")
-    if wrong != '0' and (c.get('target_profile','ubuntu-26.04-native')=='ubuntu-26.04-native' or c.get('normalize_php85')):
-        if not c.get('normalize_php85'):
-            raise RuntimeError('native fixture requires all source PHP intent=8.5; explicit normalize_php85 is only for this disposable fixture setup')
-        c['prior_php_intent'] = json.loads(pg("SELECT json_agg(row_to_json(q)) FROM (SELECT id,php_version,desired_php_version FROM sites ORDER BY id) q"))
-        pg("BEGIN; UPDATE sites SET php_version='8.5',desired_php_version='8.5'; UPDATE php_applications SET php_version='8.5'; COMMIT;")
-        cli('reconcile', '--system')
-        wait("SELECT count(*) FROM php_applications WHERE convergence_status<>'in_sync' OR desired_revision<>applied_revision OR php_version<>'8.5'", '0')
+    if c.get('target_profile','ubuntu-26.04-native')=='ubuntu-26.04-native' or c.get('normalize_php85'):
+        normalize_site_php(c,post)
     c=discover(c)
     after_php=assert_fixture_php_inventory(c)
     preserve=c.get('target_profile')=='ubuntu-26.04-sury' and not c.get('normalize_php85')
     assert_snapshot_only_php_changed(prior_php['subscriptions'],after_php['subscriptions'],preserve_supported_php=preserve)
     if preserve and prior_php['selected']!=after_php['selected']:raise RuntimeError('Surý fixture changed selected site/application PHP intent')
     c['prior_php_inventory']=prior_php
-    # Fixture setup mirrors the repo's phase28 entitlement preparation. These
-    # explicit test-source changes precede the baseline/archive; target restore
-    # must retain this resulting intent without further rewriting.
+    # Dedicated fixture capabilities use the normal policy API; immutable base
+    # entitlement scalars and plan snapshots are never modified for seeding.
     allowed_slugs=json.loads(pg("SELECT COALESCE(hosting_policy#>'{applications,allowed_catalog_slugs}','[]'::jsonb) FROM subscription_entitlements WHERE subscription_id="+str(c['subscription_id'])))
     if not isinstance(allowed_slugs,list) or any(not isinstance(slug,str) for slug in allowed_slugs):raise RuntimeError('invalid source catalog entitlement')
     allowed_slugs=sorted(set(allowed_slugs+[fixture_catalog_slug(c)]))
-    patch = {'permissions': {'mail': True, 'ftps': True, 'sftp': True, 'applications': True, 'custom_oci_images': True,'application_egress':False},
-             'mail': {'enabled': True}, 'access': {'ftps_enabled': True},
-             'applications': {'catalog_enabled':True,'allowed_catalog_slugs':allowed_slugs,'allowed_runtimes': ['oci'], 'allowed_registries': ['docker.io'], 'rootless': True,'egress_enabled':False},
-             'resources': {'max_applications': 3, 'max_ftp_accounts': 4, 'max_sftp_identities': 4, 'max_mailboxes': 4, 'container_storage_mb': 64,'memory_mb':256,'cpu_percent':50,'max_tasks':128}}
-    expression = 'hosting_policy'
-    for section, fields in patch.items():
-        expression = 'jsonb_set(' + expression + ',' + quote('{' + section + '}') + ',(COALESCE(hosting_policy->' + quote(section) + ", '{}'::jsonb)||" + quote(json.dumps(fields)) + '::jsonb),true)'
-    pg('UPDATE subscription_entitlements SET max_mailboxes=4,hosting_policy=' + expression + ' WHERE subscription_id=' + str(c['subscription_id']))
+    prepare_fixture_capabilities(c,post,allowed_slugs)
     # Dedicated tracked database exercises sealed credentials without changing a
     # WordPress/application database password created by an earlier phase.
     post('databases', {'subscription_id': c['subscription_id'], 'site_id': c['site_id'],
@@ -581,28 +726,38 @@ def seed(c):
     return c
 
 
-def snapshot(c):
-    # Only durable intent participates: observed timestamps/process IDs/jobs are
-    # deliberately checked as live behavior below, rather than hashed as data.
-    projection = {
+def intent_projections():
+    return {
         'sites': 'id,domain,username,php_version,desired_php_version,desired_status,https_redirect',
-        'plans':'id,reseller_id,name,revision,lifecycle_status,php_allowlist,default_php_version,hosting_policy',
+        'plans':"id,to_jsonb(plans)-'created_at'-'updated_at'-'last_validated_at'-'readiness_error' AS contract",
+        'plan_service_presets':"plan_id AS id,to_jsonb(plan_service_presets)-'updated_at' AS contract",
+        'addon_plans':"id,to_jsonb(addon_plans)-'created_at'-'updated_at' AS contract",
+        'subscription_addons':"subscription_id::text||':'||addon_plan_id::text AS id,to_jsonb(subscription_addons)-'created_at' AS contract",
+        'subscriptions':"id,to_jsonb(subscriptions)-'created_at'-'updated_at'-'sync_error'-'last_synced_at'-'last_reconciled_at' AS contract",
         'plan_revisions':'id,plan_id,revision,lifecycle_status,definition,definition_hash,actor_user_id,actor_label,change_reason',
-        'php_applications': 'id,site_id,php_version,hosting_mode,desired_revision',
-        'php_workers': 'id,application_id,name,script,processes,desired_state',
+        'php_applications': "id,to_jsonb(php_applications)-'created_at'-'updated_at'-'last_reconciled_at'-'observed_state'-'observed_message'-'last_error'-'convergence_status'-'applied_revision' AS contract",
+        'php_workers': "id,to_jsonb(php_workers)-'created_at'-'updated_at'-'last_reconciled_at'-'observed_state'-'last_error'-'convergence_status'-'applied_revision' AS contract",
+        'php_environment_bindings': "id,to_jsonb(php_environment_bindings)-'created_at'-'updated_at' AS contract",
+        'php_deployments': "id,to_jsonb(php_deployments)-'created_at'-'started_at'-'activated_at'-'finished_at' AS contract",
         'application_instances': 'id,subscription_id,name,runtime,catalog_slug,catalog_revision,manifest,image_ref,desired_state,desired_revision',
         'application_presets':'id,reseller_id,slug,name,runtime,image_ref,active,manifest_revision,manifest',
         'application_manifest_revisions':'id,preset_id,revision,manifest,image_ref,created_by_user_id',
         'databases': 'id,subscription_id,db_name,db_user',
-        'subscription_entitlements': 'subscription_id AS id,hosting_policy',
+        'subscription_entitlements': "subscription_id AS id,to_jsonb(subscription_entitlements)-'updated_at' AS contract",
         'subscription_policy_overrides': 'subscription_id AS id,schema_version,policy_patch',
         'site_policy_overrides': 'site_id AS id,schema_version,policy_patch',
         'sftp_access_identities': 'id,subscription_id,name,public_key,relative_root,enabled',
         'ftp_accounts': 'id,subscription_id,site_id,name,password_hash,enabled',
         'mail_domains': 'id,subscription_id,domain,enabled,dkim_enabled,dmarc_policy,catch_all',
-        'mailboxes': 'id,mail_domain_id,local_part,password_ciphertext,quota_mb,enabled,autoresponder',
+        'mailboxes': 'id,mail_domain_id,local_part,password_hash,quota_mb,enabled,autoresponder',
         'service_secrets': 'id,secret_id,scope,name,key_version,wrapped_key_nonce,wrapped_data_key,value_nonce,ciphertext',
     }
+
+
+def snapshot(c):
+    # Only durable intent participates: observed timestamps/process IDs/jobs are
+    # deliberately checked as live behavior below, rather than hashed as data.
+    projection=intent_projections()
     intent = {table: pg("SELECT encode(sha256(convert_to(COALESCE(jsonb_agg(to_jsonb(q) ORDER BY id),'[]'::jsonb)::text,'UTF8')),'hex') FROM (SELECT " + cols + ' FROM ' + table + ') q') for table, cols in projection.items()}
     users = pg('SELECT username FROM subscription_system_accounts ORDER BY username').splitlines()
     identities = [{'name': u, 'uid': int(command(['id', '-u', u])), 'gid': int(command(['id', '-g', u])),

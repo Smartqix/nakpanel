@@ -33,7 +33,9 @@ on:
 jobs:
   unit:
     name: unit + generated-code + go test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    env:
+      NAKPANEL_REQUIRE_PLAN_PHP_POSTGRES: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -48,8 +50,47 @@ jobs:
         run: make release-test
       - name: go vet
         run: go vet ./...
+      - name: Start private PostgreSQL for production-schema regression tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          pg_bin=/usr/lib/postgresql/16/bin
+          if [[ ! -x "${pg_bin}/initdb" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends postgresql-16
+          fi
+          pg_root="${RUNNER_TEMP}/nakpanel-unit-postgres"
+          pg_user="$(id -un)"
+          [[ "${pg_root}" =~ ^/[a-zA-Z0-9_./-]+$ && "${pg_user}" =~ ^[a-zA-Z0-9_-]+$ ]]
+          mkdir -m 0700 "${pg_root}"
+          mkdir -m 0700 "${pg_root}/socket"
+          printf 'NAKPANEL_UNIT_PG_OWNED=1\n' >>"${GITHUB_ENV}"
+          "${pg_bin}/initdb" -D "${pg_root}/data" -U "${pg_user}" --auth-local=trust --auth-host=reject --encoding=UTF8 --no-locale >/dev/null
+          "${pg_bin}/pg_ctl" -D "${pg_root}/data" -l "${pg_root}/server.log" -o "-c listen_addresses='' -k ${pg_root}/socket -p 55439" -w -t 30 start
+          # Production advisory-lock keys are database-wide. Separate fixture
+          # databases keep package-concurrent tests isolated, including seed IDs.
+          for pg_database in nakpanel_native_fixture nakpanel_plan_php; do
+            "${pg_bin}/createdb" --host="${pg_root}/socket" --port=55439 --username="${pg_user}" "${pg_database}"
+          done
+          observed="$("${pg_bin}/psql" -XAt --host="${pg_root}/socket" --port=55439 --username="${pg_user}" --dbname=nakpanel_native_fixture -c "SELECT current_setting('data_directory') || '|' || (inet_server_addr() IS NULL AND current_setting('listen_addresses')='')::text")"
+          [[ "${observed}" == "${pg_root}/data|true" ]]
+          native_dsn="host=${pg_root}/socket port=55439 user=${pg_user} dbname=nakpanel_native_fixture sslmode=disable"
+          plan_dsn="host=${pg_root}/socket port=55439 user=${pg_user} dbname=nakpanel_plan_php sslmode=disable"
+          printf 'NAKPANEL_NATIVE_FIXTURE_TEST_DSN=%s\nNAKPANEL_PLAN_PHP_TEST_DSN=%s\n' "${native_dsn}" "${plan_dsn}" >>"${GITHUB_ENV}"
+          printf '%s\n' "${pg_bin}" >>"${GITHUB_PATH}"
       - name: go test (includes the in-process security guards)
         run: go test ./... -count=1
+      - name: Stop only the unit-owned PostgreSQL instance
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${NAKPANEL_UNIT_PG_OWNED:-}" == 1 ]] || exit 0
+          pg_root="${RUNNER_TEMP}/nakpanel-unit-postgres"
+          if [[ -f "${pg_root}/data/postmaster.pid" ]]; then
+            /usr/lib/postgresql/16/bin/pg_ctl -D "${pg_root}/data" -m fast -w -t 30 stop
+          fi
 
   security-suite:
     name: adversarial security + reliability gate (Multipass)

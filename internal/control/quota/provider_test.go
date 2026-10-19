@@ -194,7 +194,7 @@ func TestSetSubscriptionModeCustomQueuesHostConvergence(t *testing.T) {
 		WillReturnError(sql.ErrNoRows)
 	mock.ExpectQuery(`SELECT COALESCE\(c\.reseller_id,0\),s\.status`).
 		WithArgs(int64(91)).
-		WillReturnRows(sqlmock.NewRows([]string{"reseller_id", "status"}).AddRow(int64(0), "active"))
+		WillReturnRows(sqlmock.NewRows([]string{"reseller_id", "status", "sync_mode"}).AddRow(int64(0), "active", "synced"))
 	mock.ExpectExec(`DELETE FROM subscription_addons`).WithArgs(int64(91)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`INSERT INTO subscription_entitlements`).

@@ -245,5 +245,8 @@ curl --connect-timeout 5 --max-time 30 -skf -b "${tmpdir}/admin.cookies" \
   "https://${VM_IP}:7443/subscriptions/${subscription_id}" -o "${tmpdir}/subscription.html"
 grep -Fqi 'compliant' "${tmpdir}/subscription.html" || fail "subscription compliance is not visible"
 
+source "${SCRIPT_DIR}/phase31-plan-php-verify.sh"
+verify_phase31_php_versions
+
 PHASE31_COMPLETE=1
 echo "Phase 31 production service-plan verification passed for ${VM_NAME} (${VM_IP})."

@@ -20,11 +20,12 @@ func (s *SQLStore) PlanSynchronization(ctx context.Context, planID int64) (types
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT sub.id,sub.name,sub.sync_mode,sub.sync_status,
  COALESCE(ent.source_revision,0),sub.sync_error,COALESCE(account.convergence_status,'missing'),
- COALESCE(account.desired_revision,0),COALESCE(account.applied_revision,0),COALESCE(account.last_error,'')
+ COALESCE(account.desired_revision,0),COALESCE(account.applied_revision,0),COALESCE(account.last_error,''),
+ sub.plan_revision,GREATEST($2::int,COALESCE((SELECT MAX(addon.revision) FROM subscription_addons assigned JOIN addon_plans addon ON addon.id=assigned.addon_plan_id WHERE assigned.subscription_id=sub.id),0))
  FROM subscriptions sub
  LEFT JOIN subscription_entitlements ent ON ent.subscription_id=sub.id
  LEFT JOIN subscription_system_accounts account ON account.subscription_id=sub.id
- WHERE sub.plan_id=$1 ORDER BY sub.id`, planID)
+ WHERE sub.plan_id=$1 ORDER BY sub.id`, planID, view.Revision)
 	if err != nil {
 		return view, err
 	}
@@ -33,8 +34,9 @@ func (s *SQLStore) PlanSynchronization(ctx context.Context, planID int64) (types
 		var item types.PlanSubscriptionSync
 		var snapshotStatus, serviceStatus, serviceError string
 		var desired, applied int64
+		var baseRevision, composedRevision int
 		if err := rows.Scan(&item.ID, &item.Name, &item.Mode, &snapshotStatus, &item.SnapshotRevision,
-			&item.Error, &serviceStatus, &desired, &applied, &serviceError); err != nil {
+			&item.Error, &serviceStatus, &desired, &applied, &serviceError, &baseRevision, &composedRevision); err != nil {
 			return view, err
 		}
 		switch {
@@ -44,10 +46,10 @@ func (s *SQLStore) PlanSynchronization(ctx context.Context, planID int64) (types
 		case snapshotStatus == "out_of_sync" || strings.TrimSpace(item.Error) != "":
 			item.State = "failed"
 			view.Failed++
-		case item.SnapshotRevision != view.Revision || snapshotStatus != "in_sync":
+		case baseRevision != view.Revision || item.SnapshotRevision != composedRevision || snapshotStatus != "in_sync":
 			item.State = "pending"
 			view.Pending++
-		case serviceStatus == "failed":
+		case serviceStatus == "failed" || strings.TrimSpace(serviceError) != "":
 			item.State, item.Error = "failed", serviceError
 			view.Failed++
 		case serviceStatus != "in_sync" || desired != applied:

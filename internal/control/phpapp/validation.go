@@ -37,7 +37,7 @@ func validateApplicationConfiguration(input ConfigureApplicationInput, policy ty
 		input.FrameworkProfile = types.PHPFrameworkPlain
 		input.PublicPath = ""
 		input.HealthPath = "/"
-		input.SharedPaths = nil
+		input.SharedPaths = []string{}
 		input.ReleaseRetention = 5
 		input.Composer = types.PHPComposerSpec{}
 		return input, nil

@@ -13,6 +13,23 @@ No passing live result is implied by the workflow's existence. Parent review
 and an actual workflow run are required before claiming either AMD64 cell.
 This complements the local native ARM64 cells and does not replace them.
 
+## Required CI production-schema tests
+
+The existing `unit + generated-code + go test` check uses an isolated PostgreSQL
+16 instance on its Ubuntu24.04 runner. Its data and Unix socket directories are
+private to that job, TCP listening is disabled and the observed data directory
+and effective listening setting must match before tests start. Cleanup stops
+only that job's instance.
+
+Mail/forward fixtures and PHP-only plan tests use different databases in that
+instance. Production subscription advisory locks are database-wide, so separate
+schemas with the same seeded subscription IDs are insufficient for concurrent
+Go packages. Every pooled plan-test connection also selects its own schema at
+startup. `NAKPANEL_REQUIRE_PLAN_PHP_POSTGRES=1` makes a missing plan-test DSN fail
+instead of skipping actual schema55/56 preservation and concurrency tests.
+This source configuration still requires actual hosted execution; its existence
+does not establish a passing CI or native qualification result.
+
 ## Feasibility and resource evidence
 
 GitHub documents standard public-repository `ubuntu-24.04` x64 runners as

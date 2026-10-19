@@ -1017,6 +1017,10 @@ func (m *Manager) validatePlanReadiness(ctx context.Context, plan controlquota.P
 	if err != nil {
 		return nil, fmt.Errorf("load agent capabilities: %w", err)
 	}
+	return validatePlanReadinessWithCapabilities(plan, capabilities), nil
+}
+
+func validatePlanReadinessWithCapabilities(plan controlquota.Plan, capabilities types.RuntimeCapabilities) []types.PlanCapabilityIssue {
 	issues := controlpolicy.ValidatePlanCapabilities(controlquota.EffectivePlanHostingPolicy(plan), capabilities)
 	if plan.SiteDiskQuotaMB > 0 && !capabilities.DiskQuota {
 		hasDiskIssue := false
@@ -1033,7 +1037,7 @@ func (m *Manager) validatePlanReadiness(ctx context.Context, plan controlquota.P
 			})
 		}
 	}
-	return issues, nil
+	return issues
 }
 
 func blockingCapabilityMessage(issues []types.PlanCapabilityIssue) string {

@@ -29,7 +29,7 @@ func TestPlanSynchronizationSeparatesSnapshotsServicesAndExclusions(t *testing.T
 	if view.Pending != 1 || view.Excluded != 1 || view.Subscriptions[0].State != "pending" {
 		t.Fatalf("stale snapshot: %+v", view)
 	}
-	if _, err = db.Exec("UPDATE subscription_entitlements SET source_revision=4 WHERE subscription_id=1"); err != nil {
+	if _, err = db.Exec("UPDATE subscription_entitlements SET source_revision=4 WHERE subscription_id=1;UPDATE subscriptions SET plan_revision=4 WHERE id=1"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.Exec("UPDATE subscription_system_accounts SET convergence_status='pending',desired_revision=3 WHERE subscription_id=1"); err != nil {

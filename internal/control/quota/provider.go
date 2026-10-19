@@ -160,12 +160,20 @@ func validateNewResellerCustomerTx(ctx context.Context, tx *sql.Tx, resellerID i
 }
 
 func validatePlanWithinResellerTx(ctx context.Context, tx *sql.Tx, p Plan) error {
+	return validatePlanWithinReseller(ctx, tx, p, true)
+}
+
+func validatePlanWithinReseller(ctx context.Context, q queryRower, p Plan, lock bool) error {
 	if p.ResellerID <= 0 {
 		return nil
 	}
 	var rp types.ResellerPlan
 	var policyRaw []byte
-	err := tx.QueryRowContext(ctx, `SELECT x.disk_mb,x.max_sites,x.max_subdomains,x.max_domain_aliases,x.max_databases,x.bandwidth_mb,x.max_mailboxes,x.max_ftp_accounts,x.max_backups,x.backup_storage_mb,x.allow_ssh,x.allow_dns,x.allow_tls,x.allow_backups,x.allow_php_settings,x.hosting_policy FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans x ON x.id=rs.reseller_plan_id WHERE r.id=$1 FOR UPDATE OF r,rs,x`, p.ResellerID).Scan(&rp.DiskMB, &rp.MaxSites, &rp.MaxSubdomains, &rp.MaxDomainAliases, &rp.MaxDatabases, &rp.BandwidthMB, &rp.MaxMailboxes, &rp.MaxFTPAccounts, &rp.MaxBackups, &rp.BackupStorageMB, &rp.AllowSSH, &rp.AllowDNS, &rp.AllowTLS, &rp.AllowBackups, &rp.AllowPHPSettings, &policyRaw)
+	query := `SELECT x.disk_mb,x.max_sites,x.max_subdomains,x.max_domain_aliases,x.max_databases,x.bandwidth_mb,x.max_mailboxes,x.max_ftp_accounts,x.max_backups,x.backup_storage_mb,x.allow_ssh,x.allow_dns,x.allow_tls,x.allow_backups,x.allow_php_settings,x.hosting_policy FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans x ON x.id=rs.reseller_plan_id WHERE r.id=$1`
+	if lock {
+		query += ` FOR UPDATE OF r,rs,x`
+	}
+	err := q.QueryRowContext(ctx, query, p.ResellerID).Scan(&rp.DiskMB, &rp.MaxSites, &rp.MaxSubdomains, &rp.MaxDomainAliases, &rp.MaxDatabases, &rp.BandwidthMB, &rp.MaxMailboxes, &rp.MaxFTPAccounts, &rp.MaxBackups, &rp.BackupStorageMB, &rp.AllowSSH, &rp.AllowDNS, &rp.AllowTLS, &rp.AllowBackups, &rp.AllowPHPSettings, &policyRaw)
 	if err != nil {
 		return err
 	}
@@ -1250,16 +1258,24 @@ func validateResellerSubscriptionsTx(ctx context.Context, tx *sql.Tx, resellerID
 }
 
 func validateResellerCapacityTx(ctx context.Context, tx *sql.Tx, resellerID, excludeSubscriptionID int64, candidate types.SubscriptionEntitlements) error {
+	return validateResellerCapacity(ctx, tx, resellerID, excludeSubscriptionID, candidate, true)
+}
+
+func validateResellerCapacity(ctx context.Context, q *sql.Tx, resellerID, excludeSubscriptionID int64, candidate types.SubscriptionEntitlements, lock bool) error {
 	var limits types.ResellerPlan
 	var resellerPolicyRaw []byte
-	err := tx.QueryRowContext(ctx, `SELECT p.max_customers,p.max_subscriptions,p.disk_mb,p.max_sites,p.max_subdomains,p.max_domain_aliases,p.max_databases,p.bandwidth_mb,p.max_mailboxes,p.max_ftp_accounts,p.max_backups,p.backup_storage_mb,p.allow_custom_plans,p.allow_ssh,p.allow_dns,p.allow_tls,p.allow_backups,p.allow_php_settings,p.hosting_policy
-FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans p ON p.id=rs.reseller_plan_id WHERE r.id=$1 FOR UPDATE OF r,rs,p`, resellerID).Scan(&limits.MaxCustomers, &limits.MaxSubscriptions, &limits.DiskMB, &limits.MaxSites, &limits.MaxSubdomains, &limits.MaxDomainAliases, &limits.MaxDatabases, &limits.BandwidthMB, &limits.MaxMailboxes, &limits.MaxFTPAccounts, &limits.MaxBackups, &limits.BackupStorageMB, &limits.AllowCustomPlans, &limits.AllowSSH, &limits.AllowDNS, &limits.AllowTLS, &limits.AllowBackups, &limits.AllowPHPSettings, &resellerPolicyRaw)
+	query := `SELECT p.max_customers,p.max_subscriptions,p.disk_mb,p.max_sites,p.max_subdomains,p.max_domain_aliases,p.max_databases,p.bandwidth_mb,p.max_mailboxes,p.max_ftp_accounts,p.max_backups,p.backup_storage_mb,p.allow_custom_plans,p.allow_ssh,p.allow_dns,p.allow_tls,p.allow_backups,p.allow_php_settings,p.hosting_policy
+FROM reseller_accounts r JOIN reseller_subscriptions rs ON rs.reseller_id=r.id AND rs.status='active' JOIN reseller_plans p ON p.id=rs.reseller_plan_id WHERE r.id=$1`
+	if lock {
+		query += ` FOR UPDATE OF r,rs,p`
+	}
+	err := q.QueryRowContext(ctx, query, resellerID).Scan(&limits.MaxCustomers, &limits.MaxSubscriptions, &limits.DiskMB, &limits.MaxSites, &limits.MaxSubdomains, &limits.MaxDomainAliases, &limits.MaxDatabases, &limits.BandwidthMB, &limits.MaxMailboxes, &limits.MaxFTPAccounts, &limits.MaxBackups, &limits.BackupStorageMB, &limits.AllowCustomPlans, &limits.AllowSSH, &limits.AllowDNS, &limits.AllowTLS, &limits.AllowBackups, &limits.AllowPHPSettings, &resellerPolicyRaw)
 	if err != nil {
 		return err
 	}
 	var customers, subs, disk, sites, subdomains, aliases, dbs, traffic, mail, ftp, backups, backupMB int
 	var unlimitedDisk, unlimitedSites, unlimitedSubdomains, unlimitedAliases, unlimitedDB, unlimitedTraffic, unlimitedMail, unlimitedFTP, unlimitedBackups, unlimitedBackupMB bool
-	err = tx.QueryRowContext(ctx, `SELECT COUNT(DISTINCT c.id)::int,COUNT(DISTINCT s.id)::int,
+	err = q.QueryRowContext(ctx, `SELECT COUNT(DISTINCT c.id)::int,COUNT(DISTINCT s.id)::int,
 COALESCE(SUM(CASE WHEN e.disk_mb>=0 THEN e.disk_mb ELSE 0 END),0)::int,COALESCE(BOOL_OR(e.disk_mb<0),false),
 COALESCE(SUM(CASE WHEN e.max_sites>=0 THEN e.max_sites ELSE 0 END),0)::int,COALESCE(BOOL_OR(e.max_sites<0),false),
 COALESCE(SUM(CASE WHEN e.max_subdomains>=0 THEN e.max_subdomains ELSE 0 END),0)::int,COALESCE(BOOL_OR(e.max_subdomains<0),false),
@@ -1296,7 +1312,7 @@ FROM customers c LEFT JOIN subscriptions s ON s.customer_id=c.id AND s.status='a
 	}
 	typedUsed := make([]int, len(typedPolicyLimits(limits.HostingPolicy)))
 	typedUnlimited := make([]bool, len(typedUsed))
-	rows, err := tx.QueryContext(ctx, `SELECT entitlement.hosting_policy
+	rows, err := q.QueryContext(ctx, `SELECT entitlement.hosting_policy
 FROM subscription_entitlements entitlement
 JOIN subscriptions subscription ON subscription.id=entitlement.subscription_id AND subscription.status='active'
 JOIN customers customer ON customer.id=subscription.customer_id
@@ -1558,6 +1574,10 @@ func (s *SQLStore) SetSubscriptionAddons(ctx context.Context, subscriptionID int
 	if mode == "custom" && len(addonIDs) > 0 {
 		return errors.New("custom subscriptions cannot use add-ons")
 	}
+	previousAddons, err := planPHPAddonDigestTx(ctx, tx, subscriptionID)
+	if err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM subscription_addons WHERE subscription_id=$1`, subscriptionID); err != nil {
 		return err
 	}
@@ -1585,7 +1605,15 @@ func (s *SQLStore) SetSubscriptionAddons(ctx context.Context, subscriptionID int
 	if mode == "custom" {
 		return tx.Commit()
 	}
-	if err = syncSubscriptionTx(ctx, tx, subscriptionID, true); err != nil {
+	currentAddons, err := planPHPAddonDigestTx(ctx, tx, subscriptionID)
+	if err != nil {
+		return err
+	}
+	cause := resolvePlanHistory
+	if previousAddons != currentAddons {
+		cause = requireFullSync
+	}
+	if err = syncSubscriptionWithCauseTx(ctx, tx, subscriptionID, true, cause); err != nil {
 		return err
 	}
 	if err = enforceCommittedAllocationCapTx(ctx, tx); err != nil {
@@ -1744,8 +1772,8 @@ func (s *SQLStore) SetSubscriptionMode(ctx context.Context, subscriptionID int64
 		return err
 	}
 	var resellerID int64
-	var status string
-	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(c.reseller_id,0),s.status FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, subscriptionID).Scan(&resellerID, &status); err != nil {
+	var status, previousMode string
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(c.reseller_id,0),s.status,s.sync_mode FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, subscriptionID).Scan(&resellerID, &status, &previousMode); err != nil {
 		return err
 	}
 	if mode == "custom" {
@@ -1799,7 +1827,11 @@ func (s *SQLStore) SetSubscriptionMode(ctx context.Context, subscriptionID int64
 			}
 		}
 		if err == nil && mode == "synced" {
-			err = syncSubscriptionTx(ctx, tx, subscriptionID, true)
+			cause := resolvePlanHistory
+			if previousMode != mode {
+				cause = requireFullSync
+			}
+			err = syncSubscriptionWithCauseTx(ctx, tx, subscriptionID, true, cause)
 		}
 	}
 	if err != nil {
@@ -1887,6 +1919,10 @@ func syncAddonSubscriptionsTx(ctx context.Context, tx *sql.Tx, addonID int64) er
 }
 
 func syncSubscriptionTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, force bool) error {
+	return syncSubscriptionWithCauseTx(ctx, tx, subscriptionID, force, resolvePlanHistory)
+}
+
+func syncSubscriptionWithCauseTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, force bool, cause planSyncCause) error {
 	var planID, customerID, resellerID int64
 	var mode, status string
 	err := tx.QueryRowContext(ctx, `SELECT COALESCE(s.plan_id,0),s.customer_id,COALESCE(c.reseller_id,0),s.sync_mode,s.status FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1 FOR UPDATE OF s,c`, subscriptionID).Scan(&planID, &customerID, &resellerID, &mode, &status)
@@ -1920,12 +1956,27 @@ func syncSubscriptionTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, f
 		return err
 	}
 	e.SubscriptionID = subscriptionID
+	decision, err := resolvePlanPHPSyncTx(ctx, tx, subscriptionID, plan, e, cause)
+	if err != nil {
+		return err
+	}
+	if decision.PHPOnly {
+		e, err = projectPlanPHPEntitlementsTx(ctx, tx, subscriptionID, e)
+		if err != nil {
+			return err
+		}
+	}
 	if resellerID > 0 && status == "active" {
 		if err = validateResellerCapacityTx(ctx, tx, resellerID, subscriptionID, e); err != nil {
 			return err
 		}
 	}
-	if err = writeSubscriptionEntitlementsTx(ctx, tx, e); err != nil {
+	if decision.PHPOnly {
+		err = writePlanPHPEntitlementsTx(ctx, tx, subscriptionID, decision)
+	} else {
+		err = writeSubscriptionEntitlementsTx(ctx, tx, e)
+	}
+	if err != nil {
 		return err
 	}
 	if err = evaluateSubscriptionComplianceTx(ctx, tx, subscriptionID, e); err != nil {
