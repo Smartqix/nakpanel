@@ -5501,6 +5501,13 @@
     .np-dns-template-table tr[data-np-dns-row] td:nth-child(5) { align-items: center; display: flex; gap: 8px; }
     .np-dns-template-table tr[data-np-dns-row] td:nth-child(5)::before { content: "TTL"; }
     .np-dns-template-table tr[data-np-dns-row] td:nth-child(6) { justify-self: end; }
+    .np-dns-preview-table tbody tr { display: grid; gap: 6px 12px; grid-template-columns: minmax(0,1fr) auto; padding: 12px 0; }
+    .np-dns-preview-table tbody td { display: block; min-width: 0; padding: 4px 0; width: auto; }
+    .np-dns-preview-table tbody td::before { content: none; }
+    .np-dns-preview-table tbody td:nth-child(2) { grid-column: 2; grid-row: 1; text-align: right; }
+    .np-dns-preview-table tbody td:nth-child(3) { grid-column: 1 / -1; }
+    .np-dns-preview-table tbody td:nth-child(4)::before { content: "TTL "; }
+    .np-dns-preview-table tbody td:nth-child(5) { text-align: right; }
     .np-dns-domain-preview-form button { min-height: 44px; }
   }
   .np-dns-settings-form { display: grid; gap: 12px 16px; grid-template-columns: repeat(2,minmax(0,1fr)); }
