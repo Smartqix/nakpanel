@@ -519,11 +519,10 @@ wait_for "isolated account provisioning" "SELECT convergence_status FROM subscri
 second_username="$(db "SELECT username FROM subscription_system_accounts WHERE subscription_id=${second_subscription_id}")"
 classic_document_root="$(db "SELECT document_root FROM sites WHERE id=${classic_site_id}")"
 [[ "${classic_document_root}" == "/home/${username}/"* ]] || fail "Classic document root is not owned by the first subscription"
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${username}" "${second_username}" "${classic_site_id}" "${classic_document_root}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${username}" "${second_username}" "${classic_site_id}" "${classic_document_root}" "${NAKPANEL_REMOTE_SRC}" <<'REMOTE'
 set -euo pipefail
 username="$1"; second_username="$2"; site_id="$3"; classic_document_root="$4"
-quota_status="$(quotaon -p / || true)"
-grep -q 'user quota .* is on' <<<"${quota_status}"
+python3 "$5/deploy/multipass/qualification_quota.py" /home
 quota -u "${username}" >/tmp/phase30-quota.out
 expected_hard_kib=$((2048 * 1024))
 hard_kib="$(repquota -up / | awk -v user="${username}" '$1==user {print $5; found=1} END{if (!found) exit 1}')"
@@ -803,7 +802,7 @@ PRE_REBOOT_JOURNAL="$(stop_phase30_journal_capture)"
 multipass restart "${VM_NAME}"
 wait_for_cloud_init "${VM_NAME}"
 # Persistence is observed before application or system reconciliation.
-multipass_exec_short "${VM_NAME}" -- sudo bash -c 'set -euo pipefail; findmnt --target /home; quotaon -p "$(findmnt -n -o TARGET --target /home)" 2>/dev/null | grep "user quota .* is on" >/dev/null'
+multipass_exec_short "${VM_NAME}" -- sudo python3 "${NAKPANEL_REMOTE_SRC}/deploy/multipass/qualification_quota.py" /home
 VM_IP="$(vm_ip)"
 for _ in $(seq 1 120); do curl --connect-timeout 5 --max-time 30 -skf "https://${VM_IP}:7443/healthz" >/dev/null && break; sleep 2; done
 cli site reconcile phase30-classic.test >/dev/null
