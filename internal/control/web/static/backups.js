@@ -3,7 +3,17 @@
   function matchesBackup(domain,text,query,selected) {return (!selected||domain===selected)&&(domain+' '+text).toLowerCase().includes((query||'').toLowerCase());}
   function backupStateSignature(states) {return Object.keys(states).sort().map(function(id){return id+':'+states[id];}).join('|');}
   function backupPending(states) {return Object.values(states).some(function(s){return s==='pending'||s==='deleting';});}
-  if(typeof module!=='undefined'&&module.exports)module.exports={matchesBackup:matchesBackup,backupStateSignature:backupStateSignature,backupPending:backupPending};
+  function backupOperationMessage(removing,states,ids){
+    if(removing){
+      if(ids.every(function(id){return !Object.hasOwn(states,id);}))return 'Selected backups removed. Other recovery points were preserved.';
+      if(ids.some(function(id){return states[id]==='delete_failed';}))return 'A selected backup could not be removed. Review its error before retrying.';
+      return 'Removing the selected backups. Other recovery points are preserved.';
+    }
+    if(states[ids[0]]==='active')return 'Backup created. The recovery point is ready.';
+    if(states[ids[0]]==='failed')return 'Backup creation failed. Review the recovery point error.';
+    return 'Creating your backup. This list updates automatically.';
+  }
+  if(typeof module!=='undefined'&&module.exports)module.exports={matchesBackup:matchesBackup,backupStateSignature:backupStateSignature,backupPending:backupPending,backupOperationMessage:backupOperationMessage};
   if(typeof window==='undefined'||!window.NakpanelUI)return;
   var ui=window.NakpanelUI,document=window.document,dialog=document.getElementById('np-backup-removal-dialog'),timer,previewGeneration=0,watching=false,started=0;
   function manager(){return document.querySelector('[data-np-backup-manager]');}
@@ -65,11 +75,14 @@
     var form=e.target;
     if(form.matches('[data-np-backup-selection]')){e.preventDefault();var url=new URL(form.action);new FormData(form).forEach(function(v,k){url.searchParams.append(k,v);});if(url.searchParams.has('backup_id'))preview(url.href,form.querySelector('button'));return;}
     if(!form.matches('[data-np-backup-remove-form],[data-np-backup-create-form]'))return;
-    e.preventDefault();if(form.dataset.busy==='true')return;form.dataset.busy='true';ui.setBusy(form,true);
+    e.preventDefault();if(form.dataset.busy==='true')return;var owner=manager();form.dataset.busy='true';ui.setBusy(form,true);
     try{
-      var result=await request(form.action,{method:'POST',body:new URLSearchParams(new FormData(form))}),parent=form.closest('dialog');if(parent)ui.dialogs.close(parent);
+      var submitted=new URLSearchParams(new FormData(form)),removing=form.matches('[data-np-backup-remove-form]');
+      var result=await request(form.action,{method:'POST',body:submitted});if(owner&&!owner.isConnected)return;
+      var parent=form.closest('dialog');if(parent)ui.dialogs.close(parent);
       if(!manager()){window.location.assign(result.redirect);return;}
-      await refresh();start();announce(form.matches('[data-np-backup-remove-form]')?'Removing the selected backups. Other recovery points are preserved.':'Creating your backup. This list updates automatically.');
+      await refresh();start();var states={};manager().querySelectorAll('[data-np-backup-row]').forEach(function(row){states[row.dataset.backupId]=row.dataset.backupStatus;});
+      announce(backupOperationMessage(removing,states,removing?submitted.getAll('backup_id'):[String(result.backup_id)]));
     }catch(error){showError(form,error.message||'The request may have been accepted. Close this dialog and refresh the backup list before retrying.');if(!error.status||error.status>=500){form.dataset.uncertain='true';return;}}finally{if(!form.dataset.uncertain){form.dataset.busy='false';ui.setBusy(form,false);}}
   });
   document.addEventListener('nakpanel:navigated',start);
