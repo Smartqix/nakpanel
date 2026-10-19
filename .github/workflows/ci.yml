@@ -35,9 +35,17 @@ jobs:
     runs-on: [self-hosted, multipass]
     steps:
       - uses: actions/checkout@v4
+      - name: Isolate host Go state
+        shell: bash
+        run: |
+          printf 'GOPATH=%s/nakpanel-go\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'GOCACHE=%s/nakpanel-go-build\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
+          printf 'GOMODCACHE=%s/nakpanel-go/pkg/mod\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-go@v5
         with:
           go-version: '1.22'
+          # Builds run in the VM; never upload a self-hosted user's Go caches.
+          cache: false
       - name: Run the adversarial validation suite (Parts A-H)
         run: ./deploy/multipass/security-verify.sh
         env:
