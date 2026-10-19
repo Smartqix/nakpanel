@@ -18,6 +18,7 @@ func TestSubscriptionTeardownDeletesOnlyValidatedAccountHome(t *testing.T) {
 		t.Fatal(err)
 	}
 	runner := &teardownRunner{outputs: map[string][]byte{
+		"systemctl": []byte("LoadState=not-found\nActiveState=inactive\n"),
 		"systemctl show --property=LoadState --property=ActiveState --no-pager nakpanel-php-fpm@17.service": []byte("LoadState=not-found\nActiveState=active\n"),
 		"systemctl show --property=LoadState --value --no-pager nakpanel-php-fpm-candidate@17-42.service":   []byte("loaded\n"),
 		"systemctl list-units --all --type=service --no-legend --plain --no-pager nakpanel-php-worker@51*.service": []byte(

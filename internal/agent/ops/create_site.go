@@ -3,7 +3,6 @@ package ops
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"errors"
 	"fmt"
 	"os"
@@ -186,88 +185,39 @@ func NewSitePlan(req types.CreateSiteReq, paths SitePathConfig) (SitePlan, error
 	if err != nil {
 		return SitePlan{}, err
 	}
-	customPHPFPMPoolDir := paths.PHPFPMPoolDir
-	customNginxAvailableDir := paths.NginxAvailableDir
-	customNginxConfDir := paths.NginxConfDir
-	customNginxCacheDir := paths.NginxCacheDir
-	customNginxProtectedDir := paths.NginxProtectedDir
-	customPHPFPMDedicatedDir := paths.PHPFPMDedicatedDir
-	customPHPFPMDedicatedRunDir := paths.PHPFPMDedicatedRunDir
-	customSystemdUnitDir := paths.SystemdUnitDir
-	paths = fillSitePathDefaults(paths)
-	if customPHPFPMPoolDir == "" {
-		paths.PHPFPMPoolDir = runtime.PoolDir
-	}
-	if customNginxConfDir == "" && customNginxAvailableDir != "" {
-		paths.NginxConfDir = filepath.Join(filepath.Dir(customNginxAvailableDir), "conf.d")
-	}
-	if customNginxCacheDir == "" && paths.HomeRoot != "/home" {
-		paths.NginxCacheDir = filepath.Join(filepath.Dir(paths.HomeRoot), "var", "cache", "nginx", "nakpanel")
-	}
-	if customNginxProtectedDir == "" && paths.HomeRoot != "/home" {
-		paths.NginxProtectedDir = filepath.Join(filepath.Dir(paths.HomeRoot), "etc", "nginx", "nakpanel", "protected")
-	}
-	if customPHPFPMDedicatedDir == "" && paths.HomeRoot != "/home" {
-		paths.PHPFPMDedicatedDir = filepath.Join(filepath.Dir(paths.HomeRoot), "etc", "nakpanel", "php-fpm", "sites")
-	}
-	if customPHPFPMDedicatedRunDir == "" && paths.HomeRoot != "/home" {
-		paths.PHPFPMDedicatedRunDir = filepath.Join(filepath.Dir(paths.HomeRoot), "run", "nakpanel", "php")
-	}
-	if customSystemdUnitDir == "" && paths.HomeRoot != "/home" {
-		paths.SystemdUnitDir = filepath.Join(filepath.Dir(paths.HomeRoot), "etc", "systemd", "system")
-	}
-	siteHome := filepath.Join(paths.HomeRoot, normalized.Username)
-	docroot := filepath.Join(siteHome, "public_html")
-	if normalized.SharedAccount {
-		docroot = filepath.Join(siteHome, "domains", normalized.Domain, "public_html")
-	}
-	slug := normalized.Username + "-" + strings.ReplaceAll(normalized.Domain, ".", "-")
-	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(normalized.Domain)))[:12]
-	nginxName := normalized.Domain + ".conf"
-	fpmName := "nakpanel-" + slug
-	phpConfig := filepath.Join(paths.PHPFPMPoolDir, fpmName+".conf")
-	phpSocket := filepath.Join(paths.PHPRunDir, fpmName+".sock")
-	phpService := "php" + normalized.PHPVersion + "-fpm"
-	phpUnit := ""
-	if normalized.SiteID > 0 {
-		phpConfig = filepath.Join(paths.PHPFPMDedicatedDir, strconv.FormatInt(normalized.SiteID, 10)+".conf")
-		phpSocket = filepath.Join(paths.PHPFPMDedicatedRunDir, "site-"+strconv.FormatInt(normalized.SiteID, 10)+".sock")
-		phpService = fmt.Sprintf("nakpanel-php-fpm@%d.service", normalized.SiteID)
-		phpUnit = filepath.Join(paths.SystemdUnitDir, phpService)
-		fpmName = "www"
-	}
-
+	files := siteFileLayout(normalized, paths, runtime.PoolDir)
+	defaults := fillSitePathDefaults(paths)
 	return SitePlan{
 		runtime:                runtime,
 		SiteID:                 normalized.SiteID,
 		Username:               normalized.Username,
 		Domain:                 normalized.Domain,
 		PHPVersion:             normalized.PHPVersion,
-		SiteSlug:               slug,
-		SiteHome:               siteHome,
-		Docroot:                docroot,
-		ACMEWebroot:            filepath.Join(paths.ACMEChallengeRoot, normalized.Domain),
-		NginxConfig:            filepath.Join(paths.NginxAvailableDir, nginxName),
-		NginxEnabled:           filepath.Join(paths.NginxEnabledDir, nginxName),
-		NginxAccessLog:         filepath.Join(paths.NginxLogDir, slug+".access.log"),
-		NginxErrorLog:          filepath.Join(paths.NginxLogDir, slug+".error.log"),
-		NginxSnippet:           paths.NginxSnippet,
-		NginxPolicyConfig:      filepath.Join(paths.NginxConfDir, "00-nakpanel-"+digest+".conf"),
-		NginxRateZone:          "npr_" + digest,
-		NginxConnectionZone:    "npc_" + digest,
-		NginxCacheZone:         "npm_" + digest,
-		NginxCachePath:         filepath.Join(paths.NginxCacheDir, "npm_"+digest),
-		NginxProtectedConfig:   filepath.Join(paths.NginxProtectedDir, "site-"+strconv.FormatInt(normalized.SiteID, 10), "locations.conf"),
-		NginxApplicationConfig: filepath.Join(filepath.Dir(paths.NginxProtectedDir), "applications", "site-"+strconv.FormatInt(normalized.SiteID, 10)+".conf"),
-		PHPFPMConfig:           phpConfig,
-		PHPFPMPool:             fpmName,
-		PHPFPMSocket:           phpSocket,
-		PHPFPMErrorLog:         filepath.Join(paths.PHPFPMLogDir, slug+".error.log"),
-		PHPServiceName:         phpService,
-		PHPServiceUnit:         phpUnit,
-		WWWGroup:               paths.WWWGroup,
-		PHPTmpDir:              paths.PHPTmpDir,
-		FileMode:               paths.DefaultFileMode,
+		SiteSlug:               files.SiteSlug,
+		SiteHome:               files.SiteHome,
+		Docroot:                files.Docroot,
+		ACMEWebroot:            files.ACMEWebroot,
+		NginxConfig:            files.NginxConfig,
+		NginxEnabled:           files.NginxEnabled,
+		NginxAccessLog:         files.NginxAccessLog,
+		NginxErrorLog:          files.NginxErrorLog,
+		NginxSnippet:           files.NginxSnippet,
+		NginxPolicyConfig:      files.NginxPolicyConfig,
+		NginxRateZone:          files.NginxRateZone,
+		NginxConnectionZone:    files.NginxConnectionZone,
+		NginxCacheZone:         files.NginxCacheZone,
+		NginxCachePath:         files.NginxCachePath,
+		NginxProtectedConfig:   files.NginxProtectedConfig,
+		NginxApplicationConfig: files.NginxApplicationConfig,
+		PHPFPMConfig:           files.PHPFPMConfig,
+		PHPFPMPool:             files.PHPFPMPool,
+		PHPFPMSocket:           files.PHPFPMSocket,
+		PHPFPMErrorLog:         files.PHPFPMErrorLog,
+		PHPServiceName:         files.PHPServiceName,
+		PHPServiceUnit:         files.PHPServiceUnit,
+		WWWGroup:               defaults.WWWGroup,
+		PHPTmpDir:              defaults.PHPTmpDir,
+		FileMode:               defaults.DefaultFileMode,
 		Limits:                 normalized.Limits,
 	}, nil
 }

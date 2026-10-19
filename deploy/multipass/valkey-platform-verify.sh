@@ -75,7 +75,13 @@ if multipass_exec_short "${VM_NAME}" -- sudo ss -ltnp | grep -E 'valkey|redis'; 
 fi
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}/redis" -o "${tmpdir}/cache.html"
 grep -Fq "${socket}" "${tmpdir}/cache.html" || fail "domain cache page does not show the subscription socket"
-if grep -Fq "${credential}" "${tmpdir}/cache.html"; then fail "Valkey credential rendered after rotation"; fi
+credential_status=0
+grep -Fq -- "${credential}" "${tmpdir}/cache.html" 2>/dev/null || credential_status=$?
+case "${credential_status}" in
+  0) fail "Valkey credential rendered after rotation" ;;
+  1) ;; # A successful read established that the credential is absent.
+  *) fail "Valkey credential privacy check could not read the cache page" ;;
+esac
 
 assert_valkey_boundary() {
   multipass_exec_short "${VM_NAME}" -- sudo bash -c '

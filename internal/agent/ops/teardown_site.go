@@ -108,7 +108,7 @@ func (p *SiteTeardownProvisioner) TeardownSite(ctx context.Context, req types.Te
 		if req.Stage == types.RemovalShared && !slices.Contains(journal.Checkpoints, string(types.RemovalHosting)) {
 			return errors.New("remove website hosting before shared services")
 		}
-		if err = p.validateRemovalArtifacts(req); err != nil {
+		if err = p.validateRemovalArtifacts(ctx, req, journal.Checkpoints); err != nil {
 			return err
 		}
 		if _, err = p.sharedRemovalArtifacts(req); err != nil {
@@ -313,7 +313,7 @@ func validateSiteTeardownRequest(req types.TeardownSiteReq) ([]types.SiteIdentit
 	return ids, nil
 }
 
-func (p *SiteTeardownProvisioner) siteRemovalPlan(item types.SiteRemovalSite) (SitePlan, error) {
-	return NewSitePlan(types.CreateSiteReq{SiteID: item.SiteID, SubscriptionID: item.SubscriptionID, Username: item.Username, Domain: item.Domain, PHPVersion: item.PHPVersion, SharedAccount: true}, p.options.Paths)
+func (p *SiteTeardownProvisioner) siteRemovalPlan(item types.SiteRemovalSite) (siteCleanupPlan, error) {
+	return newSiteCleanupPlan(types.SiteIdentity{SiteID: item.SiteID, SubscriptionID: item.SubscriptionID, Username: item.Username, Domain: item.Domain}, item.PHPVersion, p.options.Paths, "")
 }
 func siteRemovalID(id int64) string { return strconv.FormatInt(id, 10) }

@@ -47,11 +47,13 @@ func (p *SiteTeardownProvisioner) removalArtifacts(req types.TeardownSiteReq) ([
 			removalArtifact{root: filepath.Dir(paths.NginxProtectedDir), path: plan.NginxApplicationConfig},
 			removalArtifact{root: opts.GitRoot, path: filepath.Join(opts.GitRoot, "site-"+siteRemovalID(item.SiteID)), directory: true},
 		)
-		legacy, err := NewSitePlan(types.CreateSiteReq{Username: item.Username, Domain: item.Domain, PHPVersion: item.PHPVersion, SharedAccount: true}, paths)
+		legacyPlans, err := legacySiteCleanupPlans(types.SiteIdentity{Username: item.Username, Domain: item.Domain}, item.PHPVersion, paths)
 		if err != nil {
 			return nil, err
 		}
-		artifacts = append(artifacts, removalArtifact{root: filepath.Dir(legacy.PHPFPMConfig), path: legacy.PHPFPMConfig}, removalArtifact{root: filepath.Dir(legacy.PHPFPMConfig), path: legacy.PHPFPMConfig + ".suspended"}, removalArtifact{root: paths.PHPRunDir, path: legacy.PHPFPMSocket})
+		for _, legacy := range legacyPlans {
+			artifacts = append(artifacts, removalArtifact{root: filepath.Dir(legacy.PHPFPMConfig), path: legacy.PHPFPMConfig}, removalArtifact{root: filepath.Dir(legacy.PHPFPMConfig), path: legacy.PHPFPMConfig + ".suspended"}, removalArtifact{root: paths.PHPRunDir, path: legacy.PHPFPMSocket})
+		}
 		for _, log := range []struct{ root, path string }{{paths.NginxLogDir, plan.NginxAccessLog}, {paths.NginxLogDir, plan.NginxErrorLog}, {paths.PHPFPMLogDir, plan.PHPFPMErrorLog}} {
 			rotated, err := removalMatchingPaths(log.root, regexp.MustCompile("^"+regexp.QuoteMeta(filepath.Base(log.path))+`(?:\.[1-9][0-9]*|-\d{8})(?:\.gz)?$`))
 			if err != nil {
@@ -136,20 +138,34 @@ func (p *SiteTeardownProvisioner) excludeSurvivingArtifacts(req types.TeardownSi
 		if selected[peer.Domain] {
 			continue
 		}
-		plan, err := NewSitePlan(types.CreateSiteReq{SiteID: peer.SiteID, SubscriptionID: peer.SubscriptionID, Username: peer.Username, Domain: peer.Domain, PHPVersion: "8.4", SharedAccount: true}, p.options.Paths)
+		// Peer paths are identity-only; an unavailable or different installed
+		// PHP version must not prevent protecting a surviving website.
+		version := historicalPHPVersions(p.options.Paths.HomeRoot)[0]
+		legacyPlans, err := legacySiteCleanupPlans(peer, version, p.options.Paths)
 		if err != nil {
-			return nil, errors.New("surviving website paths cannot be verified")
+			return nil, err
+		}
+		plan := legacyPlans[0]
+		if peer.SiteID > 0 {
+			plan, err = newSiteCleanupPlan(peer, "", p.options.Paths, "")
+			if err != nil {
+				return nil, errors.New("surviving website paths cannot be verified")
+			}
 		}
 		for _, path := range []string{plan.NginxConfig, plan.NginxEnabled, plan.NginxPolicyConfig, plan.NginxCachePath, plan.NginxProtectedConfig, plan.NginxApplicationConfig, plan.PHPFPMConfig, plan.PHPFPMSocket} {
 			protected[path] = true
 		}
-		legacy, err := NewSitePlan(types.CreateSiteReq{Username: peer.Username, Domain: peer.Domain, PHPVersion: "8.4", SharedAccount: true}, p.options.Paths)
-		if err != nil {
-			return nil, err
+		for _, version := range historicalPHPVersions(p.options.Paths.HomeRoot) {
+			legacyPlans, err := legacySiteCleanupPlans(peer, version, p.options.Paths)
+			if err != nil {
+				return nil, err
+			}
+			for _, legacy := range legacyPlans {
+				protected[legacy.PHPFPMConfig] = true
+				protected[legacy.PHPFPMConfig+".suspended"] = true
+				protected[legacy.PHPFPMSocket] = true
+			}
 		}
-		protected[legacy.PHPFPMConfig] = true
-		protected[legacy.PHPFPMConfig+".suspended"] = true
-		protected[legacy.PHPFPMSocket] = true
 		logs = append(logs, plan.NginxAccessLog, plan.NginxErrorLog, plan.PHPFPMErrorLog)
 	}
 	kept := artifacts[:0]
@@ -222,7 +238,7 @@ func validateRemovalArtifact(artifact removalArtifact) error {
 	}
 	return nil
 }
-func (p *SiteTeardownProvisioner) validateRemovalArtifacts(req types.TeardownSiteReq) error {
+func (p *SiteTeardownProvisioner) validateRemovalArtifacts(ctx context.Context, req types.TeardownSiteReq, checkpoints []string) error {
 	for _, root := range []string{p.options.Paths.HomeRoot, p.options.CertRoot, p.options.GitRoot, p.options.StagingRoot, p.options.TaskStateRoot, p.options.PHPApplicationStateRoot, p.options.ContainerStateRoot, p.options.ContainerRuntimeRoot, p.options.StatisticsRoot} {
 		if !filepath.IsAbs(root) || root == string(filepath.Separator) {
 			return errors.New("unsafe website removal state root")
@@ -237,6 +253,41 @@ func (p *SiteTeardownProvisioner) validateRemovalArtifacts(req types.TeardownSit
 	}
 	for _, artifact := range artifacts {
 		if err := validateRemovalArtifact(artifact); err != nil {
+			return err
+		}
+	}
+	// A live shared pool must have an authoritative provider before any removal
+	// fence/service mutation. Configuration validation still runs after pruning.
+	preflightVersions := []string{}
+	for _, item := range req.Snapshot.Sites {
+		plans, err := legacySiteCleanupPlans(types.SiteIdentity{Username: item.Username, Domain: item.Domain}, item.PHPVersion, p.options.Paths)
+		if err != nil {
+			return err
+		}
+		exists := false
+		for _, plan := range plans {
+			for _, path := range []string{plan.PHPFPMConfig, plan.PHPFPMConfig + ".suspended"} {
+				if _, err := os.Lstat(path); err == nil {
+					exists = true
+				} else if !errors.Is(err, os.ErrNotExist) {
+					return err
+				}
+			}
+		}
+		if exists {
+			preflightVersions = append(preflightVersions, item.PHPVersion)
+		}
+	}
+	// A previous attempt may have unlinked the pool before interruption. Its
+	// authenticated local journal still requires active-provider preflight.
+	for _, checkpoint := range checkpoints {
+		if version, ok := strings.CutPrefix(checkpoint, "legacy-php-reload:"); ok {
+			preflightVersions = append(preflightVersions, version)
+		}
+	}
+	slices.Sort(preflightVersions)
+	for _, version := range slices.Compact(preflightVersions) {
+		if _, _, err := activePHPRuntimeForCleanup(ctx, p.options.Runner, p.options.Paths.RuntimeResolver, version); err != nil {
 			return err
 		}
 	}
@@ -265,14 +316,16 @@ func (p *SiteTeardownProvisioner) removeHostingArtifacts(ctx context.Context, re
 		if strings.HasPrefix(filepath.Base(artifact.path), "nakpanel-") && strings.HasSuffix(artifact.path, ".conf") {
 			if _, err := os.Lstat(artifact.path); err == nil {
 				for _, item := range req.Snapshot.Sites {
-					legacy, err := NewSitePlan(types.CreateSiteReq{Username: item.Username, Domain: item.Domain, PHPVersion: item.PHPVersion, SharedAccount: true}, p.options.Paths)
+					legacyPlans, err := legacySiteCleanupPlans(types.SiteIdentity{Username: item.Username, Domain: item.Domain}, item.PHPVersion, p.options.Paths)
 					if err != nil {
 						return err
 					}
-					if artifact.path == legacy.PHPFPMConfig && !slices.Contains(journal.Checkpoints, "legacy-php-reload:"+item.PHPVersion) {
-						journal.Checkpoints = append(journal.Checkpoints, "legacy-php-reload:"+item.PHPVersion)
-						if err = p.writeRemovalJournal(journalPath, *journal); err != nil {
-							return err
+					for _, legacy := range legacyPlans {
+						if (artifact.path == legacy.PHPFPMConfig || artifact.path == legacy.PHPFPMConfig+".suspended") && !slices.Contains(journal.Checkpoints, "legacy-php-reload:"+item.PHPVersion) {
+							journal.Checkpoints = append(journal.Checkpoints, "legacy-php-reload:"+item.PHPVersion)
+							if err = p.writeRemovalJournal(journalPath, *journal); err != nil {
+								return err
+							}
 						}
 					}
 				}
@@ -306,24 +359,7 @@ func (p *SiteTeardownProvisioner) removeHostingArtifacts(ctx context.Context, re
 			return errors.New("invalid legacy PHP service")
 		}
 		if err := p.removalCheckpoint(journalPath, journal, "legacy-php-reloaded:"+version, func() error {
-			runtime, err := resolvePHPRuntime(nil, version)
-			if err != nil {
-				return err
-			}
-			name, args := runtime.FPMCommand("-t")
-			if _, err := p.options.Runner.Run(ctx, name, args...); err != nil {
-				return errors.New("legacy PHP configuration validation failed")
-			}
-			loaded, err := (&SubscriptionTeardownProvisioner{runner: p.options.Runner}).systemdUnitLoaded(ctx, "php"+version+"-fpm.service")
-			if err != nil {
-				return err
-			}
-			if loaded {
-				if _, err = p.options.Runner.Run(ctx, "systemctl", "reload", "php"+version+"-fpm.service"); err != nil {
-					return errors.New("legacy PHP service reload failed")
-				}
-			}
-			return nil
+			return reloadActivePHPAfterCleanup(ctx, p.options.Runner, p.options.Paths.RuntimeResolver, version)
 		}); err != nil {
 			return err
 		}

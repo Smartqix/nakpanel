@@ -261,6 +261,44 @@ func (p *SubscriptionTeardownProvisioner) teardownSubscription(ctx context.Conte
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return result, err
 	}
+	// Resolve the entire removal inventory before stopping services. Historical
+	// paths are identities, not evidence that a runtime is executable.
+	cleanupVersions := p.teardownPHPVersions()
+	domainPlans := make([][]siteCleanupPlan, len(req.Domains))
+	dedicatedPlans := make([]siteCleanupPlan, len(req.Domains))
+	for index, domain := range req.Domains {
+		id := types.SiteIdentity{SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain}
+		for _, version := range cleanupVersions {
+			plans, planErr := legacySiteCleanupPlans(id, version, p.paths)
+			if planErr != nil {
+				return result, planErr
+			}
+			for _, plan := range plans {
+				if planErr = validateSiteCleanupFiles(plan, false); planErr != nil {
+					return result, planErr
+				}
+				domainPlans[index] = append(domainPlans[index], plan)
+			}
+		}
+		if len(req.SiteIDs) != 0 {
+			id.SiteID = req.SiteIDs[index]
+			plan, planErr := newSiteCleanupPlan(id, "", p.paths, "")
+			if planErr != nil {
+				return result, planErr
+			}
+			if planErr = validateSiteCleanupFiles(plan, true); planErr != nil {
+				return result, planErr
+			}
+			dedicatedPlans[index] = plan
+		}
+	}
+	if len(req.Domains) != 0 {
+		for _, version := range cleanupVersions {
+			if _, _, err := activePHPRuntimeForCleanup(ctx, p.runner, p.paths.RuntimeResolver, version); err != nil {
+				return result, err
+			}
+		}
+	}
 	needsDaemonReload := false
 	uidOutput, userLookupErr := p.runner.Run(ctx, "id", "-u", req.Username)
 	userExists := userLookupErr == nil
@@ -365,11 +403,7 @@ func (p *SubscriptionTeardownProvisioner) teardownSubscription(ctx context.Conte
 		needsDaemonReload = true
 	}
 	for index, domain := range req.Domains {
-		for _, php := range p.teardownPHPVersions() {
-			plan, planErr := NewSitePlan(types.CreateSiteReq{SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain, PHPVersion: php, SharedAccount: true}, p.paths)
-			if planErr != nil {
-				return result, planErr
-			}
+		for _, plan := range domainPlans[index] {
 			for _, path := range []string{plan.NginxEnabled, plan.NginxConfig, plan.NginxPolicyConfig, plan.PHPFPMConfig, plan.PHPFPMConfig + ".suspended"} {
 				if err = os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 					return result, fmt.Errorf("remove tracked configuration: %w", err)
@@ -377,10 +411,7 @@ func (p *SubscriptionTeardownProvisioner) teardownSubscription(ctx context.Conte
 			}
 		}
 		if len(req.SiteIDs) != 0 {
-			plan, planErr := NewSitePlan(types.CreateSiteReq{SiteID: req.SiteIDs[index], SubscriptionID: req.SubscriptionID, Username: req.Username, Domain: domain, PHPVersion: "8.3", SharedAccount: true}, p.paths)
-			if planErr != nil {
-				return result, planErr
-			}
+			plan := dedicatedPlans[index]
 			loaded, inspectErr := p.systemdUnitLoaded(ctx, plan.PHPServiceName)
 			if inspectErr != nil {
 				return result, fmt.Errorf("inspect dedicated PHP service %s: %w", plan.PHPServiceName, inspectErr)
@@ -432,6 +463,15 @@ func (p *SubscriptionTeardownProvisioner) teardownSubscription(ctx context.Conte
 			}
 		}
 		result.Removed = append(result.Removed, "domain:"+domain)
+	}
+	// Recheck active shared services on every retry, even when a previous try
+	// already removed their pool files before configuration/reload failed.
+	if len(req.Domains) != 0 {
+		for _, version := range cleanupVersions {
+			if err = reloadActivePHPAfterCleanup(ctx, p.runner, p.paths.RuntimeResolver, version); err != nil {
+				return result, err
+			}
+		}
 	}
 	for _, workerID := range req.PHPWorkerIDs {
 		unitPaths := make(map[string]string)
@@ -785,17 +825,7 @@ func (p *SubscriptionTeardownProvisioner) systemdUnitLoaded(ctx context.Context,
 }
 
 func (p *SubscriptionTeardownProvisioner) teardownPHPVersions() []string {
-	versions := []string{"8.2", "8.3"}
-	if p.homeRoot == "/home" {
-		if entries, err := os.ReadDir("/etc/php"); err == nil {
-			for _, entry := range entries {
-				if entry.IsDir() {
-					versions = append(versions, entry.Name())
-				}
-			}
-		}
-	}
-	return normalizedPHPVersionDirectories(versions)
+	return historicalPHPVersions(p.homeRoot)
 }
 
 func normalizedPHPVersionDirectories(versions []string) []string {

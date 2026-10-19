@@ -212,3 +212,7 @@ The [proposed implementation plan](/Users/rickynkansah/Projects/nakpanel/docs/su
 ## Research evidence and limits
 
 Local source audits covered installers, runtime provisioning, plan selection, CI, verification and archive/restore contracts. Official Ubuntu/upstream/Plesk/Go documentation, vendor package indexes, PPA Release responses, Roundcube source tarballs and the current amd64 Resolute updates/security universe indices were inspected. Six unchanged-source static Go cross-builds passed as described above. No installer, service, existing VM or deployed system was changed. Package availability observations must be refreshed when implementation starts; they do not substitute for signed APT resolution and native application tests.
+
+### Architecture follow-up — 19 October 2026
+
+Canonical confirms that Ubuntu26.04's `amd64v3` package variant is opt-in, preserving the ordinary AMD64 installation path. It requires additional CPU features such as AVX2, FMA and BMI2. Keep the explicit conservative Go binary baseline and the pinned ordinary AMD64 qualification images; enabling a different image/package variant needs its own hardware validation. The installer does not enable `APT::Architecture-Variants`. [Ubuntu26.04 architecture variants](https://documentation.ubuntu.com/release-notes/26.04/summary-for-lts-users/#architecture-variants-and-amd64v3), [supported architectures](https://ubuntu.com/project/docs/how-ubuntu-is-made/concepts/supported-architectures/)
