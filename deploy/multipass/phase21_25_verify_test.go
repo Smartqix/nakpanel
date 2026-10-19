@@ -10,9 +10,9 @@ func TestHostingToolkitVerifierChain(t *testing.T) {
 	expected := map[string][]string{
 		"phase21-verify.sh": {"phase20-verify.sh", "phase21-25-install.sh", "TLSRequired on", `restrict,command=\"internal-sftp -d /domains/`, "root:root:711"},
 		"phase22-verify.sh": {"phase21-verify.sh", "nakpanel-php-fpm@", "fastcgi_cache", "nginx -t"},
-		"phase23-verify.sh": {"phase22-verify.sh", "scheduled_task_runs", "/logs/data", "/statistics"},
-		"phase24-verify.sh": {"phase23-verify.sh", "/git/deploy", "protected-directories", "/staging", "retained a file deleted"},
-		"phase25-verify.sh": {"phase24-verify.sh", "redis-cli", "NetworkMode", "valkey.sock", "getfacl", "idempotent Valkey convergence"},
+		"phase23-verify.sh": {"phase22-verify.sh", "scheduled_task_runs", "/logs/data", "/statistics", "Web Statistics", "Subscription disk", "not an isolated per-domain disk quota"},
+		"phase24-verify.sh": {"phase23-verify.sh", "/git/deploy", "protected-directories", "/staging", "retained a file deleted", "legacy hosted fixture", "INSERT INTO git_repositories", "expected_revision=${repository_revision}"},
+		"phase25-verify.sh": {"phase24-verify.sh", "redis-cli", "NetworkMode", "valkey.sock", "getfacl", "idempotent Valkey convergence", "{resources,cpu_percent}", "{resources,max_tasks}"},
 	}
 	for path, markers := range expected {
 		t.Run(path, func(t *testing.T) {

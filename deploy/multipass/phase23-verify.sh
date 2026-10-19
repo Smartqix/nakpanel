@@ -56,7 +56,11 @@ curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}/logs/data?source=nginx_error&limit=50&byte_limit=4096" -o "${tmpdir}/log.json"
 grep -Fq '"source":"nginx_error"' "${tmpdir}/log.json" || fail "bounded log API failed"
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}/statistics" -o "${tmpdir}/statistics.html"
-grep -Fq 'subscription-wide quota context' "${tmpdir}/statistics.html" || fail "statistics workspace is missing quota context"
+grep -Fq 'Web Statistics' "${tmpdir}/statistics.html" || fail "statistics workspace is missing"
+grep -Fq 'Inherited from subscription' "${tmpdir}/statistics.html" || fail "statistics inheritance is missing"
+curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}?tab=overview" -o "${tmpdir}/overview.html"
+grep -Fq 'Subscription disk' "${tmpdir}/overview.html" || fail "domain overview is missing quota context"
+grep -Fq 'not an isolated per-domain disk quota' "${tmpdir}/overview.html" || fail "domain overview misrepresents shared quotas"
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
 set -euo pipefail
 cd "${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"

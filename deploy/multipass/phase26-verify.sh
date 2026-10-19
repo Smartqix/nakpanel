@@ -172,18 +172,19 @@ trap cleanup_migration_test_db EXIT
 cleanup_migration_test_db
 sudo -u postgres createdb -O nakpanel "${migration_test_db}"
 migration_test_dsn="postgres:///${migration_test_db}?host=/var/run/postgresql&sslmode=disable"
-sudo -u nakpanel env DB_DSN="${migration_test_dsn}" make goose-up >/dev/null
+goose_migration_test() {
+  sudo -u nakpanel go run github.com/pressly/goose/v3/cmd/goose@v3.24.0 \
+    -dir migrations postgres "${migration_test_dsn}" "$@" >/dev/null
+}
+# Exercise this historical rollback ladder without crossing later migrations
+# that intentionally require backup recovery instead of SQL downgrades.
+goose_migration_test up-to 20260723000034
 test "$(sudo -u postgres psql -Atqd "${migration_test_db}" -c \
   "SELECT to_regclass('public.server_settings') IS NOT NULL
           AND to_regclass('public.server_inventory') IS NOT NULL
           AND to_regclass('public.server_operations') IS NOT NULL
           AND to_regclass('public.service_secrets') IS NOT NULL
           AND to_regclass('public.server_operations_active_host_action_idx') IS NOT NULL")" = t
-# Phase 29 note: later phases stacked migrations above 20260723000034; step
-# down through them first so the ladder below keeps asserting the exact
-# Phase 26-era rollback semantics it was written for.
-sudo -u nakpanel go run github.com/pressly/goose/v3/cmd/goose@v3.24.0 \
-  -dir migrations postgres "${migration_test_dsn}" down-to 20260723000034 >/dev/null
 sudo -u nakpanel env DB_DSN="${migration_test_dsn}" make goose-down >/dev/null
 test "$(sudo -u postgres psql -Atqd "${migration_test_db}" -c \
   "SELECT NOT EXISTS (
@@ -241,7 +242,7 @@ test "$(sudo -u postgres psql -Atqd "${migration_test_db}" -c \
 sudo -u nakpanel env DB_DSN="${migration_test_dsn}" make goose-down >/dev/null
 test "$(sudo -u postgres psql -Atqd "${migration_test_db}" -c \
   "SELECT to_regclass('public.server_settings') IS NULL")" = t
-sudo -u nakpanel env DB_DSN="${migration_test_dsn}" make goose-up >/dev/null
+goose_migration_test up-to 20260723000034
 test "$(sudo -u postgres psql -Atqd "${migration_test_db}" -c \
   "SELECT version_id>=20260723000034 AND is_applied FROM goose_db_version ORDER BY id DESC LIMIT 1")" = t
 sudo -u postgres psql -v ON_ERROR_STOP=1 -qd "${migration_test_db}" <<'SQL'

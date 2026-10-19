@@ -56,7 +56,7 @@ mail_domain_id="$(db_value "SELECT id FROM mail_domains WHERE domain='${domain}'
 multipass exec "${VM_NAME}" -- bash -c "sudo -u postgres psql -qd nakpanel -c \"UPDATE subscription_entitlements SET max_mailboxes=2, hosting_policy=jsonb_set(jsonb_set(jsonb_set(('{\\\"resources\\\":{},\\\"permissions\\\":{},\\\"mail\\\":{}}'::jsonb || COALESCE(hosting_policy,'{}'::jsonb)),'{resources,max_mailboxes}','2'::jsonb,true),'{permissions,mail}','true'::jsonb,true),'{mail}',COALESCE(hosting_policy->'mail','{}'::jsonb) || '{\\\"enabled\\\":true,\\\"webmail\\\":true}'::jsonb,true) WHERE subscription_id=${subscription_id}\"" >/dev/null
 
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/sites/${site_id}?tab=mail" -o "${tmpdir}/mail.html"
-for marker in '>Mail<' 'Mailboxes' "Mail for ${domain}" 'data-np-generate-password' 'name="site_id"' 'value="site-mail"' 'Reconfigure webmail'; do
+for marker in '>Mail<' 'Email addresses' "alice@${domain}" 'data-np-mail-list' 'data-np-mail-connect' 'data-np-generate-password' 'name="site_id"' 'value="site-mail"' 'Reconfigure webmail'; do
   grep -Fq "${marker}" "${tmpdir}/mail.html" || fail "mail workspace is missing ${marker}"
 done
 sidebar="$(sed -n '/class="np-routed-side"/,/<\/aside>/p' "${tmpdir}/mail.html")"

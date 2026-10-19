@@ -43,6 +43,8 @@ csrf="$(csrf_token "${tmpdir}/admin.cookies")"
 subscription_id="$(db "SELECT subscription_id FROM sites WHERE desired_status='active' ORDER BY id LIMIT 1")"
 site_id="$(db "SELECT id FROM sites WHERE subscription_id=${subscription_id} ORDER BY id LIMIT 1")"
 username="$(db "SELECT username FROM subscription_system_accounts WHERE subscription_id=${subscription_id}")"
+# The cache must fit both its own limits and the account's CPU/process ceiling.
+db "UPDATE subscription_entitlements SET hosting_policy=jsonb_set(jsonb_set(COALESCE(hosting_policy,'{}'::jsonb),'{resources,cpu_percent}','100'::jsonb,true),'{resources,max_tasks}','128'::jsonb,true) WHERE subscription_id=${subscription_id}" >/dev/null
 db "UPDATE settings SET valkey_capacity_mb=1024 WHERE id; UPDATE subscription_entitlements SET hosting_policy=jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(COALESCE(hosting_policy,'{}'::jsonb),'{permissions,valkey}','true'::jsonb,true),'{valkey,enabled}','true'::jsonb,true),'{valkey,memory_mb}','64'::jsonb,true),'{valkey,max_clients}','32'::jsonb,true),'{valkey,idle_timeout_seconds}','300'::jsonb,true),'{valkey,cpu_percent}','25'::jsonb,true),'{valkey,process_limit}','64'::jsonb,true),'{resources,valkey_memory_mb}','64'::jsonb,true) WHERE subscription_id=${subscription_id}" >/dev/null
 curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
   -d 'desired_state=enabled' -d 'memory_mb=64' -d 'max_clients=32' -d 'idle_timeout_seconds=300' \
