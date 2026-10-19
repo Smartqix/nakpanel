@@ -13,6 +13,13 @@ No passing live result is implied by the workflow's existence. Parent review
 and an actual workflow run are required before claiming either AMD64 cell.
 This complements the local native ARM64 cells and does not replace them.
 
+Standard GitHub ARM64 runner labels do not establish that a runner can execute
+the required accelerated guests. The runner-image maintainers
+[report that the hosted ARM64 fleet does not expose nested KVM](https://github.com/actions/runner-images/issues/14062).
+ARM64 server qualification therefore remains separate from ARM64 compilation;
+it needs an available native host that passes the existing hypervisor and
+capacity checks.
+
 ## Required CI production-schema tests
 
 The existing `unit + generated-code + go test` check uses an isolated PostgreSQL
@@ -27,6 +34,17 @@ schemas with the same seeded subscription IDs are insufficient for concurrent
 Go packages. Every pooled plan-test connection also selects its own schema at
 startup. `NAKPANEL_REQUIRE_PLAN_PHP_POSTGRES=1` makes a missing plan-test DSN fail
 instead of skipping actual schema55/56 preservation and concurrency tests.
+Phase31's shell oracles also need actual `psql` coverage: bare SQL booleans
+print as `t`/`f`, while the existing shell comparisons expect `true`/`false`.
+The complete history and convergence expressions explicitly project to text.
+Each history row's predicate treats SQL NULL as false before aggregation, so a
+valid row cannot hide another row's missing operation marker.
+Read-only CTE fixtures exercise the real helper functions and wait comparison,
+including valid records and invalid count, hash, actor, reason and convergence
+controls; a mock returning `true` cannot establish that boundary.
+The required CI mode fails if the native fixture DSN or real `psql` client is
+missing. An ordinary local run without an explicit fixture may still skip
+this optional integration test.
 Candidate 20 executed this private PostgreSQL 16 startup and owned cleanup in the
 hosted unit job, and its quota package passed. The complete unit job failed
 separate database-manager fixture assertions. The retained log contains the

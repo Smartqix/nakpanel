@@ -66,7 +66,7 @@ db(){
   *"SELECT revision FROM plans WHERE id=9"*) echo 3;;
   *"SELECT php_allowlist"*) echo '8.5|8.5';;
   *"SELECT lifecycle_status"*) echo 'draft:false';;
-  *"SELECT count(*)=1"*) echo true;;
+  *"SELECT (count(*)=1"*) echo true;;
   *"SELECT count(*) FROM audit_events"*) echo "$(( $(cat "${tmpdir}/draft-revision")-2 ))";;
   *"a.desired_revision"*) echo '5:3:1:1:2';;
   *"encode(sha256"*) echo unchanged-raw-oracle;;

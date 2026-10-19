@@ -241,3 +241,58 @@ run-summary APIs still report queued states. Original API-digest-verified
 artifacts and logs are retained. No rerun, cancellation, guest repair or passing
 cell report is substituted for those results. Candidate20 does not establish
 installed-server, forward-migration, PHP maintenance or full platform acceptance.
+
+The remaining original Noble job subsequently passed seven gates through
+security, then failed Phase29 during fresh disaster-recovery installation.
+Go dependency verification received an HTTP/2 `INTERNAL_ERROR` from
+`sum.golang.org`, and `make goose-up` failed before restore. Its original report
+retains nine pending gates. All three candidate20 workflows are officially
+failed; all five owned cleanup and artifact-upload paths completed successfully.
+
+### Candidate21 required CI and Phase31 oracle boundary
+
+Candidate21 (`17a69dd57ca99d3d2cb4b799eec1da4eaea53981`) passed the full
+local source checks and both architecture development-bundle checks. Its
+[required CI](https://github.com/Smartqix/nakpanel/actions/runs/39287501317)
+also passed unit/generated-code tests, static release policy, signed fresh
+Noble installation, native containers, adversarial Parts A–H and the full
+Phase29 upgrade, reboot and disaster-recovery chain. Independent original
+artifact review checked six main installed-binary checkpoints, the separate
+signed fault companion and three physical-SQL readiness receipts. The CI
+runtime is actual PR merge `4cba90fdaa320d417e9e3017ca3dd8c114ea0a87`, with
+the same source tree and its own signed manifest and three binary hashes.
+Roundcube contacts/preferences survived restore and its subsequent reboot;
+this archive assertion is separate from the canonical single-send R9 flow.
+
+All four original
+[native](https://github.com/Smartqix/nakpanel/actions/runs/39287491432) and
+[Surý-run](https://github.com/Smartqix/nakpanel/actions/runs/39287861667)
+AMD64 cells passed nine gates through Phase30, then failed Phase31's new
+PHP-only history assertion. Their failed reports, logs and artifacts remain
+unchanged, with seven gates pending. Both matrix workflows are officially
+failed. None reached R9 or the database-manager check; the Surý26 maintenance
+rehearsal was not admitted after its canonical failure.
+
+A read-only reproduction with actual owned PostgreSQL and `psql` confirmed a
+qualifier defect: both the new history expression and later convergence
+expression return bare SQL booleans, but their shell consumers compare with
+the text `true`. Valid fixtures therefore fail with PostgreSQL's `t` output.
+Projecting the whole expressions to text admits those valid controls while
+invalid controls still fail. The production PHP-only writer uses the same
+PostgreSQL `jsonb::text` hash contract as the history oracle; a hash mismatch
+was not established. The original guests' individual history predicate values
+were not uploaded and remain unknown.
+
+A separate read-only mixed-row control showed that `bool_and` can ignore a
+row's NULL operation predicate. A valid PHP row could therefore hide a second
+row with an absent or JSON-null operation kind after fixing the display issue.
+The history oracle treats each complete per-row predicate's NULL as false
+before aggregation; this is separate counterevidence, not an assertion about
+the original guests' records.
+
+The follow-up changes those two qualifier projections, makes that history
+predicate fail closed on NULL, and adds real-psql behavioral regressions. It
+retains every history, audit, raw-data and convergence condition. Fresh
+qualification of the new committed and signed candidate is required; neither
+the earlier failed reports nor candidate21's passing CI is transferred to new
+runtime bytes.

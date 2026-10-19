@@ -55,12 +55,12 @@ phase31_php_digest(){
 
 phase31_php_wait(){
   local id="$1"
-  wait_for 'PHP-only snapshot and service convergence' "SELECT s.sync_status='in_sync' AND s.sync_error='' AND s.plan_revision=p.revision AND e.source_revision=GREATEST(p.revision,COALESCE((SELECT MAX(a.revision) FROM subscription_addons sa JOIN addon_plans a ON a.id=sa.addon_plan_id WHERE sa.subscription_id=s.id),0)) AND account.convergence_status='in_sync' AND account.desired_revision=account.applied_revision AND account.last_error='' FROM subscriptions s JOIN plans p ON p.id=s.plan_id JOIN subscription_entitlements e ON e.subscription_id=s.id JOIN subscription_system_accounts account ON account.subscription_id=s.id WHERE s.id=${id}" true
+  wait_for 'PHP-only snapshot and service convergence' "SELECT (s.sync_status='in_sync' AND s.sync_error='' AND s.plan_revision=p.revision AND e.source_revision=GREATEST(p.revision,COALESCE((SELECT MAX(a.revision) FROM subscription_addons sa JOIN addon_plans a ON a.id=sa.addon_plan_id WHERE sa.subscription_id=s.id),0)) AND account.convergence_status='in_sync' AND account.desired_revision=account.applied_revision AND account.last_error='')::text FROM subscriptions s JOIN plans p ON p.id=s.plan_id JOIN subscription_entitlements e ON e.subscription_id=s.id JOIN subscription_system_accounts account ON account.subscription_id=s.id WHERE s.id=${id}" true
 }
 
 phase31_php_history(){
   local id="$1" previous="$2" audit_before="$3" writes="$4"
-  [[ "$(db "SELECT count(*)=${writes} AND bool_and(definition#>>'{_operation,kind}'='php_versions_only' AND definition_hash=encode(sha256(convert_to(definition::text,'UTF8')),'hex') AND actor_user_id IS NOT NULL AND btrim(actor_label)<>'' AND btrim(change_reason)<>'') FROM plan_revisions WHERE plan_id=${id} AND revision>${previous}")" == true ]] || fail "PHP-only immutable raw revision proof failed"
+  [[ "$(db "SELECT (count(*)=${writes} AND bool_and(COALESCE(definition#>>'{_operation,kind}'='php_versions_only' AND definition_hash=encode(sha256(convert_to(definition::text,'UTF8')),'hex') AND actor_user_id IS NOT NULL AND btrim(actor_label)<>'' AND btrim(change_reason)<>'',false)))::text FROM plan_revisions WHERE plan_id=${id} AND revision>${previous}")" == true ]] || fail "PHP-only immutable raw revision proof failed"
   [[ "$(db "SELECT count(*) FROM audit_events WHERE action='plan.saved' AND target_type='plan' AND target_id=${id}")" == "$((audit_before+writes))" ]] || fail "PHP-only save did not produce exactly one atomic audit per write"
 }
 
