@@ -482,11 +482,12 @@ prepare_migration_root() {
 }
 
 run_goose_up() {
-  sudo -u nakpanel env HOME=/var/lib/nakpanel PATH="${PATH}" DB_DSN="${DB_DSN}" make -C "${migration_root}" goose-up
+  # Keep migration-tool downloads on HTTPS/HTTP1; never replay a migration.
+  sudo -u nakpanel env HOME=/var/lib/nakpanel PATH="${PATH}" DB_DSN="${DB_DSN}" GODEBUG="${GODEBUG:+${GODEBUG},}http2client=0" make -C "${migration_root}" goose-up
 }
 
 run_river_up() {
-  sudo -u nakpanel env HOME=/var/lib/nakpanel PATH="${PATH}" DB_DSN="${DB_DSN}" make -C "${migration_root}" river-up
+  sudo -u nakpanel env HOME=/var/lib/nakpanel PATH="${PATH}" DB_DSN="${DB_DSN}" GODEBUG="${GODEBUG:+${GODEBUG},}http2client=0" make -C "${migration_root}" river-up
 }
 
 setup_fail2ban() {

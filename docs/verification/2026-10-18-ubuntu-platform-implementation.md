@@ -372,3 +372,39 @@ Official HTTPS release metadata and exact SHA256 verification still precede
 Go extraction. Other installer, mail and qualification operations are not
 replayed. This controlled reproduction establishes the command's retry behavior;
 fresh qualification is required for the changed signed runtime.
+
+## Candidate23 Noble DR result: Go checksum transport
+
+The original [native Noble job](https://github.com/Smartqix/nakpanel/actions/runs/39321562308/job/118297590874)
+passed seven gates through security, including fresh installation and the genuine
+historical upgrade, then failed Phase29 with nine later gates pending. On the
+fresh DR guest, Goose dependency verification printed actual `sum.golang.org`
+tile URLs and HTTP/2 stream INTERNAL_ERROR messages. Make returned failure and
+the DR installer stopped. The original report, logs, installed checkpoints and
+successful owned cleanup are retained. No completed DR installation, restore,
+Roundcube or database-manager acceptance is established by that cell. The
+remote peer/network cause and retry history are unknown.
+
+This Go-client failure is separate from the Surý26 curl archive failure. The
+follow-up keeps `http2client=0` local to the installer's two Goose/River command
+environments. It preserves other GODEBUG options and does not change HTTPS,
+checksum settings, migration ordering, pinned tools or service environments.
+Each migration command still executes once; no migration retry is introduced.
+Go documents this per-process [HTTP/2 compatibility setting](https://go.dev/doc/godebug).
+
+A controlled regression executes the actual extracted installer functions with
+real env/make and the pinned Go standard-library HTTPS client against an owned
+TLS server. Only the sudo UID switch and Makefile leaf are fixture boundaries;
+no database or privileged installer operation runs. The original environment
+negotiates HTTP/2 and receives a real partial-stream INTERNAL_ERROR reset. The
+adjusted environment uses HTTP/1.1 successfully. Persistent HTTP503 and an
+untrusted CA still stop without reaching the next fixture stage. Tests check
+one Make invocation, unchanged checksum-related environment and an unchanged
+parent environment, with both present and absent parent GODEBUG values.
+
+That client shares cmd/go's documented transport mechanism; it is not an actual
+cmd/go checksum-database or Goose/River execution. Fresh hosted qualification
+must establish those runtime boundaries. Candidate23's required CI completed
+successfully using its own signed merge artifact; its passing result does not
+transfer to the failed matrix cells or the changed follow-up runtime. Native26
+and the Noble Surý-run cell remain in progress at this checkpoint.
