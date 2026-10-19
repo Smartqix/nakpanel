@@ -52,6 +52,7 @@ post_expect_400() {
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -b "${tmpdir}/${actor}.cookies" -c "${tmpdir}/${actor}.cookies" "$@" \
     -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/${actor}.cookies")" \
+    -H 'X-Nakpanel-SPA: true' -H 'Accept: application/json' \
     "https://${VM_IP}:7443/${endpoint}")"
   [[ "${status}" == "400" ]] || { echo "${label} returned ${status}, want 400" >&2; cat "${tmpdir}/${label}.out" >&2; exit 1; }
   assert_contains "${tmpdir}/${label}.out" "${needle}"

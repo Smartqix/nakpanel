@@ -58,6 +58,7 @@ post_expect_400() {
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
     -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
+    -H 'X-Nakpanel-SPA: true' -H 'Accept: application/json' \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "400" ]]; then

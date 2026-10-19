@@ -54,6 +54,31 @@ func TestPhase8VerifierCoversQuotasAndDiskIsolation(t *testing.T) {
 	}
 }
 
+func TestPhase8QuotaRejectionsRequestTheJSONErrorContract(t *testing.T) {
+	data, err := os.ReadFile("phase8-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	start := strings.Index(script, "post_expect_quota_exceeded() {")
+	if start < 0 {
+		t.Fatal("quota rejection helper is missing")
+	}
+	end := strings.Index(script[start:], "\n}\n")
+	if end < 0 {
+		t.Fatal("quota rejection helper is incomplete")
+	}
+	helper := script[start : start+end]
+	for _, want := range []string{"X-Nakpanel-SPA: true", "Accept: application/json", `"400"`, "'quota exceeded'"} {
+		if !strings.Contains(helper, want) {
+			t.Errorf("quota rejection helper is missing %q", want)
+		}
+	}
+	if strings.Count(script, `-d "subscription_id=${quota_subscription_id}"`) != 3 {
+		t.Error("all three quota rejections must select the fixture subscription")
+	}
+}
+
 func TestPhase8InstallerInstallsQuotaTooling(t *testing.T) {
 	const path = "../install/phase8-install.sh"
 	data, err := os.ReadFile(path)

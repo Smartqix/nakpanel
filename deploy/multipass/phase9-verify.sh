@@ -58,6 +58,7 @@ post_expect_400() {
   status="$(curl -sk -o "${tmpdir}/${label}.out" -w '%{http_code}' \
     -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
     -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
+    -H 'X-Nakpanel-SPA: true' -H 'Accept: application/json' \
     "$@" \
     "https://${VM_IP}:7443/${endpoint}")"
   if [[ "${status}" != "400" ]]; then
@@ -132,11 +133,34 @@ if [[ -z "${phase9_user_id}" || -z "${client_user_id}" || -z "${starter_plan_id}
   exit 1
 fi
 
-post_expect_400 phase9-unsubscribed sites 'no active subscription' \
+# Enhanced create flows require an explicit active subscription before provisioning.
+post_expect_400 phase9-unsubscribed sites 'Select an active subscription.' \
   -d "owner_user_id=${phase9_user_id}" \
   -d 'username=npq9a' \
   -d 'domain=phase9-client.test' \
   -d 'php_version=8.3'
+
+# Preserve the legacy browser path's no-active-subscription entitlement check.
+legacy_unsubscribed_status="$(curl -sk -o /dev/null -D "${tmpdir}/unsubscribed.headers" -w '%{http_code}' \
+  -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" \
+  -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" \
+  -d "owner_user_id=${phase9_user_id}" -d 'username=npq9a' \
+  -d 'domain=phase9-client.test' -d 'php_version=8.3' "https://${VM_IP}:7443/sites")"
+[[ "${legacy_unsubscribed_status}" == '303' ]] || { echo 'legacy unsubscribed request did not redirect' >&2; exit 1; }
+python3 - "${tmpdir}/unsubscribed.headers" <<'PY'
+import http.cookies
+import sys
+import urllib.parse
+
+cookies = http.cookies.SimpleCookie()
+with open(sys.argv[1]) as headers:
+    for line in headers:
+        if line.lower().startswith('set-cookie:'):
+            cookies.load(line.split(':', 1)[1].strip())
+error = cookies.get('nakpanel_form_error')
+assert error and 'no active subscription' in urllib.parse.unquote_plus(error.value), 'missing legacy entitlement error'
+PY
+[[ "$(multipass_exec_short "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "SELECT count(*) FROM sites WHERE domain='phase9-client.test'" | tr -d '\r')" == '0' ]] || { echo 'unsubscribed request wrote site intent' >&2; exit 1; }
 
 post_admin phase9-plan plans \
   -d 'name=Phase9 Tiny' \
@@ -262,17 +286,22 @@ echo "phase9 backup did not become active" >&2
 exit 1
 REMOTE
 
+quota_subscription_id="$(multipass_exec_short "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "SELECT subscription_id FROM sites WHERE domain='phase9-client.test'" | tr -d '\r')"
+[[ "${quota_subscription_id}" =~ ^[0-9]+$ ]] || { echo 'quota fixture subscription is missing' >&2; exit 1; }
 post_expect_400 phase9-site-over sites 'quota exceeded' \
+  -d "subscription_id=${quota_subscription_id}" \
   -d "owner_user_id=${phase9_user_id}" \
   -d 'username=npq9b' \
   -d 'domain=phase9-over.test' \
   -d 'php_version=8.3'
 post_expect_400 phase9-db-over databases 'quota exceeded' \
+  -d "subscription_id=${quota_subscription_id}" \
   -d "owner_user_id=${phase9_user_id}" \
   -d 'engine=mariadb' \
   -d 'db_name=np_phase9_over' \
   -d 'db_user=np_phase9_over_user'
 post_expect_400 phase9-backup-over backups 'quota exceeded' \
+  -d "subscription_id=${quota_subscription_id}" \
   -d "owner_user_id=${phase9_user_id}" \
   -d 'domain=phase9-client.test'
 

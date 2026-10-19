@@ -27,7 +27,10 @@ func TestPhase9VerifierCoversPlansSubscriptionsAndPeerCredentials(t *testing.T) 
 		"np-layout",
 		"data-np-view=\"subscriptions\"",
 		"create-site-modal",
+		"Select an active subscription.",
+		"legacy_unsubscribed_status",
 		"no active subscription",
+		"nakpanel_form_error",
 		"action=\"/plans\"",
 		"action=\"/subscriptions\"",
 		"action=\"/settings/oversell\"",
@@ -41,6 +44,33 @@ func TestPhase9VerifierCoversPlansSubscriptionsAndPeerCredentials(t *testing.T) 
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("phase9 verifier is missing %q", want)
+		}
+	}
+}
+
+func TestLegacyQuotaVerifiersRequestJSONFailures(t *testing.T) {
+	for _, path := range []string{"phase9-verify.sh", "phase10-verify.sh", "phase12-verify.sh"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		script := string(data)
+		start := strings.Index(script, "post_expect_400() {")
+		if start < 0 {
+			t.Fatalf("%s: rejection helper missing", path)
+		}
+		end := strings.Index(script[start:], "\n}\n")
+		if end < 0 {
+			t.Fatalf("%s: rejection helper incomplete", path)
+		}
+		helper := script[start : start+end]
+		for _, want := range []string{"X-Nakpanel-SPA: true", "Accept: application/json", `"400"`, "assert_contains"} {
+			if !strings.Contains(helper, want) {
+				t.Errorf("%s: rejection helper missing %q", path, want)
+			}
+		}
+		if path == "phase9-verify.sh" && strings.Count(script, `-d "subscription_id=${quota_subscription_id}"`) != 3 {
+			t.Error("phase9: each resource quota rejection must select the fixture subscription")
 		}
 	}
 }

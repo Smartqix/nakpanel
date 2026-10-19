@@ -1755,11 +1755,15 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
+		message := "Could not create database. Check the name, credentials and subscription limits."
+		if errors.Is(err, controlquota.ErrExceeded) {
+			message = "Could not create database: quota exceeded. Review the selected subscription's database and storage limits."
+		}
 		if wantsSPAJSON(r) {
-			writeSPAError(w, http.StatusBadRequest, "Could not create database. Check the name, credentials and subscription limits.")
+			writeSPAError(w, http.StatusBadRequest, message)
 			return
 		}
-		formFailure(w, r, "Could not create database. Check the name, credentials and subscription limits.")
+		formFailure(w, r, message)
 		return
 	}
 	customerID := int64(0)
