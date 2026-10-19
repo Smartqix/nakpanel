@@ -19,7 +19,9 @@ func TestSubscriptionBackupManagerHasFocusedActionsAndNoCrampedRail(t *testing.T
 }
 
 func TestBackupManagerStatusTones(t *testing.T) {
-	for status,want:=range map[string]string{"active":"ok","deleting":"run","delete_failed":"fail","pending":"pend"} {
-		if got:=statusPillClass(backupStatusLabel(status));got!=want {t.Errorf("%s: %s != %s",status,got,want)}
+	for status, want := range map[string]string{"active": "ok", "deleting": "run", "delete_failed": "fail", "pending": "pend"} {
+		if got := statusPillClass(backupStatusLabel(status)); got != want {
+			t.Errorf("%s: %s != %s", status, got, want)
+		}
 	}
 }

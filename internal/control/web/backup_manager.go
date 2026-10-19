@@ -11,6 +11,13 @@ type BackupRemovalView struct {
 	Approval string
 }
 
+func backupCountLabel(count int) string {
+	if count == 1 {
+		return "1 backup"
+	}
+	return formatPlanLimit(count) + " backups"
+}
+
 func backupRemovable(status string) bool {
 	return status == "active" || status == "failed" || status == "delete_failed"
 }

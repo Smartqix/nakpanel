@@ -81,22 +81,22 @@ func BackupRemovalContent(view WorkspaceView, model BackupRemovalView) templ.Com
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(model.Preview.Items)))
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(backupCountLabel(len(model.Preview.Items)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 14, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 14, Col: 58}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " backups · ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " · ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(model.Preview.SizeBytes))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 14, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 14, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {
@@ -200,15 +200,15 @@ func BackupRemovalContent(view WorkspaceView, model BackupRemovalView) templ.Com
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var11 string
-		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(model.Preview.Items)))
+		templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(backupCountLabel(len(model.Preview.Items)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 28, Col: 297}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 28, Col: 298}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, " backups</span></button></footer></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</span></button></footer></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -472,7 +472,7 @@ func backupManagerPanel(subscription types.SubscriptionSummary, data dashboard.D
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<div class=\"np-table-wrap\"><table class=\"np-table np-backup-table\"><thead><tr><th><input type=\"checkbox\" aria-label=\"Select visible backups\" data-np-backup-select-all></th><th>Recovery point</th><th>Size</th><th>Status</th><th><span class=\"np-sr-only\">Actions</span></th></tr></thead><tbody>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<div class=\"np-table-wrap\"><table class=\"np-table np-backup-table\"><thead><tr><th><label class=\"np-backup-check-target\"><input type=\"checkbox\" aria-label=\"Select visible backups\" data-np-backup-select-all></label></th><th>Recovery point</th><th>Size</th><th>Status</th><th><span class=\"np-sr-only\">Actions</span></th></tr></thead><tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -516,14 +516,14 @@ func backupManagerPanel(subscription types.SubscriptionSummary, data dashboard.D
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\"><td data-label=\"Select\"><input type=\"checkbox\" name=\"backup_id\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\"><td data-label=\"Select\"><label class=\"np-backup-check-target\"><input type=\"checkbox\" name=\"backup_id\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 69, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 69, Col: 136}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 				if templ_7745c5c3_Err != nil {
@@ -536,7 +536,7 @@ func backupManagerPanel(subscription types.SubscriptionSummary, data dashboard.D
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs("Select backup for " + item.TargetName + " from " + formatStampLabel(item.CreatedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 69, Col: 219}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 69, Col: 257}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {
@@ -552,7 +552,7 @@ func backupManagerPanel(subscription types.SubscriptionSummary, data dashboard.D
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "></td><td data-label=\"Recovery point\"><strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "></label></td><td data-label=\"Recovery point\"><strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

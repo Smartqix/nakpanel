@@ -11,7 +11,7 @@ templ BackupRemovalContent(view WorkspaceView, model BackupRemovalView) {
 		@csrfInput(view)
 		<input type="hidden" name="approval" value={ model.Approval }/>
 		<div class="np-dialog-body">
-			<p><strong>{ formatPlanLimit(len(model.Preview.Items)) } backups · { formatBytes(model.Preview.SizeBytes) }</strong></p>
+			<p><strong>{ backupCountLabel(len(model.Preview.Items)) } · { formatBytes(model.Preview.SizeBytes) }</strong></p>
 			<ul class="np-backup-impact">
 				for _,item:=range model.Preview.Items {
 					<li><input type="hidden" name="backup_id" value={ formatJobID(item.ID) }/><div><strong>{ item.Domain }</strong><span>{ formatStampLabel(item.CreatedAt) } · { formatBytes(item.SizeBytes) }</span>
@@ -25,7 +25,7 @@ templ BackupRemovalContent(view WorkspaceView, model BackupRemovalView) {
 			<label class="np-backup-ack"><input type="checkbox" name="acknowledge_permanent" value="true" required/><span>I understand that these selected backups will be permanently deleted.</span></label>
 			<p class="np-error" role="alert" data-np-backup-error hidden></p>
 		</div>
-		<footer class="np-dialog-foot"><a class="np-secondary-button" href={ subscriptionTabPath(view,model.Preview.SubscriptionID,"backups") } data-np-backup-cancel autofocus>Cancel</a><button type="submit" class="np-danger-button">@icon("trash")<span>Remove { formatPlanLimit(len(model.Preview.Items)) } backups</span></button></footer>
+		<footer class="np-dialog-foot"><a class="np-secondary-button" href={ subscriptionTabPath(view,model.Preview.SubscriptionID,"backups") } data-np-backup-cancel autofocus>Cancel</a><button type="submit" class="np-danger-button">@icon("trash")<span>Remove { backupCountLabel(len(model.Preview.Items)) }</span></button></footer>
 	</form>
 }
 
@@ -63,10 +63,10 @@ templ backupManagerPanel(subscription types.SubscriptionSummary, data dashboard.
 		if len(backups)==0 {
 			<div class="np-empty-block"><span class="np-empty-icon">@icon("archive")</span><strong>No backups yet</strong><p>Create a recovery point before making changes to a website.</p></div>
 		} else {
-			<div class="np-table-wrap"><table class="np-table np-backup-table"><thead><tr><th><input type="checkbox" aria-label="Select visible backups" data-np-backup-select-all/></th><th>Recovery point</th><th>Size</th><th>Status</th><th><span class="np-sr-only">Actions</span></th></tr></thead><tbody>
+			<div class="np-table-wrap"><table class="np-table np-backup-table"><thead><tr><th><label class="np-backup-check-target"><input type="checkbox" aria-label="Select visible backups" data-np-backup-select-all/></label></th><th>Recovery point</th><th>Size</th><th>Status</th><th><span class="np-sr-only">Actions</span></th></tr></thead><tbody>
 				for _,item:=range backups {
 					<tr data-np-backup-row data-backup-domain={ item.TargetName } data-backup-status={ item.Status } data-backup-id={ formatJobID(item.ID) }>
-						<td data-label="Select"><input type="checkbox" name="backup_id" value={ formatJobID(item.ID) } form="np-backup-selection" aria-label={ "Select backup for "+item.TargetName+" from "+formatStampLabel(item.CreatedAt) } data-np-backup-check disabled?={ !backupRemovable(item.Status) }/></td>
+						<td data-label="Select"><label class="np-backup-check-target"><input type="checkbox" name="backup_id" value={ formatJobID(item.ID) } form="np-backup-selection" aria-label={ "Select backup for "+item.TargetName+" from "+formatStampLabel(item.CreatedAt) } data-np-backup-check disabled?={ !backupRemovable(item.Status) }/></label></td>
 						<td data-label="Recovery point"><strong>{ item.TargetName }</strong><small>{ formatStampLabel(item.CreatedAt) }</small>
 							if item.SiteID==0 {
 								<span class="np-plan-pill">Retained backup</span>
