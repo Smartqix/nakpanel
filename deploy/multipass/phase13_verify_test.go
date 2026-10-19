@@ -25,6 +25,7 @@ func TestPhase13VerifierCoversSubscriptionAndDomainWorkspace(t *testing.T) {
 		"PHP switching", "HTTPS redirect convergence", "DNS record rendering", "DNS record deletion",
 		"domain database assignment", "domain backup creation", "domain backup restore",
 		"hierarchical desired status restore", "client exposed provider subscription actions", "CSRF check",
+		"--retry-connrefused", "phase13-plan-retire plans/status",
 		"Phase 13 subscription and domain workspace verification passed",
 	} {
 		if !strings.Contains(string(data), want) {

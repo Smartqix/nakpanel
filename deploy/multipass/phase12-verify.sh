@@ -94,7 +94,7 @@ wait_for_http_status() {
 curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin.html"
-for marker in 'Resellers' 'Domains' 'Service Plans' 'Tools &amp; Settings'; do
+for marker in 'Resellers' 'href="/sites" class="np-routed-nav-item' 'Service Plans' 'Tools &amp; Settings'; do
   assert_contains "${tmpdir}/admin.html" "${marker}"
 done
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/resellers" > "${tmpdir}/resellers.html"
@@ -109,7 +109,7 @@ assert_contains "${tmpdir}/addon-plans.html" '/addons/bulk-status'
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/service-plans?type=reseller" > "${tmpdir}/reseller-plans.html"
 assert_contains "${tmpdir}/reseller-plans.html" '/reseller-plans/bulk-status'
 curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/service-plans/new" > "${tmpdir}/service-plan-new.html"
-for marker in 'data-np-plan-editor' 'Resources' 'Permissions' 'PHP Settings' 'Logs &amp; Statistics' 'Overuse is not allowed' 'data-np-unlimited'; do
+for marker in 'data-np-plan-editor' 'Resources' 'Permissions' 'PHP defaults' 'name="php_memory_mb"' 'Logs &amp; Statistics' 'Overuse is not allowed' 'data-np-unlimited'; do
   assert_contains "${tmpdir}/service-plan-new.html" "${marker}"
 done
 service_plan_schema="$(db_value "SELECT (SELECT COUNT(*) FROM information_schema.columns WHERE table_name='plans' AND column_name IN ('overuse_policy','max_subdomains','max_domain_aliases','max_ftp_accounts','validity_days')) || ':' || (SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('plan_service_presets','subscription_usage_current','site_traffic_cursors','notifications','notification_deliveries'))")"
@@ -166,7 +166,7 @@ reseller_id="$(db_value "SELECT id FROM reseller_accounts WHERE email='phase12-r
 curl -sk --fail -c "${tmpdir}/reseller.cookies" -b "${tmpdir}/reseller.cookies" -L \
   -d 'email=phase12-reseller@nakpanel.test' -d 'password=NakpanelPhase12!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/reseller.html"
-for marker in 'Customers' 'Domains' 'Service Plans' 'My Resources'; do
+for marker in 'Customers' 'href="/sites" class="np-routed-nav-item' 'Service Plans' 'My Resources'; do
   assert_contains "${tmpdir}/reseller.html" "${marker}"
 done
 if grep -Fq 'Tools &amp; Settings' "${tmpdir}/reseller.html"; then

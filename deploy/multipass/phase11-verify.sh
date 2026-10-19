@@ -45,11 +45,7 @@ curl -sk --fail -c "${tmpdir}/admin.cookies" -b "${tmpdir}/admin.cookies" -L \
 for marker in 'np-routed-layout' 'Customers' 'Service Plans' 'data-np-search-input' 'name="nakpanel-csrf"'; do
   assert_contains "${tmpdir}/dashboard.html" "${marker}"
 done
-if ! grep -Eq 'Websites &amp; Domains|>Domains<' "${tmpdir}/dashboard.html"; then
-  echo "administrator dashboard is missing the domains navigation item" >&2
-  cat "${tmpdir}/dashboard.html" >&2
-  exit 1
-fi
+assert_contains "${tmpdir}/dashboard.html" 'href="/sites" class="np-routed-nav-item'
 
 for route in sites databases backups dns certificates activity customers subscriptions subscriptions/new service-plans tools-settings; do
   curl -sk --fail -b "${tmpdir}/admin.cookies" "https://${VM_IP}:7443/${route}" > "${tmpdir}/route-${route//\//-}.html"

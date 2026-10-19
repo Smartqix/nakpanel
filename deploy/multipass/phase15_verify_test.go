@@ -6,6 +6,16 @@ import (
 	"testing"
 )
 
+func TestPhase15WaitsForPanelAfterRestart(t *testing.T) {
+	data, err := os.ReadFile("phase15-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "--retry-connrefused") {
+		t.Fatal("Phase 15 must wait for the listener before signing in")
+	}
+}
+
 func TestPhase15VerifierCoversAccountProvisioning(t *testing.T) {
 	const path = "phase15-verify.sh"
 	data, err := os.ReadFile(path)

@@ -1294,7 +1294,7 @@ FROM customers c LEFT JOIN subscriptions s ON s.customer_id=c.id AND s.status='a
 	} else {
 		limits.HostingPolicy = resellerHostingPolicyFromLegacy(limits)
 	}
-	typedUsed := make([]int, 11)
+	typedUsed := make([]int, len(typedPolicyLimits(limits.HostingPolicy)))
 	typedUnlimited := make([]bool, len(typedUsed))
 	rows, err := tx.QueryContext(ctx, `SELECT entitlement.hosting_policy
 FROM subscription_entitlements entitlement

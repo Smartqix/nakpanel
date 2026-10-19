@@ -23,6 +23,7 @@ func TestPhase11VerifierCoversRoutedSelfServiceAndIsolation(t *testing.T) {
 	for _, want := range []string{
 		"phase10-verify.sh",
 		"np-routed-layout",
+		`href="/sites" class="np-routed-nav-item`,
 		"subscriptions/new",
 		"Phase11 Client Workspace",
 		"phase11-client.test",
