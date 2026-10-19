@@ -1,0 +1,42 @@
+name: Isolated FPM startup diagnostic
+on:
+  push:
+    branches: [ricky/fpm-startup-probe-20261019-v1]
+permissions:
+  contents: read
+concurrency:
+  group: fpm-startup-probe-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Verify disposable hosted context before package installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_ACTIONS" == true && "$RUNNER_ENVIRONMENT" == github-hosted && "$RUNNER_OS" == Linux ]]
+          [[ "$GITHUB_REPOSITORY" == Smartqix/nakpanel && "$GITHUB_REF" == refs/heads/ricky/fpm-startup-probe-20261019-v1 ]]
+          [[ "$(git rev-parse HEAD^)" == fbcf634e11318af85a14c1cae0e10b256e220d50 ]]
+      - name: Install authenticated configured-repository PHP 8.3 FPM
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo timeout --kill-after=5s 300s apt-get update
+          sudo timeout --kill-after=5s 300s apt-get install -y --no-install-recommends php8.3-fpm
+      - name: Measure real isolated service startup without application requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT,RUNNER_OS,GITHUB_REPOSITORY,GITHUB_EVENT_NAME,GITHUB_REF,GITHUB_RUN_ID,GITHUB_RUN_ATTEMPT,GITHUB_SHA,RUNNER_TEMP python3 -I -B .github/probes/fpm-startup-probe.py --output "${RUNNER_TEMP}/fpm-startup-probe-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fpm-startup-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fpm-startup-probe-${{ github.run_id }}-${{ github.run_attempt }}/
+          if-no-files-found: error
+          retention-days: 3
