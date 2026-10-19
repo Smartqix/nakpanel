@@ -24,7 +24,7 @@
         if (!error) { error = document.createElement('p'); error.className = 'np-gate is-blocked'; error.setAttribute('role','alert'); error.dataset.npDnsError = ''; form.prepend(error); }
         error.hidden = true; form.dataset.pending = 'true'; buttons.forEach(function (button) { button.disabled = true; });
         try {
-          var response = await window.NakpanelUI.fetch(form.action, {method:'POST', body:body, credentials:'same-origin', headers:{'X-Nakpanel-SPA':'true'},signal:signal});
+          var response = await window.NakpanelUI.fetch(form.action, {method:'POST', body:body, credentials:'same-origin', allowPageResponse:true, headers:{'X-Nakpanel-SPA':'true',Accept:'text/html'},signal:signal});
           if (!response.ok) {
             if (response.status === 428) throw new Error('Confirm your administrator password with Authorize, then retry. Your entries are preserved.');
             var data = (response.headers.get('Content-Type') || '').includes('application/json') ? await response.json() : null;
