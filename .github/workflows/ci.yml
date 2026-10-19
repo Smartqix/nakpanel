@@ -53,15 +53,68 @@ jobs:
 
   security-suite:
     name: adversarial security + reliability gate (Multipass)
-    # The end-to-end suites provision real tenants on a throwaway Multipass
-    # VM, so they must run on a self-hosted runner that has Multipass
-    # installed. Label such a runner [self-hosted, multipass].
-    runs-on: [self-hosted, multipass]
+    # Keep this check's identity stable. Even a failed/cancelled artifact build
+    # must produce a failed security check rather than a skipped required job.
+    needs: release-build
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    permissions:
+      contents: read
+    env:
+      NAKPANEL_MULTIPASS_ARCH: amd64
+      NAKPANEL_MULTIPASS_IMAGE: '24.04'
+      NAKPANEL_QUALIFICATION_PHP_PROVIDER: native
+      NAKPANEL_RELEASE_ALLOW_DEVELOPMENT: '1'
+      NAKPANEL_QUALIFICATION_VM_CPUS: '2'
+      NAKPANEL_QUALIFICATION_VM_MEMORY: 5G
+      NAKPANEL_QUALIFICATION_VM_DISK: 32G
+      NAKPANEL_QUALIFICATION_DR_CPUS: '2'
+      NAKPANEL_QUALIFICATION_DR_MEMORY: 3G
+      NAKPANEL_QUALIFICATION_DR_DISK: 16G
     steps:
       - uses: actions/checkout@v4
+      - name: Require the signed application build
+        env:
+          RELEASE_BUILD_RESULT: ${{ needs.release-build.result }}
+        run: |
+          set -euo pipefail
+          [[ "${RELEASE_BUILD_RESULT}" == success ]] || { echo 'Required signed application build did not succeed.' >&2; exit 1; }
       - uses: actions/setup-go@v5
         with:
           go-version-file: deploy/release/GO_VERSION
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-security-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/security-release
+      - name: Validate the exact signed AMD64 CI artifact
+        run: |
+          set -euo pipefail
+          python3 - <<'PYBUNDLE'
+          import os,pathlib,subprocess,sys,tarfile,uuid
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'security-release'
+          unpacked=root/'unpacked';unpacked.mkdir(mode=0o700)
+          with tarfile.open(root/'bundle.tar.gz') as archive:
+              seen=set()
+              for member in archive.getmembers():
+                  path=pathlib.PurePosixPath(member.name)
+                  if path.is_absolute() or '..' in path.parts or member.name in seen or not (member.isfile() or member.isdir()):
+                      raise ValueError('unsafe signed application archive member')
+                  seen.add(member.name)
+              archive.extractall(unpacked)
+          directories=list(unpacked.iterdir())
+          assert len(directories)==1 and directories[0].is_dir(), 'one signed application bundle is required'
+          bundle=directories[0]; key=root/'public.pem'; version=(bundle/'VERSION').read_text().strip()
+          subprocess.run([sys.executable,'deploy/release/verify.py','--bundle',str(bundle),'--public-key',str(key),'--version',version,'--architecture','amd64','--allow-development'],check=True)
+          exports={'NAKPANEL_RELEASE_BUNDLE':str(bundle),'NAKPANEL_RELEASE_PUBLIC_KEY':str(key),'NAKPANEL_RELEASE_VERSION':version}
+          with open(os.environ['GITHUB_ENV'],'a') as output:
+              for name,value in sorted(exports.items()):
+                  delimiter=uuid.uuid4().hex;output.write(f'{name}<<{delimiter}\n{value}\n{delimiter}\n')
+          PYBUNDLE
+      - name: Prepare only this disposable hosted runner
+        run: bash deploy/multipass/prepare-hosted-runner.sh
+      - name: Require actual KVM and measured capacity before guest launch
+        run: python3 deploy/multipass/hosted-runner-preflight.py --output "${RUNNER_TEMP}/hosted-evidence/host-preflight.json"
       - name: Initialize unique owned security guests
         shell: bash
         run: |
@@ -78,9 +131,16 @@ jobs:
                       delimiter = uuid.uuid4().hex
                       output.write(f'{key}<<{delimiter}\n{value}\n{delimiter}\n')
           PYENV
-          ensure_vm 4 6G 48G
+      - name: Install the signed candidate on a fresh Noble guest
+        run: ./deploy/multipass/current-install-verify.sh
+      - name: Establish the native container fixture
+        env:
+          NAKPANEL_SKIP_PRIOR_PHASES: '1'
+        run: ./deploy/multipass/phase28-verify.sh
       - name: Run the adversarial validation suite (Parts A-H)
         shell: bash
+        env:
+          NAKPANEL_SKIP_PRIOR_PHASES: '1'
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/security-evidence"
@@ -111,7 +171,9 @@ jobs:
         if: always()
         with:
           name: security-evidence-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/security-evidence/
+          path: |
+            ${{ runner.temp }}/security-evidence/
+            ${{ runner.temp }}/hosted-evidence/
           if-no-files-found: warn
 
   release-build:
@@ -133,6 +195,19 @@ jobs:
           # without changing the application's comparable VERSION contract.
           printf '\n<!-- CI development qualification %s -->\n' "${GITHUB_RUN_ID}" >> README.md
           NAKPANEL_RELEASE_ALLOW_DIRTY=1 NAKPANEL_RELEASE_SIGNING_KEY="${RUNNER_TEMP}/release-test-key.pem" ./deploy/release/build.sh "${RUNNER_TEMP}/release"
+          # Publish only the exact AMD64 test bundle and its out-of-band public
+          # key. The ephemeral private signing key remains outside this tree.
+          mkdir -p "${RUNNER_TEMP}/security-release"
+          version="$(tr -d '[:space:]' < VERSION)"
+          # The tar preserves executable permissions across Actions artifact transport.
+          tar -C "${RUNNER_TEMP}/release" -czf "${RUNNER_TEMP}/security-release/bundle.tar.gz" "nakpanel-${version}-linux-amd64"
+          openssl pkey -in "${RUNNER_TEMP}/release-test-key.pem" -pubout -out "${RUNNER_TEMP}/security-release/public.pem"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-security-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/security-release/
+          retention-days: 3
+          if-no-files-found: error
       - name: Remove ephemeral release signing key
         if: always()
         run: rm -f "${RUNNER_TEMP}/release-test-key.pem"

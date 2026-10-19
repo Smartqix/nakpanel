@@ -39,6 +39,9 @@ install -d -o nakpanel -g nakpanel -m 0750 /var/lib/nakpanel
 install -d -o nakpanel -g nakpanel -m 0750 /var/lib/nakpanel/tls
 install -d -o nakpanel -g nakpanel -m 0700 /var/lib/nakpanel/tls-staging
 install -d -o nakpanel -g nakpanel -m 0750 /var/lib/nakpanel/backups
+# Explicitly set the managed parent: implicit parents inherit a restrictive
+# caller umask, which makes an otherwise readable BIND include inaccessible.
+install -d -o root -g bind -m 0755 /etc/bind/nakpanel
 install -d -m 0755 /etc/bind/nakpanel/zones
 install -d -m 0755 /etc/bind/nakpanel/zones.d
 

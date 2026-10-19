@@ -45,9 +45,9 @@ def private_write(path, value):
 def example_spec():
     return {'version': 1, 'source_vm': 'nakpanel-24-04-arm64-CHANGE-ME', 'architecture': 'arm64',
         'run_token': 'CHANGE-ME', 'target_profile': 'ubuntu-26.04-native',
-        'remote_src': '/tmp/nakpanel-src', 'admin_email': 'admin@nakpanel.test',
+        'remote_src': '', 'admin_email': 'admin@nakpanel.test',
         'admin_password': 'NakpanelAdmin!2026',
-        'normalize_php85': False, 'site_id': 0, 'worker_id': 0,
+        'normalize_php85': False, 'site_id': 0, 'worker_id': 0, 'oci_image_ref': '',
         'database_password': secrets.token_urlsafe(30), 'application_secret': secrets.token_urlsafe(30),
         'ftp_password': secrets.token_urlsafe(30), 'mailbox_password': secrets.token_urlsafe(30),
         'tls_hostname': 'forward-fixture.test'}
@@ -64,8 +64,12 @@ def validate_spec(c):
         raise ValueError('fixture requires an owned disposable source VM')
     if c.get('target_profile') not in ('ubuntu-26.04-native', 'ubuntu-26.04-sury'):
         raise ValueError('unknown target profile')
-    if not re.fullmatch(r'/tmp/nakpanel-[A-Za-z0-9._-]+', c.get('remote_src', '')):
-        raise ValueError('unsafe remote source directory')
+    if c.get('oci_image_ref') and not re.fullmatch(r'docker\.io/library/nginx@sha256:[a-f0-9]{64}',c['oci_image_ref']):
+        raise ValueError('fixture requires an explicit immutable official nginx image or trusted active catalog')
+    expected_source='/var/lib/nakpanel-qualification/'+token+'/source'
+    if c.get('remote_src') and c['remote_src']!=expected_source:
+        raise ValueError('fixture source must use its exact root-owned persistent qualification directory')
+    c['remote_src']=expected_source
     for key in ('admin_email', 'admin_password', 'database_password', 'application_secret', 'ftp_password', 'mailbox_password'):
         if not isinstance(c.get(key), str) or not c[key] or '\x00' in c[key] or '\n' in c[key]:
             raise ValueError('missing private fixture field ' + key)
@@ -96,6 +100,8 @@ def validate_prepared(c):
     for field in ('username','domain','marker','database','database_user','image_ref','guest_ca','volume_file','tenant_file','ftp_username','mailbox','oci_digest','oci_image_id'):
         if not isinstance(c.get(field), str) or not c[field] or any(v in c[field] for v in ('\x00','\n','\r')):
             raise ValueError('prepared runtime inventory is incomplete: ' + field)
+    if c.get('worker_php_version') not in ('8.3','8.4','8.5'):
+        raise ValueError('prepared actual worker PHP identity is missing')
     if not re.fullmatch(r'[a-f0-9]{64}', c.get('worker_secret_sha256','')):
         raise ValueError('prepared worker secret evidence is missing')
     if not isinstance(c.get('images'),list) or not c['images']:
@@ -241,12 +247,23 @@ print(json.dumps({'databases':q("SELECT db_name FROM databases WHERE engine='mar
     return created
 
 
+def seed_roundcube(c):
+    environment=dict(os.environ,NAKPANEL_MULTIPASS_VM=c['source_vm'],
+        NAKPANEL_MULTIPASS_SOURCE_VM=c['source_vm'],NAKPANEL_MULTIPASS_IMAGE='24.04',
+        NAKPANEL_MULTIPASS_ARCH=c['architecture'],NAKPANEL_RUN_TOKEN=c['run_token'],
+        NAKPANEL_REMOTE_SRC=c['remote_src'])
+    # The root-owned source stays private. The common helper validates it and
+    # exposes only the exact canary script to www-data in a recreated /run leaf.
+    run(['bash','-c','source "$1"; run_qualification_roundcube_canary "$2" seed "$3"',
+         '_',HERE/'common.sh',c['source_vm'],c['mailbox']],env=environment)
+
+
 def prepare(spec_path, output):
     c = load_spec(spec_path)
     identity(c, c['source_vm'], '24.04')
     # Read-only storage qualification precedes fixture files, PHP normalization,
     # seed mutations and freezing. Never convert an existing webmail backend.
-    probe(c, c['source_vm'], 'source-preflight')
+    c.update(probe(c, c['source_vm'], 'source-preflight'))
     output = Path(output).resolve()
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
     os.chmod(output, 0o700)
@@ -257,6 +274,7 @@ def prepare(spec_path, output):
     c['marker'] = 'forward-canary-' + c['run_token']
     c['guest_ca'] = '/etc/nakpanel/forward-fixture-ca.crt'
     c = probe(c, c['source_vm'], 'seed')
+    seed_roundcube(c)
     private_write(output / 'fixture-ca.crt', certificates(c))
     c['ca_file'] = str(output / 'fixture-ca.crt')
     probe(c, c['source_vm'], 'live')

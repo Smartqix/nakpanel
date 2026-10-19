@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/nakroteck/nakpanel/internal/backup"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"os"
 	"os/exec"
@@ -24,7 +25,8 @@ func TestRoundcubeSQLiteDiscoveryNativeAndNoble(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(dir, tc.file), []byte(tc.contents), 0600); err != nil {
 				t.Fatal(err)
 			}
-			got, err := roundcubeSQLitePath(dir)
+			database, err := backup.ReadRoundcubeDatabase(dir, uint32(os.Geteuid()))
+			got := database.SQLitePath
 			if err != nil || got != tc.want {
 				t.Fatalf("got=%q err=%v want=%q", got, err, tc.want)
 			}
@@ -97,8 +99,9 @@ func TestRoundcubeBackupRejectsConfiguredNonSQLiteWithoutLeakingCredentials(t *t
 			if err := os.WriteFile(filepath.Join(dir, tc.file), []byte(tc.contents), 0600); err != nil {
 				t.Fatal(err)
 			}
-			got, err := roundcubeSQLitePath(dir)
-			if err == nil || !strings.Contains(err.Error(), "configured non-SQLite") {
+			database, err := backup.ReadRoundcubeDatabase(dir, uint32(os.Geteuid()))
+			got := database.SQLitePath
+			if err == nil || !strings.Contains(err.Error(), "Roundcube") {
 				t.Fatalf("got=%q err=%v; unsupported configured storage must never be omitted", got, err)
 			}
 			if strings.Contains(err.Error(), "secret-canary") {
@@ -114,7 +117,7 @@ func TestUnsupportedRoundcubeBackupFailsBeforeSpoolOrExternalCommands(t *testing
 	if err := os.Mkdir(config, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(config, "debian-db.php"), []byte("<?php\n$dbtype='mysql';\n"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(config, "debian-db.php"), []byte("<?php\n$dbtype='pgsql';\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	commandLog := filepath.Join(dir, "commands")
@@ -128,8 +131,9 @@ func TestUnsupportedRoundcubeBackupFailsBeforeSpoolOrExternalCommands(t *testing
 	spool := filepath.Join(dir, "spool")
 	p := NewServerBackupProvisioner(ServerBackupProvisionerOptions{SpoolDir: spool})
 	p.roundcubeConfigDir = config
+	p.roundcubeConfigOwnerUID = uint32(os.Geteuid())
 	_, err := p.CreateServerBackup(context.Background(), types.CreateServerBackupReq{ArchiveKey: make([]byte, 32), Destination: types.BackupDestinationSpec{Kind: "local", Settings: []byte(fmt.Sprintf(`{"dir":%q}`, filepath.Join(dir, "destination")))}, IncludeMailData: true, TenantDatabases: []string{"tenant"}})
-	if err == nil || !strings.Contains(err.Error(), "configured non-SQLite") {
+	if err == nil || !strings.Contains(err.Error(), "Roundcube") {
 		t.Fatalf("err=%v", err)
 	}
 	if _, err := os.Stat(commandLog); !os.IsNotExist(err) {

@@ -13,7 +13,7 @@ func TestRoundcubeDRCanaryUsesRealContactAndPreferenceSchema(t *testing.T) {
 	if err != nil {
 		t.Skip("PHP CLI required for Roundcube fixture test")
 	}
-	if err := exec.Command(php, "-r", `exit(class_exists('SQLite3')?0:1);`).Run(); err != nil {
+	if err := exec.Command(php, "-r", `exit((class_exists('SQLite3') && in_array('sqlite',PDO::getAvailableDrivers(),true))?0:1);`).Run(); err != nil {
 		t.Skip("PHP SQLite3 required")
 	}
 	helper, err := filepath.Abs("roundcube-dr-canary.php")
@@ -59,9 +59,62 @@ try { roundcube_canary($argv[2].'.absent', 'phase29@example.test', false); exit(
 		if err := os.WriteFile(filepath.Join(config, file), []byte(content), 0600); err != nil {
 			t.Fatal(err)
 		}
-		out, err := exec.Command(php, "-r", `require $argv[1];echo roundcube_database_path($argv[2]);`, helper, config).CombinedOutput()
+		out, err := exec.Command(php, "-r", `require $argv[1];echo roundcube_database_path($argv[2], posix_geteuid());`, helper, config).CombinedOutput()
 		if err != nil || strings.TrimSpace(string(out)) != want {
 			t.Fatalf("configured Roundcube path: %s %v", out, err)
 		}
+	}
+}
+
+func TestRoundcubeDRCanaryDetectsDefaultLocalMySQLWithoutExecutingPHP(t *testing.T) {
+	php, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("PHP CLI required")
+	}
+	helper, err := filepath.Abs("roundcube-dr-canary.php")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "executed")
+	wrapper := `<?php
+require("/etc/roundcube/debian-db.php");
+
+switch ($dbtype) {
+ case "sqlite":
+ case "sqlite3":
+   $config['db_dsnw'] = "sqlite:///$basepath/$dbname?mode=0640";
+   break;
+ default:
+   if ($dbport != '') $dbport=":$dbport";
+   if ($dbserver == '') $dbserver="localhost";
+   $config['db_dsnw'] = "$dbtype://$dbuser:$dbpass@$dbserver$dbport/$dbname";
+   break;
+ }
+?>
+`
+	config := "<?php\n$dbtype='mysql';\n$dbserver='localhost';\n$dbport='3306';\n$dbname='roundcube';\n$dbuser='roundcube';\n$dbpass='secret-canary';\nfile_put_contents('" + marker + "','executed');\n"
+	for name, data := range map[string]string{"debian-db.php": config, "debian-db-roundcube.php": wrapper} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	code := `require $argv[1];$db=roundcube_database_config($argv[2],posix_geteuid());if($db['backend']!=='mysql'||$db['username']!=='roundcube'||$db['database']!=='roundcube'||$db['password']!=='secret-canary')exit(17);echo $db['backend'];`
+	out, err := exec.Command(php, "-r", code, helper, dir).CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "mysql" {
+		t.Fatalf("default MySQL discovery failed: %s %v", out, err)
+	}
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("database configuration executed PHP")
+	}
+	if strings.Contains(string(out), "secret-canary") {
+		t.Fatal("database credential printed")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "debian-db-roundcube.php"), []byte("<?php require('/etc/roundcube/debian-db.php');\n$config['db_dsnw'] = \"mysql://remote.example.test/$dbtype\";"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	out, err = exec.Command(php, "-r", `require $argv[1];try{roundcube_database_config($argv[2],posix_geteuid());exit(18);}catch(RuntimeException $e){echo 'rejected';}`, helper, dir).CombinedOutput()
+	if err != nil || strings.TrimSpace(string(out)) != "rejected" {
+		t.Fatalf("custom active database wrapper was accepted: %s %v", out, err)
 	}
 }

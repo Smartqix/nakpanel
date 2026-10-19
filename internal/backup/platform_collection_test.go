@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 	"testing"
@@ -78,5 +80,31 @@ func TestImageProvenanceUsesActualRootlessImageDigest(t *testing.T) {
 	got := collectImageDigests(context.Background(), "test-dsn", probe)
 	if got[ref] != digest {
 		t.Fatalf("digests=%v", got)
+	}
+}
+
+func TestRequiredPHPInventoryIncludesActivePlanOffersWithRealPostgres(t *testing.T) {
+	dsn := os.Getenv("NAKPANEL_PLATFORM_TEST_DSN")
+	if dsn == "" {
+		t.Skip("requires explicitly isolated PostgreSQL test DSN")
+	}
+	sql := `BEGIN;
+ CREATE TEMP TABLE sites(php_version text,desired_php_version text);
+ CREATE TEMP TABLE php_applications(php_version text);
+ CREATE TEMP TABLE plans(lifecycle_status text,hosting_enabled boolean,default_php_version text,php_allowlist text,hosting_policy jsonb);
+ CREATE TEMP TABLE subscription_entitlements(hosting_enabled boolean,default_php_version text,php_allowlist text,hosting_policy jsonb);
+ INSERT INTO subscription_entitlements VALUES(true,'8.1','8.1,8.5','{"php":{"default_version":"8.1","allowed_versions":["8.1","8.5"]}}');
+ INSERT INTO sites VALUES('8.5','8.5'); INSERT INTO php_applications VALUES('8.5');
+ INSERT INTO plans VALUES('active',true,'8.3','8.3, 8.4','{"php":{"default_version":"8.3","allowed_versions":["8.3","8.4"]}}'),
+ ('active',true,'8.5','8.5','{"php":{"default_version":"8.5","allowed_versions":["8.2","8.5"]}}'),
+ ('draft',true,'7.4','7.4','{}'),('retired',true,'8.0','8.0','{}'),('active',false,'8.1','8.1','{}');
+ ` + requiredPHPIntentQuery + `;ROLLBACK;`
+	cmd := exec.Command("psql", "-X", "-qAt", dsn, "-v", "ON_ERROR_STOP=1", "-c", sql)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("isolated required-PHP query failed: %v %s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "8.1\n8.2\n8.3\n8.4\n8.5" {
+		t.Fatalf("active offers lost or inactive offers included: %s", out)
 	}
 }

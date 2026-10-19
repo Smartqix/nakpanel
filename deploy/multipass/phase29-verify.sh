@@ -4,6 +4,7 @@
 # fail2ban, staged firewall), and full disaster recovery onto a fresh VM from
 # an encrypted server backup.
 set -euo pipefail
+umask 077
 trap 'status=$?; echo "phase29 verifier failed at line ${LINENO}: ${BASH_COMMAND}" >&2; exit "${status}"' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -27,7 +28,7 @@ assert_no_failed_units(){
   failed="$(multipass_exec_short "${vm}" -- sudo systemctl --failed --no-legend --plain --no-pager | tr -d '\r')"
   [[ -z "${failed//[[:space:]]/}" ]] || fail "${label} has failed systemd units: ${failed}"
 }
-wait_for(){
+wait_for() {
   local query="$1" expected="$2" value=""
   for _ in $(seq 1 120); do
     value="$(db "${query}")"
@@ -35,6 +36,36 @@ wait_for(){
     sleep 2
   done
   fail "got ${value}, want ${expected}: ${query}"
+}
+
+# quotaon may exit 1 because unrelated group/project quota classes are off.
+# Inspect the actual filesystem's user-quota state without repairing anything.
+assert_phase29_user_quota() {
+  local mountpoint state
+  mountpoint="$(findmnt -n -o TARGET --target /home)" || return "$?"
+  [[ -n "${mountpoint}" ]] || return 1
+  state="$(quotaon -p "${mountpoint}" 2>/dev/null || true)"
+  printf '%s\n' "${state}"
+  grep -Eq 'user quota .* is on' <<<"${state}"
+}
+
+reconcile_phase29_after_reboot() {
+  local output run_id
+  output="$(cli reconcile --system)" || return "$?"
+  run_id="$(printf '%s\n' "${output}" | tr -d '\r' | sed -nE 's/^System reconciliation queued \(run ([1-9][0-9]*)\)\.$/\1/p')"
+  [[ "${run_id}" =~ ^[1-9][0-9]*$ ]] || { echo 'reconciliation request did not return one valid run ID' >&2; return 1; }
+  wait_for "SELECT status FROM reconciliation_runs WHERE id=${run_id}" active
+}
+
+# Same-platform restore can warn if its convenience reconciliation enqueue
+# fails. Demand a new, explicitly acknowledged DR run and observe only its ID.
+reconcile_phase29_dr() {
+  (
+    VM_NAME="${DR_VM_NAME}"
+    export NAKPANEL_MULTIPASS_VM="${DR_VM_NAME}"
+    assert_current_vm_identity || exit "$?"
+    reconcile_phase29_after_reboot
+  )
 }
 
 # Mirrors challengeCSRFToken() in the panel. `command -v` is required: a
@@ -80,11 +111,109 @@ create_server_backup(){
   echo "server backup ${backup_id} did not finish within 45 minutes (status ${status:-unknown})" >&2
   return 1
 }
+# Synthetic version/migration fault injection is additional coverage. A signed
+# qualification keeps its primary/DR binaries immutable and runs those drills
+# only on a separate, freshly bootstrapped owned companion.
+run_phase29_signed_fault_companion() {
+  local companion="${VM_NAME}-fault" report_root report_dir result
+  if multipass info "${companion}" >/dev/null 2>&1; then
+    echo "phase29: existing fault companion retained; choose a fresh owned run: ${companion}" >&2
+    return 1
+  fi
+  report_root="${NAKPANEL_CELL_REPORT_DIR:-${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}}/phase29-additional-fault-drills"
+  mkdir -p "${report_root}" || return 1
+  chmod 0700 "${report_root}" || return 1
+  report_dir="$(mktemp -d "${report_root}/attempt.XXXXXXXX")" || return 1
+  printf 'additional-synthetic-fault-drills\t%s\t%s\n' "${companion}" "${NAKPANEL_RELEASE_VERSION:-selected}" >"${report_dir}/identity.tsv"
+  if (
+    export NAKPANEL_MULTIPASS_VM="${companion}"
+    export NAKPANEL_MULTIPASS_SOURCE_VM="${companion}"
+    export NAKPANEL_MULTIPASS_DR_VM="${companion}-dr"
+    export NAKPANEL_CELL_REPORT_DIR="${report_dir}"
+    export NAKPANEL_INSTALL_ONLY=0
+    export NAKPANEL_RELEASE_BUNDLE NAKPANEL_RELEASE_PUBLIC_KEY NAKPANEL_RELEASE_VERSION NAKPANEL_RELEASE_ALLOW_DEVELOPMENT
+    export NAKPANEL_QUALIFICATION_VM_CPUS="${NAKPANEL_QUALIFICATION_DR_CPUS:-2}"
+    export NAKPANEL_QUALIFICATION_VM_MEMORY="${NAKPANEL_QUALIFICATION_DR_MEMORY:-3G}"
+    export NAKPANEL_QUALIFICATION_VM_DISK="${NAKPANEL_QUALIFICATION_DR_DISK:-32G}"
+    "${SCRIPT_DIR}/current-install-verify.sh" >"${report_dir}/bootstrap.log" 2>&1 || exit "$?"
+    # This explicit additional drill is the sole signed-flow exception allowed
+    # to build mutated synthetic versions. Its readable/writable source lives
+    # outside the private signed qualification parent, only on this companion.
+    unset NAKPANEL_RELEASE_BUNDLE NAKPANEL_RELEASE_PUBLIC_KEY NAKPANEL_RELEASE_VERSION NAKPANEL_RELEASE_ALLOW_DEVELOPMENT NAKPANEL_RELEASE_LEGACY_INSTALLER
+    export NAKPANEL_REMOTE_SRC=/tmp/nakpanel-phase29-fault-src
+    export NAKPANEL_PHASE29_FAULT_DRILLS_ONLY=1
+    export NAKPANEL_PHASE29_FAULT_COMPANION_VM="${companion}"
+    export NAKPANEL_SKIP_PRIOR_PHASES=1
+    "${SCRIPT_DIR}/phase29-verify.sh" >"${report_dir}/fault-drills.log" 2>&1
+  ); then
+    if destroy_owned_vm "${companion}" "${NAKPANEL_RUN_TOKEN}"; then
+      printf 'PASS\tadditional-synthetic-fault-drills\t%s\n' "${companion}" >"${report_dir}/result.tsv"
+      echo "phase29: additional synthetic fault drills passed; evidence ${report_dir}"
+      return 0
+    fi
+    result=1
+    printf 'FAIL\tcompanion-reclaim\t%s\n' "${companion}" >"${report_dir}/result.tsv"
+  else
+    result=$?
+    printf 'FAIL\tadditional-synthetic-fault-drills\t%s\t%s\n' "${companion}" "${result}" >"${report_dir}/result.tsv"
+  fi
+  echo "phase29: fault companion failed; retaining ${companion} and evidence ${report_dir}" >&2
+  return "${result}"
+}
+
+install_phase29_fresh_dr() {
+  destroy_vm "${DR_VM_NAME}" || return "$?"
+  if [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
+    (
+      export NAKPANEL_MULTIPASS_VM="${DR_VM_NAME}"
+      export NAKPANEL_INSTALL_ONLY=1
+      export NAKPANEL_RELEASE_BUNDLE NAKPANEL_RELEASE_PUBLIC_KEY NAKPANEL_RELEASE_VERSION NAKPANEL_RELEASE_ALLOW_DEVELOPMENT
+      # Exact selected signed artifacts, private administrator bootstrap and
+      # services health, with no tenant fixtures before archive restoration.
+      "${SCRIPT_DIR}/current-install-verify.sh"
+    )
+  else
+    (
+      export NAKPANEL_MULTIPASS_VM="${DR_VM_NAME}"
+      ensure_vm 2 3G 16G || exit "$?"
+      sync_repo "${ROOT_DIR}" || exit "$?"
+    ) || return "$?"
+    multipass transfer "${tmpdir}/panel" "${DR_VM_NAME}:/tmp/panel" || return "$?"
+    multipass transfer "${tmpdir}/agent" "${DR_VM_NAME}:/tmp/agent" || return "$?"
+    multipass transfer "${tmpdir}/panelctl" "${DR_VM_NAME}:/tmp/panelctl" || return "$?"
+
+    # Fresh install with the lab's binaries (29.0.2), then restore the archive.
+    multipass exec "${DR_VM_NAME}" -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" <<'REMOTE'
+set -euo pipefail
+src="$1"
+echo '29.0.2' > "${src}/VERSION"
+install -d -m 0755 /tmp/nakpanel-bin
+for artifact in panel agent panelctl; do
+  install -m 0755 "/tmp/${artifact}" "/tmp/nakpanel-bin/${artifact}"
+done
+cd "${src}"
+args=(--fresh --bin-dir /tmp/nakpanel-bin --yes)
+if [[ "$2" == sury ]]; then args+=(--php-provider sury); fi
+umask 077
+admin_password_file="$(mktemp /root/nakpanel-qualification-admin.XXXXXXXX)"
+trap 'rm -f "${admin_password_file}"' EXIT
+printf '%s' 'NakpanelAdmin!2026' >"${admin_password_file}"
+args+=(--admin-email admin@nakpanel.test --admin-password-file "${admin_password_file}")
+deploy/install/install.sh "${args[@]}"
+REMOTE
+  fi
+}
+
 restore_entrypoint(){ # runs ON the DR VM via multipass exec
   multipass exec "${DR_VM_NAME}" -- sudo env NAKPANEL_SECRET_KEY_FILE=/etc/nakpanel/secret-keys.json \
     panelctl --actor phase29-restore restore-server \
     --archive /tmp/phase29-archive.nkbk --backup-key-file /tmp/phase29-backup.key --yes
 }
+
+if [[ "${NAKPANEL_PHASE29_FAULT_DRILLS_ONLY:-0}" == 1 ]]; then
+  [[ "${VM_NAME}" == *-fault && "${NAKPANEL_PHASE29_FAULT_COMPANION_VM:-}" == "${VM_NAME}" && -z "${NAKPANEL_RELEASE_BUNDLE:-}" ]] \
+    || fail "raw synthetic drills require the explicit owned fault companion"
+fi
 
 if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
   "${SCRIPT_DIR}/phase28-verify.sh"
@@ -95,6 +224,9 @@ for tool in python3 dig curl; do
   command -v "${tool}" >/dev/null 2>&1 || fail "host prerequisite ${tool} is not installed"
 done
 sync_repo "${ROOT_DIR}"
+if [[ "${NAKPANEL_PHASE29_FAULT_DRILLS_ONLY:-0}" == 1 ]]; then
+  multipass_exec_short "${VM_NAME}" -- sudo chown -R nakpanel:nakpanel "${REMOTE_SRC}"
+fi
 
 VM_IP="$(vm_ip)"
 BASE_URL="https://${VM_IP}:7443"
@@ -110,6 +242,13 @@ cleanup_phase29() {
   exit "${status}"
 }
 trap cleanup_phase29 EXIT
+
+PHASE29_EXPECTED_VERSION=29.0.2
+if [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
+  PHASE29_EXPECTED_VERSION="${NAKPANEL_RELEASE_VERSION:?signed phase29 requires an exact version}"
+  assert_qualification_installed_release "${VM_NAME}"
+  run_phase29_signed_fault_companion || fail "mandatory additional signed-bootstrap fault companion failed"
+fi
 
 admin_login(){ # JAR-NAME
   curl -sk --fail -c "${tmpdir}/$1" -L -d 'email=admin@nakpanel.test' \
@@ -217,13 +356,13 @@ assert_mariadb_canary(){ # LABEL VM
 }
 
 roundcube_canary(){
-  multipass exec "$1" -- sudo -u www-data "/usr/bin/php${NAKPANEL_BASELINE_PHP}" \
-    "${REMOTE_SRC}/deploy/multipass/roundcube-dr-canary.php" "$2" "${mailbox_address}"
+  run_qualification_roundcube_canary "$1" "$2" "${mailbox_address}"
 }
 
 assert_baseline "pre-upgrade" "${VM_IP}" ""
 assert_mariadb_canary "pre-upgrade" "${VM_NAME}"
 
+if [[ -z "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
 run_installer(){ # EXTRA-ENV... (returns installer exit status)
   multipass exec "${VM_NAME}" -- sudo env "$@" bash -c \
     "cd '${REMOTE_SRC}' && deploy/install/install.sh --yes" \
@@ -298,6 +437,12 @@ assert_mariadb_canary "drill-b" "${VM_NAME}"
 run_installer NAKPANEL_INSTALL_FAULT= || { cat "${tmpdir}/install.log" >&2; fail "final upgrade to 29.0.2 failed"; }
 for _ in $(seq 1 60); do curl -skf "${BASE_URL}/healthz" | grep -q '^version=29\.0\.2' && break; sleep 2; done
 assert_baseline "final-upgrade" "${VM_IP}" "29.0.2"
+
+fi
+if [[ "${NAKPANEL_PHASE29_FAULT_DRILLS_ONLY:-0}" == 1 ]]; then
+  echo "Phase 29 additional synthetic fault drills passed on ${VM_NAME} (${VM_IP})."
+  exit 0
+fi
 
 # ---------------------------------------------------------------------------
 echo "phase29: leg 2 - production security (throttle, fail2ban, TOTP, firewall)"
@@ -481,22 +626,17 @@ BASE_URL="https://${VM_IP}:7443"
 multipass exec "${VM_NAME}" -- sudo bash -se <<'REMOTE'
 set -euo pipefail
 findmnt --target /home
-quotaon -p "$(findmnt -n -o TARGET --target /home)"
-quotaon -p "$(findmnt -n -o TARGET --target /home)" 2>/dev/null | grep -q 'user quota .* is on'
 systemctl --failed --no-legend --plain --no-pager
 REMOTE
+multipass_exec_short "${VM_NAME}" -- sudo bash -c "$(declare -f assert_phase29_user_quota); assert_phase29_user_quota"
 for _ in $(seq 1 90); do curl -skf "${BASE_URL}/healthz" >/dev/null && break; sleep 2; done
 for service in nakpanel nakpanel-agent nginx mariadb named stalwart-mail fail2ban; do
   multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "${service}" \
     || fail "service ${service} is not active after reboot"
 done
-reconcile_before="$(db "SELECT COALESCE(MAX(id),0) FROM reconciliation_runs")"
-cli reconcile --system >/dev/null
-reconcile_run="$(db "SELECT COALESCE(MAX(id),0) FROM reconciliation_runs")"
-[[ "${reconcile_run}" -gt "${reconcile_before}" ]] || fail "reconcile run was not queued"
-wait_for "SELECT status FROM reconciliation_runs WHERE id=${reconcile_run}" "active"
+reconcile_phase29_after_reboot || fail "the requested post-reboot reconciliation did not converge"
 assert_no_failed_units "${VM_NAME}" "post-reboot deployment"
-assert_baseline "post-reboot" "${VM_IP}" "29.0.2"
+assert_baseline "post-reboot" "${VM_IP}" "${PHASE29_EXPECTED_VERSION}"
 assert_mariadb_canary "post-reboot" "${VM_NAME}"
 admin_login admin-reboot.cookies || fail "post-reboot login failed"
 assert_admin_workspace "${tmpdir}/admin-reboot.cookies.html" "post-reboot login"
@@ -504,6 +644,10 @@ assert_admin_workspace "${tmpdir}/admin-reboot.cookies.html" "post-reboot login"
 # ---------------------------------------------------------------------------
 echo "phase29: leg 4 - disaster recovery onto a fresh VM"
 # ---------------------------------------------------------------------------
+
+# The server archive and all later recovery checks must still describe the
+# exact selected release, never the companion's synthetic drill binaries.
+assert_qualification_installed_release "${VM_NAME}"
 
 # --force so a rerun on the same VM re-keys instead of aborting; destination
 # add is an upsert. Both must be re-runnable or the gate cannot be retried.
@@ -518,58 +662,34 @@ archive_name="$(db "SELECT archive_name FROM server_backups WHERE status='active
 [[ "$(db "SELECT verified_at IS NOT NULL FROM server_backups WHERE status='active' ORDER BY id DESC LIMIT 1")" == "t" ]] \
   || fail "server backup was not verified"
 
-multipass exec "${VM_NAME}" -- sudo bash -se -- "${archive_name}" <<'REMOTE'
+multipass exec "${VM_NAME}" -- sudo bash -se -- "${archive_name}" "${NAKPANEL_RELEASE_BUNDLE:+1}" <<'REMOTE'
 set -euo pipefail
 install -m 0644 "/var/lib/nakpanel/server-backups/${1}" /tmp/phase29-archive.nkbk
-install -d -m 0755 /tmp/nakpanel-bin
-install -m 0755 /usr/local/bin/nakpanel-panel /tmp/nakpanel-bin/panel
-install -m 0755 /usr/local/bin/nakpanel-agent /tmp/nakpanel-bin/agent
-install -m 0755 /usr/local/bin/panelctl /tmp/nakpanel-bin/panelctl
+if [[ "$2" != 1 ]]; then
+  install -d -m 0755 /tmp/nakpanel-bin
+  install -m 0755 /usr/local/bin/nakpanel-panel /tmp/nakpanel-bin/panel
+  install -m 0755 /usr/local/bin/nakpanel-agent /tmp/nakpanel-bin/agent
+  install -m 0755 /usr/local/bin/panelctl /tmp/nakpanel-bin/panelctl
+fi
 REMOTE
 multipass transfer "${VM_NAME}:/tmp/phase29-archive.nkbk" "${tmpdir}/phase29-archive.nkbk"
-multipass transfer "${VM_NAME}:/tmp/nakpanel-bin/panel" "${tmpdir}/panel"
-multipass transfer "${VM_NAME}:/tmp/nakpanel-bin/agent" "${tmpdir}/agent"
-multipass transfer "${VM_NAME}:/tmp/nakpanel-bin/panelctl" "${tmpdir}/panelctl"
+if [[ -z "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
+  multipass transfer "${VM_NAME}:/tmp/nakpanel-bin/panel" "${tmpdir}/panel"
+  multipass transfer "${VM_NAME}:/tmp/nakpanel-bin/agent" "${tmpdir}/agent"
+  multipass transfer "${VM_NAME}:/tmp/nakpanel-bin/panelctl" "${tmpdir}/panelctl"
+fi
 printf '%s\n' "${backup_key}" >"${tmpdir}/phase29-backup.key"
 
-destroy_vm "${DR_VM_NAME}"
-(
-  export NAKPANEL_MULTIPASS_VM="${DR_VM_NAME}"
-  ensure_vm 2 3G 16G
-  sync_repo "${ROOT_DIR}"
-)
+install_phase29_fresh_dr || fail "fresh disaster-recovery installation failed"
 multipass transfer "${tmpdir}/phase29-archive.nkbk" "${DR_VM_NAME}:/tmp/phase29-archive.nkbk"
 multipass transfer "${tmpdir}/phase29-backup.key" "${DR_VM_NAME}:/tmp/phase29-backup.key"
-multipass transfer "${tmpdir}/panel" "${DR_VM_NAME}:/tmp/panel"
-multipass transfer "${tmpdir}/agent" "${DR_VM_NAME}:/tmp/agent"
-multipass transfer "${tmpdir}/panelctl" "${DR_VM_NAME}:/tmp/panelctl"
-
-# Fresh install with the lab's binaries (29.0.2), then restore the archive.
-multipass exec "${DR_VM_NAME}" -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" <<'REMOTE'
-set -euo pipefail
-src="$1"
-echo '29.0.2' > "${src}/VERSION"
-install -d -m 0755 /tmp/nakpanel-bin
-for artifact in panel agent panelctl; do
-  install -m 0755 "/tmp/${artifact}" "/tmp/nakpanel-bin/${artifact}"
-done
-cd "${src}"
-args=(--fresh --bin-dir /tmp/nakpanel-bin --yes)
-if [[ "$2" == sury ]]; then args+=(--php-provider sury); fi
-umask 077
-admin_password_file="$(mktemp /root/nakpanel-qualification-admin.XXXXXXXX)"
-trap 'rm -f "${admin_password_file}"' EXIT
-printf '%s' 'NakpanelAdmin!2026' >"${admin_password_file}"
-args+=(--admin-email admin@nakpanel.test --admin-password-file "${admin_password_file}")
-deploy/install/install.sh "${args[@]}"
-REMOTE
 restore_entrypoint || fail "restore-server failed on the DR VM"
+assert_qualification_installed_release "${DR_VM_NAME}"
 
 DR_IP="$(multipass info "${DR_VM_NAME}" | awk '/IPv4/{print $2; exit}')"
 [[ -n "${DR_IP}" ]] || fail "could not determine DR VM address"
-dr_db(){ multipass_exec_short "${DR_VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "$1" | tr -d '\r'; }
 for _ in $(seq 1 90); do curl -skf "https://${DR_IP}:7443/healthz" >/dev/null && break; sleep 2; done
-assert_baseline "disaster-recovery" "${DR_IP}" "29.0.2"
+assert_baseline "disaster-recovery" "${DR_IP}" "${PHASE29_EXPECTED_VERSION}"
 assert_mariadb_canary "disaster-recovery" "${DR_VM_NAME}"
 roundcube_canary "${DR_VM_NAME}" assert
 curl -sk --fail -c "${tmpdir}/dr.cookies" -L -d 'email=admin@nakpanel.test' \
@@ -592,12 +712,7 @@ try:
 finally:
     client.logout()
 ' "${mailbox_address}" 'Phase29Mail!2026' >/dev/null || fail "restored mailbox IMAP login failed"
-for _ in $(seq 1 120); do
-  dr_status="$(dr_db "SELECT status FROM reconciliation_runs ORDER BY id DESC LIMIT 1")"
-  [[ "${dr_status}" == "active" ]] && break
-  sleep 2
-done
-[[ "${dr_status:-}" == "active" ]] || fail "DR reconciliation did not converge (status ${dr_status:-none})"
+reconcile_phase29_dr || fail "the requested fresh DR reconciliation did not converge"
 assert_no_failed_units "${DR_VM_NAME}" "disaster-recovery deployment"
 
 # A second boot catches restore-time repairs that were never made durable.
@@ -606,11 +721,12 @@ wait_for_cloud_init "${DR_VM_NAME}"
 assert_vm_identity "${DR_VM_NAME}" "${IMAGE}" "${NAKPANEL_MULTIPASS_ARCH}" "${NAKPANEL_RUN_TOKEN}"
 DR_IP="$(multipass info "${DR_VM_NAME}" | awk '/IPv4/{print $2; exit}')"
 for _ in $(seq 1 90); do curl -skf "https://${DR_IP}:7443/healthz" >/dev/null && break; sleep 2; done
-assert_baseline "disaster-recovery second reboot" "${DR_IP}" "29.0.2"
+assert_qualification_installed_release "${DR_VM_NAME}"
+assert_baseline "disaster-recovery second reboot" "${DR_IP}" "${PHASE29_EXPECTED_VERSION}"
 assert_mariadb_canary "disaster-recovery second reboot" "${DR_VM_NAME}"
 roundcube_canary "${DR_VM_NAME}" assert
 assert_no_failed_units "${DR_VM_NAME}" "disaster-recovery second reboot"
-multipass_exec_short "${DR_VM_NAME}" -- sudo bash -c 'set -euo pipefail; quotaon -p "$(findmnt -n -o TARGET --target /home)" 2>/dev/null | grep "user quota .* is on" >/dev/null'
+multipass_exec_short "${DR_VM_NAME}" -- sudo bash -c "$(declare -f assert_phase29_user_quota); assert_phase29_user_quota"
 
 destroy_vm "${DR_VM_NAME}"
 

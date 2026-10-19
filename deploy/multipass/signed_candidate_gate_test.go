@@ -10,62 +10,53 @@ import (
 	"time"
 )
 
-func TestExpectedSignedBundleRequiresGuestArtifacts(t *testing.T) {
-	data, err := os.ReadFile("common.sh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	function := shellFixtureFunction(t, string(data), "assert_qualification_bundle_staged", false)
-	for _, state := range []string{"legacy", "missing", "complete", "missing key", "missing panel", "symlink manifest"} {
-		t.Run(state, func(t *testing.T) {
-			dir := t.TempDir()
-			bundle := filepath.Join(dir, "bundle")
-			if state != "missing" && state != "legacy" {
-				if err := os.MkdirAll(filepath.Join(bundle, "bin"), 0700); err != nil {
-					t.Fatal(err)
-				}
-				for _, artifact := range []string{"manifest.json", "manifest.sig", "bin/panel", "bin/agent", "bin/panelctl"} {
-					if state == "missing panel" && artifact == "bin/panel" {
-						continue
-					}
-					if err := os.WriteFile(filepath.Join(bundle, artifact), []byte("fixture"), 0700); err != nil {
-						t.Fatal(err)
-					}
-				}
-				if state != "missing key" {
-					if err := os.WriteFile(bundle+"-public.pem", []byte("fixture"), 0600); err != nil {
-						t.Fatal(err)
-					}
-				}
-				if state == "symlink manifest" {
-					if err := os.Remove(filepath.Join(bundle, "manifest.json")); err != nil {
-						t.Fatal(err)
-					}
-					if err := os.Symlink(bundle+"-public.pem", filepath.Join(bundle, "manifest.json")); err != nil {
-						t.Fatal(err)
-					}
-				}
-			}
-			body := `set -euo pipefail
-multipass_exec_short(){
- while [[ "$1" != -c ]]; do shift; done
- shift
- local code="$1"; shift
- code="${code//\/tmp\/nakpanel-release/$FIXTURE_BUNDLE}"
- bash -c "$code" "$@"
-}
-` + function + `assert_qualification_bundle_staged`
-			cmd := exec.Command("bash", "-c", body)
-			cmd.Env = append(os.Environ(), "FIXTURE_BUNDLE="+bundle, "NAKPANEL_MULTIPASS_VM=nakpanel-fixture", "NAKPANEL_RELEASE_BUNDLE=")
-			if state != "legacy" {
-				cmd.Env = append(cmd.Env, "NAKPANEL_RELEASE_BUNDLE=/expected/bundle")
-			}
+func TestSignedGuestPathsAreTokenBound(t *testing.T) {
+	for _, tc := range []struct {
+		name, token, override, want string
+		valid                       bool
+	}{
+		{"private signed source", "test-run123", "", "/var/lib/nakpanel-qualification/test-run123/source:/var/lib/nakpanel-qualification/test-run123/release:/var/lib/nakpanel-qualification/test-run123/public.pem", true},
+		{"source override", "test-run123", "/tmp/nakpanel-src", "", false},
+		{"unsafe token", "../escape", "", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.Command("bash", "-c", `set -euo pipefail; source ./common.sh; printf '%s:%s:%s' "$NAKPANEL_REMOTE_SRC" "$NAKPANEL_GUEST_RELEASE_DIR" "$NAKPANEL_GUEST_RELEASE_PUBLIC_KEY"`)
+			cmd.Env = append(os.Environ(), "NAKPANEL_RELEASE_BUNDLE=/host/selected", "NAKPANEL_RUN_TOKEN="+tc.token, "NAKPANEL_REMOTE_SRC="+tc.override)
 			out, err := cmd.CombinedOutput()
-			wantSuccess := state == "legacy" || state == "complete"
-			if (err == nil) != wantSuccess {
-				t.Fatalf("%s: %s %v", state, out, err)
+			if (err == nil) != tc.valid || (tc.valid && string(out) != tc.want) {
+				t.Fatalf("paths: %s %v", out, err)
 			}
 		})
+	}
+}
+
+func TestSignedSourceConfigurationCanPrecedeRunTokenCreation(t *testing.T) {
+	cmd := exec.Command("bash", "-c", `set -euo pipefail
+source ./common.sh
+export NAKPANEL_RUN_TOKEN=review-run123
+init_qualification_run
+printf '%s' "$NAKPANEL_REMOTE_SRC"
+`)
+	cmd.Env = append(os.Environ(), "NAKPANEL_RELEASE_BUNDLE=/host/selected", "NAKPANEL_RUN_TOKEN=", "NAKPANEL_REMOTE_SRC=", "NAKPANEL_MULTIPASS_VM=nakpanel-lab")
+	out, err := cmd.CombinedOutput()
+	if err != nil || string(out) != "/var/lib/nakpanel-qualification/review-run123/source" {
+		t.Fatalf("source-before-token configuration: %s %v", out, err)
+	}
+}
+
+func TestExplicitRawSourceDoesNotReuseSignedGuestArtifacts(t *testing.T) {
+	cmd := exec.Command("bash", "-c", `set -euo pipefail
+source ./common.sh
+unset NAKPANEL_RELEASE_BUNDLE
+NAKPANEL_REMOTE_SRC=/tmp/nakpanel-explicit-raw
+configure_qualification_guest_paths
+test "$NAKPANEL_REMOTE_SRC" = /tmp/nakpanel-explicit-raw
+test -z "${NAKPANEL_GUEST_RELEASE_DIR:-}"
+test -z "${NAKPANEL_GUEST_RELEASE_PUBLIC_KEY:-}"
+`)
+	cmd.Env = append(os.Environ(), "NAKPANEL_RELEASE_BUNDLE=/host/selected", "NAKPANEL_RUN_TOKEN=review-run123", "NAKPANEL_REMOTE_SRC=")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("raw mode reused signed artifacts: %s %v", out, err)
 	}
 }
 

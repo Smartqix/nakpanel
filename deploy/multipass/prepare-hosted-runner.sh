@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Reclaim and prepare only the disposable GitHub-hosted AMD64 runner assigned
+# to this job. Never run this helper on a developer machine or persistent host.
+set -euo pipefail
+
+if [[ "${GITHUB_ACTIONS:-}" != true || "${RUNNER_ENVIRONMENT:-}" != github-hosted || "$(uname -s)" != Linux || "$(uname -m)" != x86_64 ]]; then
+  echo 'This preparation requires a disposable GitHub-hosted Linux AMD64 runner.' >&2
+  exit 1
+fi
+: "${RUNNER_TEMP:?GitHub runner temporary directory is required}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+evidence="${RUNNER_TEMP}/hosted-evidence"
+mkdir -p "${evidence}"
+df -h / | tee "${evidence}/disk-before.log"
+# These unused SDK trees belong to this disposable hosted VM only.
+sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/share/swift /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL /usr/lib/jvm /usr/local/share/powershell /usr/share/miniconda
+sudo docker system prune --all --force
+sudo apt-get update
+sudo apt-get install -y acl cpu-checker curl dnsutils jq make openssl python3 ubuntu-keyring gnupg
+sudo snap install multipass
+sudo udevadm control --reload-rules
+sudo udevadm trigger --name-match=kvm
+if [[ -c /dev/kvm ]]; then sudo setfacl -m "u:$(id -u):rw" /dev/kvm; fi
+sudo apt-get clean
+# snap install may return before multipassd has created its root certificate.
+# A successful bounded daemon query is the readiness condition, never elapsed time.
+python3 "${SCRIPT_DIR}/hosted-multipass-ready.py" --output-dir "${evidence}"
+timeout --kill-after=2s 15s multipass version | tee "${evidence}/multipass.log"
+# Diagnostic only; the separate ioctl capacity/KVM preflight is mandatory.
+sudo kvm-ok >"${evidence}/kvm.log" 2>&1 || cat "${evidence}/kvm.log"

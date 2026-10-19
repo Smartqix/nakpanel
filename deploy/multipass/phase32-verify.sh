@@ -79,13 +79,15 @@ post_expect(){
 
 echo "phase32: install the current WordPress Toolkit build"
 sync_repo "${ROOT_DIR}"
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" "${NAKPANEL_GUEST_RELEASE_DIR:-}" "${NAKPANEL_GUEST_RELEASE_PUBLIC_KEY:-}" <<'REMOTE'
 set -euo pipefail
 src="$1"
 cd "${src}"
 export NAKPANEL_RELEASE_ALLOW_DEVELOPMENT="${2:-0}"
-if [[ -d /tmp/nakpanel-release/bin ]]; then
-  args=(--yes --allow-downgrade --force --bundle /tmp/nakpanel-release --release-public-key /tmp/nakpanel-release-public.pem)
+release_dir="${3:-}"
+release_key="${4:-}"
+if [[ -n "${release_dir}" ]]; then
+  args=(--yes --allow-downgrade --force --bundle "${release_dir}" --release-public-key "${release_key}")
   if [[ "${2:-0}" == 1 ]]; then args+=(--allow-development-bundle); fi
   timeout 45m deploy/install/install.sh "${args[@]}"
 else

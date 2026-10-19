@@ -2,9 +2,11 @@
 # Ubuntu's Roundcube package creates its database during its first installation.
 # Source this helper before that installation; sourcing alone has no effects.
 
+# roundcube-core.config calls dbc_go roundcube, so the debconf questions use
+# roundcube/* even though their owning binary package is roundcube-core.
 nakpanel_noble_roundcube_debconf_value() {
   local answer result=0
-  answer="$(printf 'GET roundcube-core/%s\n' "$1" | debconf-communicate roundcube-core 2>/dev/null)" || result=$?
+  answer="$(printf 'GET roundcube/%s\n' "$1" | debconf-communicate roundcube-core 2>/dev/null)" || result=$?
   case "$answer" in
     '0 '*) printf '%s' "${answer#0 }" ;;
     '10 '*) return 0 ;; # The question has not been registered on a fresh host.
@@ -37,7 +39,7 @@ nakpanel_prepare_noble_roundcube() {
   if [[ "$dbconfig_install" == false ]]; then return 0; fi
 
   printf '%s\n' \
-    'roundcube-core roundcube-core/database-type select sqlite3' \
-    'roundcube-core roundcube-core/dbconfig-install boolean true' | debconf-set-selections
+    'roundcube-core roundcube/database-type select sqlite3' \
+    'roundcube-core roundcube/dbconfig-install boolean true' | debconf-set-selections
   NAKPANEL_NOBLE_ROUNDCUBE_PACKAGES+=(roundcube-sqlite3)
 }

@@ -1,0 +1,9 @@
+This unchanged maintainer script was read from a disposable Ubuntu 24.04
+qualification guest's /var/lib/dpkg/info/roundcube-core.config, package version
+1.6.6+dfsg-2ubuntu0.1, on 2026-10-18 America/New_York. The upstream distribution
+package is https://packages.ubuntu.com/noble/roundcube-core .
+
+The behavioral installer test runs this script with the external debconf and
+dbconfig libraries replaced at their boundaries. Its actual `dbc_go roundcube`
+call selects the question namespace. This prevents the test fake from accepting
+an arbitrary namespace which the real package silently ignores.

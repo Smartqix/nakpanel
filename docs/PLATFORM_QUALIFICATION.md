@@ -71,6 +71,20 @@ retain their existing workflow. Fresh bootstrap explicitly creates a MariaDB
 fixture and writes/reads a canary in its physical schema before later upgrade
 or recovery checks use it.
 
+Selected release, trust anchor and frozen harness source persist under
+`/var/lib/nakpanel-qualification/<run-token>/{release,public.pem,source}`.
+The root-owned0700 parent is outside the panel-writable data directory and the
+backup inventory. Every signed gate checks the exact host-selected manifest
+and public-key digests plus the guest signature and complete payload inventory.
+Transfer archives are bound to the frozen host's SHA256 and byte count, opened
+without following links, and copied into private staging before parsing. A
+changed guest-writable transfer cannot supply code to the privileged verifier.
+Reboot does not depend on `/tmp`. Only reviewed probe code is copied into a
+root-owned read-only directory under `/run` when an unprivileged test process
+needs it; its bytes must match the frozen host source. Credentials and release
+assets stay private. Each cell's0600 `run.env` records the explicit nonsecret
+configuration and derived guest paths for inspection and recovery.
+
 Set repository variable `NAKPANEL_QUALIFICATION_ARTIFACTS` to JSON with this
 shape, or pass the same JSON in the `qualification_artifacts` dispatch input.
 The following paths and versions are examples and must be replaced with actual
@@ -160,6 +174,14 @@ Valkey boundaries/cgroup/reboot checks, security, rollback/reboot/DR, native PHP
 service plans, WordPress Toolkit, webmail, uninstall, GoAccess and domain removal.
 The DR leg includes real message contents and a second reboot. It finishes by
 checking installed application digests against the signed artifact.
+
+Phase29's synthetic version and migration fault drills run on a separate owned
+`-fault` companion when a signed release is selected. That additional fault
+test is mandatory, has its own identity and evidence, and is reclaimed before
+DR starts. The primary and fresh DR guest retain the exact selected release;
+their three binary digests are checked before backup, after restore and after
+the second reboot. The DR installer still performs secure administrator setup
+and health checks, and skips only the creation of disposable product fixtures.
 
 Every matrix job always uploads its configuration preflight JSON and any cell
 report/logs produced, including failures. A final summary job requires all four

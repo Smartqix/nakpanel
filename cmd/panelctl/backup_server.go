@@ -343,6 +343,9 @@ func runRestoreServer(ctx context.Context, actor string, args []string, stdin io
 	if err := backup.CheckRoundcubeRestoreTarget(manifest, target, mode); err != nil {
 		return err
 	}
+	if err := backup.CheckRoundcubeMySQLTarget(ctx, manifest, target, mode, ops.CheckRoundcubeMySQLRuntime); err != nil {
+		return err
+	}
 	if *checkOnly {
 		verifiedSource, err := openArchive()
 		if err != nil {
@@ -389,6 +392,7 @@ func runRestoreServer(ctx context.Context, actor string, args []string, stdin io
 	summary, err := backup.RunRestore(ctx, backup.RestoreOptions{
 		Mode:                          mode,
 		ReadyPHPVersions:              ops.ReadyBackupPHPVersions,
+		RoundcubeMySQLRuntimeCheck:    ops.CheckRoundcubeMySQLRuntime,
 		SourceProvenanceReview:        openReview,
 		RegenerateTargetConfiguration: regenerate,
 		OpenArchive:                   openArchive,

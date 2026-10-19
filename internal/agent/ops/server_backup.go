@@ -28,11 +28,12 @@ import (
 // database role, tenant MariaDB databases are dumped over the root socket,
 // and the archive is assembled from the state trees disaster recovery needs.
 type ServerBackupProvisioner struct {
-	spoolDir           string
-	roundcubeConfigDir string
-	postgresDSN        string
-	runner             CommandRunner
-	now                func() time.Time
+	spoolDir                string
+	roundcubeConfigDir      string
+	roundcubeConfigOwnerUID uint32
+	postgresDSN             string
+	runner                  CommandRunner
+	now                     func() time.Time
 }
 
 type ServerBackupProvisionerOptions struct {
@@ -143,11 +144,16 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 	}
 
 	// Reject unsupported webmail storage before dumps, service pauses or archive state.
-	roundcubePath, err := roundcubeSQLitePath(p.roundcubeConfigDir)
+	roundcube, err := backup.ReadRoundcubeDatabase(p.roundcubeConfigDir, p.roundcubeConfigOwnerUID)
 	if err != nil {
 		return result, err
 	}
 
+	if roundcube.MySQL != nil {
+		if _, err := backup.ReadRoundcubePackageConfig(backup.RoundcubePackageConfigPath, 0, *roundcube.MySQL); err != nil {
+			return result, err
+		}
+	}
 	if err := os.MkdirAll(p.spoolDir, 0o700); err != nil {
 		return result, err
 	}
@@ -163,6 +169,12 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 	platform, err := backup.CollectPlatformProvenance(ctx, p.postgresDSN, ReadyBackupPHPVersions)
 	if err != nil {
 		return result, fmt.Errorf("collect backup platform: %w", err)
+	}
+
+	if roundcube.MySQL != nil {
+		if err := backup.CheckRoundcubeMySQLBackupPlatform(platform, req.IncludeMailData); err != nil {
+			return result, err
+		}
 	}
 
 	// 1. Postgres dump (custom format) as the nakpanel role.
@@ -185,10 +197,17 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 		dumpFiles = append(dumpFiles, normalized)
 	}
 
-	var roundcubeSnapshot string
-	if roundcubePath != "" {
+	var roundcubeSnapshot, roundcubeMySQLDump string
+	if roundcube.SQLitePath != "" {
 		roundcubeSnapshot = filepath.Join(workDir, "roundcube.sqlite")
-		if err := snapshotRoundcubeSQLite(ctx, roundcubePath, roundcubeSnapshot); err != nil {
+		if err := snapshotRoundcubeSQLite(ctx, roundcube.SQLitePath, roundcubeSnapshot); err != nil {
+			return result, err
+		}
+	}
+
+	if roundcube.MySQL != nil {
+		roundcubeMySQLDump = filepath.Join(workDir, "roundcube-mysql.sql.gz")
+		if err := backup.DumpRoundcubeMySQL(ctx, *roundcube.MySQL, roundcubeMySQLDump); err != nil {
 			return result, err
 		}
 	}
@@ -220,7 +239,8 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 	}
 
 	manifest := backup.Manifest{
-		RoundcubeSQLitePath: roundcubePath,
+		RoundcubeSQLitePath: roundcube.SQLitePath,
+		RoundcubeMySQL:      roundcube.MySQL,
 		Platform:            &platform,
 		FormatVersion:       1,
 		CreatedAt:           started.UTC(),
@@ -236,6 +256,12 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 	}
 	if roundcubeSnapshot != "" {
 		manifest.FormatVersion = 2
+	}
+	if roundcubeMySQLDump != "" {
+		manifest.FormatVersion = 3
+	}
+	if roundcube.MySQL != nil {
+		manifest.Trees = append(append([]string(nil), serverBackupTrees...), backup.RoundcubePackageConfigPath)
 	}
 	manifest.Hostname, _ = os.Hostname()
 	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
@@ -271,12 +297,17 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 				return err
 			}
 		}
+		if roundcubeMySQLDump != "" {
+			if err := writer.AddFileFrom(backup.RoundcubeMySQLDumpName, roundcubeMySQLDump); err != nil {
+				return err
+			}
+		}
 		for _, database := range dumpFiles {
 			if err := writer.AddFileFrom(backup.MariaDBPrefix+database+".sql.gz", filepath.Join(workDir, "mariadb-"+database+".sql.gz")); err != nil {
 				return err
 			}
 		}
-		for _, tree := range serverBackupTrees {
+		for _, tree := range manifest.Trees {
 			if err := writer.AddTreeMapped(tree, tree, serverBackupSkip); err != nil {
 				return fmt.Errorf("archive %s: %w", tree, err)
 			}
@@ -303,6 +334,21 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 	}
 	if err := spoolFile.Close(); err != nil {
 		return result, err
+	}
+
+	if roundcube.MySQL != nil {
+		check, err := os.Open(spoolPath)
+		if err != nil {
+			return result, err
+		}
+		verifyErr := backup.CheckArchiveIntegrity(check, req.ArchiveKey)
+		closeErr := check.Close()
+		if verifyErr != nil {
+			return result, verifyErr
+		}
+		if closeErr != nil {
+			return result, closeErr
+		}
 	}
 
 	info, err := os.Stat(spoolPath)
@@ -746,55 +792,6 @@ func (p *ServerBackupProvisioner) TestBackupDestination(ctx context.Context, req
 // recovery, without depending on a running panel database or peer-gated RPC.
 func ReadyBackupPHPVersions(ctx context.Context) ([]string, error) {
 	return readyBackupPHPVersions(ctx, systemRuntimeCapabilityProbe{}, nil)
-}
-
-// roundcubeSQLitePath reads literal package-managed database configuration as
-// data; it never sources PHP (which can contain credentials and executable code).
-func roundcubeSQLitePath(configDir string) (string, error) {
-	for _, name := range []string{"debian-db-roundcube.php", "debian-db.php"} {
-		data, err := os.ReadFile(filepath.Join(configDir, name))
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			return "", err
-		}
-		text := string(data)
-		if name == "debian-db-roundcube.php" {
-			assignment := regexp.MustCompile(`(?m)^\s*\$config\[['"]db_dsnw['"]\]\s*=\s*['"]([^'"\r\n]*)['"]\s*;`).FindStringSubmatch(text)
-			if len(assignment) < 2 {
-				continue
-			}
-			if !strings.HasPrefix(assignment[1], "sqlite:") {
-				return "", errors.New("Roundcube configured non-SQLite database cannot be included in whole-server backups; preserve and migrate its database separately before using this backup path")
-			}
-			path := filepath.Clean("/" + strings.TrimLeft(strings.TrimPrefix(assignment[1], "sqlite:"), "/"))
-			if !backup.IsRoundcubeSQLitePath(path) {
-				return "", errors.New("Roundcube SQLite configuration uses an unsupported backup path")
-			}
-			return path, nil
-		}
-		values := map[string]string{}
-		for _, assignment := range regexp.MustCompile(`(?m)^\s*\$(dbtype|dbbasepath|basepath|dbname)\s*=\s*['"]([^'"\r\n]*)['"]\s*;`).FindAllStringSubmatch(text, -1) {
-			values[assignment[1]] = assignment[2]
-		}
-		if values["dbtype"] != "sqlite3" && values["dbtype"] != "sqlite" {
-			if values["dbtype"] == "" {
-				continue
-			}
-			return "", errors.New("Roundcube configured non-SQLite database cannot be included in whole-server backups; preserve and migrate its database separately before using this backup path")
-		}
-		base := values["dbbasepath"]
-		if base == "" {
-			base = values["basepath"]
-		}
-		path := filepath.Join(base, values["dbname"])
-		if !backup.IsRoundcubeSQLitePath(path) {
-			return "", errors.New("Roundcube SQLite configuration uses an unsupported backup path")
-		}
-		return path, nil
-	}
-	return "", nil
 }
 
 func snapshotRoundcubeSQLite(ctx context.Context, source, destination string) error {

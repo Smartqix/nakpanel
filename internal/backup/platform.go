@@ -51,6 +51,9 @@ func CheckRestoreCompatibility(source Manifest, target PlatformProvenance, mode 
 	if mode != RestoreSamePlatform && mode != RestoreForwardMigration {
 		return fmt.Errorf("unknown restore mode %q", mode)
 	}
+	if err := checkRoundcubeMySQLCompatibility(source, target); err != nil {
+		return err
+	}
 	s := source.Platform
 	if s == nil {
 		if mode == RestoreSamePlatform && target.OSID == "ubuntu" && target.VersionID == "24.04" {
@@ -147,6 +150,23 @@ func requireNotOlder(label, target, source string, parts int) error {
 	return nil
 }
 
+const requiredPHPIntentQuery = `WITH active_php_plans AS (
+ SELECT default_php_version,php_allowlist,hosting_policy FROM plans
+ WHERE lifecycle_status='active' AND hosting_enabled
+ UNION ALL SELECT default_php_version,php_allowlist,hosting_policy FROM subscription_entitlements WHERE hosting_enabled
+)
+SELECT DISTINCT version FROM (
+ SELECT btrim(version) AS version FROM (
+ SELECT php_version AS version FROM sites
+ UNION SELECT desired_php_version FROM sites
+ UNION SELECT php_version FROM php_applications
+ UNION SELECT default_php_version FROM active_php_plans
+ UNION SELECT regexp_split_to_table(php_allowlist,',') FROM active_php_plans
+ UNION SELECT hosting_policy#>>'{php,default_version}' FROM active_php_plans
+ UNION SELECT jsonb_array_elements_text(COALESCE(hosting_policy#>'{php,allowed_versions}','[]'::jsonb)) FROM active_php_plans
+ ) current_intent
+) normalized WHERE version <> '' ORDER BY version`
+
 var observedVersionRE = regexp.MustCompile(`(?:^|[^0-9])([0-9]+\.[0-9]+(?:\.[0-9]+)?)`)
 
 func observedVersion(value string) string {
@@ -213,6 +233,7 @@ func collectPlatform(ctx context.Context, dsn string, probe platformProbe) (Plat
 			p.Codename = v
 		}
 	}
+	legacyProfileAbsent := false
 	if data, err = probe.readFile("/etc/nakpanel/platform.json"); err == nil {
 		var installed PlatformProvenance
 		if json.Unmarshal(data, &installed) != nil {
@@ -228,6 +249,8 @@ func collectPlatform(ctx context.Context, dsn string, probe platformProbe) (Plat
 				p.InternalPHPVersion = strings.TrimSpace(string(out))
 			}
 		}
+	} else if os.IsNotExist(err) {
+		legacyProfileAbsent = true
 	}
 	// Existing Noble installations predate platform.json and use the legacy
 	// internal 8.3 interpreter; still observe the actual binary before recording.
@@ -235,6 +258,9 @@ func collectPlatform(ctx context.Context, dsn string, probe platformProbe) (Plat
 		if out, e := probe.command(ctx, "php8.3", "-r", "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"); e == nil && strings.TrimSpace(string(out)) == "8.3" {
 			p.InternalPHPVersion = "8.3"
 		}
+	}
+	if legacyProfileAbsent && p.OSID == "ubuntu" && p.VersionID == "24.04" && p.Codename == "noble" && p.InternalPHPVersion == "8.3" {
+		p.Profile = "ubuntu-24.04"
 	}
 	observe := func(name string, args ...string) string {
 		out, e := probe.command(ctx, name, args...)
@@ -273,9 +299,9 @@ func collectPlatform(ctx context.Context, dsn string, probe platformProbe) (Plat
 	}
 	// Hosted readiness is supplied by the trusted descriptor/extension/isolated
 	// FPM collector at the caller boundary; stray versioned binaries prove nothing.
-	// Include active and desired versions: a suspended site or pending runtime is
-	// still tenant intent. Query failure makes migration provenance incomplete.
-	query := `SELECT DISTINCT version FROM (SELECT php_version AS version FROM sites UNION SELECT desired_php_version FROM sites UNION SELECT php_version FROM php_applications) p WHERE version <> '' ORDER BY version`
+	// Include active/desired site versions and active plan offers: a suspended
+	// site, pending runtime or assignable plan is still tenant intent. Query failure makes migration provenance incomplete.
+	query := requiredPHPIntentQuery
 	out, e := probe.command(ctx, "runuser", "-u", "nakpanel", "--", "psql", "-Atq", dsn, "-c", query)
 	if e == nil {
 		p.PHPInventoryComplete = true

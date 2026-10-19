@@ -68,6 +68,7 @@ exit 99
 		t.Fatal(err)
 	}
 	cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"), "FAKE_LOG="+calls, "NAKPANEL_RUN_TOKEN=run123", "NAKPANEL_MULTIPASS_VM=nakpanel-26-04-native-run123", "NAKPANEL_MULTIPASS_ARCH="+strings.TrimSpace(string(archOut)), "NAKPANEL_MULTIPASS_IMAGE=26.04", "NAKPANEL_RELEASE_BUNDLE="+dir, "NAKPANEL_RELEASE_PUBLIC_KEY="+filepath.Join(dir, "missing.pem"), "NAKPANEL_RELEASE_VERSION=29.0.0", "NAKPANEL_CELL_REPORT_DIR="+report, "NAKPANEL_OWNERSHIP_DIR="+filepath.Join(dir, "ownership"))
+	cmd.Env = append(cmd.Env, "NAKPANEL_RELEASE_SIGNING_KEY=SECRET_PRIVATE_KEY_SHOULD_NOT_BE_SAVED")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("invalid bundle accepted: %s", out)
@@ -91,6 +92,10 @@ exit 99
 	}
 	if data, _ := os.ReadFile(calls); len(data) > 0 {
 		t.Fatalf("VM calls before valid bundle: %s", data)
+	}
+	run, err := os.ReadFile(filepath.Join(report, "run.env"))
+	if err != nil || !strings.Contains(string(run), "/var/lib/nakpanel-qualification/run123/source") || strings.Contains(string(run), "SECRET_PRIVATE_KEY_SHOULD_NOT_BE_SAVED") {
+		t.Fatalf("missing durable path contract or leaked unapproved environment: %s %v", run, err)
 	}
 }
 
@@ -196,7 +201,7 @@ func TestModernReinstallsUseStagedSignedCandidateWhenPresent(t *testing.T) {
 				t.Fatal(err)
 			}
 			block = strings.ReplaceAll(block, "/tmp/nakpanel-release", bundle)
-			cmd := exec.Command("bash", "-c", "timeout(){ shift; \"$@\"; }; goaccess(){ :; };\n"+block, "_", source, "1")
+			cmd := exec.Command("bash", "-c", "timeout(){ shift; \"$@\"; }; goaccess(){ :; };\n"+block, "_", source, "1", bundle, bundle+"-public.pem")
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("installer: %s %v", out, err)

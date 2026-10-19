@@ -133,16 +133,18 @@ cat "${capture_path}"
 
 echo "phase30: install and prove the current worktree"
 sync_repo "${ROOT_DIR}"
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${REMOTE_SRC}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" "${NAKPANEL_GUEST_RELEASE_DIR:-}" "${NAKPANEL_GUEST_RELEASE_PUBLIC_KEY:-}" <<'REMOTE'
 set -euo pipefail
 src="$1"
 cd "${src}"
-# Phase 29 deliberately installs a synthetic 29.0.2 version. The verifier now
-# installs the actual worktree; --allow-downgrade is required when VERSION is
-# lower than that synthetic drill version.
+# Legacy source-only Phase29 can leave a synthetic29.0.2 version. Signed
+# qualification keeps the selected artifact on the primary throughout;
+# --allow-downgrade remains necessary for the legacy development workflow.
 export NAKPANEL_RELEASE_ALLOW_DEVELOPMENT="${2:-0}"
-if [[ -d /tmp/nakpanel-release/bin ]]; then
-  args=(--yes --allow-downgrade --force --bundle /tmp/nakpanel-release --release-public-key /tmp/nakpanel-release-public.pem)
+release_dir="${3:-}"
+release_key="${4:-}"
+if [[ -n "${release_dir}" ]]; then
+  args=(--yes --allow-downgrade --force --bundle "${release_dir}" --release-public-key "${release_key}")
   if [[ "${2:-0}" == 1 ]]; then args+=(--allow-development-bundle); fi
   timeout 45m deploy/install/install.sh "${args[@]}"
 else
@@ -155,7 +157,7 @@ for artifact in panel agent panelctl; do
   [[ "${artifact}" == panel ]] && installed=/usr/local/bin/nakpanel-panel
   [[ "${artifact}" == agent ]] && installed=/usr/local/bin/nakpanel-agent
   binary_root=bin
-  if [[ -d /tmp/nakpanel-release/bin ]]; then binary_root=/tmp/nakpanel-release/bin; fi
+  if [[ -n "${release_dir}" ]]; then binary_root="${release_dir}/bin"; fi
   test "$(sha256sum "${binary_root}/${artifact}" | awk '{print $1}')" = "$(sha256sum "${installed}" | awk '{print $1}')"
 done
 systemctl is-active --quiet nakpanel.service

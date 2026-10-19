@@ -36,20 +36,21 @@ const TreePrefix = "files/"
 
 // Manifest describes an archive's contents and provenance.
 type Manifest struct {
-	RoundcubeSQLitePath string              `json:"roundcube_sqlite_path,omitempty"`
-	Platform            *PlatformProvenance `json:"platform,omitempty"`
-	FormatVersion       int                 `json:"format_version"`
-	CreatedAt           time.Time           `json:"created_at"`
-	Hostname            string              `json:"hostname"`
-	PanelVersion        string              `json:"panel_version,omitempty"`
-	GooseVersion        int64               `json:"goose_version,omitempty"`
-	KeyFingerprint      string              `json:"key_fingerprint"`
-	TenantDatabases     []string            `json:"tenant_databases,omitempty"`
-	Trees               []string            `json:"trees,omitempty"`
-	SystemdUnits        []string            `json:"systemd_units,omitempty"`
-	IncludeMailData     bool                `json:"include_mail_data"`
-	StalwartPausedMS    int64               `json:"stalwart_paused_ms,omitempty"`
-	Excluded            []string            `json:"excluded,omitempty"`
+	RoundcubeMySQL      *RoundcubeMySQLMetadata `json:"roundcube_mysql,omitempty"`
+	RoundcubeSQLitePath string                  `json:"roundcube_sqlite_path,omitempty"`
+	Platform            *PlatformProvenance     `json:"platform,omitempty"`
+	FormatVersion       int                     `json:"format_version"`
+	CreatedAt           time.Time               `json:"created_at"`
+	Hostname            string                  `json:"hostname"`
+	PanelVersion        string                  `json:"panel_version,omitempty"`
+	GooseVersion        int64                   `json:"goose_version,omitempty"`
+	KeyFingerprint      string                  `json:"key_fingerprint"`
+	TenantDatabases     []string                `json:"tenant_databases,omitempty"`
+	Trees               []string                `json:"trees,omitempty"`
+	SystemdUnits        []string                `json:"systemd_units,omitempty"`
+	IncludeMailData     bool                    `json:"include_mail_data"`
+	StalwartPausedMS    int64                   `json:"stalwart_paused_ms,omitempty"`
+	Excluded            []string                `json:"excluded,omitempty"`
 }
 
 // SystemIdentity is the users.json payload.
@@ -304,11 +305,11 @@ func ReadManifest(src io.Reader, key []byte) (Manifest, error) {
 	if err := decoder.Decode(&manifest); err != nil {
 		return manifest, fmt.Errorf("backup: manifest: %w", err)
 	}
-	if manifest.FormatVersion != 1 && manifest.FormatVersion != 2 {
+	if manifest.FormatVersion != 1 && manifest.FormatVersion != 2 && manifest.FormatVersion != 3 {
 		return manifest, fmt.Errorf("backup: unsupported archive format version %d", manifest.FormatVersion)
 	}
-	if manifest.RoundcubeSQLitePath != "" && manifest.FormatVersion < 2 {
-		return manifest, errors.New("backup: Roundcube SQLite snapshots require archive format version 2")
+	if err := validateRoundcubeManifest(manifest); err != nil {
+		return manifest, err
 	}
 	return manifest, nil
 }
@@ -322,8 +323,13 @@ func CheckArchiveIntegrity(src io.Reader, key []byte) error {
 	}
 	var manifest Manifest
 	manifestSeen := false
-	var snapshot string
+	var snapshot, mysqlSnapshot string
+	mysqlConfigs := map[string][]byte{}
+	var mysqlPackageConfig []byte
 	defer func() {
+		if mysqlSnapshot != "" {
+			_ = os.Remove(mysqlSnapshot)
+		}
 		if snapshot != "" {
 			_ = os.Remove(snapshot)
 		}
@@ -335,6 +341,13 @@ func CheckArchiveIntegrity(src io.Reader, key []byte) error {
 		}
 		if err != nil {
 			return fmt.Errorf("archive integrity: %w", err)
+		}
+		if manifest.RoundcubeMySQL != nil {
+			canonical := strings.TrimPrefix(filepath.Clean("/"+header.Name), "/")
+			protected := map[string]bool{TreePrefix + "etc/roundcube/debian-db.php": true, TreePrefix + "etc/roundcube/debian-db-roundcube.php": true, TreePrefix + "etc/roundcube/config.inc.php": true, TreePrefix + strings.TrimPrefix(RoundcubePackageConfigPath, "/"): true, RoundcubeMySQLDumpName: true}
+			if protected[canonical] && canonical != header.Name {
+				return errors.New("archive integrity: noncanonical protected Roundcube entry")
+			}
 		}
 		if header.Name == ManifestName {
 			if manifestSeen {
@@ -348,7 +361,49 @@ func CheckArchiveIntegrity(src io.Reader, key []byte) error {
 			if err = json.Unmarshal(data, &manifest); err != nil {
 				return fmt.Errorf("archive integrity: invalid manifest: %w", err)
 			}
-		} else if header.Name == RoundcubeSQLiteDumpName && manifest.RoundcubeSQLitePath != "" {
+		} else if header.Name == RoundcubeMySQLDumpName {
+			if manifest.RoundcubeMySQL == nil || mysqlSnapshot != "" {
+				return errors.New("archive integrity: unlisted or duplicate Roundcube MySQL SQL payload")
+			}
+			if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+				return errors.New("archive integrity: Roundcube MySQL SQL payload must be a regular file")
+			}
+			file, err := os.CreateTemp("", "nakpanel-roundcube-preflight-*.sql.gz")
+			if err != nil {
+				return err
+			}
+			mysqlSnapshot = file.Name()
+			_, copyErr := io.Copy(file, reader)
+			closeErr := file.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+		} else if manifest.RoundcubeMySQL != nil && header.Name == TreePrefix+strings.TrimPrefix(RoundcubePackageConfigPath, "/") {
+			if mysqlPackageConfig != nil || (header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA) || header.Size > roundcubeConfigLimit || header.Uid != 0 || header.Mode&0077 != 0 {
+				return errors.New("archive integrity: invalid Roundcube package database configuration entry")
+			}
+			data, err := io.ReadAll(io.LimitReader(reader, roundcubeConfigLimit+1))
+			if err != nil {
+				return err
+			}
+			mysqlPackageConfig = data
+		} else if manifest.RoundcubeMySQL != nil && (header.Name == TreePrefix+"etc/roundcube/debian-db.php" || header.Name == TreePrefix+"etc/roundcube/debian-db-roundcube.php" || header.Name == TreePrefix+"etc/roundcube/config.inc.php") {
+			name := filepath.Base(header.Name)
+			if _, duplicate := mysqlConfigs[name]; duplicate || (header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA) || header.Size > roundcubeConfigLimit || header.Uid != 0 || header.Mode&0022 != 0 {
+				return errors.New("archive integrity: invalid Roundcube MySQL configuration entry")
+			}
+			data, err := io.ReadAll(io.LimitReader(reader, roundcubeConfigLimit+1))
+			if err != nil {
+				return err
+			}
+			mysqlConfigs[name] = data
+		} else if header.Name == RoundcubeSQLiteDumpName {
+			if manifest.RoundcubeSQLitePath == "" {
+				return errors.New("archive integrity: unlisted Roundcube SQLite snapshot")
+			}
 			if snapshot != "" {
 				return errors.New("archive integrity: duplicate Roundcube SQLite snapshot")
 			}
@@ -375,6 +430,27 @@ func CheckArchiveIntegrity(src io.Reader, key []byte) error {
 	// Authenticate the complete encrypted stream before inspecting database bytes.
 	if err := reader.Finish(); err != nil {
 		return err
+	}
+	if err := validateRoundcubeManifest(manifest); err != nil {
+		return err
+	}
+	if manifest.RoundcubeMySQL != nil {
+		if mysqlSnapshot == "" {
+			return errors.New("archive integrity: advertised Roundcube MySQL SQL payload is missing")
+		}
+		config, err := ParseRoundcubeDatabaseFiles(mysqlConfigs)
+		if err != nil {
+			return err
+		}
+		if config.MySQL == nil || *config.MySQL != *manifest.RoundcubeMySQL {
+			return errors.New("archive integrity: Roundcube MySQL configuration does not match declared metadata")
+		}
+		if err := ValidateRoundcubePackageConfig(mysqlPackageConfig, *manifest.RoundcubeMySQL); err != nil {
+			return err
+		}
+		if err := validateRoundcubeSQLDump(mysqlSnapshot); err != nil {
+			return err
+		}
 	}
 	if manifest.RoundcubeSQLitePath != "" {
 		if manifest.FormatVersion != 2 || !IsRoundcubeSQLitePath(manifest.RoundcubeSQLitePath) {

@@ -708,13 +708,36 @@ Older restore binaries reject these archives; retain the matching restore
 binary with the backup. Current binaries still read existing format-1 archives.
 The SQLite snapshot uses an online database backup, including committed WAL
 data, and is authenticated inside the encrypted archive.
-New whole-server backups reject an explicitly configured non-SQLite Roundcube
-backend before taking database dumps or pausing mail services. Older Noble
-installations may have a dbconfig-managed MySQL webmail database; this path does
-not back it up or convert it. Preserve that database through its own verified
-backup process. Existing format-1 same-platform recovery remains readable, with
-its original coverage limitations; it must not be assumed to contain webmail
-contacts or preferences.
+Existing Noble installations using Debian's default local MySQL Roundcube
+backend are preserved by archive `format_version: 3`. This path exports the
+`roundcube` database, its active static connection configuration and the private
+`/etc/dbconfig-common/roundcube.conf` package state inside the encrypted archive.
+Same-platform restore recreates only `roundcube`@`localhost` with privileges
+scoped to that database, preserving the source backend even when a fresh target
+initially selected SQLite. The ordinary restore confirmation authorizes this
+source-state restoration; no backend conversion is performed during backup.
+Passwords never appear in command arguments, progress output or the manifest.
+Root runs only fixed database/account setup with password input on stdin; the SQL
+dump imports as the recreated database-scoped account. Its short-lived client
+options file is mode 0600 inside a private 0700 directory and is deleted on every
+exit. The import disables local file loading and uses batch `--binary-mode`,
+which disables client commands such as shell/source commands for noninteractive
+input ([MariaDB client documentation](https://mariadb.com/docs/server/clients-and-utilities/mariadb-client/mariadb-command-line-client)).
+The dump's own CREATE DATABASE preserves the source character set/collation.
+New SQL archives require complete observed platform/tool provenance; known
+unrecorded Noble installations are identified from the actual OS and PHP8.3.
+Format-3 archives require the matching new restore binary; older readers reject
+them before modifying state. Current readers retain format-1 and format-2
+recovery.
+
+Only the reviewed stock Debian wrapper or a static default local connection is
+supported. Remote/custom database names, accounts, wrapper/DSN overrides and SQL
+forward migration reject explicitly before mutation. Full archive authentication
+requires one valid bounded SQL payload and matching active/package configuration.
+Target checks use the actual root MariaDB socket and the trusted internal PHP
+CLI/FPM descriptor with PDO MySQL. Recovery preserves whether internal FPM was
+running before it began. Legacy format-1 archives retain their original coverage
+limitations and must not be assumed to contain webmail contacts or preferences.
 
 
 Use an installed target to check an archive without stopping services:
@@ -753,7 +776,8 @@ sudo panelctl restore-server --mode forward-migration --check-only \
 ```
 
 Forward mode requires complete observed platform/database provenance, a
-complete source PHP intent inventory, and format-2 metadata naming a supported
+complete source PHP intent inventory (including active hosting plan offers and
+retained subscription entitlement offers), and format-2 metadata naming a supported
 Roundcube SQLite snapshot. The complete encrypted archive must contain that
 snapshot exactly once, with a valid SQLite header and a successful read-only
 integrity check, before any service is stopped. A provenance review cannot add
@@ -811,7 +835,12 @@ implementation behavior, not sufficient evidence to cut over production.
 
 The repository supplies a concrete driver and preparer:
 `deploy/multipass/ubuntu-forward-migration-fixture.py`. It consumes the existing
-Phase 28 pinned OCI and Phase 30 managed PHP/worker fixtures. Run that real
+Phase 30 managed PHP/worker fixture and a reviewed immutable official nginx
+image from Phase 28 evidence (or an existing active root-provider catalog). Phase
+28 removes its test instance, so preparation creates its own dedicated catalog
+recipe and application through the normal product routes. The image must match
+`docker.io/library/nginx@sha256:<64 lowercase hex digits>`; no mutable-tag lookup
+or alternate registry is accepted by the preparer. Run that real
 phase chain on an **owned disposable 24.04 source**, with the same run token and
 architecture, before preparing the migration fixture. The source must run this
 backup implementation. Preparation creates additional database/account/mail/
@@ -836,7 +865,9 @@ p = sys.argv[1]
 c = json.load(open(p))
 c.update(source_vm="nakpanel-24-04-arm64-YOUR-RUN-TOKEN",
          run_token="YOUR-RUN-TOKEN", architecture="arm64")
-# Match the actual source administrator and source repository path if different.
+# Match the actual source administrator if different. The private persistent
+# source path is derived from this exact run token; arbitrary paths are rejected.
+c["oci_image_ref"] = "docker.io/library/nginx@sha256:REPLACE_WITH_REVIEWED_PHASE28_DIGEST"
 # Default preparation refuses existing 8.3/8.4 tenant intent. Only for this
 # disposable source fixture, explicitly opt in to preparing all-PHP-8.5 intent:
 c["normalize_php85"] = True
@@ -849,12 +880,32 @@ PYFIXTURE
 
 `normalize_php85` is an explicit source-fixture setup choice; its previous PHP
 intent is retained in the private fixture JSON. Restore never normalizes tenant
-versions. This bundled fixture exercises all-8.5 intent, including when the
-experimental Sury target is selected with `target_profile=ubuntu-26.04-sury` in
-the specification. It does not qualify Sury 8.3/8.4 migration parity. Leave the
-flag false when the disposable source was already prepared with all-8.5 intent.
-Preparation rejects missing phase fixtures, failed convergence or protocol
-checks. Use a new disposable source to retry incomplete preparation.
+versions. With the explicit fixture flag, active hosting plans are revised
+through their normal product editor/API before the backup: the preparer retains
+all successful form controls, changes only PHP defaults/allowlists, requires a
+new immutable revision and audit event, verifies earlier history is unchanged,
+and waits for ordinary synchronized subscription updates. Locked/custom
+subscription snapshots are preserved. A native target rehearsal rejects any
+remaining incompatible offers in those snapshots; use a compatible source or
+the separately selected Surý target. The backup inventory independently retains
+those effective PHP requirements even if every current site uses 8.5. The native variant uses all-8.5 intent. A separate experimental Surý variant
+uses `target_profile=ubuntu-26.04-sury` and `normalize_php85=false` to retain the
+source's exact 8.3/8.4/8.5 site/application choices, active plans and custom/locked
+snapshots. It records the managed worker's actual selected PHP and verifies that
+same interpreter after restoration and reboot. Actual supplied runtime and
+migration evidence is still required for every preserved version; the variant's
+presence does not qualify parity. Choose a separate source preparation per
+variant; never reuse a source already seeded/frozen by the other rehearsal.
+Preparation rejects missing phase fixtures, absent/unreviewed immutable image
+selection, failed convergence or protocol checks. Its dedicated container must
+pull the exact digest and become healthy; source, target and post-reboot checks
+require the real mounted volume and decrypted secret, exact tenant process UID,
+kernel memory/PID/CPU limits, loopback endpoint and disabled-egress network
+configuration. Selection of a digest alone is not runtime qualification.
+The signed source remains root-private at
+`/var/lib/nakpanel-qualification/<run-token>/source`; the shared qualification
+helper validates and exposes only the exact Roundcube canary script to
+`www-data` in a recreated `/run` leaf. Use a new disposable source to retry incomplete preparation.
 
 Use a signed release bundle for the exact candidate revision and target
 architecture. It must include its matching installer, migrations, build assets,

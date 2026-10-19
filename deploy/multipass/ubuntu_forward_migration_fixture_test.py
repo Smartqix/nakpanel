@@ -95,6 +95,140 @@ class ForwardFixtureTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError,'configured non-SQLite') as failure:probe.roundcube_preflight({},Path(directory))
                 self.assertNotIn('secret-canary',str(failure.exception));execute.assert_not_called()
 
+    def test_fixture_image_requires_reviewed_immutable_official_namespace(self):
+        pinned='docker.io/library/nginx@sha256:'+'a'*64
+        with patch.object(probe,'pg') as query:
+            self.assertEqual(probe.fixture_image({'oci_image_ref':pinned}),pinned);query.assert_not_called()
+        for invalid in ('docker.io/library/nginx:alpine','evil.test/library/nginx@sha256:'+'a'*64,''):
+            with self.subTest(invalid=invalid),patch.object(probe,'pg',return_value=invalid):
+                with self.assertRaisesRegex(RuntimeError,'reviewed immutable'):probe.fixture_image({'oci_image_ref':invalid})
+        with patch.object(probe,'pg',return_value=pinned):
+            self.assertEqual(probe.fixture_image({}),pinned)
+
+    def test_seed_without_catalog_digest_refuses_before_any_mutation(self):
+        with patch.object(probe,'roundcube_preflight'),patch.object(probe,'pg',return_value=''),patch.object(probe,'discover') as discover,patch.object(probe,'command') as execute,patch.object(probe,'login') as login:
+            with self.assertRaisesRegex(RuntimeError,'reviewed immutable'):probe.seed({})
+            discover.assert_not_called();execute.assert_not_called();login.assert_not_called()
+
+    def test_dedicated_container_uses_provider_catalog_and_real_volume_secret_contract(self):
+        c={'run_token':'fixture-test','username':'npfixture','subscription_id':3,'site_id':7,'application_secret':'secret-canary'}
+        image='docker.io/library/nginx@sha256:'+'a'*64
+        calls=[]
+        def post(route,values):calls.append((route,values))
+        with patch.object(probe,'command'),patch.object(probe,'rootless') as rootless,patch.object(probe,'pg',return_value='4'),patch.object(probe,'wait'):
+            probe.create_fixture_container(c,post,image)
+        self.assertEqual(c['image_ref'],image);self.assertEqual(c['oci_id'],4)
+        self.assertEqual([row[0] for row in calls],['application-presets','subscriptions/3/applications'])
+        recipe,app=calls[0][1],calls[1][1]
+        self.assertEqual(recipe['image_ref'],image);self.assertEqual(recipe['slug'],app['catalog_slug'])
+        self.assertEqual(json.loads(recipe['volumes']),[{'name':'forward','target':'/forward-data','size_mb':1,'read_only':False}])
+        self.assertEqual(recipe['container_port'],80);self.assertEqual(recipe['health_path'],'/')
+        self.assertEqual(json.loads(app['secrets']),{'FORWARD_SECRET':'secret-canary'})
+        self.assertNotIn('image_ref',app);rootless.assert_called_once_with(c,'pull',image)
+
+    def test_forward_container_limits_check_real_process_cgroup_files(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proc=root/'proc';group=root/'cgroup';(proc/'42').mkdir(parents=True);(group/'fixture').mkdir(parents=True)
+            (proc/'42/status').write_text('Uid:\t10000\t10000\t10000\t10000\n')
+            (proc/'42/cgroup').write_text('0::/fixture\n')
+            for name,value in {'memory.max':'268435456','pids.max':'128','cpu.max':'50000 100000'}.items():(group/'fixture'/name).write_text(value)
+            with patch.object(probe.pwd,'getpwnam',return_value=SimpleNamespace(pw_uid=10000)):
+                probe.container_limits({'username':'npfixture'},{'State':{'Pid':42}},proc,group)
+                (group/'fixture/memory.max').write_text('max')
+                with self.assertRaisesRegex(RuntimeError,'memory limit'):probe.container_limits({'username':'npfixture'},{'State':{'Pid':42}},proc,group)
+
+    def test_plan_form_roundtrip_preserves_controls_except_explicit_php_changes(self):
+        html="""<form action="/plans" method="post"><input name="plan_id" value="7"><input name="name" value="Custom &amp; preserved"><input type="hidden" name="allow_mail" value="false"><input type="checkbox" name="allow_mail" value="true" checked><input type="checkbox" name="allow_ssh" value="true"><input name="ignored" value="disabled" disabled><select name="lifecycle_status"><option value="draft">Draft</option><option value="active" selected>Active</option></select><select name="default_php_version"><option value="8.4" selected>8.4</option><option value="8.5">8.5</option></select><textarea name="description">Exact custom description &amp; data</textarea><input name="php_versions" value="8.3" type="checkbox" checked><input name="php_versions" value="8.4" type="checkbox" checked><input name="php_allowlist" value="8.3,8.4"><input name="change_reason" value="old"></form>"""
+        values=probe.normalized_plan_form(html,7)
+        self.assertIn(('name','Custom & preserved'),values);self.assertIn(('description','Exact custom description & data'),values)
+        self.assertEqual([v for k,v in values if k=='allow_mail'],['false','true'])
+        self.assertNotIn('ignored',dict(values));self.assertNotIn('allow_ssh',dict(values))
+        self.assertEqual(dict(values)['lifecycle_status'],'active');self.assertEqual([v for k,v in values if k=='php_versions'],['8.5'])
+        self.assertEqual(dict(values)['php_allowlist'],'8.5');self.assertEqual(dict(values)['default_php_version'],'8.5')
+        with self.assertRaisesRegex(RuntimeError,'exact plan editor'):probe.normalized_plan_form(html,8)
+
+    def test_plan_normalization_allows_only_php_revision_fields(self):
+        before={'revision':3,'name':'Custom','resources':{'disk_mb':123,'php_allowlist':'8.3,8.4'},'presets':{'hosting':{'default_php_version':'8.4','allowed_php_versions':['8.3','8.4']}},'hosting_policy':{'php':{'default_version':'8.4','allowed_versions':['8.3','8.4']}}}
+        after=json.loads(json.dumps(before));after['revision']=4;after['resources']['php_allowlist']='8.5';after['presets']['hosting'].update(default_php_version='8.5',allowed_php_versions=['8.5']);after['hosting_policy']['php'].update(default_version='8.5',allowed_versions=['8.5'])
+        probe.assert_plan_only_php_changed(before,after)
+        after['resources']['disk_mb']=124
+        with self.assertRaisesRegex(RuntimeError,'non-PHP'):probe.assert_plan_only_php_changed(before,after)
+
+    def test_active_plan_normalization_requires_optin_before_product_mutation(self):
+        plans=[{'id':7,'revision':3,'default_php_version':'8.4','php_allowlist':'8.3,8.4','hosting_policy':{'php':{'default_version':'8.4','allowed_versions':['8.3','8.4']}}}]
+        with patch.object(probe,'pg',return_value=json.dumps(plans)):
+            class API:
+                def __call__(self,*args):raise AssertionError('product mutation without opt-in')
+                def get(self,*args):raise AssertionError('product form read without opt-in')
+            with self.assertRaisesRegex(RuntimeError,'normalize_php85'):probe.normalize_active_plans({'normalize_php85':False},API())
+
+    def test_plan_normalization_uses_product_revision_and_retains_immutable_history(self):
+        before={'revision':3,'name':'Custom','resources':{'disk_mb':123,'php_allowlist':'8.4'},'presets':{'hosting':{'default_php_version':'8.4','allowed_php_versions':['8.4']}},'hosting_policy':{'php':{'default_version':'8.4','allowed_versions':['8.4']}}}
+        after=json.loads(json.dumps(before));after['revision']=4;after['resources']['php_allowlist']='8.5';after['presets']['hosting'].update(default_php_version='8.5',allowed_php_versions=['8.5']);after['hosting_policy']['php'].update(default_version='8.5',allowed_versions=['8.5'])
+        for failure in ('none','history','audit','contract'):
+            with self.subTest(failure=failure):
+                changed=[]
+                class API:
+                    def get(self,path):
+                        self.path=path
+                        return '<form action="/plans" method="post"><input name="plan_id" value="7"><input name="name" value="Custom"><input name="lifecycle_status" value="active"><input name="php_versions" value="8.4"></form>'
+                    def __call__(self,path,values):
+                        if path!='plans' or dict(values)['default_php_version']!='8.5':raise AssertionError('wrong product revision request')
+                        changed.append(values)
+                api=API()
+                plan={'id':7,'revision':3,'php_allowlist':'8.4','default_php_version':'8.4','hosting_policy':before['hosting_policy']}
+                def query(sql):
+                    if 'row_to_json(q)' in sql:return json.dumps([plan])
+                    if 'jsonb_agg(to_jsonb(p)' in sql:return 'changed-history' if changed and failure=='history' else 'stable-history'
+                    if 'definition::text' in sql:
+                        value=before if 'revision=3' in sql else json.loads(json.dumps(after))
+                        if changed and failure=='contract' and 'revision=4' in sql:value['resources']['disk_mb']=124
+                        return json.dumps(value)
+                    if 'audit_events' in sql:return '1' if changed and failure!='audit' else '0'
+                    if 'json_build_object' in sql:return json.dumps(dict(plan,revision=4,php_allowlist='8.5',default_php_version='8.5',hosting_policy=after['hosting_policy']))
+                    raise AssertionError('unexpected SQL boundary')
+                with patch.object(probe,'pg',side_effect=query),patch.object(probe,'wait') as wait:
+                    if failure=='none':
+                        c={'normalize_php85':True};probe.normalize_active_plans(c,api);self.assertEqual(c['prior_plan_php_intent'],[plan]);wait.assert_called_once()
+                    else:
+                        with self.assertRaises(RuntimeError):probe.normalize_active_plans({'normalize_php85':True},api)
+                        wait.assert_not_called()
+                self.assertEqual(api.path,'service-plans/7');self.assertEqual(len(changed),1)
+
+    def test_roundcube_canary_uses_root_staged_common_helper_not_public_source(self):
+        c={'source_vm':'nakpanel-source-fixture-test','run_token':'fixture-test','architecture':'arm64','remote_src':'/var/lib/nakpanel-qualification/fixture-test/source','mailbox':'canary@example.test'}
+        with patch.object(fixture,'run') as run:
+            fixture.seed_roundcube(c)
+        args=run.call_args.args[0];env=run.call_args.kwargs['env']
+        self.assertIn('run_qualification_roundcube_canary',args[2]);self.assertEqual(args[-2:],[c['source_vm'],c['mailbox']])
+        self.assertEqual(env['NAKPANEL_REMOTE_SRC'],c['remote_src']);self.assertEqual(env['NAKPANEL_MULTIPASS_IMAGE'],'24.04')
+        self.assertNotIn('www-data',args)
+
+    def test_native_fixture_rejects_locked_custom_php_offers_without_rewriting_them(self):
+        rows=[{'subscription_id':9,'sync_mode':'locked','php_allowlist':'8.3,8.4','default_php_version':'8.4','hosting_policy':{'php':{'default_version':'8.4','allowed_versions':['8.3','8.4']}}}]
+        with patch.object(probe,'pg',return_value=json.dumps(rows)) as query,patch.object(probe,'command') as execute:
+            with self.assertRaisesRegex(RuntimeError,'not rewritten'):probe.assert_fixture_entitlements({'target_profile':'ubuntu-26.04-native'},locked_only=True)
+            self.assertTrue(all(call.args[0].startswith('SELECT ') for call in query.call_args_list));execute.assert_not_called()
+        with patch.object(probe,'pg') as query:
+            probe.assert_fixture_entitlements({'target_profile':'ubuntu-26.04-sury'},locked_only=True);query.assert_not_called()
+
+    def test_sury_fixture_preserves_legacy_plan_php_without_normalization(self):
+        plans=[{'id':7,'revision':3,'default_php_version':'8.4','php_allowlist':'8.3,8.4','hosting_policy':{'php':{'default_version':'8.4','allowed_versions':['8.3','8.4']}}}]
+        with patch.object(probe,'pg',return_value=json.dumps(plans)):
+            class API:
+                def __call__(self,*args):raise AssertionError('Surý preservation must not revise plans')
+                def get(self,*args):raise AssertionError('Surý preservation must not edit plans')
+            c={'target_profile':'ubuntu-26.04-sury','normalize_php85':False}
+            self.assertEqual(probe.normalize_active_plans(c,API()),[])
+            self.assertEqual(c['prior_plan_php_intent'],plans)
+
+    def test_worker_discovery_records_actual_php_for_sury_preservation(self):
+        results=[json.dumps({'domain':'phase30-managed.test','username':'npfixture','subscription_id':3}),'8.4']
+        with patch.object(probe,'pg',side_effect=results):
+            c=probe.discover({'site_id':7,'worker_id':4})
+        self.assertEqual(c['worker_php_version'],'8.4')
+
     def test_every_durable_contract_must_survive(self):
         original = {'intent': 'a', 'identities': ['1001:1001'], 'files': {'key': 'digest'},
                     'mariadb': {'rows': 'canary', 'collation': 'utf8mb4_unicode_520_ci', 'routine': 'body', 'event': 'DISABLED', 'trigger': 'body'},
@@ -120,7 +254,7 @@ class ForwardFixtureTests(unittest.TestCase):
         c = fixture.example_spec()
         c.update(run_token='fixture-test', source_vm='nakpanel-source-fixture-test',
                  baseline={'intent':{'sites':'hash'},'identities':[{'name':'npfixture','uid':1001,'gid':1001,'subuid':'','subgid':''}],'files':{'tenant':'digest'},'mariadb':{'rows':'canary'},'roundcube':'digest','grants': ['SELECT']}, archive_sha256=hashlib.sha256(b'archive').hexdigest())
-        c.update(oci_digest='sha256:'+'c'*64,oci_image_id='d'*64,site_id=1, worker_id=2, subscription_id=3, oci_id=4, username='npfixture', domain='phase30-managed.test', marker='forward-canary-fixture-test', database='np_forward_fixture', database_user='np_forward_fixture', image_ref='docker.io/library/nginx@sha256:'+'a'*64, guest_ca='/etc/nakpanel/forward-fixture-ca.crt', volume_file='/var/lib/nakpanel/containers/sub-3/apps/4/volumes/forward/forward-canary',tenant_file='/home/npfixture/forward-canary.txt',worker_secret_sha256='b'*64,valkey_image='',ftp_username='forwardfixture',mailbox='forwardfixture@phase30-managed.test',images=[{'subscription_id':3,'username':'npfixture','image_ref':'docker.io/library/nginx@sha256:'+'a'*64}])
+        c.update(worker_php_version='8.4',oci_digest='sha256:'+'c'*64,oci_image_id='d'*64,site_id=1, worker_id=2, subscription_id=3, oci_id=4, username='npfixture', domain='phase30-managed.test', marker='forward-canary-fixture-test', database='np_forward_fixture', database_user='np_forward_fixture', image_ref='docker.io/library/nginx@sha256:'+'a'*64, guest_ca='/etc/nakpanel/forward-fixture-ca.crt', volume_file='/var/lib/nakpanel/containers/sub-3/apps/4/volumes/forward/forward-canary',tenant_file='/home/npfixture/forward-canary.txt',worker_secret_sha256='b'*64,valkey_image='',ftp_username='forwardfixture',mailbox='forwardfixture@phase30-managed.test',images=[{'subscription_id':3,'username':'npfixture','image_ref':'docker.io/library/nginx@sha256:'+'a'*64}])
         for key, name, data in [('archive_file','source.nkbk',b'archive'), ('backup_key_file','archive.key',b'key'), ('ssh_identity_file','sftp-key',b'private'), ('ca_file','ca.crt',b'public')]:
             p = Path(directory) / name
             p.write_bytes(data)

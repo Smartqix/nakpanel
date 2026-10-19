@@ -14,24 +14,50 @@ not supply them to disposable qualification cleanup.
 
 ## Starting the soak
 
+Use the same signed, architecture-compatible release bundle and out-of-band
+public key used for native qualification. Supply the exact application version.
+The initializer rejects missing or invalid release inputs before any VM work;
+it never falls back to a working-tree build or historical installer.
+
 ```bash
-NAKPANEL_MULTIPASS_IMAGE=24.04 ./deploy/multipass/soak-verify.sh --init
-# Start a separate run for the experimental native Resolute profile:
-NAKPANEL_MULTIPASS_IMAGE=26.04 ./deploy/multipass/soak-verify.sh --init
+NAKPANEL_MULTIPASS_IMAGE=24.04 \
+NAKPANEL_RELEASE_BUNDLE=/absolute/path/to/nakpanel-VERSION-linux-arm64 \
+NAKPANEL_RELEASE_PUBLIC_KEY=/absolute/path/to/release-public.pem \
+NAKPANEL_RELEASE_VERSION=VERSION \
+./deploy/multipass/soak-verify.sh --init
 ```
 
-This launches the VM (2 CPU / 3 GB / 32 GB), runs the one-command installer
-(`deploy/install/install.sh --yes`), generates the backup archive key (stored
-once in the run-specific directory printed by the initializer; move it
-somewhere safe), and configures a scheduled local server backup. Initialization
-first proves that the actual scheduler creates and verifies an archive, then
-sets its daily schedule. A manually queued archive cannot satisfy this check.
-Source the printed `run.env` before later sweeps so the run's release,
-architecture, VM and ownership token remain explicit.
+Start a separate run with the matching bundle architecture and
+`NAKPANEL_MULTIPASS_IMAGE=26.04` for the experimental native Resolute profile.
+For the explicit Sury profile, also set
+`NAKPANEL_QUALIFICATION_PHP_PROVIDER=sury`; preserve that provider throughout
+its own run. Use `NAKPANEL_RELEASE_ALLOW_DEVELOPMENT=1` only for intentionally
+signed development candidates. Their soak evidence cannot promote them to a
+production release.
 
-Optionally populate a tenant through the panel or the provisioning API so the
-soak covers hosted workloads, then note the date: the window ends 30-60 days
-later.
+Initialization launches a uniquely owned VM (2 CPU / 3 GB / 32 GB by default)
+and reuses `current-install-verify.sh`. That canonical verifier stages and
+installs the exact signed bundle, supplies the fresh installer's administrator
+password through a temporary root-only file, verifies that other public seed
+logins are disabled, and creates a real tenant/site/database/DNS/TLS workload.
+Its administrator is the isolated qualification fixture documented in that
+verifier; keep the guest confined to the test environment. The existing
+`NAKPANEL_QUALIFICATION_VM_CPUS`, `_MEMORY`, and `_DISK` overrides can increase
+the resource budget.
+
+The initializer records `run.env`, the initial signed release manifest and
+public key in the run's private log directory. It generates the archive key
+and saves only its encoded value in `backup-key.txt` with mode 0600, ready for
+`--backup-key-file` during recovery. Move a copy to safe offline custody.
+It first proves that the actual scheduler creates and verifies an archive,
+then changes the schedule to daily at 02:00 in the guest's timezone. A manually
+queued or unverified archive cannot satisfy this check.
+
+Source the printed `run.env` before later operations so the run's release,
+architecture, provider, source/DR names and ownership token remain explicit.
+Additional representative tenants can be populated through the panel or API.
+Record the successful initialization date: the evidence window ends 30–60 days
+later. Creating the environment is not evidence of that elapsed window.
 
 ## The recurring sweep
 
@@ -49,7 +75,7 @@ the run's `soak.log`. It checks:
 - no retryable or discarded River jobs;
 - root filesystem below 85%;
 - the panel certificate is not within 7 days of expiry;
-- the newest verified server backup is under 26 hours old;
+- the newest verified, scheduler-created server backup is under 26 hours old;
 - a freshly queued system reconciliation converges;
 - fail2ban is active.
 
@@ -58,12 +84,50 @@ doubles as the incident timeline.
 
 ## Weekly operations during the window
 
-- **Upgrade in place** once a week from the current tree:
-  `multipass exec nakpanel-soak -- sudo bash -c 'cd /tmp/nakpanel-src && git-less sync as in sync_repo, then deploy/install/install.sh --yes'`
-  (or re-run `sync_repo` from the host first). Every upgrade exercises the
-  pre-upgrade backup and the health gate.
-- **Reboot once mid-soak**: `multipass restart nakpanel-soak`, then run the
-  sweep and confirm it passes.
+Source the actual run identity, then verify it before each guest operation:
+
+```bash
+source /absolute/path/to/run.env
+source ./deploy/multipass/common.sh
+assert_vm_identity "$NAKPANEL_SOAK_VM" "$NAKPANEL_MULTIPASS_IMAGE" \
+  "$NAKPANEL_MULTIPASS_ARCH" "$NAKPANEL_RUN_TOKEN"
+```
+
+Upgrade weekly to the next reviewed, signed candidate using the unified
+installer's signed-bundle procedure in [README.md](../README.md). Verify the
+new bundle on the host with `deploy/release/verify.py`, its trusted public key,
+exact version and the run's architecture. Transfer the bundle and public key
+to persistent private root-owned guest paths, preserving the authenticated
+file inventory and trusted public key. Confirm that the staged files match
+the host-verified signed inventory before executing any staged installer.
+Invoke that authenticated next bundle's own installer:
+
+```bash
+multipass exec "$NAKPANEL_SOAK_VM" -- sudo \
+  /root/next-release/deploy/install/install.sh --upgrade --yes \
+  --bundle /root/next-release --release-public-key /root/next-release-public.pem
+./deploy/multipass/soak-verify.sh
+```
+
+The installer seals and authenticates the new bundle before executing that
+bundle's own installer and assets. For a development candidate, both the
+explicit environment opt-in and `--allow-development-bundle` are required, as
+in the signed-bundle instructions. Retain each new manifest and upgrade result
+in the run's log directory. Do not re-run `--init` or the fresh-install verifier
+against the populated endurance guest. Preserve the guest's PHP provider.
+Every real upgrade exercises its pre-upgrade backup and health gate.
+
+Reboot once mid-soak, after the same ownership assertion:
+
+```bash
+multipass restart "$NAKPANEL_SOAK_VM"
+./deploy/multipass/soak-verify.sh
+```
+
+These are operator actions. The harness does not create host cron entries or
+schedule Codex automation. Do not target the protected historical
+`nakpanel-soak` name or pass the endurance identity to disposable phase-chain
+cleanup.
 
 ## Exit criteria
 
@@ -75,9 +139,13 @@ The soak passes when, over the full 30-60 day window:
 4. at least four in-place upgrades completed with no rollback;
 5. the mid-soak reboot converged with a passing sweep;
 6. a final disaster-recovery drill succeeds: take the newest archive plus the
-   stored key, and run the Phase 29 DR procedure (fresh VM,
-   `deploy/install/install.sh --fresh`, `panelctl restore-server`) - the same
-   flow `phase29-verify.sh` automates.
+   stored key, and perform the documented same-profile recovery procedure in
+   [RECOVERY.md](RECOVERY.md) on a fresh, separately owned VM using the same
+   signed application bundle and explicit secure administrator bootstrap.
+   Restore the archive with `panelctl restore-server --backup-key-file`, prove
+   the populated workload and mail/SQLite canaries, then reboot and prove them
+   again. `phase29-verify.sh` provides the automated reference for this flow;
+   do not run its destructive drills against the endurance guest itself.
 
 Only after the final drill is the soak VM allowed to be deleted through a
 deliberate ownership-checked cleanup. Starting a soak or passing one sweep does

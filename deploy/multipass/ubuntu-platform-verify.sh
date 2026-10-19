@@ -14,6 +14,26 @@ export NAKPANEL_CELL_REPORT_DIR="${NAKPANEL_CELL_REPORT_DIR:-${ROOT_DIR}/docs/ve
 # Never append evidence to an old run or overwrite a prior result.
 mkdir "${NAKPANEL_CELL_REPORT_DIR}" 2>/dev/null || { mkdir -p "$(dirname "${NAKPANEL_CELL_REPORT_DIR}")"; mkdir "${NAKPANEL_CELL_REPORT_DIR}"; }
 chmod 700 "${NAKPANEL_CELL_REPORT_DIR}"
+python3 - "${NAKPANEL_CELL_REPORT_DIR}/run.env" <<'PY'
+import os,shlex,sys
+# Explicit nonsecret configuration only; never dump the runner environment.
+names=['NAKPANEL_RUN_TOKEN','NAKPANEL_MULTIPASS_VM','NAKPANEL_MULTIPASS_SOURCE_VM',
+ 'NAKPANEL_MULTIPASS_DR_VM','NAKPANEL_MULTIPASS_IMAGE','NAKPANEL_MULTIPASS_ARCH',
+ 'NAKPANEL_REMOTE_SRC','NAKPANEL_GUEST_QUALIFICATION_ROOT','NAKPANEL_GUEST_RELEASE_DIR',
+ 'NAKPANEL_GUEST_RELEASE_PUBLIC_KEY','NAKPANEL_RELEASE_BUNDLE','NAKPANEL_RELEASE_PUBLIC_KEY',
+ 'NAKPANEL_RELEASE_VERSION','NAKPANEL_RELEASE_ALLOW_DEVELOPMENT','NAKPANEL_PRIOR_RELEASE_BUNDLE',
+ 'NAKPANEL_PRIOR_RELEASE_PUBLIC_KEY','NAKPANEL_PRIOR_RELEASE_VERSION','NAKPANEL_PRIOR_RELEASE_ALLOW_DEVELOPMENT',
+ 'NAKPANEL_QUALIFICATION_PHP_PROVIDER','NAKPANEL_CELL_REPORT_DIR','NAKPANEL_OWNERSHIP_DIR',
+ 'NAKPANEL_MULTIPASS_IMAGE_SOURCE','NAKPANEL_MULTIPASS_IMAGE_SHA256',
+ 'NAKPANEL_PRIOR_MULTIPASS_IMAGE_SOURCE','NAKPANEL_PRIOR_MULTIPASS_IMAGE_SHA256',
+ 'NAKPANEL_QUALIFICATION_RECLAIM_PRIOR','NAKPANEL_QUALIFICATION_VM_CPUS',
+ 'NAKPANEL_QUALIFICATION_VM_MEMORY','NAKPANEL_QUALIFICATION_VM_DISK',
+ 'NAKPANEL_QUALIFICATION_DR_CPUS','NAKPANEL_QUALIFICATION_DR_MEMORY','NAKPANEL_QUALIFICATION_DR_DISK',
+ 'NAKPANEL_VERIFY_DATABASE_MANAGER','NAKPANEL_REMOVAL_BROWSER_SMOKE','PLAYWRIGHT_MODULE','NODE_PATH']
+with os.fdopen(os.open(sys.argv[1],os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'w') as target:
+ for name in names:
+  if name in os.environ:target.write('export '+name+'='+shlex.quote(os.environ[name])+'\n')
+PY
 results="${NAKPANEL_CELL_REPORT_DIR}/gates.tsv"
 : >"${results}"
 complete=0
@@ -103,15 +123,7 @@ for gate in phase28 valkey-platform security phase29 phase30 phase31 phase32 int
 done
 signed_artifacts() {
   assert_current_vm_identity
-  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- sudo bash -c '
-set -euo pipefail
-for artifact in panel agent panelctl; do
-  installed="/usr/local/bin/$artifact"
-  case "$artifact" in panel) installed=/usr/local/bin/nakpanel-panel;; agent) installed=/usr/local/bin/nakpanel-agent;; esac
-  test "$(sha256sum /tmp/nakpanel-release/bin/"$artifact" | cut -d " " -f1)" = "$(sha256sum "$installed" | cut -d " " -f1)"
-  sha256sum "$installed"
-done
-'
+  assert_qualification_installed_release
 }
 run_gate release-artifacts signed_artifacts
 complete=1

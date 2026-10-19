@@ -24,9 +24,10 @@ import (
 // through the standard CLI tools so the engine works before the panel is up.
 
 type RestoreOptions struct {
-	SourceProvenanceReview func() (io.ReadCloser, error)
-	Mode                   RestoreMode
-	TargetPlatform         *PlatformProvenance
+	RoundcubeMySQLRuntimeCheck RoundcubeMySQLRuntimeCheck
+	SourceProvenanceReview     func() (io.ReadCloser, error)
+	Mode                       RestoreMode
+	TargetPlatform             *PlatformProvenance
 	// ReadyPHPVersions must use the trusted profile, full extension checks and isolated FPM readiness.
 	ReadyPHPVersions ReadyPHPCollector
 	// RegenerateTargetConfiguration must synchronously regenerate and validate native configuration.
@@ -154,6 +155,16 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 	if err := CheckRoundcubeRestoreTarget(manifest, *target, opts.Mode); err != nil {
 		return summary, err
 	}
+	if err := CheckRoundcubeMySQLTarget(ctx, manifest, *target, opts.Mode, opts.RoundcubeMySQLRuntimeCheck); err != nil {
+		return summary, err
+	}
+	var roundcubeFPMWasActive bool
+	if manifest.RoundcubeMySQL != nil || manifest.RoundcubeSQLitePath != "" {
+		roundcubeFPMWasActive, err = checkRoundcubeFPMState(ctx, target.InternalPHPVersion)
+		if err != nil {
+			return summary, err
+		}
+	}
 	if opts.Mode == RestoreForwardMigration && opts.RegenerateTargetConfiguration == nil {
 		return summary, errors.New("forward-migration mutation is not qualified: synchronous target-native regeneration and validation capability is unavailable")
 	}
@@ -182,6 +193,11 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 	}
 
 	// --- Stop the world (except the database engines) --------------------
+	if roundcubeFPMWasActive {
+		if err := runQuiet(ctx, "systemctl", "stop", "php"+target.InternalPHPVersion+"-fpm.service"); err != nil {
+			return summary, err
+		}
+	}
 	opts.log("step: stop services")
 	for _, unit := range restoreStopServices {
 		_ = runQuiet(ctx, "systemctl", "stop", unit)
@@ -208,7 +224,7 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 		return summary, err
 	}
 	var identity SystemIdentity
-	var roundcubeSnapshot string
+	var roundcubeSnapshot, roundcubeMySQLDump string
 	var pgDumpPath string
 	var mariaDumps []string
 	identityApplied := false
@@ -236,6 +252,14 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 			summary.UsersCreated = created
 			summary.Identity = &identity
 			identityApplied = true
+		case header.Name == RoundcubeMySQLDumpName:
+			if manifest.RoundcubeMySQL == nil || roundcubeMySQLDump != "" {
+				return summary, errors.New("unexpected duplicate or unlisted Roundcube MySQL SQL payload")
+			}
+			roundcubeMySQLDump = filepath.Join(workDir, "roundcube-mysql.sql.gz")
+			if err := writeFileFrom(reader, roundcubeMySQLDump, 0600); err != nil {
+				return summary, err
+			}
 		case header.Name == RoundcubeSQLiteDumpName:
 			if manifest.RoundcubeSQLitePath == "" || roundcubeSnapshot != "" {
 				return summary, errors.New("unexpected duplicate or unlisted Roundcube SQLite snapshot")
@@ -308,6 +332,10 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 		return summary, errors.New("archive is missing its declared Roundcube SQLite snapshot")
 	}
 
+	if manifest.RoundcubeMySQL != nil && roundcubeMySQLDump == "" {
+		return summary, errors.New("archive is missing its declared Roundcube MySQL SQL payload")
+	}
+
 	// --- Postgres ---------------------------------------------------------
 	opts.log("step: restore panel database")
 	if err := restorePostgres(ctx, opts.PostgresDSN, pgDumpPath); err != nil {
@@ -335,14 +363,17 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 	}
 	if roundcubeSnapshot != "" {
 		destination, _ := RoundcubeSQLiteDestination(manifest.RoundcubeSQLitePath, opts.Mode)
-		unit := "php" + target.InternalPHPVersion + "-fpm.service"
-		if err := runQuiet(ctx, "systemctl", "stop", unit); err != nil {
-			return summary, err
-		}
 		if err := restoreRoundcubeSQLite(ctx, roundcubeSnapshot, destination); err != nil {
 			return summary, err
 		}
-		if err := runQuiet(ctx, "systemctl", "start", unit); err != nil {
+	}
+	if roundcubeMySQLDump != "" {
+		if err := RestoreRoundcubeMySQL(ctx, *manifest.RoundcubeMySQL, roundcubeMySQLDump, "/etc/roundcube"); err != nil {
+			return summary, err
+		}
+	}
+	if roundcubeFPMWasActive {
+		if err := runQuiet(ctx, "systemctl", "start", "php"+target.InternalPHPVersion+"-fpm.service"); err != nil {
 			return summary, err
 		}
 	}

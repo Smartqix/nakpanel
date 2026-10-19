@@ -54,7 +54,8 @@ grep -iq 'location: .*_task=mail' "${tmpdir}/headers"
 echo 'PASS internal PHP FastCGI + Roundcube login + Stalwart IMAP'
 if [[ "${NAKPANEL_VERIFY_DATABASE_MANAGER:-0}" == 1 ]]; then
   assert_current_vm_identity
-  multipass exec "${VM_NAME}" -- sudo bash -se -- "${NAKPANEL_REMOTE_SRC}" <<'DBMANAGER'
+  tool_assets="${NAKPANEL_GUEST_RELEASE_DIR:-${NAKPANEL_REMOTE_SRC}}"
+  multipass exec "${VM_NAME}" -- sudo bash -se -- "${tool_assets}" <<'DBMANAGER'
 set -euo pipefail
 timeout 45m "$1/deploy/install/database-manager-install.sh" --yes
 systemctl is-active --quiet nakpanel-database-manager

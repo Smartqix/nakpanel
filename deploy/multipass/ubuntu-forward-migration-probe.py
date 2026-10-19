@@ -5,6 +5,7 @@ Input, including fixture credentials, arrives only on stdin. Results contain
 hashes/public observations. This file is run by the fixture driver, not a daemon.
 """
 import hashlib
+from html.parser import HTMLParser
 import pwd
 import grp
 import tempfile
@@ -82,11 +83,12 @@ def login(c):
 
     def post(path, values):
         request = urllib.request.Request('https://127.0.0.1:7443/' + path,
-            data=urllib.parse.urlencode(values).encode(), headers={'X-Nakpanel-CSRF': csrf})
+            data=urllib.parse.urlencode(values,doseq=True).encode(), headers={'X-Nakpanel-CSRF': csrf})
         response = opener.open(request, timeout=60)
         if response.status not in (200, 202, 303):
             raise RuntimeError('fixture API mutation failed')
         response.read()
+    post.get=lambda path:opener.open('https://127.0.0.1:7443/'+path,timeout=60).read().decode()
     return post
 
 
@@ -101,6 +103,9 @@ def discover(c):
     if not str(worker).isdigit():
         raise RuntimeError('a real desired-running managed PHP worker is required')
     c['worker_id'] = int(worker)
+    version=pg('SELECT a.php_version FROM php_workers w JOIN php_applications a ON a.id=w.application_id WHERE w.id='+str(c['worker_id'])+' AND a.site_id='+str(c['site_id']))
+    if version not in ('8.3','8.4','8.5'):raise RuntimeError('managed fixture worker has missing or unsupported PHP identity')
+    c['worker_php_version']=version
     return c
 
 
@@ -244,29 +249,180 @@ def roundcube_preflight(c, config_dir=Path('/etc/roundcube')):
     return {'roundcube_sqlite_path': selected, 'roundcube_storage_preflight': 'sqlite-readonly'}
 
 
+class PlanEditor(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True);self.forms=[];self.current=None;self.select=None;self.option=None;self.textarea=None
+    def handle_starttag(self,tag,attrs):
+        a=dict(attrs)
+        if tag=='form':
+            self.current=[] if a.get('action')=='/plans' and a.get('method','').lower()=='post' else None
+        if self.current is None:return
+        if tag=='input' and a.get('name') and 'disabled' not in a:
+            kind=a.get('type','text').lower()
+            if kind not in ('button','submit','reset','file') and (kind not in ('radio','checkbox') or 'checked' in a):self.current.append((a['name'],a.get('value','on' if kind in ('radio','checkbox') else '')))
+        elif tag=='textarea' and a.get('name') and 'disabled' not in a:self.textarea=[a['name'],'']
+        elif tag=='select' and a.get('name') and 'disabled' not in a:self.select=[a['name'],'multiple' in a,[]]
+        elif tag=='option' and self.select is not None:self.option=[a.get('value'),'', 'selected' in a,'disabled' in a]
+    def handle_data(self,data):
+        if self.textarea is not None:self.textarea[1]+=data
+        if self.option is not None:self.option[1]+=data
+    def handle_endtag(self,tag):
+        if self.current is None:return
+        if tag=='textarea' and self.textarea is not None:self.current.append(tuple(self.textarea));self.textarea=None
+        elif tag=='option' and self.option is not None:
+            if not self.option[3]:self.select[2].append((self.option[0] if self.option[0] is not None else self.option[1],self.option[2]))
+            self.option=None
+        elif tag=='select' and self.select is not None:
+            name,multiple,options=self.select;selected=[v for v,checked in options if checked]
+            if not selected and not multiple and options:selected=[options[0][0]]
+            self.current.extend((name,v) for v in selected);self.select=None
+        elif tag=='form':self.forms.append(self.current);self.current=None
+
+
+def normalized_plan_form(html,plan_id):
+    parser=PlanEditor();parser.feed(html)
+    forms=[values for values in parser.forms if dict(values).get('plan_id')==str(plan_id)]
+    if len(forms)!=1:raise RuntimeError('exact plan editor was not returned')
+    values=forms[0]
+    if dict(values).get('lifecycle_status')!='active':raise RuntimeError('normalization only revises active hosting plans')
+    changed={'php_versions','php_allowlist','default_php_version','change_reason'}
+    return [(k,v) for k,v in values if k not in changed]+[('php_versions','8.5'),('php_allowlist','8.5'),('default_php_version','8.5'),('change_reason','Explicit disposable forward-fixture PHP 8.5 preparation')]
+
+
+def assert_plan_only_php_changed(before,after):
+    def masked(value):
+        result=json.loads(json.dumps(value));result.pop('revision',None)
+        for path in [('resources','php_allowlist'),('presets','hosting','default_php_version'),('presets','hosting','allowed_php_versions'),('hosting_policy','php','default_version'),('hosting_policy','php','allowed_versions')]:
+            node=result
+            for key in path[:-1]:node=node.get(key,{})
+            node.pop(path[-1],None)
+        return result
+    if masked(before)!=masked(after):raise RuntimeError('plan revision changed non-PHP contract fields')
+
+
+def active_php_plans():
+    return json.loads(pg("SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (SELECT id,revision,php_allowlist,default_php_version,hosting_policy FROM plans WHERE lifecycle_status='active' AND hosting_enabled ORDER BY id) q"))
+
+
+def plan_needs_php85(plan):
+    policy=plan.get('hosting_policy',{}).get('php',{})
+    versions=set(v.strip() for v in plan['php_allowlist'].split(',') if v.strip())|set(policy.get('allowed_versions',[]))
+    return versions!={'8.5'} or plan['default_php_version']!='8.5' or policy.get('default_version','8.5')!='8.5'
+
+
+def assert_fixture_entitlements(c,locked_only=False):
+    if c.get('target_profile')!='ubuntu-26.04-native':return []
+    restriction=" AND s.sync_mode IN ('locked','custom')" if locked_only else ''
+    rows=json.loads(pg("SELECT COALESCE(json_agg(row_to_json(q)),'[]'::json) FROM (SELECT e.subscription_id,s.sync_mode,e.php_allowlist,e.default_php_version,e.hosting_policy FROM subscription_entitlements e JOIN subscriptions s ON s.id=e.subscription_id WHERE e.hosting_enabled"+restriction+' ORDER BY e.subscription_id) q'))
+    if any(plan_needs_php85(row) for row in rows):raise RuntimeError('native fixture retains incompatible subscription PHP offers; locked/custom snapshots are not rewritten; use a compatible source or Sury target')
+    return rows
+
+
+def normalize_active_plans(c,post):
+    plans=[plan for plan in active_php_plans() if plan_needs_php85(plan)]
+    if c.get('target_profile')=='ubuntu-26.04-sury' and not c.get('normalize_php85'):
+        c['prior_plan_php_intent']=plans
+        return []
+    if plans and not c.get('normalize_php85'):raise RuntimeError('active plan offers require explicit normalize_php85 fixture preparation')
+    c['prior_plan_php_intent']=plans
+    for plan in plans:
+        identity=str(int(plan['id']));revision=int(plan['revision'])
+        history="SELECT encode(sha256(convert_to(COALESCE(jsonb_agg(to_jsonb(p) ORDER BY revision),'[]'::jsonb)::text,'UTF8')),'hex') FROM plan_revisions p WHERE plan_id="+identity+' AND revision<='+str(revision)
+        before_hash=pg(history)
+        before=json.loads(pg('SELECT definition::text FROM plan_revisions WHERE plan_id='+identity+' AND revision='+str(revision)))
+        audit="SELECT count(*) FROM audit_events WHERE action='plan.saved' AND target_type='plan' AND target_id="+identity
+        old_audit=int(pg(audit))
+        values=normalized_plan_form(post.get('service-plans/'+identity),int(identity))
+        post('plans',values)
+        current=json.loads(pg("SELECT json_build_object('revision',revision,'php_allowlist',php_allowlist,'default_php_version',default_php_version,'hosting_policy',hosting_policy) FROM plans WHERE id="+identity))
+        if current['revision']!=revision+1 or plan_needs_php85(current):raise RuntimeError('product plan revision did not commit PHP 8.5 intent')
+        after=json.loads(pg('SELECT definition::text FROM plan_revisions WHERE plan_id='+identity+' AND revision='+str(current['revision'])))
+        assert_plan_only_php_changed(before,after)
+        if pg(history)!=before_hash:raise RuntimeError('immutable prior plan history changed')
+        if int(pg(audit))<=old_audit:raise RuntimeError('plan normalization product audit is missing')
+        wait("SELECT count(*) FROM subscriptions WHERE plan_id="+identity+" AND sync_mode='synced' AND (sync_status<>'in_sync' OR plan_revision<>"+str(current['revision'])+')','0')
+    return plans
+
+
+def fixture_image(c):
+    # A private reviewed spec can pin the image validated by Phase 28. Fallback
+    # reads only the exact official nginx namespace from provider-owned state;
+    # no mutable tag or unreviewed registry is resolved during preparation.
+    image=c.get('oci_image_ref','')
+    if not image:
+        image=pg("SELECT image_ref FROM application_presets WHERE reseller_id IS NULL AND active AND runtime='oci' AND image_ref ~ '^docker.io/library/nginx@sha256:[a-f0-9]{64}$' ORDER BY id LIMIT 1")
+    if not re.fullmatch(r'docker\.io/library/nginx@sha256:[a-f0-9]{64}',image):
+        raise RuntimeError('forward fixture requires a reviewed immutable official nginx image; set oci_image_ref from validated Phase 28 evidence or a trusted active catalog')
+    return image
+
+
+def fixture_catalog_slug(c):
+    return 'forward-fixture-'+hashlib.sha256(c['run_token'].encode()).hexdigest()[:12]
+
+
+def source_preflight(c):
+    result=roundcube_preflight(c)
+    result['oci_image_ref']=fixture_image(c)
+    assert_fixture_entitlements(c,locked_only=True)
+    if c.get('target_profile','ubuntu-26.04-native')=='ubuntu-26.04-native' and not c.get('normalize_php85') and any(plan_needs_php85(plan) for plan in active_php_plans()):raise RuntimeError('active plan offers require explicit normalize_php85 fixture preparation')
+    observed=discover(dict(c))
+    result.update({key:observed[key] for key in ('site_id','worker_id','worker_php_version','domain','username','subscription_id')})
+    return result
+
+
+def create_fixture_container(c,post,image):
+    image=fixture_image({'oci_image_ref':image})
+    c['image_ref']=image;c['catalog_slug']=fixture_catalog_slug(c)
+    # Build a dedicated provider recipe through its real product route. Phase28
+    # removes its test application, so no retained instance is required here.
+    post('application-presets',{'slug':c['catalog_slug'],'name':'Forward migration durable fixture',
+        'runtime':'oci','image_ref':image,'active':'true','container_port':80,
+        'health_kind':'http','health_path':'/','health_timeout_seconds':30,
+        'volumes':json.dumps([{'name':'forward','target':'/forward-data','size_mb':1,'read_only':False}])})
+    for suffix in ('home','data','config'):
+        command(['install','-d','-m','0700','-o',c['username'],'-g',c['username'],'/var/lib/nakpanel/containers/sub-'+str(c['subscription_id'])+'/'+suffix])
+    command(['install','-d','-m','0700','-o',c['username'],'-g',c['username'],'/run/nakpanel-containers/sub-'+str(c['subscription_id'])])
+    rootless(c,'pull',image)
+    post('subscriptions/'+str(c['subscription_id'])+'/applications',{
+        'site_id':c['site_id'],'name':'forward-fixture','runtime':'oci','catalog_slug':c['catalog_slug'],
+        'desired_state':'running','route_mode':'prefix','route_prefix':'/forward-fixture/',
+        'container_port':80,'health_kind':'http','health_path':'/','health_timeout_seconds':30,
+        'secrets':json.dumps({'FORWARD_SECRET':c['application_secret']})})
+    c['oci_id']=int(pg("SELECT id FROM application_instances WHERE name='forward-fixture' AND subscription_id="+str(c['subscription_id'])))
+    wait("SELECT convergence_status||':'||observed_state FROM application_instances WHERE id="+str(c['oci_id']),'in_sync:healthy')
+    return c
+
+
 def seed(c):
     roundcube_preflight(c)
+    image=fixture_image(c)
     c = discover(c)
+    post=login(c)
+    normalize_active_plans(c,post)
+    assert_fixture_entitlements(c)
     wrong = pg("SELECT count(*) FROM (SELECT php_version v FROM sites UNION ALL SELECT desired_php_version FROM sites UNION ALL SELECT php_version FROM php_applications) q WHERE v<>'8.5'")
-    if wrong != '0':
+    if wrong != '0' and (c.get('target_profile','ubuntu-26.04-native')=='ubuntu-26.04-native' or c.get('normalize_php85')):
         if not c.get('normalize_php85'):
             raise RuntimeError('native fixture requires all source PHP intent=8.5; explicit normalize_php85 is only for this disposable fixture setup')
         c['prior_php_intent'] = json.loads(pg("SELECT json_agg(row_to_json(q)) FROM (SELECT id,php_version,desired_php_version FROM sites ORDER BY id) q"))
         pg("BEGIN; UPDATE sites SET php_version='8.5',desired_php_version='8.5'; UPDATE php_applications SET php_version='8.5'; COMMIT;")
         cli('reconcile', '--system')
         wait("SELECT count(*) FROM php_applications WHERE convergence_status<>'in_sync' OR desired_revision<>applied_revision OR php_version<>'8.5'", '0')
+    c=discover(c)
     # Fixture setup mirrors the repo's phase28 entitlement preparation. These
     # explicit test-source changes precede the baseline/archive; target restore
     # must retain this resulting intent without further rewriting.
-    patch = {'permissions': {'mail': True, 'ftps': True, 'sftp': True, 'applications': True, 'custom_oci_images': True},
+    allowed_slugs=json.loads(pg("SELECT COALESCE(hosting_policy#>'{applications,allowed_catalog_slugs}','[]'::jsonb) FROM subscription_entitlements WHERE subscription_id="+str(c['subscription_id'])))
+    if not isinstance(allowed_slugs,list) or any(not isinstance(slug,str) for slug in allowed_slugs):raise RuntimeError('invalid source catalog entitlement')
+    allowed_slugs=sorted(set(allowed_slugs+[fixture_catalog_slug(c)]))
+    patch = {'permissions': {'mail': True, 'ftps': True, 'sftp': True, 'applications': True, 'custom_oci_images': True,'application_egress':False},
              'mail': {'enabled': True}, 'access': {'ftps_enabled': True},
-             'applications': {'allowed_runtimes': ['oci'], 'allowed_registries': ['docker.io'], 'rootless': True},
-             'resources': {'max_applications': 3, 'max_ftp_accounts': 4, 'max_sftp_identities': 4, 'max_mailboxes': 4, 'container_storage_mb': 64}}
+             'applications': {'catalog_enabled':True,'allowed_catalog_slugs':allowed_slugs,'allowed_runtimes': ['oci'], 'allowed_registries': ['docker.io'], 'rootless': True,'egress_enabled':False},
+             'resources': {'max_applications': 3, 'max_ftp_accounts': 4, 'max_sftp_identities': 4, 'max_mailboxes': 4, 'container_storage_mb': 64,'memory_mb':256,'cpu_percent':50,'max_tasks':128}}
     expression = 'hosting_policy'
     for section, fields in patch.items():
         expression = 'jsonb_set(' + expression + ',' + quote('{' + section + '}') + ',(COALESCE(hosting_policy->' + quote(section) + ", '{}'::jsonb)||" + quote(json.dumps(fields)) + '::jsonb),true)'
     pg('UPDATE subscription_entitlements SET max_mailboxes=4,hosting_policy=' + expression + ' WHERE subscription_id=' + str(c['subscription_id']))
-    post = login(c)
     # Dedicated tracked database exercises sealed credentials without changing a
     # WordPress/application database password created by an earlier phase.
     post('databases', {'subscription_id': c['subscription_id'], 'site_id': c['site_id'],
@@ -275,24 +431,7 @@ def seed(c):
     c['database'] = 'np_forward_fixture'
     c['database_user'] = 'np_forward_fixture'
     maria("CREATE TABLE np_forward_canary(id INT PRIMARY KEY,v VARCHAR(160) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_520_ci); INSERT INTO np_forward_canary VALUES(1,'" + c['marker'] + "'); CREATE PROCEDURE np_forward_routine() SELECT v FROM np_forward_canary WHERE id=1; CREATE EVENT np_forward_event ON SCHEDULE EVERY 1 DAY STARTS '2030-01-01 00:00:00' DISABLE DO SELECT 1; CREATE TRIGGER np_forward_trigger BEFORE UPDATE ON np_forward_canary FOR EACH ROW SET NEW.v=NEW.v;", c['database'])
-    # A pinned, independently managed OCI fixture with a real persistent volume.
-    image = pg("SELECT image_ref FROM application_instances WHERE runtime='oci' AND image_ref LIKE '%@sha256:%' ORDER BY id LIMIT 1")
-    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._:/-]+@sha256:[a-f0-9]{64}', image):
-        raise RuntimeError('run phase28 pinned-image fixture first')
-    c['image_ref'] = image
-    # Precache the actual digest in the selected subscription's rootless store.
-    for suffix in ('home', 'data', 'config'):
-        command(['install', '-d', '-m', '0700', '-o', c['username'], '-g', c['username'], '/var/lib/nakpanel/containers/sub-' + str(c['subscription_id']) + '/' + suffix])
-    command(['install', '-d', '-m', '0700', '-o', c['username'], '-g', c['username'], '/run/nakpanel-containers/sub-' + str(c['subscription_id'])])
-    rootless(c, 'pull', image)
-    post('subscriptions/' + str(c['subscription_id']) + '/applications', {
-        'site_id': c['site_id'], 'name': 'forward-fixture', 'runtime': 'oci', 'image_ref': image,
-        'desired_state': 'running', 'route_mode': 'prefix', 'route_prefix': '/forward-fixture/',
-        'container_port': 80, 'health_kind': 'http', 'health_path': '/', 'health_timeout_seconds': 30,
-        'volume_name': 'forward', 'volume_target': '/forward-data', 'volume_size_mb': 1,
-        'secrets': json.dumps({'FORWARD_SECRET': c['application_secret']})})
-    c['oci_id'] = int(pg("SELECT id FROM application_instances WHERE name='forward-fixture' AND subscription_id=" + str(c['subscription_id'])))
-    wait("SELECT convergence_status||':'||observed_state FROM application_instances WHERE id=" + str(c['oci_id']), 'in_sync:healthy')
+    create_fixture_container(c,post,image)
     c['volume_file'] = '/var/lib/nakpanel/containers/sub-{subscription_id}/apps/{oci_id}/volumes/forward/forward-canary'.format(**c)
     Path(c['volume_file']).write_text(c['marker'])
     command(['chown', c['username'] + ':' + c['username'], c['volume_file']])
@@ -317,7 +456,6 @@ def seed(c):
         status, _ = client.append('INBOX', None, None, ('Subject: Forward migration durable canary\r\n\r\n' + c['marker'] + '\r\n').encode())
         if status != 'OK': raise RuntimeError('real IMAP message append failed')
     finally: client.logout()
-    command(['runuser', '-u', 'www-data', '--', 'php8.3', c['remote_src'] + '/deploy/multipass/roundcube-dr-canary.php', 'seed', c['mailbox']])
     pid = command(['systemctl','show','--property=MainPID','--value','nakpanel-php-worker@'+str(c['worker_id'])+'.service'])
     c['worker_secret_sha256'] = worker_secret_digest(pid)
     c['images'] = image_inventory()
@@ -331,9 +469,13 @@ def snapshot(c):
     # deliberately checked as live behavior below, rather than hashed as data.
     projection = {
         'sites': 'id,domain,username,php_version,desired_php_version,desired_status,https_redirect',
+        'plans':'id,reseller_id,name,revision,lifecycle_status,php_allowlist,default_php_version,hosting_policy',
+        'plan_revisions':'id,plan_id,revision,lifecycle_status,definition,definition_hash,actor_user_id,actor_label,change_reason',
         'php_applications': 'id,site_id,php_version,hosting_mode,desired_revision',
         'php_workers': 'id,application_id,name,script,processes,desired_state',
-        'application_instances': 'id,subscription_id,name,runtime,image_ref,desired_state,desired_revision',
+        'application_instances': 'id,subscription_id,name,runtime,catalog_slug,catalog_revision,manifest,image_ref,desired_state,desired_revision',
+        'application_presets':'id,reseller_id,slug,name,runtime,image_ref,active,manifest_revision,manifest',
+        'application_manifest_revisions':'id,preset_id,revision,manifest,image_ref,created_by_user_id',
         'databases': 'id,subscription_id,db_name,db_user',
         'subscription_entitlements': 'subscription_id AS id,hosting_policy',
         'sftp_access_identities': 'id,subscription_id,name,public_key,relative_root,enabled',
@@ -375,11 +517,33 @@ def snapshot(c):
     return result
 
 
+def container_limits(c,observed,proc=Path('/proc'),cgroups=Path('/sys/fs/cgroup')):
+    pid=observed.get('State',{}).get('Pid',0)
+    if not isinstance(pid,int) or pid<=1:raise RuntimeError('actual OCI process is missing')
+    uid=re.search(r'(?m)^Uid:\s+([0-9]+)',(proc/str(pid)/'status').read_text())
+    if not uid or int(uid[1])!=pwd.getpwnam(c['username']).pw_uid:raise RuntimeError('OCI process lost its exact tenant UID')
+    row=next((line.split(':',2)[2] for line in (proc/str(pid)/'cgroup').read_text().splitlines() if line.startswith('0::')),None)
+    if not row or not row.startswith('/') or '..' in Path(row).parts:raise RuntimeError('OCI process unified cgroup is missing')
+    group=cgroups/row.lstrip('/')
+    if (group/'memory.max').read_text().strip()!='268435456':raise RuntimeError('OCI kernel memory limit changed')
+    if (group/'pids.max').read_text().strip()!='128':raise RuntimeError('OCI kernel process limit changed')
+    values=(group/'cpu.max').read_text().split()
+    if len(values)!=2 or not all(v.isdigit() for v in values) or int(values[1])<1 or int(values[0])*100//int(values[1])!=50:raise RuntimeError('OCI kernel CPU limit changed')
+
+
 def podman_live(c):
     container = pg('SELECT container_name FROM application_generations WHERE application_id=' + str(c['oci_id']) + ' AND desired_revision=(SELECT active_generation FROM application_instances WHERE id=' + str(c['oci_id']) + ')')
     if not container: raise RuntimeError('active OCI generation missing')
     observed = json.loads(rootless(c, 'inspect', container))[0]
     if not observed.get('State', {}).get('Running'): raise RuntimeError('restored OCI container is not running')
+    container_limits(c,observed)
+    mode=observed.get('HostConfig',{}).get('NetworkMode','')
+    if not mode.startswith('slirp4netns') or 'allow_host_loopback=false' not in mode or 'outbound_addr=lo' not in mode:raise RuntimeError('restored OCI network isolation changed')
+    endpoint=pg('SELECT endpoint_port FROM application_instances WHERE id='+str(c['oci_id']))
+    if not endpoint.isdigit():raise RuntimeError('restored OCI loopback endpoint is missing')
+    command(['curl','--fail','--silent','--show-error','--max-time','10','http://127.0.0.1:'+endpoint+'/'])
+    listeners=command(['ss','-Hlt','sport = :'+endpoint]).splitlines()
+    if not listeners or any('127.0.0.1:'+endpoint not in line for line in listeners):raise RuntimeError('OCI endpoint is not confined to guest loopback')
     digest = rootless(c, 'image', 'inspect', '--format', '{{.Digest}}', c['image_ref'])
     if digest != c['oci_digest']: raise RuntimeError('actual OCI image digest changed')
     if str(observed.get('Image','')).removeprefix('sha256:') != c['oci_image_id'].removeprefix('sha256:'): raise RuntimeError('running container does not use the source immutable image')
@@ -403,7 +567,7 @@ def live(c):
         raise RuntimeError('restored tenant DB authentication/routine execution failed')
     pid = command(['systemctl', 'show', '--property=MainPID', '--value', 'nakpanel-php-worker@' + str(c['worker_id']) + '.service'])
     if not pid.isdigit() or int(pid) <= 1: raise RuntimeError('PHP worker did not execute')
-    if os.path.realpath('/proc/' + pid + '/exe') != '/usr/bin/php8.5': raise RuntimeError('worker executed wrong PHP interpreter')
+    if os.path.realpath('/proc/' + pid + '/exe') != '/usr/bin/php'+c['worker_php_version']: raise RuntimeError('worker executed wrong PHP interpreter')
     if worker_secret_digest(pid) != c['worker_secret_sha256']: raise RuntimeError('restored PHP worker secret environment changed')
     cmdline = Path('/proc/' + pid + '/cmdline').read_bytes()
     script = pg('SELECT script FROM php_workers WHERE id=' + str(c['worker_id']))
@@ -485,7 +649,7 @@ if __name__ == '__main__':
     try:
         request = json.load(sys.stdin)
         action, config = request['action'], request['config']
-        handlers = {'source-preflight': roundcube_preflight, 'seed': seed, 'snapshot': snapshot, 'live': live, 'tls': tls, 'freeze': freeze, 'cache-target-images':cache_target_images}
+        handlers = {'source-preflight': source_preflight, 'seed': seed, 'snapshot': snapshot, 'live': live, 'tls': tls, 'freeze': freeze, 'cache-target-images':cache_target_images}
         if action == 'freeze-for-backup': result = freeze(config,keep_agent=True)
         elif action == 'frozen': result = frozen()
         elif action in handlers: result = handlers[action](config)

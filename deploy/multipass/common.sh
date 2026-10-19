@@ -2,7 +2,7 @@
 
 NAKPANEL_MULTIPASS_VM="${NAKPANEL_MULTIPASS_VM:-nakpanel-lab}"
 NAKPANEL_MULTIPASS_IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-24.04}"
-NAKPANEL_REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
+NAKPANEL_REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-}"
 
 NAKPANEL_LEGACY_PHASE_VMS=(
   nakpanel-phase1
@@ -125,20 +125,7 @@ require_nakpanel_vm_name() {
 # Runs without a release retain the legacy source-development workflow.
 assert_qualification_bundle_staged() {
   [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]] || return 0
-  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- sudo bash -c '
-set -euo pipefail
-test -d /tmp/nakpanel-release
-test ! -L /tmp/nakpanel-release
-test -d /tmp/nakpanel-release/bin
-test ! -L /tmp/nakpanel-release/bin
-for file in /tmp/nakpanel-release/manifest.json /tmp/nakpanel-release/manifest.sig /tmp/nakpanel-release-public.pem; do
-  [[ -f "$file" && -s "$file" && ! -L "$file" ]] || exit 1
-done
-for artifact in panel agent panelctl; do
-  file="/tmp/nakpanel-release/bin/$artifact"
-  [[ -f "$file" && -x "$file" && ! -L "$file" ]] || exit 1
-done
-' || { echo 'expected signed release artifacts are missing or unsafe in the guest; refusing source-build fallback' >&2; return 1; }
+  qualification_release_operation check || { echo 'expected signed release artifacts are missing, unsafe or differ from the selected host release; refusing source-build fallback' >&2; return 1; }
 }
 
 # A launch may create ownership only after confirming the actual guest identity.
@@ -179,6 +166,7 @@ init_qualification_run() {
   export NAKPANEL_MULTIPASS_SOURCE_VM="${NAKPANEL_MULTIPASS_VM}"
   export NAKPANEL_MULTIPASS_DR_VM="${NAKPANEL_MULTIPASS_DR_VM:-${NAKPANEL_MULTIPASS_VM}-dr}"
   export NAKPANEL_MULTIPASS_VM NAKPANEL_MULTIPASS_ARCH NAKPANEL_MULTIPASS_IMAGE NAKPANEL_OWNERSHIP_DIR
+  configure_qualification_guest_paths || return 1
   assert_disposable_name "${NAKPANEL_MULTIPASS_VM}" || return 1
   assert_disposable_name "${NAKPANEL_MULTIPASS_DR_VM}" || return 1
   assert_distinct_vm_names "${NAKPANEL_MULTIPASS_VM}" "${NAKPANEL_MULTIPASS_DR_VM}"
@@ -358,7 +346,12 @@ sync_repo() (
   assert_current_vm_identity || return 1
   local root_dir="$1"
   local remote_src="${2:-${NAKPANEL_REMOTE_SRC}}"
-  if [[ ! "${remote_src}" =~ ^/tmp/nakpanel-[A-Za-z0-9._-]+$ ]]; then
+  local signed_source=0
+  if [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
+    configure_qualification_guest_paths || return 1
+    [[ "${remote_src}" == "${NAKPANEL_REMOTE_SRC}" ]] || { echo 'signed source destination differs from private run path' >&2; return 1; }
+    signed_source=1
+  elif [[ ! "${remote_src}" =~ ^/tmp/nakpanel-[A-Za-z0-9._-]+$ ]]; then
     echo "refusing unsafe Multipass sync destination: ${remote_src}" >&2
     echo "NAKPANEL_REMOTE_SRC must be a direct child of /tmp named nakpanel-*" >&2
     return 1
@@ -371,13 +364,22 @@ sync_repo() (
   # secrets, build caches, sockets or this task's private test artifacts.
   git -C "${root_dir}" ls-files -z --cached --others --exclude-standard |
     COPYFILE_DISABLE=1 tar -C "${root_dir}" --null -T - -cf "${tmpdir}/source.tar"
+  local archive_identity source_sha source_size
+  archive_identity="$(qualification_archive_identity "${tmpdir}/source.tar")" || return 1
+  read -r source_sha source_size <<<"${archive_identity}"
   multipass transfer "${tmpdir}/source.tar" "${NAKPANEL_MULTIPASS_VM}:${remote_archive}"
-  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- bash -c '
+  if [[ "${signed_source}" == 1 ]]; then
+    # Feed the trusted host program directly through stdin. No guest-writable
+    # temporary executable can race a privileged source-staging operation.
+    multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- sudo python3 - source --token "${NAKPANEL_RUN_TOKEN}" --archive "${remote_archive}" --archive-sha "${source_sha}" --archive-size "${source_size}" < "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/qualification_artifacts.py"
+  else
+    multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- bash -c '
 set -euo pipefail
 sudo rm -rf "$1"
 sudo install -d -m 0755 -o ubuntu -g ubuntu "$1"
 tar --no-same-owner -xf "$2" -C "$1"
 ' _ "${remote_src}" "${remote_archive}"
+  fi
   wait_for_repo_sync "${remote_src}"
   multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- rm -f "${remote_archive}"
 )
@@ -389,7 +391,7 @@ wait_for_repo_sync() {
   local remote_src="$1"
   local previous_count="" stable_checks=0 file_count=""
   for _ in $(seq 1 60); do
-    file_count="$(multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- bash -c \
+    file_count="$(multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- sudo bash -c \
       'test -f "$1/go.mod" && test -f "$1/sqlc.yaml" && test -f "$1/cmd/panel/main.go" && test -f "$1/internal/control/http/server.go" && test -f "$1/migrations/migrations_test.go" && find "$1" -type f | wc -l' \
       _ "${remote_src}" 2>/dev/null || true)"
     file_count="${file_count//[[:space:]]/}"
@@ -464,3 +466,6 @@ destroy_legacy_phase_vms() {
     destroy_owned_vm "${name}" "${NAKPANEL_RUN_TOKEN:-}" || return 1
   done
 }
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/qualification-artifacts.sh"
+configure_qualification_guest_paths

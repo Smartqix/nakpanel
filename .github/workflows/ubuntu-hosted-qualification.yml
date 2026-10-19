@@ -165,25 +165,7 @@ jobs:
           path: ${{ runner.temp }}/hosted-bundles
       - name: Prepare only this disposable hosted runner
         shell: bash
-        run: |
-          set -euo pipefail
-          [[ "${GITHUB_ACTIONS}" == true && "${RUNNER_ENVIRONMENT}" == github-hosted && "$(uname -m)" == x86_64 ]]
-          mkdir -p "${RUNNER_TEMP}/hosted-evidence"
-          df -h / | tee "${RUNNER_TEMP}/hosted-evidence/disk-before.log"
-          # These unused SDK trees belong to this disposable hosted VM only.
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/share/swift /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL /usr/lib/jvm /usr/local/share/powershell /usr/share/miniconda
-          sudo docker system prune --all --force
-          sudo apt-get update
-          sudo apt-get install -y acl cpu-checker curl dnsutils jq make openssl python3 ubuntu-keyring gnupg
-          sudo snap install multipass
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          if [[ -c /dev/kvm ]]; then sudo setfacl -m "u:$(id -u):rw" /dev/kvm; fi
-          sudo apt-get clean
-          multipass version | tee "${RUNNER_TEMP}/hosted-evidence/multipass.log"
-          multipass list
-          # Diagnostic only; the later ioctl preflight is the required gate.
-          sudo kvm-ok >"${RUNNER_TEMP}/hosted-evidence/kvm.log" 2>&1 || cat "${RUNNER_TEMP}/hosted-evidence/kvm.log"
+        run: bash deploy/multipass/prepare-hosted-runner.sh
       - name: Stage verified identical application artifacts and pinned local images
         shell: bash
         run: |

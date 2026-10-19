@@ -26,16 +26,22 @@ fi
 assert_qualification_bundle_staged
 
 sync_repo "${ROOT_DIR}"
-multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_REMOTE_SRC}" "${NAKPANEL_GUEST_RELEASE_DIR:-}" <<'REMOTE'
 set -euo pipefail
-cd "${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
-sudo deploy/install/phase21-25-install.sh
+cd "$1"
+release_dir="${2:-}"
+assets=.
+if [[ -n "${release_dir}" ]]; then assets="${release_dir}"; fi
+"${assets}/deploy/install/phase21-25-install.sh"
 command -v podman newuidmap newgidmap slirp4netns >/dev/null
 sudo test -x /usr/lib/nakpanel/slirp4netns
-if ! sudo test -d /tmp/nakpanel-release/bin; then make build; fi
-sudo -u nakpanel env DB_DSN='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' make goose-up
 binary_root=bin
-if sudo test -d /tmp/nakpanel-release/bin; then binary_root=/tmp/nakpanel-release/bin; fi
+if [[ -n "${release_dir}" ]]; then
+  binary_root="${release_dir}/bin"
+else
+  make build
+  sudo -u nakpanel env DB_DSN='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' make goose-up
+fi
 sudo install -m 0755 "$binary_root/agent" /usr/local/bin/nakpanel-agent
 sudo install -m 0755 "$binary_root/panel" /usr/local/bin/nakpanel-panel
 sudo systemctl restart nakpanel-agent.service nakpanel.service

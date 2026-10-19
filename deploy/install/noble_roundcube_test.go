@@ -116,11 +116,26 @@ func runNobleRoundcubePackageStages(t *testing.T, kind, failure string) nobleRou
 		write("package-status", "config-files")
 	}
 	if kind == "debconf" {
-		write("choice", "pgsql")
+		write("selections/roundcube/database-type", "pgsql")
 	}
 	if kind == "declined" {
-		write("declined", "false")
+		write("selections/roundcube/dbconfig-install", "false")
 	}
+	// The real Noble maintainer script supplies the namespace to dbc_go. Run it
+	// with its external debconf/dbconfig libraries replaced at their boundaries;
+	// a fake that accepts any question suffix would miss roundcube-core/* typos.
+	config, err := os.ReadFile("testdata/roundcube-core-1.6.6.config")
+	if err != nil {
+		t.Fatal(err)
+	}
+	config = []byte(strings.NewReplacer("/usr/share/debconf/confmodule", root+"/confmodule", "/usr/share/dbconfig-common/dpkg/config", root+"/dbconfig").Replace(string(config)))
+	write("roundcube-core.config", string(config))
+	write("confmodule", `db_input(){ :; }; db_go(){ :; };`)
+	write("dbconfig", `dbc_go(){
+ local namespace="$1" value=mysql
+ if [[ "$FIXTURE_HAS_SQLITE_PROVIDER" == 1 && -e "$FIXTURE/selections/$namespace/database-type" ]]; then value="$(cat "$FIXTURE/selections/$namespace/database-type")";fi
+ printf '%s' "$value" > "$FIXTURE/database"
+}`)
 	original := map[string][]byte{}
 	for _, name := range []string{"etc/roundcube/debian-db.php", "etc/roundcube/config.inc.php", "etc/dbconfig-common/roundcube.conf", "var/lib/roundcube/custom.db"} {
 		if data, err := os.ReadFile(filepath.Join(root, name)); err == nil {
@@ -161,24 +176,27 @@ NAKPANEL_POSTGRES_PACKAGES=(postgresql postgresql-contrib)
 apt-get(){
  printf '%s \n' "$*" >> "$FIXTURE/events"
  if [[ "$*" == *'install '* && " $* " == *' roundcube '* && ! -e "$FIXTURE/database" ]]; then
-  value=mysql
-  if [[ -f "$FIXTURE/choice" && " $* " == *' roundcube-sqlite3 '* ]]; then value="$(cat "$FIXTURE/choice")"; fi
-  printf '%s' "$value" > "$FIXTURE/database"
+  FIXTURE_HAS_SQLITE_PROVIDER=0
+  if [[ " $* " == *' roundcube-sqlite3 '* ]]; then FIXTURE_HAS_SQLITE_PROVIDER=1;fi
+  export FIXTURE_HAS_SQLITE_PROVIDER
+  DPKG_MAINTSCRIPT_NAME=config bash "$FIXTURE/roundcube-core.config" configure
   mkdir -p "$FIXTURE/etc/roundcube"
-  printf "<?php \\\$dbtype='%s';\n" "$value" > "$FIXTURE/etc/roundcube/debian-db.php"
+  printf '%s' 'configured by package' > "$FIXTURE/etc/roundcube/debian-db.php"
  fi
  if [[ "$*" == *'install '* && " $* " == *' roundcube '* ]]; then echo installed > "$FIXTURE/package-status"; fi
 }
 debconf-set-selections(){
- local input;input="$(cat)";printf 'selection %s\n' "$input" >> "$FIXTURE/events"
+ local input owner question type value;input="$(cat)";printf 'selection %s\n' "$input" >> "$FIXTURE/events"
  [[ "$FAILURE" != preseed-failure ]] || return 73
- if [[ "$input" == *'database-type select sqlite3'* ]]; then echo sqlite3 > "$FIXTURE/choice"; fi
+ while read -r owner question type value;do
+  mkdir -p "$FIXTURE/selections/$(dirname "$question")"
+  printf '%s' "$value" > "$FIXTURE/selections/$question"
+ done <<<"$input"
 }
 debconf-communicate(){
- local question;question="$(cat)"
+ local operation question;read -r operation question
  if [[ "$FAILURE" == metadata-failure ]]; then echo '20 database unavailable';return 20;fi
- if [[ "$question" == *'/dbconfig-install' && -e "$FIXTURE/declined" ]]; then echo '0 false';return;fi
- if [[ -e "$FIXTURE/choice" ]]; then printf '0 %s\n' "$(cat "$FIXTURE/choice")"; else echo '10 question does not exist';return 10;fi
+ if [[ -e "$FIXTURE/selections/$question" ]]; then printf '0 %s\n' "$(cat "$FIXTURE/selections/$question")"; else echo '10 question does not exist';return 10;fi
 }
 dpkg-query(){ if [[ -f "$FIXTURE/package-status" ]]; then cat "$FIXTURE/package-status";else return 1;fi; }
 dpkg-reconfigure(){ echo reconfigure >> "$FIXTURE/events";return 2; }

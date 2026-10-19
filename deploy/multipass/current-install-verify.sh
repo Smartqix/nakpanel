@@ -4,6 +4,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
+if [[ "${NAKPANEL_INSTALL_ONLY:-0}" == 1 && -z "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
+  echo 'install-only qualification requires the selected signed release' >&2
+  exit 1
+fi
+if [[ "${NAKPANEL_INSTALL_ONLY:-0}" == 1 && "${NAKPANEL_RELEASE_LEGACY_INSTALLER:-0}" == 1 ]]; then
+  echo 'install-only recovery qualification requires modern secure administrator setup' >&2
+  exit 1
+fi
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 require_nakpanel_vm_name "${VM_NAME}"
@@ -11,40 +19,28 @@ ensure_vm 4 6G 48G
 sync_repo "${ROOT_DIR}"
 assert_current_vm_identity
 if [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
-  : "${NAKPANEL_RELEASE_PUBLIC_KEY:?signed bundle requires an out-of-band public key}"
-  : "${NAKPANEL_RELEASE_VERSION:?signed bundle requires an exact version}"
-  verify_args=(--bundle "${NAKPANEL_RELEASE_BUNDLE}" --public-key "${NAKPANEL_RELEASE_PUBLIC_KEY}" --version "${NAKPANEL_RELEASE_VERSION}" --architecture "${NAKPANEL_MULTIPASS_ARCH}")
-  if [[ "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" == 1 ]]; then verify_args+=(--allow-development); fi
-  python3 "${ROOT_DIR}/deploy/release/verify.py" "${verify_args[@]}"
-  staging="$(mktemp -d)"
-  trap 'status=$?; rm -rf "${staging}"; exit "${status}"' EXIT
-  COPYFILE_DISABLE=1 tar -C "${NAKPANEL_RELEASE_BUNDLE}" -cf "${staging}/release.tar" .
-  multipass transfer "${staging}/release.tar" "${VM_NAME}:/tmp/nakpanel-release.tar"
-  multipass transfer "${NAKPANEL_RELEASE_PUBLIC_KEY}" "${VM_NAME}:/tmp/nakpanel-release-public.pem"
-  multipass_exec_short "${VM_NAME}" -- sudo bash -c 'set -e; test ! -e /tmp/nakpanel-release; install -d -m 0700 /tmp/nakpanel-release; tar --no-same-owner -xf /tmp/nakpanel-release.tar -C /tmp/nakpanel-release'
-  rm -rf "${staging}"
-  trap - EXIT
+  stage_qualification_release
+  assert_qualification_bundle_staged
 fi
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_REMOTE_SRC}" "${IMAGE}" "${NAKPANEL_RELEASE_BUNDLE:+1}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" "${NAKPANEL_RELEASE_LEGACY_INSTALLER:-0}" "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_REMOTE_SRC}" "${IMAGE}" "${NAKPANEL_RELEASE_BUNDLE:+1}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" "${NAKPANEL_RELEASE_LEGACY_INSTALLER:-0}" "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" "${NAKPANEL_GUEST_RELEASE_DIR:-}" "${NAKPANEL_GUEST_RELEASE_PUBLIC_KEY:-}" <<'REMOTE'
 set -euo pipefail
 cd "$1"
 if ! id nakpanel >/dev/null 2>&1; then
   useradd --system --home-dir /var/lib/nakpanel --create-home --shell /usr/sbin/nologin nakpanel
 fi
-chown -R nakpanel:nakpanel "$1"
+if [[ "$3" != 1 ]]; then chown -R nakpanel:nakpanel "$1"; fi
 test ! -e /etc/nakpanel/version
 export NAKPANEL_RELEASE_ALLOW_DEVELOPMENT="$4"
 install_args=(--yes)
 if [[ "$6" == sury ]]; then install_args+=(--php-provider sury); fi
 if [[ "$3" == 1 ]]; then
-  install_args+=(--bundle /tmp/nakpanel-release --release-public-key /tmp/nakpanel-release-public.pem)
+  install_args+=(--bundle "$7" --release-public-key "$8")
   if [[ "$4" == 1 ]]; then install_args+=(--allow-development-bundle); fi
 fi
 if [[ "$5" == 1 ]]; then
   # The historical installer predates --bundle. The host already verified
   # every file and signature before staging this exact trusted artifact.
-  chmod 0755 /tmp/nakpanel-release
-  timeout 45m /tmp/nakpanel-release/deploy/install/install.sh --yes --bin-dir /tmp/nakpanel-release/bin
+  timeout 45m "$7/deploy/install/install.sh" --yes --bin-dir "$7/bin"
 else
   umask 077
   admin_password_file="$(mktemp /root/nakpanel-qualification-admin.XXXXXXXX)"
@@ -62,6 +58,11 @@ REMOTE
 VM_IP="$(vm_ip)"
 test -n "${VM_IP}"
 curl -skf --connect-timeout 5 --max-time 30 "https://${VM_IP}:7443/healthz" >/dev/null
+if [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then assert_qualification_installed_release; fi
+if [[ "${NAKPANEL_INSTALL_ONLY:-0}" == 1 ]]; then
+  echo "Fresh signed installation and health verified without product fixtures on ${VM_NAME}."
+  exit 0
+fi
 tmpdir="$(mktemp -d)"
 trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 base="https://${VM_IP}:7443"

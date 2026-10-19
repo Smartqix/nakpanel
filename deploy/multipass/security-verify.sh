@@ -29,18 +29,23 @@ assert_qualification_bundle_staged
 # ---------------------------------------------------------------------------
 sync_repo "${ROOT_DIR}"
 VM_IP="$(vm_ip)"
-multipass exec "${VM_NAME}" -- bash -se <<REMOTE
+webhook_sink="${NAKPANEL_REMOTE_SRC}/deploy/multipass/webhook_sink.py"
+if [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then webhook_sink="$(stage_qualification_public_probe "${VM_NAME}" webhook_sink.py)"; fi
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se <<REMOTE
 set -euo pipefail
-cd /tmp/nakpanel-src
-if ! sudo test -d /tmp/nakpanel-release/bin; then make build; fi
+cd '${NAKPANEL_REMOTE_SRC}'
+release_dir='${NAKPANEL_GUEST_RELEASE_DIR:-}'
+if [[ -z "\${release_dir}" ]]; then
+  make build
+  sudo -u nakpanel env DB_DSN='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' make goose-up
+fi
 go build -o bin/agentprobe ./deploy/multipass/agentprobe
 binary_root=bin
-if sudo test -d /tmp/nakpanel-release/bin; then binary_root=/tmp/nakpanel-release/bin; fi
+if [[ -n "\${release_dir}" ]]; then binary_root="\${release_dir}/bin"; fi
 sudo install -m 0755 "\${binary_root}/panel" /usr/local/bin/nakpanel-panel
 sudo install -m 0755 "\${binary_root}/agent" /usr/local/bin/nakpanel-agent
 sudo install -m 0755 "\${binary_root}/panelctl" /usr/local/bin/panelctl
 sudo install -m 0755 bin/agentprobe /usr/local/bin/agentprobe
-sudo -u nakpanel env DB_DSN='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' make goose-up
 sudo mkdir -p /etc/systemd/system/nakpanel.service.d
 sudo tee /etc/systemd/system/nakpanel.service.d/phase20.conf >/dev/null <<EOF
 [Service]
@@ -51,7 +56,7 @@ EOF
 sudo pkill -f webhook_sink.py 2>/dev/null || true
 sudo rm -f /tmp/security-webhooks.jsonl
 sudo -u nakpanel env WEBHOOK_SINK_SECRET=security-webhook-secret WEBHOOK_SINK_OUTPUT=/tmp/security-webhooks.jsonl \
-  nohup python3 /tmp/nakpanel-src/deploy/multipass/webhook_sink.py >/tmp/security-webhook-sink.log 2>&1 &
+  nohup python3 ${webhook_sink} >/tmp/security-webhook-sink.log 2>&1 &
 sudo systemctl daemon-reload
 # Disk quotas do not survive a VM reboot until the kernel module is present.
 if ! sudo quotaon -p / 2>/dev/null | grep -q 'user quota .* is on'; then
