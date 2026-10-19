@@ -29,7 +29,7 @@ on:
       verify_database_manager:
         description: Require optional database manager browser and FastCGI coverage
         type: boolean
-        default: false
+        default: true
 
 permissions:
   contents: read
@@ -153,7 +153,7 @@ jobs:
       NAKPANEL_QUALIFICATION_DR_MEMORY: 3G
       NAKPANEL_QUALIFICATION_DR_DISK: 16G
       NAKPANEL_QUALIFICATION_RECLAIM_PRIOR: '1'
-      NAKPANEL_VERIFY_DATABASE_MANAGER: ${{ inputs.verify_database_manager && '1' || '0' }}
+      NAKPANEL_VERIFY_DATABASE_MANAGER: ${{ (github.event_name == 'push' || inputs.verify_database_manager) && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

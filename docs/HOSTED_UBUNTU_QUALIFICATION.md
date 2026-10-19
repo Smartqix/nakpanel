@@ -115,8 +115,10 @@ Both release jobs call `ubuntu-platform-verify.sh`, including its fresh clean
 installer, genuine populated prior24 upgrade, native26 same-profile update,
 rootless OCI/rootful Valkey boundaries and cgroups, full security suite,
 synthetic rollback, reboot and same-OS DR, native PHP, service plans, Toolkit,
-webmail, uninstall, GoAccess and domain removal. Optional database-manager
-browser coverage can be explicitly required with its dispatch input. The
+webmail, uninstall, GoAccess and domain removal. Database-manager FastCGI and browser coverage is required for push runs and
+by default for manual dispatches. An explicit manual
+`verify_database_manager=false` leaves that optional feature unrequested;
+such a result does not establish its coverage. The
 required Mail workspace browser uses pinned Playwright1.64.1 and installed
 Chrome even when that optional database feature is not requested. Dispatch
 `php_provider=sury` selects the optional `ubuntu-26.04-sury` profile only for

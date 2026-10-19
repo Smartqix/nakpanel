@@ -182,6 +182,7 @@ jobs:
         shell: bash
         env:
           NAKPANEL_SKIP_PRIOR_PHASES: '1'
+          NAKPANEL_CELL_REPORT_DIR: ${{ runner.temp }}/security-evidence
         run: |
           set -euo pipefail
           ./deploy/multipass/phase29-verify.sh 2>&1 | tee "${RUNNER_TEMP}/security-evidence/phase29.log"

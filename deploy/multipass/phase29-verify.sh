@@ -28,6 +28,11 @@ assert_no_failed_units(){
   failed="$(multipass_exec_short "${vm}" -- sudo systemctl --failed --no-legend --plain --no-pager | tr -d '\r')"
   [[ -z "${failed//[[:space:]]/}" ]] || fail "${label} has failed systemd units: ${failed}"
 }
+imap_canary() {
+  local target_vm="$1" mode="$2"
+  assert_vm_identity "${target_vm}" "${IMAGE}" "${NAKPANEL_MULTIPASS_ARCH}" "${NAKPANEL_RUN_TOKEN}" || return "$?"
+  python3 "${SCRIPT_DIR}/phase29-imap-canary.py" remote "${target_vm}" "${mode}" "${mailbox_address}" 'Phase29Mail!2026'
+}
 wait_for() {
   local query="$1" expected="$2" value=""
   for _ in $(seq 1 120); do
@@ -318,16 +323,7 @@ grep -qi "created\|saved" <<<"${mailbox_output}" \
 
 # Store a real message through Stalwart IMAP before the server archive. Auth
 # alone cannot prove that mailbox contents survived restore.
-multipass_exec_short "${VM_NAME}" -- python3 -c '
-import imaplib, ssl, sys
-client=imaplib.IMAP4_SSL("127.0.0.1",993,ssl_context=ssl._create_unverified_context(),timeout=20)
-try:
-    client.login(sys.argv[1],sys.argv[2])
-    status,_=client.append("INBOX",None,None,b"Subject: Nakpanel phase29 durable mail canary\r\n\r\nphase29-restored-message-content\r\n")
-    assert status=="OK",status
-finally:
-    client.logout()
-' "${mailbox_address}" 'Phase29Mail!2026'
+imap_canary "${VM_NAME}" seed || fail "authenticated IMAP canary seed failed"
 
 
 assert_baseline(){ # LABEL TARGET-IP EXPECTED-VERSION
@@ -699,19 +695,7 @@ multipass_exec_short "${DR_VM_NAME}" -- sudo systemctl is-active --quiet stalwar
   || fail "stalwart-mail is not active on the DR VM"
 multipass_exec_short "${DR_VM_NAME}" -- sudo named-checkconf || fail "named configuration is invalid on the DR VM"
 multipass_exec_short "${DR_VM_NAME}" -- sudo test -d /var/lib/nakpanel/certs || fail "certificate store missing on the DR VM"
-multipass_exec_short "${DR_VM_NAME}" -- python3 -c '
-import imaplib, ssl, sys
-client = imaplib.IMAP4_SSL("127.0.0.1", 993, ssl_context=ssl._create_unverified_context(), timeout=20)
-try:
-    client.login(sys.argv[1], sys.argv[2])
-    assert client.select("INBOX")[0] == "OK"
-    status, messages = client.search(None, "SUBJECT", "durable")
-    assert status == "OK" and messages[0], "restored mailbox canary missing"
-    status, payload = client.fetch(messages[0].split()[-1], "(RFC822)")
-    assert status == "OK" and any(isinstance(p, tuple) and b"phase29-restored-message-content" in p[1] for p in payload)
-finally:
-    client.logout()
-' "${mailbox_address}" 'Phase29Mail!2026' >/dev/null || fail "restored mailbox IMAP login failed"
+imap_canary "${DR_VM_NAME}" assert >/dev/null || fail "restored mailbox IMAP login failed"
 reconcile_phase29_dr || fail "the requested fresh DR reconciliation did not converge"
 assert_no_failed_units "${DR_VM_NAME}" "disaster-recovery deployment"
 
@@ -725,6 +709,7 @@ assert_qualification_installed_release "${DR_VM_NAME}"
 assert_baseline "disaster-recovery second reboot" "${DR_IP}" "${PHASE29_EXPECTED_VERSION}"
 assert_mariadb_canary "disaster-recovery second reboot" "${DR_VM_NAME}"
 roundcube_canary "${DR_VM_NAME}" assert
+imap_canary "${DR_VM_NAME}" assert >/dev/null || fail "second reboot mailbox IMAP canary failed"
 assert_no_failed_units "${DR_VM_NAME}" "disaster-recovery second reboot"
 multipass_exec_short "${DR_VM_NAME}" -- sudo bash -c "$(declare -f assert_phase29_user_quota); assert_phase29_user_quota"
 

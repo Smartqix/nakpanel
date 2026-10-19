@@ -91,6 +91,146 @@ printf '29.0.0\n' > "$bundle/VERSION"
 	}
 }
 
+// Execute the actual CI step and Phase29 companion routing. Only external
+// guest/bootstrap operations are replaced; failed private attempt logs must
+// land in the paths the workflow actually uploads, not just the parent tee.
+func TestCISecurityPhase29RetainsFailedCompanionEvidence(t *testing.T) {
+	data, err := os.ReadFile("../../.github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow qualificationWorkflow
+	if err := yaml.Unmarshal(data, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	program, uploadPaths := "", ""
+	var stepEnv map[string]string
+	for _, step := range workflow.Jobs["security-suite"].Steps {
+		if step.Name == "Run the Phase 29 reliability gate (upgrade, reboot, DR)" {
+			program, stepEnv = step.Run, step.Env
+		}
+		if strings.HasPrefix(fmt.Sprint(step.With["name"]), "security-evidence-") {
+			if step.If != "always()" {
+				t.Fatal("failed companion evidence must upload even when the gate fails")
+			}
+			uploadPaths, _ = step.With["path"].(string)
+		}
+	}
+	if program == "" || uploadPaths == "" {
+		t.Fatal("Phase29 gate or its evidence upload is missing")
+	}
+	gate, err := os.ReadFile("phase29-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"bootstrap", "synthetic-drill"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			runner := filepath.Join(root, "runner-temp")
+			for _, path := range []string{"deploy/multipass", "commands", "runner-temp/security-evidence"} {
+				if err := os.MkdirAll(filepath.Join(root, path), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			common := `NAKPANEL_MULTIPASS_VM="${NAKPANEL_MULTIPASS_VM:-nakpanel-primary}"
+NAKPANEL_MULTIPASS_IMAGE=24.04
+NAKPANEL_MULTIPASS_DR_VM="${NAKPANEL_MULTIPASS_DR_VM:-nakpanel-primary-dr}"
+NAKPANEL_REMOTE_SRC=/private/source
+if [[ "${NAKPANEL_PHASE29_FAULT_DRILLS_ONLY:-0}" == 1 ]]; then
+  echo 'synthetic-drill error canary: ConnectionRefusedError' >&2
+  exit 79
+fi
+assert_distinct_vm_names(){ :; }
+assert_current_vm_identity(){ :; }
+assert_qualification_bundle_staged(){ :; }
+assert_qualification_installed_release(){ echo selected-hashes >> "$CALL_LOG"; }
+require_nakpanel_vm_name(){ :; }
+sync_repo(){ :; }
+vm_ip(){ echo 127.0.0.1; }
+multipass(){ [[ "$1" == info ]] && return 1;echo forbidden-primary-mutation >> "$CALL_LOG";return 97; }
+multipass_exec_short(){ echo forbidden-primary-mutation >> "$CALL_LOG";return 97; }
+`
+			bootstrap := `#!/bin/bash
+set -eu
+echo signed-bootstrap >> "$CALL_LOG"
+echo 'signed-bootstrap output canary'
+if [[ "$FAIL_MODE" == bootstrap ]]; then echo 'bootstrap failure canary' >&2;exit 78;fi
+`
+			for name, body := range map[string]string{
+				"deploy/multipass/phase29-verify.sh":         string(gate),
+				"deploy/multipass/common.sh":                 common,
+				"deploy/multipass/current-install-verify.sh": bootstrap,
+				"commands/dig":  "#!/bin/bash\nexit 97\n",
+				"commands/curl": "#!/bin/bash\nexit 97\n",
+			} {
+				if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			cmd := exec.Command("bash", "-c", program)
+			cmd.Dir = root
+			for _, entry := range os.Environ() {
+				if !strings.HasPrefix(entry, "NAKPANEL_") {
+					cmd.Env = append(cmd.Env, entry)
+				}
+			}
+			cmd.Env = append(cmd.Env, "PATH="+filepath.Join(root, "commands")+":"+os.Getenv("PATH"), "RUNNER_TEMP="+runner,
+				"CALL_LOG="+filepath.Join(root, "calls"), "FAIL_MODE="+mode, "NAKPANEL_RUN_TOKEN=run123",
+				"NAKPANEL_OWNERSHIP_DIR="+filepath.Join(root, "private-ownership"), "NAKPANEL_RELEASE_BUNDLE=/selected", "NAKPANEL_RELEASE_VERSION=29.0.0")
+			for name, value := range stepEnv {
+				value = strings.ReplaceAll(value, "${{ runner.temp }}", runner)
+				cmd.Env = append(cmd.Env, name+"="+value)
+			}
+			out, runErr := cmd.CombinedOutput()
+			if runErr == nil || !strings.Contains(string(out), "mandatory additional signed-bootstrap fault companion failed") {
+				t.Fatalf("failed companion did not fail the real CI step: %v: %s", runErr, out)
+			}
+			calls, err := os.ReadFile(filepath.Join(root, "calls"))
+			if err != nil || string(calls) != "selected-hashes\nsigned-bootstrap\n" {
+				t.Fatalf("companion failure mutated the primary or bypassed signed bootstrap: %s %v", calls, err)
+			}
+			retained := map[string]string{}
+			for _, upload := range strings.Split(strings.TrimSpace(uploadPaths), "\n") {
+				path := strings.ReplaceAll(strings.TrimSpace(upload), "${{ runner.temp }}", runner)
+				err := filepath.Walk(path, func(path string, info os.FileInfo, walkErr error) error {
+					if os.IsNotExist(walkErr) {
+						return nil
+					}
+					if walkErr != nil {
+						return walkErr
+					}
+					if !info.IsDir() {
+						content, err := os.ReadFile(path)
+						if err != nil {
+							return err
+						}
+						retained[info.Name()] = string(content)
+					}
+					return nil
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			if !strings.Contains(retained["bootstrap.log"], "signed-bootstrap output canary") || !strings.Contains(retained["identity.tsv"], "nakpanel-primary-fault") {
+				t.Fatalf("actual upload omitted the private failed companion's bootstrap/identity logs; retained=%v: %s", retained, out)
+			}
+			code := "78"
+			if mode == "synthetic-drill" {
+				code = "79"
+				if !strings.Contains(retained["fault-drills.log"], "synthetic-drill error canary: ConnectionRefusedError") {
+					t.Fatalf("actual upload omitted the failed synthetic drill: %v", retained)
+				}
+			} else if _, ok := retained["fault-drills.log"]; ok {
+				t.Fatal("bootstrap failure must not execute synthetic drills")
+			}
+			if !strings.Contains(retained["result.tsv"], "FAIL\tadditional-synthetic-fault-drills\tnakpanel-primary-fault\t"+code) {
+				t.Fatalf("actual upload omitted the exact companion failure status: %v", retained)
+			}
+		})
+	}
+}
+
 // Removing the real daemon probe, its deadline, or its failure diagnostics must
 // fail these tests. Only the external Multipass client and journal are replaced.
 func TestHostedMultipassReadinessRequiresActualDaemonAndBoundsFailure(t *testing.T) {

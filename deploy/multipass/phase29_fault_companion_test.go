@@ -262,7 +262,7 @@ func TestPhase29DRRequiresFreshReturnedReconciliationWithoutRetargetingPrimary(t
 		t.Fatal(err)
 	}
 	script := string(data)
-	marker := `'Phase29Mail!2026' >/dev/null || fail "restored mailbox IMAP login failed"`
+	marker := `imap_canary "${DR_VM_NAME}" assert >/dev/null || fail "restored mailbox IMAP login failed"`
 	start := strings.Index(script, marker)
 	if start < 0 {
 		t.Fatal("DR mailbox/convergence boundary missing")

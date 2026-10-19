@@ -92,7 +92,7 @@ func TestPhase29VerifierCoversTheReliabilityGate(t *testing.T) {
 		"restore-server",
 		"--backup-key-file",
 		"named-checkconf",
-		"imaplib.IMAP4_SSL",
+		"phase29-imap-canary.py",
 		`destroy_vm "${DR_VM_NAME}"`,
 	} {
 		if !strings.Contains(script, want) {
