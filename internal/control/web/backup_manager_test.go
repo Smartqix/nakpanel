@@ -8,7 +8,7 @@ import (
 
 func TestSubscriptionBackupManagerHasFocusedActionsAndNoCrampedRail(t *testing.T) {
 	html := renderSubscriptionDetail(t, auth.RoleAdmin, "backups")
-	for _, marker := range []string{"data-np-backup-manager", "Back Up Now", "Remove selected", "Search backups", "Filter backup domain", "Existing recovery points are kept until you select and confirm removal."} {
+	for _, marker := range []string{"data-np-backup-manager", "Back Up Now", "Remove selected", "Search backups", "Filter backup domain", "6 backups", "Existing recovery points are kept until you select and confirm removal."} {
 		if !strings.Contains(html, marker) {
 			t.Errorf("missing backup workflow %q", marker)
 		}

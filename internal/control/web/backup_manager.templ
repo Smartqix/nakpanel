@@ -33,7 +33,7 @@ templ backupManagerPanel(subscription types.SubscriptionSummary, data dashboard.
 	{{ backups:=subscriptionBackupsForID(data.Phase6.Backups,subscription.ID) }}
 	{{ sites:=sitesForSubscription(data.Sites,subscription.ID) }}
 	<section class="np-panel np-backup-manager" data-np-backup-manager data-np-backup-subscription={ formatJobID(subscription.ID) }>
-		<div class="np-panel-title"><div><h2>Backup Manager</h2><span class="np-muted">{ formatPlanLimit(subscription.BackupsUsed) } recovery points · { formatBytes(subscription.BackupBytesUsed) } stored</span></div><button class="np-primary-link" type="button" data-np-dialog-open="np-backup-create-dialog">@icon("plus")<span>Back Up Now</span></button></div>
+		<div class="np-panel-title"><div><h2>Backup Manager</h2><span class="np-muted">{ backupCountLabel(subscription.BackupsUsed) } · { formatBytes(subscription.BackupBytesUsed) } stored</span></div><button class="np-primary-link" type="button" data-np-dialog-open="np-backup-create-dialog">@icon("plus")<span>Back Up Now</span></button></div>
 		<p class="np-backup-compliance"><span>Compliance:</span>
 			@compliancePill(subscription)
 		</p>

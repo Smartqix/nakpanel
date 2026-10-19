@@ -257,22 +257,22 @@ func backupManagerPanel(subscription types.SubscriptionSummary, data dashboard.D
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var14 string
-		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.BackupsUsed))
+		templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(backupCountLabel(subscription.BackupsUsed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 36, Col: 124}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 36, Col: 125}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, " recovery points · ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, " · ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var15 string
 		templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(subscription.BackupBytesUsed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 36, Col: 189}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/backup_manager.templ`, Line: 36, Col: 174}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 		if templ_7745c5c3_Err != nil {
