@@ -161,7 +161,7 @@ assert_bootstrap_mail_fixture() {
 JOIN customers customer ON customer.id=subscription.customer_id AND customer.id=${customer_id} AND customer.email='admin@nakpanel.test' AND customer.status='active' AND customer.reseller_id IS NULL
 JOIN plans plan ON plan.id=subscription.plan_id AND plan.id=${plan_id} AND plan.name='${bootstrap_plan_name}' AND plan.reseller_id IS NULL AND plan.lifecycle_status='active' AND plan.is_active AND plan.last_validated_at IS NOT NULL AND plan.readiness_error=''
 JOIN subscription_entitlements entitlement ON entitlement.subscription_id=subscription.id AND entitlement.source_revision=plan.revision AND entitlement.plan_name=plan.name
-WHERE subscription.id=${subscription_id} AND subscription.name='${bootstrap_subscription_name}' AND subscription.status='active' AND subscription.sync_status='in_sync' AND subscription.plan_mode='synced'
+WHERE subscription.id=${subscription_id} AND subscription.name='${bootstrap_subscription_name}' AND subscription.status='active' AND subscription.sync_status='in_sync' AND subscription.sync_mode='synced'
   AND entitlement.hosting_enabled AND entitlement.default_php_version='${bootstrap_default_php}' AND entitlement.php_allowlist='${bootstrap_php_versions}'
   AND entitlement.max_mailboxes >= -1 AND entitlement.max_mailboxes <> 0
   AND entitlement.hosting_policy#>>'{php,default_version}'='${bootstrap_default_php}'

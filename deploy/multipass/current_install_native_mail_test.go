@@ -21,6 +21,8 @@ var bootstrapMailProfiles = []bootstrapMailProfile{
 	{"ubuntu-26.04-native", "26.04", "8.5", "8.5", "8.5", `["8.5"]`},
 }
 
+// Small API/policy-boundary model; production compatibility is independently
+// exercised by TestBootstrapMailActualProductionSchema55And56 below.
 func bootstrapMailSQL(t *testing.T) (*sql.DB, string, string) {
 	t.Helper()
 	dsn := os.Getenv("NAKPANEL_NATIVE_FIXTURE_TEST_DSN")
@@ -41,7 +43,7 @@ func bootstrapMailSQL(t *testing.T) (*sql.DB, string, string) {
 	_, err = db.Exec(`CREATE TABLE plans(id bigserial PRIMARY KEY,reseller_id bigint,lifecycle_status text,is_active boolean,hosting_enabled boolean,default_php_version text,php_allowlist text,max_mailboxes int,hosting_policy jsonb,name text,revision int DEFAULT 1,last_validated_at timestamptz,readiness_error text DEFAULT '');
 CREATE TABLE plan_revisions(plan_id bigint,revision int,snapshot jsonb);
 CREATE TABLE customers(id bigint,email text,status text,reseller_id bigint);
-CREATE TABLE subscriptions(id bigint,customer_id bigint,plan_id bigint,status text,sync_status text,name text,plan_mode text DEFAULT 'synced');
+CREATE TABLE subscriptions(id bigint,customer_id bigint,plan_id bigint,status text,sync_status text,name text,sync_mode text DEFAULT 'synced');
 CREATE TABLE subscription_entitlements(subscription_id bigint,hosting_enabled boolean,default_php_version text,php_allowlist text,max_mailboxes int,hosting_policy jsonb,source_revision int DEFAULT 1,plan_name text);
 CREATE TABLE subscription_policy_overrides(subscription_id bigint,policy_patch jsonb);
 CREATE TABLE sites(id bigint,subscription_id bigint,domain text,status text,desired_status text,php_version text,desired_php_version text,settings_status text DEFAULT 'in_sync',removal_state text DEFAULT 'none');
@@ -222,6 +224,11 @@ func TestBootstrapMailAPISyncAndPolicyFailuresStopDownstreamCreation(t *testing.
 
 func assertBootstrapMail(t *testing.T, profile bootstrapMailProfile, dsn, schema string) (string, error) {
 	t.Helper()
+	return assertBootstrapMailIDs(t, profile, dsn, schema, 11, 11, 188, 201)
+}
+
+func assertBootstrapMailIDs(t *testing.T, profile bootstrapMailProfile, dsn, schema string, customer, plan, subscription, site int64) (string, error) {
+	t.Helper()
 	data, err := os.ReadFile("current-install-verify.sh")
 	if err != nil {
 		t.Fatal(err)
@@ -229,13 +236,19 @@ func assertBootstrapMail(t *testing.T, profile bootstrapMailProfile, dsn, schema
 	program := `set -euo pipefail
 db(){ [[ "$1" == SELECT* ]] || return 86;psql -X -qAt "$TEST_DSN" -v ON_ERROR_STOP=1 -c "$1"; }
 post(){ echo 'assertion attempted product mutation' >&2;return 87; }
-` + shellFixtureFunction(t, string(data), "configure_bootstrap_mail_profile", false) + shellFixtureFunction(t, string(data), "assert_bootstrap_mail_fixture", false) + `
+` + shellFixtureFunction(t, string(data), "configure_bootstrap_mail_profile", true) + shellFixtureFunction(t, string(data), "find_bootstrap_mail_plan", true) + shellFixtureFunction(t, string(data), "assert_bootstrap_mail_fixture", true) + `
 configure_bootstrap_mail_profile
-customer_id=11;plan_id=11;subscription_id=188;site_id=201
+customer_id="$TEST_CUSTOMER";plan_id="$TEST_PLAN";subscription_id="$TEST_SUBSCRIPTION";site_id="$TEST_SITE"
+selected="$(find_bootstrap_mail_plan)"
+[[ "$selected" == "$plan_id" ]] || exit 88
 assert_bootstrap_mail_fixture
 `
+	siteID := ""
+	if site > 0 {
+		siteID = fmt.Sprintf("%d", site)
+	}
 	cmd := exec.Command("bash", "-c", program)
-	cmd.Env = append(os.Environ(), "TEST_DSN="+dsn, "PGOPTIONS=-c search_path="+schema, "IMAGE="+profile.image, "NAKPANEL_QUALIFICATION_PROFILE="+profile.name, "NAKPANEL_BASELINE_PHP="+profile.baseline, "NAKPANEL_RUN_TOKEN=fixture-mail-test")
+	cmd.Env = append(os.Environ(), "TEST_DSN="+dsn, "PGOPTIONS=-c search_path="+schema, "IMAGE="+profile.image, "NAKPANEL_QUALIFICATION_PROFILE="+profile.name, "NAKPANEL_BASELINE_PHP="+profile.baseline, "NAKPANEL_RUN_TOKEN=fixture-mail-test", fmt.Sprintf("TEST_CUSTOMER=%d", customer), fmt.Sprintf("TEST_PLAN=%d", plan), fmt.Sprintf("TEST_SUBSCRIPTION=%d", subscription), "TEST_SITE="+siteID)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -261,7 +274,7 @@ func TestBootstrapMailEffectiveEligibilityWithRealPostgres(t *testing.T) {
 		{"wrong-run-name", `UPDATE subscriptions SET name='unrelated' WHERE id=188`},
 		{"pending-subscription", `UPDATE subscriptions SET sync_status='pending' WHERE id=188`},
 		{"inactive-subscription", `UPDATE subscriptions SET status='suspended' WHERE id=188`},
-		{"locked-snapshot", `UPDATE subscriptions SET plan_mode='locked' WHERE id=188`},
+		{"locked-snapshot", `UPDATE subscriptions SET sync_mode='locked' WHERE id=188`},
 		{"stale-source-revision", `UPDATE subscription_entitlements SET source_revision=0 WHERE subscription_id=188`},
 		{"unvalidated-plan", `UPDATE plans SET last_validated_at=NULL WHERE id=11`},
 		{"plan-readiness-error", `UPDATE plans SET readiness_error='not ready' WHERE id=11`},
@@ -302,6 +315,116 @@ func TestBootstrapMailEffectiveEligibilityWithRealPostgres(t *testing.T) {
 				}
 				if before != preservedBootstrapRows(t, db) {
 					t.Fatal("read-only assertion changed unrelated fixture")
+				}
+			})
+		}
+	}
+}
+
+// Apply the production migration bytes, rather than modeling their columns.
+// Every file is read by this Go test so migration changes invalidate its cache.
+func bootstrapMailProductionSchema(t *testing.T, version string) (*sql.DB, string, string) {
+	t.Helper()
+	dsn := os.Getenv("NAKPANEL_NATIVE_FIXTURE_TEST_DSN")
+	if dsn == "" {
+		t.Skip("requires explicitly isolated PostgreSQL fixture DSN")
+	}
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetMaxOpenConns(1)
+	schema := fmt.Sprintf("bootstrap_production_%d_%d", os.Getpid(), time.Now().UnixNano())
+	if _, err = db.Exec("CREATE SCHEMA " + schema + ";SET search_path TO " + schema); err != nil {
+		db.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = db.Exec("SET search_path TO public;DROP SCHEMA " + schema + " CASCADE"); db.Close() })
+	files, err := filepath.Glob("../../migrations/*.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	applied := 0
+	for _, file := range files {
+		if strings.SplitN(filepath.Base(file), "_", 2)[0] > version {
+			continue
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		up := strings.SplitN(string(data), "-- +goose Down", 2)[0]
+		if _, err = db.Exec(up); err != nil {
+			t.Fatalf("actual production migration %s: %v", filepath.Base(file), err)
+		}
+		applied++
+	}
+	if applied == 0 {
+		t.Fatal("no production migrations applied")
+	}
+	var syncColumn, inventedColumn int
+	if err := db.QueryRow(`SELECT count(*) FILTER(WHERE column_name='sync_mode'),count(*) FILTER(WHERE column_name='plan_mode') FROM information_schema.columns WHERE table_schema=$1 AND table_name='subscriptions'`, schema).Scan(&syncColumn, &inventedColumn); err != nil {
+		t.Fatal(err)
+	}
+	if syncColumn != 1 || inventedColumn != 0 {
+		t.Fatalf("production subscription columns: sync_mode=%d plan_mode=%d", syncColumn, inventedColumn)
+	}
+	t.Logf("actual production migration schema %s: %d files; sync_mode exists, plan_mode absent", version, applied)
+	return db, dsn, schema
+}
+
+func TestBootstrapMailActualProductionSchema55And56(t *testing.T) {
+	for _, version := range []string{"20261015000055", "20261018000056"} {
+		for _, profile := range bootstrapMailProfiles {
+			t.Run(version+"/"+profile.name, func(t *testing.T) {
+				db, dsn, schema := bootstrapMailProductionSchema(t, version)
+				var customer, owner, plan, subscription, account, site int64
+				if err := db.QueryRow(`SELECT id,login_user_id FROM customers WHERE email='admin@nakpanel.test'`).Scan(&customer, &owner); err != nil {
+					t.Fatal(err)
+				}
+				policy := fmt.Sprintf(`{"resources":{"max_mailboxes":4},"permissions":{"hosting":true,"mail":true},"mail":{"enabled":true,"webmail":true,"mailbox_quota_mb":64},"php":{"default_version":"%s","allowed_versions":%s}}`, profile.defaultPHP, profile.jsonVersions)
+				if err := db.QueryRow(`INSERT INTO plans(name,lifecycle_status,hosting_enabled,default_php_version,php_allowlist,max_mailboxes,hosting_policy,last_validated_at) VALUES('Qualification Mail fixture-mail-test','active',true,$1,$2,4,$3,now()) RETURNING id`, profile.defaultPHP, profile.versions, policy).Scan(&plan); err != nil {
+					t.Fatal(err)
+				}
+				if err := db.QueryRow(`INSERT INTO subscriptions(customer_id,plan_id,name,status,sync_status,sync_mode) VALUES($1,$2,'Qualification Bootstrap fixture-mail-test','active','in_sync','synced') RETURNING id`, customer, plan).Scan(&subscription); err != nil {
+					t.Fatal(err)
+				}
+				if out, err := assertBootstrapMailIDs(t, profile, dsn, schema, customer, plan, subscription, 0); err != nil {
+					t.Fatalf("actual schema%s initial subscription/plan check rejected: %v %s", version, err, out)
+				}
+				if err := db.QueryRow(`INSERT INTO subscription_system_accounts(subscription_id,username,home_path,applied_state,convergence_status) VALUES($1,'fixturemail','/home/fixturemail','active','in_sync') RETURNING id`, subscription).Scan(&account); err != nil {
+					t.Fatal(err)
+				}
+				if err := db.QueryRow(`INSERT INTO sites(owner_user_id,username,domain,php_version,desired_php_version,status,desired_status,subscription_id,customer_id,system_account_id,document_root,settings_status,removal_state) VALUES($1,'fixturemail','current-bootstrap.test',$2,$2,'active','active',$3,$4,$5,'/home/fixturemail/domains/current-bootstrap.test/public_html','in_sync','none') RETURNING id`, owner, profile.baseline, subscription, customer, account).Scan(&site); err != nil {
+					t.Fatal(err)
+				}
+				snapshot := func() string {
+					var value string
+					if err := db.QueryRow(`SELECT jsonb_build_object('plans',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM plans p),'revisions',(SELECT jsonb_agg(to_jsonb(r) ORDER BY id) FROM plan_revisions r),'subscriptions',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM subscriptions s),'entitlements',(SELECT jsonb_agg(to_jsonb(e) ORDER BY subscription_id) FROM subscription_entitlements e),'sites',(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM sites s))::text`).Scan(&value); err != nil {
+						t.Fatal(err)
+					}
+					return value
+				}
+				before := snapshot()
+				out, err := assertBootstrapMailIDs(t, profile, dsn, schema, customer, plan, subscription, site)
+				if err != nil {
+					t.Fatalf("actual schema%s ready fixture rejected: %v %s", version, err, out)
+				}
+				if snapshot() != before {
+					t.Fatal("eligibility check changed actual production rows/history")
+				}
+				if _, err := db.Exec(`UPDATE subscriptions SET sync_mode='locked' WHERE id=$1`, subscription); err != nil {
+					t.Fatal(err)
+				}
+				before = snapshot()
+				if out, err = assertBootstrapMailIDs(t, profile, dsn, schema, customer, plan, subscription, site); err == nil {
+					t.Fatalf("actual schema%s locked snapshot accepted: %s", version, out)
+				}
+				if !strings.Contains(out, "owned fixture effective PHP/mail/webmail entitlement is unavailable") {
+					t.Fatalf("locked snapshot refused for unrelated SQL failure: %s", out)
+				}
+				if snapshot() != before {
+					t.Fatal("locked rejection changed actual production rows/history")
 				}
 			})
 		}
