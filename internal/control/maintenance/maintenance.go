@@ -414,7 +414,16 @@ func (s *Service) deleteBackup(ctx context.Context, id, approvalID int64) error 
 	if err != nil {
 		return err
 	}
+	sharedArchive := false
 	if path != "" {
+		if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('backup-archive:'||$1,0))`, path); err != nil {
+			return err
+		}
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM backups WHERE archive_path=$1 AND id<>$2)`, path, id).Scan(&sharedArchive); err != nil {
+			return err
+		}
+	}
+	if path != "" && !sharedArchive {
 		var resp types.Response
 		resp, err = s.agent.DeleteBackup(ctx, types.DeleteBackupReq{ArchivePath: path})
 		if err == nil && !resp.OK {
@@ -437,7 +446,7 @@ func (s *Service) deleteBackup(ctx context.Context, id, approvalID int64) error 
 	if _, err = tx.ExecContext(ctx, `DELETE FROM backups WHERE id=$1`, id); err != nil {
 		return err
 	}
-	if err = s.auditTx(ctx, tx, actorID, customerID, subscriptionID, "backup.deleted", "backup", id, map[string]any{"approval_id": approvalID}); err != nil {
+	if err = s.auditTx(ctx, tx, actorID, customerID, subscriptionID, "backup.deleted", "backup", id, map[string]any{"approval_id": approvalID, "shared_archive_preserved": sharedArchive}); err != nil {
 		return err
 	}
 	return tx.Commit()

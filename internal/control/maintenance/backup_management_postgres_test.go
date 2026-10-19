@@ -82,3 +82,35 @@ func TestBackupManagerWorkerRetainedDeletionFailureAndRecovery(t *testing.T) {
 		})
 	}
 }
+
+func TestBackupManagerSharedLegacyArchivePreservesUnselectedReference(t *testing.T) {
+	db, first, approval := confirmedBackupFixture(t)
+	var subscription, second int64
+	if err := db.QueryRow(`INSERT INTO subscriptions(customer_user_id,customer_id,plan_id,name,status,sync_mode) SELECT customer_user_id,customer_id,plan_id,'legacy archive scope','active','synced' FROM subscriptions WHERE id=1 RETURNING id`).Scan(&subscription); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO backups(owner_user_id,customer_id,subscription_id,target_kind,target_name,status,archive_path,size_bytes) SELECT owner_user_id,customer_id,$2,'site','sibling.test','active',archive_path,size_bytes FROM backups WHERE id=$1 RETURNING id`, first, subscription).Scan(&second); err != nil {
+		t.Fatal(err)
+	}
+	agent := &deleteAgent{response: types.Response{OK: true}}
+	service := NewService(db, nil, agent)
+	if err := service.deleteBackup(context.Background(), first, approval); err != nil {
+		t.Fatal(err)
+	}
+	if len(agent.calls) != 0 {
+		t.Fatal("unselected sibling's archive was deleted")
+	}
+	var secondApproval int64
+	if _, err := db.Exec(`UPDATE backups SET status='deleting' WHERE id=$1`, second); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`INSERT INTO audit_events(actor_user_id,customer_id,subscription_id,action,target_type,target_id,metadata) SELECT 1,customer_id,subscription_id,'backup.deletion_requested','backup',id,'{"confirmed":true,"source":"backup-manager"}' FROM backups WHERE id=$1 RETURNING id`, second).Scan(&secondApproval); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.deleteBackup(context.Background(), second, secondApproval); err != nil {
+		t.Fatal(err)
+	}
+	if len(agent.calls) != 1 {
+		t.Fatal("last confirmed reference did not remove its archive", len(agent.calls))
+	}
+}

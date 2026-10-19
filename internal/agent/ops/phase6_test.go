@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/nakroteck/nakpanel/internal/types"
 )
@@ -85,6 +86,42 @@ func TestBackupProvisionerCreatesArchiveWithFilesAndDatabaseDumps(t *testing.T) 
 		if !slices.Contains(names, want) {
 			t.Fatalf("archive names = %#v, missing %s", names, want)
 		}
+	}
+}
+
+func TestBackupProvisionerNeverOverwritesSameSecondRecoveryPoint(t *testing.T) {
+	root := t.TempDir()
+	docroot := filepath.Join(root, "home", "npdemo", "public_html")
+	if err := os.MkdirAll(docroot, 0755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(docroot, "index.php")
+	if err := os.WriteFile(file, []byte("first version"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	p := NewBackupProvisioner(BackupProvisionerOptions{OutputDir: filepath.Join(root, "backups"), HomeRoot: filepath.Join(root, "home"), Now: func() time.Time { return time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC) }})
+	req := types.CreateBackupReq{Domain: "example.test", Username: "npdemo", Docroot: docroot}
+	first, err := p.CreateBackup(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(first.ArchivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(file, []byte("second version"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	second, err := p.CreateBackup(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ArchivePath == second.ArchivePath {
+		t.Fatal("same-second backup reused archive path")
+	}
+	after, err := os.ReadFile(first.ArchivePath)
+	if err != nil || string(before) != string(after) {
+		t.Fatal("earlier recovery point was overwritten", err)
 	}
 }
 

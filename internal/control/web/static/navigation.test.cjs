@@ -77,6 +77,14 @@ test('app mounts are idempotent and retain dirty state on repeated mounts', () =
  assert.equal(app.intervals.size,1);
  app.lifecycle.unmount(app.root);assert.equal(app.intervals.size,0);
 });
+test('generic dialog submits leave Backup Manager forms to their dedicated handler',()=>{
+ const h=appHarness(false);
+ const form={action:'https://panel.test/backups',matches:selector=>selector.includes('data-np-backup-create-form'),getAttribute:()=> 'true'};
+ const target={closest:selector=>selector==='dialog form[method="post"]'?form:null};
+ const event={target,defaultPrevented:false,preventDefault(){this.defaultPrevented=true;}};
+ h.documentEvents.submit.forEach(listener=>listener(event));
+ assert.equal(event.defaultPrevented,false,'shared dialog handler claimed the dedicated backup form');
+});
 test('legacy documents without navigation still initialise once', () => {
  const app=appHarness(false);assert.equal(app.bindings.get('input').length,1);assert.equal(app.intervals.size,1);
 });

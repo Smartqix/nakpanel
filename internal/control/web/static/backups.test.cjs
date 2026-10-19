@@ -1,6 +1,14 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {matchesBackup, backupStateSignature, backupPending, backupOperationMessage} = require('./backups.js');
+const {matchesBackup, backupStateSignature, backupPending, backupOperationMessage, revealBackupTab} = require('./backups.js');
+test('mobile navigation reveals the active backup tab without scrolling the document', () => {
+  const active={clientWidth:90,getBoundingClientRect:()=>({left:640})};
+  const nav={scrollWidth:800,clientWidth:360,scrollLeft:0,querySelector:()=>active,getBoundingClientRect:()=>({left:15})};
+  revealBackupTab(nav);
+  assert.equal(nav.scrollLeft,490);
+  nav.scrollWidth=360;revealBackupTab(nav);assert.equal(nav.scrollLeft,490);
+  revealBackupTab(null);
+});
 test('backup filtering is case insensitive and domain exact', () => {
   assert.equal(matchesBackup('Blog.Example.com','2026-10-19','blog',''),true);
   assert.equal(matchesBackup('blog.example.com','2026-10-19','','example.com'),false);

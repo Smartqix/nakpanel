@@ -3511,6 +3511,7 @@
     if (!form) {
       var dialogForm = event.target.closest('dialog form[method="post"]');
       if (!event.defaultPrevented && dialogForm && window.NakpanelUI &&
+          !dialogForm.matches('[data-np-backup-create-form],[data-np-backup-remove-form]') &&
           /^(\/sites\/\d+\/(dns-records|dns-template\/reset|certificates\/custom)|\/backups|\/restores)$/.test(new URL(dialogForm.action, window.location.href).pathname)) {
         event.preventDefault();
         submitDialogForm(dialogForm, event.submitter);

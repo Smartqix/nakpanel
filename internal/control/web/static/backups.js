@@ -3,6 +3,11 @@
   function matchesBackup(domain,text,query,selected) {return (!selected||domain===selected)&&(domain+' '+text).toLowerCase().includes((query||'').toLowerCase());}
   function backupStateSignature(states) {return Object.keys(states).sort().map(function(id){return id+':'+states[id];}).join('|');}
   function backupPending(states) {return Object.values(states).some(function(s){return s==='pending'||s==='deleting';});}
+  function revealBackupTab(nav){
+    var active=nav&&nav.querySelector('a.is-active');
+    if(!active||nav.scrollWidth<=nav.clientWidth)return;
+    nav.scrollLeft+=active.getBoundingClientRect().left-nav.getBoundingClientRect().left-(nav.clientWidth-active.clientWidth)/2;
+  }
   function backupOperationMessage(removing,states,ids){
     if(removing){
       if(ids.every(function(id){return !Object.hasOwn(states,id);}))return 'Selected backups removed. Other recovery points were preserved.';
@@ -13,7 +18,7 @@
     if(states[ids[0]]==='failed')return 'Backup creation failed. Review the recovery point error.';
     return 'Creating your backup. This list updates automatically.';
   }
-  if(typeof module!=='undefined'&&module.exports)module.exports={matchesBackup:matchesBackup,backupStateSignature:backupStateSignature,backupPending:backupPending,backupOperationMessage:backupOperationMessage};
+  if(typeof module!=='undefined'&&module.exports)module.exports={matchesBackup:matchesBackup,backupStateSignature:backupStateSignature,backupPending:backupPending,backupOperationMessage:backupOperationMessage,revealBackupTab:revealBackupTab};
   if(typeof window==='undefined'||!window.NakpanelUI)return;
   var ui=window.NakpanelUI,document=window.document,dialog=document.getElementById('np-backup-removal-dialog'),timer,previewGeneration=0,watching=false,started=0;
   function manager(){return document.querySelector('[data-np-backup-manager]');}
@@ -61,7 +66,8 @@
     }
     timer=setTimeout(poll,3000);
   }
-  function start(){clearTimeout(timer);filter();var root=manager();watching=!!(root&&root.querySelector('[data-backup-status="pending"],[data-backup-status="deleting"]'));if(watching){started=Date.now();timer=setTimeout(poll,1500);}}
+  function revealActiveTab(){if(manager())revealBackupTab(document.querySelector('.np-subscription-tabs'));}
+  function start(){clearTimeout(timer);filter();revealActiveTab();var root=manager();watching=!!(root&&root.querySelector('[data-backup-status="pending"],[data-backup-status="deleting"]'));if(watching){started=Date.now();timer=setTimeout(poll,1500);}}
   document.addEventListener('input',function(e){if(e.target.matches('[data-np-backup-search]'))filter();});
   document.addEventListener('change',function(e){
     if(e.target.matches('[data-np-backup-select-all]')){var root=manager();if(root)root.querySelectorAll('[data-np-backup-row]:not([hidden]) [data-np-backup-check]:not(:disabled)').forEach(function(b){b.checked=e.target.checked;});}
@@ -72,6 +78,7 @@
     var cancel=e.target.closest('[data-np-backup-cancel]');if(cancel&&cancel.closest('dialog')){e.preventDefault();ui.dialogs.close(cancel.closest('dialog'));}
   });
   document.addEventListener('submit',async function(e){
+    if(e.defaultPrevented)return;
     var form=e.target;
     if(form.matches('[data-np-backup-selection]')){e.preventDefault();var url=new URL(form.action);new FormData(form).forEach(function(v,k){url.searchParams.append(k,v);});if(url.searchParams.has('backup_id'))preview(url.href,form.querySelector('button'));return;}
     if(!form.matches('[data-np-backup-remove-form],[data-np-backup-create-form]'))return;
@@ -87,5 +94,6 @@
   });
   document.addEventListener('nakpanel:navigated',start);
   document.addEventListener('visibilitychange',function(){if(!document.hidden&&watching)poll();});
+  window.addEventListener('resize',revealActiveTab);
   start();
 }());

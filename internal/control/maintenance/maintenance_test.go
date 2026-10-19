@@ -131,6 +131,8 @@ func TestDeleteBackupUsesTrackedRowPath(t *testing.T) {
 	mock.ExpectExec("SELECT pg_advisory_xact_lock").WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectQuery("SELECT provisioning_state").WithArgs(int64(3)).WillReturnRows(sqlmock.NewRows([]string{"provisioning_state"}))
 	mock.ExpectQuery("SELECT backup.archive_path").WithArgs(int64(7), int64(11)).WillReturnRows(sqlmock.NewRows([]string{"archive_path", "customer_id", "subscription_id", "actor_user_id"}).AddRow("/var/lib/nakpanel/backups/site.tar.gz", int64(2), int64(3), int64(99)))
+	mock.ExpectExec("SELECT pg_advisory_xact_lock").WithArgs("/var/lib/nakpanel/backups/site.tar.gz").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery("SELECT EXISTS.*archive_path").WithArgs("/var/lib/nakpanel/backups/site.tar.gz", int64(7)).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 	mock.ExpectExec("DELETE FROM backups").WithArgs(int64(7)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("INSERT INTO audit_events").WithArgs(int64(99), int64(2), int64(3), "backup.deleted", "backup", int64(7), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
