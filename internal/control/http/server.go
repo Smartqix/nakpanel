@@ -705,6 +705,20 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			if err != nil {
 				view.DNSSettingsError = "DNS settings could not be loaded."
 			}
+			if manager, ok := s.dnsTemplates.(dnsDomainPreviewer); ok && err == nil {
+				view.DNSPreviewDomains, err = manager.PreviewDomains(r.Context())
+				if err != nil {
+					view.DNSDomainPreviewError = "Hosted domains could not be loaded."
+				}
+				if siteID := parseQueryInt64(r, "preview_site"); siteID > 0 {
+					preview, loadErr := manager.DomainPreview(r.Context(), siteID)
+					if loadErr != nil {
+						view.DNSDomainPreviewError = "This domain preview is unavailable."
+					} else {
+						view.DNSDomainPreview = &preview
+					}
+				}
+			}
 		}
 		if route == "site-detail" && view.Tab == "dns" && s.dnsTemplates != nil {
 			if runID := parseQueryInt64(r, "dns_run"); runID > 0 {
@@ -1741,11 +1755,15 @@ func (s *Server) handleCreateDatabase(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
+		message := "Could not create database. Check the name, credentials and subscription limits."
+		if errors.Is(err, controlquota.ErrExceeded) {
+			message = "Could not create database: quota exceeded. Review the selected subscription's database and storage limits."
+		}
 		if wantsSPAJSON(r) {
-			writeSPAError(w, http.StatusBadRequest, "Could not create database. Check the name, credentials and subscription limits.")
+			writeSPAError(w, http.StatusBadRequest, message)
 			return
 		}
-		formFailure(w, r, "Could not create database. Check the name, credentials and subscription limits.")
+		formFailure(w, r, message)
 		return
 	}
 	customerID := int64(0)

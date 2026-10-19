@@ -73,6 +73,7 @@ schema="$(db_value "SELECT (SELECT COUNT(*) FROM information_schema.tables WHERE
 [[ "$(db_value "SELECT COUNT(*) FROM information_schema.columns WHERE column_name='delete_requested' AND table_name IN ('mail_domains','application_instances')")" == '2' ]] || { echo 'Phase 15 service cleanup schema is incomplete' >&2; exit 1; }
 [[ "$(db_value "SELECT COUNT(*) FROM subscriptions")" == "$(db_value "SELECT COUNT(*) FROM subscription_system_accounts")" ]] || { echo 'subscriptions do not have exactly one account' >&2; exit 1; }
 
+curl -sk --fail --retry 30 --retry-connrefused --retry-delay 1 --max-time 5 -o /dev/null "https://${VM_IP}:7443/login"
 curl -sk --fail -c "${tmpdir}/admin.cookies" -L \
   -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
   "https://${VM_IP}:7443/login" > "${tmpdir}/admin.html"

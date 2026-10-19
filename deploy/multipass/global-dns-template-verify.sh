@@ -8,7 +8,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
 VM_NAME="${NAKPANEL_MULTIPASS_VM:-nakpanel-lab}"
 
 sync_repo "${ROOT_DIR}"
-multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'
+multipass exec "${VM_NAME}" -- env NAKPANEL_REMOTE_SRC="${NAKPANEL_REMOTE_SRC}" bash -se <<'REMOTE'
 set -euo pipefail
 cd "${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
 make build
@@ -39,7 +39,7 @@ curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \
 
 curl -sk --fail -b "${tmpdir}/admin.cookies" \
   "https://${VM_IP}:7443/tools-settings/dns" -o "${tmpdir}/dns-settings.html"
-for marker in 'Zone Records Template' 'SOA Template' 'Transfer Restrictions' 'Synchronization History' 'Provider nameservers' 'Apply &amp; History'; do
+for marker in 'Zone Records Template' 'SOA Template' 'Transfer Restrictions' 'Synchronization History' 'Provider nameservers' 'Apply &amp; History' 'Generated per domain' 'Preview domain' 'data-np-dns-group' 'Adopt matching records'; do
   grep -Fq "${marker}" "${tmpdir}/dns-settings.html" || fail "DNS Settings omitted ${marker}"
 done
 
@@ -57,6 +57,18 @@ template_revision="$(db "SELECT revision.revision FROM dns_template_state state 
 
 zone_id="$(db "SELECT id FROM dns_zones WHERE mode='primary' ORDER BY id LIMIT 1")"
 if [[ -n "${zone_id}" ]]; then
+  site_id="$(db "SELECT site_id FROM dns_zones WHERE id=${zone_id}")"
+  preview_before="$(db "SELECT md5(COALESCE(string_agg(row_to_json(record)::text,',' ORDER BY id),'')) FROM dns_records record WHERE zone_id=${zone_id}")"
+  curl -sk --fail -b "${tmpdir}/admin.cookies" \
+    "https://${VM_IP}:7443/tools-settings/dns/domain-preview?site_id=${site_id}" -o "${tmpdir}/domain-preview.json"
+  grep -Fq '"ok":true' "${tmpdir}/domain-preview.json" || fail "domain preview failed"
+  grep -Fq '"records":' "${tmpdir}/domain-preview.json" || fail "domain preview omitted records"
+  [[ "$(db "SELECT md5(COALESCE(string_agg(row_to_json(record)::text,',' ORDER BY id),'')) FROM dns_records record WHERE zone_id=${zone_id}")" == "${preview_before}" ]] || fail "read-only preview changed DNS"
+  curl -sk --fail -b "${tmpdir}/admin.cookies" \
+    "https://${VM_IP}:7443/sites/${site_id}?tab=dns" -o "${tmpdir}/site-dns.html"
+  for ui_marker in 'Preview DNS changes' 'Adopt matching records' 'Only exact address and TTL matches'; do
+    grep -Fq "${ui_marker}" "${tmpdir}/site-dns.html" || fail "domain DNS omitted ${ui_marker}"
+  done
   custom_before="$(db "SELECT count(*) FROM dns_records WHERE zone_id=${zone_id} AND origin='custom'")"
   custom_fingerprint="$(db "SELECT md5(COALESCE(string_agg(row_to_json(record)::text,',' ORDER BY id),'')) FROM dns_records record WHERE zone_id=${zone_id} AND origin='custom'")"
   curl -sk --fail -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: ${csrf}" \

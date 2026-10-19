@@ -83,7 +83,7 @@ func TestCompareZoneAdoptsMatchesAndPreservesOverrides(t *testing.T) {
 			{ID: 2, OwnerSiteID: 10, Host: "www", Type: "A", Value: "192.0.2.99", TTL: 3600, Origin: "template", TemplateRecordKey: "www", LocallyModified: true},
 			{ID: 3, OwnerSiteID: 10, Host: "old", Type: "TXT", Value: "retained", TTL: 3600, Origin: "template", TemplateRecordKey: "removed", LocallyModified: true},
 		},
-	}, Hostname: "panel.example.test", SubdomainSite: map[int64]siteExpansion{}}
+	}, Hostname: "panel.example.test", SubdomainSite: map[int64]siteExpansion{}, AdoptMatching: true}
 	plan := compareZone(template, zone)
 	if len(plan.adopt) != 1 || plan.adopt[1].TemplateRecordKey != "apex" {
 		t.Fatalf("adopt = %#v, want exact custom match adopted", plan.adopt)
@@ -186,7 +186,7 @@ func TestCompareZonePreservesCustomTTLOverrideWithoutDuplicateInsert(t *testing.
 		Hostname: "panel.example.test", SubdomainSite: map[int64]siteExpansion{},
 	}
 	plan := compareZone(template, zone)
-	if len(plan.add) != 0 || plan.item.ConflictCount != 1 {
+	if len(plan.add) != 0 || plan.item.OverrideCount != 1 {
 		t.Fatalf("plan = %#v, want preserved TTL override and no duplicate insert", plan)
 	}
 }

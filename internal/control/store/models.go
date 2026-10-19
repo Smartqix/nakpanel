@@ -407,6 +407,8 @@ type DnsTemplateSyncItem struct {
 	Detail               string
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	AdoptedCount         int32
+	PlanFingerprint      string
 }
 
 type DnsTemplateSyncRun struct {
@@ -426,6 +428,7 @@ type DnsTemplateSyncRun struct {
 	CreatedAt                     time.Time
 	AppliedAt                     sql.NullTime
 	CompletedAt                   sql.NullTime
+	AdoptMatching                 bool
 }
 
 type DnsZone struct {

@@ -654,26 +654,37 @@ SET dns_template_adoption_completed=true,updated_at=now() WHERE id=$1`, site.id)
 }
 
 func ensureSystemDNSRecordsTx(ctx context.Context, tx *sql.Tx, zoneID, ownerSiteID int64, domain, address string) error {
-	if _, err := tx.ExecContext(ctx, `DELETE FROM dns_records
-WHERE zone_id=$1 AND origin='system' AND (
-    (host='@' AND record_type='NS') OR
-    (host IN ('ns1','webmail') AND record_type='A')
-)`, zoneID); err != nil {
-		return err
-	}
 	_, err := tx.ExecContext(ctx, `INSERT INTO dns_records(
 zone_id,owner_site_id,host,record_type,value,ttl,origin
 ) SELECT $1::bigint,$2::bigint,'@','NS',$3::text,3600,'system'
 WHERE NOT EXISTS(SELECT 1 FROM dns_records WHERE zone_id=$1 AND record_type='NS')
   AND NOT EXISTS(SELECT 1 FROM dns_template_deletions WHERE zone_id=$1 AND owner_site_id=$2 AND template_record_key='primary-ns')
-UNION ALL SELECT $1,$2,'ns1','A',$4::text,3600,'system'
-WHERE (NOT EXISTS(SELECT 1 FROM dns_records WHERE zone_id=$1 AND record_type='NS')
-   OR EXISTS(SELECT 1 FROM dns_records WHERE zone_id=$1 AND record_type='NS' AND value=$3))
-  AND NOT EXISTS(SELECT 1 FROM dns_template_deletions WHERE zone_id=$1 AND owner_site_id=$2 AND template_record_key='ns1-a')
-UNION ALL SELECT $1,$2,'webmail','A',$4,3600,'system'
-WHERE EXISTS(SELECT 1 FROM webmail_hosts WHERE site_id=$2 AND hostname LIKE 'webmail.%' AND status='active')
-ON CONFLICT DO NOTHING`, zoneID, ownerSiteID, "ns1."+domain, address)
-	return err
+ON CONFLICT DO NOTHING`, zoneID, ownerSiteID, "ns1."+domain)
+	if err != nil {
+		return err
+	}
+	records, err := loadDNSRecordsTx(ctx, tx, zoneID)
+	if err != nil {
+		return err
+	}
+	ftps, webmail, err := LoadDNSServiceFlags(ctx, tx, ownerSiteID)
+	if err != nil {
+		return err
+	}
+	desired := DNSServiceDefaults(domain, address, "", records, ftps, webmail)
+	for i := len(desired) - 1; i >= 0; i-- {
+		var suppressed bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM dns_template_deletions WHERE zone_id=$1 AND owner_site_id=$2 AND template_record_key=$3)`, zoneID, ownerSiteID, desired[i].Host+"-a").Scan(&suppressed); err != nil {
+			return err
+		}
+		if suppressed {
+			desired = append(desired[:i], desired[i+1:]...)
+		}
+	}
+	add, remove, _ := PlanServiceDNSRecords(records, desired, func(record types.DNSRecord) bool {
+		return (record.OwnerSiteID == ownerSiteID || record.OwnerSiteID == 0) && IsEndpointDNSRecord(record)
+	})
+	return insertServiceDNSRecordsTx(ctx, tx, zoneID, ownerSiteID, add, remove)
 }
 
 func instantiateDNSTemplateTx(

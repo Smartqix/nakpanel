@@ -210,7 +210,14 @@ type ConvergeSubscriptionWorker struct {
 	agent                 SubscriptionConvergenceAgent
 	river                 *river.Client[*sql.Tx]
 	applicationReconciler SiteApplicationReconciler
+	dnsServiceReconciler  interface {
+		ReconcileSubscriptionDNS(context.Context, int64) error
+	}
 }
+
+func (w *ConvergeSubscriptionWorker) SetDNSServiceReconciler(reconciler interface {
+	ReconcileSubscriptionDNS(context.Context, int64) error
+}) { w.dnsServiceReconciler = reconciler }
 
 func (w *ConvergeSubscriptionWorker) SetRiverClient(client *river.Client[*sql.Tx]) { w.river = client }
 
@@ -874,6 +881,11 @@ func (w *ConvergeSubscriptionWorker) Work(ctx context.Context, job *river.Job[Co
 	}
 	if err = convergeFTPSAccounts(ctx, w.db, w.agent); err != nil {
 		return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
+	}
+	if w.dnsServiceReconciler != nil {
+		if err = w.dnsServiceReconciler.ReconcileSubscriptionDNS(ctx, job.Args.SubscriptionID); err != nil {
+			return errors.Join(err, w.markAccountConvergence(ctx, job.Args.SubscriptionID, snapshot.DesiredRevision, "failed", err.Error(), result.LinuxUID, snapshot.Account.State))
+		}
 	}
 	if snapshot.Valkey != nil {
 		if valkeyErr := convergeValkeyAllocation(ctx, w.db, w.agent, *snapshot.Valkey, snapshot.DesiredRevision, snapshot.ValkeyAllocationError); valkeyErr != nil {

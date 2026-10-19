@@ -7,6 +7,20 @@ import (
 	"testing"
 )
 
+func TestPhase26RollbackFixturePinsItsHistoricalSchema(t *testing.T) {
+	data, err := os.ReadFile("phase26-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	if strings.Count(script, "goose_migration_test up-to 20260723000034") != 2 {
+		t.Fatal("historical rollback fixtures must stop before later irreversible migrations")
+	}
+	if strings.Contains(script, `DB_DSN="${migration_test_dsn}" make goose-up`) {
+		t.Fatal("rollback fixture must not apply every later migration")
+	}
+}
+
 func TestPhase26VerifierCoversSettingsCatalogAndRoleIsolation(t *testing.T) {
 	const path = "phase26-verify.sh"
 	data, err := os.ReadFile(path)

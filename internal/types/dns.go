@@ -70,6 +70,7 @@ type DNSSyncItem struct {
 	RemovedCount  int    `json:"removed_count"`
 	OverrideCount int    `json:"override_count"`
 	ConflictCount int    `json:"conflict_count"`
+	AdoptedCount  int    `json:"adopted_count"`
 	Detail        string `json:"detail,omitempty"`
 }
 
@@ -87,6 +88,7 @@ type DNSSyncRun struct {
 	CreatedAt             time.Time     `json:"created_at"`
 	CompletedAt           *time.Time    `json:"completed_at,omitempty"`
 	Items                 []DNSSyncItem `json:"items,omitempty"`
+	AdoptMatching         bool          `json:"adopt_matching"`
 }
 
 type DNSTemplateView struct {
@@ -100,6 +102,26 @@ type DNSTemplateView struct {
 type DNSProviderDefaults struct {
 	PrimaryNameserver   string `json:"primary_nameserver"`
 	SecondaryNameserver string `json:"secondary_nameserver"`
+}
+
+type DNSPreviewDomain struct {
+	SiteID int64  `json:"site_id"`
+	Domain string `json:"domain"`
+}
+
+type DNSDomainPreview struct {
+	SiteID           int64              `json:"site_id"`
+	Domain           string             `json:"domain"`
+	ZoneDomain       string             `json:"zone_domain"`
+	Mode             string             `json:"mode"`
+	TemplateRevision int64              `json:"template_revision"`
+	Records          []DNSPreviewRecord `json:"records"`
+	Warnings         []string           `json:"warnings,omitempty"`
+}
+
+type DNSPreviewRecord struct {
+	Record DNSRecord `json:"record"`
+	Action string    `json:"action"`
 }
 
 type DNSTemplateSettingsInput struct {

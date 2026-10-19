@@ -297,6 +297,9 @@
           row.hidden = !(matchesQuery && matchesType);
           if (!row.hidden) visible += 1;
         });
+        each("[data-np-dns-group]", workspace, function (group) {
+          group.hidden = !Array.prototype.some.call(group.querySelectorAll("[data-np-dns-row]"), function (row) { return !row.hidden; });
+        });
         var count = workspace.querySelector("[data-np-dns-result-count]");
         var empty = workspace.querySelector("[data-np-dns-filter-empty]");
         if (count) count.textContent = visible + (visible === 1 ? " record" : " records");

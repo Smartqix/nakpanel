@@ -351,25 +351,26 @@ type WebmailHost struct {
 }
 
 type DNSZone struct {
-	ID                int64
-	Domain            string
-	Address           string
-	IPv6Address       string
-	Serial            int64
-	Status            string
-	ZonePath          string
-	LastError         string
-	CreatedAt         time.Time
-	SiteID            int64
-	ParentZoneID      int64
-	Mode              string
-	UpstreamPrimaries string
-	TransferCIDRs     string
-	TemplateRevision  int64
-	TemplateStatus    string
-	DesiredRevision   int64
-	AppliedRevision   int64
-	SOA               types.DNSSOASettings
+	ID                      int64
+	Domain                  string
+	Address                 string
+	IPv6Address             string
+	Serial                  int64
+	Status                  string
+	ZonePath                string
+	LastError               string
+	CreatedAt               time.Time
+	SiteID                  int64
+	ParentZoneID            int64
+	Mode                    string
+	UpstreamPrimaries       string
+	TransferCIDRs           string
+	TemplateRevision        int64
+	CurrentTemplateRevision int64
+	TemplateStatus          string
+	DesiredRevision         int64
+	AppliedRevision         int64
+	SOA                     types.DNSSOASettings
 }
 
 type ReconciliationRun struct {

@@ -1815,7 +1815,7 @@ templ domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phas
 				<div><span class="np-kicker">{ dnsZoneRelationship(zone,item.ID) }</span><h2>{ item.Domain }</h2><p>Records are served from <strong>{ zone.Domain }</strong>.</p></div>
 				<div class="np-domain-dns-actions">
 					<button type="button" data-np-dialog-open={ "dns-record-dialog-"+formatJobID(item.ID) }>@icon("plus")<span>Add Record</span></button>
-					<form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/dns-template/preview") }>@csrfInput(view)<button type="submit" class="np-secondary-button">@icon("activity")<span>Apply DNS Template</span></button></form>
+					<button type="button" class="np-secondary-button" data-np-dialog-open={ "dns-preview-options-"+formatJobID(item.ID) }>@icon("activity")<span>Preview DNS changes</span></button>
 					<details class="np-dns-action-menu">
 						<summary class="np-icon-button" title="More DNS zone actions">@icon("ellipsis")<span class="np-sr-only">More actions</span></summary>
 						<div>
@@ -1829,7 +1829,7 @@ templ domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phas
 			<div class="np-zone-summary">
 				<span><strong>{ zone.Mode }</strong><small>zone mode</small></span>
 				<span>@statusPill(zone.Status)<small>agent state</small></span>
-				<span><strong>r{ formatJobID(zone.TemplateRevision) }</strong><small>template { zone.TemplateStatus }</small></span>
+				<span><strong>{ dnsTemplateSyncLabel(zone) }</strong><small>Template r{ formatJobID(zone.TemplateRevision) } · { dnsLocalRecordLabel(dnsRecordsForSiteZone(phase.DNSRecords,zone,item.ID)) }</small></span>
 				<span><strong>{ formatJobID(zone.AppliedRevision) } / { formatJobID(zone.DesiredRevision) }</strong><small>applied / desired</small></span>
 				<span><strong>{ formatJobID(zone.Serial) }</strong><small>SOA serial</small></span>
 			</div>
@@ -1842,6 +1842,7 @@ templ domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phas
 					<dl class="np-dns-impact-summary" aria-label="Template impact">
 						<div class="is-add"><dt>Add</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"added")) }</dd></div>
 						<div class="is-update"><dt>Update</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"updated")) }</dd></div>
+						<div class="is-update"><dt>Adopt</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"adopted")) }</dd></div>
 						<div class="is-remove"><dt>Remove</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"removed")) }</dd></div>
 						<div class="is-preserve"><dt>Preserve</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"preserved")) }</dd></div>
 						<div class="is-conflict"><dt>Conflict</dt><dd>{ formatPlanLimit(dnsSyncCount(preview,"conflicts")) }</dd></div>
@@ -1878,20 +1879,30 @@ templ domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phas
 								}
 								<form method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/dns-records/"+formatJobID(record.ID)+"/delete") }>@csrfInput(view)<button class="np-icon-button" type="submit" title="Delete DNS record" data-np-confirm="Delete this DNS record?">@icon("x")</button></form>
 							} else {
-								<span class="np-dns-managed" title="System-managed record">@icon("shield-check")<span class="np-sr-only">System-managed record</span></span>
+								<span class="np-dns-managed" title="Service-managed record">@icon("shield-check")<span class="np-sr-only">System-managed record · Service-managed</span></span>
 							}
 						</div></td>
 					</tr>
 				}
 			</tbody></table></div>
 			<p class="np-dns-filter-empty" data-np-dns-filter-empty role="status" aria-live="polite" hidden>No DNS records match this search.</p>
+			<dialog class="np-dialog" id={ "dns-preview-options-"+formatJobID(item.ID) } data-np-dialog aria-labelledby={ "dns-preview-title-"+formatJobID(item.ID) }>
+				<form method="dialog" class="np-dialog-close"><button aria-label="Close dialog">@icon("x")</button></form>
+				<div class="np-dialog-head"><span class="np-kicker">{ item.Domain }</span><h2 id={ "dns-preview-title-"+formatJobID(item.ID) }>Apply DNS Template</h2><p>Preview template and configured-service defaults. Custom values and external mail records are preserved.</p></div>
+				<form class="np-form np-dialog-form" method="post" action={ templ.SafeURL("/sites/"+formatJobID(item.ID)+"/dns-template/preview") }>
+					@csrfInput(view)
+					<label class="np-check"><input type="checkbox" name="adopt_matching" value="true"/>Adopt matching records</label>
+					<p class="np-muted">Only exact address and TTL matches become managed. Mail policies and different custom values stay unchanged. Adoption allows future managed updates.</p>
+					<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Preview changes</button></div>
+				</form>
+			</dialog>
 			for _, record := range dnsRecordsForSiteZone(phase.DNSRecords,zone,item.ID) {
 				if dnsRecordEditable(record) {
 					@dnsRecordDialog(view,item.ID,item.Domain,zone,"dns-record-edit-"+formatJobID(record.ID),"Edit DNS record",record)
 				}
 			}
 			<details class="np-dns-advanced-workspace" id="dns-zone-advanced">
-				<summary><span>@icon("settings")</span><span><strong>Advanced zone settings</strong><small>Zone placement, authoritative mode, SOA, transfers, and reset.</small></span><span class="np-dns-advanced-state">{ zone.Mode } · { zone.TemplateStatus }</span>@icon("chevron-right")</summary>
+				<summary><span>@icon("settings")</span><span><strong>Advanced zone settings</strong><small>Zone placement, authoritative mode, SOA, transfers, and reset.</small></span><span class="np-dns-advanced-state">{ zone.Mode } · { dnsTemplateSyncLabel(zone) }</span>@icon("chevron-right")</summary>
 				<div class="np-domain-dns-settings">
 				<section>
 					<header><div><h3>Zone placement</h3><p>Subdomains use the parent zone unless an independent authoritative child zone is selected.</p></div></header>

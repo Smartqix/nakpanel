@@ -30,6 +30,7 @@ func TestPhase12VerifierCoversProviderScopeSyncAndLifecycle(t *testing.T) {
 		"subscription reactivation", "foreign-subscription-update",
 		"foreign-site-conflict", "foreign-database-conflict", "tenant integrity guards",
 		"service-plan-new.html", "data-np-plan-editor", "service plan schema is incomplete",
+		"PHP defaults", `name="php_memory_mb"`,
 		"provider-scoped plan name indexes are incomplete",
 		"/addons/bulk-status", "/reseller-plans/bulk-status",
 		"phase12-overuse-plan", "usage collection completed", "overuse subscription suspension",

@@ -106,6 +106,10 @@ type WorkspaceView struct {
 	WebStatistics        *webstatistics.Workspace
 	StatisticsSettings   *webstatistics.Settings
 	PHPRuntimeInventory  *types.RuntimeCapabilities
+
+	DNSPreviewDomains     []types.DNSPreviewDomain
+	DNSDomainPreview      *types.DNSDomainPreview
+	DNSDomainPreviewError string
 }
 
 func setupStatusURL(status types.SiteSetupStatus, view WorkspaceView) string {
@@ -655,7 +659,39 @@ func dnsRecordOrigin(record types.DNSRecord) string {
 	if record.Origin == "" {
 		return "custom"
 	}
+	if record.Origin == "system" {
+		return "Service-managed"
+	}
 	return record.Origin
+}
+
+func dnsTemplateSyncLabel(zone dashboard.DNSZone) string {
+	if zone.Status == "failed" {
+		return "DNS update failed"
+	}
+	if zone.Status == "pending" || zone.AppliedRevision < zone.DesiredRevision {
+		return "Applying changes"
+	}
+	if zone.CurrentTemplateRevision > zone.TemplateRevision || zone.TemplateStatus == "out_of_sync" {
+		return "Update available"
+	}
+	if zone.Mode == "disabled" {
+		return "DNS disabled"
+	}
+	return "Up to date"
+}
+
+func dnsLocalRecordLabel(records []types.DNSRecord) string {
+	count := 0
+	for _, record := range records {
+		if record.Origin == "custom" || record.Origin == "" || record.LocallyModified {
+			count++
+		}
+	}
+	if count == 1 {
+		return "1 local record"
+	}
+	return fmt.Sprintf("%d local records", count)
 }
 
 func dnsRecordValue(record types.DNSRecord) string {
@@ -711,6 +747,8 @@ func dnsSyncCount(run *types.DNSSyncRun, field string) int {
 			total += item.OverrideCount
 		case "conflicts":
 			total += item.ConflictCount
+		case "adopted":
+			total += item.AdoptedCount
 		}
 	}
 	return total

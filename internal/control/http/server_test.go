@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -2428,6 +2429,45 @@ func TestCreateDatabaseDefaultsToMariaDB(t *testing.T) {
 	want := types.CreateDatabaseReq{Engine: types.EngineMariaDB, DBName: "np_demo", DBUser: "np_demo_user"}
 	if len(creator.requests) != 1 || creator.requests[0] != want {
 		t.Fatalf("database requests = %#v, want %#v", creator.requests, []types.CreateDatabaseReq{want})
+	}
+}
+
+func TestDatabaseQuotaFailureIsActionableWithoutLeakingDetails(t *testing.T) {
+	for _, enhanced := range []bool{false, true} {
+		t.Run(fmt.Sprintf("enhanced=%t", enhanced), func(t *testing.T) {
+			creator := &fakeDatabaseCreator{err: fmt.Errorf("database password=private-db-secret: %w", controlquota.ErrExceeded)}
+			handler, _ := newTestHandlerWithCreators(t, auth.RoleAdmin, nil, creator, nil)
+			cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+			req := httptest.NewRequest(http.MethodPost, "https://panel.test/databases", strings.NewReader("subscription_id=39&db_name=np_demo&db_user=np_demo_user"))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			if enhanced {
+				req.Header.Set("X-Nakpanel-SPA", "true")
+			}
+			addAuthenticatedCookie(req, cookie)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			message := ""
+			if enhanced {
+				if rec.Code != http.StatusBadRequest {
+					t.Fatalf("status = %d, want 400", rec.Code)
+				}
+				var body struct {
+					Error string `json:"error"`
+				}
+				if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+					t.Fatal(err)
+				}
+				message = body.Error
+			} else {
+				if rec.Code != http.StatusSeeOther {
+					t.Fatalf("status = %d, want 303", rec.Code)
+				}
+				message = formErrorFromRecorder(rec)
+			}
+			if !strings.Contains(message, "quota exceeded") || strings.Contains(message, "private-db-secret") {
+				t.Fatalf("quota error = %q, want safe actionable quota message", message)
+			}
+		})
 	}
 }
 
