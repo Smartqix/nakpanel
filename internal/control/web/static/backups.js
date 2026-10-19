@@ -28,11 +28,11 @@
     try{return await(await ui.fetch(url,Object.assign({},options||{},{signal:controller.signal}))).json();}finally{clearTimeout(timeout);}
   }
   async function preview(url,opener){
-    var own=++previewGeneration;
-    try{var result=await request(url);if(own!==previewGeneration)return;dialog.innerHTML=result.html;ui.dialogs.open(dialog,opener);}catch(error){if(own===previewGeneration)announce(error.message||'Could not load confirmation. No backups were removed.');}
+    var own=++previewGeneration,owner=manager();
+    try{var result=await request(url);if(own!==previewGeneration||!owner||!owner.isConnected)return;dialog.innerHTML=result.html;ui.dialogs.open(dialog,opener);}catch(error){if(own===previewGeneration&&owner&&owner.isConnected)announce(error.message||'Could not load confirmation. No backups were removed.');}
   }
   async function refresh(){
-    var root=manager();if(!root||document.querySelector('dialog[open]'))return;
+    var root=manager();if(!root||document.querySelector('dialog[open]')||root.contains(document.activeElement)&&document.activeElement.matches('input,select,summary'))return;
     var url=managerURL(),query=root.querySelector('[data-np-backup-search]').value,domain=root.querySelector('[data-np-backup-domain]').value;
     var selected=Array.from(root.querySelectorAll('[data-np-backup-check]:checked')).map(function(b){return b.value;});
     var response=await window.fetch(url.href,{credentials:'same-origin',cache:'no-store',headers:{Accept:'text/html'}});if(!response.ok)throw new Error('Unable to refresh backups.');

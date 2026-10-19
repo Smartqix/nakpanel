@@ -42,6 +42,17 @@ templ backupManagerPanel(subscription types.SubscriptionSummary, data dashboard.
 			<p class="np-gate is-blocked">This subscription holds more than its plan allows: backups { formatPlanLimit(subscription.BackupsUsed) } against a limit of { formatPlanLimit(subscription.MaxBackups) }. No existing backup will be removed automatically.</p>
 		}
 		<p class="np-gate" role="status" aria-live="polite" data-np-backup-progress hidden></p>
+		<noscript>
+			<details class="np-backup-native-create"><summary>Back Up Now</summary>
+				<form method="post" action="/backups">@csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><input type="hidden" name="return_to" value="subscription-backups"/><label>Website<select name="domain" required><option value="">Select a website</option>
+					for _,site:=range sites {
+						if site.Status=="active" {
+						<option value={ site.Domain }>{ site.Domain }</option>
+						}
+					}
+				</select></label><button type="submit" class="np-primary-link">Create backup</button></form>
+			</details>
+		</noscript>
 		<form id="np-backup-selection" method="get" action={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(subscription.ID)+"/backups/remove")) } data-np-backup-selection>
 			<div class="np-backup-toolbar"><label class="np-backup-search"><span class="np-sr-only">Search backups</span><input type="search" placeholder="Search backups" data-np-backup-search/></label><label><span class="np-sr-only">Filter backup domain</span><select aria-label="Filter backup domain" data-np-backup-domain><option value="">All domains</option>
 				for _,domain:=range backupDomains(backups) {
