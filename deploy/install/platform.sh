@@ -95,12 +95,7 @@ PY
 
 nakpanel_platform_bootstrap_pending() {
   local state="${1:-/etc/nakpanel/platform.json}"
-  if [[ ! -e "${state}" ]]; then printf 'false\n'; return; fi
-  python3 - "${state}" <<'PY'
-import json, sys
-with open(sys.argv[1]) as stream: data = json.load(stream)
-print('true' if data.get('bootstrap_pending') is True else 'false')
-PY
+  python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/platform_state.py" pending "${state}"
 }
 
 nakpanel_require_platform() {
@@ -164,6 +159,10 @@ nakpanel_validate_ppa_source() {
     grep -qE '^(Suites:[[:space:]]*noble[[:space:]]*$|deb .* noble )' "${source}" || {
       echo 'platform: PHP PPA must bind its signing key and exact noble suite' >&2; return 1;
     }
+}
+
+nakpanel_preflight_host() {
+  python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/host_preflight.py" "${NAKPANEL_PLATFORM_ID}"
 }
 
 nakpanel_preflight_packages() {

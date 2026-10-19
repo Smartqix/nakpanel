@@ -82,6 +82,9 @@ func main() {
 		FTPSTLSCertPath:   os.Getenv("NAKPANEL_FTPS_TLS_CERT"),
 		FTPSTLSKeyPath:    os.Getenv("NAKPANEL_FTPS_TLS_KEY"),
 	})
+	if err := hostingToolkit.RestoreValkeyRuntimeAccess(ctx); err != nil {
+		log.Fatalf("restore subscription cache runtime access: %v", err)
+	}
 	phpApplications := ops.NewPHPApplicationProvisioner(ops.PHPApplicationProvisionerOptions{})
 	wordpress := ops.NewWordPressProvisioner(ops.WordPressProvisionerOptions{
 		DatabaseRemover: ops.NewLazyMariaDBWordPressRemover(os.Getenv("NAKPANEL_MARIADB_DSN")),

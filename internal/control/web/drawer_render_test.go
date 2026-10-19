@@ -29,10 +29,16 @@ func requireDrawer(t *testing.T, html, id, action string, fields ...string) {
 		if !strings.Contains(head, `id="`+id+`"`) {
 			continue
 		}
-		if !strings.Contains(head, "np-drawer") || !strings.Contains(head, "data-np-dialog") {
-			t.Errorf("%s must use the shared dialog controller and drawer variant", id)
+		variant := "np-drawer"
+		structure := "np-drawer-body"
+		if strings.HasPrefix(id, "mail-") {
+			// Mail retains its newer, approved centered Figma dialogs.
+			variant, structure = "np-mail-dialog", "np-dialog-form"
 		}
-		for _, want := range append([]string{`action="` + action + `"`, "np-drawer-body", "aria-label=", "np-dialog-actions"}, fields...) {
+		if !strings.Contains(head, variant) || !strings.Contains(head, "data-np-dialog") {
+			t.Errorf("%s must use the shared dialog controller and %s variant", id, variant)
+		}
+		for _, want := range append([]string{`action="` + action + `"`, structure, "aria-label=", "np-dialog-actions"}, fields...) {
 			if !strings.Contains(dialog, want) {
 				t.Errorf("drawer %s missing %q", id, want)
 			}

@@ -37,6 +37,9 @@ func RoundcubeSQLiteDestination(source string, mode RestoreMode) (string, error)
 // CheckRoundcubeRestoreTarget verifies the actual SQLite import prerequisites
 // without stopping FPM or replacing the installed database.
 func CheckRoundcubeRestoreTarget(source Manifest, target PlatformProvenance, mode RestoreMode) error {
+	if mode == RestoreForwardMigration && (source.FormatVersion != 2 || !IsRoundcubeSQLitePath(source.RoundcubeSQLitePath)) {
+		return errors.New("forward-migration requires archive format 2 with an encrypted Roundcube SQLite snapshot; legacy non-SQLite webmail migration is unsupported")
+	}
 	if source.RoundcubeSQLitePath == "" {
 		return nil
 	}

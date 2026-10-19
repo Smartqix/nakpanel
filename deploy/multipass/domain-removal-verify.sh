@@ -11,6 +11,7 @@ if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != 1 ]]; then
   "${SCRIPT_DIR}/current-install-verify.sh"
   NAKPANEL_SKIP_PRIOR_PHASES=1 "${SCRIPT_DIR}/phase34-verify.sh"
 fi
+assert_qualification_bundle_staged
 tmpdir="$(mktemp -d)"
 trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 fail(){ echo "domain-removal: $*" >&2; exit 1; }
@@ -153,7 +154,11 @@ wait_for "SELECT status FROM databases WHERE id=${optional_database_id}" active
 remove_site "${optional_id}" "${optional}" "${optional_database_id}"
 observe completed
 [[ "$(db "SELECT count(*) FROM databases WHERE id=${optional_database_id}")" == 0 ]] || fail 'selected eligible database was not removed'
-curl -skfL --max-time 30 -c "${tmpdir}/client.cookies" -d email=client@nakpanel.test -d 'password=NakpanelClient!2026' "${base}/login" >/dev/null
+unrelated_email="removal-unrelated-${run_id}@nakpanel.test"
+post customers -d "customer_email=${unrelated_email}" -d 'customer_name=Unrelated removal customer' \
+  -d enable_login=true -d 'password=NakpanelUnrelated!2026'
+curl -skfL --max-time 30 -c "${tmpdir}/client.cookies" -d "email=${unrelated_email}" -d 'password=NakpanelUnrelated!2026' "${base}/login" -o "${tmpdir}/client.html"
+grep -q 'data-np-role="client"' "${tmpdir}/client.html" || fail 'unrelated customer login failed'
 code="$(curl -sk --max-time 30 -b "${tmpdir}/client.cookies" -o /dev/null -w '%{http_code}' "${base}/site-removals/${operation_id}/status")"
 [[ "${code}" == 404 ]] || fail 'cross-customer operation revealed'
 multipass exec "${VM_NAME}" -- sudo nginx -t

@@ -106,7 +106,7 @@ esac
 }
 
 func TestIdentityProbeRetriesTransientTransportButRejectsMismatches(t *testing.T) {
-	for _, mode := range []string{"reset", "wrong token"} {
+	for _, mode := range []string{"reset", "empty", "wrong token"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
 			record := filepath.Join(dir, "testtoken", "nakpanel-test-native")
@@ -120,7 +120,7 @@ func TestIdentityProbeRetriesTransientTransportButRejectsMismatches(t *testing.T
 source ./common.sh
 sleep(){ return 0; }
 probe_vm_identity(){
- if [[ ! -e "$NAKPANEL_OWNERSHIP_DIR/probed" ]]; then touch "$NAKPANEL_OWNERSHIP_DIR/probed"; if [[ "$MODE" == reset ]]; then return 255; fi; printf '26.04\narm64\nwrong\n';return;fi
+ if [[ ! -e "$NAKPANEL_OWNERSHIP_DIR/probed" ]]; then touch "$NAKPANEL_OWNERSHIP_DIR/probed"; if [[ "$MODE" == reset ]]; then return 255; fi; if [[ "$MODE" == empty ]]; then return 0; fi; printf '26.04\narm64\nwrong\n';return;fi
  printf '26.04\narm64\ntesttoken\n'
 }
 assert_vm_identity nakpanel-test-native 26.04 arm64 testtoken
@@ -128,8 +128,34 @@ assert_vm_identity nakpanel-test-native 26.04 arm64 testtoken
 			cmd := exec.Command("bash", "-c", script)
 			cmd.Env = append(os.Environ(), "MODE="+mode, "NAKPANEL_OWNERSHIP_DIR="+dir, "NAKPANEL_MULTIPASS_IMAGE=26.04", "NAKPANEL_MULTIPASS_ARCH=arm64")
 			out, err := cmd.CombinedOutput()
-			if (err == nil) != (mode == "reset") {
+			if (err == nil) != (mode != "wrong token") {
 				t.Fatalf("mode %s: %s %v", mode, out, err)
+			}
+		})
+	}
+}
+
+func TestGuestIdentityProbeRequiresUbuntuBeforeReturningVersion(t *testing.T) {
+	for _, id := range []string{"ubuntu", "debian"} {
+		t.Run(id, func(t *testing.T) {
+			dir := t.TempDir()
+			release := filepath.Join(dir, "os-release")
+			if err := os.WriteFile(release, []byte("ID="+id+"\nVERSION_ID=26.04\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			script := `source ./common.sh
+dpkg(){ echo arm64; };export -f dpkg
+multipass_exec_short(){
+ while [[ "$1" != -c ]]; do shift; done
+ shift; code="$1";code="${code//\/etc\/os-release/$TEST_RELEASE}";bash -c "$code"
+}
+probe_vm_identity nakpanel-test-native
+`
+			cmd := exec.Command("bash", "-c", script)
+			cmd.Env = append(os.Environ(), "TEST_RELEASE="+release)
+			out, err := cmd.CombinedOutput()
+			if (err == nil) != (id == "ubuntu") {
+				t.Fatalf("identity ID%s: %s %v", id, out, err)
 			}
 		})
 	}

@@ -708,6 +708,14 @@ Older restore binaries reject these archives; retain the matching restore
 binary with the backup. Current binaries still read existing format-1 archives.
 The SQLite snapshot uses an online database backup, including committed WAL
 data, and is authenticated inside the encrypted archive.
+New whole-server backups reject an explicitly configured non-SQLite Roundcube
+backend before taking database dumps or pausing mail services. Older Noble
+installations may have a dbconfig-managed MySQL webmail database; this path does
+not back it up or convert it. Preserve that database through its own verified
+backup process. Existing format-1 same-platform recovery remains readable, with
+its original coverage limitations; it must not be assumed to contain webmail
+contacts or preferences.
+
 
 Use an installed target to check an archive without stopping services:
 
@@ -744,8 +752,14 @@ sudo panelctl restore-server --mode forward-migration --check-only \
   --archive /offline/server.nkbk --backup-key-file /offline/archive.key
 ```
 
-Forward mode requires complete observed platform/database provenance and a
-complete source PHP intent inventory. Source 8.3 or 8.4 sites are rejected by a
+Forward mode requires complete observed platform/database provenance, a
+complete source PHP intent inventory, and format-2 metadata naming a supported
+Roundcube SQLite snapshot. The complete encrypted archive must contain that
+snapshot exactly once, with a valid SQLite header and a successful read-only
+integrity check, before any service is stopped. A provenance review cannot add
+missing webmail data to a legacy archive. Migration of an existing MySQL-backed
+Roundcube installation is unsupported; the rehearsal does not convert the
+backend or alter a working Noble installation. Source 8.3 or 8.4 sites are rejected by a
 target that only provides 8.5; the restore does not rewrite tenant PHP choices.
 The source dump tool and server must fit the target database and import client.
 Copied Stalwart mail stores require the identical observed Stalwart version.
@@ -802,7 +816,10 @@ phase chain on an **owned disposable 24.04 source**, with the same run token and
 architecture, before preparing the migration fixture. The source must run this
 backup implementation. Preparation creates additional database/account/mail/
 certificate canaries, then stops application writers and makes the databases
-read-only **before** taking the final encrypted backup and baseline. It leaves
+read-only **before** taking the final encrypted backup and baseline. A read-only
+Roundcube storage preflight runs before any output/key generation, PHP fixture
+normalization, seeding, or freezing; unsupported legacy storage is rejected
+without those mutations. It leaves
 the source frozen and intact; it never freezes an ordinary unowned server.
 
 Create a private specification (replace the ownership identity with the source
@@ -839,12 +856,12 @@ flag false when the disposable source was already prepared with all-8.5 intent.
 Preparation rejects missing phase fixtures, failed convergence or protocol
 checks. Use a new disposable source to retry incomplete preparation.
 
-Build the exact same revision with `make build` on a separately qualified native
-26.04 machine of the target architecture. Copy its `bin/panel`, `bin/agent`,
-`bin/panelctl`, and repository `VERSION` into a private local directory such as
-`$HOME/nakpanel-migration/native-26-bin`; each filename is required. Retain that
-native machine's build and qualification evidence. A host cross-build does not
-qualify these artifacts. Then run:
+Use a signed release bundle for the exact candidate revision and target
+architecture. It must include its matching installer, migrations, build assets,
+and static `bin/panel`, `bin/agent`, and `bin/panelctl`; a directory of loose
+binaries is rejected. Keep the trusted release public key separately from the
+bundle. Cross-building a bundle alone does not qualify it: retain its native
+installation and runtime evidence. Then run:
 
 ```bash
 export NAKPANEL_RUN_TOKEN=YOUR-RUN-TOKEN
@@ -853,20 +870,37 @@ export NAKPANEL_MULTIPASS_SOURCE_VM=nakpanel-24-04-arm64-YOUR-RUN-TOKEN
 export NAKPANEL_FORWARD_FIXTURE_JSON="$HOME/nakpanel-migration/prepared/fixture.json"
 export NAKPANEL_FORWARD_ARCHIVE="$HOME/nakpanel-migration/prepared/source.nkbk"
 export NAKPANEL_FORWARD_KEY="$HOME/nakpanel-migration/prepared/archive.key"
-export NAKPANEL_FORWARD_TARGET_ARTIFACTS="$HOME/nakpanel-migration/native-26-bin"
+export NAKPANEL_FORWARD_TARGET_BUNDLE="/offline/nakpanel-29.0.0-linux-arm64"
+export NAKPANEL_FORWARD_TARGET_PUBLIC_KEY="/offline/trusted-release-public.pem"
+export NAKPANEL_FORWARD_TARGET_VERSION="29.0.0"
+# Only for an explicitly isolated development rehearsal, never production:
+# export NAKPANEL_FORWARD_ALLOW_DEVELOPMENT=1
 ./deploy/multipass/ubuntu-forward-migration-verify.sh
 ```
 
 The verifier validates the private JSON, archive digest, offline input paths and
-driver capabilities before VM access. It creates a new owned ephemeral target;
+driver capabilities, then privately stages and verifies the target signature,
+exact version, architecture, CPU/static policy and complete file inventory before
+any Multipass access. Development bundles require the explicit opt-in above.
+The target authenticates the transferred archive digest and release signature
+again before executing the signed bundle's own installer with `--bundle` and
+its out-of-band public key. Administrator credentials arrive over stdin and
+use a root-owned mode-0600 temporary password file that is removed on success
+or failure. Installer assets and binaries therefore come from the same signed
+candidate. It creates a new owned ephemeral target;
 pre-existing targets are refused. The driver installs the actual selected native
 profile and pre-caches every source OCI digest under its numeric tenant identity
-before real restore convergence. Credentials travel over stdin and are not
+before real restore convergence. Every numeric UID/GID and subordinate range
+must fit the target without collision; no identity is remapped. Some legacy
+Noble system-account IDs collide with Ubuntu 26.04 base accounts (for example
+UID 995 with `messagebus`) and are rejected. Fresh installs allocate managed
+accounts in a reserved high range, but that does not make existing conflicting
+accounts migratable. Credentials travel over stdin and are not
 included in stage logs. Archive, key and private fixture JSON remain offline on
 the host. Do not publish the fixture bundle or logs containing tenant evidence.
 
 An independently reviewed driver can override `NAKPANEL_FORWARD_FIXTURE_DRIVER`.
-Its interface is `STAGE TARGET_VM SOURCE_VM RUN_TOKEN ARTIFACT_DIR EVIDENCE_DIR`;
+Its interface is `STAGE TARGET_VM SOURCE_VM RUN_TOKEN VERIFIED_BUNDLE_DIR EVIDENCE_DIR`;
 `--capabilities` must advertise `fixture-v1`, `install-native-target`,
 `assert-source-readonly`, `assert-baseline`, `assert-migration-data`,
 `assert-services`, `assert-trusted-tls`, `assert-reboot`, and

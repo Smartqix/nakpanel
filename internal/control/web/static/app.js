@@ -90,10 +90,6 @@
       }
       form.addEventListener("input", markDirty);
       form.addEventListener("change", markDirty);
-      form.addEventListener("submit", function () {
-        form.dataset.npDirty = "false";
-        if (submit) submit.disabled = false;
-      });
     });
   }
 
@@ -724,17 +720,21 @@
   function loadServerInventory() {
     var target = document.querySelector("[data-np-settings-inventory]");
     if (!target || !window.fetch) return Promise.resolve();
+    var pageSignal = lifetime(target);
     var setText = function (selector, value) {
       each(selector, document, function (element) { element.textContent = value; });
     };
-    return fetch("/tools-settings/inventory", { credentials: "same-origin", headers: { "Accept": "application/json" } })
+    return fetch("/tools-settings/inventory", { credentials: "same-origin", signal: pageSignal, headers: { "Accept": "application/json" } })
       .then(function (response) {
+        if (pageSignal.aborted) return;
         return response.json().then(function (data) {
+          if (pageSignal.aborted) return;
           if (!response.ok || !data.ok || !data.inventory) throw new Error("inventory unavailable");
           return data;
         });
       })
       .then(function (payload) {
+        if (pageSignal.aborted) return;
         var inventory = payload.inventory;
         var cached = payload.cached === true;
         serverInventoryHostname = cached ? "" : (inventory.hostname || "");
@@ -977,6 +977,7 @@
         }
       })
       .catch(function () {
+        if (pageSignal.aborted) return;
         var state = document.querySelector("[data-np-server-inventory-state]");
         var indicator = target.querySelector(".np-health-indicator");
         if (state) { state.textContent = "unavailable"; state.className = "np-pill np-pill-fail"; }
@@ -1083,6 +1084,7 @@
   function loadServerJournal(form) {
     var target = document.querySelector("[data-np-journal-entries]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     form = form || document.querySelector("[data-np-journal-filter]");
     if (!form) return;
     var status = document.querySelector("[data-np-journal-state]");
@@ -1095,14 +1097,17 @@
     loadingRow.appendChild(loadingCell);
     target.appendChild(loadingRow);
     fetch("/tools-settings/journal?" + params.toString(), {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.result) throw new Error(payload.error || "Journal is unavailable");
         return payload.result;
       });
     }).then(function (result) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       (result.entries || []).forEach(function (entry) {
         var row = document.createElement("tr");
@@ -1132,6 +1137,7 @@
         status.textContent = (result.entries || []).length + " bounded entries loaded" + (result.truncated ? " (messages truncated)" : "") + ".";
       }
     }).catch(function (error) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       var row = document.createElement("tr");
       var cell = document.createElement("td");
@@ -1282,12 +1288,13 @@
   function loadServerUpdates(dryRun) {
     var target = document.querySelector("[data-np-update-packages]");
     if (!target || !window.fetch) return Promise.resolve(false);
+    var pageSignal = lifetime(target);
     var operation = document.querySelector("[data-np-update-operation]");
     var button = document.querySelector("[data-np-update-dry-run]");
     var refresh = document.querySelector("[data-np-update-refresh]");
     var request = {
       method: dryRun ? "POST" : "GET",
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     };
     if (dryRun) request.headers["X-Nakpanel-CSRF"] = csrfToken();
@@ -1296,12 +1303,15 @@
     if (operation) { operation.hidden = false; operation.textContent = dryRun ? "Running package simulation..." : "Loading update inventory..."; }
     return fetch(dryRun ? "/tools-settings/updates/dry-run" : "/tools-settings/updates/inventory", request)
       .then(function (response) {
+        if (pageSignal.aborted) return;
         return response.json().then(function (payload) {
+          if (pageSignal.aborted) return;
           if (!response.ok || !payload.ok || (!payload.updates && !payload.operation_id)) throw new Error(payload.error || "Update inventory is unavailable");
           return payload;
         });
       })
       .then(function (payload) {
+        if (pageSignal.aborted) return;
         if (payload.operation_id) {
           if (operation) {
             operation.hidden = false;
@@ -1314,12 +1324,14 @@
         return true;
       })
       .catch(function (error) {
+        if (pageSignal.aborted) return;
         if (operation) { operation.hidden = false; operation.textContent = error.message; }
         var badge = document.querySelector("[data-np-update-state]");
         if (badge) { badge.textContent = "unavailable"; badge.className = "np-pill np-pill-fail"; }
         return false;
       })
       .then(function (success) {
+        if (pageSignal.aborted) return;
         if (button) button.disabled = false;
         if (refresh) refresh.disabled = false;
         return success;
@@ -1329,9 +1341,11 @@
   function loadMailStatus() {
     var status = document.querySelector("[data-np-mail-status]");
     if (!status || !window.fetch) return;
-    fetch("/mail/status", { credentials: "same-origin" })
+    var signal = lifetime(status);
+    fetch("/mail/status", { credentials: "same-origin", signal: signal })
       .then(function (response) { return response.json().then(function (data) { if (!response.ok || !data.ok) throw new Error("status unavailable"); return data.status; }); })
       .then(function (data) {
+        if (signal.aborted) return;
         var state = document.querySelector("[data-np-mail-state]");
         var version = document.querySelector("[data-np-mail-version]");
         var listeners = document.querySelector("[data-np-mail-listeners]");
@@ -1348,6 +1362,7 @@
 		if (error) { error.textContent = data.last_error || ""; error.hidden = !data.last_error; }
       })
       .catch(function () {
+        if (signal.aborted) return;
         var state = document.querySelector("[data-np-mail-state]");
         var version = document.querySelector("[data-np-mail-version]");
         var healthCopy = document.querySelector("[data-np-mail-health-copy]");
@@ -1364,15 +1379,19 @@
   function loadServerSecurity() {
     var state = document.querySelector("[data-np-security-state]");
     if (!state || !window.fetch) return;
+    var pageSignal = lifetime(state);
     fetch("/tools-settings/security/status", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.policy) throw new Error(payload.error || "Security inspection is unavailable");
         return payload;
       });
     }).then(function (payload) {
+      if (pageSignal.aborted) return;
       var policy = payload.policy;
       var capabilities = payload.capabilities || {};
       var firewall = policy.firewall || {};
@@ -1394,16 +1413,20 @@
       if (tlsCopy) tlsCopy.textContent = policy.tls && policy.tls.profile ? policy.tls.profile : "Unknown";
       loadSecurityBans();
     }).catch(function () {
+      if (pageSignal.aborted) return;
       state.textContent = "unavailable";
       state.className = "np-pill np-pill-fail";
     });
   }
 
   async function securityAction(url, body, successMessage, confirmMessage) {
+    var pageSignal = lifetime(document.querySelector('#main-content'));
     if (confirmMessage && !await askConfirmation(confirmMessage, document.activeElement)) return;
+    if (pageSignal.aborted) return;
     var status = document.querySelector("[data-np-security-action-state]");
     fetch(url, {
       method: "POST",
+      signal: pageSignal,
       credentials: "same-origin",
       headers: {
         "Accept": "application/json",
@@ -1412,16 +1435,20 @@
       },
       body: JSON.stringify(body || {})
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (response.status === 428) throw new Error("Recent authentication is required: confirm your password first.");
         if (!response.ok || !payload.ok) throw new Error(payload.error || "The security action failed.");
         return payload;
       });
     }).then(function (payload) {
+      if (pageSignal.aborted) return;
       if (status) { status.textContent = successMessage || "Done."; status.hidden = false; }
       if (payload.operation_id) trackSecurityOperation(payload.operation_id);
       loadSecurityBans();
     }).catch(function (err) {
+      if (pageSignal.aborted) return;
       if (status) { status.textContent = err && err.message ? err.message : "The security action failed."; status.hidden = false; }
     });
   }
@@ -1439,15 +1466,19 @@
   function loadSecurityBans() {
     var target = document.querySelector("[data-np-security-bans]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     fetch("/tools-settings/security/bans", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Ban list unavailable");
         return payload.bans || {};
       });
     }).then(function (bans) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       if (!bans.running) {
         replaceTableWithMessage(target, 3, "Fail2ban is not running on this server.");
@@ -1481,6 +1512,7 @@
         target.appendChild(row);
       });
     }).catch(function () {
+      if (pageSignal.aborted) return;
       replaceTableWithMessage(target, 3, "Jail status is unavailable.");
     });
   }
@@ -1519,15 +1551,19 @@
   function loadServerBackups() {
     var state = document.querySelector("[data-np-backup-state]");
     if (!state || !window.fetch) return;
+    var pageSignal = lifetime(state);
     fetch("/tools-settings/backups/status", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Server backups are unavailable");
         return payload;
       });
     }).then(function (payload) {
+      if (pageSignal.aborted) return;
       state.textContent = payload.key_present ? "configured" : "key missing";
       state.className = "np-pill " + (payload.key_present ? "np-pill-ok" : "np-pill-fail");
       var keyCopy = document.querySelector("[data-np-backup-key]");
@@ -1593,6 +1629,7 @@
         });
       }
     }).catch(function (err) {
+      if (pageSignal.aborted) return;
       state.textContent = "unavailable";
       state.className = "np-pill np-pill-fail";
       var error = document.querySelector("[data-np-backup-error]");
@@ -1602,8 +1639,10 @@
 
   function backupAction(url, body, successMessage) {
     var error = document.querySelector("[data-np-backup-error]");
+    var signal = lifetime(error || document.querySelector('#main-content'));
     fetch(url, {
       method: "POST",
+      signal: signal,
       credentials: "same-origin",
       headers: {
         "Accept": "application/json",
@@ -1618,6 +1657,7 @@
         return payload;
       });
     }).then(function (payload) {
+      if (signal.aborted) return;
       if (payload.key) {
         var output = document.querySelector("[data-np-backup-key-output]");
         if (output) {
@@ -1628,6 +1668,7 @@
       if (error) { error.textContent = successMessage || "Done."; error.hidden = false; }
       loadServerBackups();
     }).catch(function (err) {
+      if (signal.aborted) return;
       if (error) { error.textContent = err && err.message ? err.message : "The backup action failed."; error.hidden = false; }
     });
   }
@@ -1655,19 +1696,23 @@
   function loadMailQueue(form) {
     var target = document.querySelector("[data-np-mail-queue-rows]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     form = form || document.querySelector("[data-np-mail-queue-filter]");
     var status = document.querySelector("[data-np-mail-queue-state]");
     var params = form ? new URLSearchParams(new FormData(form)) : new URLSearchParams("limit=50");
     replaceTableWithMessage(target, 6, "Loading queue metadata...");
     fetch("/tools-settings/mail/queue?" + params.toString(), {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.queue) throw new Error(payload.error || "Mail queue is unavailable");
         return payload.queue;
       });
     }).then(function (queue) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       (queue.messages || []).forEach(function (message) {
         var recipients = 0;
@@ -1694,6 +1739,7 @@
         status.textContent = String(queue.total || 0) + " queued messages reported" + (queue.truncated ? " (result capped)" : "") + ".";
       }
     }).catch(function (error) {
+      if (pageSignal.aborted) return;
       replaceTableWithMessage(target, 6, "Mail queue metadata could not be loaded.");
       if (status) { status.hidden = false; status.textContent = error.message; }
     });
@@ -1702,18 +1748,22 @@
   function loadMailLogs(form) {
     var target = document.querySelector("[data-np-mail-log-rows]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     form = form || document.querySelector("[data-np-mail-log-filter]");
     var params = form ? new URLSearchParams(new FormData(form)) : new URLSearchParams("since_minutes=60&limit=100");
     replaceTableWithMessage(target, 3, "Loading bounded mail logs...");
     fetch("/tools-settings/mail/logs?" + params.toString(), {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.logs) throw new Error(payload.error || "Mail logs are unavailable");
         return payload.logs;
       });
     }).then(function (logs) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       (logs.entries || []).forEach(function (entry) {
         var row = document.createElement("tr");
@@ -1731,6 +1781,7 @@
       });
       if (!target.children.length) replaceTableWithMessage(target, 3, "No mail log entries matched this window.");
     }).catch(function () {
+      if (pageSignal.aborted) return;
       replaceTableWithMessage(target, 3, "Mail logs could not be loaded.");
     });
   }
@@ -1874,11 +1925,12 @@
   async function reloadDatabasePanel() {
     var panel = document.querySelector('[data-np-domain-databases]');
     if (!panel || panel.querySelector('dialog[open]')) return;
-    var response = await fetch(window.location.href, {credentials:'same-origin',cache:'no-store',headers:{Accept:'text/html'}});
+    var signal = lifetime(panel);
+    var response = await fetch(window.location.href, {credentials:'same-origin',cache:'no-store',headers:{Accept:'text/html'},signal:signal});
     if (!response.ok || response.redirected) throw new Error('Refresh this page to see the latest database status.');
     var next = new DOMParser().parseFromString(await response.text(),'text/html').querySelector('[data-np-domain-databases]');
     if (!next) throw new Error('Refresh this page to see the latest database status.');
-    if (!panel.isConnected || lifetime(panel).aborted) return;
+    if (!panel.isConnected || signal.aborted) return;
     if (window.NakpanelUI.lifecycle) window.NakpanelUI.lifecycle.unmount(panel);
     panel.replaceWith(next);
     if (window.NakpanelUI.lifecycle) window.NakpanelUI.lifecycle.mount(next);
@@ -1887,6 +1939,7 @@
 
   async function submitDomainDatabase(form) {
     if (form.dataset.npSubmitting === 'true') return;
+    var pageSignal = lifetime(document.querySelector('#main-content') || form);
     var error = form.querySelector('[data-np-db-form-error]');
     if (new URL(form.action).pathname === '/databases' && !form.querySelector('[name="idempotency_key"]')) {
       var requestKey = document.createElement('input');
@@ -1898,14 +1951,16 @@
     setFormBusy(form,true);
     if (error) error.hidden = true;
     try {
-      var response = await fetch(form.action,{method:'POST',credentials:'same-origin',body:body,headers:{'X-Nakpanel-SPA':'true','X-Nakpanel-CSRF':csrfToken(),'Accept':'application/json'}});
+      var response = await fetch(form.action,{method:'POST',credentials:'same-origin',body:body,headers:{'X-Nakpanel-SPA':'true','X-Nakpanel-CSRF':csrfToken(),'Accept':'application/json'},signal:pageSignal});
       var payload = await response.json();
+      if (pageSignal.aborted) return;
       if (!response.ok || !payload.ok) throw new Error(payload.error || 'The database operation could not be completed.');
       var dialog = form.closest('dialog');
       if (dialog) closeDialog(dialog);
       clearSensitiveInputs(form);
       var refreshFailed = false;
       try {await reloadDatabasePanel();} catch (_) {refreshFailed = true;}
+      if (pageSignal.aborted) return;
       var feedback = document.querySelector('[data-np-db-feedback]');
       if (feedback) {
         feedback.hidden=false;
@@ -1913,6 +1968,7 @@
           (refreshFailed ? ' The operation was accepted, but the list could not refresh. Refresh this page to check progress; do not submit again.' : '');
       }
     } catch (failure) {
+      if (pageSignal.aborted) return;
       if (error) {error.hidden=false;error.textContent=failure.message;}
     } finally {form.dataset.npSubmitting='false';setFormBusy(form,false);}
   }
@@ -1926,17 +1982,21 @@
   function loadDatabaseAdmin() {
     var target = document.querySelector("[data-np-database-rows]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     var state = document.querySelector("[data-np-database-state]");
     var summary = document.querySelector("[data-np-database-summary]");
     fetch("/tools-settings/databases/status", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok || !payload.database_admin) throw new Error(payload.error || "Database administration is unavailable");
         return payload.database_admin;
       });
     }).then(function (snapshot) {
+      if (pageSignal.aborted) return;
       var server = snapshot.server || {};
       if (state) {
         state.textContent = server.available ? "available" : "unavailable";
@@ -1973,6 +2033,7 @@
       if (!target.children.length) replaceTableWithMessage(target, 5, "No MariaDB databases are tracked.");
       prepareForms(document);
     }).catch(function (error) {
+      if (pageSignal.aborted) return;
       if (state) { state.textContent = "unavailable"; state.className = "np-pill np-pill-fail"; }
       if (summary) summary.textContent = error.message;
       replaceTableWithMessage(target, 5, "Database administration could not be loaded.");
@@ -1982,16 +2043,20 @@
   function loadApplicationCatalog() {
     var target = document.querySelector("[data-np-application-rows]");
     if (!target || !window.fetch) return;
+    var pageSignal = lifetime(target);
     var state = document.querySelector("[data-np-application-state]");
     fetch("/tools-settings/operations/application-catalog", {
-      credentials: "same-origin",
+      credentials: "same-origin", signal: pageSignal,
       headers: {"Accept": "application/json"}
     }).then(function (response) {
+      if (pageSignal.aborted) return;
       return response.json().then(function (payload) {
+        if (pageSignal.aborted) return;
         if (!response.ok || !payload.ok) throw new Error(payload.error || "Application catalog is unavailable");
         return payload.catalog || [];
       });
     }).then(function (catalog) {
+      if (pageSignal.aborted) return;
       target.replaceChildren();
       catalog.forEach(function (item) {
         var row = document.createElement("tr");
@@ -2014,6 +2079,7 @@
       if (!target.children.length) replaceTableWithMessage(target, 7, "No application catalog instances are tracked.");
       if (state) { state.textContent = "current"; state.className = "np-pill np-pill-ok"; }
     }).catch(function () {
+      if (pageSignal.aborted) return;
       replaceTableWithMessage(target, 7, "Application catalog inventory could not be loaded.");
       if (state) { state.textContent = "unavailable"; state.className = "np-pill np-pill-fail"; }
     });
@@ -3513,6 +3579,16 @@
     if (!files || !files.length) return;
     var entries = Array.prototype.map.call(files, function (file) { return {file: file, relative: file.name}; });
     uploadFileQueue(manager, entries, null);
+  });
+
+  // Run after document delegates and the navigation controller claim submits.
+  window.addEventListener("submit", function (event) {
+    if (event.defaultPrevented) return;
+    var form = event.target.closest && event.target.closest("[data-np-dirty-guard]");
+    if (!form || form.hasAttribute("data-np-editor-form")) return;
+    form.dataset.npDirty = "false";
+    var submit = form.querySelector("[data-np-dirty-submit]");
+    if (submit) submit.disabled = false;
   });
 
   window.addEventListener("beforeunload", function (event) {

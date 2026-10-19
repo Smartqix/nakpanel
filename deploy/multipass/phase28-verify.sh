@@ -23,6 +23,7 @@ wait_for(){
 if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
   "${SCRIPT_DIR}/phase27-verify.sh"
 fi
+assert_qualification_bundle_staged
 
 sync_repo "${ROOT_DIR}"
 multipass exec "${VM_NAME}" -- bash -se <<'REMOTE'

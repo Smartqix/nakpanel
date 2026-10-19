@@ -26,6 +26,7 @@ cli(){ multipass_exec_short "${VM_NAME}" -- sudo -u nakpanel env NAKPANEL_DATABA
 if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
   "${SCRIPT_DIR}/phase29-verify.sh"
 fi
+assert_qualification_bundle_staged
 
 require_nakpanel_vm_name "${VM_NAME}"
 for tool in curl openssl python3; do

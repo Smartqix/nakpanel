@@ -41,6 +41,7 @@ RELEASE_PUBLIC_KEY=""
 ALLOW_DEVELOPMENT_BUNDLE=0
 SEALED_BUNDLE_DIR=""
 NEW_PANEL_DATABASE=0
+RESUMING_NATIVE_BOOTSTRAP=0
 RESTORE_ARCHIVE=""
 BACKUP_KEY_FILE=""
 ADMIN_EMAIL=""
@@ -93,6 +94,28 @@ if [[ -n "${RESTORE_ARCHIVE}" && -z "${BACKUP_KEY_FILE}" ]]; then
   exit 1
 fi
 
+# The authenticated private bundle owns all later installer functions and assets.
+# The child uses --bin-dir because its complete source tree is already sealed.
+run_verified_bundle_installer() {
+  local args=(--bin-dir "${BUNDLE_DIR}/bin" --rollback-schema "${ROLLBACK_SCHEMA}") value absolute
+  [[ -z "${MODE}" ]] || args+=("--${MODE}")
+  [[ -z "${REQUESTED_PHP_PROVIDER}" ]] || args+=(--php-provider "${REQUESTED_PHP_PROVIDER}")
+  [[ "${FORCE}" != 1 ]] || args+=(--force)
+  [[ "${ALLOW_DOWNGRADE}" != 1 ]] || args+=(--allow-downgrade)
+  [[ "${ASSUME_YES}" != 1 ]] || args+=(--yes)
+  [[ -z "${ADMIN_EMAIL}" ]] || args+=(--admin-email "${ADMIN_EMAIL}")
+  for value in ADMIN_PASSWORD_FILE RESTORE_ARCHIVE BACKUP_KEY_FILE; do
+    if [[ -n "${!value}" ]]; then
+      absolute="$(python3 -c 'import os,sys;print(os.path.abspath(sys.argv[1]))' "${!value}")" || return
+      printf -v "${value}" '%s' "${absolute}" || return
+    fi
+  done
+  [[ -z "${ADMIN_PASSWORD_FILE}" ]] || args+=(--admin-password-file "${ADMIN_PASSWORD_FILE}")
+  [[ -z "${RESTORE_ARCHIVE}" ]] || args+=(--restore "${RESTORE_ARCHIVE}")
+  [[ -z "${BACKUP_KEY_FILE}" ]] || args+=(--backup-key-file "${BACKUP_KEY_FILE}")
+  bash "${BUNDLE_DIR}/deploy/install/install.sh" "${args[@]}"
+}
+
 source "${SCRIPT_DIR}/platform.sh"
 nakpanel_require_platform "${REQUESTED_PHP_PROVIDER}"
 PLATFORM_BOOTSTRAP_PENDING="$(nakpanel_platform_bootstrap_pending)"
@@ -115,11 +138,9 @@ if [[ -n "${BUNDLE_DIR}" ]]; then
     verify_args+=(--allow-development)
   fi
   python3 "${ROOT_DIR}/deploy/release/verify.py" "${verify_args[@]}"
-  # All later component, migration and unit assets must match the signed bundle.
-  ROOT_DIR="${BUNDLE_DIR}"
-  SCRIPT_DIR="${BUNDLE_DIR}/deploy/install"
-  BIN_DIR="${BUNDLE_DIR}/bin"
-  cd "${ROOT_DIR}"
+  # Execute the authenticated installer's own code, not this outer version's
+  # functions against a possibly different bundle's assets.
+  if run_verified_bundle_installer; then exit 0; else exit "$?"; fi
 fi
 
 TARGET_VERSION="$(tr -d '[:space:]' <"${ROOT_DIR}/VERSION")"
@@ -144,24 +165,30 @@ if [[ -z "${installed_version}" && "${have_binaries}" == "1" ]]; then
   installed_version="unversioned"
 fi
 
-if [[ -z "${MODE}" ]]; then
-  if [[ "${have_binaries}" == "1" ]]; then
-    MODE="upgrade"
-  else
-    MODE="fresh"
+resolve_install_mode() {
+  RESUMING_NATIVE_BOOTSTRAP=0
+  if [[ -z "${MODE}" ]]; then
+    if [[ "${have_binaries}" == "1" ]]; then MODE=upgrade; else MODE=fresh; fi
   fi
-fi
-if [[ "${MODE}" == "fresh" && "${have_binaries}" == "1" && "${FORCE}" != "1" ]]; then
-  echo "an existing installation was detected; use --upgrade (or --force to reinstall fresh)" >&2
-  exit 1
-fi
+  # A trusted pending first installation may not yet have its OS user or DB.
+  # Resume its idempotent fresh prerequisites rather than assuming an upgrade.
+  if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-26.04-native && "${PLATFORM_BOOTSTRAP_PENDING}" == true && -z "${RESTORE_ARCHIVE}" ]]; then
+    RESUMING_NATIVE_BOOTSTRAP=1
+    MODE=fresh
+  fi
+  if [[ "${MODE}" == fresh && "${have_binaries}" == 1 && "${FORCE}" != 1 && "${RESUMING_NATIVE_BOOTSTRAP}" != 1 ]]; then
+    echo "an existing installation was detected; use --upgrade (or --force to reinstall fresh)" >&2
+    return 1
+  fi
+}
+resolve_install_mode
 if [[ "${REQUESTED_PHP_PROVIDER}" == sury && ! -e /etc/nakpanel/platform.json && "${MODE}" != fresh ]]; then
   echo 'platform: new Surý provider enrollment requires a fresh installation' >&2
   exit 1
 fi
 
-if [[ "${MODE}" == "upgrade" && -n "${installed_version}" && "${installed_version}" != "unversioned" && "${installed_version}" != "dev" ]]; then
-  if [[ "${installed_version}" == "${TARGET_VERSION}" && "${FORCE}" != "1" ]]; then
+if [[ "${MODE}" == "upgrade" || "${RESUMING_NATIVE_BOOTSTRAP}" == 1 ]] && [[ -n "${installed_version}" && "${installed_version}" != "unversioned" && "${installed_version}" != "dev" ]]; then
+  if [[ "${installed_version}" == "${TARGET_VERSION}" && "${FORCE}" != "1" && "${PLATFORM_BOOTSTRAP_PENDING}" != true ]]; then
     echo "nakpanel ${TARGET_VERSION} is already installed; nothing to do (use --force to re-run)"
     exit 0
   fi
@@ -370,7 +397,8 @@ bootstrap_postgres() {
 prepare_platform_install() {
   # The local check precedes the same-version no-op above. Network/package
   # preparation runs only when a real installation/update was requested.
-  if [[ "${MODE}" == fresh && "${NAKPANEL_OS_VERSION}" == 26.04 ]] && command -v psql >/dev/null 2>&1; then
+  nakpanel_preflight_host
+  if [[ "${MODE}" == fresh && "${NAKPANEL_OS_VERSION}" == 26.04 && "${RESUMING_NATIVE_BOOTSTRAP}" != 1 ]] && command -v psql >/dev/null 2>&1; then
     if sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='nakpanel'" 2>/dev/null | grep -qx 1; then
       echo 'platform: fresh Resolute bootstrap requires a new panel database; use --upgrade or explicit restore' >&2
       return 1
@@ -381,6 +409,18 @@ prepare_platform_install() {
     source "${SCRIPT_DIR}/roundcube.sh"
     nakpanel_prepare_roundcube_artifact
   fi
+  source "${SCRIPT_DIR}/stalwart.sh"
+  nakpanel_prepare_stalwart_artifact
+}
+
+record_native_admin_intent() {
+  python3 "${SCRIPT_DIR}/native_admin.py" record "${ADMIN_EMAIL}"
+}
+resolve_native_admin_intent() {
+  python3 "${SCRIPT_DIR}/native_admin.py" resolve "${ADMIN_EMAIL}"
+}
+clear_native_admin_intent() {
+  python3 "${SCRIPT_DIR}/native_admin.py" clear
 }
 
 bootstrap_native_plans() {
@@ -388,7 +428,12 @@ bootstrap_native_plans() {
     sudo -u nakpanel env NAKPANEL_DATABASE_URL="${DB_DSN}" \
       /usr/local/bin/panelctl --actor installer platform bootstrap-plans \
       --profile ubuntu-26.04-native --discard-demo-subscriptions
+    # Keep the durable startup gate until the operator's administrator exists.
+    # A retry cannot accidentally enable migration-seeded public credentials.
+    ADMIN_EMAIL="$(resolve_native_admin_intent)"
+    ensure_admin
     nakpanel_write_platform_state false
+    clear_native_admin_intent
     PLATFORM_BOOTSTRAP_PENDING=false
   fi
 }
@@ -450,7 +495,7 @@ EOF
   systemctl restart fail2ban
 }
 
-ensure_admin() {
+ensure_admin() (
   if [[ -z "${ADMIN_EMAIL}" ]]; then
     return 0
   fi
@@ -458,10 +503,27 @@ ensure_admin() {
     echo "--admin-email requires --admin-password-file" >&2
     return 1
   fi
+  if [[ ! -f "${ADMIN_PASSWORD_FILE}" || ! -s "${ADMIN_PASSWORD_FILE}" ]]; then
+    echo "administrator password file must be a non-empty regular file" >&2
+    return 1
+  fi
+  # The operator's file can remain root-only. Only the temporary copy needs
+  # to be readable by the service identity used for PostgreSQL peer auth.
+  admin_stage="$(mktemp -d "${TMPDIR:-/tmp}/nakpanel-admin.XXXXXXXX")"
+  trap 'rm -rf "${admin_stage}"' EXIT
+  install -m 0600 "${ADMIN_PASSWORD_FILE}" "${admin_stage}/password"
+  chown nakpanel:nakpanel "${admin_stage}" "${admin_stage}/password"
+  sudo -u nakpanel psql "${DB_DSN}" -X -v ON_ERROR_STOP=1 \
+    <<'SQL'
+UPDATE users SET login_disabled = true
+WHERE email IN ('admin@nakpanel.test', 'client@nakpanel.test', 'reseller@nakpanel.test');
+SQL
+  # EnsureAdmin normalizes the email and re-enables the chosen identity,
+  # including when an operator explicitly selects a seeded administrator.
   sudo -u nakpanel env NAKPANEL_DATABASE_URL="${DB_DSN}" \
     /usr/local/bin/panelctl --actor installer admin ensure \
-    --email "${ADMIN_EMAIL}" --password-file "${ADMIN_PASSWORD_FILE}"
-}
+    --email "${ADMIN_EMAIL}" --password-file "${admin_stage}/password"
+)
 
 health_gate() {
   local expected_version="$1" body version_re
@@ -512,6 +574,7 @@ cleanup_stages() {
     rm -rf "${migration_stage}"
   fi
   if [[ -n "${NAKPANEL_ROUNDCUBE_STAGE:-}" ]]; then rm -rf "${NAKPANEL_ROUNDCUBE_STAGE}"; fi
+  if [[ -n "${NAKPANEL_STALWART_STAGE:-}" ]]; then rm -rf "${NAKPANEL_STALWART_STAGE}"; fi
   if [[ -n "${SEALED_BUNDLE_DIR}" ]]; then rm -rf "${SEALED_BUNDLE_DIR}"; fi
 }
 
@@ -522,6 +585,15 @@ fresh_install() {
   trap 'status=$?; cleanup_stages; exit "${status}"' EXIT
 
   prepare_platform_install
+  # Persist the fresh transaction before application files: a crash between
+  # marker and JSON writes must never leave unrecorded installed binaries.
+  if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-26.04-native && -z "${RESTORE_ARCHIVE}" ]]; then
+    ADMIN_EMAIL="$(resolve_native_admin_intent)"
+    record_native_admin_intent
+    PLATFORM_BOOTSTRAP_PENDING=true
+    systemctl stop nakpanel.service 2>/dev/null || true
+    nakpanel_write_platform_state true
+  fi
   pause_apt_background
   ensure_build_prereqs
   ensure_go_toolchain
@@ -541,10 +613,8 @@ fresh_install() {
   prepare_panel_prerequisites
   harden_etc_nakpanel
   bootstrap_postgres
-  if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-26.04-native && "${NEW_PANEL_DATABASE}" == 1 && -z "${RESTORE_ARCHIVE}" ]]; then
-    PLATFORM_BOOTSTRAP_PENDING=true
-    systemctl stop nakpanel.service 2>/dev/null || true
-    nakpanel_write_platform_state true
+  if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-26.04-native && -z "${RESTORE_ARCHIVE}" ]]; then
+    [[ "${NEW_PANEL_DATABASE}" == 1 || "${RESUMING_NATIVE_BOOTSTRAP}" == 1 ]] || { echo 'platform: fresh native bootstrap did not create a new database' >&2; return 1; }
   else
     nakpanel_write_platform_state false
   fi
@@ -552,6 +622,11 @@ fresh_install() {
   prepare_migration_root
   run_goose_up
   run_river_up
+  # Native bootstrap needs pristine seeds; its durable gate holds all panel
+  # starts until bootstrap_native_plans has also secured the administrator.
+  if [[ "${PLATFORM_BOOTSTRAP_PENDING}" != true ]]; then
+    ensure_admin
+  fi
 
   run_component_installers
   harden_etc_nakpanel
@@ -561,7 +636,6 @@ fresh_install() {
   setup_fail2ban
   systemctl restart nakpanel-agent.service
   bootstrap_native_plans
-  ensure_admin
 
   systemctl daemon-reload
   systemctl enable nakpanel-agent.service nakpanel.service

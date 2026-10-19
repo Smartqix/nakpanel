@@ -28,10 +28,11 @@ import (
 // database role, tenant MariaDB databases are dumped over the root socket,
 // and the archive is assembled from the state trees disaster recovery needs.
 type ServerBackupProvisioner struct {
-	spoolDir    string
-	postgresDSN string
-	runner      CommandRunner
-	now         func() time.Time
+	spoolDir           string
+	roundcubeConfigDir string
+	postgresDSN        string
+	runner             CommandRunner
+	now                func() time.Time
 }
 
 type ServerBackupProvisionerOptions struct {
@@ -66,7 +67,7 @@ func NewServerBackupProvisioner(opts ServerBackupProvisionerOptions) *ServerBack
 	if now == nil {
 		now = time.Now
 	}
-	return &ServerBackupProvisioner{spoolDir: spool, postgresDSN: dsn, runner: runner, now: now}
+	return &ServerBackupProvisioner{roundcubeConfigDir: "/etc/roundcube", spoolDir: spool, postgresDSN: dsn, runner: runner, now: now}
 }
 
 // serverBackupTrees are archived verbatim. Missing roots are skipped so the
@@ -141,6 +142,12 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 		return result, err
 	}
 
+	// Reject unsupported webmail storage before dumps, service pauses or archive state.
+	roundcubePath, err := roundcubeSQLitePath(p.roundcubeConfigDir)
+	if err != nil {
+		return result, err
+	}
+
 	if err := os.MkdirAll(p.spoolDir, 0o700); err != nil {
 		return result, err
 	}
@@ -178,10 +185,6 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 		dumpFiles = append(dumpFiles, normalized)
 	}
 
-	roundcubePath, err := roundcubeSQLitePath("/etc/roundcube")
-	if err != nil {
-		return result, err
-	}
 	var roundcubeSnapshot string
 	if roundcubePath != "" {
 		roundcubeSnapshot = filepath.Join(workDir, "roundcube.sqlite")
@@ -211,7 +214,7 @@ func (p *ServerBackupProvisioner) CreateServerBackup(ctx context.Context, req ty
 		}
 	}
 
-	units, err := collectNakpanelUnits()
+	units, err := collectNakpanelUnits("/etc/systemd/system")
 	if err != nil {
 		return result, err
 	}
@@ -411,9 +414,10 @@ func serviceIsActive(ctx context.Context, unit string) bool {
 	return exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", unit).Run() == nil
 }
 
-func collectNakpanelUnits() ([]string, error) {
+func collectNakpanelUnits(systemdDir string) ([]string, error) {
 	var units []string
 	for _, pattern := range nakpanelUnitPatterns() {
+		pattern = filepath.Join(systemdDir, strings.TrimPrefix(pattern, "/etc/systemd/system/"))
 		matches, err := filepath.Glob(pattern)
 		if err != nil {
 			return nil, err
@@ -429,6 +433,7 @@ func nakpanelUnitPatterns() []string {
 		"/etc/systemd/system/nakpanel-php-worker@*.service",
 		"/etc/systemd/system/nakpanel-php-app-*.slice",
 		"/etc/systemd/system/nakpanel-valkey@*.service",
+		"/etc/systemd/system/nakpanel-podman-runtime.service",
 		"/etc/systemd/system/nakpanel-task-*.service",
 		"/etc/systemd/system/nakpanel-task-*.timer",
 		"/etc/systemd/system/nakpanel-proftpd.service",
@@ -761,7 +766,7 @@ func roundcubeSQLitePath(configDir string) (string, error) {
 				continue
 			}
 			if !strings.HasPrefix(assignment[1], "sqlite:") {
-				return "", nil
+				return "", errors.New("Roundcube configured non-SQLite database cannot be included in whole-server backups; preserve and migrate its database separately before using this backup path")
 			}
 			path := filepath.Clean("/" + strings.TrimLeft(strings.TrimPrefix(assignment[1], "sqlite:"), "/"))
 			if !backup.IsRoundcubeSQLitePath(path) {
@@ -774,7 +779,10 @@ func roundcubeSQLitePath(configDir string) (string, error) {
 			values[assignment[1]] = assignment[2]
 		}
 		if values["dbtype"] != "sqlite3" && values["dbtype"] != "sqlite" {
-			return "", nil
+			if values["dbtype"] == "" {
+				continue
+			}
+			return "", errors.New("Roundcube configured non-SQLite database cannot be included in whole-server backups; preserve and migrate its database separately before using this backup path")
 		}
 		base := values["dbbasepath"]
 		if base == "" {

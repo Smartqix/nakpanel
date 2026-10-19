@@ -7,6 +7,7 @@ source "${SCRIPT_DIR}/common.sh"
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 assert_current_vm_identity
+assert_qualification_bundle_staged
 VM_IP="$(vm_ip)"
 base="https://${VM_IP}:7443"
 tmpdir="$(mktemp -d)"

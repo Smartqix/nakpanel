@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import re
 import secrets
+import shutil
+import tarfile
 import stat
 import subprocess
 import sys
@@ -242,6 +244,9 @@ print(json.dumps({'databases':q("SELECT db_name FROM databases WHERE engine='mar
 def prepare(spec_path, output):
     c = load_spec(spec_path)
     identity(c, c['source_vm'], '24.04')
+    # Read-only storage qualification precedes fixture files, PHP normalization,
+    # seed mutations and freezing. Never convert an existing webmail backend.
+    probe(c, c['source_vm'], 'source-preflight')
     output = Path(output).resolve()
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
     os.chmod(output, 0o700)
@@ -280,34 +285,119 @@ def prepare(spec_path, output):
     print('Prepared frozen-source fixture: ' + str(output / 'fixture.json'))
 
 
-def install_target(c, target, artifacts, evidence):
-    artifacts = Path(artifacts).resolve()
-    for name in ('panel', 'agent', 'panelctl', 'VERSION'):
-        if not (artifacts / name).is_file(): raise ValueError('target native artifacts require panel/agent/panelctl/VERSION')
-    environment = dict(os.environ, NAKPANEL_MULTIPASS_VM=target, NAKPANEL_MULTIPASS_DR_VM=target,
-        NAKPANEL_MULTIPASS_SOURCE_VM=c['source_vm'], NAKPANEL_RUN_TOKEN=c['run_token'],
-        NAKPANEL_MULTIPASS_ARCH=c['architecture'], NAKPANEL_MULTIPASS_IMAGE='26.04')
-    run(['bash', '-c', 'source "$1"; sync_repo "$2" "$3"', '_', HERE / 'common.sh', HERE.parent.parent, c['remote_src']], env=environment)
-    binary_dir = '/tmp/nakpanel-forward-bin-' + c['run_token']
-    run(['multipass', 'exec', target, '--', 'mkdir', '-m', '700', binary_dir])
-    for name in ('panel', 'agent', 'panelctl', 'VERSION'):
-        run(['multipass', 'transfer', artifacts / name, target + ':' + binary_dir + '/' + name])
-    args = ['multipass', 'exec', target, '--', 'sudo', 'bash', '-se', '--', c['remote_src'], binary_dir]
-    program = 'set -euo pipefail\ncp "$2/VERSION" "$1/VERSION"\nchmod 755 "$2/panel" "$2/agent" "$2/panelctl"\n"$1/deploy/install/install.sh" --fresh --bin-dir "$2" --yes'
-    if c['target_profile'] == 'ubuntu-26.04-sury': program += ' --php-provider sury'
-    run(args, program + '\n')
-    run(['multipass', 'transfer', c['ca_file'], target + ':' + binary_dir + '/ca.crt'])
-    run(['multipass', 'exec', target, '--', 'sudo', 'install', '-m', '0644', binary_dir + '/ca.crt', '/usr/local/share/ca-certificates/nakpanel-forward-fixture.crt'])
+
+def stage_target_bundle(bundle, public_key, version, architecture, allow_development='0'):
+    """Seal and authenticate exact local inputs before any Multipass action."""
+    if architecture not in ('amd64','arm64') or not version or allow_development not in ('0','1'):
+        raise ValueError('signed target requires exact version, architecture and explicit 0/1 development opt-in')
+    key=Path(public_key)
+    if not stat.S_ISREG(key.lstat().st_mode) or not key.stat().st_size:
+        raise ValueError('target public key must be a nonempty regular out-of-band file')
+    root=Path(tempfile.mkdtemp(prefix='nakpanel-forward-target-'))
+    staged=None
+    try:
+        os.chmod(root,0o700)
+        private_write(root/'public.pem',key.read_text())
+        staged=Path(run([sys.executable,HERE.parent/'install/stage_bundle.py',bundle]))
+        shutil.move(str(staged),str(root/'bundle'));staged=None
+        args=[sys.executable,HERE.parent/'release/verify.py','--bundle',root/'bundle','--public-key',root/'public.pem','--version',version,'--architecture',architecture]
+        if allow_development=='1':args+=['--allow-development']
+        try:run(args)
+        except RuntimeError as error:raise ValueError('signed target bundle verification failed') from error
+        private_write(root/'verified-inputs.json',json.dumps({'version':version,'architecture':architecture,'allow_development':allow_development=='1'}))
+        return str(root)
+    except BaseException:
+        shutil.rmtree(root)
+        if staged is not None:shutil.rmtree(staged)
+        raise
+
+
+def discard_target_bundle(path):
+    root=Path(path)
+    info=root.lstat()
+    if not root.name.startswith('nakpanel-forward-target-') or not stat.S_ISDIR(info.st_mode) or info.st_uid!=os.getuid() or not (root/'verified-inputs.json').is_file():
+        raise ValueError('refusing to remove an unrecognized target staging directory')
+    shutil.rmtree(root)
+
+
+def target_install_program():
+    return r'''
+import hashlib,io,json,os,shutil,stat,subprocess,sys,tarfile,tempfile
+from pathlib import Path,PurePosixPath
+payload=json.load(sys.stdin);c=payload['config']
+fd=os.open(payload['archive'],os.O_RDONLY|os.O_NOFOLLOW)
+with os.fdopen(fd,'rb') as archive_file:
+ if not stat.S_ISREG(os.fstat(archive_file.fileno()).st_mode):raise ValueError('bundle archive must be regular')
+ archive=archive_file.read()
+if hashlib.sha256(archive).hexdigest()!=payload['archive_sha256']:raise ValueError('signed target archive digest mismatch')
+with tempfile.TemporaryDirectory(prefix='nakpanel-forward-install-') as directory:
+ root=Path(directory);os.chmod(root,0o700);bundle=root/'bundle';bundle.mkdir(mode=0o700)
+ with tarfile.open(fileobj=io.BytesIO(archive),mode='r:') as stream:
+  seen=set()
+  for entry in stream:
+   name=entry.name.removeprefix('./') if hasattr(entry.name,'removeprefix') else entry.name[2:] if entry.name.startswith('./') else entry.name
+   if name in ('','.'):continue
+   path=PurePosixPath(name)
+   if path.is_absolute() or '..' in path.parts or str(path)!=name or name in seen or not (entry.isdir() or entry.isfile()):raise ValueError('unsafe signed target archive member')
+   seen.add(name);destination=bundle/name
+   if entry.isdir():destination.mkdir(mode=0o755,parents=True,exist_ok=True)
+   else:
+    destination.parent.mkdir(mode=0o755,parents=True,exist_ok=True)
+    with destination.open('xb') as output,stream.extractfile(entry) as source:shutil.copyfileobj(source,output)
+    destination.chmod(0o755 if entry.mode&0o111 else 0o644)
+ key=root/'public.pem';key.write_text(payload['public_key']);key.chmod(0o600)
+ verifier=root/'verify.py';verifier.write_text(payload['verifier_program']);verifier.chmod(0o600)
+ verify=[sys.executable,str(verifier),'--bundle',str(bundle),'--public-key',str(key),'--version',payload['version'],'--architecture',c['architecture']]
+ if payload['allow_development']:verify+=['--allow-development']
+ subprocess.run(verify,check=True)
+ descriptor,password_path=tempfile.mkstemp(prefix='admin-',dir=root)
+ try:
+  os.fchmod(descriptor,0o600)
+  with os.fdopen(descriptor,'w') as password_file:password_file.write(c['admin_password'])
+  args=['bash',str(bundle/'deploy/install/install.sh'),'--fresh','--bundle',str(bundle),'--release-public-key',str(key),'--yes','--admin-email',c['admin_email'],'--admin-password-file',password_path]
+  if payload['allow_development']:args+=['--allow-development-bundle']
+  if c['target_profile']=='ubuntu-26.04-sury':args+=['--php-provider','sury']
+  # sudo sanitizes the caller environment. Carry the verified explicit policy
+  # to the real installer, and clear any inherited override for production.
+  installer_env=dict(os.environ,NAKPANEL_RELEASE_ALLOW_DEVELOPMENT='1' if payload['allow_development'] else '0')
+  subprocess.run(args,check=True,env=installer_env)
+ finally:
+  os.unlink(password_path)
+'''
+
+
+def install_target(c, target, bundle, evidence):
+    bundle=Path(bundle).resolve()
+    key=Path(os.environ['NAKPANEL_FORWARD_TARGET_PUBLIC_KEY'])
+    version=os.environ['NAKPANEL_FORWARD_TARGET_VERSION']
+    allow=os.environ.get('NAKPANEL_FORWARD_ALLOW_DEVELOPMENT','0')
+    if allow not in ('0','1'):raise ValueError('development opt-in must be 0 or 1')
+    verifier=HERE.parent/'release/verify.py'
+    args=[sys.executable,verifier,'--bundle',bundle,'--public-key',key,'--version',version,'--architecture',c['architecture']]
+    if allow=='1':args+=['--allow-development']
+    run(args)
+    remote='/tmp/nakpanel-forward-target-'+c['run_token']
+    run(['multipass','exec',target,'--','mkdir','-m','700',remote])
+    with tempfile.TemporaryDirectory(prefix='nakpanel-forward-transfer-') as temporary:
+        archive=Path(temporary)/'bundle.tar'
+        with tarfile.open(archive,'w',format=tarfile.PAX_FORMAT) as stream:
+            for path in sorted(bundle.rglob('*')):
+                if path.is_file():stream.add(path,arcname=path.relative_to(bundle).as_posix(),recursive=False)
+        digest=hashlib.sha256(archive.read_bytes()).hexdigest()
+        run(['multipass','transfer',archive,target+':'+remote+'/bundle.tar'])
+    guest(c,target,target_install_program(),{'config':c,'archive':remote+'/bundle.tar',
+        'archive_sha256':digest,'public_key':key.read_text(),'verifier_program':verifier.read_text(),
+        'version':version,'allow_development':allow=='1'})
+    run(['multipass', 'transfer', c['ca_file'], target + ':' + remote + '/ca.crt'])
+    run(['multipass', 'exec', target, '--', 'sudo', 'install', '-m', '0644', remote + '/ca.crt', '/usr/local/share/ca-certificates/nakpanel-forward-fixture.crt'])
     run(['multipass', 'exec', target, '--', 'sudo', 'update-ca-certificates'])
-    # Cached image bytes are intentionally absent from server archives. Create
-    # exact managed identities and populate the target's allowed rootless store
-    # using the immutable source digest before the restore's convergence starts.
+    # Create exact collision-checked identities before filling allowed stores.
     probe(c,target,'cache-target-images')
     boot = run(['multipass', 'exec', target, '--', 'cat', '/proc/sys/kernel/random/boot_id'])
     private_write(Path(evidence) / 'initial-target-boot-id', boot + '\n')
 
 
-def driver(stage, target, source, token, artifacts, evidence):
+def driver(stage, target, source, token, bundle, evidence):
     c = validate_prepared(load_spec(os.environ.get('NAKPANEL_FORWARD_FIXTURE_JSON', '')))
     if source != c['source_vm'] or token != c['run_token']: raise ValueError('fixture identity differs from orchestration')
     if target == source: raise ValueError('migration target equals source')
@@ -317,7 +407,7 @@ def driver(stage, target, source, token, artifacts, evidence):
         source_unchanged(c)
         archive = os.environ.get('NAKPANEL_FORWARD_ARCHIVE', c['archive_file'])
         if hashlib.sha256(Path(archive).read_bytes()).hexdigest() != c['archive_sha256']: raise ValueError('fixture does not describe this offline archive')
-    elif stage == 'install-native-target': install_target(c, target, artifacts, evidence)
+    elif stage == 'install-native-target': install_target(c, target, bundle, evidence)
     elif stage == 'assert-migration-data':
         observed = probe(c, target, 'snapshot')
         compare_snapshots(c['baseline'], observed)
@@ -342,10 +432,12 @@ if __name__ == '__main__':
     try:
         if sys.argv[1:] == ['--capabilities']: print('\n'.join(CAPABILITIES))
         elif sys.argv[1:] == ['--template']: print(json.dumps(example_spec(), indent=2))
+        elif len(sys.argv) == 7 and sys.argv[1] == '--stage-target-bundle': print(stage_target_bundle(*sys.argv[2:]))
+        elif len(sys.argv) == 3 and sys.argv[1] == '--discard-target-bundle': discard_target_bundle(sys.argv[2])
         elif len(sys.argv) == 3 and sys.argv[1] == '--validate': validate_prepared(load_spec(sys.argv[2]))
         elif len(sys.argv) == 4 and sys.argv[1] == '--prepare': prepare(sys.argv[2], sys.argv[3])
         elif len(sys.argv) == 7 and sys.argv[1] in CAPABILITIES[1:]: driver(*sys.argv[1:])
-        else: raise ValueError('usage: --template | --prepare PRIVATE_SPEC NEW_OUTPUT_DIR | STAGE TARGET SOURCE TOKEN ARTIFACTS EVIDENCE')
+        else: raise ValueError('usage: --template | --prepare PRIVATE_SPEC NEW_OUTPUT_DIR | STAGE TARGET SOURCE TOKEN VERIFIED_BUNDLE EVIDENCE')
     except Exception as error:
         print('forward fixture failed: ' + str(error), file=sys.stderr)
         sys.exit(1)

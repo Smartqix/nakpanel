@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -37,11 +38,14 @@ func (m *recordingOwnershipManager) ChownRecursive(_ context.Context, path, _ st
 }
 
 type linuxUserTestRunner struct {
-	home     string
-	username string
-	uid      int
-	exists   bool
-	calls    []string
+	home       string
+	username   string
+	uid        int
+	gid        int
+	subUIDPath string
+	subGIDPath string
+	exists     bool
+	calls      []string
 }
 
 func (r *linuxUserTestRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
@@ -51,10 +55,35 @@ func (r *linuxUserTestRunner) Run(_ context.Context, name string, args ...string
 		if !r.exists {
 			return nil, errors.New("not found")
 		}
-		return []byte(r.username + ":x:" + fmt.Sprint(r.uid) + ":" + fmt.Sprint(r.uid) + "::" + filepath.Join(r.home, r.username) + ":/usr/sbin/nologin\n"), nil
+		gid := r.gid
+		if gid == 0 {
+			gid = r.uid
+		}
+		return []byte(r.username + ":x:" + fmt.Sprint(r.uid) + ":" + fmt.Sprint(gid) + "::" + filepath.Join(r.home, r.username) + ":/usr/sbin/nologin\n"), nil
 	case "useradd":
 		r.exists = true
 		return nil, nil
+	case "usermod":
+		if len(args) != 3 {
+			return nil, errors.New("unexpected usermod arguments")
+		}
+		path := r.subUIDPath
+		if args[0] == "--add-subgids" {
+			path = r.subGIDPath
+		}
+		bounds := strings.Split(args[1], "-")
+		if len(bounds) != 2 {
+			return nil, errors.New("unexpected subordinate range")
+		}
+		start, err := strconv.ParseUint(bounds[0], 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		end, err := strconv.ParseUint(bounds[1], 10, 64)
+		if err != nil || end < start {
+			return nil, errors.New("invalid subordinate range")
+		}
+		return nil, os.WriteFile(path, []byte(fmt.Sprintf("%s:%d:%d\n", args[2], start, end-start+1)), 0o600)
 	case "userdel":
 		r.exists = false
 		return nil, nil
@@ -123,10 +152,132 @@ func TestLinuxUserManagerRefusesUnmarkedExistingAccount(t *testing.T) {
 	}
 }
 
+// Missing or altered useradd range overrides would allow OS-dependent low IDs
+// that can be occupied by base-system accounts on another supported release.
+func TestLinuxUserManagerCreatesOnlyInDedicatedSystemIDRange(t *testing.T) {
+	for _, uid := range []int{10000, 59999} {
+		t.Run(strconv.Itoa(uid), func(t *testing.T) {
+			home := t.TempDir()
+			runner := &linuxUserTestRunner{home: home, username: "npsnew", uid: uid}
+			manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: t.TempDir(), Runner: runner})
+			if err := manager.EnsureUser(context.Background(), runner.username); err != nil {
+				t.Fatal(err)
+			}
+			want := "useradd --system --user-group -K SYS_UID_MIN=10000 -K SYS_UID_MAX=59999 -K SYS_GID_MIN=10000 -K SYS_GID_MAX=59999 --home-dir " + filepath.Join(home, runner.username) + " --create-home --shell /usr/sbin/nologin " + runner.username
+			if !slices.Contains(runner.calls, want) {
+				t.Fatalf("creation did not constrain UID and GID allocation: %v", runner.calls)
+			}
+		})
+	}
+}
+
+// A successful useradd command is insufficient: unexpected UID/GID results
+// must be removed before Nakpanel writes an ownership marker.
+func TestLinuxUserManagerRemovesOutOfRangeNewAccountBeforeMarking(t *testing.T) {
+	for _, test := range []struct {
+		name     string
+		uid, gid int
+	}{
+		{"low_uid", 997, 10000},
+		{"high_uid", 60000, 10000},
+		{"low_gid", 10000, 996},
+		{"high_gid", 10000, 60000},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			markers := t.TempDir()
+			runner := &linuxUserTestRunner{home: home, username: "npsbad", uid: test.uid, gid: test.gid}
+			manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: markers, Runner: runner})
+			if err := manager.EnsureUser(context.Background(), runner.username); err == nil {
+				t.Fatal("new account outside the dedicated UID/GID range was accepted")
+			}
+			if runner.exists || !slices.Contains(runner.calls, "userdel --remove npsbad") {
+				t.Fatalf("unexpected new account was not removed: %v", runner.calls)
+			}
+			if _, err := os.Lstat(filepath.Join(markers, runner.username)); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("unexpected account left an ownership marker: %v", err)
+			}
+		})
+	}
+}
+
+// Existing marked low IDs are valid historical identities and must never be
+// silently allocated again, renumbered, or have their marker rewritten.
+func TestLinuxUserManagerReusesExistingLowIDWithoutMutation(t *testing.T) {
+	home := t.TempDir()
+	markers := t.TempDir()
+	runner := &linuxUserTestRunner{home: home, username: "npsold", uid: 997, gid: 995, exists: true}
+	markerPath := filepath.Join(markers, runner.username)
+	marker := []byte("997:" + filepath.Join(home, runner.username) + "\n")
+	if err := os.WriteFile(markerPath, marker, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(markerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: markers, Runner: runner})
+	for range 2 {
+		if err := manager.EnsureUser(context.Background(), runner.username); err != nil {
+			t.Fatal(err)
+		}
+	}
+	after, err := os.Stat(markerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(markerPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(marker) || !before.ModTime().Equal(after.ModTime()) {
+		t.Fatalf("existing marker changed: %q", got)
+	}
+	if !slices.Equal(runner.calls, []string{"getent passwd npsold", "getent passwd npsold"}) {
+		t.Fatalf("existing identity was mutated: %v", runner.calls)
+	}
+}
+
+// At UID 59999 both generated subordinate ranges end at 4032159999, below
+// Linux's last usable UID/GID (4294967294), and retain all 65536 IDs.
+func TestLinuxUserManagerMaximumNewUIDHasUsableSubordinateRange(t *testing.T) {
+	home := t.TempDir()
+	subUIDPath, subGIDPath := filepath.Join(t.TempDir(), "subuid"), filepath.Join(t.TempDir(), "subgid")
+	for _, path := range []string{subUIDPath, subGIDPath} {
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runner := &linuxUserTestRunner{home: home, username: "npsmax", uid: 59999, subUIDPath: subUIDPath, subGIDPath: subGIDPath}
+	manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: t.TempDir(), Runner: runner, ManageSubIDs: true, SubUIDPath: subUIDPath, SubGIDPath: subGIDPath})
+	if err := manager.EnsureUser(context.Background(), runner.username); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{subUIDPath, subGIDPath} {
+		got, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != "npsmax:4032094464:65536\n" {
+			t.Fatalf("subordinate range = %q", got)
+		}
+	}
+	for _, kind := range []string{"--add-subuids", "--add-subgids"} {
+		want := "usermod " + kind + " 4032094464-4032159999 npsmax"
+		if !slices.Contains(runner.calls, want) {
+			t.Fatalf("maximum subordinate allocation was not usable: %v", runner.calls)
+		}
+	}
+	const lastMappedID uint64 = 4032159999
+	if lastMappedID > uint64(4294967294) {
+		t.Fatal("subordinate mapping exceeds the Linux UID/GID limit")
+	}
+}
+
 func TestLinuxUserManagerMarksNewAccountAndAllowsReuse(t *testing.T) {
 	home := t.TempDir()
 	markers := filepath.Join(t.TempDir(), "markers")
-	runner := &linuxUserTestRunner{home: home, username: "nps43", uid: 4343}
+	runner := &linuxUserTestRunner{home: home, username: "nps43", uid: 43434}
 	manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: markers, Runner: runner})
 	if err := manager.EnsureUser(context.Background(), runner.username); err != nil {
 		t.Fatal(err)
@@ -146,7 +297,7 @@ func TestLinuxUserManagerMarksNewAccountAndAllowsReuse(t *testing.T) {
 func TestLinuxUserManagerSerializesConcurrentCreation(t *testing.T) {
 	home := t.TempDir()
 	markers := filepath.Join(t.TempDir(), "markers")
-	runner := &linuxUserTestRunner{home: home, username: "nps45", uid: 4545}
+	runner := &linuxUserTestRunner{home: home, username: "nps45", uid: 45454}
 	manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: markers, Runner: runner})
 
 	var wg sync.WaitGroup
@@ -186,7 +337,7 @@ func TestLinuxUserManagerRecoversOwnedStaleMarker(t *testing.T) {
 	if err := os.WriteFile(marker, []byte("old\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	runner := &linuxUserTestRunner{home: home, username: "nps46", uid: 4646}
+	runner := &linuxUserTestRunner{home: home, username: "nps46", uid: 46464}
 	manager := NewLinuxUserManager(LinuxUserManagerOptions{HomeRoot: home, MarkerDir: markers, Runner: runner})
 	if err := manager.EnsureUser(context.Background(), runner.username); err != nil {
 		t.Fatal(err)
@@ -195,7 +346,7 @@ func TestLinuxUserManagerRecoversOwnedStaleMarker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := strings.TrimSpace(string(contents)), "4646:"+filepath.Join(home, "nps46"); got != want {
+	if got, want := strings.TrimSpace(string(contents)), "46464:"+filepath.Join(home, "nps46"); got != want {
 		t.Fatalf("marker = %q, want %q", got, want)
 	}
 }

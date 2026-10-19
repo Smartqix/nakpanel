@@ -46,6 +46,11 @@ if [[ "$5" == 1 ]]; then
   chmod 0755 /tmp/nakpanel-release
   timeout 45m /tmp/nakpanel-release/deploy/install/install.sh --yes --bin-dir /tmp/nakpanel-release/bin
 else
+  umask 077
+  admin_password_file="$(mktemp /root/nakpanel-qualification-admin.XXXXXXXX)"
+  trap 'rm -f "${admin_password_file}"' EXIT
+  printf '%s' 'NakpanelAdmin!2026' >"${admin_password_file}"
+  install_args+=(--admin-email admin@nakpanel.test --admin-password-file "${admin_password_file}")
   timeout 45m deploy/install/install.sh "${install_args[@]}"
 fi
 systemctl is-active --quiet nakpanel nakpanel-agent nginx postgresql mariadb named stalwart-mail
@@ -61,6 +66,23 @@ tmpdir="$(mktemp -d)"
 trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
 base="https://${VM_IP}:7443"
 db(){ multipass_exec_short "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "$1" | tr -d '\r'; }
+assert_bootstrap_mariadb() {
+  local engine name canary
+  engine="$(db "SELECT engine FROM databases WHERE id=${database_id}")"
+  name="$(db "SELECT db_name FROM databases WHERE id=${database_id}")"
+  [[ "${engine}" == mariadb && "${name}" == np_current_bootstrap ]] || {
+    echo "current-install: bootstrap database identity is ${engine}:${name}, expected mariadb:np_current_bootstrap" >&2
+    return 1
+  }
+  # The control database's active flag alone cannot prove that MariaDB owns
+  # a usable schema. Write and read a canary through the actual engine now,
+  # before a later upgrade/restore gate relies on this physical database.
+  canary="$(multipass_exec_short "${VM_NAME}" -- sudo mariadb --batch --skip-column-names "${name}" -e "CREATE TABLE IF NOT EXISTS nakpanel_qualification_canary (id TINYINT PRIMARY KEY, value VARCHAR(64) NOT NULL); INSERT INTO nakpanel_qualification_canary VALUES (1,'current-bootstrap-mariadb-canary') ON DUPLICATE KEY UPDATE value=VALUES(value); SELECT value FROM nakpanel_qualification_canary WHERE id=1;")" || return 1
+  [[ "${canary}" == current-bootstrap-mariadb-canary ]] || {
+    echo 'current-install: physical MariaDB canary did not round trip' >&2
+    return 1
+  }
+}
 wait_for(){
   local value=""
   for _ in $(seq 1 120); do
@@ -73,6 +95,9 @@ wait_for(){
 curl -skfL --max-time 30 -c "${tmpdir}/cookies" -d email=admin@nakpanel.test \
   -d 'password=NakpanelAdmin!2026' "${base}/login" -o "${tmpdir}/login.html"
 grep -q 'data-np-role="admin"' "${tmpdir}/login.html"
+if [[ "${NAKPANEL_RELEASE_LEGACY_INSTALLER:-0}" != 1 ]]; then
+  [[ "$(db "SELECT count(*) FROM users WHERE email IN ('client@nakpanel.test','reseller@nakpanel.test') AND NOT login_disabled")" == 0 ]] || { echo 'public seed clients remain enabled' >&2; exit 1; }
+fi
 post(){
   local path="$1" code; shift
   code="$(curl -sk --max-time 30 -b "${tmpdir}/cookies" \
@@ -115,9 +140,10 @@ curl -skf --max-time 20 --resolve "current-bootstrap.test:443:${VM_IP}" https://
 database_id="$(db "SELECT id FROM databases WHERE db_name='np_current_bootstrap'")"
 if [[ -z "${database_id}" ]]; then
   post databases -d "subscription_id=${subscription_id}" -d "site_id=${site_id}" \
-    -d db_name=np_current_bootstrap -d db_user=npu_current_bootstrap -d 'password=NakpanelBootstrap_2026'
+    -d engine=mariadb -d db_name=np_current_bootstrap -d db_user=npu_current_bootstrap -d 'password=NakpanelBootstrap_2026'
   database_id="$(db "SELECT id FROM databases WHERE db_name='np_current_bootstrap'")"
 fi
 [[ "${database_id}" =~ ^[0-9]+$ ]]
 wait_for "SELECT status FROM databases WHERE id=${database_id}" active
+assert_bootstrap_mariadb
 echo "Current installation verified on ${VM_NAME} (${VM_IP})."

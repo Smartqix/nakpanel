@@ -68,12 +68,22 @@ require_multipass() {
 # Multipass 1.16 on macOS can leave its client process spinning after a short
 # remote command has already exited. Buffer output until the client exits so
 # downstream grep cannot close the pipe early, and retry only watchdog hangs.
-multipass_exec_short() {
+multipass_exec_short() (
+  umask 077
   local budget="${NAKPANEL_MULTIPASS_SHORT_TIMEOUT:-30}"
   local attempt pid waited output_dir exit_status
+  output_dir="$(mktemp -d "${TMPDIR:-/tmp}/nakpanel-mp.XXXXXX")" || return 1
+  trap 'rm -f "${output_dir}/stdin" "${output_dir}/stdout" "${output_dir}/stderr"; rmdir "${output_dir}"' EXIT
+  # Bash disconnects asynchronous commands from the caller's stdin. Capture
+  # redirected scripts/data once, then reopen the private buffer for every
+  # watchdog attempt. Interactive callers must never block on a terminal read.
+  if [[ -t 0 ]]; then
+    : >"${output_dir}/stdin"
+  else
+    cat >"${output_dir}/stdin" || return 1
+  fi
   for attempt in 1 2 3; do
-    output_dir="$(mktemp -d "${TMPDIR:-/tmp}/nakpanel-mp.XXXXXX")"
-    multipass exec "$@" >"${output_dir}/stdout" 2>"${output_dir}/stderr" &
+    multipass exec "$@" <"${output_dir}/stdin" >"${output_dir}/stdout" 2>"${output_dir}/stderr" &
     pid=$!
     waited=0
     while kill -0 "${pid}" 2>/dev/null && [[ "${waited}" -lt "${budget}" ]]; do
@@ -85,8 +95,7 @@ multipass_exec_short() {
       wait "${pid}" 2>/dev/null || true
       cat "${output_dir}/stdout" || true
       cat "${output_dir}/stderr" >&2 || true
-      rm -rf "${output_dir}"
-      echo "multipass exec watchdog fired (attempt ${attempt}): $*" >&2
+      echo "multipass exec watchdog fired (attempt ${attempt})" >&2
       continue
     fi
     if wait "${pid}"; then
@@ -96,12 +105,11 @@ multipass_exec_short() {
     fi
     cat "${output_dir}/stdout" || true
     cat "${output_dir}/stderr" >&2 || true
-    rm -rf "${output_dir}"
     return "${exit_status}"
   done
-  echo "multipass exec kept hanging: $*" >&2
+  echo "multipass exec kept hanging after three attempts" >&2
   return 124
-}
+)
 
 require_nakpanel_vm_name() {
   local name="$1"
@@ -110,6 +118,27 @@ require_nakpanel_vm_name() {
     echo "choose a VM name beginning with nakpanel- or run manual cleanup yourself" >&2
     exit 1
   fi
+}
+
+# A qualification run that selected a signed release must never silently
+# switch to a working-tree build because its staged guest copy disappeared.
+# Runs without a release retain the legacy source-development workflow.
+assert_qualification_bundle_staged() {
+  [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]] || return 0
+  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- sudo bash -c '
+set -euo pipefail
+test -d /tmp/nakpanel-release
+test ! -L /tmp/nakpanel-release
+test -d /tmp/nakpanel-release/bin
+test ! -L /tmp/nakpanel-release/bin
+for file in /tmp/nakpanel-release/manifest.json /tmp/nakpanel-release/manifest.sig /tmp/nakpanel-release-public.pem; do
+  [[ -f "$file" && -s "$file" && ! -L "$file" ]] || exit 1
+done
+for artifact in panel agent panelctl; do
+  file="/tmp/nakpanel-release/bin/$artifact"
+  [[ -f "$file" && -x "$file" && ! -L "$file" ]] || exit 1
+done
+' || { echo 'expected signed release artifacts are missing or unsafe in the guest; refusing source-build fallback' >&2; return 1; }
 }
 
 # A launch may create ownership only after confirming the actual guest identity.
@@ -160,6 +189,7 @@ probe_vm_identity() {
   multipass_exec_short "$1" -- sudo bash -c '
 set -euo pipefail
 . /etc/os-release
+[[ "${ID:-}" == ubuntu ]] || { echo "guest identity requires Ubuntu" >&2; exit 1; }
 printf "%s\n" "$VERSION_ID"
 dpkg --print-architecture
 marker=/etc/nakpanel-qualification-owner
@@ -177,9 +207,14 @@ assert_vm_identity() {
   [[ "$(cat "${manifest}")" == "${expected}" ]] || { echo "VM host ownership mismatch: ${name}" >&2; return 1; }
   # Multipass may report cloud-init done just before a reboot resets SSH.
   # Retry only failed read transports; a completed mismatched probe fails now.
-  local probe_attempt probe_ok=0
+  local probe_attempt probe_version probe_ok=0
   for probe_attempt in 1 2 3; do
-    if identity="$(probe_vm_identity "${name}")"; then probe_ok=1; break; fi
+    if identity="$(probe_vm_identity "${name}")"; then
+      # The macOS client occasionally reports SSH reset with a successful
+      # exit and no protocol body. A real probe always starts version+arch.
+      probe_version="${identity%%$'\n'*}"
+      if [[ "${probe_version}" =~ ^[0-9]+\.[0-9]+$ && "${identity}" == *$'\n'* ]]; then probe_ok=1; break; fi
+    fi
     [[ "${probe_attempt}" == 3 ]] || sleep 2
   done
   [[ "${probe_ok}" == 1 ]] || return 1

@@ -2,9 +2,11 @@ package web
 
 import (
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/site"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
 
@@ -93,7 +95,7 @@ func mailWorkspaceSummary(data dashboard.Data, subscriptions []types.Subscriptio
 
 func siteForMailDomain(sites []dashboard.Site, domain dashboard.MailDomain) (dashboard.Site, bool) {
 	for _, item := range sites {
-		if (domain.SiteID > 0 && item.ID == domain.SiteID) || strings.EqualFold(item.Domain, domain.Domain) {
+		if item.SubscriptionID == domain.SubscriptionID && ((domain.SiteID > 0 && item.ID == domain.SiteID) || (domain.SiteID == 0 && strings.EqualFold(item.Domain, domain.Domain))) {
 			return item, true
 		}
 	}
@@ -102,7 +104,7 @@ func siteForMailDomain(sites []dashboard.Site, domain dashboard.MailDomain) (das
 
 func mailDomainForSite(domains []dashboard.MailDomain, site dashboard.Site) (dashboard.MailDomain, bool) {
 	for _, domain := range domains {
-		if domain.SiteID == site.ID || (domain.SiteID == 0 && domain.SubscriptionID == site.SubscriptionID && strings.EqualFold(domain.Domain, site.Domain)) {
+		if domain.SubscriptionID == site.SubscriptionID && (domain.SiteID == site.ID || (domain.SiteID == 0 && strings.EqualFold(domain.Domain, site.Domain))) {
 			return domain, true
 		}
 	}
@@ -116,6 +118,124 @@ func webmailForSite(items []dashboard.WebmailHost, siteID int64) (dashboard.Webm
 		}
 	}
 	return dashboard.WebmailHost{}, false
+}
+
+func mailWebmailURL(hostedSite dashboard.Site, subscription types.SubscriptionSummary, domain dashboard.MailDomain, data dashboard.Data) string {
+	if hostedSite.Status != "active" || subscription.Status != "active" || !domain.Enabled || domain.Status != "in_sync" || !subscriptionMailEnabled(subscription, data.SubscriptionServices) || !subscriptionWebmailEnabled(subscription, data.SubscriptionServices) {
+		return ""
+	}
+	for _, customer := range data.Customers {
+		if customer.ID == subscription.CustomerID && customer.Status != "active" {
+			return ""
+		}
+	}
+	for _, provider := range data.Resellers {
+		if provider.ID == subscription.ResellerID && provider.Status != "active" {
+			return ""
+		}
+	}
+	host, found := webmailForSite(data.SubscriptionServices.WebmailHosts, hostedSite.ID)
+	if !found || host.SubscriptionID != subscription.ID || host.Status != "active" || host.LastError != "" || site.ValidateDomain(host.Hostname) != nil || net.ParseIP(host.Hostname) != nil {
+		return ""
+	}
+	return "https://" + host.Hostname + "/"
+}
+
+func mailWorkspaceURL(view WorkspaceView, siteID int64, section string) string {
+	return workspacePath(view, fmt.Sprintf("/sites/%d?tab=mail&mail_view=%s", siteID, section))
+}
+
+func mailTabClass(active bool) string {
+	if active {
+		return "is-active"
+	}
+	return ""
+}
+func mailCurrent(active bool) string {
+	if active {
+		return "page"
+	}
+	return "false"
+}
+func mailDomainState(domain dashboard.MailDomain) string {
+	if !domain.Enabled {
+		return "disabled"
+	}
+	if domain.Status == "in_sync" {
+		return "active"
+	}
+	return domain.Status
+}
+func mailDMARCLabel(policy string) string {
+	switch policy {
+	case "quarantine":
+		return "Quarantine"
+	case "reject":
+		return "Reject"
+	default:
+		return "Monitoring only"
+	}
+}
+func mailWebmailReadiness(url string) string {
+	if url != "" {
+		return "Ready"
+	}
+	return "Unavailable"
+}
+func mailMailboxLabel(enabled bool) string {
+	if enabled {
+		return "Mailbox enabled"
+	}
+	return "Mailbox suspended"
+}
+
+func mailConnectionURL(view WorkspaceView, siteID, mailboxID int64) string {
+	return mailWorkspaceURL(view, siteID, "connection") + fmt.Sprintf("&mailbox_id=%d", mailboxID)
+}
+
+func mailClientCopy(view WorkspaceView) string {
+	p := view.MailClient
+	if view.MailClientError != "" || !p.IMAPTLS || (!p.SMTPTLS && !p.SMTPSTARTTLS) {
+		return ""
+	}
+	smtp := "465 (SSL/TLS)"
+	if !p.SMTPTLS {
+		smtp = "587 (STARTTLS)"
+	}
+	return "Email / username: " + view.MailClientAddress + "\nIncoming IMAP: " + p.Hostname + "\nPort: 993 (SSL/TLS)\nOutgoing SMTP: " + p.Hostname + "\nPort: " + smtp + "\nAuthentication: required for incoming and outgoing mail.\nPassword: your mailbox password, not your panel password."
+}
+
+func mailFormView(view string) bool {
+	return view == "create-address" || view == "edit-address" || view == "create-alias" || view == "edit-alias" || view == "webmail"
+}
+
+func mailReturnSiteID(primary, fallback int64) int64 {
+	if primary > 0 {
+		return primary
+	}
+	return fallback
+}
+func mailDeleteMessage(kind string) string {
+	if kind == "mail_alias" {
+		return "Delete this alias? Its destination mailboxes and messages are kept."
+	}
+	return "Delete this email address and permanently remove its messages? Other mailboxes and website files are kept."
+}
+func mailSelectedMailbox(items []dashboard.Mailbox, id int64, defaultQuota int) dashboard.Mailbox {
+	for _, item := range items {
+		if item.ID == id && id > 0 {
+			return item
+		}
+	}
+	return dashboard.Mailbox{QuotaMB: defaultQuota}
+}
+func mailSelectedAlias(items []dashboard.MailAlias, id int64) dashboard.MailAlias {
+	for _, item := range items {
+		if item.ID == id && id > 0 {
+			return item
+		}
+	}
+	return dashboard.MailAlias{}
 }
 
 func mailDialogID(kind string, subscriptionID, resourceID int64) string {
@@ -222,7 +342,7 @@ func mailboxDialogTitle(id int64) string {
 	if id > 0 {
 		return "Edit mailbox"
 	}
-	return "Create mailbox"
+	return "Create email address"
 }
 
 func mailboxPasswordHint(id int64) string {

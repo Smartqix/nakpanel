@@ -10,6 +10,9 @@ import (
 )
 
 func domainWorkspaceClass(view WorkspaceView) string {
+	if view.Route == "site-detail" && view.Tab == "mail" {
+		return "np-app np-routed np-domains np-mail-page"
+	}
 	switch view.Route {
 	case "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress":
 		return "np-app np-routed np-domains"

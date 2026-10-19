@@ -1,0 +1,53 @@
+package web
+
+templ MailClientContent(view WorkspaceView) {
+	<div data-np-mail-client-view class="np-mail-client-view">
+		<div class="np-dialog-head"><h2 id="np-mail-connect-title">Connect a mail app</h2><button class="np-icon-button" type="button" data-np-dialog-close aria-label="Close">@icon("x")</button><p>{ view.MailClientAddress }</p></div>
+		<div class="np-mail-client-body">
+			<div class="np-mail-client-account"><span class="np-object-icon">@icon("mail")</span><div><strong>{ view.MailClientAddress }</strong><small>Use this full email address as your username.</small></div><button type="button" class="np-icon-button np-secondary-button" data-np-mail-copy={ view.MailClientAddress } title="Copy username" aria-label="Copy username">@icon("copy")</button></div>
+			if view.MailClientError!="" {
+				<div class="np-mail-notice" role="status">@icon("triangle-alert")<p>{ view.MailClientError }</p></div>
+			} else {
+				<div class="np-mail-protocol-tabs" role="tablist" aria-label="Incoming mail protocol"><button type="button" role="tab" id="np-mail-imap-tab" aria-selected="true" aria-controls="np-mail-imap" data-np-mail-protocol="imap">IMAP <span>Recommended</span></button><button type="button" role="tab" id="np-mail-pop-tab" aria-selected="false" aria-controls="np-mail-pop" tabindex="-1" data-np-mail-protocol="pop">POP3 <span>Not enabled</span></button></div>
+				<div id="np-mail-imap" role="tabpanel" aria-labelledby="np-mail-imap-tab" data-np-mail-protocol-panel="imap">
+					<p class="np-mail-client-caption">IMAP keeps your mail and folders in sync across devices.</p>
+					<div class="np-mail-mobile-segments" role="group" aria-label="Connection direction"><button type="button" aria-pressed="true" data-np-mail-direction="incoming">Incoming</button><button type="button" aria-pressed="false" data-np-mail-direction="outgoing">Outgoing</button></div>
+					<section class="np-mail-endpoint" data-np-mail-endpoint="incoming"><h3>Incoming mail <span>IMAP</span></h3>
+						if view.MailClient.IMAPTLS {
+							@mailEndpointFields(view.MailClient.Hostname,"993","SSL/TLS")
+						} else {
+							<p class="np-mail-notice">Secure IMAP could not be verified. Contact your provider before connecting.</p>
+						}
+					</section>
+					<section class="np-mail-endpoint" data-np-mail-endpoint="outgoing"><h3>Outgoing mail <span>SMTP</span></h3>
+						if view.MailClient.SMTPTLS {
+							@mailEndpointFields(view.MailClient.Hostname,"465","SSL/TLS")
+						} else if view.MailClient.SMTPSTARTTLS {
+							@mailEndpointFields(view.MailClient.Hostname,"587","STARTTLS")
+						} else {
+							<p class="np-mail-notice">Secure SMTP could not be verified. Contact your provider before connecting.</p>
+						}
+						if view.MailClient.SMTPTLS && view.MailClient.SMTPSTARTTLS {
+							<p class="np-mail-client-caption">Alternative: port <strong>587</strong> with <strong>STARTTLS</strong>.</p>
+						}
+					</section>
+				</div>
+				<div id="np-mail-pop" role="tabpanel" aria-labelledby="np-mail-pop-tab" data-np-mail-protocol-panel="pop"><h3>POP3 is not enabled</h3><p>This server provides IMAP for incoming mail. Select IMAP in your mail app; do not use an unencrypted POP3 connection.</p></div>
+				<div class="np-mail-auth-note">@icon("shield-check")<p>Authentication is required for incoming and outgoing mail. Use your <strong>mailbox password</strong>, not your Nakpanel sign-in password. Never turn off certificate verification.</p></div>
+				<details class="np-mail-setup-guide"><summary>Set up Outlook, Apple Mail or Thunderbird</summary><ol><li>Add a new account using your full email address.</li><li>Choose manual setup, then IMAP.</li><li>Enter the verified incoming and outgoing settings above.</li><li>Enable authentication for both servers and enter your mailbox password.</li></ol><p>Webmail opens a separate login page. It does not sign you in automatically.</p></details>
+				<p class="np-mail-client-caption">TLS identity checked just now against the server trust store. Public DNS and your network must also reach this hostname.</p>
+			}
+			<p class="np-mail-copy-status" role="status" aria-live="polite" data-np-mail-copy-status></p>
+			<textarea class="np-mail-manual-copy" readonly hidden aria-label="Connection settings for manual copying" data-np-mail-manual-copy></textarea>
+		</div>
+		<div class="np-dialog-actions np-mail-client-footer"><button type="button" class="np-secondary-button" data-np-dialog-close>Close</button>
+			if copy:=mailClientCopy(view);copy!="" {
+				<button type="button" data-np-mail-copy={ copy }>@icon("copy") Copy all settings</button>
+			}
+		</div>
+	</div>
+}
+
+templ mailEndpointFields(hostname string, port string, security string) {
+	<dl class="np-mail-endpoint-fields"><div><dt>Server hostname</dt><dd><strong>{ hostname }</strong><button type="button" class="np-icon-button np-secondary-button" data-np-mail-copy={ hostname } title="Copy hostname" aria-label="Copy hostname">@icon("copy")</button></dd></div><div><dt>Port</dt><dd><strong>{ port }</strong></dd></div><div><dt>Encryption</dt><dd><strong>{ security }</strong></dd></div></dl>
+}

@@ -1476,6 +1476,12 @@ func (p *HostingToolkitProvisioner) EnsureValkey(ctx context.Context, req types.
 	if err != nil {
 		return types.EnsureValkeyResult{}, err
 	}
+	if _, err := valkeyTenantID(account.Uid); err != nil {
+		return types.EnsureValkeyResult{}, err
+	}
+	if _, err := valkeyTenantID(account.Gid); err != nil {
+		return types.EnsureValkeyResult{}, err
+	}
 	valkeyMutationMu.Lock()
 	defer valkeyMutationMu.Unlock()
 	base := filepath.Join(p.valkeyConfigRoot, fmt.Sprintf("sub-%d", req.SubscriptionID))
@@ -1493,9 +1499,6 @@ func (p *HostingToolkitProvisioner) EnsureValkey(ctx context.Context, req types.
 		return types.EnsureValkeyResult{}, err
 	}
 	if os.Geteuid() == 0 {
-		if err := os.MkdirAll("/run/crun", 0o755); err != nil {
-			return types.EnsureValkeyResult{}, err
-		}
 		output, aclErr := p.runner.Run(ctx, "setfacl", "-m", "u:"+req.Username+":--x", filepath.Dir(p.valkeyRuntimeRoot))
 		if aclErr != nil {
 			return types.EnsureValkeyResult{}, fmt.Errorf("grant subscription cache traversal: %w: %s", aclErr, strings.TrimSpace(string(output)))
@@ -1530,12 +1533,14 @@ timeout %d
 aclfile /etc/valkey/users.acl
 `, req.MemoryMB, req.MaxClients, req.IdleTimeout)
 	unit := renderValkeyUnit(req, account.Uid, account.Gid, base, runtimeDir, p.valkeyImage)
-	snapshots, err := snapshotFiles([]string{aclPath, configPath, unitPath})
+	podmanRuntimePath := filepath.Join(p.systemdUnitDir, "nakpanel-podman-runtime.service")
+	podmanRuntimeUnit := renderValkeyPodmanRuntimeUnit()
+	snapshots, err := snapshotFiles([]string{aclPath, configPath, unitPath, podmanRuntimePath})
 	if err != nil {
 		return types.EnsureValkeyResult{}, err
 	}
 	configChanged := snapshotsDiffer(snapshots, map[string][]byte{
-		aclPath: []byte(acl), configPath: []byte(config), unitPath: []byte(unit),
+		aclPath: []byte(acl), configPath: []byte(config), unitPath: []byte(unit), podmanRuntimePath: []byte(podmanRuntimeUnit),
 	})
 	hadUnit := false
 	for _, snapshot := range snapshots {
@@ -1595,6 +1600,9 @@ aclfile /etc/valkey/users.acl
 		if err := os.Chown(configPath, 0, gid); err != nil {
 			return rollback(err)
 		}
+	}
+	if err := writeFileAtomic(podmanRuntimePath, []byte(podmanRuntimeUnit), 0o644); err != nil {
+		return rollback(err)
 	}
 	if err := writeFileAtomic(unitPath, []byte(unit), 0o644); err != nil {
 		return rollback(err)
@@ -1677,7 +1685,8 @@ func renderValkeyUnit(req types.EnsureValkeyReq, uid, gid, base, runtimeDir, ima
 	controllerTasks := max(128, req.ProcessLimit+64)
 	return fmt.Sprintf(`[Unit]
 Description=Nakpanel cache for subscription %d
-After=podman.service
+Requires=nakpanel-podman-runtime.service
+After=podman.service nakpanel-podman-runtime.service
 
 [Service]
 Type=notify
@@ -1692,7 +1701,7 @@ NoNewPrivileges=yes
 PrivateTmp=yes
 ProtectSystem=strict
 ProtectHome=yes
-ReadWritePaths=/var/lib/containers -/run/containers -/run/libpod -/run/lock -/run/crun %s
+ReadWritePaths=/var/lib/containers /run/containers /run/libpod -/run/lock /run/crun %s
 MemoryMax=%dM
 CPUQuota=%d%%
 TasksMax=%d

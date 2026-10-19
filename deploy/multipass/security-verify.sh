@@ -21,6 +21,7 @@ IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
   "${ROOT_DIR}/deploy/multipass/phase26-verify.sh"
 fi
+assert_qualification_bundle_staged
 
 # ---------------------------------------------------------------------------
 # Bootstrap: build current HEAD (with the hardening) + agentprobe, wire the
@@ -151,7 +152,7 @@ require_fixture_http() {
 provision_tenant() { # LABEL -> exports <LABEL>_ACC/_SUB/_USER/_DOMAIN/_SITE
   local label="$1" ref dom body acc sub user site
   ref="sec${label}${STAMP}"
-  dom="${ref}.test"
+  dom="$(printf '%s.test' "${ref}" | tr '[:upper:]' '[:lower:]')"
   body="{\"external_ref\":\"${ref}\",\"provider\":\"admin\",\"plan\":\"${PLAN_SLUG}\",\"email\":\"${ref}@example.test\",\"name\":\"tenant ${label}\",\"domain\":\"${dom}\"}"
   api -o "${tmpdir}/${label}.json" -d "${body}" "https://${VM_IP}:7443/api/v1/accounts" >/dev/null
   acc="$(sed -n 's/.*"id":"\(acc_[^"]*\)".*/\1/p' "${tmpdir}/${label}.json")"

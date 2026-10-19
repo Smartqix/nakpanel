@@ -11,6 +11,7 @@ require_nakpanel_vm_name "${VM_NAME}"
 if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != 1 ]]; then
   "${SCRIPT_DIR}/phase33-verify.sh"
 fi
+assert_qualification_bundle_staged
 tmpdir="$(mktemp -d)"
 cleanup(){ rm -rf "${tmpdir}"; }
 trap cleanup EXIT
@@ -125,9 +126,13 @@ curl -skfL --connect-timeout 5 --max-time 30 -c "${tmpdir}/owner.cookies" \
   "https://${VM_IP}:7443/login" -o "${tmpdir}/owner.html"
 curl -skf --connect-timeout 5 --max-time 30 -b "${tmpdir}/owner.cookies" \
   "https://${VM_IP}:7443/sites/${site_id}/statistics/report" >/dev/null
+unrelated_email="statistics-unrelated-${run_id}@nakpanel.test"
+post customers -d "customer_email=${unrelated_email}" -d 'customer_name=Unrelated statistics customer' \
+  -d enable_login=true -d 'password=NakpanelUnrelated!2026'
 curl -skfL --connect-timeout 5 --max-time 30 -c "${tmpdir}/client.cookies" \
-  -d 'email=client@nakpanel.test' -d 'password=NakpanelClient!2026' \
+  -d "email=${unrelated_email}" -d 'password=NakpanelUnrelated!2026' \
   "https://${VM_IP}:7443/login" -o "${tmpdir}/client.html"
+grep -q 'data-np-role="client"' "${tmpdir}/client.html" || fail 'unrelated customer login failed'
 for endpoint in "sites/${site_id}/statistics" "sites/${site_id}/statistics/report"; do
   status="$(curl -sk --connect-timeout 5 --max-time 30 -b "${tmpdir}/client.cookies" \
     -o /dev/null -w '%{http_code}' "https://${VM_IP}:7443/${endpoint}")"

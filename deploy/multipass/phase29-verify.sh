@@ -16,6 +16,7 @@ REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
 # Reject collisions before prior phases, sync or any destructive helper.
 assert_distinct_vm_names "${VM_NAME}" "${DR_VM_NAME}"
 assert_current_vm_identity
+assert_qualification_bundle_staged
 export NAKPANEL_MULTIPASS_SOURCE_VM="${VM_NAME}"
 
 fail(){ echo "phase29: $*" >&2; exit 1; }
@@ -555,6 +556,11 @@ done
 cd "${src}"
 args=(--fresh --bin-dir /tmp/nakpanel-bin --yes)
 if [[ "$2" == sury ]]; then args+=(--php-provider sury); fi
+umask 077
+admin_password_file="$(mktemp /root/nakpanel-qualification-admin.XXXXXXXX)"
+trap 'rm -f "${admin_password_file}"' EXIT
+printf '%s' 'NakpanelAdmin!2026' >"${admin_password_file}"
+args+=(--admin-email admin@nakpanel.test --admin-password-file "${admin_password_file}")
 deploy/install/install.sh "${args[@]}"
 REMOTE
 restore_entrypoint || fail "restore-server failed on the DR VM"

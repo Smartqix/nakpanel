@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -9,6 +10,40 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class BootstrapGateTests(unittest.TestCase):
+    def test_effective_pending_survives_false_commit_before_marker_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            module.write_state(root, dict(bootstrap_pending=True))
+            original = module.atomic_write
+            def interrupt_after_commit(path, contents, mode):
+                original(path, contents, mode)
+                if path.name == 'platform.json' and json.loads(contents).get('bootstrap_pending') is False:
+                    raise OSError('interrupted before marker cleanup')
+            module.atomic_write = interrupt_after_commit
+            try:
+                with self.assertRaises(OSError): module.write_state(root, dict(bootstrap_pending=False))
+            finally:
+                module.atomic_write = original
+            state = root/'etc/nakpanel/platform.json'
+            self.assertFalse(json.loads(state.read_text())['bootstrap_pending'])
+            self.assertTrue(module.is_pending(state, owner=os.geteuid()))
+            module.write_state(root, dict(bootstrap_pending=False))
+            self.assertFalse(module.is_pending(state, owner=os.geteuid()))
+
+    def test_untrusted_marker_cannot_authorize_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            module.write_state(root, dict(bootstrap_pending=True))
+            state = root/'etc/nakpanel/platform.json'
+            marker = state.with_name('platform-bootstrap-pending')
+            marker.chmod(0o644)
+            with self.assertRaisesRegex(ValueError, 'marker'):
+                module.is_pending(state, owner=os.geteuid())
+            marker.unlink()
+            marker.symlink_to(state)
+            with self.assertRaisesRegex(ValueError, 'marker'):
+                module.is_pending(state, owner=os.geteuid())
+
     def test_pending_gate_survives_failed_state_write_and_clear_commits_first(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

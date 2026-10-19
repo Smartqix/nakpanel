@@ -9,6 +9,7 @@ VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 
 assert_current_vm_identity
+assert_qualification_bundle_staged
 VM_IP="$(vm_ip)"
 tmpdir="$(mktemp -d)"
 trap 'status=$?; rm -rf "${tmpdir}"; exit "${status}"' EXIT
@@ -50,8 +51,11 @@ PY
 wait_for "SELECT convergence_status FROM valkey_instances WHERE subscription_id=${subscription_id}" "in_sync"
 socket="/run/nakpanel/valkey/sub-${subscription_id}/valkey.sock"
 multipass_exec_short "${VM_NAME}" -- sudo test -S "${socket}" || fail "Valkey Unix socket is missing"
-multipass_exec_short "${VM_NAME}" -- sudo getfacl -cp /run/nakpanel | grep -Fqx "user:${username}:--x" || fail "subscription cache traversal ACL is missing"
-[[ "$(multipass_exec_short "${VM_NAME}" -- sudo stat -c '%a %U:%G' /run/nakpanel | tr -d '\r')" == "750 root:nakpanel" ]] || fail "agent socket directory permissions changed"
+assert_valkey_traversal() {
+  multipass_exec_short "${VM_NAME}" -- sudo getfacl -cp /run/nakpanel | grep -Fqx "user:${username}:--x" || fail "subscription cache traversal ACL is missing (observed without repair)"
+  [[ "$(multipass_exec_short "${VM_NAME}" -- sudo stat -c '%a %U:%G' /run/nakpanel | tr -d '\r')" == "750 root:nakpanel" ]] || fail "agent socket directory permissions changed"
+}
+assert_valkey_traversal
 multipass_exec_short "${VM_NAME}" -- sudo -u "${username}" redis-cli -s "${socket}" --user app --pass "${credential}" --no-auth-warning ping | grep -Fq PONG || fail "subscription account cannot authenticate to Valkey"
 multipass_exec_short "${VM_NAME}" -- sudo -u "${username}" redis-cli -s "${socket}" --user app --pass "${credential}" --no-auth-warning set valkey-platform-idempotency retained | grep -Fq OK || fail "Valkey fixture could not be written"
 started_before="$(multipass_exec_short "${VM_NAME}" -- sudo podman inspect "nakpanel-valkey-sub-${subscription_id}" --format '{{.State.StartedAt}}' | tr -d '\r')"
@@ -82,7 +86,10 @@ test "$pid" -gt 1
 # Rootful engine, process demoted to the tenant UID and finite cgroup limits.
 test "$(awk "/^Uid:/{print \$2}" /proc/"$pid"/status)" = "$(id -u "$2")"
 cgroup=$(awk -F: "\$1==0 {print \$3}" /proc/"$pid"/cgroup)
-test "$(cat /sys/fs/cgroup"$cgroup"/memory.max)" = 67108864
+# Cache maxmemory is64MiB; the existing runtime reserves32MiB extra inside
+# the container for allocator overhead. Enforce both distinct budgets.
+grep -Fxq "maxmemory 64mb" "/etc/nakpanel/valkey/sub-$1/valkey.conf"
+test "$(cat /sys/fs/cgroup"$cgroup"/memory.max)" = 100663296
 test "$(cat /sys/fs/cgroup"$cgroup"/pids.max)" = 64
 read -r quota period </sys/fs/cgroup"$cgroup"/cpu.max
 test "$quota" != max
@@ -102,6 +109,7 @@ assert_current_vm_identity
 # Observe restart policy and finite limits without requesting reconciliation.
 multipass_exec_short "${VM_NAME}" -- sudo systemctl is-active --quiet "nakpanel-valkey@${subscription_id}.service"
 assert_valkey_boundary
+assert_valkey_traversal
 multipass_exec_short "${VM_NAME}" -- sudo -u "${username}" redis-cli -s "${socket}" --user app --pass "${credential}" --no-auth-warning ping | grep -Fq PONG
 VM_IP="$(vm_ip)"
 curl -skfL -c "${tmpdir}/admin.cookies" -d email=admin@nakpanel.test -d 'password=NakpanelAdmin!2026' "https://${VM_IP}:7443/login" >/dev/null

@@ -79,9 +79,13 @@
         prepared.delete(dialog);
       });
     }
+    function sensitiveField(field) {
+      return /^(password|file)$/i.test(field.type) || /password|private_key/i.test(field.name || '') || field.name === 'secrets' ||
+        field.hasAttribute && field.hasAttribute('data-np-sensitive');
+    }
     function safeFields(form) {
       return Array.from(form.elements).filter(function (field) {
-        return field.name && !/^(password|file|submit|button|reset|image)$/i.test(field.type) && !(field.type === 'hidden' && /csrf/i.test(field.name));
+        return field.name && !sensitiveField(field) && !/^(submit|button|reset|image)$/i.test(field.type) && !(field.type === 'hidden' && /csrf/i.test(field.name));
       });
     }
     function prefill(dialog, trigger) {
@@ -96,7 +100,7 @@
       });
     }
     function capture(form) {
-      var dialog = form.closest('dialog.np-drawer');
+      var dialog = form.closest('dialog.np-drawer, dialog.np-mail-dialog');
       if (!dialog || !dialog.id) return null;
       return {id:dialog.id, fields:safeFields(form).map(function (field) {
         return {name:field.name, type:field.type, value:field.value, checked:field.checked,
@@ -107,12 +111,12 @@
       if (!snapshot) return false;
       var error = main.querySelector('.np-notice[role="alert"]');
       var dialog = document.getElementById(snapshot.id);
-      if (!error || !dialog || !dialog.matches('dialog.np-drawer')) return false;
+      if (!error || !dialog || !dialog.matches('dialog.np-drawer, dialog.np-mail-dialog')) return false;
       var form = dialog.querySelector('form[method="post"]');
       if (!form) return false;
       // Shell drawers survive the swap. Clear their old sensitive inputs too;
       // newly rendered content drawers already start with these fields empty.
-      Array.from(form.elements).forEach(function (field) { if (/^(password|file)$/.test(field.type)) field.value = ''; });
+      Array.from(form.elements).forEach(function (field) { if (sensitiveField(field)) field.value = ''; });
       var fields = safeFields(form), restored = [];
       snapshot.fields.forEach(function (entry) {
         var index = fields.findIndex(function (field) { return field.name === entry.name && field.type === entry.type; });

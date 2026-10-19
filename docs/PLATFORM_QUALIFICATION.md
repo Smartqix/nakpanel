@@ -4,6 +4,20 @@ Ubuntu 24.04 remains the default. Native qualification runs four cells:
 24.04/amd64, 24.04/arm64, 26.04/amd64 and 26.04/arm64. The Resolute native
 profile advertises PHP 8.5; it does not imply PHP 8.3/8.4 parity.
 
+The experimental Resolute profiles require a booted systemd server, an ext4
+filesystem backing `/home`, and cgroup v2 CPU, memory and PID controllers.
+Installer preflight reports actual mount information, available bytes/inodes
+and writable storage before package preparation or application replacement.
+It does not invent a minimum disk or memory capacity. Existing Noble filesystem
+and controller eligibility is preserved; its report identifies anything that
+still needs quota or OCI verification. This is separate from the native runner
+capacity needed to run several disposable guests below.
+
+New tenant accounts use system UID/GID range 10000–59999. Existing marked
+accounts retain their IDs. A legacy archive whose numeric identities collide
+with target OS accounts remains incompatible; qualification never remaps it or
+reassigns an OS account to make the restore pass.
+
 The ordinary `unit`, `security-suite` and `release-build` CI jobs remain
 required. The security suite creates unique owned source/DR guests and always
 attempts ownership-validated cleanup. It does not reuse a fixed CI VM name.
@@ -25,8 +39,10 @@ Only public verification keys are needed for this workflow.
 Install Multipass and grant the runner account access to its daemon. Provide
 Git, Bash, Python 3, OpenSSL, curl, dig, jq, tar, Make and the build dependencies
 used by the verifier scripts. `actions/setup-go` installs the exact toolchain
-from `deploy/release/GO_VERSION`. Optional database-manager browser qualification
-also needs Node.js, Playwright and its Chrome browser available to the runner.
+from `deploy/release/GO_VERSION`. Mail workspace qualification requires Node.js, Playwright and Chrome on the
+runner. Set `PLAYWRIGHT_MODULE` to an absolute module path when it is not
+resolvable as `playwright`; optional database-manager coverage uses the same
+browser dependency. The hosted workflow provisions pinned Playwright1.64.1.
 
 Allow approximately 20 GB of free RAM and 150 GB of free disk per active cell:
 a source guest, historical-upgrade guest and short-lived DR guest may coexist.
@@ -46,6 +62,14 @@ architecture on the corresponding native runner. Supply their independently
 managed public keys and exact application versions. Both Ubuntu releases of an
 architecture use the same current bundle directory and therefore the same
 signed payload; do not rebuild separately for each OS cell.
+
+After staging, every modern gate requires the guest's release directory,
+manifest, signature, public key and all three executables. A missing or unsafe
+guest artifact fails the run; it cannot trigger a working-tree build while a
+signed release is selected. Source-development runs without a selected release
+retain their existing workflow. Fresh bootstrap explicitly creates a MariaDB
+fixture and writes/reads a canary in its physical schema before later upgrade
+or recovery checks use it.
 
 Set repository variable `NAKPANEL_QUALIFICATION_ARTIFACTS` to JSON with this
 shape, or pass the same JSON in the `qualification_artifacts` dispatch input.
@@ -164,3 +188,16 @@ their trusted installed profile. All PHP 8.3/8.4/8.5 gates run and reports use
 The default remains native 8.5 and the required four-cell CI matrix is unchanged.
 The historical 24.04 upgrade guest always resets the provider to its original
 profile. Unsupported provider/release combinations fail before VM mutation.
+
+The required `mail-workspace` gate creates fresh synthetic mailboxes and aliases
+through the real browser, rotates a password, proves old-password denial,
+validates IMAP plus SMTP TLS/STARTTLS and alias delivery, tests an unrelated
+customer boundary, then removes only its QA objects. Protocol verification
+runs in the owned guest with its installed Stalwart certificate as the explicit
+trust anchor and matching hostname; TLS verification remains enabled. Browser
+lab self-signed HTTPS and `.test` DNS overrides require an explicit guest IPv4;
+production QA defaults retain normal trust and DNS. Private credential state
+is kept in a0700 temporary directory outside uploaded cell reports and removed.
+The public-HTTPS webmail popup stage requires a separately configured public
+webmail TLS hostname; this gate does not claim that stage. The mandatory
+`internal-tools` gate separately proves actual Roundcube FastCGI and IMAP login.

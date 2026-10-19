@@ -130,7 +130,7 @@ function harness() {
   vm.runInNewContext(source, {window, URL, URLSearchParams, FormData: Fields, AbortController,
     DOMParser: class {parseFromString(html) { return parse(html); }}, CustomEvent: class {}});
   windowEvents.DOMContentLoaded();
-  return {ui, document, main, history, location, entries, pushes, goCalls, requests, assignments, documentEvents,
+  return {ui, document, main, history, location, entries, pushes, goCalls, requests, assignments, documentEvents, window, windowEvents,
     get position() { return position; },
     async flush() { while (traversals.length) { traversals.shift()(); await tick(); } },
     async back() { history.go(-1); await this.flush(); },
@@ -151,6 +151,18 @@ test('D1 fragment discards noscript required controls in main and every shell te
   assert.equal(h.document.title, 'Git');
   assert.equal(h.document.querySelectorAll('noscript').length, 0);
   assert.equal(h.document.querySelectorAll('input[required]').length, 0);
+});
+
+test('tab-owned hash changes retain the tab and scroll position after Back', async () => {
+  const h = harness();
+  await h.ui.navigate('/sites/7/git');
+  h.history.replaceState(h.history.state, '', '/sites/7/git#git-history');
+  h.window.scrollY = 640;
+  h.windowEvents.scroll();
+  await h.ui.navigate('/subscriptions');
+  await h.back();
+  assert.equal(h.location.href, base + '/sites/7/git#git-history');
+  assert.equal(h.window.scrollY, 640);
 });
 
 test('D2 two pending Backs render final target and preserve all Forward entries', async () => {

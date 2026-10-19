@@ -1,0 +1,7 @@
+self-hosted-runner:
+  labels:
+    - multipass
+    - nakpanel-qualification
+    - isolated-php-builder
+    - resolute
+    - amd64

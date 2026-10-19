@@ -148,10 +148,10 @@ func RunRestore(ctx context.Context, opts RestoreOptions) (RestoreSummary, error
 	} else if opts.Mode == RestoreForwardMigration || (manifest.Platform != nil && len(manifest.Platform.RequiredPHPVersions) > 0) {
 		return summary, errors.New("restore requires an authoritative ready PHP inventory collector")
 	}
-	if err := CheckRoundcubeRestoreTarget(manifest, *target, opts.Mode); err != nil {
+	if err := CheckRestoreCompatibility(manifest, *target, opts.Mode); err != nil {
 		return summary, err
 	}
-	if err := CheckRestoreCompatibility(manifest, *target, opts.Mode); err != nil {
+	if err := CheckRoundcubeRestoreTarget(manifest, *target, opts.Mode); err != nil {
 		return summary, err
 	}
 	if opts.Mode == RestoreForwardMigration && opts.RegenerateTargetConfiguration == nil {

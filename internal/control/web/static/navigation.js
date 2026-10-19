@@ -183,7 +183,12 @@
   live.className = 'np-sr-only'; live.setAttribute('aria-live', 'polite'); live.setAttribute('aria-atomic', 'true');
   document.body.appendChild(live);
   function renderedEntryIsCurrent() {
-    return window.location.href === currentURL && history.state && history.state.npKey === currentState.npKey;
+    if (!history.state || history.state.npKey !== currentState.npKey) return false;
+    // Tool tabs own their hash within the same entry. Keep it when recording
+    // scroll without adopting a pending Back/Forward navigation's address.
+    if (window.location.href.split('#')[0] !== currentURL.split('#')[0]) return false;
+    currentURL = window.location.href;
+    return true;
   }
   function rememberScroll(optional) {
     if (!renderedEntryIsCurrent()) return;
@@ -383,7 +388,13 @@
     var signal = controller.signal, id = ++sequence, main = document.querySelector('#main-content');
     function current() { return isCurrent(id, sequence, signal); }
     var finishFeedback = feedback(main, action, signal), committed = false, leavingDocument = false;
-    function finish(success) { if (success) committed = true; finishFeedback(success); }
+    function finish(success) {
+      if (success) {
+        committed = true;
+        if (form.hasAttribute('data-np-dirty-guard')) form.dataset.npDirty = 'false';
+      }
+      finishFeedback(success);
+    }
     main.setAttribute('aria-busy', 'true');
     try {
       // Match native encoding so handlers see exactly what a normal submission sends.

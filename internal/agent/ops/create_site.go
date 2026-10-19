@@ -1538,6 +1538,14 @@ func (m *LinuxDiskQuotaManager) ApplyUserQuota(ctx context.Context, username, pa
 	return nil
 }
 
+// Keep newly allocated tenant identities clear of distribution system IDs.
+// The upper bound also leaves each derived 65536-entry subordinate range
+// below Linux's last usable UID/GID. Existing marked identities are retained.
+const (
+	tenantSystemIDMin = 10000
+	tenantSystemIDMax = 59999
+)
+
 type LinuxUserManagerOptions struct {
 	HomeRoot     string
 	MarkerDir    string
@@ -1607,6 +1615,10 @@ func (m *LinuxUserManager) EnsureUser(ctx context.Context, username string) erro
 		"useradd",
 		"--system",
 		"--user-group",
+		"-K", "SYS_UID_MIN="+strconv.Itoa(tenantSystemIDMin),
+		"-K", "SYS_UID_MAX="+strconv.Itoa(tenantSystemIDMax),
+		"-K", "SYS_GID_MIN="+strconv.Itoa(tenantSystemIDMin),
+		"-K", "SYS_GID_MAX="+strconv.Itoa(tenantSystemIDMax),
 		"--home-dir", filepath.Join(m.homeRoot, username),
 		"--create-home",
 		"--shell", "/usr/sbin/nologin",
@@ -1624,6 +1636,11 @@ func (m *LinuxUserManager) EnsureUser(ctx context.Context, username string) erro
 	if err != nil {
 		_, _ = m.runner.Run(ctx, "userdel", "--remove", username)
 		return err
+	}
+	gid, gidErr := strconv.Atoi(strings.Split(strings.TrimSpace(string(out)), ":")[3])
+	if uid < tenantSystemIDMin || uid > tenantSystemIDMax || gidErr != nil || gid < tenantSystemIDMin || gid > tenantSystemIDMax {
+		_, _ = m.runner.Run(ctx, "userdel", "--remove", username)
+		return fmt.Errorf("new account %q has UID/GID outside dedicated tenant range %d-%d", username, tenantSystemIDMin, tenantSystemIDMax)
 	}
 	if err := m.writeMarker(username, uid, home, true); err != nil {
 		_, _ = m.runner.Run(ctx, "userdel", "--remove", username)

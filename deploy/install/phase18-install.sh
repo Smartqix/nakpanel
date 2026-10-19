@@ -13,21 +13,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/platform.sh"
 nakpanel_require_platform
 STALWART_VERSION="v0.11.8"
-
-case "$(uname -m)" in
-  x86_64) STALWART_ARCH="x86_64" ;;
-  aarch64|arm64) STALWART_ARCH="aarch64" ;;
-  *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;;
-esac
-
-if ! /usr/local/bin/stalwart-mail --version 2>/dev/null | grep -q "${STALWART_VERSION#v}"; then
-  tmpdir="$(mktemp -d)"
-  trap 'rm -rf "${tmpdir}"' EXIT
-  curl -fsSL -o "${tmpdir}/stalwart-mail.tar.gz" \
-    "https://github.com/stalwartlabs/stalwart/releases/download/${STALWART_VERSION}/stalwart-mail-${STALWART_ARCH}-unknown-linux-gnu.tar.gz"
-  tar -xzf "${tmpdir}/stalwart-mail.tar.gz" -C "${tmpdir}"
-  install -m 0755 "${tmpdir}/stalwart-mail" /usr/local/bin/stalwart-mail
-fi
+source "${SCRIPT_DIR}/stalwart.sh"
+nakpanel_install_stalwart
 
 install -d -m 0700 /etc/stalwart /etc/stalwart/tls
 install -d -m 0755 /var/lib/stalwart
@@ -70,19 +57,17 @@ sudo -u postgres psql -d nakpanel -tAc "SELECT COUNT(*) FROM pg_views WHERE view
   sudo -u postgres psql -v ON_ERROR_STOP=1 -d nakpanel -c \
     'GRANT SELECT ON stalwart_accounts, stalwart_emails, stalwart_domains TO stalwart_directory;'
 
-# Roundcube (real package plus the PHP extensions its runtime needs). New
-# installs prefer a local SQLite database, while php8.3-mysql keeps upgrades
-# from earlier Nakpanel releases working when dbconfig already selected
-# MariaDB for Roundcube sessions and preferences.
+# Preserve every existing Roundcube backend. On a genuinely unconfigured Noble
+# host, select SQLite before its first package installation (normally phase 7).
+# Keep the MySQL extension for upgrades with a MariaDB-backed webmail database.
 export DEBIAN_FRONTEND=noninteractive
 if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]]; then
-echo "roundcube-core roundcube-core/dbconfig-install boolean true" | debconf-set-selections
-echo "roundcube-core roundcube-core/database-type select sqlite3" | debconf-set-selections
-apt-get install -y roundcube roundcube-core roundcube-sqlite3 sqlite3 \
-  "php${NAKPANEL_INTERNAL_PHP_VERSION}-mbstring" "php${NAKPANEL_INTERNAL_PHP_VERSION}-intl" "php${NAKPANEL_INTERNAL_PHP_VERSION}-xml" "php${NAKPANEL_INTERNAL_PHP_VERSION}-sqlite3" "php${NAKPANEL_INTERNAL_PHP_VERSION}-mysql" >/dev/null
-if ! grep -q "dbtype='sqlite3'" /etc/roundcube/debian-db.php 2>/dev/null; then
-  dpkg-reconfigure -fnoninteractive roundcube-core >/dev/null 2>&1 || true
-fi
+  source "${SCRIPT_DIR}/noble-roundcube.sh"
+  nakpanel_prepare_noble_roundcube
+  apt-get install -y "${NAKPANEL_NOBLE_ROUNDCUBE_PACKAGES[@]}" sqlite3 \
+    "php${NAKPANEL_INTERNAL_PHP_VERSION}-mbstring" "php${NAKPANEL_INTERNAL_PHP_VERSION}-intl" \
+    "php${NAKPANEL_INTERNAL_PHP_VERSION}-xml" "php${NAKPANEL_INTERNAL_PHP_VERSION}-sqlite3" \
+    "php${NAKPANEL_INTERNAL_PHP_VERSION}-mysql" >/dev/null
 else
   apt-get install -y --no-install-recommends sqlite3 \
     "php${NAKPANEL_INTERNAL_PHP_VERSION}-mbstring" "php${NAKPANEL_INTERNAL_PHP_VERSION}-intl" \

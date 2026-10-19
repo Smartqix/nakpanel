@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/nakroteck/nakpanel/internal/types"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +18,6 @@ func TestRoundcubeSQLiteDiscoveryNativeAndNoble(t *testing.T) {
 		{"native", "debian-db-roundcube.php", "<?php\n$config['db_dsnw'] = 'sqlite:////var/lib/roundcube/roundcube.sqlite';\n", "/var/lib/roundcube/roundcube.sqlite"},
 		{"noble", "debian-db.php", "<?php\n$dbtype='sqlite3';\n$dbbasepath='/var/lib/roundcube/db';\n$dbname='roundcube';\n", "/var/lib/roundcube/db/roundcube"},
 		{"legacy dbconfig", "debian-db.php", "<?php\n$dbtype='sqlite3';\n$basepath='/var/lib/dbconfig-common/sqlite3/roundcube';\n$dbname='roundcube';\n", "/var/lib/dbconfig-common/sqlite3/roundcube/roundcube"},
-		{"maria", "debian-db.php", "<?php\n$dbtype='mysql';\n$dbname='roundcube';\n", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -83,5 +83,59 @@ func TestRoundcubeSQLiteSnapshotKeepsLiveContactsAndPreferences(t *testing.T) {
 	}
 	if out, err := exec.Command(binary, "-readonly", dest, "SELECT preferences||'|'||email FROM users JOIN contacts USING(user_id); PRAGMA quick_check;").CombinedOutput(); err != nil || !strings.Contains(string(out), "retained") || !strings.Contains(string(out), "friend@example.test") || !strings.Contains(string(out), "ok") {
 		t.Fatalf("lost contacts/preferences: %s err=%v", out, err)
+	}
+}
+
+func TestRoundcubeBackupRejectsConfiguredNonSQLiteWithoutLeakingCredentials(t *testing.T) {
+	for _, tc := range []struct{ name, file, contents string }{
+		{"dbconfig mysql", "debian-db.php", "<?php\n$dbtype='mysql';\n$dbpass='secret-canary';\n"},
+		{"dsn mysql", "debian-db-roundcube.php", "<?php\n$config['db_dsnw']='mysql://user:secret-canary@localhost/roundcube';\n"},
+		{"dsn postgres", "debian-db-roundcube.php", "<?php\n$config['db_dsnw']='pgsql://user:secret-canary@localhost/roundcube';\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, tc.file), []byte(tc.contents), 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := roundcubeSQLitePath(dir)
+			if err == nil || !strings.Contains(err.Error(), "configured non-SQLite") {
+				t.Fatalf("got=%q err=%v; unsupported configured storage must never be omitted", got, err)
+			}
+			if strings.Contains(err.Error(), "secret-canary") {
+				t.Fatal("diagnostic leaked database credentials")
+			}
+		})
+	}
+}
+
+func TestUnsupportedRoundcubeBackupFailsBeforeSpoolOrExternalCommands(t *testing.T) {
+	dir := t.TempDir()
+	config := filepath.Join(dir, "roundcube")
+	if err := os.Mkdir(config, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(config, "debian-db.php"), []byte("<?php\n$dbtype='mysql';\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	commandLog := filepath.Join(dir, "commands")
+	for _, name := range []string{"pg_dump", "mariadb-dump", "systemctl", "runuser", "php8.3", "php8.5"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\necho called >> \"$BACKUP_COMMAND_LOG\"\nexit 19\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+	t.Setenv("BACKUP_COMMAND_LOG", commandLog)
+	spool := filepath.Join(dir, "spool")
+	p := NewServerBackupProvisioner(ServerBackupProvisionerOptions{SpoolDir: spool})
+	p.roundcubeConfigDir = config
+	_, err := p.CreateServerBackup(context.Background(), types.CreateServerBackupReq{ArchiveKey: make([]byte, 32), Destination: types.BackupDestinationSpec{Kind: "local", Settings: []byte(fmt.Sprintf(`{"dir":%q}`, filepath.Join(dir, "destination")))}, IncludeMailData: true, TenantDatabases: []string{"tenant"}})
+	if err == nil || !strings.Contains(err.Error(), "configured non-SQLite") {
+		t.Fatalf("err=%v", err)
+	}
+	if _, err := os.Stat(commandLog); !os.IsNotExist(err) {
+		t.Fatal("ran a dump, platform probe or service command before rejecting webmail backend")
+	}
+	if _, err := os.Stat(spool); !os.IsNotExist(err) {
+		t.Fatal("created spool state before rejecting webmail backend")
 	}
 }

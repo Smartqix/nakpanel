@@ -93,26 +93,31 @@ test('prefill sets named fields and signals dependent controls, ignoring malform
   assert.doesNotThrow(() => f.controller.prefill(dialog, {getAttribute: () => '{bad'}));
 });
 
-test('error recovery reopens the matching drawer and restores safe fields with fresh CSRF', () => {
+for (const variant of ['np-drawer', 'np-mail-dialog']) test(variant + ' error recovery restores safe fields with fresh CSRF', () => {
   const f = fixture(), dialog = f.dialogs.edit;
-  dialog.matches = selector => selector === 'dialog.np-drawer';
+  dialog.matches = selector => selector.split(',').some(part => part.trim() === 'dialog.' + variant);
   const fields = [
     {name:'name',type:'text',value:'entered'}, {name:'password',type:'password',value:'secret'},
     {name:'upload',type:'file',value:'private'}, {name:'csrf_token',type:'hidden',value:'old-csrf'},
     {name:'resource_id',type:'hidden',value:'12'}, {name:'enabled',type:'checkbox',value:'true',checked:false},
-    {name:'destinations',type:'select-multiple',multiple:true,options:[{value:'a',selected:true},{value:'b',selected:false}]}
+    {name:'destinations',type:'select-multiple',multiple:true,options:[{value:'a',selected:true},{value:'b',selected:false}]},
+    {name:'environment',type:'textarea',value:'{"MODE":"production"}'},
+    {name:'secrets',type:'textarea',value:'private-container-value'},
+    {name:'relay_password',type:'text',value:'revealed-private-password'}
   ];
   const changed = [];
   fields.forEach(field => { field.dispatchEvent = event => {
     assert.equal(event.type, 'change'); assert.equal(fields[0].value, 'entered'); assert.equal(fields[5].checked, false);
     changed.push(field.name);
   }; });
-  const form = {elements:fields, closest: () => dialog};
+  const form = {elements:fields, closest: selector => dialog.matches(selector) ? dialog : null};
   const snapshot = f.controller.capture(form);
   assert.ok(!JSON.stringify(snapshot).includes('secret')); assert.ok(!JSON.stringify(snapshot).includes('old-csrf'));
+  assert.ok(!JSON.stringify(snapshot).includes('private-container-value'));
+  assert.ok(!JSON.stringify(snapshot).includes('revealed-private-password'));
   // Shell drawers survive swaps, including their original sensitive controls.
   fields[0].value = ''; fields[3].value = 'fresh-csrf'; fields[4].value = ''; fields[5].checked = true;
-  fields[6].options.forEach(option => { option.selected = !option.selected; });
+  fields[6].options.forEach(option => { option.selected = !option.selected; }); fields[7].value='';
   const error = {setAttribute(){}, focus(){this.focused=true;}, cloneNode(){return {...this};}};
   const body = {prepend(node){this.error=node;}};
   const query = dialog.querySelector;
@@ -123,7 +128,8 @@ test('error recovery reopens the matching drawer and restores safe fields with f
   assert.equal(dialog.open, true); assert.equal(fields[0].value, 'entered'); assert.equal(fields[1].value, '');
   assert.equal(fields[2].value, ''); assert.equal(fields[3].value, 'fresh-csrf'); assert.equal(fields[4].value, '12'); assert.equal(fields[5].checked, false);
   assert.deepEqual(fields[6].options.map(option=>option.selected), [true,false]); assert.equal(body.error.focused, true);
-  assert.deepEqual(changed, ['name','enabled','destinations']);
+  assert.equal(fields[7].value,'{"MODE":"production"}');assert.equal(fields[8].value,'');assert.equal(fields[9].value,'');
+  assert.deepEqual(changed, ['name','enabled','destinations','environment']);
   f.controller.close(dialog);
   assert.equal(f.controller.restore(snapshot, {querySelector:()=>null}), false);
   delete f.dialogs.edit;

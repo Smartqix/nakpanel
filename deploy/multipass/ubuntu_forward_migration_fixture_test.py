@@ -7,6 +7,9 @@ import json
 import os
 import tempfile
 import ast
+import subprocess
+import sys
+import struct
 
 path = Path(__file__).with_name('ubuntu-forward-migration-fixture.py')
 spec = importlib.util.spec_from_file_location('forward_fixture', path)
@@ -17,11 +20,80 @@ probe = importlib.util.module_from_spec(probe_spec)
 probe_spec.loader.exec_module(probe)
 
 class ForwardFixtureTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.keydir=tempfile.TemporaryDirectory()
+        cls.private=Path(cls.keydir.name)/'private.pem';cls.public=Path(cls.keydir.name)/'public.pem'
+        subprocess.run(['openssl','genrsa','-out',str(cls.private),'2048'],check=True,capture_output=True)
+        subprocess.run(['openssl','pkey','-in',str(cls.private),'-pubout','-out',str(cls.public)],check=True,capture_output=True)
+
+    @classmethod
+    def tearDownClass(cls):cls.keydir.cleanup()
+
+    def signed_bundle(self,directory,development=False):
+        root=Path(directory)/'release';root.mkdir()
+        elf=struct.pack('<16sHHIQQQIHHHHHH',b'\x7fELF\x02\x01\x01'+b'\0'*9,2,183,1,0,64,0,0,64,56,1,0,0,0)+struct.pack('<IIQQQQQQ',1,5,0,0,0,120,120,4096)
+        files={'VERSION':b'29.0.0\n','go.mod':b'module example\n','go.sum':b'checksums\n','Makefile':b'build:\n','migrations/00001.sql':b'-- migration\n','deploy/install/install.sh':b'#!/bin/sh\nexit 0\n'}
+        files.update({'bin/'+name:elf for name in ('panel','agent','panelctl')})
+        for name,data in files.items():
+            path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(data)
+        manifest=dict(schema_version=1,version='29.0.0',commit='a'*40,go_toolchain='go1.26.9',cgo_enabled=False,os='linux',architecture='arm64',cpu_baseline='v8.0',development=development,files={name:hashlib.sha256(data).hexdigest() for name,data in files.items()})
+        (root/'manifest.json').write_text(json.dumps(manifest))
+        subprocess.run(['openssl','dgst','-sha256','-sign',str(self.private),'-out',str(root/'manifest.sig'),str(root/'manifest.json')],check=True,capture_output=True)
+        return root
+
+    def test_host_staging_authenticates_signature_version_arch_and_development_before_vm_access(self):
+        for case in ('tampered','wrong-version','wrong-arch','development','valid'):
+            with self.subTest(case=case),tempfile.TemporaryDirectory() as directory:
+                bundle=self.signed_bundle(directory,case=='development')
+                if case=='tampered':(bundle/'bin/panel').write_bytes(b'tampered')
+                version='28.0.0' if case=='wrong-version' else '29.0.0'
+                architecture='amd64' if case=='wrong-arch' else 'arm64'
+                if case=='valid':
+                    staged=Path(fixture.stage_target_bundle(bundle,self.public,version,architecture,'0'))
+                    try:
+                        self.assertEqual(staged.stat().st_mode&0o777,0o700)
+                        (bundle/'bin/panel').write_bytes(b'changed after authentication')
+                        self.assertNotEqual((staged/'bundle/bin/panel').read_bytes(),b'changed after authentication')
+                    finally:fixture.discard_target_bundle(staged)
+                else:
+                    with self.assertRaisesRegex(ValueError,'bundle verification'):fixture.stage_target_bundle(bundle,self.public,version,architecture,'0')
+                if case=='development':
+                    staged=fixture.stage_target_bundle(bundle,self.public,version,architecture,'1');fixture.discard_target_bundle(staged)
+
     def test_private_spec_requires_owned_source_and_real_inputs(self):
         with self.assertRaises(ValueError): fixture.validate_spec({})
         item = fixture.example_spec()
         item['source_vm'] = 'nakpanel-lab'
         with self.assertRaises(ValueError): fixture.validate_spec(item)
+
+    def test_preparation_rejects_unsupported_webmail_before_seed_or_local_state(self):
+        with tempfile.TemporaryDirectory() as directory:
+            c=fixture.example_spec();c.update(run_token='fixture-test',source_vm='nakpanel-source-fixture-test')
+            spec=Path(directory)/'spec.json';fixture.private_write(spec,json.dumps(c))
+            output=Path(directory)/'prepared'
+            stages=[]
+            def check(config,vm,stage):
+                stages.append(stage)
+                raise RuntimeError('configured non-SQLite webmail')
+            with patch.object(fixture,'identity'),patch.object(fixture,'probe',side_effect=check),patch.object(fixture,'run') as execute:
+                with self.assertRaisesRegex(RuntimeError,'non-SQLite'): fixture.prepare(spec,output)
+                execute.assert_not_called()
+            self.assertEqual(stages,['source-preflight'])
+            self.assertFalse(output.exists())
+
+    def test_seed_refuses_non_sqlite_before_any_php_or_database_changes(self):
+        with patch.object(probe,'roundcube_preflight',side_effect=RuntimeError('configured non-SQLite')),patch.object(probe,'discover') as discover,patch.object(probe,'pg') as pg:
+            with self.assertRaisesRegex(RuntimeError,'non-SQLite'):probe.seed({})
+            discover.assert_not_called();pg.assert_not_called()
+
+    def test_source_roundcube_preflight_reads_config_without_executing_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config=Path(directory)/'debian-db.php'
+            config.write_text("<?php\n$dbtype='mysql';\n$dbpass='secret-canary';\nfile_put_contents('/tmp/unsafe','bad');\n")
+            with patch.object(probe,'command') as execute:
+                with self.assertRaisesRegex(RuntimeError,'configured non-SQLite') as failure:probe.roundcube_preflight({},Path(directory))
+                self.assertNotIn('secret-canary',str(failure.exception));execute.assert_not_called()
 
     def test_every_durable_contract_must_survive(self):
         original = {'intent': 'a', 'identities': ['1001:1001'], 'files': {'key': 'digest'},
@@ -166,5 +238,51 @@ class ForwardFixtureTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,'nonroot'):
                     probe.install_target_identities({'baseline':{'identities':[rootuser]}},root)
                 execute.assert_not_called()
+
+    def test_native_install_uses_signed_bundle_and_matching_installer_with_private_admin(self):
+        program=fixture.target_install_program()
+        for fail,allow in ((False,False),(False,True),(True,False),(True,True)):
+            with self.subTest(fail=fail,allow_development=allow),tempfile.TemporaryDirectory() as directory:
+                root=Path(directory);repo=root/'bundle';repo.mkdir();installer=repo/'deploy/install/install.sh';installer.parent.mkdir(parents=True)
+                evidence=root/'observed.json'
+                installer.write_text('#!/bin/sh\nexec "'+sys.executable+'" -c '+"'"+"import json,os,sys;from pathlib import Path;a=sys.argv[1:];actual=os.environ.get(\"NAKPANEL_RELEASE_ALLOW_DEVELOPMENT\",\"0\");expected=os.environ[\"INSTALL_EXPECT_ALLOW\"];assert actual==expected;assert (\"--allow-development-bundle\" in a)==(actual==\"1\");assert (Path(a[a.index(\"--bundle\")+1])/\"host-verified\").exists();p=Path(a[a.index(\"--admin-password-file\")+1]);Path(os.environ[\"INSTALL_OBSERVED\"]).write_text(json.dumps({\"args\":a,\"password\":p.read_text(),\"mode\":p.stat().st_mode&0o777,\"path\":str(p)}));sys.exit(int(os.environ[\"INSTALL_FAIL\"]))"+"'"+' "$@"\n')
+                import tarfile
+                archive=root/'bundle.tar'
+                with tarfile.open(archive,'w') as stream:stream.add(repo,arcname='.')
+                # The guest preflight verifier must run before even the signed installer.
+                verifier="import sys\nfrom pathlib import Path\na=sys.argv[1:];Path(a[a.index('--bundle')+1]+'/host-verified').write_text('verified')\n"
+                c={'admin_email':'operator@example.test','admin_password':'private-admin-canary','target_profile':'ubuntu-26.04-native','architecture':'arm64'}
+                payload={'config':c,'archive':str(archive),'archive_sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'public_key':'test-public-key','verifier_program':verifier,'version':'29.0.0','allow_development':allow}
+                result=subprocess.run([sys.executable,'-c',program],input=json.dumps(payload),text=True,capture_output=True,env=dict(os.environ,TMPDIR=directory,INSTALL_OBSERVED=str(evidence),INSTALL_FAIL='9' if fail else '0',INSTALL_EXPECT_ALLOW='1' if allow else '0',NAKPANEL_RELEASE_ALLOW_DEVELOPMENT='0' if allow else '1'))
+                self.assertEqual(result.returncode!=0,fail,result.stderr)
+                observed=json.loads(evidence.read_text())
+                self.assertEqual(observed['password'],c['admin_password']);self.assertEqual(observed['mode'],0o600)
+                self.assertFalse(Path(observed['path']).exists());self.assertNotIn(c['admin_password'],observed['args'])
+                self.assertEqual(observed['args'][observed['args'].index('--admin-email')+1],c['admin_email'])
+                self.assertIn('--bundle',observed['args']);self.assertIn('--release-public-key',observed['args']);self.assertEqual('--allow-development-bundle' in observed['args'],allow)
+                self.assertNotIn('--bin-dir',observed['args'])
+
+    def test_guest_refuses_correctly_transferred_but_unsigned_payload_before_installer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);bundle=self.signed_bundle(directory)
+            (bundle/'bin/panel').write_bytes(b'tampered before transfer')
+            import tarfile
+            archive=root/'bundle.tar'
+            with tarfile.open(archive,'w') as stream:
+                for path in sorted(bundle.rglob('*')):
+                    if path.is_file():stream.add(path,arcname=path.relative_to(bundle).as_posix(),recursive=False)
+            payload={'config':{'architecture':'arm64'},'archive':str(archive),'archive_sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'public_key':self.public.read_text(),'verifier_program':(fixture.HERE.parent/'release/verify.py').read_text(),'version':'29.0.0','allow_development':False}
+            result=subprocess.run([sys.executable,'-c',fixture.target_install_program()],input=json.dumps(payload),text=True,capture_output=True,env=dict(os.environ,TMPDIR=directory))
+            self.assertNotEqual(result.returncode,0)
+            self.assertIn('SHA256 mismatch',result.stderr)
+            self.assertFalse(list(root.glob('nakpanel-forward-install-*')))
+
+    def test_native_install_refuses_changed_archive_before_installer_or_password_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);archive=root/'bad.tar';archive.write_bytes(b'changed')
+            payload={'config':{'admin_password':'secret'},'archive':str(archive),'archive_sha256':'0'*64}
+            result=subprocess.run([sys.executable,'-c',fixture.target_install_program()],input=json.dumps(payload),text=True,capture_output=True,env=dict(os.environ,TMPDIR=directory))
+            self.assertNotEqual(result.returncode,0);self.assertIn('archive digest mismatch',result.stderr)
+            self.assertEqual(sorted(p.name for p in root.iterdir()),['bad.tar'])
 
 if __name__ == '__main__': unittest.main()

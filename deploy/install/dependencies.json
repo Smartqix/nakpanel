@@ -56,5 +56,24 @@
       "keyring_package_sha256": "7511384559c9ddf1d5ce5f60be429ae9d4e7d01d9480d6f1b7a30c0810cf8b60",
       "enrollment": "explicit-fresh-only"
     }
+  },
+  "external_artifacts": {
+    "stalwart": {
+      "version": "0.11.8",
+      "release": "https://github.com/stalwartlabs/stalwart/releases/tag/v0.11.8",
+      "source_commit": "7dc620816f355a09830691af495b2a63c05fe971",
+      "attested_repository": "stalwartlabs/mail-server",
+      "assessment": "deploy/release/STALWART_V0_11_8_ASSESSMENT.md",
+      "architectures": {
+        "amd64": {
+          "sha256": "17ace571b012ff0228b276e09c83f28114824596279f86234f7a55e3773ad7df",
+          "size": 28160752
+        },
+        "arm64": {
+          "sha256": "1e85521e44f1347336ad90235fa18c701616798bd2837d2dfdd6e9f082fcde3d",
+          "size": 26412751
+        }
+      }
+    }
   }
 }

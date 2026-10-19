@@ -724,7 +724,7 @@ func TestRenderValkeyUnitAllowsOnlyPodmanStateAndSocketWrites(t *testing.T) {
 		"--user 1200:1200",
 		"PrivateTmp=yes",
 		"ProtectSystem=strict",
-		"ReadWritePaths=/var/lib/containers -/run/containers -/run/libpod -/run/lock -/run/crun /run/nakpanel/valkey/sub-12",
+		"ReadWritePaths=/var/lib/containers /run/containers /run/libpod -/run/lock /run/crun /run/nakpanel/valkey/sub-12",
 		"MemoryMax=160M",
 	} {
 		if !strings.Contains(rendered, marker) {

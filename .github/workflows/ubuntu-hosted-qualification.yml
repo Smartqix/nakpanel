@@ -244,8 +244,7 @@ jobs:
                   if key.startswith('NAKPANEL_'):
                       delimiter=uuid.uuid4().hex;output.write(f'{key}<<{delimiter}\n{value}\n{delimiter}\n')
           PYENV
-      - name: Prepare optional database manager browser dependency
-        if: inputs.verify_database_manager
+      - name: Prepare required native Mail and optional database browser dependency
         shell: bash
         run: |
           set -euo pipefail

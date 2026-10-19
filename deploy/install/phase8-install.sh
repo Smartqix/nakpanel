@@ -16,13 +16,19 @@ cd "${ROOT_DIR}"
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
+apt_package_has_candidate() {
+  local candidate policy
+  policy="$(apt-cache policy "$1")"
+  candidate="$(awk '/^[[:space:]]*Candidate:/ { print $2; exit }' <<<"${policy}")"
+  [[ -n "${candidate}" && "${candidate}" != "(none)" ]]
+}
 quota_packages=(quota)
-if apt-cache show "linux-modules-extra-$(uname -r)" >/dev/null 2>&1; then
+if apt_package_has_candidate "linux-modules-extra-$(uname -r)"; then
   quota_packages+=("linux-modules-extra-$(uname -r)")
 fi
 # Track future generic kernels too; installing only the currently running
 # kernel's extra modules loses quota_v2 after the next image update/reboot.
-if [[ "$(uname -r)" == *-generic ]] && apt-cache show linux-generic >/dev/null 2>&1; then
+if [[ "$(uname -r)" == *-generic ]] && apt_package_has_candidate linux-generic; then
   quota_packages+=(linux-generic)
 fi
 apt-get install -y "${quota_packages[@]}"
@@ -30,7 +36,10 @@ install -d -m 0755 /etc/modules-load.d /etc/systemd/system/quotaon.service.d
 install -m 0644 "${ROOT_DIR}/deploy/systemd/nakpanel-quota.modules-load.conf" /etc/modules-load.d/nakpanel-quota.conf
 install -m 0644 "${ROOT_DIR}/deploy/systemd/quotaon.service.d/nakpanel.conf" /etc/systemd/system/quotaon.service.d/nakpanel.conf
 systemctl daemon-reload
-modprobe quota_v2 >/dev/null 2>&1 || true
+if ! modprobe quota_v2; then
+  echo "Disk quota support is unavailable in the running kernel. Reboot into the installed kernel, then rerun the installer." >&2
+  exit 75
+fi
 
 ensure_quota_fstab() {
   local target="$1"

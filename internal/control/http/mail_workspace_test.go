@@ -26,6 +26,7 @@ type fakeMailDomainServices struct {
 	resetSiteID    int64
 	resetScope     string
 	setSiteCalled  bool
+	mailbox        types.MailboxInput
 }
 
 func (*fakeMailDomainServices) SetSubscriptionPolicy(context.Context, auth.SessionUser, int64, json.RawMessage) error {
@@ -49,7 +50,8 @@ func (s *fakeMailDomainServices) UpsertMailDomain(_ context.Context, _ auth.Sess
 	s.subscriptionID, s.input = subscriptionID, input
 	return 41, s.err
 }
-func (*fakeMailDomainServices) UpsertMailbox(context.Context, auth.SessionUser, int64, types.MailboxInput) (int64, error) {
+func (s *fakeMailDomainServices) UpsertMailbox(_ context.Context, _ auth.SessionUser, _ int64, input types.MailboxInput) (int64, error) {
+	s.mailbox = input
 	return 0, nil
 }
 func (*fakeMailDomainServices) UpsertMailAlias(context.Context, auth.SessionUser, int64, types.MailAliasInput) (int64, error) {
@@ -102,6 +104,10 @@ type fakeMailManager struct {
 	status    types.MailServerStatus
 	restarts  int
 	reconfigs int
+}
+
+func (m *fakeMailManager) MailClientSettings(context.Context, auth.SessionUser, int64) (types.MailClientProfile, error) {
+	return types.MailClientProfile{Hostname: "mail.node.test", IMAPTLS: true, SMTPTLS: true, SMTPSTARTTLS: true, CheckedAt: time.Now()}, nil
 }
 
 func (m *fakeMailManager) MailSettings(context.Context, auth.SessionUser) (types.MailSettingsView, error) {
@@ -227,7 +233,7 @@ func TestProviderMailRoutesAndNavigationUseDomains(t *testing.T) {
 				t.Fatalf("GET domain Mail status=%d body=%s", rec.Code, rec.Body.String())
 			}
 			body := rec.Body.String()
-			for _, want := range []string{"Mail for mail-owned.test", "hello@mail-owned.test", "sales@mail-owned.test", `name="return_to" value="site-mail"`, `name="site_id" value="31"`, "Reconfigure webmail"} {
+			for _, want := range []string{`id="domain-mail-title"`, "hello@mail-owned.test", "Aliases (1)", `name="return_to" value="site-mail"`, `name="site_id" value="31"`, "Reconfigure webmail"} {
 				if !strings.Contains(body, want) {
 					t.Fatalf("domain Mail workspace missing %q", want)
 				}
@@ -264,7 +270,7 @@ func TestClientMailUnavailableState(t *testing.T) {
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 	body = rec.Body.String()
-	if rec.Code != http.StatusOK || !strings.Contains(body, "Mail for mail-owned.test") || !strings.Contains(body, "Contact your hosting provider") {
+	if rec.Code != http.StatusOK || !strings.Contains(body, `id="domain-mail-title"`) || !strings.Contains(body, "Contact your hosting provider") {
 		t.Fatalf("client disabled domain Mail status=%d body=%s", rec.Code, body)
 	}
 	if strings.Contains(body, "Edit the service plan") || strings.Contains(body, "Enable mail") {
@@ -417,5 +423,133 @@ func TestSupportCustomerFilterIncludesOnlyOwnedMailResources(t *testing.T) {
 		len(filtered.SubscriptionServices.MailAliases) != 1 || filtered.SubscriptionServices.MailAliases[0].SubscriptionID != 20 ||
 		len(filtered.SubscriptionServices.WebmailHosts) != 1 || filtered.SubscriptionServices.WebmailHosts[0].SiteID != 1 {
 		t.Fatalf("support mail data was not scoped: %+v", filtered.SubscriptionServices)
+	}
+}
+
+func TestDomainMailFigmaMailboxActions(t *testing.T) {
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{data: mailWorkspaceData(true)}, Phase6Manager: &fakePhase6Manager{}})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/31?tab=mail", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	for _, want := range []string{"Create email address", "Open webmail", "Connect a mail app", "https://webmail.mail-owned.test", "mailbox_id=51", "data-np-mail-search", "/assets/mail.css", "/assets/mail.js"} {
+		if !strings.Contains(rec.Body.String(), want) {
+			t.Errorf("domain Mail missing %q", want)
+		}
+	}
+}
+
+func TestMailClientConnectionContentAndOwnership(t *testing.T) {
+	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleReseller, auth.RoleClient} {
+		t.Run(string(role), func(t *testing.T) {
+			handler, _ := newTestHandlerWithOptions(t, role, ServerOptions{DashboardReader: &fakeDashboardReader{data: mailWorkspaceData(true)}, MailManager: &fakeMailManager{}})
+			cookie := login(t, handler, string(role)+"@nakpanel.test", "Nakpanel"+strings.Title(string(role))+"!2026")
+			for _, partial := range []bool{false, true} {
+				req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/31?tab=mail&mail_view=connection&mailbox_id=51", nil)
+				addAuthenticatedCookie(req, cookie)
+				if partial {
+					req.Header.Set("X-Nakpanel-Mail", "connection")
+				}
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, req)
+				body := rec.Body.String()
+				if rec.Code != 200 || !strings.Contains(body, "mail.node.test") || !strings.Contains(body, "hello@mail-owned.test") || !strings.Contains(body, "POP3 is not enabled") || !strings.Contains(body, "Copy all settings") || rec.Header().Get("Cache-Control") != "private, no-store" {
+					t.Fatalf("connection status=%d body=%s", rec.Code, body)
+				}
+				if partial && strings.Contains(body, "<!doctype") {
+					t.Fatal("fragment returned entire workspace")
+				}
+			}
+			for _, id := range []string{"0", "52", "-1", "garbage"} {
+				req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/31?tab=mail&mail_view=connection&mailbox_id="+id, nil)
+				addAuthenticatedCookie(req, cookie)
+				rec := httptest.NewRecorder()
+				handler.ServeHTTP(rec, req)
+				if rec.Code != 404 {
+					t.Fatalf("unowned mailbox %q status=%d", id, rec.Code)
+				}
+			}
+		})
+	}
+}
+
+func TestMailWorkspaceLegacyDomainAndFormFallbacks(t *testing.T) {
+	data := mailWorkspaceData(true)
+	data.SubscriptionServices.MailDomains[0].SiteID = 0
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{data: data}, MailManager: &fakeMailManager{}})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	for _, entry := range []struct{ view, want string }{{"connection&mailbox_id=51", "mail.node.test"}, {"create-address", `name="password"`}, {"edit-address&resource_id=51", `value="hello"`}, {"create-alias", `name="destinations"`}, {"edit-alias&resource_id=61", `value="sales"`}, {"webmail", `action="/webmail"`}} {
+		req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/31?tab=mail&mail_view="+entry.view, nil)
+		addAuthenticatedCookie(req, cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), entry.want) {
+			t.Errorf("fallback %s: status=%d missing %q", entry.view, rec.Code, entry.want)
+		}
+	}
+}
+
+func TestMailConnectionSupportScopeAndDisabledStates(t *testing.T) {
+	data := mailWorkspaceData(true)
+	data.Customers = []types.Customer{{ID: 88, DisplayName: "Mail customer", Status: "active"}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{data: data}, MailManager: &fakeMailManager{}, Workspace: &fakeWorkspaceService{}})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	for _, entry := range []struct {
+		path string
+		code int
+		want string
+	}{{"/support/customers/88/sites/31?tab=mail", 200, "/support/customers/88/sites/31?tab=mail&amp;mail_view=connection"}, {"/support/customers/88/sites/31?tab=mail&mail_view=connection&mailbox_id=51", 200, "mail.node.test"}, {"/support/customers/99/sites/31?tab=mail&mail_view=connection&mailbox_id=51", 404, ""}, {"/sites/31?tab=mail&mail_view=edit-address&resource_id=999", 404, ""}, {"/sites/31?tab=mail&mail_view=edit-alias&resource_id=999", 404, ""}} {
+		req := httptest.NewRequest(http.MethodGet, "https://panel.test"+entry.path, nil)
+		addAuthenticatedCookie(req, cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != entry.code || !strings.Contains(rec.Body.String(), entry.want) {
+			t.Errorf("%s status=%d missing %q", entry.path, rec.Code, entry.want)
+		}
+	}
+	data.SubscriptionServices.Mailboxes[0].Enabled = false
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/31?tab=mail&mail_view=connection&mailbox_id=51", nil)
+	req.Header.Set("X-Nakpanel-Mail", "connection")
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "mailbox is suspended") || strings.Contains(rec.Body.String(), "mail.node.test") || strings.Contains(rec.Body.String(), "Copy all settings") {
+		t.Fatalf("suspended connection response=%d %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestMailEnableDomainFallback(t *testing.T) {
+	data := mailWorkspaceData(true)
+	data.SubscriptionServices.MailDomains = nil
+	data.SubscriptionServices.Mailboxes = nil
+	data.SubscriptionServices.MailAliases = nil
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{DashboardReader: &fakeDashboardReader{data: data}})
+	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
+	req := httptest.NewRequest(http.MethodGet, "https://panel.test/sites/31?tab=mail&mail_view=enable-domain", nil)
+	addAuthenticatedCookie(req, cookie)
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `class="np-mail-form-page np-mail-settings-page"`) || !strings.Contains(rec.Body.String(), `name="site_id" value="31"`) {
+		t.Fatal("missing visible enable-mail fallback")
+	}
+}
+
+func TestMailFormsUncheckedTogglesAreNotReenabled(t *testing.T) {
+	services := &fakeMailDomainServices{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DomainManager: services, DashboardReader: &fakeDashboardReader{data: mailWorkspaceData(true)}})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	for _, kind := range []string{"mail-domains", "mailboxes"} {
+		req := httptest.NewRequest(http.MethodPost, "https://panel.test/subscriptions/20/"+kind, strings.NewReader("site_id=31&resource_id=41&mail_domain_id=41&mail_form=true"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		addAuthenticatedCookie(req, cookie)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != 303 {
+			t.Fatalf("%s status=%d", kind, rec.Code)
+		}
+	}
+	if services.input.Enabled || services.input.DKIM || services.mailbox.Enabled {
+		t.Fatalf("unchecked form controls were enabled: domain=%+v mailbox=%+v", services.input, services.mailbox)
 	}
 }

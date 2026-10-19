@@ -60,6 +60,13 @@ func (s *SQLStore) MailSettings(ctx context.Context) (MailSettings, error) {
 	return ReadMailSettings(ctx, s.db, s.secrets)
 }
 
+// MailClientHostname deliberately avoids loading outbound relay credentials.
+func (s *SQLStore) MailClientHostname(ctx context.Context) (string, error) {
+	var hostname string
+	err := s.db.QueryRowContext(ctx, `SELECT mail_hostname FROM mail_settings WHERE id`).Scan(&hostname)
+	return hostname, err
+}
+
 // UpdateMailSettings persists the node mail settings and queues a Stalwart
 // reconfiguration. The smarthost password is stored so the agent can render
 // it into Stalwart's root-only config; it is never returned by list APIs.

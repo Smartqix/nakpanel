@@ -209,3 +209,76 @@ func TestModernReinstallsUseStagedSignedCandidateWhenPresent(t *testing.T) {
 		})
 	}
 }
+
+func TestValkeyBoundarySeparatesCacheAndContainerMemory(t *testing.T) {
+	data, err := os.ReadFile("valkey-platform-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"100663296", "maxmemory 64mb", "/etc/nakpanel/valkey/sub-$1/valkey.conf"} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("Valkey cache64MiB requires intentional96MiB container bound plus real maxmemory proof: missing %s", want)
+		}
+	}
+	if strings.Contains(string(data), "= 67108864") {
+		t.Fatal("physical cache/container budgets conflated")
+	}
+}
+
+func TestModernFreshInstallerChoosesAdminAndDisablesOtherPublicSeeds(t *testing.T) {
+	for _, path := range []string{"current-install-verify.sh", "phase29-verify.sh"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range []string{"--admin-email admin@nakpanel.test", "--admin-password-file", "umask 077", "NakpanelAdmin!2026"} {
+			if !strings.Contains(string(data), want) {
+				t.Errorf("%s missing explicit private admin bootstrap %s", path, want)
+			}
+		}
+	}
+	current, err := os.ReadFile("current-install-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(current), "NOT login_disabled") {
+		t.Fatal("fresh bootstrap does not prove other public seeds disabled")
+	}
+	for _, path := range []string{"phase34-verify.sh", "domain-removal-verify.sh"} {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "email=client@nakpanel.test") {
+			t.Errorf("%s still depends on intentionally disabled public client", path)
+		}
+		if !strings.Contains(string(data), "unrelated_email") {
+			t.Errorf("%s missing explicit unrelated customer identity", path)
+		}
+	}
+}
+
+func TestValkeyTraversalACLRequiredBeforeAndAfterReboot(t *testing.T) {
+	data, err := os.ReadFile("valkey-platform-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	script := string(data)
+	function := shellFixtureFunction(t, script, "assert_valkey_traversal", true)
+	for _, mode := range []string{"present", "missing"} {
+		cmd := exec.Command("bash", "-c", `set -euo pipefail
+VM_NAME=owned;username=tenant
+fail(){ echo "$*" >&2;exit 1; }
+multipass_exec_short(){ if [[ "$*" == *getfacl* ]]; then if [[ "$MODE" == present ]]; then echo user:tenant:--x;fi; else echo '750 root:nakpanel'; fi; }
+`+function+`assert_valkey_traversal`)
+		cmd.Env = append(os.Environ(), "MODE="+mode)
+		out, err := cmd.CombinedOutput()
+		if (err == nil) != (mode == "present") {
+			t.Fatalf("mode%s: %s %v", mode, out, err)
+		}
+	}
+	restart := strings.Index(script, `multipass restart "${VM_NAME}"`)
+	if restart < 0 || !strings.Contains(script[restart:], "assert_valkey_traversal") {
+		t.Fatal("postboot ACL observation missing")
+	}
+}

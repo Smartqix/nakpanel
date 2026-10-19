@@ -24,6 +24,43 @@ func shellFixtureFunction(t *testing.T, script, name string, required bool) stri
 	return body[:end+2] + "\n"
 }
 
+func TestSecurityTenantFixtureUsesCanonicalDomain(t *testing.T) {
+	data, err := os.ReadFile("security-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	function := shellFixtureFunction(t, string(data), "provision_tenant", true)
+	body := `set -euo pipefail
+STAMP=123;VM_IP=127.0.0.1;PLAN_SLUG=fixture-plan
+tmpdir=$(mktemp -d);trap 'rm -rf "$tmpdir"' EXIT
+api(){
+ local output="" payload=""
+ while [[ "$#" -gt 0 ]]; do
+  case "$1" in -o) output="$2";shift;; -d) payload="$2";shift;; esac
+  shift
+ done
+ python3 - "$payload" <<'PY'
+import json,sys
+payload=json.loads(sys.argv[1])
+assert payload['domain']=='seca123.test', payload['domain']
+PY
+ printf '{"id":"acc_fixture"}' >"$output"
+}
+db(){ case "$1" in
+ *provisioning_state*) echo active;;
+ 'SELECT subscription_id'*) echo 3;;
+ 'SELECT username'*) echo np_fixture;;
+ 'SELECT id FROM sites'*) echo 7;;
+ 'UPDATE subscription_entitlements'*) :;;
+ *) echo 'unexpected fixture query' >&2;return 1;;
+esac; }
+` + function + `provision_tenant A; test "$A_DOMAIN" = seca123.test`
+	cmd := exec.Command("bash", "-c", body)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("canonical tenant domain: %s %v", out, err)
+	}
+}
+
 func TestSecurityResourceFixturesRejectFailedProductOperations(t *testing.T) {
 	data, err := os.ReadFile("security-verify.sh")
 	if err != nil {

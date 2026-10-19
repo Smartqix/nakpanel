@@ -142,6 +142,7 @@ type Manager struct {
 	accessPolicy            AccessPolicy
 	capabilities            RuntimeCapabilityReader
 	mailAgent               MailAdminAgent
+	mailClientProbe         func(context.Context, string, int) error
 	hostingToolkitAgent     HostingToolkitAgent
 	customCertificateRepo   CustomCertificateRepository
 	customCertificateStager CustomCertificateStager

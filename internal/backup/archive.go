@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
@@ -319,17 +320,83 @@ func CheckArchiveIntegrity(src io.Reader, key []byte) error {
 	if err != nil {
 		return err
 	}
+	var manifest Manifest
+	manifestSeen := false
+	var snapshot string
+	defer func() {
+		if snapshot != "" {
+			_ = os.Remove(snapshot)
+		}
+	}()
 	for {
-		_, err := reader.Next()
+		header, err := reader.Next()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
 			return fmt.Errorf("archive integrity: %w", err)
 		}
-		if _, err := io.Copy(io.Discard, reader); err != nil {
+		if header.Name == ManifestName {
+			if manifestSeen {
+				return errors.New("archive integrity: duplicate manifest")
+			}
+			manifestSeen = true
+			data, err := io.ReadAll(io.LimitReader(reader, 1<<20))
+			if err != nil {
+				return fmt.Errorf("archive integrity: %w", err)
+			}
+			if err = json.Unmarshal(data, &manifest); err != nil {
+				return fmt.Errorf("archive integrity: invalid manifest: %w", err)
+			}
+		} else if header.Name == RoundcubeSQLiteDumpName && manifest.RoundcubeSQLitePath != "" {
+			if snapshot != "" {
+				return errors.New("archive integrity: duplicate Roundcube SQLite snapshot")
+			}
+			if header.Typeflag != tar.TypeReg && header.Typeflag != tar.TypeRegA {
+				return errors.New("archive integrity: Roundcube SQLite snapshot must be a regular file")
+			}
+			file, err := os.CreateTemp("", "nakpanel-roundcube-preflight-*.sqlite")
+			if err != nil {
+				return err
+			}
+			snapshot = file.Name()
+			_, copyErr := io.Copy(file, reader)
+			closeErr := file.Close()
+			if copyErr != nil {
+				return fmt.Errorf("archive integrity: %w", copyErr)
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+		} else if _, err := io.Copy(io.Discard, reader); err != nil {
 			return fmt.Errorf("archive integrity: %w", err)
 		}
 	}
-	return reader.Finish()
+	// Authenticate the complete encrypted stream before inspecting database bytes.
+	if err := reader.Finish(); err != nil {
+		return err
+	}
+	if manifest.RoundcubeSQLitePath != "" {
+		if manifest.FormatVersion != 2 || !IsRoundcubeSQLitePath(manifest.RoundcubeSQLitePath) {
+			return errors.New("archive integrity: invalid Roundcube SQLite metadata")
+		}
+		if snapshot == "" {
+			return errors.New("archive integrity: advertised Roundcube SQLite snapshot is missing")
+		}
+		header := make([]byte, 16)
+		file, err := os.Open(snapshot)
+		if err != nil {
+			return err
+		}
+		_, readErr := io.ReadFull(file, header)
+		_ = file.Close()
+		if readErr != nil || string(header) != "SQLite format 3\x00" {
+			return errors.New("archive integrity: Roundcube SQLite snapshot integrity check failed")
+		}
+		output, err := exec.Command("sqlite3", "-readonly", snapshot, "PRAGMA quick_check;").Output()
+		if err != nil || strings.TrimSpace(string(output)) != "ok" {
+			return errors.New("archive integrity: Roundcube SQLite snapshot integrity check failed")
+		}
+	}
+	return nil
 }

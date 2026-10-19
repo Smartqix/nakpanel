@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-//go:embed static/app.css static/app.js static/interaction.js static/navigation.js static/tasks.js static/git.js static/git.css static/domains.css static/domains.js static/fonts/* static/domain-icons/* static/site-removal.js static/plan-sync.js static/mail-import.js static/dns-template.js static/icons.svg static/ace/*
+//go:embed static/app.css static/app.js static/interaction.js static/navigation.js static/tasks.js static/git.js static/git.css static/domains.css static/domains.js static/mail.css static/mail.js static/fonts/* static/domain-icons/* static/site-removal.js static/plan-sync.js static/mail-import.js static/dns-template.js static/icons.svg static/ace/*
 var staticFiles embed.FS
 
 var appCSS = mustReadStatic("static/app.css")
@@ -24,6 +24,15 @@ func StaticHandler() http.Handler {
 			return
 		}
 		switch r.URL.Path {
+		case "mail.css", "/mail.css":
+			w.Header().Set("Content-Type", "text/css; charset=utf-8")
+			http.ServeContent(w, r, "mail.css", time.Time{}, bytes.NewReader(mustReadStatic("static/mail.css")))
+		case "mail.js", "/mail.js":
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+			http.ServeContent(w, r, "mail.js", time.Time{}, bytes.NewReader(mustReadStatic("static/mail.js")))
+		case "domain-icons/mail-help.svg", "/domain-icons/mail-help.svg":
+			w.Header().Set("Content-Type", "image/svg+xml")
+			http.ServeContent(w, r, "mail-help.svg", time.Time{}, bytes.NewReader(mustReadStatic("static/domain-icons/mail-help.svg")))
 		case "domain-icons/server.svg", "/domain-icons/server.svg", "domain-icons/terminal.svg", "/domain-icons/terminal.svg", "domain-icons/chart.svg", "/domain-icons/chart.svg":
 			w.Header().Set("Content-Type", "image/svg+xml")
 			http.ServeContent(w, r, path.Base(r.URL.Path), time.Time{}, bytes.NewReader(mustReadStatic("static/"+strings.TrimPrefix(r.URL.Path, "/"))))

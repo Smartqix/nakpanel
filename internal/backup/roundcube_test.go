@@ -105,3 +105,69 @@ func TestRoundcubeSQLiteDestinationRejectsArbitraryPaths(t *testing.T) {
 		t.Fatalf("got=%s err=%v", got, err)
 	}
 }
+
+func TestForwardRoundcubeRestoreRequiresEncryptedSQLiteSnapshotMetadata(t *testing.T) {
+	for _, source := range []Manifest{{FormatVersion: 1}, {FormatVersion: 2}, {FormatVersion: 1, RoundcubeSQLitePath: NativeRoundcubeSQLitePath}, {FormatVersion: 2, RoundcubeSQLitePath: "/tmp/foreign.sqlite"}} {
+		err := CheckRoundcubeRestoreTarget(source, PlatformProvenance{}, RestoreForwardMigration)
+		if err == nil || !strings.Contains(err.Error(), "forward-migration requires") {
+			t.Fatalf("source=%+v err=%v", source, err)
+		}
+	}
+	// Existing same-platform format-1 recovery remains available.
+	if err := CheckRoundcubeRestoreTarget(Manifest{FormatVersion: 1}, PlatformProvenance{}, RestoreSamePlatform); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestArchivePreflightRequiresUsableAdvertisedRoundcubeSnapshot(t *testing.T) {
+	sqlite, err := exec.LookPath("sqlite3")
+	if err != nil {
+		t.Skip("sqlite3 unavailable")
+	}
+	path := filepath.Join(t.TempDir(), "roundcube.sqlite")
+	if out, err := exec.Command(sqlite, path, "CREATE TABLE contacts(email TEXT); INSERT INTO contacts VALUES('archive-canary@example.test');").CombinedOutput(); err != nil {
+		t.Fatalf("sqlite fixture: %s %v", out, err)
+	}
+	valid, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name    string
+		entries [][]byte
+		want    string
+	}{
+		{"missing", nil, "missing"}, {"invalid", [][]byte{[]byte("not a SQLite database")}, "integrity"},
+		{"empty", [][]byte{nil}, "integrity"},
+		{"duplicate", [][]byte{valid, valid}, "duplicate"}, {"valid", [][]byte{valid}, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			key := testKey(t)
+			var archive bytes.Buffer
+			w, err := NewArchiveWriter(&archive, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			m, _ := json.Marshal(Manifest{FormatVersion: 2, RoundcubeSQLitePath: NativeRoundcubeSQLitePath})
+			if err := w.AddBytes(ManifestName, m, 0600); err != nil {
+				t.Fatal(err)
+			}
+			for _, data := range tc.entries {
+				if err := w.AddBytes(RoundcubeSQLiteDumpName, data, 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := w.Close(); err != nil {
+				t.Fatal(err)
+			}
+			err = CheckArchiveIntegrity(bytes.NewReader(archive.Bytes()), key)
+			if tc.want == "" {
+				if err != nil {
+					t.Fatal(err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("err=%v want %s", err, tc.want)
+			}
+		})
+	}
+}

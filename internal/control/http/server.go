@@ -719,6 +719,9 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 			return
 		}
 		applyCertificateQueuedNotice(r, route, view.DetailID, &data)
+		if route == "site-detail" && view.Tab == "mail" && !s.loadMailClientWorkspace(w, r, user, data, &view) {
+			return
+		}
 		if route == "site-detail" && view.Tab == "applications" {
 			if !s.loadPHPApplicationWorkspace(w, r, user, view.DetailID, &view) {
 				return
@@ -948,6 +951,9 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 		tab = "overview"
 	}
 	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, Drawer: workspaceDrawerID(r.URL.Query().Get("drawer")), ApplicationTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab"))), WordPressTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("wp_tab"))), LogSource: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source"))), CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
+	if page == "site-detail" && tab == "mail" && !s.loadMailClientWorkspace(w, r, user, data, &view) {
+		return
+	}
 	if page == "site-new" {
 		view.SelectedSubscription = parseQueryInt64(r, "subscription_id")
 		view.SiteCreateKind = strings.ToLower(strings.TrimSpace(r.URL.Query().Get("type")))

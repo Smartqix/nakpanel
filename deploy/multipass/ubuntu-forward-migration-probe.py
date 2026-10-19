@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 import re
 import socket
+import sqlite3
 import ssl
 import subprocess
 import sys
@@ -210,7 +211,41 @@ def managed_writers():
     return sorted(set(result))
 
 
+def roundcube_preflight(c, config_dir=Path('/etc/roundcube')):
+    """Inspect literals and SQLite read-only; never source credential-bearing PHP."""
+    allowed = {'/var/lib/roundcube/roundcube.sqlite', '/var/lib/roundcube/db/roundcube',
+               '/var/lib/dbconfig-common/sqlite3/roundcube/roundcube'}
+    selected = None
+    for name in ('debian-db-roundcube.php', 'debian-db.php'):
+        config = config_dir / name
+        if not config.exists(): continue
+        text = config.read_text()
+        if name == 'debian-db-roundcube.php':
+            match = re.search(r"(?m)^\s*\$config\[['\"]db_dsnw['\"]\]\s*=\s*['\"]([^'\"\r\n]*)['\"]\s*;", text)
+            if not match: continue
+            if not match[1].startswith('sqlite:'):
+                raise RuntimeError('Roundcube configured non-SQLite storage is unsupported for forward migration; preserve the legacy database separately')
+            selected = '/' + match[1][len('sqlite:'):].lstrip('/')
+        else:
+            values = dict(re.findall(r"(?m)^\s*\$(dbtype|dbbasepath|basepath|dbname)\s*=\s*['\"]([^'\"\r\n]*)['\"]\s*;", text))
+            if not values.get('dbtype'): continue
+            if values['dbtype'] not in ('sqlite','sqlite3'):
+                raise RuntimeError('Roundcube configured non-SQLite storage is unsupported for forward migration; preserve the legacy database separately')
+            selected = str(Path(values.get('dbbasepath') or values.get('basepath','')) / values.get('dbname',''))
+        break
+    if selected not in allowed:
+        raise RuntimeError('forward migration requires an explicitly configured supported Roundcube SQLite database')
+    database = Path(selected)
+    if not database.is_file() or database.is_symlink():
+        raise RuntimeError('configured Roundcube SQLite database must be a regular existing file')
+    with sqlite3.connect(database.as_uri()+'?mode=ro',uri=True) as connection:
+        if connection.execute('PRAGMA quick_check').fetchall() != [('ok',)]:
+            raise RuntimeError('Roundcube SQLite source integrity check failed')
+    return {'roundcube_sqlite_path': selected, 'roundcube_storage_preflight': 'sqlite-readonly'}
+
+
 def seed(c):
+    roundcube_preflight(c)
     c = discover(c)
     wrong = pg("SELECT count(*) FROM (SELECT php_version v FROM sites UNION ALL SELECT desired_php_version FROM sites UNION ALL SELECT php_version FROM php_applications) q WHERE v<>'8.5'")
     if wrong != '0':
@@ -450,7 +485,7 @@ if __name__ == '__main__':
     try:
         request = json.load(sys.stdin)
         action, config = request['action'], request['config']
-        handlers = {'seed': seed, 'snapshot': snapshot, 'live': live, 'tls': tls, 'freeze': freeze, 'cache-target-images':cache_target_images}
+        handlers = {'source-preflight': roundcube_preflight, 'seed': seed, 'snapshot': snapshot, 'live': live, 'tls': tls, 'freeze': freeze, 'cache-target-images':cache_target_images}
         if action == 'freeze-for-backup': result = freeze(config,keep_agent=True)
         elif action == 'frozen': result = frozen()
         elif action in handlers: result = handlers[action](config)

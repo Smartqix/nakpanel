@@ -132,7 +132,7 @@ and soak evidence is required before production promotion. Existing Ubuntu
 24.04 installations retain their PHP choices and provider. An in-place Ubuntu
 release upgrade is unsupported. See [platform qualification](docs/PLATFORM_QUALIFICATION.md).
 
-## Production Installation (Ubuntu 24.04)
+## Server Installation
 
 One command from a checkout on the target server:
 
@@ -152,6 +152,19 @@ updates. Changing a populated host's provider requires a separately reviewed
 migration; the installer rejects a mismatching provider request. Signed bundles
 may be supplied with `--bundle DIR --release-public-key FILE`; obtain the public
 key independently. Development signing keys cannot establish production trust.
+
+For a public server, provide a real administrator during the fresh install:
+
+```bash
+sudo deploy/install/install.sh --fresh --yes \
+  --admin-email admin@example.com \
+  --admin-password-file /root/nakpanel-admin-password
+```
+
+The password file may remain root-owned with mode `0600`. The installer creates
+the administrator before starting the panel, disables the other known test
+logins, and removes its temporary password copy. Without an explicit
+administrator, migration-seeded logins are for isolated lab testing only.
 
 The installer detects fresh installs versus upgrades (`panelctl version` /
 `/etc/nakpanel/version`). Upgrades take a full pre-upgrade backup set and

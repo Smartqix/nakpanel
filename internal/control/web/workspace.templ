@@ -25,6 +25,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<link rel="stylesheet" href="/assets/app.css"/>
 			<link rel="stylesheet" href="/assets/git.css"/>
 			<link rel="stylesheet" href="/assets/domains.css"/>
+			<link rel="stylesheet" href="/assets/mail.css"/>
 		</head>
 		<body class={ domainWorkspaceClass(view) } data-np-role={ string(user.Role) }
 			if workspaceRequiresDocument(view) {
@@ -59,6 +60,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			}
 			@confirmationDialog()
 			<dialog class="np-dialog np-site-removal-dialog" id="np-site-removal-dialog" data-np-dialog></dialog>
+			<dialog class="np-dialog np-mail-dialog np-mail-connect-dialog" id="np-mail-connect-dialog" aria-labelledby="np-mail-connect-title" data-np-dialog></dialog>
 			<script defer src="/assets/interaction.js"></script>
 			<script defer src="/assets/navigation.js"></script>
  <script defer src="/assets/tasks.js"></script>
@@ -71,6 +73,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<script defer src="/assets/site-removal.js"></script>
 			<script defer src="/assets/plan-sync.js"></script>
 			<script defer src="/assets/mail-import.js"></script>
+			<script defer src="/assets/mail.js"></script>
 		</body>
 	</html>
 }

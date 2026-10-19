@@ -19,6 +19,7 @@ maria(){ multipass_exec_short "${VM_NAME}" -- sudo mariadb --batch --skip-column
 if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
   "${SCRIPT_DIR}/phase32-verify.sh"
 fi
+assert_qualification_bundle_staged
 
 require_nakpanel_vm_name "${VM_NAME}"
 for tool in curl python3; do
