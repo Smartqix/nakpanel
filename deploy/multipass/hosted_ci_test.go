@@ -341,7 +341,27 @@ func TestHostedPreparationAuthorizesOnlyItsRunnerOnTheActualSocket(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"ready", "delayed-kvm", "reset-kvm", "missing", "symlink", "not-root", "acl-failure", "settle-failure", "missing-kvm", "symlink-kvm", "not-root-kvm", "kvm-acl-failure", "linked-temp-root", "file-temp-root", "foreign-temp-root"} {
+	// These literal outcomes describe snap's external boundary; the complete
+	// preparer still controls retry classification, timeouts, evidence and all
+	// downstream daemon/KVM admission. No real sudo/snap/timeout is executed.
+	snapCases := map[string]struct {
+		codes    []int
+		backoffs []string
+		wantExit int
+	}{
+		"snap-retry-once":          {[]int{1, 0}, []string{"10"}, 0},
+		"snap-retry-twice":         {[]int{1, 1, 0}, []string{"10", "20"}, 0},
+		"snap-three-fail":          {[]int{1, 1, 1}, []string{"10", "20"}, 1},
+		"snap-timeout":             {[]int{124}, nil, 124},
+		"snap-timeout-after-retry": {[]int{1, 124}, []string{"10"}, 124},
+		"snap-killed":              {[]int{137}, nil, 137},
+		"snap-tool125":             {[]int{125}, nil, 125},
+		"snap-tool126":             {[]int{126}, nil, 126},
+		"snap-tool127":             {[]int{127}, nil, 127},
+		"snap-other2":              {[]int{2}, nil, 2},
+		"snap-interrupted":         {[]int{130}, nil, 130},
+	}
+	for _, mode := range []string{"ready", "delayed-kvm", "reset-kvm", "missing", "symlink", "not-root", "acl-failure", "settle-failure", "missing-kvm", "symlink-kvm", "not-root-kvm", "kvm-acl-failure", "linked-temp-root", "file-temp-root", "foreign-temp-root", "snap-retry-once", "snap-retry-twice", "snap-three-fail", "snap-timeout", "snap-timeout-after-retry", "snap-killed", "snap-tool125", "snap-tool126", "snap-tool127", "snap-other2", "snap-interrupted"} {
 		t.Run(mode, func(t *testing.T) {
 			root, err := filepath.EvalSymlinks(t.TempDir())
 			if err != nil {
@@ -373,12 +393,19 @@ case "$1" in -s) echo Linux;; -m) echo x86_64;; *) exit 90;; esac
 test "$1" = -u || exit 90
 echo 1001
 `,
-				"df":    "#!/bin/sh\necho 'disposable hosted disk fixture'\n",
-				"sleep": "#!/bin/sh\nexit 0\n",
+				"df": "#!/bin/sh\necho 'disposable hosted disk fixture'\n",
+				"sleep": `#!/bin/sh
+printf '%s\n' "$*" >> "$FIXTURE/sleeps"
+printf 'sleep %s\n' "$*" >> "$FIXTURE/host-commands"
+exit 0
+`,
 				"mktemp": `#!/bin/sh
 # Model GNU mktemp's TMPDIR behavior even on a BSD/macOS test host.
-test "$*" = -d || exit 99
-exec "$FIXTURE_PYTHON" -c 'import tempfile;print(tempfile.mkdtemp(prefix="tmp."))'
+case "$*" in
+ -d) exec "$FIXTURE_PYTHON" -c 'import tempfile;print(tempfile.mkdtemp(prefix="tmp."))';;
+ -d\ *) exec "$FIXTURE_PYTHON" -c 'import pathlib,sys,tempfile;p=pathlib.Path(sys.argv[1]);assert p.name=="snap-install-multipass.XXXXXX";print(tempfile.mkdtemp(prefix="snap-install-multipass.",dir=p.parent))' "$2";;
+ *) exit 99;;
+esac
 `,
 				"sudo": `#!/bin/sh
 set -eu
@@ -456,7 +483,32 @@ case "$1" in
   esac
   ;;
  journalctl) echo 'multipassd journal fixture';;
- rm|docker|apt-get|snap) :;;
+ snap|timeout)
+  # Accept the legacy unbounded boundary only for the meaningful RED control.
+  # Tests independently require every successful new invocation to be bounded.
+  case "$*" in
+   'snap install multipass'|'timeout --kill-after=5s 360s snap install multipass') :;;
+   *) exit 90;;
+  esac
+  n=0;test ! -f "$FIXTURE/snap-attempts" || n=$(cat "$FIXTURE/snap-attempts")
+  n=$((n+1));printf '%s\n' "$n" > "$FIXTURE/snap-attempts"
+  printf 'snap stdout attempt %s\n' "$n"
+  printf 'snap stderr attempt %s\n' "$n" >&2
+  case "$CLIENT_MODE" in
+   snap-retry-once) test "$n" -gt 1 || exit 1;;
+   snap-retry-twice) test "$n" -gt 2 || exit 1;;
+   snap-three-fail) exit 1;;
+   snap-timeout) exit 124;;
+   snap-timeout-after-retry) if test "$n" = 1;then exit 1;else exit 124;fi;;
+   snap-killed) exit 137;;
+   snap-tool125) exit 125;;
+   snap-tool126) exit 126;;
+   snap-tool127) exit 127;;
+   snap-other2) exit 2;;
+   snap-interrupted) exit 130;;
+  esac
+  ;;
+ rm|docker|apt-get) :;;
  *) exit 96;;
 esac
 `,
@@ -512,11 +564,79 @@ exec "$@"
 			cmd := exec.Command("bash", helper)
 			cmd.Env = append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "FIXTURE="+root, "FIXTURE_PYTHON="+python, "RUNNER_TEMP="+runnerTemp, "GITHUB_ENV="+filepath.Join(root, "environment"), "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "CLIENT_MODE="+mode)
 			output, runErr := cmd.CombinedOutput()
-			wantReady := mode == "ready" || mode == "delayed-kvm" || mode == "reset-kvm"
+			snapCase, isSnapCase := snapCases[mode]
+			wantReady := mode == "ready" || mode == "delayed-kvm" || mode == "reset-kvm" || isSnapCase && snapCase.wantExit == 0
 			if (runErr == nil) != wantReady {
 				t.Fatalf("mode=%s preparation err=%v: %s", mode, runErr, output)
 			}
 			commandsLog, _ := os.ReadFile(filepath.Join(root, "host-commands"))
+			if isSnapCase {
+				if snapCase.wantExit != 0 {
+					exit, ok := runErr.(*exec.ExitError)
+					if !ok || exit.ExitCode() != snapCase.wantExit {
+						t.Fatalf("Snap failure class changed: %v, want %d: %s", runErr, snapCase.wantExit, output)
+					}
+				}
+				count, err := os.ReadFile(filepath.Join(root, "snap-attempts"))
+				if err != nil || strings.TrimSpace(string(count)) != fmt.Sprint(len(snapCase.codes)) {
+					t.Fatalf("wrong bounded install count: %q %v: %s", count, err, commandsLog)
+				}
+				if strings.Count(string(commandsLog), "timeout --kill-after=5s 360s snap install multipass\n") != len(snapCase.codes) {
+					t.Fatalf("install bypassed exact bounded default-store invocation: %s", commandsLog)
+				}
+				var trace []string
+				for _, line := range strings.Split(string(commandsLog), "\n") {
+					if strings.HasPrefix(line, "udevadm ") {
+						break
+					}
+					if line == "timeout --kill-after=5s 360s snap install multipass" {
+						trace = append(trace, "install")
+					}
+					if strings.HasPrefix(line, "sleep ") {
+						trace = append(trace, line)
+					}
+				}
+				wantTrace := []string{"install"}
+				for _, pause := range snapCase.backoffs {
+					wantTrace = append(wantTrace, "sleep "+pause, "install")
+				}
+				if strings.Join(trace, ",") != strings.Join(wantTrace, ",") {
+					t.Fatalf("wrong install/backoff order: %v want %v", trace, wantTrace)
+				}
+				dirs, err := filepath.Glob(filepath.Join(root, "hosted-evidence", "snap-install-multipass.*"))
+				if err != nil || len(dirs) != 1 {
+					t.Fatalf("one retained private attempt directory required: %v %v", dirs, err)
+				}
+				if info, err := os.Lstat(dirs[0]); err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+					t.Fatalf("Snap evidence directory is not private: %v %v", info, err)
+				}
+				for i, code := range snapCase.codes {
+					for suffix, want := range map[string]string{"stdout.log": fmt.Sprintf("snap stdout attempt %d\n", i+1), "stderr.log": fmt.Sprintf("snap stderr attempt %d\n", i+1), "exit-code": fmt.Sprintln(code)} {
+						path := filepath.Join(dirs[0], fmt.Sprintf("attempt-%d.%s", i+1, suffix))
+						data, err := os.ReadFile(path)
+						if err != nil || string(data) != want {
+							t.Fatalf("original Snap %s evidence lost: %q %v", suffix, data, err)
+						}
+						info, err := os.Lstat(path)
+						if err != nil || !info.Mode().IsRegular() || info.Mode().Perm() != 0600 {
+							t.Fatalf("Snap attempt evidence is not private: %v %v", info, err)
+						}
+						if suffix != "exit-code" && !strings.Contains(string(output), strings.TrimSpace(want)) {
+							t.Fatalf("original Snap output not surfaced: %s", output)
+						}
+					}
+				}
+				if snapCase.wantExit != 0 {
+					if strings.Contains(string(commandsLog), "udevadm ") || strings.Contains(string(commandsLog), "setfacl ") {
+						t.Fatalf("failed Snap reached daemon/KVM setup: %s", commandsLog)
+					}
+					for _, name := range []string{"client-attempts", "daemon-ready", "kvm-authorized"} {
+						if _, err := os.Stat(filepath.Join(root, name)); !os.IsNotExist(err) {
+							t.Fatalf("failed Snap reached downstream admission: %s", name)
+						}
+					}
+				}
+			}
 			if strings.HasSuffix(mode, "temp-root") {
 				if len(commandsLog) != 0 || !strings.Contains(string(output), "absolute current-owner directory without symlinks") {
 					t.Fatalf("unsafe runner temp root reached hosted mutations: %s %s", commandsLog, output)

@@ -205,3 +205,39 @@ preservation. Actual-schema and concurrency tests, independent core review and
 new-runtime acceptance remain required. The required CI unit job now provisions
 separate private fixture databases so real production-schema tests cannot be
 silently skipped or conflict through database-wide advisory locks.
+
+### Candidate20 source checks and hosted failures
+
+Candidate20 (`483215e4f3eb98187c6c33595fae4f80ffca95c2`) includes the
+PHP-only plan path, raw-preserving synchronization, authenticated database-manager
+readiness, legacy PHP mirror qualification and separate CI fixture databases.
+Independent reviews and the full local Go tests/vet passed. Both architecture
+development bundles passed signatures, exact inventories of 173 files, static
+ELF/CPU/toolchain checks and comparison of 128 committed shell/Python helpers.
+Generated assets match the committed source. These are source/build results.
+
+The [required CI](https://github.com/Smartqix/nakpanel/actions/runs/39283612331)
+unit job failed four database-manager fixture assertions on Linux. A retained
+reproducer established that the fixture's global fake `time.sleep` also advances
+its clock inside the real Python subprocess wait loop. A real child that closes
+its streams and exits 50 ms later exhausts the synthetic deadline before readiness
+inspection. The production helper uses ordinary real time. A fixture correction
+isolates the test clock, retains all original assertions and adds the delayed-exit
+regression. Independent normal and optimized runs passed without skips and cleared
+that correction; fresh CI remains required.
+
+Both [native matrix](https://github.com/Smartqix/nakpanel/actions/runs/39283602441)
+jobs, the required security job and the
+[Surý Ubuntu 26.04 job](https://github.com/Smartqix/nakpanel/actions/runs/39283797528)
+failed while installing Multipass Snap prerequisites. Original logs record
+Snapcraft refresh timeouts or download connection resets. These failures occurred
+before KVM/VM ownership, Nakpanel installation or canonical cell gates. They
+establish infrastructure preparation failures; a global provider outage is not
+established. The Surý-run Noble job has reached the canonical product chain;
+its individual gates and final result remain unconfirmed at this checkpoint.
+
+Direct completed-job logs establish the observed failures while the retained
+run-summary APIs still report queued states. Original API-digest-verified
+artifacts and logs are retained. No rerun, cancellation, guest repair or passing
+cell report is substituted for those results. Candidate20 does not establish
+installed-server, forward-migration, PHP maintenance or full platform acceptance.

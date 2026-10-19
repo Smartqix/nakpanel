@@ -40,7 +40,30 @@ sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/share/swift /usr/local
 sudo docker system prune --all --force
 sudo apt-get update
 sudo apt-get install -y acl cpu-checker curl dnsutils jq make openssl python3 ubuntu-keyring gnupg
-sudo snap install multipass
+# A normal failed Snap transaction can roll back its dependency download.
+# Retry only that exit class; a timeout/tool error leaves backend state unknown.
+# Keep each invocation's original streams private, including failures before a
+# later successful install. No alternate store/revision or trust bypass is used.
+snap_install_evidence="$(mktemp -d "${evidence}/snap-install-multipass.XXXXXX")"
+for snap_install_attempt in 1 2 3; do
+  snap_install_stdout="${snap_install_evidence}/attempt-${snap_install_attempt}.stdout.log"
+  snap_install_stderr="${snap_install_evidence}/attempt-${snap_install_attempt}.stderr.log"
+  if (umask 077; sudo timeout --kill-after=5s 360s snap install multipass >"${snap_install_stdout}" 2>"${snap_install_stderr}"); then
+    snap_install_status=0
+  else
+    snap_install_status=$?
+  fi
+  (umask 077; printf '%s\n' "${snap_install_status}" >"${snap_install_evidence}/attempt-${snap_install_attempt}.exit-code")
+  cat "${snap_install_stdout}"
+  cat "${snap_install_stderr}" >&2
+  if [[ "${snap_install_status}" == 0 ]]; then break; fi
+  if [[ "${snap_install_status}" != 1 || "${snap_install_attempt}" == 3 ]]; then
+    printf 'Snap multipass install failed at attempt %s (exit %s); evidence: %s\n' "${snap_install_attempt}" "${snap_install_status}" "${snap_install_evidence}" >&2
+    exit "${snap_install_status}"
+  fi
+  printf 'Retrying Snap multipass install after exit 1 (attempt %s of 3).\n' "${snap_install_attempt}" >&2
+  sleep "$((snap_install_attempt * 10))"
+done
 sudo udevadm control --reload-rules
 sudo udevadm trigger --name-match=kvm
 sudo apt-get clean

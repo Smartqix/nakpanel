@@ -12,6 +12,7 @@ import socket
 import subprocess
 import tempfile
 import threading
+import types
 import unittest
 from unittest.mock import patch
 
@@ -22,7 +23,7 @@ POISON = 'PRIVATE_RESPONSE_BODY_NEVER_LOG'
 # The fixture maps only fixed guest filesystem/network boundaries. The production
 # Python stdin remains unchanged, including its deadlines and authentication.
 BOOTSTRAP = r'''
-import http.client,json,os,pathlib,socket,stat,subprocess,sys,time,types
+import builtins,http.client,json,os,pathlib,socket,stat,subprocess,sys,time,types
 fixture=pathlib.Path(os.environ['FIXTURE_DIR']);original_open=os.open;original_lstat=os.lstat;original_fstat=os.fstat
 def mapped(path):
     return str(fixture/'key') if str(path)=='/etc/nakpanel/database-manager.key' else str(fixture/'bridge') if str(path)=='/run/nakpanel-db-manager/bridge.sock' else path
@@ -41,8 +42,10 @@ def connection(address,*args,**kwargs):
         address=('127.0.0.1',int(os.environ['FIXTURE_CLOSED_PORT'] if refused else os.environ['FIXTURE_PORT']))
     return connect(address,*args,**kwargs)
 socket.create_connection=connection
-clock=[0.0];time.monotonic=lambda:clock[0]
-time.sleep=lambda delay:clock.__setitem__(0,clock[0]+max(delay,20))
+clock=[0.0]
+# Only the production stdin receives synthetic time. subprocess/threading keep
+# the real stdlib module for timed waits and process reaping.
+probe_time=types.SimpleNamespace(monotonic=lambda:clock[0],sleep=lambda delay:clock.__setitem__(0,clock[0]+max(delay,20)))
 run=subprocess.run
 def bounded(args,*a,**kwargs):
     assert 0<kwargs['timeout']<=120
@@ -60,7 +63,12 @@ def received(self):
     if os.environ.get('FIXTURE_MODE')=='overrun':clock[0]+=1000
     return value
 http.client.HTTPConnection.getresponse=received
-exec(compile(sys.stdin.read(),'actual-readiness-stdin','exec'),{'__name__':'__main__'})
+original_import=builtins.__import__
+def isolated_import(name,globals=None,locals=None,fromlist=(),level=0):
+    if name=='time' and level==0:return probe_time
+    return original_import(name,globals,locals,fromlist,level)
+probe_builtins=dict(vars(builtins),__import__=isolated_import)
+exec(compile(sys.stdin.read(),'actual-readiness-stdin','exec'),{'__name__':'__main__','__builtins__':probe_builtins})
 '''
 
 @contextlib.contextmanager
@@ -145,6 +153,24 @@ class DatabaseManagerReadiness(unittest.TestCase):
             self.assertEqual(bounded[0]['args'],['systemctl','restart','nakpanel.service'])
             self.assertLessEqual(bounded[0]['timeout'],30)
 
+    def test_canonical_real_delayed_child_exit_keeps_subprocess_clock_real(self):
+        # POSIX subprocess timeout polling sleeps after pipe EOF until reaping.
+        # This valid50ms child exit must not spend the synthetic120s deadline.
+        with fixture('ready') as (root,env,state):
+            command=root/'systemctl'
+            source=command.read_text().replace('import json,os,pathlib,sys',"import atexit,json,os,pathlib,sys,time\ndef delayed_exit():\n    sys.stdout.flush();sys.stderr.flush();sys.stdout.close();sys.stderr.close();os.close(1);os.close(2);time.sleep(0.05)\natexit.register(delayed_exit)")
+            command.write_text(source)
+            control=subprocess.run([str(command),'show','--value','nakpanel-database-manager.service'],env=env,capture_output=True,text=True,timeout=2)
+            self.assertEqual(control.returncode,0,control.stderr)
+            (root/'calls').unlink()
+            result=execute_block(root,env)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            calls=(root/'calls').read_text().splitlines()
+            self.assertEqual(calls.count('["restart", "nakpanel.service"]'),1)
+            self.assertEqual(calls[-1],'browser')
+            self.assertTrue(state['requests'])
+            self.assertTrue(all(row['authorized'] and row['activated'] for row in state['requests']))
+
     def test_canonical_waits_through_actual_initial_tcp_refusals(self):
         with fixture('delayed-listener') as (root,env,state):
             result=execute_block(root,env)
@@ -216,7 +242,7 @@ class DatabaseManagerReadiness(unittest.TestCase):
                 value=response(connection)
                 if mode=='overrun':clock[0]+=1000
                 return value
-            with patch.object(module,'command',side_effect=command),patch('socket.create_connection',side_effect=connect),patch('os.open',side_effect=lambda path,*a,**kw:original_open(mapped(path),*a,**kw)),patch('os.lstat',side_effect=lambda path,*a,**kw:original_lstat(mapped(path),*a,**kw)),patch('os.fstat',side_effect=fstat),patch.object(module.time,'monotonic',side_effect=lambda:clock[0]),patch.object(module.time,'sleep',side_effect=lambda delay:clock.__setitem__(0,clock[0]+30)),patch.object(http.client.HTTPConnection,'getresponse',received):
+            with patch.object(module,'command',side_effect=command),patch('socket.create_connection',side_effect=connect),patch('os.open',side_effect=lambda path,*a,**kw:original_open(mapped(path),*a,**kw)),patch('os.lstat',side_effect=lambda path,*a,**kw:original_lstat(mapped(path),*a,**kw)),patch('os.fstat',side_effect=fstat),patch.object(module,'time',types.SimpleNamespace(monotonic=lambda:clock[0],sleep=lambda delay:clock.__setitem__(0,clock[0]+30))),patch.object(http.client.HTTPConnection,'getresponse',received):
                 if mode in ['ready','delayed-listener']:module.service_wait({'nakpanel.service':'active','nakpanel-agent.service':'active'},True)
                 else:
                     with self.assertRaisesRegex(ValueError,'readiness timed out'):
@@ -261,7 +287,7 @@ class DatabaseManagerReadiness(unittest.TestCase):
                 self.assertNotIn(args[1],['start','stop','restart','enable','daemon-reload'])
                 return subprocess.CompletedProcess(args,0,'','')
             read=module.root_regular
-            with patch.object(module,'root_regular',side_effect=lambda path: b'boot-after\n' if str(path)=='/proc/sys/kernel/random/boot_id' else read(path)),patch.object(module,'command',side_effect=command),patch.object(module,'service_state',side_effect=lambda unit:'inactive' if unit=='nakpanel.service' else 'active'),patch.object(module,'package_inventory',return_value={}),patch.object(module,'guarded_settings',return_value={}),patch.object(module,'package_files',return_value={}),patch.object(module,'intent_state',return_value={}),patch.object(module,'managed_state',return_value={}),patch.object(module.time,'monotonic',side_effect=[0,121]):
+            with patch.object(module,'root_regular',side_effect=lambda path: b'boot-after\n' if str(path)=='/proc/sys/kernel/random/boot_id' else read(path)),patch.object(module,'command',side_effect=command),patch.object(module,'service_state',side_effect=lambda unit:'inactive' if unit=='nakpanel.service' else 'active'),patch.object(module,'package_inventory',return_value={}),patch.object(module,'guarded_settings',return_value={}),patch.object(module,'package_files',return_value={}),patch.object(module,'intent_state',return_value={}),patch.object(module,'managed_state',return_value={}),patch.object(module,'time',types.SimpleNamespace(monotonic=iter([0,121]).__next__)):
                 with self.assertRaisesRegex(ValueError,'readiness timed out'):
                     module.guest_health(root,{},'reboot-1',reboot=True)
             observation=json.loads((root/'observed-reboot-1.json').read_text())

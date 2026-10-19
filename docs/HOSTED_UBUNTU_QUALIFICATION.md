@@ -27,8 +27,35 @@ schemas with the same seeded subscription IDs are insufficient for concurrent
 Go packages. Every pooled plan-test connection also selects its own schema at
 startup. `NAKPANEL_REQUIRE_PLAN_PHP_POSTGRES=1` makes a missing plan-test DSN fail
 instead of skipping actual schema55/56 preservation and concurrency tests.
-This source configuration still requires actual hosted execution; its existence
-does not establish a passing CI or native qualification result.
+Candidate 20 executed this private PostgreSQL 16 startup and owned cleanup in the
+hosted unit job, and its quota package passed. The complete unit job failed
+separate database-manager fixture assertions. The retained log contains the
+data-directory/Unix/no-TCP assertion and successful subsequent control flow;
+its SQL result was captured silently, so direct observed field values are not
+claimed. This does not establish a passing full CI or native qualification result.
+
+## Disposable runner bootstrap
+
+The first Snap installation can also download dependencies; Snap authenticates
+those downloads through its store. Canonical documents the
+[installation transaction](https://snapcraft.io/docs/tutorials/get-started/) and
+[network availability requirements](https://snapcraft.io/docs/how-to-guides/manage-snaps/fix-common-issues/).
+Candidate 20 had several dependency download failures before creating a guest.
+Those original failures remain retained as infrastructure preparation failures.
+
+The shared runner helper permits at most three Multipass Snap installation
+attempts, with 10-second and 20-second backoffs. Each attempt uses
+the same authenticated store command with a 360-second timeout and a five-second
+kill grace. Separate original stdout, stderr and exit-code files are retained
+privately for every attempt, including failures before a later success.
+
+Only ordinary exit code 1 is retried. Timeouts and other exit codes stop
+preparation immediately: the helper does not start another installation or
+attempt to repair an unknown backend state. Successful installation must still
+pass the existing daemon, certificate, socket/ACL, KVM and capacity checks.
+These retries apply only to disposable runner preparation, before guest
+ownership and product qualification. They do not repeat failed product gates or
+change any original report.
 
 ## Feasibility and resource evidence
 
