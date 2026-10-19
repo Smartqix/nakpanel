@@ -563,6 +563,7 @@ PLATFORM_BOOTSTRAP_PENDING=true
 RESTORE_ARCHIVE=''
 DB_DSN=unused
 ADMIN_EMAIL=''
+wait_for_agent_ready(){ :; }
 sudo(){ printf 'bootstrap\n' >> "$TRACE"; }
 resolve_native_admin_intent(){ printf 'resolve\n' >> "$TRACE"; printf 'admin@example.com\n'; }
 ensure_admin(){ printf 'admin\n' >> "$TRACE"; test "$FAIL_ADMIN" = 0; }

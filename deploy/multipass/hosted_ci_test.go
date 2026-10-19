@@ -3,7 +3,9 @@ package multipass
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -199,9 +201,30 @@ func TestHostedPreparationAuthorizesOnlyItsRunnerOnTheActualSocket(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mode := range []string{"ready", "delayed-kvm", "reset-kvm", "missing", "symlink", "not-root", "acl-failure", "settle-failure", "missing-kvm", "symlink-kvm", "not-root-kvm", "kvm-acl-failure"} {
+	for _, mode := range []string{"ready", "delayed-kvm", "reset-kvm", "missing", "symlink", "not-root", "acl-failure", "settle-failure", "missing-kvm", "symlink-kvm", "not-root-kvm", "kvm-acl-failure", "linked-temp-root", "file-temp-root", "foreign-temp-root"} {
 		t.Run(mode, func(t *testing.T) {
-			root := t.TempDir()
+			root, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			runnerTemp := root
+			switch mode {
+			case "linked-temp-root":
+				runnerTemp = filepath.Join(root, "linked-temp")
+				if err := os.Symlink(root, runnerTemp); err != nil {
+					t.Fatal(err)
+				}
+			case "file-temp-root":
+				runnerTemp = filepath.Join(root, "temp-file")
+				if err := os.WriteFile(runnerTemp, []byte("regular file"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "foreign-temp-root":
+				if os.Getuid() == 0 {
+					t.Skip("foreign-owned root requires an unprivileged test actor")
+				}
+				runnerTemp = "/"
+			}
 			commands := map[string]string{
 				"uname": `#!/bin/sh
 case "$1" in -s) echo Linux;; -m) echo x86_64;; *) exit 90;; esac
@@ -212,6 +235,11 @@ echo 1001
 `,
 				"df":    "#!/bin/sh\necho 'disposable hosted disk fixture'\n",
 				"sleep": "#!/bin/sh\nexit 0\n",
+				"mktemp": `#!/bin/sh
+# Model GNU mktemp's TMPDIR behavior even on a BSD/macOS test host.
+test "$*" = -d || exit 99
+exec "$FIXTURE_PYTHON" -c 'import tempfile;print(tempfile.mkdtemp(prefix="tmp."))'
+`,
 				"sudo": `#!/bin/sh
 set -eu
 printf '%s\n' "$*" >> "$FIXTURE/host-commands"
@@ -294,6 +322,7 @@ esac
 `,
 				"multipass": `#!/bin/sh
 set -eu
+case "${TMPDIR:-}" in "$FIXTURE"/nakpanel-hosted-*) :;; *) echo 'current helper process did not export workspace TMPDIR' >&2;exit 97;;esac
 case "$*" in
  'list --format json')
   echo attempt >> "$FIXTURE/client-attempts"
@@ -305,11 +334,30 @@ case "$*" in
   if test "$CLIENT_MODE" = reset-kvm;then rm -f "$FIXTURE/kvm-authorized";fi
   echo 'multipass fixture'
   ;;
+ transfer\ *)
+  "$FIXTURE_PYTHON" - "$2" <<'PYTRANSFER'
+import os,pathlib,shutil,stat,sys
+source=pathlib.Path(sys.argv[1]);root=pathlib.Path(os.environ['FIXTURE'])
+# Snap's private /tmp namespace cannot see host temporary paths. This fake
+# exposes only the runner workspace, while the real common helpers create
+# and hash their actual archives on the ordinary host filesystem.
+if not source.is_relative_to(root):
+ print('[sftp] cannot access '+str(source)+': No such file or directory',file=sys.stderr);sys.exit(2)
+assert source.is_file(),source
+if source.name in ('source.tar','release.tar'):
+ assert stat.S_IMODE(source.parent.stat().st_mode)==0o700
+ assert source.parent.stat().st_uid==os.getuid()
+ shutil.copyfile(source,root/('captured-'+source.name))
+PYTRANSFER
+  ;;
  *) exit 97;;
 esac
 `,
 				"python3": `#!/bin/sh
-exec "$FIXTURE_PYTHON" "$@" --timeout 0.2 --attempt-timeout 0.05 --retry-interval 0.01
+case "$1" in
+ */hosted-multipass-ready.py) exec "$FIXTURE_PYTHON" "$@" --timeout 0.2 --attempt-timeout 0.05 --retry-interval 0.01;;
+ *) exec "$FIXTURE_PYTHON" "$@";;
+esac
 `,
 				"timeout": `#!/bin/sh
 shift 2
@@ -322,13 +370,19 @@ exec "$@"
 				}
 			}
 			cmd := exec.Command("bash", helper)
-			cmd.Env = append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "FIXTURE="+root, "FIXTURE_PYTHON="+python, "RUNNER_TEMP="+root, "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "CLIENT_MODE="+mode)
+			cmd.Env = append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "FIXTURE="+root, "FIXTURE_PYTHON="+python, "RUNNER_TEMP="+runnerTemp, "GITHUB_ENV="+filepath.Join(root, "environment"), "GITHUB_ACTIONS=true", "RUNNER_ENVIRONMENT=github-hosted", "CLIENT_MODE="+mode)
 			output, runErr := cmd.CombinedOutput()
 			wantReady := mode == "ready" || mode == "delayed-kvm" || mode == "reset-kvm"
 			if (runErr == nil) != wantReady {
 				t.Fatalf("mode=%s preparation err=%v: %s", mode, runErr, output)
 			}
 			commandsLog, _ := os.ReadFile(filepath.Join(root, "host-commands"))
+			if strings.HasSuffix(mode, "temp-root") {
+				if len(commandsLog) != 0 || !strings.Contains(string(output), "absolute current-owner directory without symlinks") {
+					t.Fatalf("unsafe runner temp root reached hosted mutations: %s %s", commandsLog, output)
+				}
+				return
+			}
 			if strings.Contains(string(commandsLog), "chmod ") || strings.Contains(string(commandsLog), "chown ") || strings.Contains(string(commandsLog), "usermod ") {
 				t.Fatalf("preparation broadened socket permissions: %s", commandsLog)
 			}
@@ -355,8 +409,103 @@ exec "$@"
 				if err != nil || !strings.Contains(string(acl), "uid=0 gid=108 mode=660") || !strings.Contains(string(acl), "user:1001:rw-") || !strings.Contains(string(acl), "other::---") {
 					t.Fatalf("numeric KVM ownership and runner-only ACL evidence missing: %s %v", acl, err)
 				}
+				if mode == "ready" {
+					assertHostedTemporaryArchiveTransfers(t, root, cmd.Env, python)
+					before, _ := os.ReadFile(filepath.Join(root, "environment"))
+					again := exec.Command("bash", helper)
+					again.Env = cmd.Env
+					if out, err := again.CombinedOutput(); err != nil {
+						t.Fatalf("second private temp preparation: %s %v", out, err)
+					}
+					after, _ := os.ReadFile(filepath.Join(root, "environment"))
+					lines := strings.Fields(string(after))
+					if len(lines) != 2 || !strings.HasPrefix(string(after), string(before)) || lines[0] == lines[1] {
+						t.Fatalf("hosted temporary directory was reused or prior exports replaced: %s", after)
+					}
+					for _, line := range lines {
+						path := strings.TrimPrefix(line, "TMPDIR=")
+						info, err := os.Lstat(path)
+						if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || filepath.Dir(path) != root {
+							t.Fatalf("hosted temp export is not a unique private workspace directory: %s %v", line, err)
+						}
+					}
+				}
 			}
 		})
+	}
+}
+
+func assertHostedTemporaryArchiveTransfers(t *testing.T, root string, env []string, python string) {
+	t.Helper()
+	common, err := filepath.Abs("common.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixtures, err := filepath.Abs("qualification_artifacts_test.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Reuse the existing real RSA-signed static-ELF fixture. Verification,
+	// source export, tar creation and archive hashing remain actual helpers.
+	setup := `import importlib.util,pathlib,shutil,sys
+spec=importlib.util.spec_from_file_location('artifacts_fixture',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+m.QualificationArtifacts.setUpClass();case=m.QualificationArtifacts();case.setUp()
+try:
+ root=pathlib.Path(sys.argv[2]);shutil.copytree(case.bundle,root/'selected-bundle');shutil.copyfile(case.key,root/'selected-public.pem')
+finally:case.doCleanups();m.QualificationArtifacts.tearDownClass()
+`
+	if out, err := exec.Command(python, "-c", setup, fixtures, root).CombinedOutput(); err != nil {
+		t.Fatalf("signed transfer fixture: %s %v", out, err)
+	}
+	source := filepath.Join(root, "source-fixture")
+	if err := os.Mkdir(source, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(source, "go.mod"), []byte("module fixture\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"init", "-q"}, {"add", "go.mod"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = source
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("source fixture git: %s %v", out, err)
+		}
+	}
+	// An invisible host temp namespace makes this independent of whether the
+	// test itself runs on macOS or Linux. Only the preparer's persisted export
+	// can move both real helper-created archives into the visible workspace.
+	invisible := t.TempDir()
+	temporary := invisible
+	data, _ := os.ReadFile(filepath.Join(root, "environment"))
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "TMPDIR=") {
+			temporary = strings.TrimPrefix(line, "TMPDIR=")
+		}
+	}
+	base := `set -euo pipefail
+source "$1"
+assert_current_vm_identity(){ :; }
+# Guest execution is the replaced external boundary; no VM is contacted.
+multipass_exec_short(){ if [[ "$*" == *'wc -l'* ]];then echo 7;else cat >/dev/null;fi; }
+`
+	for _, operation := range []struct{ name, program string }{{"source", `sync_repo "$2"`}, {"release", "stage_qualification_release"}} {
+		caller := filepath.Join(root, operation.name+"-transfer.sh")
+		if err := os.WriteFile(caller, []byte(base+operation.program+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command("bash", caller, common, source)
+		cmd.Env = append(env, "TMPDIR="+temporary, "NAKPANEL_RUN_TOKEN=hosted-test123", "NAKPANEL_MULTIPASS_VM=nakpanel-hosted-test123", "NAKPANEL_MULTIPASS_ARCH=amd64", "NAKPANEL_RELEASE_BUNDLE="+filepath.Join(root, "selected-bundle"), "NAKPANEL_RELEASE_PUBLIC_KEY="+filepath.Join(root, "selected-public.pem"), "NAKPANEL_RELEASE_VERSION=1.2.3", "NAKPANEL_REMOTE_SRC=")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Errorf("actual %s archive helper used snap-invisible host temp: %s %v", operation.name, out, err)
+		}
+		if _, err := os.Stat(filepath.Join(root, "captured-"+operation.name+".tar")); err != nil {
+			t.Errorf("actual %s archive was not transferred: %v", operation.name, err)
+		} else {
+			t.Logf("actual %s archive helper transferred through the Snap-visible workspace", operation.name)
+		}
+	}
+	if temporary == invisible || filepath.Dir(temporary) != root {
+		t.Errorf("hosted prep did not persist a private runner workspace TMPDIR: %s", data)
 	}
 }
 
@@ -407,5 +556,135 @@ func TestRequiredSecurityGateUsesDisposableHostedRunnerWithoutSkippingBuildFailu
 		if (err == nil) != (result == "success") || (strings.Contains(string(out), "gates-may-run")) != (result == "success") {
 			t.Fatalf("upstream %s silently skipped/accepted security: %v: %s", result, err, out)
 		}
+	}
+}
+
+func TestRequiredSecurityGateStagesAuthenticatedPinnedNobleBeforeLaunch(t *testing.T) {
+	data, err := os.ReadFile("../../.github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow qualificationWorkflow
+	if err := yaml.Unmarshal(data, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	program := ""
+	pins := map[string]string{}
+	stageIndex, capacityIndex, ownershipIndex := -1, -1, -1
+	for index, step := range workflow.Jobs["security-suite"].Steps {
+		if step.Name == "Stage the pinned signed Noble cloud image" {
+			program, pins, stageIndex = step.Run, step.Env, index
+		}
+		if strings.Contains(step.Run, "hosted-runner-preflight.py") {
+			capacityIndex = index
+		}
+		if strings.Contains(step.Run, "init_qualification_run") {
+			ownershipIndex = index
+		}
+	}
+	common, err := filepath.Abs("common.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	image := "pinned official cloud image fixture\n"
+	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(image)))
+	for _, mode := range []string{"ready", "bad-signature", "manifest-mismatch", "image-mismatch", "invalid-serial"} {
+		t.Run(mode, func(t *testing.T) {
+			root := t.TempDir()
+			commands := map[string]string{
+				"curl": `#!/usr/bin/env python3
+import os,pathlib,sys
+assert sys.argv[1:8]==['--fail','--location','--retry','3','--proto','=https','--proto-redir'],sys.argv
+assert sys.argv[8]=='=https' and sys.argv[-2]=='--output',sys.argv
+url=sys.argv[9];name=url.rsplit('/',1)[-1]
+assert url.startswith('https://cloud-images.ubuntu.com/releases/noble/release-20261017/'),url
+root=pathlib.Path(os.environ['FIXTURE'])
+with (root/'calls').open('a') as out:out.write('download:'+name+'\n')
+target=pathlib.Path(sys.argv[-1])
+if name=='SHA256SUMS':
+ digest='0'*64 if os.environ['CLIENT_MODE']=='manifest-mismatch' else os.environ['IMAGE_SHA']
+ target.write_text(digest+' *ubuntu-24.04-server-cloudimg-amd64.img\n')
+elif name=='SHA256SUMS.gpg':target.write_text('signature fixture\n')
+else:
+ assert name=='ubuntu-24.04-server-cloudimg-amd64.img',name
+ assert 'signature-verified' in (root/'calls').read_text(),'image download preceded signature validation'
+ target.write_text('corrupt image' if os.environ['CLIENT_MODE']=='image-mismatch' else os.environ['IMAGE_BYTES'])
+`,
+				"gpgv": `#!/bin/sh
+set -eu
+test "$1" = --keyring && test "$2" = /usr/share/keyrings/ubuntu-cloudimage-keyring.gpg
+test -f "$3" && test -f "$4"
+test "$CLIENT_MODE" != bad-signature || exit 7
+echo signature-verified >> "$FIXTURE/calls"
+`,
+				"multipass": `#!/bin/sh
+set -eu
+test "$1" = launch
+case "$2" in
+ file://*) echo "local-image-launched:$2" >> "$FIXTURE/calls";;
+ *) echo 'launch failed: Remote "release" is unknown or unreachable.' >&2;exit 8;;
+esac
+`,
+			}
+			for name, body := range commands {
+				if err := os.WriteFile(filepath.Join(root, name), []byte(body), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			serial := "20261017"
+			if mode == "invalid-serial" {
+				serial = "latest/../unreviewed"
+			}
+			env := append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "FIXTURE="+root, "RUNNER_TEMP="+root, "GITHUB_ENV="+filepath.Join(root, "environment"), "NOBLE_SERIAL="+serial, "NOBLE_SHA256="+digest, "IMAGE_BYTES="+image, "IMAGE_SHA="+digest, "CLIENT_MODE="+mode)
+			stage := exec.Command("bash", "-c", program)
+			stage.Env = env
+			output, stageErr := stage.CombinedOutput()
+			if mode != "ready" {
+				if stageErr == nil {
+					t.Fatalf("%s image was staged without rejection: %s", mode, output)
+				}
+				if _, err := os.Stat(filepath.Join(root, "environment")); !os.IsNotExist(err) {
+					t.Fatal("unverified image was exported for guest launch")
+				}
+				return
+			}
+			if stageErr != nil {
+				t.Fatalf("pinned image staging: %s %v", output, stageErr)
+			}
+			exports := map[string]string{}
+			data, _ := os.ReadFile(filepath.Join(root, "environment"))
+			lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+			for len(lines) >= 3 {
+				name, delimiter, ok := strings.Cut(lines[0], "<<")
+				if !ok || lines[2] != delimiter {
+					t.Fatalf("invalid GitHub environment export: %s", data)
+				}
+				exports[name] = lines[1]
+				env = append(env, name+"="+lines[1])
+				lines = lines[3:]
+			}
+			launch := exec.Command("bash", "-c", `set -euo pipefail; source "$1"; multipass launch "$(resolve_multipass_launch_image)"`, "_", common)
+			launch.Env = append(env, "NAKPANEL_MULTIPASS_IMAGE=24.04", "NAKPANEL_MULTIPASS_ARCH=amd64", "NAKPANEL_MULTIPASS_IMAGE_SOURCE="+exports["NAKPANEL_MULTIPASS_IMAGE_SOURCE"], "NAKPANEL_MULTIPASS_IMAGE_SHA256="+exports["NAKPANEL_MULTIPASS_IMAGE_SHA256"])
+			if out, err := launch.CombinedOutput(); err != nil {
+				t.Fatalf("required security still depends on the unavailable release alias: %s %v", out, err)
+			}
+			if exports["NAKPANEL_MULTIPASS_IMAGE_SHA256"] != digest {
+				t.Fatalf("independently pinned image hash missing: %v", exports)
+			}
+		})
+	}
+	if stageIndex < 0 || stageIndex >= capacityIndex || capacityIndex >= ownershipIndex {
+		t.Fatal("authenticated image staging must precede measured capacity and owned launch")
+	}
+	metadata, err := os.ReadFile("../../.github/workflows/ubuntu-hosted-qualification.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := yaml.Unmarshal(metadata, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	inputs := workflow.On["workflow_dispatch"].(map[string]any)["inputs"].(map[string]any)
+	if pins["NOBLE_SERIAL"] != inputs["noble_image_serial"].(map[string]any)["default"] || pins["NOBLE_SHA256"] != inputs["noble_image_sha256"].(map[string]any)["default"] {
+		t.Fatal("required security and full hosted matrix must use the identical pinned Noble image")
 	}
 }

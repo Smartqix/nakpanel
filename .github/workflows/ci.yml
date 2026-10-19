@@ -113,6 +113,39 @@ jobs:
           PYBUNDLE
       - name: Prepare only this disposable hosted runner
         run: bash deploy/multipass/prepare-hosted-runner.sh
+      - name: Stage the pinned signed Noble cloud image
+        env:
+          NOBLE_SERIAL: '20261017'
+          NOBLE_SHA256: '04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94'
+        run: |
+          set -euo pipefail
+          python3 - <<'PYIMAGE'
+          import hashlib,json,os,pathlib,re,subprocess,uuid
+          serial=os.environ['NOBLE_SERIAL']; expected=os.environ['NOBLE_SHA256'].lower()
+          assert re.fullmatch(r'20[0-9]{6}(\.[0-9]+)?',serial), 'invalid pinned Noble image serial'
+          assert re.fullmatch(r'[a-f0-9]{64}',expected), 'exact pinned image SHA256 required'
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])
+          evidence=root/'hosted-evidence'/'noble-image';evidence.mkdir(parents=True,mode=0o700)
+          images=root/'hosted-images';images.mkdir(mode=0o700)
+          base=f'https://cloud-images.ubuntu.com/releases/noble/release-{serial}/'
+          for name in ('SHA256SUMS','SHA256SUMS.gpg'):
+              subprocess.run(['curl','--fail','--location','--retry','3','--proto','=https','--proto-redir','=https',base+name,'--output',str(evidence/name)],check=True)
+          subprocess.run(['gpgv','--keyring','/usr/share/keyrings/ubuntu-cloudimage-keyring.gpg',str(evidence/'SHA256SUMS.gpg'),str(evidence/'SHA256SUMS')],check=True)
+          filename='ubuntu-24.04-server-cloudimg-amd64.img'
+          matches=[parts[0] for line in (evidence/'SHA256SUMS').read_text().splitlines() if len(parts:=line.split())==2 and parts[1].lstrip('*')==filename]
+          assert matches==[expected], 'pinned SHA256 differs from signed Ubuntu image manifest'
+          image=images/filename
+          subprocess.run(['curl','--fail','--location','--retry','3','--proto','=https','--proto-redir','=https',base+filename,'--output',str(image)],check=True)
+          digest=hashlib.sha256()
+          with image.open('rb') as source:
+              for block in iter(lambda:source.read(2**20),b''):digest.update(block)
+          assert digest.hexdigest()==expected, 'downloaded cloud-image SHA256 mismatch'
+          (evidence/'selection.json').write_text(json.dumps(dict(release='24.04',architecture='amd64',serial=serial,sha256=expected,url=base+filename),indent=2)+'\n')
+          exports={'NAKPANEL_MULTIPASS_IMAGE_SOURCE':str(image.resolve()),'NAKPANEL_MULTIPASS_IMAGE_SHA256':expected}
+          with open(os.environ['GITHUB_ENV'],'a') as output:
+              for name,value in sorted(exports.items()):
+                  delimiter=uuid.uuid4().hex;output.write(f'{name}<<{delimiter}\n{value}\n{delimiter}\n')
+          PYIMAGE
       - name: Require actual KVM and measured capacity before guest launch
         run: python3 deploy/multipass/hosted-runner-preflight.py --output "${RUNNER_TEMP}/hosted-evidence/host-preflight.json"
       - name: Initialize unique owned security guests

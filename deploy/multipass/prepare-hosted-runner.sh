@@ -8,9 +8,32 @@ if [[ "${GITHUB_ACTIONS:-}" != true || "${RUNNER_ENVIRONMENT:-}" != github-hoste
   exit 1
 fi
 : "${RUNNER_TEMP:?GitHub runner temporary directory is required}"
+: "${GITHUB_ENV:?GitHub runner environment file is required}"
+# The Linux snap has a private /tmp namespace. Keep every later host temporary
+# archive in this runner's visible workspace, including source, release and DR
+# transfers. A fresh private directory survives this helper's process lifetime.
+TMPDIR="$(python3 - <<'PYTMP'
+import os,stat,tempfile
+from pathlib import Path
+root=Path(os.environ['RUNNER_TEMP'])
+if (not root.is_absolute() or any(c in str(root) for c in ('\n','\r','\0'))
+    or root.resolve(strict=True)!=root or not stat.S_ISDIR(root.lstat().st_mode)
+    or root.lstat().st_uid!=os.getuid()):
+    raise SystemExit('hosted runner temp root must be an absolute current-owner directory without symlinks')
+temporary=Path(tempfile.mkdtemp(prefix='nakpanel-hosted-',dir=root))
+temporary.chmod(0o700)
+info=temporary.lstat()
+if not stat.S_ISDIR(info.st_mode) or info.st_uid!=os.getuid() or stat.S_IMODE(info.st_mode)!=0o700:
+    raise SystemExit('hosted temporary directory is not private and runner-owned')
+print(temporary)
+PYTMP
+)"
+export TMPDIR
+printf 'TMPDIR=%s\n' "${TMPDIR}" >>"${GITHUB_ENV}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 evidence="${RUNNER_TEMP}/hosted-evidence"
 mkdir -p "${evidence}"
+printf '%s\n' "${TMPDIR}" >"${evidence}/hosted-tmpdir.log"
 df -h / | tee "${evidence}/disk-before.log"
 # These unused SDK trees belong to this disposable hosted VM only.
 sudo rm -rf /usr/share/dotnet /usr/local/lib/android /usr/share/swift /usr/local/.ghcup /opt/ghc /opt/hostedtoolcache/CodeQL /usr/lib/jvm /usr/local/share/powershell /usr/share/miniconda

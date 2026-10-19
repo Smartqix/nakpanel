@@ -169,7 +169,7 @@ NEW_PANEL_DATABASE=0
 RESUMING_NATIVE_BOOTSTRAP=0
 gate=false
 secured=false
-for name in cleanup_stages prepare_platform_install pause_apt_background ensure_build_prereqs ensure_go_toolchain stage_binaries install_agent_and_ctl install_panel_binary prepare_panel_prerequisites harden_etc_nakpanel bootstrap_secret_key prepare_migration_root run_goose_up run_river_up ensure_dns_include_target setup_fail2ban health_gate write_version_file run_restore record_native_admin_intent clear_native_admin_intent; do eval "$name(){ :; }"; done
+for name in cleanup_stages prepare_platform_install pause_apt_background ensure_build_prereqs ensure_go_toolchain stage_binaries install_agent_and_ctl install_panel_binary prepare_panel_prerequisites harden_etc_nakpanel bootstrap_secret_key prepare_migration_root run_goose_up run_river_up ensure_dns_include_target setup_fail2ban health_gate write_version_file run_restore record_native_admin_intent clear_native_admin_intent wait_for_agent_ready; do eval "$name(){ :; }"; done
 bootstrap_postgres(){ NEW_PANEL_DATABASE=1; }
 install_agent_and_ctl(){
  if [[ "$NAKPANEL_PLATFORM_ID" == ubuntu-26.04-native && "$gate" != true ]]; then
@@ -239,7 +239,7 @@ have_binaries=0; installed_version=''; gate=false
 [[ ! -f "$FIXTURE/gate" ]] || gate=true
 PLATFORM_BOOTSTRAP_PENDING="$gate"
 stage(){ printf '%s\n' "$1" >> "$FIXTURE/trace"; [[ "$INTERRUPTED_STAGE" != "$1" ]] || return 77; }
-for name in cleanup_stages prepare_platform_install pause_apt_background ensure_build_prereqs ensure_go_toolchain install_panel_binary harden_etc_nakpanel bootstrap_secret_key prepare_migration_root run_river_up ensure_dns_include_target setup_fail2ban health_gate write_version_file run_restore; do eval "$name(){ :; }"; done
+for name in cleanup_stages prepare_platform_install pause_apt_background ensure_build_prereqs ensure_go_toolchain install_panel_binary harden_etc_nakpanel bootstrap_secret_key prepare_migration_root run_river_up ensure_dns_include_target setup_fail2ban health_gate write_version_file run_restore wait_for_agent_ready; do eval "$name(){ :; }"; done
 stage_binaries(){ stage stage_binaries; }
 install_agent_and_ctl(){ test -f "$FIXTURE/gate"; touch "$FIXTURE/binary"; stage install_agent_and_ctl; }
 prepare_panel_prerequisites(){ touch "$FIXTURE/os-user"; stage prepare_panel_prerequisites; }

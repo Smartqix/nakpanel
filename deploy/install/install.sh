@@ -423,8 +423,27 @@ clear_native_admin_intent() {
   python3 "${SCRIPT_DIR}/native_admin.py" clear
 }
 
+wait_for_agent_ready() {
+  # Type=simple becomes active before the socket's group/mode and RPC server
+  # are ready. Probe as the same peer as bootstrap, with bounded hung clients.
+  for _ in $(seq 1 15); do
+    if systemctl is-failed --quiet nakpanel-agent.service; then
+      echo 'install.sh: agent failed before native bootstrap; bootstrap remains pending' >&2
+      return 1
+    fi
+    if timeout --kill-after=1s 5s sudo -u nakpanel env NAKPANEL_DATABASE_URL="${DB_DSN}" \
+      /usr/local/bin/panelctl --actor installer agent ping >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo 'install.sh: agent did not become ready for the panel peer; bootstrap remains pending' >&2
+  return 1
+}
+
 bootstrap_native_plans() {
   if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-26.04-native && "${PLATFORM_BOOTSTRAP_PENDING}" == true && -z "${RESTORE_ARCHIVE}" ]]; then
+    wait_for_agent_ready || return $?
     sudo -u nakpanel env NAKPANEL_DATABASE_URL="${DB_DSN}" \
       /usr/local/bin/panelctl --actor installer platform bootstrap-plans \
       --profile ubuntu-26.04-native --discard-demo-subscriptions
