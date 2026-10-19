@@ -49,6 +49,9 @@ else
   install_args+=(--admin-email admin@nakpanel.test --admin-password-file "${admin_password_file}")
   timeout 45m deploy/install/install.sh "${install_args[@]}"
 fi
+# The installer restores the distribution's normal APT timers. Their first run
+# can restart PostgreSQL and other core services; wait read-only before fixtures.
+python3 -I -B deploy/multipass/qualification_maintenance_ready.py
 systemctl is-active --quiet nakpanel nakpanel-agent nginx postgresql mariadb named stalwart-mail
 /usr/local/bin/panelctl version
 nginx -t
