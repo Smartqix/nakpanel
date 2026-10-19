@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Actual FastCGI requests and Roundcube authentication; CLI php -m is not
+# Actual FastCGI requests and Roundcube login/send/read; CLI php -m is not
 # sufficient evidence that the internal web applications work.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
+[[ $# -le 1 && ( "${1:-}" == '' || "${1:-}" == --roundcube-only ) ]] || { echo 'internal-tools: expected optional --roundcube-only' >&2; exit 1; }
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 assert_current_vm_identity
@@ -22,6 +23,37 @@ else
 fi
 [[ "${site_id}" =~ ^[0-9]+$ && "${mailbox}" =~ ^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$ ]]
 domain="${mailbox#*@}"
+verify_roundcube_send_read() {
+  : "${NAKPANEL_RELEASE_BUNDLE:?Roundcube proof requires the selected signed bundle}"
+  : "${NAKPANEL_RUN_TOKEN:?Roundcube proof requires an explicit owned run}"
+  local receipt_path="${NAKPANEL_INTERNAL_TOOLS_RECEIPT:-${NAKPANEL_CELL_REPORT_DIR:+${NAKPANEL_CELL_REPORT_DIR}/roundcube-send-read.json}}"
+  [[ "${receipt_path}" == /* && ! -e "${receipt_path}" && ! -L "${receipt_path}" ]] || { echo 'internal-tools: choose a fresh absolute Roundcube receipt path in an owned case' >&2; return 1; }
+  local receipt_parent workflow_dir
+  receipt_parent="$(dirname "${receipt_path}")"
+  (umask 077; mkdir -p "${receipt_parent}")
+  workflow_dir="$(mktemp -d "${receipt_parent}/.roundcube-flow.XXXXXXXX")"
+  assert_current_vm_identity
+  (umask 077; assert_qualification_installed_release >"${workflow_dir}/installed-before.txt")
+  multipass_exec_short "${VM_NAME}" -- sudo cat /etc/stalwart/tls/cert.pem >"${tmpdir}/stalwart-ca.pem"
+  (umask 077; printf '%s' "${NAKPANEL_INTERNAL_TOOLS_PASSWORD:-Phase29Mail!2026}" >"${tmpdir}/roundcube-password")
+  python3 "${SCRIPT_DIR}/roundcube-send-read.py" --base-url "http://${VM_IP}" --host "webmail.${domain}" \
+    --mailbox "${mailbox}" --password-file "${tmpdir}/roundcube-password" \
+    --imap-ca-file "${tmpdir}/stalwart-ca.pem" --receipt-dir "${workflow_dir}"
+  assert_current_vm_identity
+  (umask 077; assert_qualification_installed_release >"${workflow_dir}/installed-after.txt")
+  python3 "${SCRIPT_DIR}/roundcube-send-read.py" enrich --raw-dir "${workflow_dir}" \
+    --manifest "${NAKPANEL_RELEASE_BUNDLE}/manifest.json" --before-proof "${workflow_dir}/installed-before.txt" \
+    --after-proof "${workflow_dir}/installed-after.txt" --output "${receipt_path}" --wrapper "${SCRIPT_DIR}/internal-tools-verify.sh" \
+    --source-vm "${VM_NAME}" --run-token "${NAKPANEL_RUN_TOKEN}" --release "${IMAGE}" \
+    --architecture "${NAKPANEL_MULTIPASS_ARCH}" --profile "${NAKPANEL_QUALIFICATION_PROFILE}" \
+    --php-provider "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" --app-version "${NAKPANEL_RELEASE_VERSION}"
+}
+if [[ "${1:-}" == --roundcube-only ]]; then
+  # Supplement an already qualified runtime without configuring webmail,
+  # changing fixtures, or running the independent database-manager workflow.
+  verify_roundcube_send_read
+  exit 0
+fi
 curl -skfL --max-time 30 -c "${tmpdir}/admin.cookies" -d email=admin@nakpanel.test -d 'password=NakpanelAdmin!2026' "${base}/login" -o "${tmpdir}/admin.html"
 grep -q 'data-np-role="admin"' "${tmpdir}/admin.html"
 code="$(curl -sk --max-time 30 -b "${tmpdir}/admin.cookies" -H "X-Nakpanel-CSRF: $(csrf_token "${tmpdir}/admin.cookies")" -d "domain=${domain}" -o "${tmpdir}/configure.html" -w '%{http_code}' "${base}/webmail")"
@@ -34,24 +66,10 @@ for _ in $(seq 1 120); do
 done
 [[ "${ready}" == 1 ]]
 # Login renders and processes PHP through the nginx FPM socket, then uses
-# Stalwart IMAP. A static file or broken PHP runtime cannot pass this check.
-curl -sf --max-time 30 -c "${tmpdir}/roundcube.cookies" -H "Host: webmail.${domain}" "http://${VM_IP}/?_task=login" -o "${tmpdir}/login.html"
-rc_token="$(python3 - "${tmpdir}/login.html" <<'PY'
-from html.parser import HTMLParser
-import sys
-class Parser(HTMLParser):
-    def handle_starttag(self,tag,attrs):
-        a=dict(attrs)
-        if tag=='input' and a.get('name')=='_token': print(a['value'])
-Parser().feed(open(sys.argv[1]).read())
-PY
-)"
-[[ -n "${rc_token}" ]]
-curl -sS --max-time 30 -D "${tmpdir}/headers" -o "${tmpdir}/mail.html" -b "${tmpdir}/roundcube.cookies" -c "${tmpdir}/roundcube.cookies" -H "Host: webmail.${domain}" \
-  --data-urlencode "_token=${rc_token}" --data-urlencode "_user=${mailbox}" --data-urlencode "_pass=${NAKPANEL_INTERNAL_TOOLS_PASSWORD:-Phase29Mail!2026}" \
-  -d _task=login -d _action=login -d _timezone=UTC -d _url= "http://${VM_IP}/?_task=login"
-grep -iq 'location: .*_task=mail' "${tmpdir}/headers"
-echo 'PASS internal PHP FastCGI + Roundcube login + Stalwart IMAP'
+# Stalwart IMAP. The same application must compose/send a unique self-mail
+# and render its exact received body. An uncertain send is never retried.
+verify_roundcube_send_read
+echo 'PASS internal PHP FastCGI + Roundcube login/send/read + Stalwart delivery'
 if [[ "${NAKPANEL_VERIFY_DATABASE_MANAGER:-0}" == 1 ]]; then
   assert_current_vm_identity
   tool_assets="${NAKPANEL_GUEST_RELEASE_DIR:-${NAKPANEL_REMOTE_SRC}}"

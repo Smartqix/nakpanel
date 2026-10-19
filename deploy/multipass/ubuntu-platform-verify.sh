@@ -10,7 +10,7 @@ init_qualification_run
 : "${NAKPANEL_RELEASE_PUBLIC_KEY:?set the out-of-band release public key}"
 : "${NAKPANEL_RELEASE_VERSION:?set the expected application release version}"
 [[ "$(multipass_host_arch)" == "${NAKPANEL_MULTIPASS_ARCH}" ]] || { echo 'native runner architecture mismatch' >&2; exit 1; }
-export NAKPANEL_CELL_REPORT_DIR="${NAKPANEL_CELL_REPORT_DIR:-${ROOT_DIR}/docs/verification/${NAKPANEL_MULTIPASS_IMAGE}-${NAKPANEL_MULTIPASS_ARCH}-${NAKPANEL_RUN_TOKEN}}"
+export NAKPANEL_CELL_REPORT_DIR="${NAKPANEL_CELL_REPORT_DIR:-${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}/reports/${NAKPANEL_MULTIPASS_IMAGE}-${NAKPANEL_MULTIPASS_ARCH}}"
 # Never append evidence to an old run or overwrite a prior result.
 mkdir "${NAKPANEL_CELL_REPORT_DIR}" 2>/dev/null || { mkdir -p "$(dirname "${NAKPANEL_CELL_REPORT_DIR}")"; mkdir "${NAKPANEL_CELL_REPORT_DIR}"; }
 chmod 700 "${NAKPANEL_CELL_REPORT_DIR}"
@@ -119,7 +119,11 @@ assert_inventory_user_quota
 run_gate inventory inventory
 run_gate real-upgrade "${SCRIPT_DIR}/ubuntu-upgrade-verify.sh"
 for gate in phase28 valkey-platform security phase29 phase30 phase31 phase32 internal-tools mail-workspace phase33 phase34 domain-removal; do
-  run_gate "${gate}" env NAKPANEL_SKIP_PRIOR_PHASES=1 "${SCRIPT_DIR}/${gate}-verify.sh"
+  if [[ "${gate}" == internal-tools ]]; then
+    run_gate "${gate}" env NAKPANEL_SKIP_PRIOR_PHASES=1 python3 "${SCRIPT_DIR}/roundcube-send-read.py" execute-canonical
+  else
+    run_gate "${gate}" env NAKPANEL_SKIP_PRIOR_PHASES=1 "${SCRIPT_DIR}/${gate}-verify.sh"
+  fi
 done
 signed_artifacts() {
   assert_current_vm_identity

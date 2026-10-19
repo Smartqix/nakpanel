@@ -30,7 +30,7 @@ func TestPhase30VerifierCoversProductionPHPAcceptance(t *testing.T) {
 		"runtime_inventory": {
 			"NAKPANEL_PHP_VERSIONS", "expected_versions", "NAKPANEL_BASELINE_PHP", `"php${version}-fpm"`,
 			"PHPVersions", "validation_errors", "required_extensions", "opcache",
-			"Composer version 2.8.11", "composer self-update", "wp --version --allow-root", "WP-CLI 2.12.0", "freshclam", "clamscan",
+			"EXPECTED_COMPOSER_VERSION", "EXPECTED_WPCLI_VERSION", "composer self-update", "wp --version --allow-root", "freshclam", "clamscan",
 		},
 		"classic_wordpress": {
 			"phase30-classic.test", "service-plans", "customers", "subscriptions", "databases",
@@ -115,7 +115,7 @@ func TestPhase30VerifierAcceptsWPCLIInfoWhitespace(t *testing.T) {
 	script := readExecutableScript(t, "phase30-verify.sh")
 	for _, want := range []string{
 		`wp_info="$(timeout 1m wp --info)"`,
-		`grep -Eq 'WP-CLI version:[[:space:]]+2\.12\.0' <<<"${wp_info}"`,
+		`grep -Eq "^WP-CLI version:[[:space:]]+${expected_wp_cli_version//./\.}([[:space:]]|$)" <<<"${wp_info}"`,
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("verifier is missing whitespace-safe WP-CLI assertion %q", want)

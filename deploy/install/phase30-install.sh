@@ -19,16 +19,126 @@ apt-get install -y acl ca-certificates clamav clamav-freshclam curl gnupg softwa
 
 # Managed releases scan both exported source and installed dependencies. Do
 # not advertise that path until the scanner has a real signature database.
-systemctl stop clamav-freshclam.service >/dev/null 2>&1 || true
-if ! timeout 5m freshclam --stdout; then
+systemctl stop clamav-freshclam.service >/dev/null 2>&1 || {
+  echo "ClamAV signature updater could not be paused safely" >&2
+  exit 1
+}
+clamav_signature_permissions() {
+  python3 - "$1" <<'PYCLAMAV'
+import os, pathlib, pwd, stat, sys
+
+ROOT_UID = 0
+clamav_uid = pwd.getpwnam('clamav').pw_uid
+database = pathlib.Path('/var/lib/clamav')
+apply = sys.argv[1] in ('prepare', 'normalize')
+flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+
+def trusted(info, directory=False):
+    if not (stat.S_ISDIR(info.st_mode) if directory else stat.S_ISREG(info.st_mode)):
+        raise RuntimeError('ClamAV database path has an unsupported type')
+    if info.st_uid not in (ROOT_UID, clamav_uid) or info.st_mode & 0o022:
+        raise RuntimeError('ClamAV database path has an untrusted owner or write permission')
+    if not directory and info.st_nlink != 1:
+        raise RuntimeError('ClamAV database signature must have one link')
+
+for parent in (database.parent.parent, database.parent):
+    info = parent.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != ROOT_UID or info.st_mode & 0o022:
+        raise RuntimeError('ClamAV database ancestor is unsafe')
+directory = os.open(database, flags | os.O_DIRECTORY)
+opened = []
+try:
+    trusted(os.fstat(directory), True)
+    for base in ('main', 'daily', 'bytecode'):
+        for suffix in ('cvd', 'cld'):
+            name = base + '.' + suffix
+            try:
+                fd = os.open(name, flags, dir_fd=directory)
+            except FileNotFoundError:
+                continue
+            opened.append((name, fd))
+            trusted(os.fstat(fd))
+    if apply:
+        if not opened and sys.argv[1] == 'normalize':
+            raise RuntimeError('ClamAV standard signatures are unavailable')
+        # Check every descriptor and directory entry before changing any mode.
+        # Never follow a symlink or normalize a different inode after a rename.
+        current = database.lstat()
+        original = os.fstat(directory)
+        if (current.st_dev, current.st_ino) != (original.st_dev, original.st_ino):
+            raise RuntimeError('ClamAV database directory changed')
+        for name, fd in opened:
+            current = os.stat(name, dir_fd=directory, follow_symlinks=False)
+            original = os.fstat(fd)
+            if (current.st_dev, current.st_ino) != (original.st_dev, original.st_ino):
+                raise RuntimeError('ClamAV signature changed during validation')
+        os.fchmod(directory, 0o755)
+        for _, fd in opened:
+            os.fchmod(fd, 0o644)
+finally:
+    for _, fd in opened:
+        os.close(fd)
+    os.close(directory)
+PYCLAMAV
+}
+clamav_signature_permissions prepare
+# Only public signature creation uses this mask. The caller may retain077 for
+# administrator credentials, application state and all subsequent installers.
+if ! (umask 022; timeout 5m freshclam --stdout); then
   echo "ClamAV signatures are unavailable; run freshclam after fixing network or mirror access" >&2
   exit 1
 fi
-shopt -s nullglob
-clamav_signatures=(/var/lib/clamav/*.cvd /var/lib/clamav/*.cld)
-shopt -u nullglob
-if [[ "${#clamav_signatures[@]}" -eq 0 ]] || ! clamscan --version >/dev/null; then
-  echo "ClamAV signatures are unavailable; managed PHP deployment cannot scan releases" >&2
+clamav_signature_permissions normalize
+if ! (
+  probe="$(mktemp /tmp/nakpanel-clamav-read.XXXXXXXX)"
+  trap 'rm -f "${probe}"' EXIT
+  printf '%s\n' 'Nakpanel public ClamAV signature readability probe' >"${probe}"
+  chmod 0644 "${probe}"
+  timeout 2m runuser -u nobody -- clamscan --database=/var/lib/clamav --no-summary -- "${probe}"
+); then
+  echo "ClamAV signatures cannot be loaded by an unprivileged managed deployment scanner" >&2
+  exit 1
+fi
+# Freshclam replaces downloaded CVD/CLD files. Its normal service must inherit
+# the same public-file creation mask after this installer exits.
+python3 - <<'PYCLAMAVUNIT'
+import os, pathlib, stat
+
+ROOT_UID = 0
+systemd = pathlib.Path('/etc/systemd/system')
+for directory in (systemd.parent.parent, systemd.parent, systemd):
+    info = directory.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != ROOT_UID or info.st_mode & 0o022:
+        raise RuntimeError('ClamAV update unit ancestor is unsafe')
+directory = systemd / 'clamav-freshclam.service.d'
+try:
+    directory.mkdir(mode=0o755)
+except FileExistsError:
+    pass
+info = directory.lstat()
+if not stat.S_ISDIR(info.st_mode) or info.st_uid != ROOT_UID or info.st_mode & 0o022:
+    raise RuntimeError('ClamAV update unit directory is unsafe')
+target = directory / 'nakpanel-signatures.conf'
+expected = b'[Service]\nUMask=0022\n'
+try:
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o644)
+except FileExistsError:
+    fd = os.open(target, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, 'rb') as source:
+        info = os.fstat(source.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != ROOT_UID or info.st_mode & 0o022 or info.st_nlink != 1 or source.read() != expected:
+            raise RuntimeError('Refusing to overwrite a foreign ClamAV update unit setting')
+        os.fchmod(source.fileno(), 0o644)
+else:
+    with os.fdopen(fd, 'wb') as output:
+        output.write(expected)
+        output.flush()
+        os.fsync(output.fileno())
+        os.fchmod(output.fileno(), 0o644)
+PYCLAMAVUNIT
+systemctl daemon-reload
+if [[ "$(systemctl show --property UMask --value clamav-freshclam.service)" != 0022 ]]; then
+  echo "ClamAV update service does not retain the required public signature creation mask" >&2
   exit 1
 fi
 systemctl enable --now clamav-freshclam.service >/dev/null 2>&1 || {

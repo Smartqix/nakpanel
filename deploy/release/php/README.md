@@ -61,10 +61,12 @@ for both versions and architectures, a real `security_update_owner`, a
 `tenant_isolation`, `security_patch_delivery` and `failed_update_recovery`.
 A release review must confirm that each check exercised **both** PHP versions.
 
-Before rollout, assign the security-update owner/on-call contact and response
-times; rehearse an upstream security patch, native rebuild/requalification,
-signed metadata refresh, staged delivery, failed install and tested rollback.
-No such operational ownership or delivery endpoint is established by this code.
+The operator assigned Nakpanel project maintainers through GitHub as the update
+owner. [PHP update operations](../../../docs/PHP_SECURITY_MAINTENANCE.md) defines
+monitoring and internal response targets. Before rollout, rehearse an upstream
+security patch, native rebuild/requalification, signed metadata refresh, staged
+delivery, failed install and tested package rollback. No production delivery
+endpoint is established by this code; policy assignment does not qualify one.
 The scoped example `nakpanel-php.pref` permits only the two owned package names
 and forbids this origin from supplying global libraries. Use a repository-specific
 `Signed-By` trust key; do not add global APT trust or broad package pins.

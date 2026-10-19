@@ -448,21 +448,40 @@ echo "phase29: leg 2 - production security (throttle, fail2ban, TOTP, firewall)"
 # restart because the counters live in PostgreSQL. Use VM loopback for this
 # application-level drill: Fail2ban deliberately has a lower network threshold
 # and would otherwise ban the verifier host before the panel reaches ten.
-for _ in $(seq 1 10); do
-  multipass_exec_short "${VM_NAME}" -- curl -sk -o /dev/null \
-    -d 'email=admin@nakpanel.test' -d 'password=wrong-password' \
-    'https://127.0.0.1:7443/login'
+throttle_root="${NAKPANEL_CELL_REPORT_DIR:-${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}}/phase29-login-throttle"
+mkdir -p "${throttle_root}"
+chmod 0700 "${throttle_root}"
+throttle_dir="$(mktemp -d "${throttle_root}/attempt.XXXXXXXX")"
+echo "phase29: private login throttle diagnostics ${throttle_dir}"
+python3 "${SCRIPT_DIR}/phase29-login-throttle.py" snapshot "${VM_NAME}" "${throttle_dir}" before
+for ordinal in $(seq 1 10); do
+  if ! python3 "${SCRIPT_DIR}/phase29-login-throttle.py" request "${VM_NAME}" "${throttle_dir}" wrong --ordinal "${ordinal}" --credential wrong >/dev/null; then
+    python3 "${SCRIPT_DIR}/phase29-login-throttle.py" snapshot "${VM_NAME}" "${throttle_dir}" transport-failure
+    python3 "${SCRIPT_DIR}/phase29-login-throttle.py" diagnostic "${VM_NAME}" "${throttle_dir}" transport-failure
+    fail "login throttle wrong-password transport failed at ordinal ${ordinal}; request is never replayed"
+  fi
 done
-throttled="$(multipass_exec_short "${VM_NAME}" -- curl -sk -o /dev/null -w '%{http_code}' \
-  -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
-  'https://127.0.0.1:7443/login' | tr -d '\r')"
-[[ "${throttled}" == "429" ]] || fail "login throttle did not engage (got ${throttled})"
+python3 "${SCRIPT_DIR}/phase29-login-throttle.py" snapshot "${VM_NAME}" "${throttle_dir}" after-ten
+if ! throttled="$(python3 "${SCRIPT_DIR}/phase29-login-throttle.py" request "${VM_NAME}" "${throttle_dir}" threshold --ordinal 11 --credential correct)"; then
+  python3 "${SCRIPT_DIR}/phase29-login-throttle.py" diagnostic "${VM_NAME}" "${throttle_dir}" threshold
+  fail "login throttle threshold transport failed; request is never replayed"
+fi
+python3 "${SCRIPT_DIR}/phase29-login-throttle.py" snapshot "${VM_NAME}" "${throttle_dir}" after-threshold
+if [[ "${throttled}" != "429" ]]; then
+  python3 "${SCRIPT_DIR}/phase29-login-throttle.py" diagnostic "${VM_NAME}" "${throttle_dir}" threshold
+  fail "login throttle did not engage (got ${throttled})"
+fi
 multipass_exec_short "${VM_NAME}" -- sudo systemctl restart nakpanel.service
 for _ in $(seq 1 60); do curl -skf "${BASE_URL}/healthz" >/dev/null && break; sleep 2; done
-throttled="$(multipass_exec_short "${VM_NAME}" -- curl -sk -o /dev/null -w '%{http_code}' \
-  -d 'email=admin@nakpanel.test' -d 'password=NakpanelAdmin!2026' \
-  'https://127.0.0.1:7443/login' | tr -d '\r')"
-[[ "${throttled}" == "429" ]] || fail "login throttle did not survive a panel restart (got ${throttled})"
+if ! throttled="$(python3 "${SCRIPT_DIR}/phase29-login-throttle.py" request "${VM_NAME}" "${throttle_dir}" post-restart --ordinal 12 --credential correct)"; then
+  python3 "${SCRIPT_DIR}/phase29-login-throttle.py" diagnostic "${VM_NAME}" "${throttle_dir}" post-restart
+  fail "login throttle post-restart transport failed; request is never replayed"
+fi
+python3 "${SCRIPT_DIR}/phase29-login-throttle.py" snapshot "${VM_NAME}" "${throttle_dir}" after-restart
+if [[ "${throttled}" != "429" ]]; then
+  python3 "${SCRIPT_DIR}/phase29-login-throttle.py" diagnostic "${VM_NAME}" "${throttle_dir}" post-restart
+  fail "login throttle did not survive a panel restart (got ${throttled})"
+fi
 cli user unlock admin@nakpanel.test >/dev/null
 admin_login admin.cookies || fail "login after unlock failed"
 assert_admin_workspace "${tmpdir}/admin.cookies.html" "unlocked admin login"

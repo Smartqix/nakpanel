@@ -9,6 +9,29 @@ trap 'status=$?; echo "phase30 verifier failed at line ${LINENO}: ${BASH_COMMAND
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "${SCRIPT_DIR}/common.sh"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd -P)"
+
+# Use the installer's exact selected-profile pins for every tool assertion.
+phase30_expected_tool_versions(){
+  python3 - "$1" "$2" <<'PY'
+import json, re, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as source:
+        manifest = json.load(source)
+except (OSError, ValueError):
+    raise SystemExit("phase30: dependency manifest cannot be read")
+if not isinstance(manifest, dict) or type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 1:
+    raise SystemExit("phase30: unsupported dependency manifest schema")
+if sys.argv[2] not in {"ubuntu-24.04", "ubuntu-26.04-native", "ubuntu-26.04-sury"}:
+    raise SystemExit("phase30: unsupported dependency profile")
+profile = manifest.get(sys.argv[2])
+if not isinstance(profile, dict):
+    raise SystemExit("phase30: dependency profile is missing")
+versions = [profile.get("composer"), profile.get("wp_cli")]
+if any(not isinstance(version, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) for version in versions):
+    raise SystemExit("phase30: exact dependency tool pins are required")
+print("\t".join(versions))
+PY
+}
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-/tmp/nakpanel-src}"
@@ -27,6 +50,8 @@ if [[ "${NAKPANEL_SKIP_PRIOR_PHASES:-0}" != "1" ]]; then
   "${SCRIPT_DIR}/phase29-verify.sh"
 fi
 assert_qualification_bundle_staged
+expected_tool_versions="$(phase30_expected_tool_versions "${ROOT_DIR}/deploy/install/dependencies.json" "${NAKPANEL_QUALIFICATION_PROFILE}")" || exit 1
+IFS=$'\t' read -r EXPECTED_COMPOSER_VERSION EXPECTED_WPCLI_VERSION <<<"${expected_tool_versions}"
 
 require_nakpanel_vm_name "${VM_NAME}"
 for tool in curl openssl python3; do
@@ -176,15 +201,15 @@ curl --connect-timeout 5 --max-time 30 -skf "https://${VM_IP}:7443/healthz" >/de
 # ready-only list and must not contain a degraded runtime.
 multipass exec "${VM_NAME}" --working-directory / -- sudo -u nakpanel /usr/local/lib/nakpanel/phase30-agentprobe \
   -op runtime_capabilities >"${tmpdir}/runtime.json"
-python3 - "${tmpdir}/runtime.json" "${NAKPANEL_PHP_VERSIONS}" <<'PY'
+python3 - "${tmpdir}/runtime.json" "${NAKPANEL_PHP_VERSIONS}" "${EXPECTED_COMPOSER_VERSION}" "${EXPECTED_WPCLI_VERSION}" <<'PY'
 import json, sys
 outer = json.load(open(sys.argv[1], encoding="utf-8"))
 assert outer.get("ok") is True, outer
 data = outer["data"]
 expected_versions = sys.argv[2].split(",")
 assert data["php_versions"] == expected_versions, data["php_versions"]
-assert data["composer_available"] and data["composer_version"] == "2.8.11"
-assert data["wp_cli_available"] and data["wp_cli_version"] == "2.12.0"
+assert data["composer_available"] and data["composer_version"] == sys.argv[3]
+assert data["wp_cli_available"] and data["wp_cli_version"] == sys.argv[4]
 required_extensions = {"bcmath","curl","dom","exif","fileinfo","gd","imagick","intl","mbstring","mysqli","openssl","redis","simplexml","soap","xml","zip","zend opcache"}
 for version in expected_versions:
     runtime = next(item for item in data["php_runtimes"] if item["version"] == version)
@@ -195,9 +220,11 @@ for version in expected_versions:
     assert required_extensions <= loaded, (version, required_extensions - loaded)
 PY
 
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_PHP_VERSIONS}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_PHP_VERSIONS}" "${EXPECTED_COMPOSER_VERSION}" "${EXPECTED_WPCLI_VERSION}" <<'REMOTE'
 set -euo pipefail
 IFS=, read -ra versions <<<"$1"
+expected_composer_version="$2"
+expected_wp_cli_version="$3"
 for version in "${versions[@]}"; do
 	command -v "php${version}" >/dev/null
 	command -v "php-fpm${version}" >/dev/null
@@ -209,7 +236,7 @@ done
 composer_wrapper_hash_before="$(sha256sum /usr/local/bin/composer | awk '{print $1}')"
 composer_phar_hash_before="$(sha256sum /usr/local/lib/nakpanel/composer.phar | awk '{print $1}')"
 composer_version_before="$(timeout 1m composer --version)"
-grep -Fq 'Composer version 2.8.11' <<<"${composer_version_before}"
+grep -Eq "^Composer version ${expected_composer_version//./\.}([[:space:]]|$)" <<<"${composer_version_before}"
 set +e
 timeout 1m composer self-update >/tmp/phase30-composer-self-update.out 2>&1
 composer_self_update_status=$?
@@ -225,9 +252,9 @@ test "${composer_version_after}" = "${composer_version_before}"
 test "$(stat -c '%U:%G:%a' /usr/local/bin/composer)" = root:root:755
 test "$(stat -c '%U:%G:%a' /usr/local/lib/nakpanel/composer.phar)" = root:root:555
 wp_info="$(timeout 1m wp --info)"
-grep -Eq 'WP-CLI version:[[:space:]]+2\.12\.0' <<<"${wp_info}"
+grep -Eq "^WP-CLI version:[[:space:]]+${expected_wp_cli_version//./\.}([[:space:]]|$)" <<<"${wp_info}"
 wp_version="$(timeout 1m wp --version --allow-root)"
-grep -Fq 'WP-CLI 2.12.0' <<<"${wp_version}"
+grep -Fxq "WP-CLI ${expected_wp_cli_version}" <<<"${wp_version}"
 command -v freshclam >/dev/null
 command -v clamscan >/dev/null
 clamav_signature="$(find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) -print -quit)"
@@ -812,9 +839,11 @@ for marker in 'PHP Application' 'Managed' 'Workers'; do grep -Fq "${marker}" <<<
 for version in ${NAKPANEL_PHP_VERSIONS//,/ }; do
   grep -Fq "PHP ${version}" "${tmpdir}/php-runtime.html" || fail "runtime inventory is missing PHP ${version}"
 done
-for marker in 'PHP Runtime Inventory' 'FPM validation' 'OPcache' 'Composer 2.8.11' 'WP-CLI 2.12.0'; do
+for marker in 'PHP Runtime Inventory' 'FPM validation' 'OPcache'; do
   grep -Fq "${marker}" "${tmpdir}/php-runtime.html" || fail "runtime inventory is missing ${marker}"
 done
+grep -Eq "Composer ${EXPECTED_COMPOSER_VERSION//./\.}([[:space:]<]|$)" "${tmpdir}/php-runtime.html" || fail "runtime inventory is missing the selected Composer version"
+grep -Eq "WP-CLI ${EXPECTED_WPCLI_VERSION//./\.}([[:space:]<]|$)" "${tmpdir}/php-runtime.html" || fail "runtime inventory is missing the selected WP-CLI version"
 for marker in 'Managed PHP deployments' 'PHP workers'; do grep -Fq "${marker}" "${tmpdir}/plan.html" || fail "plan controls are missing ${marker}"; done
 for marker in 'Provider Application Catalog' 'OCI catalog' 'value="oci"' 'WordPress Toolkit live in their domain workspaces' 'Node.js and Python adapters remain unavailable'; do
   grep -Fq "${marker}" "${tmpdir}/application-catalog.html" || fail "application catalog boundary is missing ${marker}"

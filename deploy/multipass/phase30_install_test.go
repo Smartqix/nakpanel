@@ -156,12 +156,25 @@ func TestPhase30InstallerMakesClamAVSignaturesReadyOrFailsClosed(t *testing.T) {
 	}
 	script := string(data)
 	for _, want := range []string{
-		"clamav-freshclam", "freshclam", "/var/lib/clamav/*.cvd", "/var/lib/clamav/*.cld",
-		"ClamAV signatures are unavailable", "clamscan --version",
+		"clamav-freshclam", "ClamAV signatures are unavailable", "os.O_NOFOLLOW", "os.fchmod(fd, 0o644)",
+		"('main', 'daily', 'bytecode')", "('cvd', 'cld')", "UMask=0022",
 	} {
 		if !strings.Contains(script, want) {
 			t.Fatalf("phase30 installer does not fail closed on missing ClamAV readiness: missing %q", want)
 		}
+	}
+	previous := -1
+	for _, operation := range []string{
+		"clamav_signature_permissions prepare", "(umask 022; timeout 5m freshclam --stdout)",
+		"clamav_signature_permissions normalize", "runuser -u nobody -- clamscan --database=/var/lib/clamav",
+		"systemctl daemon-reload", "systemctl show --property UMask --value clamav-freshclam.service",
+		"systemctl enable --now clamav-freshclam.service",
+	} {
+		index := strings.Index(script, operation)
+		if index <= previous {
+			t.Fatalf("ClamAV public-definition preparation/readiness/update mask is missing or out of order: %q", operation)
+		}
+		previous = index
 	}
 }
 

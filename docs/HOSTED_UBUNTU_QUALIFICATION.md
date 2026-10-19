@@ -141,3 +141,25 @@ and QA cleanup. It trusts the installed Stalwart certificate explicitly inside
 the guest and keeps hostname/certificate verification enabled. Random QA
 credentials remain outside uploaded artifacts. Configured public-HTTPS webmail
 popup handoff is separate; actual Roundcube FastCGI/login remains mandatory.
+## Surý same-version maintenance coverage
+
+This new coverage is pending actual hosted acceptance. Its source tests do not
+establish a completed AMD64 maintenance rehearsal.
+
+An explicit Surý26 dispatch defaults `verify_sury_maintenance` to true and
+requires `verify_database_manager=true`. After all17 canonical gates finish in
+an isolated, reaped process group, the additional step runs a fresh real
+Roundcube send/read, takes an owned quiesced cold snapshot, restarts and verifies
+the selected runtime, and retains its exact installed PHP8.3/8.4/8.5 dependency
+closure from natively verified Surý Resolute metadata. Both architecture indexes
+are authenticated; the actual AMD64 guest packages are downloaded and retained
+privately on that runner. The existing maintenance controller then performs a
+real same-version reinstall, failed FPM configuration recovery for each minor,
+two reboots and three additional fresh Roundcube send/read flows. Database-manager
+checks after maintenance prove actual FastCGI health; the full restricted-browser
+workflow belongs to the initial canonical baseline. This does not prove a
+security version advance or APT version rollback. Explicitly disabling the
+maintenance input leaves that coverage unrequested. Private specs, package
+archives and credentials stay outside uploaded evidence; only the allowlisted
+receipts and results enter the existing always-upload directory. Owned cleanup
+remains responsible for this run's guests and their snapshots.

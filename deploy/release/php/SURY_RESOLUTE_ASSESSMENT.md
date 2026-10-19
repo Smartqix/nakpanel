@@ -94,6 +94,8 @@ These are package/tool smokes; full details/limits appear in the Task 9 report. 
 verified, but its native application run remains a separate qualification gate.
 
 Sury provides maintained signed supply; the public project does not promise a
-response SLA. Production still needs an accountable update-monitoring/operator
-policy (or appropriate commercial support), security-patch/failed-update rehearsal,
-and the full advertised native profile/architecture matrix before parity claims.
+response SLA. The operator assigned Nakpanel project maintainers through GitHub
+as the update owner; [PHP update operations](../../../docs/PHP_SECURITY_MAINTENANCE.md)
+records monitoring, response targets, package retention and recovery requirements.
+Actual security-patch/failed-update rehearsal and the full advertised native
+profile/architecture matrix remain required before production parity claims.

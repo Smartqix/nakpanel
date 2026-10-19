@@ -140,7 +140,7 @@ Tasks 1–8 establish the proposed native profile. Task 9 is optional multi-PHP 
 
 ## Task 8: Establish full dual-release qualification
 
-**Files:** Modify `.github/workflows/ci.yml`, `deploy/multipass/deployment-verify.sh`, `phase29-verify.sh`, product fixture scripts and `docs/SOAK.md`; add `deploy/multipass/ubuntu-platform-verify.sh` and per-cell reports under `docs/verification/`.
+**Files:** Modify `.github/workflows/ci.yml`, `deploy/multipass/deployment-verify.sh`, `phase29-verify.sh`, product fixture scripts and `docs/SOAK.md`; add `deploy/multipass/ubuntu-platform-verify.sh` and private per-cell reports under the owned run directory (`${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}/reports/` by default), with explicit report destinations still supported.
 
 **Interfaces:** The wrapper consumes explicit OS/architecture/run identity from Task 1, invokes the canonical installer and modern product chain, and emits image/commit/package/tool versions, validator results, boot state and failure logs. No implicit fixture skip can count as a passing advertised feature.
 

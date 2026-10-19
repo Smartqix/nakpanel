@@ -105,5 +105,10 @@ run_qualification_roundcube_canary() {
   else
     probe="${NAKPANEL_REMOTE_SRC}/deploy/multipass/roundcube-dr-canary.php"
   fi
-  multipass_exec_short "${vm}" -- sudo -u www-data "/usr/bin/php${NAKPANEL_BASELINE_PHP}" "${probe}" "${mode}" "${mailbox}"
+  multipass_exec_short "${vm}" -- sudo bash -se -- "${NAKPANEL_REMOTE_SRC}" "${probe}" "${mode}" "${mailbox}" <<'ROUNDCUBE_RUNTIME'
+set -euo pipefail
+source "$1/deploy/install/platform.sh"
+nakpanel_require_platform || exit 1
+exec sudo -u www-data "/usr/bin/php${NAKPANEL_INTERNAL_PHP_VERSION}" "$2" "$3" "$4"
+ROUNDCUBE_RUNTIME
 }

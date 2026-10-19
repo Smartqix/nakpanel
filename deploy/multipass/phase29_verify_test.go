@@ -66,7 +66,7 @@ func TestPhase29VerifierCoversTheReliabilityGate(t *testing.T) {
 		// Exercise the durable application throttle over loopback so the
 		// separately tested five-attempt Fail2ban jail cannot cut off the
 		// verifier host before the ten-attempt panel threshold is reached.
-		"https://127.0.0.1:7443/login",
+		"phase29-login-throttle.py",
 		// Phase 11+ uses the routed Service Provider workspace. Authentication
 		// assertions must use stable role/session markers, not the retired
 		// Phase 1 "Admin dashboard" heading.
@@ -135,9 +135,8 @@ func TestPhase29VerifierCoversTheReliabilityGate(t *testing.T) {
 	if strings.Contains(script, "backup-server run --destination phase29-local --wait") {
 		t.Fatal("the verifier must enqueue the backup and poll its durable row instead of holding a Multipass exec channel open")
 	}
-	if strings.Count(script, "https://127.0.0.1:7443/login") < 3 {
-		t.Fatal("phase29-verify.sh must exercise and recheck the durable throttle over VM loopback")
-	}
+	// The executed diagnostic behavior fixture asserts the exact loopback URL,
+	// ten wrong-password POSTs and both original threshold/restart probes.
 	if strings.Contains(script, "Admin dashboard") {
 		t.Fatal("phase29-verify.sh must not depend on the retired Phase 1 dashboard heading")
 	}

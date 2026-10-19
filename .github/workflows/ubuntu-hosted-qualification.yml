@@ -30,6 +30,10 @@ on:
         description: Require optional database manager browser and FastCGI coverage
         type: boolean
         default: true
+      verify_sury_maintenance:
+        description: After all Surý26 gates, require real same-version PHP delivery and failed-configuration recovery (no version advance)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -154,6 +158,7 @@ jobs:
       NAKPANEL_QUALIFICATION_DR_DISK: 16G
       NAKPANEL_QUALIFICATION_RECLAIM_PRIOR: '1'
       NAKPANEL_VERIFY_DATABASE_MANAGER: ${{ (github.event_name == 'push' || inputs.verify_database_manager) && '1' || '0' }}
+      NAKPANEL_VERIFY_SURY_MAINTENANCE: ${{ (github.event_name == 'push' || inputs.verify_sury_maintenance) && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -165,7 +170,13 @@ jobs:
           path: ${{ runner.temp }}/hosted-bundles
       - name: Prepare only this disposable hosted runner
         shell: bash
-        run: bash deploy/multipass/prepare-hosted-runner.sh
+        run: |
+          set -euo pipefail
+          if [[ "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" == sury && "${NAKPANEL_VERIFY_SURY_MAINTENANCE}" == 1 && "${NAKPANEL_VERIFY_DATABASE_MANAGER}" != 1 ]]; then
+            echo 'Surý maintenance requires the complete database-manager browser baseline' >&2
+            exit 1
+          fi
+          bash deploy/multipass/prepare-hosted-runner.sh
       - name: Stage verified identical application artifacts and pinned local images
         shell: bash
         run: |
@@ -236,7 +247,24 @@ jobs:
           echo "PLAYWRIGHT_MODULE=${RUNNER_TEMP}/qualification-browser/node_modules/playwright" >>"${GITHUB_ENV}"
       - name: Execute every required native product security upgrade and DR gate
         shell: bash
-        run: ./deploy/multipass/ubuntu-platform-verify.sh
+        run: |
+          set -euo pipefail
+          if [[ "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" == sury && "${NAKPANEL_VERIFY_SURY_MAINTENANCE}" == 1 ]]; then
+            python3 deploy/multipass/sury-maintenance-prepare.py qualify \
+              --execution-receipt "${RUNNER_TEMP}/hosted-evidence/sury-maintenance-canonical-${NAKPANEL_RUN_TOKEN}.json"
+          else
+            ./deploy/multipass/ubuntu-platform-verify.sh
+          fi
+      - name: Record maintenance coverage and rehearse requested Surý26 same-version PHP recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 deploy/multipass/sury-maintenance-prepare.py request
+          if [[ "${NAKPANEL_MULTIPASS_IMAGE}" == 26.04 && "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" == sury && "${NAKPANEL_VERIFY_SURY_MAINTENANCE}" == 1 ]]; then
+            python3 deploy/multipass/sury-maintenance-prepare.py prepare \
+              --execution-receipt "${RUNNER_TEMP}/hosted-evidence/sury-maintenance-canonical-${NAKPANEL_RUN_TOKEN}.json" \
+              --private-root "${RUNNER_TEMP}/sury-maintenance-private-${NAKPANEL_RUN_TOKEN}"
+          fi
       - name: Always clean up only this run's proven owned guests
         if: always()
         shell: bash
@@ -275,10 +303,11 @@ jobs:
       - name: Require both complete AMD64 cells using the identical development artifact
         env:
           JOB_RESULTS: ${{ toJSON(needs) }}
+          SURY_MAINTENANCE_REQUESTED: ${{ inputs.php_provider == 'sury' && inputs.verify_sury_maintenance && '1' || '0' }}
         run: |
           python3 - <<'PYSUMMARY'
           import hashlib,json,os,pathlib,sys
-          cells={};errors=[];digests={}
+          cells={};errors=[];digests={};maintenance={}
           for path in pathlib.Path('hosted-results').rglob('report.json'):
               report=json.loads(path.read_text());release=report['release']
               if release in cells: errors.append('duplicate cell '+release)
@@ -287,12 +316,32 @@ jobs:
               if report.get('promotion_eligible') is not False or report.get('signature_class')!='development': errors.append('test artifact was incorrectly reported promotable '+release)
               manifest=path.parent/'release-manifest.json'
               if not manifest.is_file(): errors.append('missing current manifest '+release)
-              else: digests[release]=hashlib.sha256(manifest.read_bytes()).hexdigest()
+              else:
+                  digests[release]=hashlib.sha256(manifest.read_bytes()).hexdigest()
+                  payload=json.loads(manifest.read_text())
+                  coverage=path.parent/'sury-maintenance-request.json'
+                  if not coverage.is_file(): errors.append('missing explicit maintenance coverage '+release)
+                  else:
+                      proof=json.loads(coverage.read_text());maintenance[release]=proof
+                      expected=release=='26.04' and os.environ['SURY_MAINTENANCE_REQUESTED']=='1'
+                      if proof.get('schema')!='nakpanel-sury-maintenance-coverage-v1' or proof.get('requested') is not expected or proof.get('status')!=('PASS' if expected else 'NOT_REQUESTED'): errors.append('requested maintenance coverage incomplete '+release)
+                      for key in ('source_vm','run_token','release','architecture','profile','php_provider'):
+                          if proof.get(key)!=report.get(key):errors.append('maintenance source differs '+release+' '+key)
+                      if proof.get('app_version')!=payload.get('version') or proof.get('runtime_commit')!=payload.get('commit') or proof.get('qualifier_commit')!=payload.get('commit') or proof.get('manifest_sha256')!=digests[release] or proof.get('installed_binary_sha256')!={name:payload['files']['bin/'+name] for name in ('panel','agent','panelctl')}:errors.append('maintenance payload differs '+release)
+                      if proof.get('qualification_report_sha256')!=hashlib.sha256(path.read_bytes()).hexdigest() or proof.get('genuine_version_advance') is not False:errors.append('maintenance report/claim differs '+release)
+                      if expected:
+                          result_path=path.parent/'sury-maintenance'/'result.json'
+                          if not result_path.is_file():errors.append('missing actual maintenance result '+release)
+                          else:
+                              actual=json.loads(result_path.read_text())
+                              if proof.get('result_sha256')!=hashlib.sha256(result_path.read_bytes()).hexdigest() or actual.get('schema')!='nakpanel-sury-maintenance-result-v1' or actual.get('status')!='PASS' or actual.get('operation')!='SAME_VERSION_REINSTALL_AND_FAILED_CONFIGURATION_RECOVERY':errors.append('actual maintenance result failed '+release)
+                              if any(actual.get(k)!=proof.get(k) for k in ('source_vm','run_token','runtime_commit','qualifier_commit')):errors.append('actual maintenance source differs '+release)
+                              if any(actual.get(k) is not True for k in ('same_version_delivery','failed_configuration_recovery','two_reboots_verified')) or any(actual.get(k) is not False for k in ('genuine_version_advance','apt_version_rollback','application_rollback')) or actual.get('roundcube_send_read_steps')!=3 or type(actual.get('reboots')) is not list or len(actual.get('reboots',[]))!=2 or len(set(actual.get('reboots',[])))!=2:errors.append('actual recovery/reboot/product evidence incomplete '+release)
           if set(cells)!={'24.04','26.04'}:errors.append('both complete release reports are required')
           if digests.get('24.04') is None or digests.get('24.04')!=digests.get('26.04'):errors.append('current artifact differs across releases')
           for job,status in json.loads(os.environ['JOB_RESULTS']).items():
               if status.get('result')!='success':errors.append('required job failed: '+job)
-          result=dict(qualification_passed=not errors,promotion_eligible=False,architecture='amd64',development=True,manifest_sha256=digests,errors=errors)
+          result=dict(qualification_passed=not errors,promotion_eligible=False,architecture='amd64',development=True,manifest_sha256=digests,maintenance=maintenance,errors=errors)
           pathlib.Path('hosted-summary.json').write_text(json.dumps(result,indent=2)+'\n')
           for error in errors: print(error,file=sys.stderr)
           if errors:raise SystemExit(1)
