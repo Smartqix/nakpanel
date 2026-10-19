@@ -33,11 +33,28 @@ test('DNS enhanced forms accept the existing HTML redirect contract',async()=>{
   client.lifecycle={onMount(){},signal:()=>new AbortController().signal};
   vm.runInNewContext(fs.readFileSync(require.resolve('./dns-template.js'),'utf8'),{
     window:{NakpanelUI:client,location:{href:current,origin:'https://panel.test',assign(value){assigned=value;}},addEventListener(){}},
-    document:{readyState:'complete',querySelector(){return workspace;}},
+    document:{readyState:'complete',querySelector(){return workspace;},querySelectorAll(){return [];}},
     URL,URLSearchParams,AbortController,FormData:class{constructor(form){return form.data;}}
   });
   await submit({preventDefault(){},stopPropagation(){}});
   assert.equal(assigned,'https://panel.test/tools-settings/dns?run=4#dns-sync',error.textContent);
   assert.equal(error.hidden,true);
   assert.equal(button.disabled,false);
+});
+
+test('domain preview fetches read-only data and ignores responses after leaving',async()=>{
+  const {mountDomainPreviews}=require('./dns-template.js');
+  assert.equal(typeof mountDomainPreviews,'function');
+  let submit,finish,request;
+  const signal=new AbortController();
+  const result={innerHTML:'old',setAttribute(){}},error={hidden:true,focus(){}},button={disabled:false};
+  const dialog={querySelector:selector=>selector.includes('result')?result:error};
+  const form={dataset:{previewUrl:'/tools-settings/dns/domain-preview'},isConnected:true,closest:()=>dialog,
+    querySelector:selector=>selector.includes('preview_site')?{value:'11'}:button,addEventListener:(type,fn)=>{submit=fn;}};
+  mountDomainPreviews({querySelectorAll:()=>[form]},{lifecycle:{signal:()=>signal.signal},fetch:(url,options)=>{request={url,options};return new Promise(resolve=>{finish=resolve;});}});
+  const job=submit({preventDefault(){},stopPropagation(){}});
+  assert.equal(request.options.method,'GET');assert.equal(request.url,'/tools-settings/dns/domain-preview?site_id=11');
+  signal.abort();form.isConnected=false;
+  finish({ok:true,json:async()=>({html:'late'})});await job;
+  assert.notEqual(result.innerHTML,'late');assert.equal(error.hidden,true);
 });

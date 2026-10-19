@@ -25,12 +25,13 @@ templ dnsSettingsFocus(view WorkspaceView) {
 			</nav>
 			<section class="np-dns-template-section" id="dns-record-template" role="tabpanel" aria-labelledby="dns-tab-records" data-np-dns-settings-panel="records" data-np-dns-workspace>
 				<header class="np-dns-template-head"><div><h4>Zone Records Template</h4><p>New zones receive this revision. Existing zones change only after a preview and confirmed synchronization.</p></div></header>
-				<p class="np-callout">For <code>example.com</code>, <code>{ "@ A <ip.web>" }</code> uses the site's address and <code>www</code> becomes <code>www.example.com</code>. IPv6 records are omitted when no IPv6 address is configured. Mail service records come from each enabled mail domain, not generic template keys.</p>
+				<p class="np-callout">Template and service defaults are shown together. Conditional records appear only when their service is configured. Custom and external mail records are preserved.</p>
 				<div class="np-dns-commandbar">
 					<button type="button" data-np-dialog-open="dns-template-record-dialog">@icon("plus")<span>Add record</span></button>
+					<a class="np-secondary-button" href="/tools-settings/dns?drawer=dns-domain-preview-dialog" data-np-dialog-open="dns-domain-preview-dialog">@icon("search")<span>Preview domain</span></a>
 					<label class="np-dns-command-search">@icon("search")<input type="search" placeholder="Search host, value, or key" aria-label="Search template records" data-np-dns-search/></label>
 					<select aria-label="Template record type" data-np-dns-type><option value="">All types</option><option>A</option><option>AAAA</option><option>CNAME</option><option>MX</option><option>TXT</option><option>NS</option><option>SRV</option><option>CAA</option><option>DS</option></select>
-					<span class="np-dns-result-count" data-np-dns-result-count role="status" aria-live="polite">{ dnsRecordCountLabel(len(template.Records)) }</span>
+					<span class="np-dns-result-count" data-np-dns-result-count role="status" aria-live="polite">{ dnsRecordCountLabel(dnsTemplateRowCount(template)) }</span>
 					<details class="np-dns-action-menu">
 						<summary class="np-icon-button" title="More DNS template actions">@icon("ellipsis")<span class="np-sr-only">More actions</span></summary>
 						<div>
@@ -42,27 +43,39 @@ templ dnsSettingsFocus(view WorkspaceView) {
 				</div>
 				<div class="np-table-wrap">
 					<table class="np-table np-dns-template-table">
-						<thead><tr><th>Host</th><th>Type</th><th>Value</th><th>Scope</th><th>TTL</th><th>Key</th><th><span class="np-sr-only">Actions</span></th></tr></thead>
-						<tbody>
-							for _, record := range template.Records {
-								<tr data-np-dns-row data-type={ record.Type } data-search={ record.HostTemplate+" "+record.ValueTemplate+" "+record.StableKey+" "+record.Scope }><td data-label="Host"><code>{ record.HostTemplate }</code></td><td data-label="Type">{ record.Type }</td><td data-label="Value"><code>{ record.ValueTemplate }</code></td><td data-label="Scope">{ record.Scope }</td><td data-label="TTL">{ formatPlanLimit(record.TTL) }</td><td data-label="Key"><code>{ record.StableKey }</code></td><td data-label="Action"><div class="np-row-actions"><button type="button" class="np-icon-button" title="Edit template record" data-np-dialog-open={ "dns-template-edit-"+formatJobID(record.ID) }>@icon("settings")</button><form method="post" action={ templ.SafeURL("/tools-settings/dns/template/records/"+formatJobID(record.ID)+"/delete") }>@csrfInput(view)<input type="hidden" name="expected_revision" value={ formatJobID(template.OptimisticRevision) }/><button type="submit" class="np-icon-button" title="Remove from the next template revision" data-np-confirm="Remove this record from the next template revision?">@icon("x")</button></form></div></td></tr>
-							}
-						</tbody>
+						<thead><tr><th>Host</th><th>Type</th><th>Value</th><th>Applies</th><th>TTL</th><th><span class="np-sr-only">Actions</span></th></tr></thead>
+						for _, group := range dnsTemplateGroups(template) {
+							<tbody data-np-dns-group>
+								<tr class="np-dns-group-heading"><th colspan="6" scope="rowgroup"><strong>{ group.Name }</strong><span>{ group.Description }</span></th></tr>
+								for _, row := range group.Rows {
+									<tr data-np-dns-row data-type={ row.Record.Type } data-search={ group.Name+" "+row.Record.HostTemplate+" "+row.Record.ValueTemplate+" "+row.Record.StableKey+" "+row.Condition+" "+row.Detail }>
+										<td data-label="Host"><code>{ row.Record.HostTemplate }</code><small class="np-dns-row-meta">
+											if row.Automatic {
+												<span>Service-managed</span>
+											} else {
+												<span>Template</span>
+											}
+										</small></td>
+										<td data-label="Type">{ row.Record.Type }</td><td data-label="Value"><code>{ row.Record.ValueTemplate }</code></td>
+										<td data-label="Applies"><span class="np-dns-condition">{ row.Condition }</span><small class="np-dns-row-meta">{ row.Detail }</small></td>
+										<td data-label="TTL">{ formatPlanLimit(row.Record.TTL) }</td>
+										<td data-label="Actions">
+											if row.Automatic {
+												<span class="np-dns-managed-icon" title="Managed by the configured service">@icon("shield-check")<span class="np-sr-only">Service-managed record</span></span>
+											} else {
+												<div class="np-row-actions"><button type="button" class="np-icon-button" title="Edit template record" data-np-dialog-open={ "dns-template-edit-"+formatJobID(row.Record.ID) }>@icon("settings")</button><form method="post" action={ templ.SafeURL("/tools-settings/dns/template/records/"+formatJobID(row.Record.ID)+"/delete") }>@csrfInput(view)<input type="hidden" name="expected_revision" value={ formatJobID(template.OptimisticRevision) }/><button type="submit" class="np-icon-button" title="Remove from the next template revision" data-np-confirm="Remove this record from the next template revision?">@icon("x")</button></form></div>
+											}
+										</td>
+									</tr>
+								}
+							</tbody>
+						}
 					</table>
 				</div>
 				<p class="np-dns-filter-empty" data-np-dns-filter-empty role="status" aria-live="polite" hidden>No template records match this search.</p>
 				for _, record := range template.Records {
 					@dnsTemplateEditDialog(view,template,record)
 				}
-				<details class="np-dns-advanced-group">
-					<summary><span><strong>Automatic service records</strong><small>Defaults follow the services configured for each domain.</small></span>@icon("chevron-right")</summary>
-					<div class="np-table-wrap"><table class="np-table"><thead><tr><th>Service</th><th>Records</th><th>When generated</th></tr></thead><tbody>
-						<tr><td data-label="Service">Nameservers</td><td data-label="Records">Nameserver address records</td><td data-label="When generated">Only in the zone containing the configured nameserver hostname</td></tr>
-						<tr><td data-label="Service">FTPS</td><td data-label="Records"><code>ftp</code> A</td><td data-label="When generated">An enabled FTPS account has converged</td></tr>
-						<tr><td data-label="Service">Webmail</td><td data-label="Records"><code>webmail</code> A</td><td data-label="When generated">Webmail is configured and active</td></tr>
-						<tr><td data-label="Service">Local mail</td><td data-label="Records">Mail A, MX, SPF, DMARC and domain-specific DKIM</td><td data-label="When generated">Local mail is enabled; custom and external routing stays protected</td></tr>
-					</tbody></table></div>
-				</details>
 			</section>
 			<section class="np-dns-template-section" id="dns-policy" role="tabpanel" aria-labelledby="dns-tab-policy" data-np-dns-settings-panel="policy">
 				<header class="np-dns-template-head"><div><h4>Provider nameservers</h4><p>Publish nameserver defaults for new zones. Existing records, delegation and mail routing stay unchanged until a separate preview is applied.</p></div></header>
@@ -173,6 +186,28 @@ templ dnsSettingsFocus(view WorkspaceView) {
 				</div>
 			</section>
 		</div>
+		<dialog class="np-dialog np-dns-domain-preview-dialog" id="dns-domain-preview-dialog" data-np-dialog open?={ view.Drawer=="dns-domain-preview-dialog" } aria-labelledby="dns-domain-preview-title">
+			<form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form>
+			<div class="np-dialog-head"><span class="np-kicker">Read-only preview</span><h2 id="dns-domain-preview-title">Preview domain DNS</h2><p>Review this template with the domain's configured services and protected records. Nothing is saved or applied.</p></div>
+			<form method="get" action="/tools-settings/dns" class="np-dns-domain-preview-form" data-np-dns-domain-preview-form data-preview-url="/tools-settings/dns/domain-preview">
+				<input type="hidden" name="drawer" value="dns-domain-preview-dialog"/>
+				<label>Hosted domain<select name="preview_site" required><option value="">Select a domain</option>
+					for _, domain := range view.DNSPreviewDomains {
+						<option value={ formatJobID(domain.SiteID) } selected?={ view.DNSDomainPreview!=nil && view.DNSDomainPreview.SiteID==domain.SiteID }>{ domain.Domain }</option>
+					}
+				</select></label>
+				<button type="submit">Preview domain</button>
+			</form>
+			<p class="np-gate is-blocked" data-np-dns-domain-preview-error role="alert" hidden?={ view.DNSDomainPreviewError=="" }>{ view.DNSDomainPreviewError }</p>
+			<div data-np-dns-domain-preview-result aria-live="polite" aria-busy="false">
+				if view.DNSDomainPreview!=nil {
+					@DNSDomainPreviewPanel(*view.DNSDomainPreview)
+				} else {
+					<p class="np-empty">Choose a hosted domain to see its resolved records.</p>
+				}
+			</div>
+			<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Close preview</button></div>
+		</dialog>
 		<dialog class="np-dialog" id="dns-template-record-dialog" data-np-dialog aria-labelledby="dns-template-record-title">
 			<form method="dialog" class="np-dialog-close"><button aria-label="Close">@icon("x")</button></form>
 			<div class="np-dialog-head"><span class="np-kicker">DNS template</span><h2 id="dns-template-record-title">Add template record</h2><p>Use only supported placeholders and typed DNS fields.</p></div>
@@ -203,6 +238,27 @@ templ dnsSettingsFocus(view WorkspaceView) {
 				<div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-danger-button">Reset template</button></div>
 			</form>
 		</dialog>
+	}
+}
+
+templ DNSDomainPreviewPanel(preview types.DNSDomainPreview) {
+	<div class="np-dns-domain-preview-summary"><strong>{ preview.Domain }</strong><span>Template revision { formatJobID(preview.TemplateRevision) }</span>
+		if preview.ZoneDomain!="" {
+			<span>Authoritative zone: { preview.ZoneDomain } · { preview.Mode }</span>
+		}
+	</div>
+	for _, warning := range preview.Warnings {
+		<p class="np-callout">{ warning }</p>
+	}
+	<p class="np-dns-preview-note">Safe synchronization result. Custom and external mail records are preserved. Service records reflect current configuration; this does not verify public DNS delegation.</p>
+	if len(preview.Records)==0 {
+		<p class="np-empty">No local records to preview.</p>
+	} else {
+		<div class="np-table-wrap"><table class="np-table np-dns-preview-table"><thead><tr><th>Host</th><th>Type</th><th>Value</th><th>TTL</th><th>Result</th></tr></thead><tbody>
+			for _, row := range preview.Records {
+				<tr><td data-label="Host"><code>{ row.Record.Host }</code></td><td data-label="Type">{ row.Record.Type }</td><td data-label="Value"><code>{ dnsRecordValue(row.Record) }</code></td><td data-label="TTL">{ formatPlanLimit(row.Record.TTL) }</td><td data-label="Result"><span class="np-dns-condition">{ row.Action }</span><small class="np-dns-row-meta">{ dnsRecordOrigin(row.Record) }</small></td></tr>
+			}
+		</tbody></table></div>
 	}
 }
 

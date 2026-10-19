@@ -106,6 +106,10 @@ type WorkspaceView struct {
 	WebStatistics        *webstatistics.Workspace
 	StatisticsSettings   *webstatistics.Settings
 	PHPRuntimeInventory  *types.RuntimeCapabilities
+
+	DNSPreviewDomains     []types.DNSPreviewDomain
+	DNSDomainPreview      *types.DNSDomainPreview
+	DNSDomainPreviewError string
 }
 
 func setupStatusURL(status types.SiteSetupStatus, view WorkspaceView) string {

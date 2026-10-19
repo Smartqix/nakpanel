@@ -7,12 +7,46 @@
     if (target.pathname === before.pathname && !target.hash) target.hash = target.searchParams.has('run') ? '#dns-sync' : before.hash;
     return target;
   }
-  if (typeof module !== 'undefined' && module.exports) module.exports = {pending: pending, formBody: formBody, targetURL: targetURL};
+  function mountDomainPreviews(scope, ui) {
+    scope.querySelectorAll('[data-np-dns-domain-preview-form]').forEach(function (form) {
+      var dialog = form.closest('dialog'), result = dialog.querySelector('[data-np-dns-domain-preview-result]');
+      var error = dialog.querySelector('[data-np-dns-domain-preview-error]'), button = form.querySelector('[type=submit]');
+      var lifetime = ui.lifecycle ? ui.lifecycle.signal(form) : new AbortController().signal;
+      var current;
+      form.addEventListener('submit', async function (event) {
+        event.preventDefault(); event.stopPropagation();
+        var site = form.querySelector('[name=preview_site]').value;
+        if (!site || lifetime.aborted) return;
+        if (current) current.abort();
+        var request = new AbortController(); current = request;
+        var stop = function () { request.abort(); };
+        lifetime.addEventListener('abort', stop, {once:true});
+        error.hidden = true; button.disabled = true;
+        result.innerHTML = ''; result.setAttribute('aria-busy','true');
+        try {
+          var response = await ui.fetch(form.dataset.previewUrl+'?site_id='+encodeURIComponent(site), {method:'GET',credentials:'same-origin',headers:{Accept:'application/json'},signal:request.signal});
+          if (!response.ok) throw new Error('The domain preview could not be loaded. Try again.');
+          var data = await response.json();
+          if (request.signal.aborted || form.isConnected === false) return;
+          if (typeof data.html !== 'string') throw new Error('The preview response was incomplete.');
+          result.innerHTML = data.html;
+        } catch (failure) {
+          if (request.signal.aborted) return;
+          error.textContent = failure.message; error.hidden = false; error.tabIndex = -1; error.focus();
+        } finally {
+          lifetime.removeEventListener('abort',stop);
+          if (current === request) { button.disabled = false; result.setAttribute('aria-busy','false'); }
+        }
+      });
+    });
+  }
+  if (typeof module !== 'undefined' && module.exports) module.exports = {pending: pending, formBody: formBody, targetURL: targetURL, mountDomainPreviews: mountDomainPreviews};
   if (typeof document === 'undefined') return;
   var mounted = new WeakSet();
   function mount(scope) {
     var workspace = scope.querySelector('[data-np-dns-settings-workspace]');
     if (!workspace || mounted.has(workspace)) return; mounted.add(workspace);
+    mountDomainPreviews(scope, window.NakpanelUI);
     workspace.querySelectorAll('form[method="post"]').forEach(function (form) {
       if (form.matches('[data-np-reauth-form]')) return;
       var signal = window.NakpanelUI.lifecycle ? window.NakpanelUI.lifecycle.signal(form) : new AbortController().signal;

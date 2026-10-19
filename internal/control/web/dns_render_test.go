@@ -45,11 +45,49 @@ func TestDNSSettingsRendersTemplateSOATransfersAndPreview(t *testing.T) {
 		`data-np-dns-settings-panel="records"`, "Search host, value, or key",
 		"Advanced timing and transfers", "Synchronization impact", "Authorize DNS changes",
 		`aria-labelledby="dns-tab-records"`, "No template records match this search.",
-		`data-np-dns-result-count`, ">1 record</span>", `<span class="np-sr-only">Actions</span>`,
+		`data-np-dns-result-count`, `<span class="np-sr-only">Actions</span>`,
 		`aria-labelledby="dns-template-record-title"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("DNS settings missing %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestDNSSettingsUnifiesServiceGroupsAndOffersReadOnlyDomainPreview(t *testing.T) {
+	view := WorkspaceView{Route: "tools-settings", SettingsFocus: "dns", CSRFToken: "csrf", DNSSettings: types.DNSTemplateView{
+		Template: types.DNSTemplateRevision{ID: 1, Revision: 4, Records: []types.DNSTemplateRecord{{ID: 7, StableKey: "apex-a", HostTemplate: "@", Type: "A", Scope: "all", ValueTemplate: "<ip.web>", TTL: 3600}}},
+	}}
+	body := renderDNSPage(t, dashboard.Data{}, view)
+	for _, want := range []string{"Website", "Nameservers", "Local mail", "FTPS", "Webmail", "Always", "When enabled", "Generated per domain", "Preview domain", "data-np-dns-group", "dns-domain-preview-dialog", `method="get"`, `name="preview_site"`, "Custom and external mail records are preserved", `data-np-dialog-open="dns-template-edit-7"`} {
+		if !strings.Contains(body, want) {
+			t.Errorf("unified DNS workspace missing %q", want)
+		}
+	}
+	if strings.Contains(body, "<strong>Automatic service records</strong>") {
+		t.Fatal("service defaults are still hidden in a separate disclosure")
+	}
+}
+
+func TestDNSUnifiedTableLabelsIPv6AsConditional(t *testing.T) {
+	groups := dnsTemplateGroups(types.DNSTemplateRevision{Records: []types.DNSTemplateRecord{{Type: "AAAA", HostTemplate: "@", ValueTemplate: "<ipv6.web>", Scope: "all"}}})
+	if groups[0].Rows[0].Condition != "When configured" {
+		t.Fatalf("IPv6 advertised as unconditional: %+v", groups[0].Rows[0])
+	}
+}
+
+func TestDNSUnifiedTableDoesNotInventAddressesForDelegatedNameservers(t *testing.T) {
+	groups := dnsTemplateGroups(types.DNSTemplateRevision{Records: []types.DNSTemplateRecord{
+		{Type: "NS", HostTemplate: "delegated", ValueTemplate: "ns1.<domain>", Scope: "root"},
+		{Type: "NS", HostTemplate: "@", ValueTemplate: "ns2.<domain>", Scope: "subdomain"},
+	}})
+	for _, group := range groups {
+		if group.Name == "Nameservers" {
+			for _, row := range group.Rows {
+				if row.Automatic {
+					t.Fatalf("unsupported NS address advertised: %+v", row)
+				}
+			}
 		}
 	}
 }
@@ -131,9 +169,9 @@ func TestSubdomainOverviewDoesNotMistakeParentZoneForItsAddressRecord(t *testing
 	parent := dashboard.Site{ID: 1, Domain: "example.test", Status: "active"}
 	child := dashboard.Site{ID: 2, Domain: "blog.example.test", ParentSiteID: 1, DNSZoneMode: "parent", Status: "active", SubscriptionID: 5}
 	data := dashboard.Data{
-		Sites: []dashboard.Site{parent, child},
+		Sites:         []dashboard.Site{parent, child},
 		Subscriptions: []types.SubscriptionSummary{{ID: 5, SubscriptionName: "Hosting", Status: "active"}},
-		Phase6: dashboard.Phase6Data{DNSZones: []dashboard.DNSZone{{ID: 9, SiteID: 1, Domain: "example.test", Mode: "primary", Status: "active", Address: "192.0.2.10"}}},
+		Phase6:        dashboard.Phase6Data{DNSZones: []dashboard.DNSZone{{ID: 9, SiteID: 1, Domain: "example.test", Mode: "primary", Status: "active", Address: "192.0.2.10"}}},
 	}
 	body := renderDNSPage(t, data, WorkspaceView{Route: "site-detail", DetailID: 2, Tab: "overview", CSRFToken: "csrf"})
 	if !strings.Contains(body, "No address record points this subdomain") {
