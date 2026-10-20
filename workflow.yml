@@ -1,0 +1,91 @@
+{
+  "name": "INERT candidate26 native forward fixture",
+  "on": {
+    "workflow_dispatch": {}
+  },
+  "permissions": {
+    "contents": "read",
+    "actions": "read"
+  },
+  "concurrency": {
+    "group": "native-forward-candidate26-${{ github.ref }}",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "forward": {
+      "if": "github.event.repository.private == false",
+      "runs-on": "ubuntu-24.04",
+      "timeout-minutes": 360,
+      "env": {
+        "CONTROLLER_SHA": "PENDING",
+        "ROOT_ADMISSION_SHA256": "PENDING",
+        "ROOT_ADMISSION_JSON": "{\"app_helpers\":null,\"artifact\":null,\"authority\":null,\"baseline_reviews\":null,\"controller_commit\":null,\"controller_files\":null,\"expires_at\":null,\"nonce\":null,\"oci_image_ref\":null,\"payload\":null,\"repository\":null,\"schema\":\"nakpanel-hosted-forward-admission-v1\",\"source_commit\":null,\"source_tree\":null,\"state\":\"PENDING\",\"valid_from\":null}\n",
+        "GOTOOLCHAIN": "go1.26.9",
+        "PYTHONDONTWRITEBYTECODE": "1"
+      },
+      "steps": [
+        {
+          "name": "Refuse unbound inert workflow",
+          "shell": "bash",
+          "timeout-minutes": 1,
+          "run": "set -euo pipefail\n[[ \"$CONTROLLER_SHA\" =~ ^[a-f0-9]{40}$ && \"$ROOT_ADMISSION_SHA256\" =~ ^[a-f0-9]{64}$ ]] || { echo \"Root launch admission is PENDING; no execution authorized.\" >&2; exit 1; }\n"
+        },
+        {
+          "name": "Checkout independently reviewed coordinator C",
+          "uses": "actions/checkout@v4",
+          "timeout-minutes": 2,
+          "with": {
+            "ref": "${{ env.CONTROLLER_SHA }}",
+            "path": "controller",
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Checkout immutable application26 separately",
+          "uses": "actions/checkout@v4",
+          "timeout-minutes": 2,
+          "with": {
+            "ref": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+            "path": "application",
+            "persist-credentials": false
+          }
+        },
+        {
+          "name": "Select pinned toolchain for signed buildinfo inspection",
+          "uses": "actions/setup-go@v5",
+          "timeout-minutes": 3,
+          "with": {
+            "go-version": "1.26.9",
+            "cache": false
+          }
+        },
+        {
+          "name": "Materialize data-only root admission and validate before actions",
+          "shell": "bash",
+          "timeout-minutes": 1,
+          "run": "set -euo pipefail\numask 077\npython3 -I -B - <<'PYADMISSION'\nimport os,pathlib\np=pathlib.Path(os.environ['RUNNER_TEMP'])/'forward-admission.json'\nwith p.open('xb') as f:f.write(os.environ['ROOT_ADMISSION_JSON'].encode('utf-8'))\np.chmod(0o600)\nPYADMISSION\npython3 -I -B \"$GITHUB_WORKSPACE/controller/forward_hosted.py\" validate --admission \"$RUNNER_TEMP/forward-admission.json\" --sha256 \"$ROOT_ADMISSION_SHA256\"\n"
+        },
+        {
+          "name": "Execute fixed fresh synthetic fixture and exact existing verifier",
+          "shell": "bash",
+          "env": {
+            "GH_TOKEN": "${{ github.token }}"
+          },
+          "run": "set -euo pipefail\numask 077\npython3 -I -B \"$GITHUB_WORKSPACE/controller/forward_hosted.py\" run --admission \"$RUNNER_TEMP/forward-admission.json\" --sha256 \"$ROOT_ADMISSION_SHA256\" --controller-source \"$GITHUB_WORKSPACE/controller\" --app-source \"$GITHUB_WORKSPACE/application\" --private-root \"$RUNNER_TEMP/forward-private\" --public-root \"$RUNNER_TEMP/forward-public\"\n"
+        },
+        {
+          "name": "Upload fixed safe public projection only",
+          "if": "always()",
+          "uses": "actions/upload-artifact@v4",
+          "timeout-minutes": 3,
+          "with": {
+            "name": "native-forward-summary-${{ github.run_id }}-${{ github.run_attempt }}",
+            "path": "${{ runner.temp }}/forward-public/result.json",
+            "retention-days": 3,
+            "if-no-files-found": "warn"
+          }
+        }
+      ]
+    }
+  }
+}
