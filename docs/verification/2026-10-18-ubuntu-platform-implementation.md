@@ -501,3 +501,20 @@ Full PHP maintenance/recovery and two reboots, forward and genuine legacy restor
 the three-profile scheduled-backup matrix, ARM server execution, a real security
 patch advance and the required30–60 day elapsed soak remain separate incomplete
 gates. Ubuntu24.04 remains the default and Ubuntu26.04 remains experimental.
+
+The [later full maintenance diagnostic](https://github.com/Smartqix/nakpanel/actions/runs/39436613407)
+again passed all 17 product gates, then reached maintenance baseline collection
+and failed the package-file path guard before the first reinstall. Its exact
+bound predicate and helper source are known; the rejected output record was not
+retained. Cleanup completed with zero remaining owned guests.
+
+The verifier parsed every line from a multi-package `dpkg-query -L` as a path,
+but the [upstream manual](https://manpages.debian.org/testing/dpkg/dpkg-query.1.en.html)
+documents empty separators between package lists. A regression using the real
+file metadata, no-follow reader and digest code reproduces that failure on valid
+output, replacing only the command boundary. The correction skips exactly
+empty records. Nonempty relative paths, parent traversal, whitespace, diversion
+headers and unsafe regular-file ownership/modes remain subject to the original
+guards; symlink targets remain recorded without following them. These tests
+establish the parser defect; the unpublished guest record remains unknown.
+Fresh full delivery, recovery and reboot validation remain required.

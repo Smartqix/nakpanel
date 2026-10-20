@@ -738,6 +738,8 @@ def package_files(packages):
     text = command(['dpkg-query','-L',*[entry['Package'] for entry in packages]]).stdout
     result = {}
     for name in sorted(set(text.splitlines())):
+        if name == '':
+            continue
         path=Path(name)
         require(path.is_absolute() and '..' not in path.parts, 'unexpected package file path')
         info=path.lstat()

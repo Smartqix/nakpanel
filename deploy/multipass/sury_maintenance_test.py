@@ -29,6 +29,68 @@ class MaintenanceTests(unittest.TestCase):
             spec.loader.exec_module(module)
         return module
 
+    @contextlib.contextmanager
+    def package_file_fixture(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);file=root/'fixture-file';link=root/'fixture-link'
+            file.write_bytes(b'owned package file fixture\n');file.chmod(0o640)
+            link.symlink_to(file.name)
+            yield self.module(),root,file,link
+
+    def collect_package_files(self, module, stdout):
+        packages=[{'Package':'fixture-a'},{'Package':'fixture-b'}]
+        def command(args):
+            self.assertEqual(args,['dpkg-query','-L','fixture-a','fixture-b'])
+            return subprocess.CompletedProcess(args,0,stdout,'')
+        # Only command is faked; filesystem reads, guards and hashes are real.
+        with patch.object(module,'command',side_effect=command):
+            return module.package_files(packages)
+
+    def expected_package_files(self, file, link):
+        regular=file.lstat();symlink=link.lstat()
+        return {str(file):{'mode':stat.S_IMODE(regular.st_mode),'uid':regular.st_uid,'gid':regular.st_gid,'value':hashlib.sha256(file.read_bytes()).hexdigest()},
+                str(link):{'mode':stat.S_IMODE(symlink.st_mode),'uid':symlink.st_uid,'gid':symlink.st_gid,'link':file.name}}
+
+    def test_package_files_preserves_real_metadata_and_deduplicates(self):
+        with self.package_file_fixture() as (m,root,file,link):
+            result=self.collect_package_files(m,str(file)+'\n'+str(link)+'\n'+str(file)+'\n')
+            self.assertEqual(result,self.expected_package_files(file,link))
+
+    def test_package_files_accepts_documented_empty_inter_package_separator(self):
+        with self.package_file_fixture() as (m,root,file,link):
+            result=self.collect_package_files(m,str(file)+'\n\n'+str(link)+'\n')
+            self.assertEqual(result,self.expected_package_files(file,link))
+
+    def test_package_files_empty_separator_preserves_adjacent_file_bytes(self):
+        with self.package_file_fixture() as (m,root,file,link):
+            result=self.collect_package_files(m,str(link)+'\n\n'+str(root)+'\n'+str(file)+'\n\n')
+            self.assertEqual(result,self.expected_package_files(file,link))
+
+    def test_package_files_refuses_nonempty_relative_parent_and_human_records(self):
+        with self.package_file_fixture() as (m,root,file,link):
+            invalid=['relative-file',str(root/'..'/'fixture-file'),' ','\t','diversion by fixture-provider from: /fixture-file','fixture-a:']
+            for record in invalid:
+                with self.subTest(category=invalid.index(record)),self.assertRaisesRegex(ValueError,'^unexpected package file path$'):
+                    self.collect_package_files(m,record+'\n')
+
+    def test_package_files_empty_separator_cannot_hide_invalid_nonempty_record(self):
+        with self.package_file_fixture() as (m,root,file,link):
+            with self.assertRaisesRegex(ValueError,'^unexpected package file path$'):
+                self.collect_package_files(m,str(file)+'\n\nnonempty-invalid-record\n')
+
+    def test_package_files_records_symlink_without_following_missing_target(self):
+        with self.package_file_fixture() as (m,root,file,link):
+            link.unlink();link.symlink_to('missing-owned-fixture-target')
+            result=self.collect_package_files(m,str(link)+'\n')
+            self.assertEqual(result[str(link)]['link'],'missing-owned-fixture-target')
+            self.assertNotIn('value',result[str(link)])
+
+    def test_package_files_still_refuses_group_writable_regular_file(self):
+        with self.package_file_fixture() as (m,root,file,link):
+            file.chmod(0o660)
+            with self.assertRaisesRegex(ValueError,'^unsafe input type/owner/mode:'):
+                self.collect_package_files(m,str(file)+'\n')
+
     def inputs(self):
         binary = {name: str(n) * 64 for name,n in [('panel',1),('agent',2),('panelctl',3)]}
         b = {'source_vm':'nakpanel-26-04-arm64-test1234','run_token':'test1234','release':'26.04','architecture':'arm64','profile':'ubuntu-26.04-sury','php_provider':'sury','app_version':'29.0.0','runtime_commit':'a'*40,'manifest_sha256':'b'*64,'installed_binary_sha256':binary}
