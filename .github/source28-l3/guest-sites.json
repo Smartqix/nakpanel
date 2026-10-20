@@ -1,0 +1,334 @@
+{
+  "fixture_loop": {
+    "checks_ast_sha256": "c8f5fcc62d9476289ef92e62cef9d250b9065b7e52d04384650875a417c602ef",
+    "count": 6,
+    "function": "Guest.source_fixtures",
+    "line": 239
+  },
+  "functions": {
+    "Guest.__init__": [
+      160,
+      161
+    ],
+    "Guest.active_readiness": [
+      463,
+      466
+    ],
+    "Guest.admin": [
+      208,
+      220
+    ],
+    "Guest.admin.post": [
+      213,
+      219
+    ],
+    "Guest.app_row": [
+      230,
+      232
+    ],
+    "Guest.authenticate": [
+      366,
+      368
+    ],
+    "Guest.backup": [
+      355,
+      365
+    ],
+    "Guest.canary": [
+      254,
+      255
+    ],
+    "Guest.cli": [
+      178,
+      180
+    ],
+    "Guest.command": [
+      163,
+      174
+    ],
+    "Guest.discover": [
+      221,
+      226
+    ],
+    "Guest.dispatch": [
+      467,
+      487
+    ],
+    "Guest.file_fact": [
+      314,
+      315
+    ],
+    "Guest.go_preflight": [
+      450,
+      457
+    ],
+    "Guest.identity": [
+      187,
+      201
+    ],
+    "Guest.invocation": [
+      202,
+      207
+    ],
+    "Guest.jobs": [
+      227,
+      229
+    ],
+    "Guest.migrate": [
+      458,
+      459
+    ],
+    "Guest.observe": [
+      349,
+      354
+    ],
+    "Guest.parent_facts": [
+      285,
+      288
+    ],
+    "Guest.pg": [
+      176,
+      176
+    ],
+    "Guest.physical": [
+      316,
+      348
+    ],
+    "Guest.prepare_source_namespace": [
+      233,
+      235
+    ],
+    "Guest.quiet": [
+      380,
+      389
+    ],
+    "Guest.quiet_observation": [
+      375,
+      379
+    ],
+    "Guest.remaining": [
+      162,
+      162
+    ],
+    "Guest.restore": [
+      369,
+      370
+    ],
+    "Guest.rootless": [
+      274,
+      284
+    ],
+    "Guest.roundcube": [
+      256,
+      260
+    ],
+    "Guest.row": [
+      177,
+      177
+    ],
+    "Guest.row_units": [
+      302,
+      313
+    ],
+    "Guest.snapshot": [
+      268,
+      273
+    ],
+    "Guest.source_fixtures": [
+      236,
+      253
+    ],
+    "Guest.source_upgrade": [
+      261,
+      267
+    ],
+    "Guest.stage": [
+      390,
+      398
+    ],
+    "Guest.stop": [
+      371,
+      374
+    ],
+    "Guest.stopped": [
+      289,
+      301
+    ],
+    "Guest.strict_post": [
+      460,
+      462
+    ],
+    "Guest.target_baseline": [
+      445,
+      446
+    ],
+    "Guest.text": [
+      175,
+      175
+    ],
+    "Guest.trust_files": [
+      403,
+      444
+    ],
+    "Guest.verify_stage": [
+      399,
+      402
+    ],
+    "Guest.verify_trust": [
+      447,
+      449
+    ],
+    "Guest.wait": [
+      181,
+      186
+    ],
+    "NoRedirect.redirect_request": [
+      158,
+      158
+    ],
+    "absent": [
+      20,
+      23
+    ],
+    "application_form": [
+      18,
+      19
+    ],
+    "cache_root_facts": [
+      128,
+      136
+    ],
+    "directory_fact": [
+      125,
+      126
+    ],
+    "expected_go": [
+      99,
+      100
+    ],
+    "go_ancestors": [
+      82,
+      89
+    ],
+    "go_config_absent": [
+      91,
+      98
+    ],
+    "go_directory_safe": [
+      79,
+      80
+    ],
+    "go_group_shape": [
+      58,
+      59
+    ],
+    "go_nss_sources": [
+      32,
+      43
+    ],
+    "go_private_directory": [
+      65,
+      77
+    ],
+    "go_private_directory.identity": [
+      67,
+      67
+    ],
+    "go_private_group": [
+      45,
+      56
+    ],
+    "go_private_mode": [
+      61,
+      63
+    ],
+    "intent_sql": [
+      13,
+      17
+    ],
+    "main": [
+      489,
+      505
+    ],
+    "q": [
+      488,
+      488
+    ],
+    "safe_ancestors": [
+      24,
+      31
+    ],
+    "validate_cache_roots": [
+      138,
+      154
+    ],
+    "validate_cache_roots.descriptor": [
+      141,
+      145
+    ],
+    "validate_git_config": [
+      109,
+      117
+    ],
+    "validate_go_effective": [
+      101,
+      108
+    ],
+    "validate_rootless_layout": [
+      119,
+      123
+    ]
+  },
+  "guest_sha256": "5665dd467901274ae787ce7f4775db6d5409cb331e2633b642e507c191c69a5f",
+  "maximum_frames": 12,
+  "schema": "nakpanel-l3-fixed-guest-sites-v4",
+  "systemctl_listing_sites": {
+    "accept": {
+      "column_end": 152,
+      "column_start": 3,
+      "function": "Guest.row_units",
+      "line": 307
+    },
+    "command": {
+      "column_end": 62,
+      "column_start": 19,
+      "function": "Guest.command",
+      "line": 174
+    },
+    "decode": {
+      "column_end": 28,
+      "column_start": 7,
+      "function": "Guest.row_units",
+      "line": 306
+    },
+    "listing": {
+      "column_end": 150,
+      "column_start": 10,
+      "function": "Guest.row_units",
+      "line": 305
+    },
+    "stopped": {
+      "column_end": 34,
+      "column_start": 12,
+      "function": "Guest.stopped",
+      "line": 296
+    }
+  },
+  "tenant_ps_sites": {
+    "Guest.command": {
+      "column_end": 62,
+      "column_start": 19,
+      "line": 174
+    },
+    "Guest.rootless": {
+      "column_end": 217,
+      "column_start": 9,
+      "line": 284
+    },
+    "Guest.stopped": {
+      "column_end": 108,
+      "column_start": 12,
+      "line": 293
+    }
+  }
+}
