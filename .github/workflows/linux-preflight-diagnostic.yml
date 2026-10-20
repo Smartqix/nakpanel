@@ -1,0 +1,72 @@
+name: Linux read-only fixture preflight diagnostic
+on:
+  push:
+    branches: [ricky/linux-preflight-diagnostic-candidate26-v1]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    if: github.repository == 'Smartqix/nakpanel'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      RUNTIME_AUTHORITY_SHA256: 06e5a1f03f97f6f26a77660ef12456d1752e2fab99ca4a4ca7d37c09037760c4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Guard inactive authority and exact read-only diagnostic sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REPOSITORY" = Smartqix/nakpanel
+          test "$GITHUB_REF" = refs/heads/ricky/linux-preflight-diagnostic-candidate26-v1
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          [[ "$RUNTIME_AUTHORITY_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          test "$RUNTIME_AUTHORITY_SHA256" != PENDING
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = 1627bba3c681a884255eb91452dbba74a43ebbdc
+          python3 -I -B - <<'PYGUARD'
+          import hashlib,pathlib,subprocess
+          expected = {'.github/fixtures/linux-preflight-diagnostic-v1/diagnostic.py': '7ff3b256e02c08e5ab668d11ce1e697e51f60e89cae598ca92964af21d54f543', '.github/fixtures/linux-preflight-diagnostic-v1/original/collector.py': '57e7e9e8dd5831d0d01822444482b24a9cd7c895fb0976377517eeeb8a3c8194', '.github/fixtures/linux-preflight-diagnostic-v1/original/custody.py': 'bbe68b69d270aae3a253c2848dee8e4145eb546454d767e00ab2d8392e11b8b3', '.github/fixtures/linux-preflight-diagnostic-v1/original/fixture.go': '96a481c01178bec651f529831c40ab05bfa02d7c7907ef14b04a626f0e84d2f4', '.github/fixtures/linux-preflight-diagnostic-v1/original/fixture_driver.py': 'af98fd413930352bbc144c9847df585432083aabeb75edb577df5bc9c2edc96a', '.github/fixtures/linux-preflight-diagnostic-v1/original/inputs.json': '2590fdcf0a622c665da8b67209e692f18e70b6746c81cb411540dcf35968cea5', '.github/fixtures/linux-preflight-diagnostic-v1/original/projector/go.mod': '68601877e09e1e14a109e915b68799f5892e9c811c03a9bf8298f6e79b0fa84b', '.github/fixtures/linux-preflight-diagnostic-v1/original/projector/go.sum': '846b9f7a330fed9015b3f25a52c801c7d61d907ebc03001a44a0ea83e87000e2', '.github/fixtures/linux-preflight-diagnostic-v1/original/projector/main.go': '647987733cbe67afca1d7a6908462e32f62676f0361e682483fd629a3a071ccf', '.github/fixtures/linux-preflight-diagnostic-v1/original/units/nakpanel-agent.service': '295fc2f855ef00d75fd2aca3beb48ff76ab9c3eb0a2dc6742570b680589aaebe', '.github/fixtures/linux-preflight-diagnostic-v1/original/units/nakpanel.service': '58de1cd587def2cab29136856ff3e32f5775d68173f834960d41f912fcf5f552'}
+          source='1627bba3c681a884255eb91452dbba74a43ebbdc'
+          changed=subprocess.run(['git','diff','--name-status','--no-renames',source,'HEAD'],check=True,capture_output=True,timeout=5).stdout.decode().splitlines()
+          allowed=set(expected)|{'.github/workflows/linux-preflight-diagnostic.yml'}
+          if set(changed)!={('A'+chr(9))+n for n in allowed}:raise SystemExit('fixed diagnostic source guard refused')
+          for n,h in expected.items():
+              if hashlib.sha256(pathlib.Path(n).read_bytes()).hexdigest()!=h:raise SystemExit('fixed diagnostic source guard refused')
+          PYGUARD
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.9
+          cache: false
+      - name: Build only the unchanged inert dummy and no-connect projector
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(go version | awk '{print $3}')" = go1.26.9
+          mkdir -m 0700 "$RUNNER_TEMP/preflight-diagnostic-build"
+          export CGO_ENABLED=0 GOWORK=off
+          timeout --kill-after=5s 75s go build -trimpath -buildvcs=false -ldflags=-buildid= -o "$RUNNER_TEMP/preflight-diagnostic-build/fixture-sleeper" .github/fixtures/linux-preflight-diagnostic-v1/original/fixture.go
+          cd .github/fixtures/linux-preflight-diagnostic-v1/original/projector
+          timeout --kill-after=5s 75s go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$RUNNER_TEMP/preflight-diagnostic-build/projector" .
+      - name: Observe original read-only preflight once without setup or adapter collection
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -m 0700 "$RUNNER_TEMP/preflight-diagnostic-public"
+          sudo -n timeout --kill-after=5s 60s /usr/bin/python3 -I -B .github/fixtures/linux-preflight-diagnostic-v1/diagnostic.py --admission-sha "$RUNTIME_AUTHORITY_SHA256" --build-root "$RUNNER_TEMP/preflight-diagnostic-build" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --workflow-commit "$GITHUB_SHA" >"$RUNNER_TEMP/preflight-diagnostic-public/report.json"
+      - name: Preserve only the fixed sanitized preflight projection
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-preflight-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/preflight-diagnostic-public/report.json
+          retention-days: 3
+          if-no-files-found: error
