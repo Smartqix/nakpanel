@@ -1,0 +1,270 @@
+{
+  "fixture_loop": {
+    "checks_ast_sha256": "c8f5fcc62d9476289ef92e62cef9d250b9065b7e52d04384650875a417c602ef",
+    "count": 6,
+    "function": "Guest.source_fixtures",
+    "line": 180
+  },
+  "functions": {
+    "Guest.__init__": [
+      101,
+      102
+    ],
+    "Guest.active_readiness": [
+      402,
+      405
+    ],
+    "Guest.admin": [
+      149,
+      161
+    ],
+    "Guest.admin.post": [
+      154,
+      160
+    ],
+    "Guest.app_row": [
+      171,
+      173
+    ],
+    "Guest.authenticate": [
+      305,
+      307
+    ],
+    "Guest.backup": [
+      294,
+      304
+    ],
+    "Guest.canary": [
+      195,
+      196
+    ],
+    "Guest.cli": [
+      119,
+      121
+    ],
+    "Guest.command": [
+      104,
+      115
+    ],
+    "Guest.discover": [
+      162,
+      167
+    ],
+    "Guest.dispatch": [
+      406,
+      426
+    ],
+    "Guest.file_fact": [
+      253,
+      254
+    ],
+    "Guest.go_preflight": [
+      389,
+      396
+    ],
+    "Guest.identity": [
+      128,
+      142
+    ],
+    "Guest.invocation": [
+      143,
+      148
+    ],
+    "Guest.jobs": [
+      168,
+      170
+    ],
+    "Guest.migrate": [
+      397,
+      398
+    ],
+    "Guest.observe": [
+      288,
+      293
+    ],
+    "Guest.parent_facts": [
+      226,
+      229
+    ],
+    "Guest.pg": [
+      117,
+      117
+    ],
+    "Guest.physical": [
+      255,
+      287
+    ],
+    "Guest.prepare_source_namespace": [
+      174,
+      176
+    ],
+    "Guest.quiet": [
+      319,
+      328
+    ],
+    "Guest.quiet_observation": [
+      314,
+      318
+    ],
+    "Guest.remaining": [
+      103,
+      103
+    ],
+    "Guest.restore": [
+      308,
+      309
+    ],
+    "Guest.rootless": [
+      215,
+      225
+    ],
+    "Guest.roundcube": [
+      197,
+      201
+    ],
+    "Guest.row": [
+      118,
+      118
+    ],
+    "Guest.row_units": [
+      243,
+      252
+    ],
+    "Guest.snapshot": [
+      209,
+      214
+    ],
+    "Guest.source_fixtures": [
+      177,
+      194
+    ],
+    "Guest.source_upgrade": [
+      202,
+      208
+    ],
+    "Guest.stage": [
+      329,
+      337
+    ],
+    "Guest.stop": [
+      310,
+      313
+    ],
+    "Guest.stopped": [
+      230,
+      242
+    ],
+    "Guest.strict_post": [
+      399,
+      401
+    ],
+    "Guest.target_baseline": [
+      384,
+      385
+    ],
+    "Guest.text": [
+      116,
+      116
+    ],
+    "Guest.trust_files": [
+      342,
+      383
+    ],
+    "Guest.verify_stage": [
+      338,
+      341
+    ],
+    "Guest.verify_trust": [
+      386,
+      388
+    ],
+    "Guest.wait": [
+      122,
+      127
+    ],
+    "NoRedirect.redirect_request": [
+      99,
+      99
+    ],
+    "absent": [
+      20,
+      23
+    ],
+    "application_form": [
+      18,
+      19
+    ],
+    "cache_root_facts": [
+      69,
+      77
+    ],
+    "directory_fact": [
+      66,
+      67
+    ],
+    "expected_go": [
+      40,
+      41
+    ],
+    "go_config_absent": [
+      32,
+      39
+    ],
+    "intent_sql": [
+      13,
+      17
+    ],
+    "main": [
+      428,
+      444
+    ],
+    "q": [
+      427,
+      427
+    ],
+    "safe_ancestors": [
+      24,
+      31
+    ],
+    "validate_cache_roots": [
+      79,
+      95
+    ],
+    "validate_cache_roots.descriptor": [
+      82,
+      86
+    ],
+    "validate_git_config": [
+      50,
+      58
+    ],
+    "validate_go_effective": [
+      42,
+      49
+    ],
+    "validate_rootless_layout": [
+      60,
+      64
+    ]
+  },
+  "guest_sha256": "4d2f745273aaf6d895ebb29144b9c471edc77b439af5996fe27f2539756047d5",
+  "maximum_frames": 12,
+  "schema": "nakpanel-l3-fixed-guest-sites-v3",
+  "tenant_ps_sites": {
+    "Guest.command": {
+      "column_end": 62,
+      "column_start": 19,
+      "line": 115
+    },
+    "Guest.rootless": {
+      "column_end": 217,
+      "column_start": 9,
+      "line": 225
+    },
+    "Guest.stopped": {
+      "column_end": 108,
+      "column_start": 12,
+      "line": 234
+    }
+  }
+}
