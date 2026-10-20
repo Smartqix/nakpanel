@@ -286,8 +286,8 @@ def download(url, path, *, expected=None, size=None, limit=64*2**20):
 
 
 class Producer:
-    def __init__(self, source, private_root, execution, env):
-        self.source=Path(source).resolve();self.root=Path(private_root);self.execution=Path(execution);self.env=env
+    def __init__(self, source, private_root, execution, env, qualifier_source=None):
+        self.source=Path(source).resolve();self.qualifier_source=Path(qualifier_source).resolve() if qualifier_source is not None else self.source;self.root=Path(private_root);self.execution=Path(execution);self.env=env
         M.require(self.root.is_absolute() and not self.root.exists(),'fresh absolute private preparation path required')
         parent=self.root.parent
         info=parent.lstat()
@@ -317,6 +317,7 @@ class Producer:
     def prepare(self):
         self.record()
         commit,mapping=source_map(self.source,FROZEN,self.env.get('GITHUB_RUN_ID',''))
+        qualifier_commit,qualifier_mapping=(commit,mapping) if self.qualifier_source==self.source else source_map(self.qualifier_source,FROZEN,self.env.get('GITHUB_RUN_ID',''))
         report_dir=Path(self.env['NAKPANEL_CELL_REPORT_DIR'])
         report_bytes=(report_dir/'report.json').read_bytes();report=json.loads(report_bytes)
         binding=dict(source_vm=self.env['NAKPANEL_MULTIPASS_VM'],run_token=self.env['NAKPANEL_RUN_TOKEN'],release='26.04',
@@ -331,15 +332,15 @@ class Producer:
         M.require(execution.get('runtime_commit')==commit and execution.get('qualifier_source_sha256')==mapping,
                   'canonical process did not execute the same frozen qualifier source')
         bundle=Path(self.env['NAKPANEL_RELEASE_BUNDLE']);manifest_bytes=(bundle/'manifest.json').read_bytes();manifest=json.loads(manifest_bytes)
-        M.require(manifest['commit']==commit and manifest['architecture']=='amd64' and type(manifest['development']) is bool,'runtime and qualifier must be the actual same selected commit')
-        config=dict(binding,operation=M.MODE,app_version=manifest['version'],runtime_commit=commit,qualifier_commit=commit,
+        M.require(manifest['commit']==commit and manifest['architecture']=='amd64' and type(manifest['development']) is bool,'runtime must be the actual selected driver commit')
+        config=dict(binding,operation=M.MODE,app_version=manifest['version'],runtime_commit=commit,qualifier_commit=qualifier_commit,
             manifest_sha256=M.digest(manifest_bytes),installed_binary_sha256={name:manifest['files']['bin/'+name] for name in ('panel','agent','panelctl')},
             allow_development=manifest['development'],maintenance_id='hosted-maintenance-'+binding['run_token'],
-            retention_snapshot='maintenance-sury-'+binding['run_token'],driver_source=str(self.source),qualifier_source=str(self.source),
-            driver_source_sha256={name:mapping[name] for name in DRIVER},qualifier_source_sha256=mapping,
-            qualifier_files_sha256={name:mapping[name] for name in M.QUALIFIER_FILES},
-            qualifier_wrapper_sha256=mapping['deploy/multipass/internal-tools-verify.sh'],qualifier_helper_sha256=mapping['deploy/multipass/roundcube-send-read.py'],
-            maintenance_helper_sha256=mapping['deploy/multipass/sury-maintenance-drill.py'],bundle=str(bundle),
+            retention_snapshot='maintenance-sury-'+binding['run_token'],driver_source=str(self.source),qualifier_source=str(self.qualifier_source),
+            driver_source_sha256={name:mapping[name] for name in DRIVER},qualifier_source_sha256=qualifier_mapping,
+            qualifier_files_sha256={name:qualifier_mapping[name] for name in M.QUALIFIER_FILES},
+            qualifier_wrapper_sha256=qualifier_mapping['deploy/multipass/internal-tools-verify.sh'],qualifier_helper_sha256=qualifier_mapping['deploy/multipass/roundcube-send-read.py'],
+            maintenance_helper_sha256=qualifier_mapping['deploy/multipass/sury-maintenance-drill.py'],bundle=str(bundle),
             public_key=self.env['NAKPANEL_RELEASE_PUBLIC_KEY'],public_key_sha256=M.digest(Path(self.env['NAKPANEL_RELEASE_PUBLIC_KEY']).read_bytes()),
             signature_sha256=M.digest((bundle/'manifest.sig').read_bytes()),ownership_directory=self.env['NAKPANEL_OWNERSHIP_DIR'],
             cell_report_directory=str(report_dir),evidence_directory=str(self.root/'drill'),baseline_directory=str(self.root/'baseline'))
@@ -355,7 +356,7 @@ class Producer:
         config['qualification_report_sha256']=receipt('qualification_report',report)
         self.stage='actual-roundcube-baseline';self.record()
         output=self.root/'roundcube_receipt.json';started=utc()
-        result=M.command(['bash',str(self.source/'deploy/multipass/internal-tools-verify.sh'),'--roundcube-only'],
+        result=M.command(['bash',str(self.qualifier_source/'deploy/multipass/internal-tools-verify.sh'),'--roundcube-only'],
                          env=dict(self.env,NAKPANEL_INTERNAL_TOOLS_RECEIPT=str(output)),timeout=600,check=False)
         M.write_private(self.root/'roundcube-baseline.log',(result.stdout+result.stderr).encode())
         M.require(result.returncode==0,'actual Roundcube baseline failed; uncertain sends are not retried')
@@ -533,7 +534,9 @@ def main():
     parser.add_argument('operation',choices=['qualify','request','prepare'])
     parser.add_argument('--execution-receipt',type=Path)
     parser.add_argument('--private-root',type=Path)
+    parser.add_argument('--driver-source',type=Path)
     args=parser.parse_args()
+    M.require(args.driver_source is None or args.operation=='prepare','separate qualifier/driver source is only supported by prepare')
     env=os.environ.copy()
     if args.operation=='request':
         record_request(env)
@@ -547,10 +550,10 @@ def main():
                       dict(runtime_commit=commit,qualifier_source_sha256=mapping))
         return
     M.require(args.private_root is not None,'prepare requires an explicit fresh private root')
-    producer=Producer(SOURCE,args.private_root,args.execution_receipt,env)
+    producer=Producer(SOURCE,args.private_root,args.execution_receipt,env) if args.driver_source is None else Producer(args.driver_source,args.private_root,args.execution_receipt,env,qualifier_source=SOURCE)
     try:
         spec=producer.prepare()
-        result=M.command(['bash',str(SOURCE/'deploy/multipass/sury-maintenance-verify.sh'),'same-version',str(spec)],env=env,timeout=3600,check=False)
+        result=M.command(['bash',str(producer.qualifier_source/'deploy/multipass/sury-maintenance-verify.sh'),'same-version',str(spec)],env=env,timeout=3600,check=False)
         M.write_private(producer.root/'controller.log',(result.stdout+result.stderr).encode())
         M.require(result.returncode==0,'maintenance controller failed; inspect sanitized retained evidence')
         observed=json.loads(M.private_bytes(producer.root/'drill'/'result.json'))
@@ -559,7 +562,7 @@ def main():
         coverage=json.loads(M.private_bytes(coverage_path))
         M.require(coverage.get('requested') is True and coverage.get('status')=='PENDING','explicit pending maintenance request required')
         M.bound(coverage,producer.config)
-        coverage.update(status='PASS',result_sha256=M.digest(M.private_bytes(producer.root/'drill'/'result.json')),
+        coverage.update(status='PASS',qualifier_commit=producer.config['qualifier_commit'],result_sha256=M.digest(M.private_bytes(producer.root/'drill'/'result.json')),
                         database_manager_postchecks='actual-fastcgi-health; canonical-restricted-browser-baseline')
         M.write_private(coverage_path,coverage)
         producer.stage='complete';producer.record('PASS')
@@ -569,7 +572,9 @@ def main():
         producer.record('FAIL',failure_code=FAILURE_CODES.get(str(error)) if type(error) is ValueError else None)
         coverage_path=Path(env['NAKPANEL_CELL_REPORT_DIR'])/'sury-maintenance-request.json'
         if coverage_path.exists():
-            coverage=json.loads(M.private_bytes(coverage_path));coverage['status']='FAIL';M.write_private(coverage_path,coverage)
+            coverage=json.loads(M.private_bytes(coverage_path));coverage['status']='FAIL'
+            if producer.config.get('qualifier_commit'):coverage['qualifier_commit']=producer.config['qualifier_commit']
+            M.write_private(coverage_path,coverage)
         raise
     finally:
         publish(producer.root,Path(env['NAKPANEL_CELL_REPORT_DIR'])/'sury-maintenance')

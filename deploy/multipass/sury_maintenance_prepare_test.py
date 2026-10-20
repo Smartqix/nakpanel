@@ -544,6 +544,61 @@ m.run_canonical([sys.executable,'-c',child,sys.argv[2]],pathlib.Path(sys.argv[3]
             self.assertEqual(final['app_version'],manifest['version'])
             self.assertEqual(final['result_sha256'],m.M.digest((cell/'sury-maintenance'/'result.json').read_bytes()))
 
+    def test_distinct_qualifier_preserves_actual_driver_canonical_and_manifest_bindings(self):
+        for mode in ('default','separate','canonical-map','manifest','qualifier-source'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as td:
+                m=self.module();root=Path(td).resolve();driver=root/'driver';driver.mkdir();qualifier=root/'qualifier';qualifier.mkdir()
+                cell=root/'cell';cell.mkdir();report=self.report();report_bytes=m.M.canonical(report);(cell/'report.json').write_bytes(report_bytes)
+                bundle=root/'bundle';bundle.mkdir();manifest=dict(commit=('c'*40 if mode=='manifest' else 'a'*40),architecture='amd64',version='29.0.0',development=True,files={'bin/'+name:'1'*64 for name in ('panel','agent','panelctl')})
+                (bundle/'manifest.json').write_bytes(m.M.canonical(manifest));(bundle/'manifest.sig').write_bytes(b'sig');key=root/'key';key.write_bytes(b'key')
+                mapping={name:'b'*64 for name in m.FROZEN};qmapping=dict(mapping,**{'deploy/multipass/sury-maintenance-drill.py':'d'*64})
+                execution=dict(schema='nakpanel-canonical-execution-v1',success=True,process_exited=True,process_group_empty=True,exit_code=0,source_binding={k:report[k] for k in ('source_vm','run_token','release','architecture','profile','php_provider')},qualification_report_sha256=m.M.digest(report_bytes),process_group=99999999,runtime_commit='a'*40,qualifier_source_sha256=(qmapping if mode=='canonical-map' else mapping))
+                m.M.write_private(root/'execution.json',execution)
+                env=dict(NAKPANEL_CELL_REPORT_DIR=str(cell),NAKPANEL_MULTIPASS_VM=report['source_vm'],NAKPANEL_RUN_TOKEN=report['run_token'],NAKPANEL_RELEASE_BUNDLE=str(bundle),NAKPANEL_RELEASE_PUBLIC_KEY=str(key),NAKPANEL_OWNERSHIP_DIR=str(root/'ownership'))
+                producer=m.Producer(driver,root/'private',root/'execution.json',env,**({} if mode=='default' else {'qualifier_source':qualifier}));calls=[];maps=[]
+                def source_map(path,files,run):
+                    maps.append(path);self.assertEqual(files,m.FROZEN)
+                    if path==driver:return 'a'*40,mapping
+                    self.assertEqual(path,qualifier)
+                    if mode=='qualifier-source':raise ValueError('foreign qualifier source refused')
+                    return 'c'*40,qmapping
+                def command(args,**kwargs):
+                    calls.append(args)
+                    if '--roundcube-only' in args:
+                        self.assertEqual(args[1],str((driver if mode=='default' else qualifier)/'deploy/multipass/internal-tools-verify.sh'))
+                        raw=dict(schema='nakpanel-roundcube-send-read-v1',success=True,status='PASS',send_attempts=1,http_send_completed=True,self_recipient_verified=True,imap_arrival_verified=True,imap_message_id_verified=True,roundcube_body_verified=True,message_id='<fixture@example.test>',uid='42',**{k:'b'*64 for k in ('subject_sha256','body_sha256','recipient_sha256','qualifier_helper_sha256','certificate_sha256')})
+                        envelope={k:producer.config[k] for k in m.M.BINDING};envelope.update(schema='nakpanel-roundcube-supplement-v1',success=True,qualifier_wrapper_sha256='b'*64,qualifier_helper_sha256='b'*64,raw_receipt=raw,raw_receipt_sha256=m.M.digest(m.M.canonical(raw)))
+                        m.M.write_private(Path(kwargs['env']['NAKPANEL_INTERNAL_TOOLS_RECEIPT']),envelope)
+                    return subprocess.CompletedProcess(args,0,'','')
+                def cold():
+                    value={k:producer.config[k] for k in m.M.BINDING};value.update(schema='nakpanel-sury-maintenance-retention-v1',status='PASS',snapshot_name=producer.config['retention_snapshot'],snapshot_id=report['source_vm']+'.'+producer.config['retention_snapshot'],snapshot_info_sha256='d'*64,cold_snapshot=True,running_revalidated=True,ownership_verified=True);return value
+                def collect(receipt):receipt('native_gpgv_receipt',{'native_gpgv':True});receipt('baseline_inventory',{})
+                with patch.object(m,'source_map',side_effect=source_map),patch.object(m,'process_group_exists',return_value=False),patch.object(m.M,'command',side_effect=command),patch.object(m.M,'host_identity'),patch.object(m.M,'host_record'),patch.object(producer,'cold_retention',side_effect=cold),patch.object(producer,'collect_baseline',side_effect=collect):
+                    if mode in ('canonical-map','manifest','qualifier-source'):
+                        with self.assertRaises(ValueError):producer.prepare()
+                        self.assertEqual(calls,[],'rejected source binding reached external work')
+                        continue
+                    spec=producer.prepare()
+                selected=json.loads(spec.read_bytes());separate=mode=='separate'
+                self.assertEqual(maps,[driver,qualifier] if separate else [driver]);self.assertEqual(selected['driver_source'],str(driver));self.assertEqual(selected['runtime_commit'],'a'*40)
+                self.assertEqual(selected['qualifier_source'],str(qualifier if separate else driver));self.assertEqual(selected['qualifier_commit'],'c'*40 if separate else 'a'*40)
+                self.assertEqual(selected['driver_source_sha256'],{n:mapping[n] for n in m.DRIVER});self.assertEqual(selected['qualifier_source_sha256'],qmapping if separate else mapping)
+                self.assertEqual(selected['maintenance_helper_sha256'],'d'*64 if separate else 'b'*64)
+                outer=json.loads(Path(selected['references']['roundcube_execution_receipt']['path']).read_bytes());self.assertEqual(outer['qualifier_commit'],selected['qualifier_commit']);self.assertEqual(outer['runtime_commit'],'a'*40)
+
+    def test_qualifier_option_is_scoped_to_prepare_and_controller_uses_qualifier(self):
+        m=self.module();env=dict(NAKPANEL_MULTIPASS_VM=self.report()['source_vm'],NAKPANEL_RUN_TOKEN=self.report()['run_token'])
+        for operation in ('qualify','request'):
+            with self.subTest(operation=operation),patch.object(m.os,'environ',env),patch.object(m.sys,'argv',['producer',operation,'--driver-source','/driver','--execution-receipt','/execution']),patch.object(m,'record_request',side_effect=AssertionError('foreign operation reached work')),patch.object(m,'source_map',side_effect=AssertionError('foreign operation reached work')):
+                with self.assertRaisesRegex(ValueError,'qualifier'):m.main()
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);env['NAKPANEL_CELL_REPORT_DIR']=str(root);producer=SimpleNamespace(root=root,qualifier_source=Path('/qualifier'),config=dict(qualifier_commit='c'*40),prepare=lambda:root/'spec',record=lambda *a,**k:None)
+            def command(args,**kwargs):
+                self.assertEqual(args,['bash','/qualifier/deploy/multipass/sury-maintenance-verify.sh','same-version',str(root/'spec')]);raise RuntimeError('owned boundary reached')
+            with patch.object(m,'SOURCE',Path('/qualifier')),patch.object(m.os,'environ',env),patch.object(m.sys,'argv',['producer','prepare','--driver-source','/driver','--execution-receipt','/execution','--private-root',str(root)]),patch.object(m,'Producer',return_value=producer) as constructor,patch.object(m.M,'command',side_effect=command),patch.object(m,'publish'):
+                with self.assertRaisesRegex(RuntimeError,'owned boundary'):m.main()
+                self.assertEqual(constructor.call_args.args[0],Path('/driver'));self.assertEqual(constructor.call_args.kwargs['qualifier_source'],Path('/qualifier'))
+
     def test_actual_workflow_summary_requires_requested_real_recovery_and_explicit_opt_out(self):
         m=self.module()
         workflow=(HERE.parents[1]/'.github/workflows/ubuntu-hosted-qualification.yml').read_text()
