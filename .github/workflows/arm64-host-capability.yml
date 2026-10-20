@@ -1,0 +1,168 @@
+name: Hosted ARM64 KVM capability observation
+
+on:
+  push:
+    branches: [ricky/arm64-host-capability-candidate26-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: arm64-host-capability-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    if: github.event.repository.private == false
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04-arm
+            release: '24.04'
+          - runner: ubuntu-26.04-arm
+            release: '26.04'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Guard owned source then observe temporary KVM descriptor only
+        shell: bash
+        env:
+          APPLICATION_SOURCE: '1627bba3c681a884255eb91452dbba74a43ebbdc'
+          EXPECTED_RELEASE: ${{ matrix.release }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_EVENT_NAME}" = push
+          test "${GITHUB_REPOSITORY}" = Smartqix/nakpanel
+          test "${GITHUB_REF}" = refs/heads/ricky/arm64-host-capability-candidate26-v1
+          test "${RUNNER_ENVIRONMENT}" = github-hosted
+          test "${RUNNER_OS}" = Linux
+          test "${RUNNER_ARCH}" = ARM64
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git rev-parse HEAD^)" = "${APPLICATION_SOURCE}"
+          test "$(git diff --name-only "${APPLICATION_SOURCE}" HEAD)" = .github/workflows/arm64-host-capability.yml
+          umask 077
+          output="${RUNNER_TEMP}/nakpanel-arm64-capability"
+          mkdir -m 0700 "${output}"
+          sudo -n /usr/bin/python3 -I -B - "${EXPECTED_RELEASE}" "${GITHUB_SHA}" "${GITHUB_RUN_ID}" >"${output}/report.json" <<'PYPROBE'
+          """Hosted ARM KVM capability observation only; no guest or app execution."""
+          from datetime import datetime, timezone
+          import fcntl
+          import json
+          import os
+          from pathlib import Path
+          import platform
+          import re
+          import stat
+          import sys
+          
+          APP_SOURCE='1627bba3c681a884255eb91452dbba74a43ebbdc'
+          APP_TREE='fc003d27bc7e0fc13d095a4ebc464b17471dc26f'
+          
+          
+          def need(value):
+              if not value:raise ValueError('ARM capability identity refused')
+          
+          
+          def error_number(error):
+              value=error.errno
+              return value if type(value) is int and 0<value<4096 else None
+          
+          
+          def probe_kvm(path='/dev/kvm'):
+              # CREATE_VM allocates only a temporary kernel descriptor. There is no
+              # memory region, vCPU, disk, network, guest boot or persistent VM here.
+              result=dict(result='unobserved',errno=None,device_opened=False,api_version=None,
+                          vm_descriptor_created_and_closed=False,nested_kvm_available=False)
+              device=vm=None
+              try:
+                  try:device=os.open(path,os.O_RDWR|os.O_CLOEXEC|os.O_NOFOLLOW)
+                  except FileNotFoundError as error:
+                      result.update(result='missing-device',errno=error_number(error));return result
+                  except OSError as error:
+                      result.update(result='open-refused',errno=error_number(error));return result
+                  result['device_opened']=True
+                  if not stat.S_ISCHR(os.fstat(device).st_mode):
+                      result['result']='wrong-device-type';return result
+                  try:version=fcntl.ioctl(device,0xAE00,0)
+                  except OSError as error:
+                      result.update(result='api-refused',errno=error_number(error));return result
+                  if type(version) is int and 0<=version<2**31:result['api_version']=version
+                  if type(version) is not int or version!=12:
+                      result['result']='unsupported-api';return result
+                  try:created=fcntl.ioctl(device,0xAE01,0)
+                  except OSError as error:
+                      result.update(result='vm-refused',errno=error_number(error));return result
+                  if type(created) is not int or created<0 or created==device:
+                      result['result']='invalid-vm-descriptor';return result
+                  vm=created
+                  try:fcntl.fcntl(vm,fcntl.F_GETFD)
+                  except OSError as error:
+                      result.update(result='invalid-vm-descriptor',errno=error_number(error));return result
+                  result['result']='descriptor-observed'
+                  return result
+              finally:
+                  closed=True
+                  for fd in (vm,device):
+                      if fd is not None:
+                          try:os.close(fd)
+                          except OSError as error:
+                              closed=False;result.update(result='close-refused',errno=error_number(error))
+                  if result['result']=='descriptor-observed' and closed:
+                      result.update(result='available',vm_descriptor_created_and_closed=True,nested_kvm_available=True)
+          
+          
+          def host_identity(expected_release,event_sha,run_id,*,actual_system,actual_machine,actual_os,actual_kernel,euid):
+              need(type(expected_release) is str and expected_release in ('24.04','26.04'))
+              need(type(event_sha) is str and re.fullmatch('[a-f0-9]{40}',event_sha))
+              need(type(run_id) is str and re.fullmatch('[1-9][0-9]{0,19}',run_id))
+              need(actual_system=='Linux' and actual_machine=='aarch64' and type(euid) is int and euid==0)
+              need(type(actual_os) is dict and actual_os.get('ID')=='ubuntu' and actual_os.get('VERSION_ID')==expected_release)
+              need(type(actual_kernel) is str and len(actual_kernel)<=128 and re.fullmatch('[A-Za-z0-9_.+-]+',actual_kernel))
+              return dict(os='ubuntu',release=expected_release,architecture='arm64',kernel=actual_kernel,
+                          effective_uid=euid,workflow_event_commit=event_sha,workflow_run_id=run_id,
+                          application_source_commit=APP_SOURCE,application_tree=APP_TREE)
+          
+          
+          def collect(expected_release,event_sha,run_id):
+              raw=Path('/etc/os-release').read_text();need(len(raw)<=16384);release={}
+              for line in raw.splitlines():
+                  key,separator,value=line.partition('=')
+                  if separator and key in ('ID','VERSION_ID'):
+                      need(key not in release);release[key]=value.strip('"')
+              identity=host_identity(expected_release,event_sha,run_id,actual_system=platform.system(),
+                  actual_machine=platform.machine(),actual_os=release,actual_kernel=platform.release(),euid=os.geteuid())
+              memory=Path('/proc/meminfo').read_text();need(len(memory)<=32768)
+              values={}
+              for key in ('MemTotal','MemAvailable'):
+                  found=re.findall('^'+key+r':\s+([0-9]+) kB$',memory,re.M)
+                  need(len(found)==1);values[key]=int(found[0])//1024
+                  need(0<=values[key]<2**40)
+              disk=os.statvfs('/');available=disk.f_bavail*disk.f_frsize//2**20
+              need(0<=available<2**50)
+              return dict(schema='nakpanel-hosted-arm64-capability-v1',recorded_at=datetime.now(timezone.utc).isoformat(),
+                  **identity,memory_total_mib=values['MemTotal'],memory_available_mib=values['MemAvailable'],
+                  disk_available_mib=available,kvm=probe_kvm(),guest_booted=False,application_executed=False,
+                  server_qualification=False,local_or_protected_VM_actions=False)
+          
+          
+          if __name__=='__main__':
+              try:
+                  need(len(sys.argv)==4)
+                  print(json.dumps(collect(*sys.argv[1:]),sort_keys=True,separators=(',',':')))
+              except Exception:
+                  print('ARM capability probe refused',file=sys.stderr)
+                  sys.exit(1)
+          PYPROBE
+      - name: Preserve only typed capability observation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-host-capability-${{ matrix.release }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nakpanel-arm64-capability/report.json
+          retention-days: 3
+          if-no-files-found: error
