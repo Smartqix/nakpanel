@@ -178,6 +178,144 @@ m.run_canonical([sys.executable,'-c',child,sys.argv[2]],pathlib.Path(sys.argv[3]
                 m.installed_closure(rows,changed,['php8.3-cli'],'amd64')
         with self.assertRaises(ValueError):m.installed_closure(rows+rows[:1],installed,['php8.3-cli'],'amd64')
 
+    def database_meta_layout(self):
+        version='8.5.11-fixture1'
+        rows=[dict(Package='php8.5-'+extension,Version=version,Architecture='amd64',
+                   Depends='php8.5-common (= '+version+'), libc6')
+              for extension in ('cli','mysql','pgsql','sqlite3')]
+        rows += [dict(Package='php8.5-common',Version=version,Architecture='amd64',Depends='php-common'),
+                 dict(Package='php-common',Version='2',Architecture='all',Depends='psmisc')]
+        installed={row['Package']:[row['Version'],'install ok installed'] for row in rows}
+        for extension in ('mysql','pgsql','sqlite3'):
+            # Actual Ubuntu php-defaults99ubuntu1 .deb controls have these
+            # two dependencies, confirmed independently of this verifier.
+            installed['php-'+extension]=['2:8.5+99ubuntu1','install ok installed','all','php-common, php8.5-'+extension]
+        return rows,installed,['php8.5-cli','php8.5-mysql','php8.5-sqlite3']
+
+    def test_native_meta_retained_layout_accepts_only_signed_runtime_transaction(self):
+        # Names come from the original qualified installer; rows are synthetic
+        # contract inputs, not a claim of package signature/guest execution.
+        m=self.module();rows,installed,direct=self.database_meta_layout()
+        selected=m.installed_closure(rows,installed,direct,'amd64')
+        self.assertEqual({row['Package'] for row in selected},{row['Package'] for row in rows})
+        self.assertIn('php8.5-pgsql',{row['Package'] for row in selected})
+        self.assertTrue(all(not row['Package'].startswith('php-') or row['Package']=='php-common' for row in selected))
+        without_meta={name:value for name,value in installed.items() if name not in ('php-mysql','php-pgsql','php-sqlite3')}
+        self.assertEqual(m.installed_closure(rows,without_meta,direct,'amd64'),selected)
+
+    def test_native_meta_unknown_state_architecture_or_dependency_refuses(self):
+        m=self.module();rows,installed,direct=self.database_meta_layout()
+        bad_values=[['2:8.5+99ubuntu1','install ok installed'],
+                    ['2:8.5+99ubuntu1','install ok half-configured','all','php-common, php8.5-mysql'],
+                    ['2:8.5+99ubuntu1','install ok installed','arm64','php-common, php8.5-mysql']]
+        bad_values += [['2:8.5+99ubuntu1','install ok installed','all',dependency]
+                       for dependency in ('php-common, php8.4-mysql','php-common, php8.5-mysql | php8.4-mysql',
+                                          'php-common, php8.5-mysql, bash','php-common, php8.5-mysql (>= 99)',
+                                          'php8.5-mysql','php-common','php-common, php-common, php8.5-mysql','')]
+        for value in bad_values:
+            with self.subTest(value=value),self.assertRaises(ValueError):
+                m.installed_closure(rows,dict(installed,**{'php-mysql':value}),direct,'amd64')
+        for name in ('php-cli','php8.2-cli','php8.4-pgsql','php8.5-unreviewed'):
+            extra=dict(Package=name,Version='1',Architecture='amd64',Depends='php-common')
+            with self.subTest(name=name),self.assertRaises(ValueError):
+                m.installed_closure(rows+[extra],dict(installed,**{name:['1','install ok installed']}),direct,'amd64')
+        for missing in ('php8.5-pgsql','php8.5-mysql','php-common'):
+            with self.subTest(missing=missing),self.assertRaises(ValueError):
+                m.installed_closure(rows,{k:v for k,v in installed.items() if k!=missing},direct,'amd64')
+
+    def test_native_meta_control_binding_requires_exact_actual_inventory(self):
+        m=self.module();_,enriched,_=self.database_meta_layout()
+        installed={name:value[:2] for name,value in enriched.items()}
+        lines=['\t'.join([name,*enriched[name]]) for name in ('php-mysql','php-pgsql','php-sqlite3')]
+        raw='\n'.join(lines)+'\n'
+        self.assertEqual(m.bind_distribution_php_controls(installed,raw,'amd64'),enriched)
+        self.assertTrue(all(len(value)==2 for value in installed.values()),'binding mutated original inventory')
+        bad=[raw+lines[0]+'\n','\n'.join(lines[:-1])+'\n',raw+'php-cgi\t1\tinstall ok installed\tall\tphp8.5-cli\n',
+             raw.replace('2:8.5+99ubuntu1','2:8.4+99ubuntu1',1),
+             raw.replace('install ok installed','install ok half-configured',1),
+             raw.replace('\tall\t','\tarm64\t',1),raw.replace('php8.5-mysql','php8.4-mysql',1)]
+        for value in bad:
+            with self.subTest(kind='malformed-control'),self.assertRaises(ValueError):
+                m.bind_distribution_php_controls(installed,value,'amd64')
+
+    def test_native_meta_layout_diagnostic_omits_raw_values_and_is_bounded(self):
+        m=self.module();_,installed,direct=self.database_meta_layout()
+        layout=m.package_layout(installed,direct,'amd64')
+        self.assertEqual(layout['schema'],'nakpanel-sury-package-layout-v1')
+        self.assertEqual(layout['distribution_metapackages'],['php-mysql','php-pgsql','php-sqlite3'])
+        self.assertEqual(layout['application_roots'],['php8.5-pgsql'])
+        self.assertNotIn('8.5.11-fixture1',json.dumps(layout));self.assertNotIn('2:8.5+99ubuntu1',json.dumps(layout))
+        with self.assertRaises(ValueError):m.package_layout(dict(installed,**{'php-'+('x'*512):['1','install ok installed']}),direct,'amd64')
+
+    def test_native_meta_failure_diagnostics_accept_only_fixed_substages_and_codes(self):
+        m=self.module()
+        with tempfile.TemporaryDirectory() as td:
+            producer=m.Producer.__new__(m.Producer);producer.root=Path(td);producer.config={}
+            producer.stage='signed-provider-baseline';producer.substage='exact-php-closure'
+            producer.record('FAIL',failure_code='unsupported-installed-php')
+            value=json.loads((Path(td)/'preparation.json').read_text())
+            self.assertEqual(value['substage'],'exact-php-closure');self.assertEqual(value['failure_code'],'unsupported-installed-php')
+            before=(Path(td)/'preparation.json').read_bytes()
+            with self.assertRaises(ValueError):producer.record('FAIL',failure_code='SYNTHETIC_PRIVATE_DIAGNOSTIC')
+            self.assertEqual((Path(td)/'preparation.json').read_bytes(),before)
+            producer.substage='SYNTHETIC_PRIVATE_DIAGNOSTIC'
+            with self.assertRaises(ValueError):producer.record('FAIL')
+            self.assertEqual((Path(td)/'preparation.json').read_bytes(),before)
+
+    def test_native_meta_preparation_queries_actual_controls_and_excludes_aliases_from_apt_and_retention(self):
+        m=self.module();rows,installed,direct=self.database_meta_layout()
+        import hashlib
+        for row in rows:
+            row.update(Filename='pool/'+row['Package']+'.deb',Size='3',SHA256=hashlib.sha256(b'deb').hexdigest())
+        aliases=sorted(set(installed)&set(m.DISTRIBUTION_PHP));calls=[];receipts={}
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td).resolve();producer=m.Producer(HERE.parents[1],root/'private',root/'execution',{})
+            producer.stage='signed-provider-baseline'
+            producer.config=dict(self.report(),baseline_directory=str(producer.root/'baseline'),
+                                 runtime_commit='a'*40,qualifier_commit='a'*40)
+            def guest(args,**kwargs):
+                calls.append(args)
+                if args[0]=='sha256sum':out=m.M.KEY_SHA+'  key'
+                elif args[0]=='gpgv':out='[GNUPG:] VALIDSIG '+m.M.FINGERPRINT
+                elif args[:2]==['dpkg-query','-W']:
+                    if len(args)==3:out='\n'.join('\t'.join([name,*value[:2]]) for name,value in installed.items())+'\n'
+                    else:
+                        self.assertEqual(args,['dpkg-query','-W','-f=${binary:Package}\t${Version}\t${Status}\t${Architecture}\t${Depends}\n',*aliases])
+                        out='\n'.join('\t'.join([name,*installed[name]]) for name in aliases)+'\n'
+                elif args[:2]==['apt-cache','policy']:
+                    self.assertNotIn(args[2],aliases)
+                    version=installed[args[2]][0]
+                    out='Candidate: '+version+'\n *** '+version+' 500\n 500 https://packages.sury.org/php resolute/main amd64 Packages\n'
+                elif args[0]=='apt-get':
+                    selectors=[name+'='+installed[name][0] for name in sorted({row['Package'] for row in rows})]
+                    self.assertEqual(args,['apt-get','--simulate','--no-remove','--reinstall','--fix-broken','install',*selectors])
+                    out='\n'.join('Inst '+row['Package']+' ('+row['Version']+' fixture)' for row in rows)
+                else:self.fail('unexpected guest operation '+repr(args))
+                return subprocess.CompletedProcess(args,0,out,'')
+            def download(url,path,**kwargs):
+                value=b'deb' if url.endswith('.deb') else b'synthetic signed fixture'
+                m.M.write_private(path,value);return value
+            def command(args,**kwargs):
+                self.assertEqual(args[0],'bash');return subprocess.CompletedProcess(args,0,'\n'.join(direct)+'\n','')
+            def receipt(name,value):
+                receipts[name]=value;m.M.write_private(producer.root/(name+'.json'),value);return 'b'*64
+            with patch.object(producer,'guest',side_effect=guest),patch.object(m,'download',side_effect=download),\
+                 patch.object(m,'check_indexes',return_value={'amd64':rows,'arm64':[]}),\
+                 patch.object(m.M,'check_index_packages'),patch.object(m.M,'release_body',return_value=({},{})),\
+                 patch.object(m.M,'command',side_effect=command):
+                producer.collect_baseline(receipt)
+            self.assertEqual(sum(args[0]=='dpkg-query' for args in calls),2)
+            self.assertEqual(producer.substage,'baseline-complete')
+            derivation=receipts['baseline_inventory']['derivation']
+            self.assertEqual(derivation['application_roots'],['php8.5-pgsql'])
+            self.assertEqual(derivation['unchanged_distribution_metapackages'],aliases)
+            retained={path.stem for path in (producer.root/'baseline/retained-baseline/amd64').iterdir()}
+            self.assertEqual(retained,{row['Package'] for row in rows})
+            m.publish(producer.root,root/'upload')
+            layout=json.loads((root/'upload/package-layout.json').read_text())
+            self.assertEqual(layout['runtime_commit'],'a'*40)
+            self.assertEqual(layout['distribution_metapackages'],aliases)
+
     def test_both_signed_indexes_must_match_compressed_and_plain_release_checksums(self):
         m=self.module()
         import lzma,hashlib

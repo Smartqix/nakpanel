@@ -38,6 +38,23 @@ FROZEN = DRIVER | M.QUALIFIER_FILES | OWNED | {
     'deploy/multipass/ubuntu-platform-verify.sh','.github/workflows/ubuntu-hosted-qualification.yml',
     'deploy/install/platform.sh','deploy/install/sury-php-archive-keyring.gpg','deploy/install/dependencies.json'}
 BASE = 'https://packages.sury.org/php/'
+# The qualified Adminer install brings these Ubuntu dependency selectors. They
+# are observed and preserved, never retained or reinstalled as Surý packages.
+DISTRIBUTION_PHP = {f'php-{extension}':f'php8.5-{extension}' for extension in ('mysql','pgsql','sqlite3')}
+APPLICATION_PHP = {'php8.5-pgsql'}
+BASELINE_SUBSTAGES = {'signed-metadata','authenticated-indexes','package-inventory','exact-php-closure',
+                     'candidate-origin-and-apt-plan','retained-package-archives','baseline-complete'}
+FAILURE_CODES = {
+    'installed PHP outside the qualified profile is unsupported':'unsupported-installed-php',
+    'distribution PHP controls differ from the qualified layout':'invalid-distribution-php-controls',
+    'preexisting PHP dpkg state is not clean':'unclean-installed-php',
+    'installed PHP must match exactly one signed package row':'signed-runtime-row-mismatch',
+    'profile PHP packages are missing':'missing-profile-php',
+    'required installed PHP dependency is missing':'missing-runtime-dependency',
+    'installed PHP exceeds the exact profile dependency closure':'excess-runtime-closure',
+    'native gpgv did not authenticate exact provider metadata':'provider-signature-failed',
+    'retained package budget exceeded':'package-budget-exceeded',
+}
 
 
 def utc():
@@ -170,8 +187,56 @@ def check_indexes(release, compressed):
     return result
 
 
+def distribution_php_controls(installed, architecture):
+    M.require(architecture in ('amd64','arm64'),'distribution PHP controls differ from the qualified layout')
+    aliases={name:value for name,value in installed.items() if name in DISTRIBUTION_PHP}
+    for name,value in aliases.items():
+        target=DISTRIBUTION_PHP[name]
+        M.require(type(value) is list and len(value)==4 and all(type(part) is str for part in value) and
+                  0<len(value[0])<=256 and value[1:] == ['install ok installed','all','php-common, '+target] and
+                  all(dependency in installed and len(installed[dependency])>=2 and installed[dependency][1]=='install ok installed'
+                      for dependency in ('php-common',target)),
+                  'distribution PHP controls differ from the qualified layout')
+    return aliases
+
+
+def bind_distribution_php_controls(installed, raw, architecture):
+    # Match the second actual dpkg query to the original complete inventory;
+    # neither a missing record nor an extra/duplicate row can be substituted.
+    M.require(type(raw) is str and len(raw)<=8192,'distribution PHP controls differ from the qualified layout')
+    expected=set(installed)&set(DISTRIBUTION_PHP);controls={}
+    for line in raw.splitlines():
+        fields=line.split('\t')
+        M.require(len(fields)==5 and fields[0] in expected and fields[0] not in controls and
+                  fields[1:3]==installed[fields[0]],'distribution PHP controls differ from the qualified layout')
+        controls[fields[0]]=fields[1:]
+    M.require(set(controls)==expected,'distribution PHP controls differ from the qualified layout')
+    enriched=dict(installed,**controls)
+    distribution_php_controls(enriched,architecture)
+    return enriched
+
+
+def package_layout(installed, direct, architecture):
+    # This projection is safe to publish even before closure validation. Raw
+    # versions, control fields and command/exception output stay private.
+    names=[name.removesuffix(':'+architecture) for name in installed if name.startswith('php')]
+    M.require(len(names)<=256 and len(direct)<=256 and
+              all(type(name) is str and len(name)<=128 and re.fullmatch(r'php[a-z0-9+.-]*',name) for name in names+list(direct)),
+              'PHP package layout exceeds bounded diagnostic schema')
+    states={'installed':0,'residual_config':0,'other':0}
+    for name,value in installed.items():
+        if name.startswith('php'):
+            state='installed' if value[1]=='install ok installed' else 'residual_config' if value[1]=='deinstall ok config-files' else 'other'
+            states[state]+=1
+    return dict(schema='nakpanel-sury-package-layout-v1',architecture=architecture,php_package_names=sorted(names),
+                distribution_metapackages=sorted(set(installed)&set(DISTRIBUTION_PHP)),
+                application_roots=sorted(set(installed)&APPLICATION_PHP),profile_required_packages=sorted(direct),state_counts=states)
+
+
 def installed_closure(rows, installed, direct, architecture):
+    aliases=distribution_php_controls(installed,architecture)
     M.require(all(not name.startswith('php') or M.PHP_NAME.fullmatch(name.removesuffix(':'+architecture))
+                  or name in aliases
                   for name,value in installed.items() if value[1]!='deinstall ok config-files'),
               'installed PHP outside the qualified profile is unsupported')
     actual={name.removesuffix(':'+architecture):value for name,value in installed.items()
@@ -185,7 +250,7 @@ def installed_closure(rows, installed, direct, architecture):
     M.require(set(direct)<=set(selected),'profile PHP packages are missing')
     # Follow PHP-only dependency edges from the actual profile. APT simulation
     # independently resolves version relations, virtuals and non-PHP libraries.
-    reached=set(direct); queue=list(direct)
+    reached=set(direct)|(set(selected)&APPLICATION_PHP); queue=list(reached)
     while queue:
         row=selected[queue.pop()]
         for relation in ((row.get('Depends') or '')+','+(row.get('Pre-Depends') or '')).split(','):
@@ -228,12 +293,22 @@ class Producer:
         info=parent.lstat()
         M.require(stat.S_ISDIR(info.st_mode) and info.st_uid==os.getuid() and not info.st_mode&0o022 and parent.resolve()==parent,'unsafe private preparation parent')
         self.root.mkdir(mode=0o700)
-        self.stage='host-inputs';self.config={}
+        self.stage='host-inputs';self.substage=None;self.config={}
 
-    def record(self,status='STARTED'):
+    def record(self,status='STARTED',failure_code=None):
+        substage=self.substage if self.stage=='signed-provider-baseline' else None
+        M.require(status in ('STARTED','PREPARED','PASS','FAIL') and
+                  (substage is None or substage in BASELINE_SUBSTAGES) and
+                  (failure_code is None or (status=='FAIL' and failure_code in FAILURE_CODES.values())),
+                  'unsupported preparation diagnostic')
         M.write_private(self.root/'preparation.json',dict(schema='nakpanel-sury-maintenance-preparation-v1',status=status,
-            stage=self.stage,source_vm=self.config.get('source_vm'),run_token=self.config.get('run_token'),
+            stage=self.stage,substage=substage,failure_code=failure_code,
+            source_vm=self.config.get('source_vm'),run_token=self.config.get('run_token'),
             genuine_version_advance=False,apt_version_rollback=False,updated_at=utc()))
+
+    def baseline_stage(self,substage):
+        M.require(substage in BASELINE_SUBSTAGES,'unsupported preparation diagnostic')
+        self.substage=substage;self.record()
 
     def guest(self,args,**kwargs):
         M.host_identity(self.config,self.source,self.env)
@@ -309,6 +384,7 @@ class Producer:
 
     def collect_baseline(self,receipt):
         config=self.config;baseline=Path(config['baseline_directory']);baseline.mkdir(mode=0o700)
+        self.baseline_stage('signed-metadata')
         release=download(BASE+'dists/resolute/InRelease',baseline/'InRelease',limit=2**20)
         key=self.guest(['sha256sum','/usr/share/keyrings/nakpanel-sury-php.gpg']).stdout.split()[0]
         M.require(key==M.KEY_SHA,'actual guest provider key differs')
@@ -321,20 +397,31 @@ class Producer:
                     verified_at=utc(),status_sha256=M.digest(signed.stdout.encode()),stderr_sha256=M.digest(signed.stderr.encode()))
         M.write_private(baseline/'native-gpgv.stdout',signed.stdout.encode());M.write_private(baseline/'native-gpgv.stderr',signed.stderr.encode())
         receipt('native_gpgv_receipt',native)
+        self.baseline_stage('authenticated-indexes')
         compressed={arch:download(BASE+'dists/resolute/main/binary-'+arch+'/Packages.xz',baseline/(arch+'-Packages.xz')) for arch in ('amd64','arm64')}
         rows=check_indexes(release,compressed)
+        self.baseline_stage('package-inventory')
         raw=self.guest(['dpkg-query','-W','-f=${binary:Package}\t${Version}\t${Status}\n']).stdout
         installed={p[0]:p[1:] for line in raw.splitlines() if len(p:=line.split('\t'))==3}
         direct_script='set -euo pipefail; source "$1"; NAKPANEL_INTERNAL_PHP_VERSION=8.5; NAKPANEL_HOSTING_PHP_VERSIONS=(8.3 8.4 8.5); nakpanel_php_packages'
         direct=M.command(['bash','-c',direct_script,'_',str(self.source/'deploy/install/platform.sh')]).stdout.splitlines()
+        layout=package_layout(installed,direct,'amd64')
+        layout.update({key:config[key] for key in ('source_vm','run_token','runtime_commit','qualifier_commit','profile','php_provider')})
+        M.write_private(self.root/'package-layout.json',layout)
+        present=sorted(set(installed)&set(DISTRIBUTION_PHP))
+        controls=self.guest(['dpkg-query','-W','-f=${binary:Package}\t${Version}\t${Status}\t${Architecture}\t${Depends}\n',*present]).stdout if present else ''
+        installed=bind_distribution_php_controls(installed,controls,'amd64')
+        self.baseline_stage('exact-php-closure')
         packages=installed_closure(rows['amd64'],installed,direct,'amd64')
         M.require(sum(int(row['Size']) for row in packages)<=256*2**20,'retained package budget exceeded')
         versions={row['Package']:row['Version'] for row in packages}
+        self.baseline_stage('candidate-origin-and-apt-plan')
         for name,version in versions.items():
             M.check_candidate(self.guest(['apt-cache','policy',name]).stdout,version)
         plan=self.guest(['apt-get','--simulate','--no-remove','--reinstall','--fix-broken','install',
                          *[name+'='+version for name,version in sorted(versions.items())]])
         M.check_apt_plan(plan.stdout,versions,set(versions))
+        self.baseline_stage('retained-package-archives')
         retained=baseline/'retained-baseline';retained.mkdir(mode=0o700);retained=retained/'amd64';retained.mkdir(mode=0o700)
         for row in packages:
             # Filename safety is checked against the authenticated index before
@@ -344,7 +431,9 @@ class Producer:
             download(BASE+row['Filename'],target,expected=row['SHA256'],size=int(row['Size']))
             row['retained_file']=str(target)
         inventory=dict(state='AUTHENTICATED_CURRENT_BASELINE_ONLY_NO_VERSION_ADVANCE',provider=BASE,suite='resolute',source_commit=config['runtime_commit'],
-            profile=config['profile'],derivation=dict(profile_required_packages=direct,platform_sh_sha256=M.digest((self.source/'deploy/install/platform.sh').read_bytes())),
+            profile=config['profile'],derivation=dict(profile_required_packages=direct,
+                application_roots=layout['application_roots'],unchanged_distribution_metapackages=layout['distribution_metapackages'],
+                platform_sh_sha256=M.digest((self.source/'deploy/install/platform.sh').read_bytes())),
             trust=dict(native_gpgv=True,inrelease_sha256=M.digest(release),key_sha256=M.KEY_SHA),
             architectures={'amd64':dict(packages=packages)},both_architecture_indexes_verified=True)
         receipt('baseline_inventory',inventory)
@@ -355,6 +444,7 @@ class Producer:
             inrelease_sha256=M.digest(release),indexes={name:dict(sha256=value[0],size=value[1]) for name,value in checksums.items()
                 if name in {f'main/binary-{arch}/Packages{suffix}' for arch in ('amd64','arm64') for suffix in ('','.xz')}},
             packages=[{key:row[key] for key in ('Package','Version','Architecture','Filename','SHA256','Size')} for row in packages]))
+        self.baseline_stage('baseline-complete')
 
     def cold_retention(self):
         config=self.config
@@ -392,7 +482,7 @@ class Producer:
 def publish(root,destination):
     destination.mkdir(mode=0o700,exist_ok=False)
     for name in ('preparation.json','capacity.json','roundcube_execution_receipt.json','retention_receipt.json',
-                 'native_gpgv_receipt.json','package-baseline.json'):
+                 'native_gpgv_receipt.json','package-baseline.json','package-layout.json'):
         path=root/name
         if path.exists():M.write_private(destination/name,json.loads(M.private_bytes(path)))
     drill=root/'drill'
@@ -473,8 +563,10 @@ def main():
                         database_manager_postchecks='actual-fastcgi-health; canonical-restricted-browser-baseline')
         M.write_private(coverage_path,coverage)
         producer.stage='complete';producer.record('PASS')
-    except Exception:
-        producer.record('FAIL')
+    except Exception as error:
+        # Only exact locally defined messages map to public reason codes.
+        # Arbitrary exceptions and guest output are never copied to receipts.
+        producer.record('FAIL',failure_code=FAILURE_CODES.get(str(error)) if type(error) is ValueError else None)
         coverage_path=Path(env['NAKPANEL_CELL_REPORT_DIR'])/'sury-maintenance-request.json'
         if coverage_path.exists():
             coverage=json.loads(M.private_bytes(coverage_path));coverage['status']='FAIL';M.write_private(coverage_path,coverage)

@@ -408,3 +408,47 @@ must establish those runtime boundaries. Candidate23's required CI completed
 successfully using its own signed merge artifact; its passing result does not
 transfer to the failed matrix cells or the changed follow-up runtime. Native26
 and the Noble Surý-run cell remain in progress at this checkpoint.
+
+## Candidate25 hosted results and the PHP recovery follow-up
+
+Candidate25 completed all 17 product gates in all four original AMD64 jobs:
+native Ubuntu26.04 and Ubuntu24.04 in [the native workflow](https://github.com/Smartqix/nakpanel/actions/runs/39333901217),
+and Ubuntu26.04 Surý plus the Ubuntu24.04 regression cell in
+[the Surý workflow](https://github.com/Smartqix/nakpanel/actions/runs/39334119878).
+[Required CI](https://github.com/Smartqix/nakpanel/actions/runs/39333907335)
+also succeeded. Each workflow's actual installed runtime and signed bundle were
+checked separately. These results establish the product gates for that source;
+they do not transfer acceptance to a changed build.
+
+The requested same-version PHP maintenance rehearsal failed during
+`signed-provider-baseline`. Its retained receipt proves native gpgv authentication
+succeeded, but recovery and the two reboot checks never ran. The uploaded partial
+evidence does not contain the private package inventory, APT plan or precise
+exception message, so the original exception's exact cause remains unobserved.
+
+The original installer logs show the qualified Adminer installation brings
+Ubuntu's `php-mysql`, `php-pgsql` and `php-sqlite3` dependency metapackages,
+with Surý's versioned `php8.5-pgsql` runtime. A direct regression reproduces the
+preparation helper rejecting these metapackages. Ignoring only their names still
+rejects the PostgreSQL runtime because it is outside the platform-only roots.
+
+The follow-up preserves the installer and accepts only those three existing
+metapackages, after matching a second actual dpkg control query to the original
+inventory. Each must be clean, architecture `all`, and depend exactly on
+`php-common` plus its expected internal PHP8.5 driver. Ubuntu's
+[package record](https://packages.ubuntu.com/resolute/php-sqlite3) and the three
+actual `php-defaults99ubuntu1` archive control files confirm that layout. The
+control-file research does not establish native signature or guest execution.
+The metapackages stay outside retained archives and the APT
+reinstall transaction. Only the installed `php8.5-pgsql` application dependency
+is added as an allowed runtime root. Every retained PHP package still requires
+one exact signed Surý row, the exact dependency closure and an unchanged candidate
+origin. The existing full package inventory equality remains mandatory after
+recovery and both reboots.
+
+Fixed preparation substages and reason codes, plus a bounded package-name/state
+projection, make failures observable without publishing raw control fields or
+exceptions. Synthetic control and preparation regressions exercise these guards;
+they establish neither native signatures nor an actual package transaction.
+Fresh hosted recovery qualification remains required. ARM server qualification,
+a genuine PHP security-version advance and elapsed soak remain separate gates.
