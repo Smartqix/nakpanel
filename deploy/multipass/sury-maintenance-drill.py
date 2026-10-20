@@ -707,6 +707,9 @@ def assert_managed_services(states, intent):
     sites={row[0]:row for row in (intent.get('sites') or [])}
     applications={row[0]:row for row in (intent.get('applications') or [])}
     expected={}
+    for site_id,row in sites.items():
+        unit='nakpanel-php-fpm@'+str(site_id)+'.service'
+        if unit in states:expected[unit]='active' if row[1]=='active' and row[2]=='active' else 'inactive'
     enabled={}
     for app_id,row in applications.items():
         require(len(row)==7 and row[1] in sites and row[3] in ('active','suspended') and row[6] in ('managed','classic'),'managed PHP application intent is unknown')

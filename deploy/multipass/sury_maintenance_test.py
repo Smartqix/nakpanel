@@ -222,6 +222,77 @@ class MaintenanceTests(unittest.TestCase):
         many={'nakpanel-php-fpm@7.service':'active',**{'nakpanel-php-worker@3'+('' if n==1 else '-'+str(n))+'.service':'inactive' for n in range(1,65)}}
         m.assert_managed_services(many,maximum)
 
+    def test_classic_dedicated_fpm_follows_active_site_and_ignores_managed_application_intent(self):
+        m=self.module()
+        # Product SitePlan uses dedicated FPM for positive persisted site IDs;
+        # classic reconciliation leaves site hosting active even if the separate
+        # managed application desired_state/version is stale or suspended.
+        intent={'sites':[[7,'active','active','8.5','8.5']],'applications':[[4,7,'8.3','suspended',2,None,'classic']],'workers':[]}
+        try:m.assert_managed_services({'nakpanel-php-fpm@7.service':'active'},intent)
+        except ValueError as error:self.fail('legitimate active Classic FPM refused: '+str(error))
+
+    def test_classic_dedicated_fpm_follows_site_suspension(self):
+        m=self.module()
+        intent={'sites':[[7,'suspended','suspended','8.5','8.5']],'applications':[[4,7,'8.3','active',2,None,'classic']],'workers':[]}
+        m.assert_managed_services({'nakpanel-php-fpm@7.service':'inactive'},intent)
+        with self.assertRaises(ValueError):m.assert_managed_services({'nakpanel-php-fpm@7.service':'active'},intent)
+
+    def test_classic_shared_pool_absence_is_allowed_but_present_unit_state_is_checked(self):
+        m=self.module();intent={'sites':[[7,'active','active','8.5','8.5']],'applications':[[4,7,'8.5','active',2,None,'classic']],'workers':[]}
+        m.assert_managed_services({},intent)
+        for states in ({'nakpanel-php-fpm@7.service':'inactive'},{'nakpanel-php-fpm@7.service':'failed'},{'nakpanel-php-fpm@7.service':'activating'}):
+            with self.subTest(states=states),self.assertRaises(ValueError):m.assert_managed_services(states,intent)
+
+    def test_known_site_fpm_without_application_row_follows_site_state(self):
+        m=self.module();intent={'sites':[[7,'active','active','8.5','8.5']],'applications':[],'workers':[]}
+        m.assert_managed_services({'nakpanel-php-fpm@7.service':'active'},intent)
+        m.assert_managed_services({},intent)
+        with self.assertRaises(ValueError):m.assert_managed_services({'nakpanel-php-fpm@7.service':'inactive'},intent)
+        intent['sites'][0][2]='suspended'
+        m.assert_managed_services({'nakpanel-php-fpm@7.service':'inactive'},intent)
+        with self.assertRaises(ValueError):m.assert_managed_services({'nakpanel-php-fpm@7.service':'active'},intent)
+        with self.assertRaises(ValueError):m.assert_managed_services({'nakpanel-php-fpm@99.service':'inactive'},intent)
+
+    def test_previously_present_classic_fpm_disappearing_is_still_rejected_by_health(self):
+        m=self.module()
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);before={unit:'active' for unit in m.SERVICES}
+            intent={'sites':[[7,'active','active','8.5','8.5']],'applications':[[4,7,'8.5','active',2,None,'classic']],'workers':[]}
+            baseline={'mutation_services':before,'database_manager':False,'package_inventory':{},'settings':{},'package_files':{},'intent':intent,'managed_services':{'nakpanel-php-fpm@7.service':'active'}}
+            for name,value in [('baseline.json',baseline),('packages.json',[])]:
+                (root/name).write_text(json.dumps(value));(root/name).chmod(0o600)
+            def command(args,**kwargs):
+                self.assertTrue(args[:2]==['systemctl','show'] or args==['dpkg','--audit'],'unexpected command or attempted service repair')
+                return subprocess.CompletedProcess(args,0,'','')
+            read=m.root_regular
+            with patch.object(m,'root_regular',side_effect=lambda path:b'boot-after\n' if str(path)=='/proc/sys/kernel/random/boot_id' else read(path)),patch.object(m,'command',side_effect=command),patch.object(m,'service_state',return_value='active'),patch.object(m,'package_inventory',return_value={}),patch.object(m,'guarded_settings',return_value={}),patch.object(m,'package_files',return_value={}),patch.object(m,'intent_state',return_value=intent),patch.object(m,'managed_state',return_value={}),patch.object(m,'service_wait'):
+                with self.assertRaisesRegex(ValueError,'managed PHP service active/stopped state changed'):m.guest_health(root,self.inputs()[0],'reboot-1',reboot=True)
+            observed=json.loads((root/'observed-reboot-1.json').read_text());self.assertEqual(observed['managed_services'],{})
+
+    def test_classic_global_fpm_legacy_plan_has_no_dedicated_unit(self):
+        m=self.module();intent={'sites':[[0,'active','active','8.3','8.3']],'applications':[[4,0,'8.3','active',2,None,'classic']],'workers':[]}
+        m.assert_managed_services({},intent)
+        with self.assertRaises(ValueError):m.assert_managed_services({'nakpanel-php-fpm@7.service':'active'},intent)
+
+    def test_classic_workers_remain_stopped_even_with_running_desired_state(self):
+        m=self.module();intent={'sites':[[7,'active','active','8.5','8.5']],'applications':[[4,7,'8.5','active',2,None,'classic']],'workers':[[3,4,'worker','worker.php',[],2,'running',5]]}
+        states={'nakpanel-php-fpm@7.service':'active','nakpanel-php-worker@3.service':'inactive','nakpanel-php-worker@3-2.service':'inactive'}
+        m.assert_managed_services(states,intent)
+        for unit in ('nakpanel-php-worker@3.service','nakpanel-php-worker@3-2.service'):
+            with self.subTest(unit=unit),self.assertRaises(ValueError):m.assert_managed_services(dict(states,**{unit:'active'}),intent)
+
+    def test_classic_and_managed_units_refuse_unknown_stale_and_wrong_states(self):
+        m=self.module();intent={'sites':[[7,'active','active','8.5','8.5'],[8,'active','active','8.3','8.3']],'applications':[[4,7,'8.5','active',2,None,'classic'],[5,8,'8.3','active',3,11,'managed']],'workers':[[3,5,'worker','worker.php',[],1,'stopped',5]]}
+        states={'nakpanel-php-fpm@7.service':'active','nakpanel-php-fpm@8.service':'active','nakpanel-php-worker@3.service':'inactive'}
+        m.assert_managed_services(states,intent)
+        running=copy.deepcopy(intent);running['workers'][0][6]='running'
+        with self.assertRaises(ValueError):m.assert_managed_services({k:v for k,v in states.items() if not k.startswith('nakpanel-php-worker')},running)
+        suspended=copy.deepcopy(intent);suspended['applications'][1][3]='suspended'
+        m.assert_managed_services(dict(states,**{'nakpanel-php-fpm@8.service':'inactive'}),suspended)
+        with self.assertRaises(ValueError):m.assert_managed_services(states,suspended)
+        for unit,state in [('nakpanel-php-fpm@99.service','active'),('nakpanel-php-fpm@99.service','inactive'),('nakpanel-php-worker@99.service','inactive'),('nakpanel-php-fpm@8.service','inactive'),('nakpanel-php-worker@3.service','active')]:
+            with self.subTest(unit=unit,state=state),self.assertRaises(ValueError):m.assert_managed_services(dict(states,**{unit:state}),intent)
+
     def test_postboot_inactive_service_fails_without_repair_and_retains_readonly_observation(self):
         m=self.module()
         with tempfile.TemporaryDirectory() as td:
