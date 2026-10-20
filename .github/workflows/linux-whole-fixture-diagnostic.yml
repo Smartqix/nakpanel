@@ -1,0 +1,92 @@
+name: Whole hosted dummy Linux identity diagnostic
+on:
+  push:
+    branches: [ricky/linux-whole-identity-diagnostic-candidate26-v4]
+permissions:
+  contents: read
+jobs:
+  fixture:
+    if: github.repository == 'Smartqix/nakpanel'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RUNTIME_AUTHORITY_SHA256: abe71c3e27bce6ea52dac39c866f822089084edbda85b77181aaddaccdc98f10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Guard new admission and all fourteen exact runtime text paths
+        shell: /usr/bin/bash --noprofile --norc -p -e -o pipefail {0}
+        run: |
+          set -euo pipefail
+          test "${BASH_VERSINFO[0]}" -ge 5
+          unset BASH_ENV ENV PYTHONPATH PYTHONHOME PYTHONOPTIMIZE
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REPOSITORY" = Smartqix/nakpanel
+          test "$GITHUB_REF" = refs/heads/ricky/linux-whole-identity-diagnostic-candidate26-v4
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          [[ "$RUNTIME_AUTHORITY_SHA256" =~ ^[a-f0-9]{64}$ ]]
+          test "$RUNTIME_AUTHORITY_SHA256" != PENDING
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = 1627bba3c681a884255eb91452dbba74a43ebbdc
+          python3 -I -B - <<'PYGUARD'
+          import hashlib,pathlib,subprocess
+          source='1627bba3c681a884255eb91452dbba74a43ebbdc'
+          expected={'.github/fixtures/linux-prepared-identity-v1/diagnostic.py': '7ff3b256e02c08e5ab668d11ce1e697e51f60e89cae598ca92964af21d54f543', '.github/fixtures/linux-prepared-identity-v1/original/collector.py': '57e7e9e8dd5831d0d01822444482b24a9cd7c895fb0976377517eeeb8a3c8194', '.github/fixtures/linux-prepared-identity-v1/original/custody.py': 'bbe68b69d270aae3a253c2848dee8e4145eb546454d767e00ab2d8392e11b8b3', '.github/fixtures/linux-prepared-identity-v1/original/fixture.go': '96a481c01178bec651f529831c40ab05bfa02d7c7907ef14b04a626f0e84d2f4', '.github/fixtures/linux-prepared-identity-v1/original/fixture_driver.py': 'af98fd413930352bbc144c9847df585432083aabeb75edb577df5bc9c2edc96a', '.github/fixtures/linux-prepared-identity-v1/original/inputs.json': '2590fdcf0a622c665da8b67209e692f18e70b6746c81cb411540dcf35968cea5', '.github/fixtures/linux-prepared-identity-v1/original/projector/go.mod': '68601877e09e1e14a109e915b68799f5892e9c811c03a9bf8298f6e79b0fa84b', '.github/fixtures/linux-prepared-identity-v1/original/projector/go.sum': '846b9f7a330fed9015b3f25a52c801c7d61d907ebc03001a44a0ea83e87000e2', '.github/fixtures/linux-prepared-identity-v1/original/projector/main.go': '647987733cbe67afca1d7a6908462e32f62676f0361e682483fd629a3a071ccf', '.github/fixtures/linux-prepared-identity-v1/original/units/nakpanel-agent.service': '295fc2f855ef00d75fd2aca3beb48ff76ab9c3eb0a2dc6742570b680589aaebe', '.github/fixtures/linux-prepared-identity-v1/original/units/nakpanel.service': '58de1cd587def2cab29136856ff3e32f5775d68173f834960d41f912fcf5f552', '.github/fixtures/linux-prepared-identity-v1/prepare-host.py': '4d5069cff85eb7630359012182716dccefc6e65987627b85e2d7a70dcea8989c', '.github/fixtures/linux-prepared-identity-v1/whole-diagnostic.py': 'c7553ad2ff1c47f36a799aa4c5c456b48a9832988d7d94310640df60db8f5150'}
+          allowed=set(expected)|{'.github/workflows/linux-whole-fixture-diagnostic.yml'}
+          rows=subprocess.run(['git','diff','--name-status','--no-renames',source,'HEAD'],capture_output=True,check=True,timeout=5).stdout.decode().splitlines()
+          if len(allowed)!=14 or set(rows)!={('A'+chr(9))+n for n in allowed}:raise SystemExit('fixed prepared fixture source guard refused')
+          rows=subprocess.run(['git','ls-tree','-r','--full-tree','HEAD','--',*sorted(allowed)],capture_output=True,check=True,timeout=5).stdout.decode().splitlines()
+          if len(rows)!=14:raise SystemExit('fixed prepared fixture source guard refused')
+          seen=set()
+          for row in rows:
+              left,name=row.split(chr(9),1)
+              if left.split()[:2]!=['100644','blob'] or name not in allowed or name in seen:raise SystemExit('fixed prepared fixture source guard refused')
+              seen.add(name)
+          if seen!=allowed:raise SystemExit('fixed prepared fixture source guard refused')
+          for name,h in expected.items():
+              q=pathlib.Path(name)
+              if q.is_symlink() or not q.is_file() or hashlib.sha256(q.read_bytes()).hexdigest()!=h:raise SystemExit('fixed prepared fixture source guard refused')
+          PYGUARD
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 1.26.9
+          cache: false
+      - name: Build only unchanged dummy and no-connect projector before preparation
+        shell: /usr/bin/bash --noprofile --norc -p -e -o pipefail {0}
+        run: |
+          set -euo pipefail
+          unset BASH_ENV ENV PYTHONPATH PYTHONHOME PYTHONOPTIMIZE
+          umask 077
+          test "$(go version | awk '{print $3}')" = go1.26.9
+          mkdir -m 0700 "$RUNNER_TEMP/prepared-identity-build"
+          export CGO_ENABLED=0 GOWORK=off
+          timeout --kill-after=5s 75s go build -trimpath -buildvcs=false -ldflags=-buildid= -o "$RUNNER_TEMP/prepared-identity-build/fixture-sleeper" .github/fixtures/linux-prepared-identity-v1/original/fixture.go
+          cd .github/fixtures/linux-prepared-identity-v1/original/projector
+          timeout --kill-after=5s 75s go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$RUNNER_TEMP/prepared-identity-build/projector" .
+      - name: Prepare then unchanged preflight then one whole-fixture diagnostic
+        shell: /usr/bin/bash --noprofile --norc -p -e -o pipefail {0}
+        run: |
+          set -euo pipefail
+          unset BASH_ENV ENV PYTHONPATH PYTHONHOME PYTHONOPTIMIZE
+          umask 077
+          mkdir -m 0700 "$RUNNER_TEMP/prepared-identity-public"
+          sudo -n timeout --kill-after=5s 20s /usr/bin/python3 -I -B .github/fixtures/linux-prepared-identity-v1/prepare-host.py --admission-sha "$RUNTIME_AUTHORITY_SHA256" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --runner-environment "$RUNNER_ENVIRONMENT" --runner-os "$RUNNER_OS" --runner-arch "$RUNNER_ARCH" --event "$GITHUB_EVENT_NAME" --ref "$GITHUB_REF" >"$RUNNER_TEMP/prepared-identity-public/preparation.json"
+          sudo -n timeout --kill-after=5s 60s /usr/bin/python3 -I -B .github/fixtures/linux-prepared-identity-v1/diagnostic.py --admission-sha "$RUNTIME_AUTHORITY_SHA256" --workflow-commit "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --build-root "$RUNNER_TEMP/prepared-identity-build" >"$RUNNER_TEMP/prepared-identity-public/preflight.json"
+          python3 -I -B .github/fixtures/linux-prepared-identity-v1/whole-diagnostic.py --role supervise --build-root "$RUNNER_TEMP/prepared-identity-build" --public-root "$RUNNER_TEMP/prepared-identity-public" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --workflow-commit "$GITHUB_SHA" --admission-sha "$RUNTIME_AUTHORITY_SHA256"
+      - name: Preserve only actual fixed safe reports from steps which ran
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: whole-linux-identity-fixture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/prepared-identity-public/preparation.json
+            ${{ runner.temp }}/prepared-identity-public/preflight.json
+            ${{ runner.temp }}/prepared-identity-public/fixture.json
+            ${{ runner.temp }}/prepared-identity-public/whole-diagnostic.json
+          retention-days: 3
+          if-no-files-found: error
