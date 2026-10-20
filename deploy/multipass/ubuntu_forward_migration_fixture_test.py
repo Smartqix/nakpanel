@@ -1,4 +1,5 @@
 import importlib.util
+import contextlib
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -1100,5 +1101,94 @@ class ForwardCertificateStageTests(unittest.TestCase):
         provision=[a for a,k in result.commands if a[0]=='install' and a[-1].startswith('/usr/local/libexec/')]
         self.assertEqual(len(provision),1);self.assertEqual(provision[0][-1],'/usr/local/libexec/nakpanel/sync-service-certificates')
         self.assertFalse(any('enable' in a or 'daemon-reload' in a for a,k in result.commands))
+
+
+class ForwardContainerNetworkTests(unittest.TestCase):
+    @contextlib.contextmanager
+    def network_fixture(self):
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory);proc=root/'proc';proc.mkdir();ns=proc/'42/ns';ns.mkdir(parents=True);(ns/'net').write_text('container namespace')
+            (proc/'self/ns').mkdir(parents=True);(proc/'self/ns/net').write_text('host namespace');(root/'netns').mkdir();os.link(ns/'net',root/'netns/fixture')
+            def process(pid,flags=None,target=None):
+                entry=proc/str(pid);entry.mkdir(exist_ok=True)
+                (entry/'stat').write_text(str(pid)+' (offline process) S '+' '.join(['0']*18+['12345'])+'\n')
+                if flags is not None:
+                    (entry/'root').symlink_to('/');(entry/'exe').symlink_to('/usr/bin/slirp4netns');args=['/usr/bin/slirp4netns']+flags+['--netns-type=path',str(target or root/'netns/fixture'),'tap0'];(entry/'cmdline').write_bytes(b'\0'.join(x.encode() for x in args)+b'\0')
+                return entry
+            process(42);helper=process(101,['--disable-host-loopback','--outbound-addr=lo']);c={'username':'offline','oci_id':7,'image_ref':'fixed-image','oci_digest':'sha256:'+'d'*64,'oci_image_id':'a'*64,'images':[],'marker':'canary','application_secret':'secret'}
+            observed={'State':{'Running':True,'Pid':42},'HostConfig':{'NetworkMode':'slirp4netns'},'Image':'sha256:'+'a'*64}
+            with patch.object(probe.pwd,'getpwnam',return_value=SimpleNamespace(pw_uid=os.getuid())):
+                yield SimpleNamespace(root=root,proc=proc,helper=helper,config=c,observed=observed,process=process)
+    def check_network(self,row):
+        return probe.container_network(row.config,row.observed,row.proc)
+    def test_noble_inspect_shape_passes_only_with_actual_isolated_helper(self):
+        with self.network_fixture() as row:
+            def rootless(c,*args):
+                if args[0]=='inspect':return json.dumps([row.observed])
+                if args[0]=='image':return c['oci_digest']
+                return c['marker'] if args[-1]=='/forward-data/forward-canary' else c['application_secret']
+            def command(args,*a,**kw):return 'LISTEN 0 0 127.0.0.1:12345' if args[0]=='ss' else ''
+            checker=getattr(probe,'container_network',None)
+            defaults=patch.object(checker,'__defaults__',(row.proc,)) if checker else contextlib.nullcontext()
+            with defaults,patch.object(probe,'container_limits'),patch.object(probe,'rootless',side_effect=rootless),patch.object(probe,'pg',side_effect=lambda q:'fixed-container' if 'container_name' in q else '12345'),patch.object(probe,'command',side_effect=command):
+                error=None
+                try:probe.podman_live(row.config)
+                except RuntimeError as caught:error=str(caught)
+                self.assertIsNone(error,'valid Noble inspect/runtime shape rejected: '+str(error))
+    def test_helper_mount_namespace_view_is_used(self):
+        with self.network_fixture() as row:
+            mount=row.root/'helper-mount';(mount/'run/helper-only').mkdir(parents=True)
+            os.link(row.proc/'42/ns/net',mount/'run/helper-only/netns')
+            (row.helper/'root').unlink();(row.helper/'root').symlink_to(mount)
+            args=['/usr/bin/slirp4netns','--disable-host-loopback','--outbound-addr=lo','--netns-type=path','/run/helper-only/netns','tap0']
+            (row.helper/'cmdline').write_bytes(b'\0'.join(x.encode() for x in args)+b'\0')
+            with patch.object(subprocess,'run',side_effect=AssertionError('no extra command')):self.check_network(row)
+    def test_running_pid_owner_and_private_namespace_are_required(self):
+        from types import SimpleNamespace
+        for edit in ('stopped','pid-bool','pid-zero','owner','host-netns','host-mode'):
+            with self.subTest(edit=edit),self.network_fixture() as row:
+                if edit=='stopped':row.observed['State']['Running']=False
+                if edit=='pid-bool':row.observed['State']['Pid']=True
+                if edit=='pid-zero':row.observed['State']['Pid']=0
+                if edit=='host-mode':row.observed['HostConfig']['NetworkMode']='host'
+                if edit=='host-netns':(row.proc/'42/ns/net').unlink();os.link(row.proc/'self/ns/net',row.proc/'42/ns/net')
+                owner=patch.object(probe.pwd,'getpwnam',return_value=SimpleNamespace(pw_uid=os.getuid()+1)) if edit=='owner' else contextlib.nullcontext()
+                with owner,patch.object(subprocess,'run',side_effect=AssertionError('no extra command')):
+                    with self.assertRaises(RuntimeError):self.check_network(row)
+    def test_effective_runtime_flags_are_exact_and_never_inferred_from_intent(self):
+        for flags in ([],['--disable-host-loopback'],['--outbound-addr=lo'],['--disable-host-loopback','--outbound-addr=eth0'],['--disable-host-loopback','--outbound-addr=lo','--outbound-addr=eth0'],['--disable-host-loopback=false','--outbound-addr=lo'],['--disable-host-loopback','--disable-host-loopback','--outbound-addr=lo']):
+            with self.subTest(flags=flags),self.network_fixture() as row:
+                row.observed['Config']={'CreateCommand':['podman','create','--network','slirp4netns:allow_host_loopback=false,outbound_addr=lo']}
+                args=['/usr/bin/slirp4netns']+flags+['--netns-type=path',str(row.root/'netns/fixture'),'tap0'];(row.helper/'cmdline').write_bytes(b'\0'.join(x.encode() for x in args)+b'\0')
+                with self.assertRaisesRegex(RuntimeError,'flags'):self.check_network(row)
+    def test_exact_executable_namespace_and_unique_helper_are_required(self):
+        for edit in ('executable','foreign-netns','duplicate'):
+            with self.subTest(edit=edit),self.network_fixture() as row:
+                if edit=='executable':(row.helper/'exe').unlink();(row.helper/'exe').symlink_to('/tmp/slirp4netns')
+                if edit=='foreign-netns':(row.root/'netns/fixture').unlink();(row.root/'netns/fixture').write_text('unrelated')
+                if edit=='duplicate':row.process(102,['--disable-host-loopback','--outbound-addr=lo'])
+                with self.assertRaisesRegex(RuntimeError,'helper'):self.check_network(row)
+    def test_churn_scan_and_read_bounds_fail_closed(self):
+        for edit in ('gone','oversize','scan','changed','start-time','netns-changed'):
+            with self.subTest(edit=edit),self.network_fixture() as row:
+                readlink=probe.os.readlink;scandir=probe.os.scandir;seen=[];closed=[]
+                def link(path,*args,**kw):
+                    if str(path)==str(row.helper/'exe'):
+                        seen.append(path)
+                        if edit=='gone' and len(seen)>1:raise FileNotFoundError(2,'offline churn')
+                        if edit=='changed' and len(seen)>1:return '/tmp/foreign'
+                        if edit=='start-time' and len(seen)==2:(row.helper/'stat').write_text((row.helper/'stat').read_text().replace('12345','12346'))
+                        if edit=='netns-changed' and len(seen)==2:(row.root/'netns/fixture').unlink();(row.root/'netns/fixture').write_text('changed namespace')
+                    return readlink(path,*args,**kw)
+                class Entries:
+                    def __enter__(self):return iter([row.proc/'42']*4097)
+                    def __exit__(self,*args):closed.append(True)
+                def scan(path):return Entries() if path==row.proc and edit=='scan' else scandir(path)
+                if edit=='oversize':(row.helper/'cmdline').write_bytes(b'x'*16385)
+                with patch.object(probe.os,'readlink',side_effect=link),patch.object(probe.os,'scandir',side_effect=scan),patch.object(subprocess,'run',side_effect=AssertionError('no extra command')):
+                    with self.assertRaises(RuntimeError):self.check_network(row)
+                if edit=='scan':self.assertEqual(closed,[True])
+
 
 if __name__ == '__main__': unittest.main()

@@ -820,8 +820,7 @@ def podman_live(c):
     observed = json.loads(rootless(c, 'inspect', container))[0]
     if not observed.get('State', {}).get('Running'): raise RuntimeError('restored OCI container is not running')
     container_limits(c,observed)
-    mode=observed.get('HostConfig',{}).get('NetworkMode','')
-    if not mode.startswith('slirp4netns') or 'allow_host_loopback=false' not in mode or 'outbound_addr=lo' not in mode:raise RuntimeError('restored OCI network isolation changed')
+    container_network(c,observed)
     endpoint=pg('SELECT endpoint_port FROM application_instances WHERE id='+str(c['oci_id']))
     if not endpoint.isdigit():raise RuntimeError('restored OCI loopback endpoint is missing')
     command(['curl','--fail','--silent','--show-error','--max-time','10','http://127.0.0.1:'+endpoint+'/'])
@@ -926,6 +925,63 @@ def freeze(c, keep_agent=False):
     pg('ALTER DATABASE nakpanel SET default_transaction_read_only=on')
     maria('SET GLOBAL read_only=ON')
     return {'writers_frozen_for_backup': True} if keep_agent else frozen()
+
+
+def container_network(c, observed, proc=Path('/proc')):
+    network_stage='MODE';helper_count=None;container_uid_match=None
+    loopback_disabled=None;outbound_loopback=None
+    if observed.get('HostConfig',{}).get('NetworkMode')!='slirp4netns':raise RuntimeError('OCI network mode is not slirp4netns')
+    network_stage='CONTAINER_IDENTITY'
+    pid=observed.get('State',{}).get('Pid');uid=pwd.getpwnam(c['username']).pw_uid
+    if observed.get('State',{}).get('Running') is not True or type(pid) is not int or pid<=1:raise RuntimeError('OCI running process identity is missing')
+    def identity(directory):
+        info=directory.stat()
+        with (directory/'stat').open('rb') as stream:data=stream.read(4097)
+        if len(data)>4096:raise RuntimeError('OCI network process identity exceeds bound')
+        prefix,separator,tail=data.rpartition(b') ');fields=tail.split()
+        if not separator or not prefix.startswith(directory.name.encode()+b' (') or len(fields)<20 or not fields[19].isdigit() or int(fields[19])<=0:raise RuntimeError('OCI network process identity is invalid')
+        return info.st_dev,info.st_ino,info.st_uid,int(fields[19])
+    def namespace(path):
+        info=path.stat();return info.st_dev,info.st_ino
+    try:
+        container=proc/str(pid);before=identity(container);container_uid_match=before[2]==uid
+        if not container_uid_match:raise RuntimeError('OCI network process tenant ownership changed')
+        netns=namespace(container/'ns/net')
+        if netns==namespace(proc/'self/ns/net'):raise RuntimeError('OCI process uses the host network namespace')
+        network_stage='HELPER_MATCH';matched=None;scanned=0;helper_count=0
+        with os.scandir(proc) as entries:
+            for item in entries:
+                scanned+=1
+                if scanned>4096:network_stage='SCAN_LIMIT';raise RuntimeError('OCI network helper scan exceeds bound')
+                entry=Path(item)
+                if not entry.name.isascii() or not entry.name.isdecimal():continue
+                try:
+                    if entry.stat().st_uid!=uid or os.readlink(entry/'exe')!='/usr/bin/slirp4netns':continue
+                except FileNotFoundError:continue
+                network_stage='HELPER_READ';first=identity(entry)
+                with (entry/'cmdline').open('rb') as stream:data=stream.read(16385)
+                if len(data)>16384 or not data.endswith(b'\0'):raise RuntimeError('OCI network helper command shape exceeds bound')
+                args=data[:-1].decode('utf-8').split('\0')
+                network_stage='HELPER_SHAPE'
+                if len(args)>128 or len(args)<4 or args[-3]!='--netns-type=path' or [v for v in args if v.startswith('--netns-type')]!=['--netns-type=path'] or args[-1]!='tap0':raise RuntimeError('OCI network helper namespace shape changed')
+                target=Path(args[-2])
+                if not target.is_absolute() or '..' in target.parts:raise RuntimeError('OCI network helper namespace path changed')
+                # Resolve the helper's mount view, which may differ from the observer's.
+                target=entry/'root'/str(target).lstrip('/')
+                same_namespace=namespace(target)==netns
+                if identity(entry)!=first or os.readlink(entry/'exe')!='/usr/bin/slirp4netns':raise RuntimeError('OCI network helper identity changed')
+                network_stage='HELPER_MATCH'
+                if not same_namespace:continue
+                helper_count=min(2,helper_count+1);matched=(entry,first,args,target)
+        if helper_count!=1:raise RuntimeError('OCI network helper is missing or ambiguous')
+        network_stage='FLAGS';entry,first,args,target=matched
+        loopback_disabled=[v for v in args[1:-3] if v.startswith('--disable-host-loopback')]==['--disable-host-loopback']
+        outbound_loopback=[v for v in args[1:-3] if v.startswith('--outbound-addr')]==['--outbound-addr=lo']
+        if not loopback_disabled or not outbound_loopback:raise RuntimeError('OCI network helper isolation flags changed')
+        network_stage='STABILITY'
+        if identity(container)!=before or namespace(container/'ns/net')!=netns or identity(entry)!=first or os.readlink(entry/'exe')!='/usr/bin/slirp4netns' or namespace(target)!=netns:raise RuntimeError('OCI network process or helper identity changed')
+    except (OSError,UnicodeError,ValueError):
+        raise RuntimeError('OCI runtime network proof is unavailable') from None
 
 
 if __name__ == '__main__':
