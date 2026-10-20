@@ -1,0 +1,36 @@
+{
+  "name": "Read-only source26 hosted filesystem probe",
+  "on": {
+    "push": {
+      "branches": [
+        "ricky/source26-filesystem-probe-v1"
+      ]
+    }
+  },
+  "permissions": {
+    "contents": "read",
+    "actions": "read"
+  },
+  "jobs": {
+    "metadata": {
+      "runs-on": "ubuntu-24.04",
+      "timeout-minutes": 5,
+      "steps": [
+        {
+          "name": "Read metadata for eight fixed directories only",
+          "shell": "bash",
+          "run": "set -euo pipefail\n[[ \"$GITHUB_REPOSITORY\" == \"Smartqix/nakpanel\" && \"$GITHUB_REPOSITORY_ID\" == \"1292416194\" && \"$GITHUB_EVENT_NAME\" == \"push\" && \"$GITHUB_REF\" == \"refs/heads/ricky/source26-filesystem-probe-v1\" && \"$GITHUB_RUN_ATTEMPT\" == \"1\" && \"$RUNNER_ENVIRONMENT\" == \"github-hosted\" && \"$RUNNER_OS\" == \"Linux\" && \"$RUNNER_ARCH\" == \"X64\" ]] || exit 1\nsudo python3 -I -B - \"$RUNNER_TEMP/filesystem.json\" \"$GITHUB_SHA\" \"$GITHUB_RUN_ID\" <<'PY'\nimport json,os,platform,re,stat,sys\nif os.geteuid()!=0 or sys.platform!='linux' or platform.machine()!='x86_64':raise SystemExit('probe identity refused')\nif not re.fullmatch('[a-f0-9]{40}',sys.argv[2]) or not re.fullmatch('[1-9][0-9]{0,19}',sys.argv[3]):raise SystemExit('probe context refused')\ndirs=(('/',None,None),('/usr',0,'usr'),('/usr/local',1,'local'),('/usr/local/bin',2,'bin'),('/usr/share',1,'share'),('/etc',0,'etc'),('/usr/share/zoneinfo',4,'zoneinfo'),('/usr/share/zoneinfo/Etc',6,'Etc'))\nflags=os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC\nopened={};rows=[]\ndef mark(s):return (s.st_dev,s.st_ino,s.st_mode,s.st_uid,s.st_gid,s.st_nlink,s.st_size,s.st_mtime_ns,s.st_ctime_ns)\ntry:\n for i,(path,parent,name) in enumerate(dirs):\n  row={'path':path,'observed':False};rows.append(row)\n  if parent is not None and parent not in opened:row['error']='PARENT_UNAVAILABLE';continue\n  try:\n   fd=os.open(name,flags,dir_fd=opened[parent][0]) if parent is not None else os.open('/',flags)\n   opened[i]=(fd,None);s=os.fstat(fd);opened[i]=(fd,mark(s))\n   named=os.stat(name,dir_fd=opened[parent][0],follow_symlinks=False) if parent is not None else os.stat('/',follow_symlinks=False)\n   row.update(observed=True,type=stat.S_IFMT(s.st_mode),mode=stat.S_IMODE(s.st_mode),uid=s.st_uid,gid=s.st_gid,named_fd_equal=mark(named)==mark(s))\n  except OSError as error:row['error']=type(error).__name__ if type(error).__name__ in ('PermissionError','FileNotFoundError','NotADirectoryError') else 'OS_ERROR'\n for i,(path,parent,name) in enumerate(dirs):\n  if i not in opened or opened[i][1] is None:continue\n  try:\n   named=os.stat(name,dir_fd=opened[parent][0],follow_symlinks=False) if parent is not None else os.stat('/',follow_symlinks=False)\n   rows[i]['stable']=mark(os.fstat(opened[i][0]))==opened[i][1]==mark(named)\n  except OSError:rows[i]['stable']=False\nfinally:\n for fd,_ in reversed(list(opened.values())):os.close(fd)\nout={'schema':'nakpanel-hosted-filesystem-readonly-v1','source_commit':'1627bba3c681a884255eb91452dbba74a43ebbdc','workflow_commit':sys.argv[2],'run_id':sys.argv[3],'run_attempt':1,'root_metadata_only':True,'package_service_SQL_VM_or_KVM_actions':False,'directory_mutations':0,'server_qualification':False,'directories':rows}\nfd=os.open(sys.argv[1],os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o644)\nwith os.fdopen(fd,'w') as f:os.fchmod(f.fileno(),0o644);json.dump(out,f,sort_keys=True);f.write(chr(10))\nPY\n"
+        },
+        {
+          "uses": "actions/upload-artifact@v4",
+          "with": {
+            "name": "source26-filesystem-${{ github.run_id }}-1",
+            "path": "${{ runner.temp }}/filesystem.json",
+            "retention-days": 3,
+            "if-no-files-found": "error"
+          }
+        }
+      ]
+    }
+  }
+}
