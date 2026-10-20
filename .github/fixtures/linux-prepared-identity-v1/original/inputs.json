@@ -1,0 +1,18 @@
+{
+  "application_source_commit": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+  "appsource_runtime": false,
+  "files": {
+    "collector.py": "57e7e9e8dd5831d0d01822444482b24a9cd7c895fb0976377517eeeb8a3c8194",
+    "custody.py": "bbe68b69d270aae3a253c2848dee8e4145eb546454d767e00ab2d8392e11b8b3",
+    "fixture.go": "96a481c01178bec651f529831c40ab05bfa02d7c7907ef14b04a626f0e84d2f4",
+    "projector/go.mod": "68601877e09e1e14a109e915b68799f5892e9c811c03a9bf8298f6e79b0fa84b",
+    "projector/go.sum": "846b9f7a330fed9015b3f25a52c801c7d61d907ebc03001a44a0ea83e87000e2",
+    "projector/main.go": "647987733cbe67afca1d7a6908462e32f62676f0361e682483fd629a3a071ccf",
+    "units/nakpanel-agent.service": "295fc2f855ef00d75fd2aca3beb48ff76ab9c3eb0a2dc6742570b680589aaebe",
+    "units/nakpanel.service": "58de1cd587def2cab29136856ff3e32f5775d68173f834960d41f912fcf5f552"
+  },
+  "identity_freeze_sha256": "e28ab04add1b0f885215346e06d40b0b4a2d512a0e4ecd5fff9eb055a5bf357a",
+  "schema": "nakpanel-linux-identity-fixture-text-inputs-v1",
+  "server_qualification": false,
+  "uses_fixture_executables": true
+}
