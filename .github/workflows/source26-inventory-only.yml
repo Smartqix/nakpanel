@@ -1,0 +1,67 @@
+name: source26 fresh-install inventory diagnostic v2
+on:
+  push:
+    branches: [ricky/sury-source26-inventory-only-v2]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: source26-inventory-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  inventory26:
+    if: github.repository == 'Smartqix/nakpanel' && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: operator
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 1627bba3c681a884255eb91452dbba74a43ebbdc
+          path: application
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: application/deploy/release/GO_VERSION
+      - name: Admit reviewed wrapper and authenticate original bundle and Resolute image
+        timeout-minutes: 40
+        shell: bash
+        run: python3 -I -B operator/debug/source26-inventory/bootstrap.py stage
+      - name: Fresh signed install and health through unchanged install-only path
+        timeout-minutes: 110
+        shell: bash
+        run: python3 -I -B operator/debug/source26-inventory/bootstrap.py install
+      - name: Original inventory block only with bound finite observations
+        timeout-minutes: 22
+        shell: bash
+        run: python3 -I -B operator/debug/source26-inventory/bootstrap.py inventory
+      - name: Fixed inventory-only projection after owned command drain
+        if: always()
+        timeout-minutes: 2
+        shell: bash
+        run: python3 -I -B operator/debug/source26-inventory/bootstrap.py project
+      - name: Exact token-owned cleanup after command drain
+        if: always()
+        timeout-minutes: 6
+        shell: bash
+        run: python3 -I -B operator/debug/source26-inventory/bootstrap.py cleanup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        timeout-minutes: 5
+        with:
+          name: source26-inventory-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          include-hidden-files: false
+          path: |
+            ${{ runner.temp }}/source26-inventory-public/bootstrap.json
+            ${{ runner.temp }}/source26-inventory-public/install.json
+            ${{ runner.temp }}/source26-inventory-public/inventory.json
+            ${{ runner.temp }}/source26-inventory-public/cleanup.json

@@ -1,0 +1,13 @@
+{
+  "artifact_support.py": "74996c9223ec3aee5f098784bbbd9e4d163b9713cd85a979089ed61036f5aca5",
+  "bootstrap-pins.json": "71fdf8af57f97fb111361d49dc23058cb07b8dba990f5c61648be924c6b5c10e",
+  "bootstrap.py": "1e590c987ef71e5585fd6306f69d688e4488450439d856b5bd79e72be1e669b2",
+  "contract.py": "3560f97c095c026afe447f33a34ea394819eb022a0ec4df81fcf1a21e8db1a71",
+  "custody.py": "8c5bf483b35f6bc821b509532710a6b07b38dd904da8bf29fe7f54292d8b5e3f",
+  "custody_base.py": "bbe68b69d270aae3a253c2848dee8e4145eb546454d767e00ab2d8392e11b8b3",
+  "driver.py": "5af5461efd72cbbe3b1859a559782b12ecd228469c003b5ef1cbd8e5032649cf",
+  "inventory_ast": "bc45ac3de66da8af76d0394022e83a6dfae2006647bfa4abe40875ffbbb05a71",
+  "observer.py": "3dda20eaef1b773d4f0447398fa2acd74e758c1d151a95d645f8c61fd7fcabd4",
+  "projector.py": "62deb5375165ad1236a331f0e2e5ddbfbdb2527f2ce444db123d5027739f7481",
+  "runtime-binding.json": "1c3363f18a793994002c6d76af9dc217b0451a16e8ad434104e0e45e6b614c88"
+}

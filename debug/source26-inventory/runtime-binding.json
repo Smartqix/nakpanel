@@ -1,0 +1,13 @@
+{
+  "schema": "source26-inventory-binding-v1",
+  "scope": "SOURCE26_FRESH_INSTALL_INVENTORY_ONLY",
+  "admission_state": "APPROVED",
+  "actual_root_approval": null,
+  "repository": "Smartqix/nakpanel",
+  "repository_id": 1292416194,
+  "event": "push",
+  "branch": "ricky/sury-source26-inventory-only-v2",
+  "source_commit": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+  "archive_id": 12231269532,
+  "archive_sha256": "2433a2c9cec0ebdd4e7712419150ece7c5974bcefb8f76d61db0979607389816"
+}
