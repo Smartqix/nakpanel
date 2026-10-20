@@ -1,0 +1,1598 @@
+{
+  "assertions": {
+    "DNS_migration56_defaults_only": {
+      "dns_template_sync_items.adopted_count": 0,
+      "dns_template_sync_items.plan_fingerprint": "",
+      "dns_template_sync_runs.adopt_matching": false
+    },
+    "L1_extensions": "whole-row sites/webmail_hosts/dns_zones/dns_records retain unmodeled desired fields; only explicit observed renderer/status/time/serial fields excluded; those observations checked separately",
+    "actualDDL_must_match_selected_migration_hash": true,
+    "actual_assertions": null,
+    "application_observed_exclusions": [
+      "created_at",
+      "updated_at",
+      "applied_state",
+      "applied_revision",
+      "active_generation",
+      "observed_state",
+      "observed_message",
+      "observed_at",
+      "last_reconciled_at",
+      "convergence_status",
+      "last_error"
+    ],
+    "baseline_points": [
+      "source-before-backup",
+      "source-after-backup",
+      "target-after-stop-before-migration",
+      "target-after-migration-before-start",
+      "target-after-strict-post",
+      "target-after-reboot1",
+      "target-after-reboot2"
+    ],
+    "desired_projection_source": "source26 ubuntu-forward-migration-probe.py intent_projections; data definition reused only, no forward seed/freeze/normalization execution",
+    "desired_tables": {
+      "addon_plans": "id,to_jsonb(addon_plans)-'created_at'-'updated_at' AS contract",
+      "application_instances": "id,to_jsonb(application_instances)-'created_at'-'updated_at'-'applied_state'-'applied_revision'-'active_generation'-'observed_state'-'observed_message'-'observed_at'-'last_reconciled_at'-'convergence_status'-'last_error' AS contract",
+      "application_manifest_revisions": "id,preset_id,revision,manifest,image_ref,created_by_user_id",
+      "application_presets": "id,reseller_id,slug,name,runtime,image_ref,active,manifest_revision,manifest",
+      "databases": "id,subscription_id,db_name,db_user",
+      "dns_records": "id,to_jsonb(dns_records)-'updated_at' AS contract",
+      "dns_zones": "id,to_jsonb(dns_zones)-'status'-'zone_path'-'last_error'-'updated_at'-'serial' AS contract",
+      "ftp_accounts": "id,subscription_id,site_id,name,password_hash,enabled",
+      "mail_domains": "id,subscription_id,domain,enabled,dkim_enabled,dmarc_policy,catch_all",
+      "mailboxes": "id,mail_domain_id,local_part,password_hash,quota_mb,enabled,autoresponder",
+      "php_applications": "id,to_jsonb(php_applications)-'created_at'-'updated_at'-'last_reconciled_at'-'observed_state'-'observed_message'-'last_error'-'convergence_status'-'applied_revision' AS contract",
+      "php_deployments": "id,to_jsonb(php_deployments)-'created_at'-'started_at'-'activated_at'-'finished_at' AS contract",
+      "php_environment_bindings": "id,to_jsonb(php_environment_bindings)-'created_at'-'updated_at' AS contract",
+      "php_workers": "id,to_jsonb(php_workers)-'created_at'-'updated_at'-'last_reconciled_at'-'observed_state'-'last_error'-'convergence_status'-'applied_revision' AS contract",
+      "plan_revisions": "id,plan_id,revision,lifecycle_status,definition,definition_hash,actor_user_id,actor_label,change_reason",
+      "plan_service_presets": "plan_id AS id,to_jsonb(plan_service_presets)-'updated_at' AS contract",
+      "plans": "id,to_jsonb(plans)-'created_at'-'updated_at'-'last_validated_at'-'readiness_error' AS contract",
+      "service_secrets": "id,secret_id,scope,name,key_version,wrapped_key_nonce,wrapped_data_key,value_nonce,ciphertext",
+      "sftp_access_identities": "id,subscription_id,name,public_key,relative_root,enabled",
+      "site_policy_overrides": "site_id AS id,schema_version,policy_patch",
+      "sites": "id,to_jsonb(sites)-'updated_at'-'last_reconciled_at'-'settings_status'-'last_error'-'status'-'tls_status'-'certificate_expires_at' AS contract",
+      "subscription_addons": "subscription_id::text||':'||addon_plan_id::text AS id,to_jsonb(subscription_addons)-'created_at' AS contract",
+      "subscription_entitlements": "subscription_id AS id,to_jsonb(subscription_entitlements)-'updated_at' AS contract",
+      "subscription_policy_overrides": "subscription_id AS id,schema_version,policy_patch",
+      "subscriptions": "id,to_jsonb(subscriptions)-'created_at'-'updated_at'-'sync_error'-'last_synced_at'-'last_reconciled_at' AS contract",
+      "webmail_hosts": "id,to_jsonb(webmail_hosts)-'status'-'config_path'-'last_error'-'updated_at' AS contract"
+    },
+    "digest_rule": "one read-only repeatable-read transaction, SET LOCAL TIME ZONE 'UTC', statement_timeout30s; each fixed table ordered by id, canonical JSONB text SHA256 plus rowcount; null/empty/container and all unknown JSON keys retained; compare every table, including empty arrays/count0. No PHP leaves are removed or rewritten.",
+    "format1_only": true,
+    "mandatory_stopped_workload_contract": "stopped-workload-contract-v2.json",
+    "overall_PASS": "all covered data + strict convergence + required webmail + two reboot observations + confirmed owned cleanup; a compatible check-only or covered-data partial observation cannot promote an overall FAIL",
+    "required_physical_assertions": [
+      "full archive integrity; format1; platform absent; schema55; prior panel commit and source hostname match actual source",
+      "source tenant UID/GID/subuid/subgid and private identity bindings preserved without remap",
+      "current source26 all3 and target installer-owned Noble platform.json unchanged",
+      "tenant docroot l1-canary.txt bytes/hash/owner; TLS certificate/key hashes and real pinned request with explicit target resolution",
+      "physical MariaDB canary rows/collation and authenticated restored tenant credential; no system/global privilege expansion",
+      "secret-keys.json exact hash plus actual credential recreation/authentication; no secret bytes in output",
+      "original authenticated IMAP durable message content/password and mail service readiness",
+      "required strict post reconciliation/job IDs completed, zero failure/attention and actual database validation",
+      "no failed units; nginx/named/sshd validators; mandatory selected desired-stopped application raw identity/intent and actual no-running container/PID/unit/listener proof",
+      "two distinct actual target restart/boot IDs with read-only same data/intent/all3 assertions, no repair"
+    ],
+    "required_webmail": {
+      "coverage": "R9 proves fresh target functionality only; never old Roundcube contacts/preferences persistence",
+      "failure": "normal webmail/R9 failure is terminal overall FAIL, not NOT_APPLICABLE or a new success class; preserve actual zero/one/unknown send and phase; never copy raw exception",
+      "payload_in_ef8_archive": "no authenticated Roundcube DB payload; missing contacts/preferences preservation explicitly not asserted",
+      "source_before_backup": "normal admin POST /webmail domain=current-bootstrap.test once and actual webmail_hosts active; record actual backend and signed configuration digest",
+      "target": "unchanged narrow R9 wrapper on restored host/mailbox/site is mandatory for overall PASS; no configure/recreate database/backend changes; initial and after each successful reboot each new one-send flow"
+    },
+    "schema": "source26-L1-design-assertions-v2",
+    "scope_limit": "enumerated durable intent, not all PostgreSQL history/jobs/backup bookkeeping; excluded observations are separately captured and checked for actual health/convergence",
+    "site_observed_exclusions": [
+      "updated_at",
+      "last_reconciled_at",
+      "settings_status",
+      "last_error",
+      "status",
+      "tls_status",
+      "certificate_expires_at"
+    ],
+    "sites_extension": "whole row JSON retains unmodeled desired fields; explicitly listed observed states are checked separately, not called immutable intent",
+    "source_before_and_after_backup_equal": true,
+    "stopped_canary_nonvacuous": "mandatory exact positive selected application+parents+raw stopped revision+completed reconciliation plus independent no-runtime proof at all checkpoints. Other count0 arrays cannot satisfy it."
+  },
+  "binding": {
+    "L3_selected_input": null,
+    "actual_W": null,
+    "actual_archive": null,
+    "actual_branch_ref": null,
+    "actual_go_trust_observation": null,
+    "actual_key_reference": null,
+    "actual_phase_command_hashes": null,
+    "actual_receipts": null,
+    "actual_root_approval": null,
+    "actual_run": null,
+    "actual_source_token": null,
+    "actual_source_vm": null,
+    "actual_stopped_application": null,
+    "actual_stopped_image_ref": null,
+    "actual_target_token": null,
+    "actual_target_vm": null,
+    "actual_tree": null,
+    "actual_workflow": null,
+    "artifact": {
+      "bytes": 73997080,
+      "current_manifest_sha256": "50a0cc9802629bcdecb50f26a64f0ec8e49a434856f3f3aabb8e36650e8a60cc",
+      "current_tar_bytes": 37372100,
+      "current_tar_sha256": "9fc77a2bb7aa8824a7f1f728b6e735f29169e80c3b94fe540bddeb0b239774bf",
+      "id": 12231269532,
+      "name": "hosted-development-bundles-39347496239-1",
+      "prior_manifest_sha256": "e13277562f168f2f88f005e2e4ef0084b97209b9f95df07a27f52c6e3727cca7",
+      "prior_tar_bytes": 36724738,
+      "prior_tar_sha256": "90d1c9c3e0198ae7e7aa2aa83243c176accf30b5353fbc09c3ccf9c5fc7cd0d5",
+      "public_key_sha256": "b9ba391ccaa3d405509b6a1ec29b2ebcf1ae86880c279e4596ead8d2827f459c",
+      "run_id": 39347496239,
+      "runtime_RSA_required_before_host_root_work": true,
+      "sha256": "2433a2c9cec0ebdd4e7712419150ece7c5974bcefb8f76d61db0979607389816"
+    },
+    "bounded_clarifications": "bounded-clarifications-v2.md",
+    "event": "push",
+    "headroom_minutes": 70,
+    "host_job_last_resort_minutes": 360,
+    "image": {
+      "architecture": "amd64",
+      "label": "noble20261017",
+      "release": "24.04",
+      "sha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94"
+    },
+    "implementation_exists": false,
+    "measurement_deadline_minutes": 275,
+    "minutes": {
+      "authenticate_and_host_stage": 15,
+      "check_restore_stop_migrate_strict_post_and_initial_R9": 60,
+      "cleanup_after_proven_drain": 10,
+      "current_target_install_only_and_readiness": 60,
+      "historical_source_install_and_normal_fixtures": 75,
+      "safe_projection": 2,
+      "source_cold_retention": 3,
+      "source_final_fixtures_and_manual_backup": 20,
+      "target_reboot1_and_assertions": 20,
+      "target_reboot2_and_assertions": 20,
+      "upload": 5
+    },
+    "prior_commit": "ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466",
+    "proposed_branch": "ricky/source26-legacy-format1-v2",
+    "proposed_workflow_path": ".github/workflows/source26-legacy-format1.yml",
+    "repository": "Smartqix/nakpanel",
+    "repository_id": 1292416194,
+    "root_execution_admission": null,
+    "runner": {
+      "OS": "Linux",
+      "arch": "X64",
+      "environment": "github-hosted",
+      "runs_on": "ubuntu-24.04"
+    },
+    "runtime_acceptance": false,
+    "schema": "source26-L1-inert-design-binding-v2",
+    "source_and_target": {
+      "architecture": "amd64",
+      "cpu": 2,
+      "disk": "32G",
+      "internal_php": "8.3",
+      "max_guests": 2,
+      "max_running_guests": 1,
+      "memory": "5G",
+      "php_provider": "native",
+      "profile": "ubuntu-24.04",
+      "release": "24.04"
+    },
+    "source_commit": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+    "sum_minutes": 290,
+    "token_derivation": {
+      "attempt": "actual GITHUB_RUN_ATTEMPT must equal1",
+      "run_id": "actual GITHUB_RUN_ID; positive decimal <=14 digits",
+      "source_cold_before_target_allocation": true,
+      "source_token": "l1-<run_id>-1-s",
+      "source_vm": "nakpanel-24-04-amd64-l1-<run_id>-1-s",
+      "target_token": "l1-<run_id>-1-t",
+      "target_vm": "nakpanel-24-04-amd64-l1-<run_id>-1-t"
+    }
+  },
+  "bootstrap": {
+    "artifact": {
+      "created_at": "2026-10-20T00:27:22Z",
+      "digest": "sha256:2433a2c9cec0ebdd4e7712419150ece7c5974bcefb8f76d61db0979607389816",
+      "expires_at": "2026-10-23T00:27:20Z",
+      "id": 12231269532,
+      "name": "hosted-development-bundles-39347496239-1",
+      "size_in_bytes": 73997080
+    },
+    "bundles_metadata": {
+      "architecture": "amd64",
+      "candidate": {
+        "archive": "candidate/nakpanel-29.0.0-linux-amd64.tar.gz",
+        "commit": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+        "directory": "candidate/nakpanel-29.0.0-linux-amd64",
+        "version": "29.0.0"
+      },
+      "development": true,
+      "prior": {
+        "archive": "prior/nakpanel-29.0.0-linux-amd64.tar.gz",
+        "commit": "ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466",
+        "directory": "prior/nakpanel-29.0.0-linux-amd64",
+        "version": "29.0.0"
+      }
+    },
+    "fresh_API_availability_not_checked": true,
+    "images": {
+      "24.04": {
+        "serial": "20261017",
+        "sha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
+        "suite": "noble",
+        "url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img"
+      },
+      "26.04": {
+        "serial": "20260927",
+        "sha256": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+        "suite": "resolute",
+        "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img"
+      }
+    },
+    "local_zip_physically_verified": true,
+    "new_RSA_execution_not_performed_in_this_design_review": true,
+    "original_branch": "ricky/ubuntu-26-sury-candidate26",
+    "original_event": "workflow_dispatch",
+    "original_head_sha": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+    "original_overall_run_conclusion": "failure",
+    "original_run_attempt": 1,
+    "original_run_id": 39347496239,
+    "original_signed_bundles_job_conclusion": "success",
+    "original_signed_bundles_job_id": 118383538478,
+    "public_key_sha256": "b9ba391ccaa3d405509b6a1ec29b2ebcf1ae86880c279e4596ead8d2827f459c",
+    "runtime_sources": {
+      "candidate": {
+        "architecture": "amd64",
+        "archive": "candidate/nakpanel-29.0.0-linux-amd64.tar.gz",
+        "archive_bytes": 37372100,
+        "archive_sha256": "9fc77a2bb7aa8824a7f1f728b6e735f29169e80c3b94fe540bddeb0b239774bf",
+        "commit": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+        "development": true,
+        "installed_binary_sha256": {
+          "agent": "9dea11b8ddb98e0f21863747d50c5778ab6629b1406a2cb0971b876ccf12fd4c",
+          "panel": "535185eb683942313793bcf833f6e71d481a0cf12149103711d1f0e68a0d9c5f",
+          "panelctl": "44319f18d64575dc46afc48d24115634a81e63925a567d9420634cdaf212fc60"
+        },
+        "manifest_sha256": "50a0cc9802629bcdecb50f26a64f0ec8e49a434856f3f3aabb8e36650e8a60cc",
+        "signed_files": 173,
+        "version": "29.0.0"
+      },
+      "prior": {
+        "architecture": "amd64",
+        "archive": "prior/nakpanel-29.0.0-linux-amd64.tar.gz",
+        "archive_bytes": 36724738,
+        "archive_sha256": "90d1c9c3e0198ae7e7aa2aa83243c176accf30b5353fbc09c3ccf9c5fc7cd0d5",
+        "commit": "ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466",
+        "development": true,
+        "installed_binary_sha256": {
+          "agent": "6099a2153b2eb5c4ec2eb31f63ffc8b473f0c6f96c161fb47092e0d3077dc19f",
+          "panel": "4340d84d1b3036be7127ba23574527f8fd8c9e303991308ba48a276c25f1b3a1",
+          "panelctl": "1d3b5a76727870e2addd9b518c9be52f6c76fb500b899062b961aa0419a5a4a9"
+        },
+        "manifest_sha256": "e13277562f168f2f88f005e2e4ef0084b97209b9f95df07a27f52c6e3727cca7",
+        "signed_files": 135,
+        "version": "29.0.0"
+      }
+    },
+    "source26_inputs": {
+      ".github/workflows/ubuntu-hosted-qualification.yml": {
+        "bytes": 21588,
+        "sha256": "fb8825bdd53fe429061e4e161c28466d30d6d7851596c240066b29fbe9e46165"
+      },
+      "deploy/multipass/prepare-hosted-runner.sh": {
+        "bytes": 5903,
+        "sha256": "aab9fb45111e3d45bab421b6bc7d3c35776a50dd2da87bbc3e4a1e339e59dfd9"
+      },
+      "deploy/multipass/roundcube-send-read.py": {
+        "bytes": 48072,
+        "sha256": "db3a1770d867e543152823656e3d173f1a0ca606cad2b1d3f24642b2849e671f"
+      },
+      "deploy/multipass/sury-maintenance-drill.py": {
+        "bytes": 75779,
+        "sha256": "87d2a6f05e6d4ebfa72f960a2a067eb552455c54ba168058204a03fa28f26e8e"
+      },
+      "deploy/multipass/sury-maintenance-prepare.py": {
+        "bytes": 39931,
+        "sha256": "180c2da2874de86b2e03741e334a7faba80c7afb080089d12d38117624e32614"
+      },
+      "deploy/multipass/ubuntu-platform-verify.sh": {
+        "bytes": 8854,
+        "sha256": "c9ea992bb99e4184e8542eed05bce93730ce6f347ae7816145ebcfe2bd70568f"
+      }
+    }
+  },
+  "design_files": {
+    "assertion-contract-v2.json": {
+      "bytes": 7891,
+      "mode": "0o600",
+      "sha256": "7f5ab57d1fad2b9bb3581611e02aca9def301e07ccb2cae7c19454ca5e381fd6",
+      "uid": 501
+    },
+    "binding-and-budget-contract-v2.json": {
+      "bytes": 3505,
+      "mode": "0o600",
+      "sha256": "1e0bf4d1fe0d51d67c3307bdb1769a4d330917b45e418e9cd326dfb04b812c5a",
+      "uid": 501
+    },
+    "bounded-clarifications-v2.md": {
+      "bytes": 18754,
+      "mode": "0o600",
+      "sha256": "716a4461cd6a9065e317767f5bd75c614f937dac9ea8be993226161b97982f7c",
+      "uid": 501
+    },
+    "contract-evidence-v2.json": {
+      "bytes": 6659,
+      "mode": "0o600",
+      "sha256": "2ab82c88cf0d3d4cb2c3cddf8c6104fe472c433a4b28d9b93e6165cfdc5553af",
+      "uid": 501
+    },
+    "fixed-command-catalog-v2.json": {
+      "bytes": 9832,
+      "mode": "0o600",
+      "sha256": "a864a6d4a856ec38cca06207567a41dcfbd042161a6eb5e942a3a4c0b33abf6f",
+      "uid": 501
+    },
+    "go-trust-contract-v2.json": {
+      "bytes": 4597,
+      "mode": "0o600",
+      "sha256": "a73ff39e6432ad45097456b3e4f8723649a9551b809ab2c8f54e2f40ff526378",
+      "uid": 501
+    },
+    "implementation-design-v2.md": {
+      "bytes": 26379,
+      "mode": "0o600",
+      "sha256": "e5fc65f9c5fb704592e71530fa420fcfcc41cfe58d0839ccdc1070fe378c1672",
+      "uid": 501
+    },
+    "refinement-and-pending-state-v2.json": {
+      "bytes": 2653,
+      "mode": "0o600",
+      "sha256": "b0a78b6ad1ddc58f207d9f57a8bb2b80700dda79d125de09fe0b05e878fdadcc",
+      "uid": 501
+    },
+    "source-and-prerequisite-map-v2.json": {
+      "bytes": 16378,
+      "mode": "0o600",
+      "sha256": "328fc6e1cc70c74dda4958a43c9fd5a81a7e9a93032f7cb0a402ffe881e92675",
+      "uid": 501
+    },
+    "static-readback-v2.json": {
+      "bytes": 2015,
+      "mode": "0o600",
+      "sha256": "4b698a293e5b20edf43ef267c64e27e38d7df1486bce89be5c122d02fd07b6e2",
+      "uid": 501
+    },
+    "stopped-workload-contract-v2.json": {
+      "bytes": 3900,
+      "mode": "0o600",
+      "sha256": "01be22862d3be991d443412edbb4a2140a49ae8bdf899d176c8ef3e2a3d0eb6e",
+      "uid": 501
+    }
+  },
+  "design_freeze_sha256": "97f54dc2dbdfb30ee95d56d526c0f01473867f22470d13a12f6f79358db94097",
+  "go": {
+    "GODEBUG_policy": {
+      "inherited_authenticated_base": "",
+      "migration_only": "http2client=0",
+      "no_other_override": true
+    },
+    "actual_authority": null,
+    "actual_effective_environment": null,
+    "actual_migration_execution": null,
+    "actual_trust_baseline": null,
+    "command_count": "one Goose make and one River make; observations are bounded nonmutating preflights, not migration retry",
+    "deny_nonempty_or_present_override_families": [
+      "unknown GO* exports (except exact declared prefix/normal proxy+sumdb equal values)",
+      "SSL_CERT_FILE",
+      "SSL_CERT_DIR",
+      "CURL_CA_BUNDLE",
+      "REQUESTS_CA_BUNDLE",
+      "SSLKEYLOGFILE",
+      "HTTP_PROXY",
+      "HTTPS_PROXY",
+      "ALL_PROXY",
+      "NO_PROXY",
+      "http_proxy",
+      "https_proxy",
+      "all_proxy",
+      "no_proxy",
+      "GIT_CONFIG*",
+      "GIT_SSL*",
+      "GIT_SSH*",
+      "GIT_EXEC_PATH",
+      "GIT_ALLOW_PROTOCOL",
+      "GIT_PROXY_COMMAND",
+      "GIT_ASKPASS",
+      "SSH_ASKPASS",
+      "NETRC",
+      "XDG_CONFIG_HOME",
+      "MAKEFLAGS",
+      "GNUMAKEFLAGS",
+      "MAKEFILES",
+      "MFLAGS",
+      "SHELL",
+      "ENV",
+      "BASH_ENV",
+      "CDPATH",
+      "LD_PRELOAD",
+      "LD_LIBRARY_PATH",
+      "CC",
+      "CXX",
+      "CGO_*",
+      "PKG_CONFIG",
+      "AR",
+      "all other inherited GIT_*",
+      "all other inherited SSH_*"
+    ],
+    "design_only": true,
+    "expected_effective": {
+      "GOAUTH": "netrc (default .netrc absent; inherited GOAUTH/NETRC unset)",
+      "GOCACHE": "/var/lib/nakpanel/.cache/go-build",
+      "GOENV": "/var/lib/nakpanel/.config/go/env (absent physical file; GOENV/XDG_CONFIG_HOME inherited unset)",
+      "GOEXPERIMENT": "",
+      "GOFLAGS": "",
+      "GOINSECURE": "",
+      "GOMOD": "exact signed <MIGRATION_STAGE>/go.mod",
+      "GOMODCACHE": "/var/lib/nakpanel/go/pkg/mod",
+      "GONOPROXY": "",
+      "GONOSUMDB": "",
+      "GOPATH": "/var/lib/nakpanel/go",
+      "GOPRIVATE": "",
+      "GOPROXY": "https://proxy.golang.org,direct",
+      "GOROOT": "/usr/local/go",
+      "GOSUMDB": "sum.golang.org",
+      "GOTMPDIR": "",
+      "GOTOOLCHAIN": "go1.26.9",
+      "GOTOOLDIR": "inside exact trusted /usr/local/go/pkg/tool/linux_amd64",
+      "GOVCS": "",
+      "GOVERSION": "go1.26.9",
+      "GOWORK": ""
+    },
+    "forbidden_repair": [
+      "env-i to hide prior state",
+      "go env -w",
+      "GOENV=off",
+      "GOWORK=off to hide workspace",
+      "removing GOENV/config/cache/workspace",
+      "rewriting GOPROXY/GOSUMDB/bypass lists",
+      "custom root/cert/skip TLS/credential helper",
+      "module overlay/modfile/toolexec/make flags"
+    ],
+    "limits": "future implementation must freeze real prefix/default-GOENV/CA/VCS/refusal tests; no command or environment observation executed now",
+    "observe_before": [
+      "each go env call: physical trusted Go root/default go.env/user GOENV/workspace/env preflight",
+      "Goose: exact sudo/env child inherited+effective state, trust baseline, stage",
+      "River: fresh re-observation after Goose; no adopted override",
+      "after River: stage/trust input identities unchanged"
+    ],
+    "observe_fields": [
+      "GOENV",
+      "GOPROXY",
+      "GOSUMDB",
+      "GONOSUMDB",
+      "GOPRIVATE",
+      "GONOPROXY",
+      "GOINSECURE",
+      "GOFLAGS",
+      "GOVCS",
+      "GOEXPERIMENT",
+      "GOAUTH",
+      "GOTOOLCHAIN",
+      "GOROOT",
+      "GOVERSION",
+      "GOTOOLDIR",
+      "GOMOD",
+      "GOWORK",
+      "GOPATH",
+      "GOMODCACHE",
+      "GOCACHE",
+      "GOTMPDIR",
+      "GOOS",
+      "GOARCH",
+      "GOHOSTOS",
+      "GOHOSTARCH",
+      "GOFIPS140",
+      "CGO_ENABLED",
+      "CC",
+      "CXX",
+      "GOGCCFLAGS"
+    ],
+    "public_output": "closed predicates/reason codes and fixed trusted-file digests only; never raw env/config/cert/proxy/credential/key/command errors",
+    "same_prefix_and_stage_as_normal_make": true,
+    "schema": "source26-L1-go-trust-design-v2",
+    "stock_Git_noninteractive": "absent inherited GIT_TERMINAL_PROMPT/GCM_INTERACTIVE; normal Go sets 0/never; other interactive overrides refuse",
+    "trust_files": [
+      "official checksum-verified Go1.26.9 root/bin/tool inventory and stock go.env",
+      "GOENV absence, no ancestor go.work/go.work.sum, default .netrc absence",
+      "same current-target fresh installed Noble CA package inputs/generated bundle/canonical cert directory before restore and before both commands",
+      "trusted distro make/shell/git (or explicitly supported actual default VCS), no PATH shadows",
+      "absent user/system Git configs or exact later-pinned distro config; no trust/exec/url/proxy includes or overrides",
+      "recognized Go-created bare VCS cache config only, exact secure HTTPS remote/core keys; unknown keys/aliases/config refuse",
+      "private normal cache roots; no foreign/shared-writable roots"
+    ]
+  },
+  "helpers": {
+    "deploy/install/platform.sh": "936d53c4e81745932ce080d0bcd949ca940fffeb0ed142562f1cee6a4ad6498d",
+    "deploy/install/platform_state.py": "a0db0d870261deccd05e553d86d2229f5a1b244c498920615ac578cb4d9325fe",
+    "deploy/multipass/bootstrap_database_test.go": "28cec969984eb28dddc7b1d21c4349cebe7e60650e84569b18066aba4c2511da",
+    "deploy/multipass/ci_workflow_test.go": "550268d0e33b554f5841291a7f3b0a39d52f94f7e4e69b28363f3477ac238355",
+    "deploy/multipass/common.sh": "ec22749e3122d5182f79a0ce77af8f0eb1342611a00227fa06b2076ddc71ef8d",
+    "deploy/multipass/common_bash_guard_test.go": "12b2746e11377a598dfd2d7e5f8179afe60c559ca6132630274e5c888c316fe3",
+    "deploy/multipass/common_bash_guard_test.py": "1215738b47ca4af721c581f3db65fe351e61847a62adfe5b165dcf9c92297bd0",
+    "deploy/multipass/current-install-verify.sh": "bdd1c43ee410417e6beef31bd58f7d7ab9bfa27f452fb41e09848aefc494f931",
+    "deploy/multipass/current_install_native_mail_test.go": "abeeb9a4655c84b6952200d39d85917c050503a0fffbe5e875aed6a32fae3cf3",
+    "deploy/multipass/database-manager-browser-checks.cjs": "fdae6909233afc279e38b260f29602f86d6b11e6575e20beb2e913d440dad549",
+    "deploy/multipass/database-session-browser-smoke.cjs": "a4ed3220d8cbe14234f29e66d89bcf19a294ac2d83b00e4e915ec2dad00bf278",
+    "deploy/multipass/database-workspace-browser-smoke.cjs": "8ad4a95bd97db8c654dfd37da19dcb3075a2e73fa4f513b09c51cc97045d1afb",
+    "deploy/multipass/database_manager_readiness_test.go": "ae3caf6c9bc23ce6e2be1d85f397d3a18cb618f0f183c86354c599566db92f2d",
+    "deploy/multipass/database_manager_readiness_test.py": "ba0cf78090d0f10260bd506b5d3e532fbba08627226f47241d3426388253c857",
+    "deploy/multipass/database_manager_runtime_test.go": "27d77a281a51d010251d164e2907e74e95b087d83949b8fcda7fe3c6e2350dd0",
+    "deploy/multipass/deployment-verify.sh": "72f2e2c471216bc776c6c67ff20d350ef1c6af212eb319fcf3206eb598858379",
+    "deploy/multipass/domain-removal-browser-smoke.cjs": "3ad7ce008b67ced6bb5557c2cc7dc8756f31c3974a7b21977949787cf61059fa",
+    "deploy/multipass/domain-removal-verify.sh": "457ba06d7e8c0c824ca1687cede081cedde8a1806d878aacdd24eaff9d195249",
+    "deploy/multipass/domain-workspace-browser-smoke.cjs": "746dbe7ad9a9a527ac08ae3d8dbcd2fa752e29e7b882eb528113190bad86814e",
+    "deploy/multipass/domain-workspace-live-verify.cjs": "ca5814c07bb143f862ef618083b663aef3fb2a4b281fd39d5d7211468488f82f",
+    "deploy/multipass/domain_removal_verify_test.go": "66db785aad858599f02e799d8afbea345be75057eb756b2228e060538ce53bf7",
+    "deploy/multipass/exec_short_test.go": "2380cee395a1eb6b467972f035d6d74af78aa39cc92d848d7959cf8eb5a073f8",
+    "deploy/multipass/form-layout-browser-checks.cjs": "b5e9c703075cd85e5004d5e30fa5f41f4c9f3bada1d1c937a1d99ca242564e15",
+    "deploy/multipass/git-key-verify.sh": "465c0da484b34c477c3989576171861962f0c9d16fa0cb0cdeb6c87cb52d2528",
+    "deploy/multipass/git-simple-browser-smoke.cjs": "3179455fe51d81680732934649006504a4132e71947482879323bb44dc961494",
+    "deploy/multipass/git-workspace-verify.sh": "05970bec48c800c6223ae85c404190b1a87ea22bf02aa6e63d69993c2fa0373b",
+    "deploy/multipass/global-dns-template-verify.sh": "7f0ba10222ae446c481238b1ed5820cbe43df54bc6ccfc326c586140331eec13",
+    "deploy/multipass/hosted-multipass-ready.py": "3ef1f79052a08e2239874042a02e8159ad9d0986a0e37a9ae528a306d4ce2ba3",
+    "deploy/multipass/hosted-runner-preflight.py": "845bc5b9b33ef25468630a27e39717c4a72646906492895790b63b97cd60f380",
+    "deploy/multipass/hosted_ci_test.go": "57aff04da657413f7d2871b6df01a572d2d853a9b9b79fb881739a504512c4f3",
+    "deploy/multipass/hosted_qualification_test.go": "95211d60a1489a99db3074b4894d373b67614ac102b85a1b4c3ab47949e56394",
+    "deploy/multipass/installer_admin_test.go": "81791c90fc69b3846396068091214b5552edb8423fdeec6b5c5f0aebf628e04a",
+    "deploy/multipass/installer_agent_ready_test.go": "5a9dc7d4cba2b97887eb826d40aad5c988cbff6da9c5667c1c3131474b26117f",
+    "deploy/multipass/installer_go_download_test.go": "a9705f2b1c695e444b419ef151ff031dd3e320550c47081689e81f03e9e574c3",
+    "deploy/multipass/installer_go_migration_transport_test.go": "0e16989fcdbdffacc012cf0b3a784ab8c8fb10eadb8ab49bf0e0e6e58311c936",
+    "deploy/multipass/internal-tools-verify.sh": "d368c421dc87d9ada7a85f692a74d4fbc29424dc1526f261046f1209b234dca0",
+    "deploy/multipass/internal_tools_artifacts_test.go": "fe738aec9f956ff398dd75c72d6858698e32636a6217604690e6996f4f41a00d",
+    "deploy/multipass/mail-import-verify.sh": "a53e2826b94935c5d262bd69a87672e13c42443bf13da1f0d620ebc52cecaf2d",
+    "deploy/multipass/mail-workspace-browser-smoke.cjs": "4697dd28cf56e92a4f40552dcb95216df465f63c91300c4308e5f495d569cf01",
+    "deploy/multipass/mail-workspace-live-verify.cjs": "53cbd152ad8e0206c49f3177e9f337bbf3f911be9530a68cb2e3c3df8d6fc14b",
+    "deploy/multipass/mail-workspace-protocol-verify.py": "79df33d109481cd634ee0c6f4d207d53c1e11e443783b3dda0a1b864bec44bc0",
+    "deploy/multipass/mail-workspace-verify.sh": "3d92c86097d4277167173b81a2f0e1dfb3d37776a6e05227df6579592a990371",
+    "deploy/multipass/mail_qualification_test.go": "0b1e8e7f2b805fbe3f190080114963f0304b73318079ef8bcc06505ada39bad6",
+    "deploy/multipass/nginx_names_install_test.go": "9d48c7ed639b866dd0563f61907ca8cf8f9de56734c6ef2a1b6b986f2c90b0e0",
+    "deploy/multipass/phase1-verify.sh": "baa247cee704cd32461b1eefc3c254beebd46556ec580bcd3f1a79b118a458c8",
+    "deploy/multipass/phase10-verify.sh": "5e1647c4daae6e872e7ca751c91376e779d05805f82310e3d6b09af8a72f8563",
+    "deploy/multipass/phase11-verify.sh": "88ef2969ab63a009b7701b7a0ba2252ed805b8c63abd84db15c338e6debbc9d2",
+    "deploy/multipass/phase11_verify_test.go": "36d2508a747d6b719a9d17bb75c81aff2303de03c8a62f9d3846c4bb7b6d0306",
+    "deploy/multipass/phase12-verify.sh": "5e837747f5ca77cc3e4dfe3a6125c6aa99d3bd94568952ca9e38cb5118523bb5",
+    "deploy/multipass/phase12_verify_test.go": "28f9d7d7fdf0f206186139f2954b2cbd9792bbdb7fa3f6ceff909cc767d30ef5",
+    "deploy/multipass/phase13-verify.sh": "c733bf05a014c8f37370384b0bda10a801aeba1a7333b6e0f228377fb7f3860c",
+    "deploy/multipass/phase13_verify_test.go": "5c29b8288bf6ad7c8604495c46914b419d32607ceb96c131d736ece4fe022546",
+    "deploy/multipass/phase14-verify.sh": "929462c173d2259903d9a7e2cf7f735defce5d0ebddd1591800370ff2318a90f",
+    "deploy/multipass/phase15-verify.sh": "f0c8953e599d5eaf8e1902a1fa79bca19bbbc506482c7e2d67627c4f84acefe0",
+    "deploy/multipass/phase15_verify_test.go": "4095da9330413360d09d5cb429b3376ec2b159bb61fd17e00725c02519310397",
+    "deploy/multipass/phase16-verify.sh": "9e07ac09a37aca862c747e14668f7b0592c73185c0a19611666e10e189426f8d",
+    "deploy/multipass/phase16_verify_test.go": "58d59c996a3788e34751b4b42467cd51139d2bf3e8bfa9174c3bc1685a2f905a",
+    "deploy/multipass/phase17-verify.sh": "10f4a5cdb811adabd38c2586ad6fe5c722333a5d8071f9c56adc80ad6dc326dd",
+    "deploy/multipass/phase17_verify_test.go": "2fea18b5fe74bc503e407aad1acb32f3f9495bd2a5df357e12c31c0fd83c466a",
+    "deploy/multipass/phase18-verify.sh": "f88a3053806f7194990bc8649fc3e37717a4055b96a42d18e8ebf4f064facf34",
+    "deploy/multipass/phase18_verify_test.go": "60d100f05d7fe1d555a81d29f5e5a5f0a7d764dbe3be3bdbcf387fd5b4e34718",
+    "deploy/multipass/phase19-verify.sh": "4ff7d46de0f41edeffc6f4cd986f874876e713884254ddd7a03ae1824a77ad13",
+    "deploy/multipass/phase19_verify_test.go": "1869368bd3bebce7ff94f227e5baf97508486a389b15479da91426b7ab8e4b43",
+    "deploy/multipass/phase2-verify.sh": "2152d25b84ad4158ad97f01d94ca3f097ebf31b06fd69e050c36c21d9dd18f28",
+    "deploy/multipass/phase20-verify.sh": "a5d68dfd967ad0ba7a758c59770039618bd6d3e261785a009ee5e9f53d7e8f67",
+    "deploy/multipass/phase21-verify.sh": "634559be0bb89039189e350c4e8b37a65a70c8a1fbe9dbbdf65fff0419a22ccb",
+    "deploy/multipass/phase21_25_verify_test.go": "fafa4c79a6cbccf906658654e7a5734b6852a83575d481259dbb4ba0e11d57d3",
+    "deploy/multipass/phase22-verify.sh": "d89b2a202b3b3e97b80ae72d4473d3b1cca90883bce7c9ee77ffc950ea1e520c",
+    "deploy/multipass/phase23-verify.sh": "faff45d05e7df91d2af07a56cf843e1e05eba914e6ec0b2a028977ee95139f44",
+    "deploy/multipass/phase24-verify.sh": "94000d04b9fdac2892848b1a36b15b9c61225adb27661313a057f91278cfe46e",
+    "deploy/multipass/phase25-verify.sh": "9d03997ebf24e6fbc23acd130d551125334f84c40307fd3a7b982c167b123f08",
+    "deploy/multipass/phase26-verify.sh": "be9c8c275bfa62f45f1fbb708c317dac795faad0bac7c2b72a0068f3c1caa2c9",
+    "deploy/multipass/phase26_verify_test.go": "543ea26c69c82b2dc258439f401593911d32d434e7e3f6a58ccc5dd1a57a0fe3",
+    "deploy/multipass/phase27-verify.sh": "3a3080e4c4082795bc2d9353424c8ed6e550457e35567de6ca9ec530ef1cfe3f",
+    "deploy/multipass/phase27_verify_test.go": "b9711887c7ce10bc2bdabd46e09f8eb28cda5e917fb5b7a9946d750de350d351",
+    "deploy/multipass/phase28-verify.sh": "1e6f1914a058ea4f6d8c9379e64041b68a88acfdb70747c6c20e693ceac18085",
+    "deploy/multipass/phase28_verify_test.go": "fd04ab9f3875fde2ab1ff55860ac193767081cbcc58cf4587d195b180f32680b",
+    "deploy/multipass/phase29-imap-canary.py": "8e2845b72f997e5b232eb5e0c97a12420c2fe8ca22fde48becb4e101774237c4",
+    "deploy/multipass/phase29-login-throttle.py": "83cab8a99122fbf8359f8124e662ec206a748b124b2677e9a99f51e31361ec47",
+    "deploy/multipass/phase29-verify.sh": "10e6204d4facc0561a04983bbde31ddda5f7d13a7d79628d969bd0a17c9766d8",
+    "deploy/multipass/phase29_artifact_continuity_test.go": "2aeca846e42640970c9f4e96f2cd52d9e6bd4dfe7e5969c2cdaf835e0975fd4d",
+    "deploy/multipass/phase29_fault_companion_test.go": "fbe0b5dd1d2890eee2c001f5a637a0d695a41703a06520d769d194209917b2d2",
+    "deploy/multipass/phase29_imap_canary_test.go": "d3f37a27bb55aef33e10a3d4f863b77a6ac98319a236f412a4d74167ab0584cf",
+    "deploy/multipass/phase29_imap_canary_test.py": "a6c7f4d71709e215937f199a7d17aad5eb02c920588bcbffdd275748ba62eabc",
+    "deploy/multipass/phase29_login_throttle_test.go": "ddda701bf0112e04d74a2fa610ae9ed57b079a3576908fd5d912265af182af2f",
+    "deploy/multipass/phase29_login_throttle_test.py": "fb0dd59d0d791bbb15607287d6ef5063ae809fd3544fe17040f0712164760af8",
+    "deploy/multipass/phase29_verify_test.go": "1443cd24ad5c9b805cc359f146d163669053dd6872f2c1a18e7f03dc74712077",
+    "deploy/multipass/phase3-verify.sh": "e73b119880b4620203fec27c7112f22fd164b1ae0a18ba54c9e03c1e3497604f",
+    "deploy/multipass/phase30-verify.sh": "0eec2968c35c6b51ba61c9f3ffb60d14b1e9efc54a5aca90884cc1c97a1b1ce1",
+    "deploy/multipass/phase30_install_test.go": "518b250d8eec518b268bd2174c20f9318f5882fe4a21a5e1b0fdfe5eab93b4b4",
+    "deploy/multipass/phase30_quota_test.go": "ba0363a7b79e33d94947333d0331e2416ab745ff83ea0c73a754d42669c3cae9",
+    "deploy/multipass/phase30_tool_pins_test.go": "1453d5b482895c277e9a942fc562b822e9669f4049bf785ab235fb8df94a4beb",
+    "deploy/multipass/phase30_verify_test.go": "8dedc45f437443f44c7070288eebf5f9c354604fdcb3ebc024c03767448b121a",
+    "deploy/multipass/phase31-plan-php-verify.sh": "30db86acdb8ac0ed48915ca4afc092ae5e4684bce658b4cd3428986ebaf3330a",
+    "deploy/multipass/phase31-verify.sh": "5ac62e8c976950b2a21a131bdb601636e86da0cbe175c7910270809fe3d4127a",
+    "deploy/multipass/phase31_php_postgres_test.go": "13d2888e9c88a3d0edfbe722583395431f04995a7e0aae28ba82cd1b6e90f356",
+    "deploy/multipass/phase31_php_versions_test.go": "a18605b54c4bee74269e1cbd4c2b9ee721b461edc2fb6ee21ac7c552272589f5",
+    "deploy/multipass/phase31_verify_test.go": "5f78bd2d583fb00e9d7786df1049e265742975391e9535c8e935bc1a519fc6c4",
+    "deploy/multipass/phase32-verify.sh": "888d3962403e2a8ac49d8ecb7ddd9c6943840e306314bdef0b66b00ac154a98b",
+    "deploy/multipass/phase32_verify_test.go": "12e1d145fde98eaeeaa4b97e6ae461b281dec14574e24fd28804310921dc8bc9",
+    "deploy/multipass/phase33-verify.sh": "8214932f61acfb226e6f8a1ab39f1fa70bd2b83d89dfdd18160dcd8db95900b6",
+    "deploy/multipass/phase33_verify_test.go": "616617767b3110a5e0d9ecf38536f9b2c89bb37a3a05bcaf5241620b7c7be21a",
+    "deploy/multipass/phase34-verify.sh": "b7092b2cbdee5ac7099c28cc6ffa1db0b63e2a4f4ce1b80c48244c141c065900",
+    "deploy/multipass/phase34_verify_test.go": "180d0392db44b3ff23f94cafcc5e8cabf2bfea0afc5c0e98dfecc8ec2e46097f",
+    "deploy/multipass/phase4-tls-verify.sh": "e298970adaef865ddc279306ae1d8e54b2782c3c36096769b96fda279e99bfdc",
+    "deploy/multipass/phase4-verify.sh": "894aec5182654e9084af2a5274aa7242092e58d52435b12127f53b6abc94f4b6",
+    "deploy/multipass/phase5-ui-verify.sh": "eb16ad9fd199ab023a9fd64259b2726cb9301bab8ae40a9ef0ddca3375988831",
+    "deploy/multipass/phase5_ui_verify_test.go": "d4164041406a59579701d51b94c1ef3fbafaa12f8a02866778b44c170484668b",
+    "deploy/multipass/phase6-recovery-verify.sh": "a8e1ebc739baf14e2e82c3776baf9eea3a6b0e0c06b172e4bbc69473a4d2cec6",
+    "deploy/multipass/phase6-verify.sh": "c2e32b31b572268a2f6bc238bcf29d95fc0941545e279a1d95f989bef2ba86f0",
+    "deploy/multipass/phase6_recovery_verify_test.go": "27e124988e90d8f239beeafed2c83dc1637a6c936bf071411561b3adc48efbd9",
+    "deploy/multipass/phase6_verify_test.go": "9471bca024e082c4d79ba39de26c96413a001a91305abd1757e9bab4a769d023",
+    "deploy/multipass/phase7-verify.sh": "0fbccbfe09a3ab1154e0cd75aef5be439d24a95c92aaa89d4060f6e9d2cccc6f",
+    "deploy/multipass/phase7_verify_test.go": "baa4184502d9fcab46b5716071cd1b6d4100376558050d8c34f2b7f3e72897ad",
+    "deploy/multipass/phase8-verify.sh": "b94be5af3d1311c73a53df644b55ff77f21727f3cb442abceb26221f85c3a180",
+    "deploy/multipass/phase8_verify_test.go": "e791974e9cfd1497a156ed92d2e82e4b60a0cfd332f8ca2234ed7b2519ff3ddc",
+    "deploy/multipass/phase9-verify.sh": "0c3f688afe6e00f440e0c55d3dabd80ebb7e168532496d9e691fc39fdfd87ac5",
+    "deploy/multipass/phase9_verify_test.go": "cfc016703edab59610c38b5e53c7ea16252eed32fc33ac919e89cc9caf8be6b9",
+    "deploy/multipass/pinned_image_test.go": "8b7f9e248d69d1655d2c3f2eeea1c40b4d982c2ba7a556b7a8da2bd977664f4f",
+    "deploy/multipass/platform_identity_test.go": "78b9108df19664da698d688f95f750c80392d0dd9067c6952f471e3afa6cc5e4",
+    "deploy/multipass/prepare-hosted-runner.sh": "aab9fb45111e3d45bab421b6bc7d3c35776a50dd2da87bbc3e4a1e339e59dfd9",
+    "deploy/multipass/private_migration_assets_test.go": "5d4c7b4df6f7d8aed02d00ddbaf4b2a1dc79935714728eb327a91cca1c4532e8",
+    "deploy/multipass/qualification-artifacts.sh": "8b7fadc09affa5cae07c5c66184d11a49bd77f8369b958eb42f7dfabcc3888b7",
+    "deploy/multipass/qualification-browser-config.cjs": "1dcdab71d15689d49d21bf6cf494efc97a024341cf5d61151d5eec4a32f60c35",
+    "deploy/multipass/qualification_artifacts.py": "9cb0c090e84a6dd7e6aa2ca5667830c1a3b48ce5b0bc1a0244096c67778b09fb",
+    "deploy/multipass/qualification_artifacts_test.go": "839063430ac7489a892f513f154d754d48b836c6cc636bcec71b719c6b94db7e",
+    "deploy/multipass/qualification_artifacts_test.py": "2c1d6a7f86147b8b2e82feda2cba52ac86879ae928155f8d11c705903f1483d0",
+    "deploy/multipass/qualification_maintenance_ready.py": "f2ae856174d4e6d1bc716ddcdfe49fb5e2770fb7834d0b10d100667493b35a32",
+    "deploy/multipass/qualification_maintenance_ready_test.go": "e1d428baede72fc25cb54e3cba7b40a3f8d57ece05e5c5c3a2ffe399ac256cb3",
+    "deploy/multipass/qualification_maintenance_ready_test.py": "d1a9b663028d1f81b12f4c33d35155b53329d1b6db6bb71eb4a83b38db9d95ce",
+    "deploy/multipass/qualification_quota.py": "ba39cfabfeb3b58c3778ed22241b854bd4c3c6f0365acf0518a395eb9315811d",
+    "deploy/multipass/quota_packages_test.go": "7b11dfd658b30834c598068f166f846cfff39e76a406f7d921ffdd68cf6a6167",
+    "deploy/multipass/repo_sync_test.go": "2c84b646f12fe571d1c7d63a2558c75a1a8f5d7cd1c2c636b777097fcfd6856b",
+    "deploy/multipass/roundcube-dr-canary.php": "a266b832dfc4fc12d36e94bc741fbb23c1df5559fc60050561d7e1b97d0cbecd",
+    "deploy/multipass/roundcube-send-read.py": "db3a1770d867e543152823656e3d173f1a0ca606cad2b1d3f24642b2849e671f",
+    "deploy/multipass/roundcube_dr_canary_test.go": "762655f3efdd00c9e787bc0e2a27e4644fdaa13b603d77ab05abbb7edd8eac40",
+    "deploy/multipass/roundcube_maintenance_test.go": "ffc9ebd021de53333798ca98c9e537a735d0a800995db3e114ce2eb19553e1ed",
+    "deploy/multipass/roundcube_runtime_selection_test.go": "468d7c5724f6601b9da86f3d183e9785d2eaf094cffac53b1f4449d82dd34a54",
+    "deploy/multipass/roundcube_send_read_test.go": "c43e1173e833d7cff53ad4db22d999eff39e72e20434fd51da2d392f0bb427f0",
+    "deploy/multipass/roundcube_send_read_test.py": "d323e00888c64a46a797371b6441969de672fa1883573b5d736fdd69b3f88f6d",
+    "deploy/multipass/security-verify.sh": "3b118cd75e0e9cc088af268c603e1a7485020664b150df603334d9d5de18ab77",
+    "deploy/multipass/security_fixtures_test.go": "d2a4f73b497b4f782b2f204552853d58b8a5e2d11cf04812b05f34d0acd0b149",
+    "deploy/multipass/security_ip_allowlist_test.go": "4be18e7cbd8cfefb1f0182697d5cbf12df23e0d1111938b0867d97fa05d1b671",
+    "deploy/multipass/security_verify_test.go": "67470f061113ba2dcedfcc2017a110ae5e2810fedd364eda2edaca9febda46ef",
+    "deploy/multipass/service_tls_test.go": "4f3374977fa8b9bc87f56c6b56d91f0f37d015d43e2f20f6d4608ef5f1218385",
+    "deploy/multipass/signed_candidate_gate_test.go": "273c1eb173377ba453f82f751a0c2eacdb52ba01d637453bc9ee3cf158c42a3b",
+    "deploy/multipass/single_vm_verify_test.go": "cde784e637c7df338e261eec6e26d878f13cd06fe76861073f2f5840a60a5d4c",
+    "deploy/multipass/site-form-browser-smoke.cjs": "fa692e5bbd19f833d71f3b746df8e6ea5e121136a54bd5a3185572b7b9a0c248",
+    "deploy/multipass/soak-verify.sh": "18d4b7b2cb14e3d95bccc3c0a2cb7f8bf44a69565c29f20ba69109b3a93f6c1b",
+    "deploy/multipass/soak_verify_test.go": "0b0824c18bb99a1fb7bb6b3168250aa4604c27b6c184df92848796ad69a257c4",
+    "deploy/multipass/sury-maintenance-drill.py": "87d2a6f05e6d4ebfa72f960a2a067eb552455c54ba168058204a03fa28f26e8e",
+    "deploy/multipass/sury-maintenance-prepare.py": "180c2da2874de86b2e03741e334a7faba80c7afb080089d12d38117624e32614",
+    "deploy/multipass/sury-maintenance-verify.sh": "47907bdad8c04d40a87b58451761fff90d1398cc9f8c1bec5f524a36762d5fa8",
+    "deploy/multipass/sury_maintenance_prepare_test.go": "80c7220ad7aab8326fe6b2e2a84d6ed1697f491e6a170bbf0925d1932f723cfb",
+    "deploy/multipass/sury_maintenance_prepare_test.py": "bb5c6670f419730b108df8bdef20d275f0c04dc335536eee3af6ccae6543fc09",
+    "deploy/multipass/sury_maintenance_test.go": "38c2afdda300082548a5f73281657fa6f50e5bff9ffa7252accae3693a3e4ac6",
+    "deploy/multipass/sury_maintenance_test.py": "f9832ad057e242026ee43bdaff7fb2e543ae24e38a3fbb6586665e363e404941",
+    "deploy/multipass/ubuntu-forward-migration-fixture.py": "7224534e0fed25a1d358f8e812fdea9820ab61c9cf6f4076e2d1da40abd0222c",
+    "deploy/multipass/ubuntu-forward-migration-probe.py": "3bf4432a9ffa119066af1df808c67e971989b6ae8fd82f87a54047c3205011c7",
+    "deploy/multipass/ubuntu-forward-migration-verify.sh": "244f569137779c056ed7b13d68dff92a15433ddb1af84b0e741b04096af2b7ad",
+    "deploy/multipass/ubuntu-platform-verify.sh": "c9ea992bb99e4184e8542eed05bce93730ce6f347ae7816145ebcfe2bd70568f",
+    "deploy/multipass/ubuntu-upgrade-verify.sh": "80a79e6939742da5cc076e98c639293deea33cb23b519668432573d4e8dced20",
+    "deploy/multipass/ubuntu_forward_migration_fixture_test.py": "55199edf2e51dd5acdd83be9d45f8157ca6a67684b9825e247f9716945dc0d76",
+    "deploy/multipass/ubuntu_forward_migration_verify_test.go": "5dd60fda12e6f356269f959ca48fd1343051f891092fcede912613f80ced8fc4",
+    "deploy/multipass/ubuntu_platform_verify_test.go": "6bda21e997b97a22eee303f9e961175a9124f91b3897263e05c66ccf2c094931",
+    "deploy/multipass/v2-journey-verify.sh": "644bb7d59a2b12082b3e3feb6bf7d1759b88313fa8a0c2fe2d95a78b534618f8",
+    "deploy/multipass/valkey-platform-verify.sh": "a75b96761faab888bed182ac85c7f5592169e7c553e135a3da7087b7f040a65d",
+    "deploy/multipass/valkey_secret_guard_test.go": "6e5976843650c6710c8b0d0a8f617ee944472af4ccb68217bcdaa1cc328d72a0",
+    "deploy/multipass/vm_ip_test.go": "c2a348ddeca88ec2f79eec0ed7c762bc34d6d907df6c620791ace2dc263dafb7",
+    "deploy/multipass/webhook_sink.py": "e98454d7cc3ea22ed971a05770656c09e14e06a03fce9f5d75ad25c371ff504d",
+    "deploy/release/verify.py": "13251d0f69b5a19f09152274eb775e015b076437b94589c8dbdd586275356cdc"
+  },
+  "image_binding": {
+    "coverage": "CONFIG_ONLY_STOPPED",
+    "image_content_verified": false,
+    "image_pulled_or_started": false,
+    "image_ref": "docker.io/library/nginx@sha256:959ae6b898852db82e5b29b929388e59914f42be0a8f4d44c89a4c1f53b49208",
+    "provenance": "Root explicitly selected the same already selected forward OCI configuration in this implementation task. No registry query performed."
+  },
+  "image_coverage": "CONFIG_ONLY_STOPPED",
+  "image_ref": "docker.io/library/nginx@sha256:959ae6b898852db82e5b29b929388e59914f42be0a8f4d44c89a4c1f53b49208",
+  "legacy_archive_trees": [
+    "/var/lib/nakpanel-agent",
+    "/etc/nakpanel",
+    "/etc/stalwart",
+    "/etc/nginx/conf.d",
+    "/etc/nginx/sites-available",
+    "/etc/nginx/sites-enabled",
+    "/etc/nginx/nakpanel",
+    "/etc/bind/nakpanel",
+    "/home",
+    "/var/lib/nakpanel/certs",
+    "/var/lib/nakpanel/acme",
+    "/var/lib/nakpanel/dkim",
+    "/var/lib/nakpanel/tls",
+    "/var/lib/nakpanel/git",
+    "/var/lib/nakpanel/tasks",
+    "/var/lib/nakpanel/system-users",
+    "/var/lib/nakpanel/migrations",
+    "/var/lib/nakpanel/roundcube-des-key",
+    "/var/lib/nakpanel/containers",
+    "/etc/roundcube"
+  ],
+  "legacy_backup_source_contract": {
+    "internal/control/serveradmin/backup_jobs.go": {
+      "sha256": "cf0b9eff6494f2f5646c36e7b789e430990ffef4eb146134b733d0615eea86cf",
+      "source": "package serveradmin\n\nimport (\n\t\"context\"\n\t\"database/sql\"\n\t\"encoding/json\"\n\t\"errors\"\n\t\"fmt\"\n\t\"log\"\n\t\"os\"\n\t\"strings\"\n\t\"time\"\n\n\t\"github.com/nakroteck/nakpanel/internal/types\"\n\t\"github.com/nakroteck/nakpanel/internal/version\"\n\t\"github.com/riverqueue/river\"\n\t\"github.com/robfig/cron/v3\"\n)\n\ntype ServerBackupArgs struct {\n\tServerBackupID int64 `json:\"server_backup_id\" river:\"unique\"`\n}\n\nfunc (ServerBackupArgs) Kind() string { return \"server_backup\" }\n\nfunc (ServerBackupArgs) InsertOpts() river.InsertOpts {\n\treturn river.InsertOpts{\n\t\tQueue:       BackupQueue,\n\t\tMaxAttempts: 2,\n\t\tUniqueOpts: river.UniqueOpts{\n\t\t\tByArgs:  true,\n\t\t\tByState: activeJobStates,\n\t\t},\n\t}\n}\n\ntype PruneServerBackupsArgs struct {\n\tDestinationID int64 `json:\"destination_id\" river:\"unique\"`\n}\n\nfunc (PruneServerBackupsArgs) Kind() string { return \"server_backup_prune\" }\n\nfunc (PruneServerBackupsArgs) InsertOpts() river.InsertOpts {\n\treturn river.InsertOpts{\n\t\tQueue:       BackupQueue,\n\t\tMaxAttempts: 2,\n\t\tUniqueOpts: river.UniqueOpts{\n\t\t\tByArgs:  true,\n\t\t\tByState: activeJobStates,\n\t\t},\n\t}\n}\n\ntype ServerBackupSweepArgs struct{}\n\nfunc (ServerBackupSweepArgs) Kind() string { return \"server_backup_sweep\" }\n\nfunc (ServerBackupSweepArgs) InsertOpts() river.InsertOpts {\n\treturn river.InsertOpts{\n\t\tQueue:       BackupQueue,\n\t\tMaxAttempts: 1,\n\t\tUniqueOpts: river.UniqueOpts{\n\t\t\tByArgs:  true,\n\t\t\tByState: activeJobStates,\n\t\t},\n\t}\n}\n\n// ServerBackupSweepWorker turns stored cron schedules into backup runs. It\n// runs every minute, so schedule edits take effect without a panel restart.\ntype ServerBackupSweepWorker struct {\n\triver.WorkerDefaults[ServerBackupSweepArgs]\n\tmanager *Manager\n}\n\nfunc NewServerBackupSweepWorker(manager *Manager) *ServerBackupSweepWorker {\n\treturn &ServerBackupSweepWorker{manager: manager}\n}\n\nfunc (w *ServerBackupSweepWorker) Work(ctx context.Context, job *river.Job[ServerBackupSweepArgs]) error {\n\tm := w.manager\n\tif m == nil || m.store == nil {\n\t\treturn errors.New(\"server backup sweep is not configured\")\n\t}\n\tdestinations, err := m.ListBackupDestinations(ctx)\n\tif err != nil {\n\t\treturn err\n\t}\n\tif len(destinations) == 0 {\n\t\treturn nil\n\t}\n\tif _, ok := m.BackupKeyFingerprint(ctx); !ok {\n\t\t// Nothing can run without the archive key; stay quiet rather than\n\t\t// filling the log every minute.\n\t\treturn nil\n\t}\n\t// Reset rows abandoned in a non-terminal state (panel killed mid-backup,\n\t// worker context cancelled before it could record the failure). Without\n\t// this the in-flight guard in QueueServerBackup blocks every future run\n\t// for that destination permanently, and the only symptom is that backups\n\t// silently stop happening.\n\tif _, err := m.store.db.ExecContext(ctx, `UPDATE server_backups\n\t\tSET status='failed',\n\t\t    last_error=CASE WHEN last_error='' THEN 'abandoned while '||status||'; reset by sweep' ELSE last_error END,\n\t\t    completed_at=now(), updated_at=now()\n\t\tWHERE status IN ('pending','running','uploading','verifying','deleting')\n\t\t  AND updated_at < now() - interval '13 hours'`); err != nil {\n\t\tlog.Printf(\"server backup sweep: reset abandoned rows: %v\", err)\n\t}\n\n\tnow := m.now()\n\tfor _, dest := range destinations {\n\t\tif !dest.Enabled {\n\t\t\tcontinue\n\t\t}\n\t\tschedule, err := cron.ParseStandard(dest.ScheduleCron)\n\t\tif err != nil {\n\t\t\tcontinue\n\t\t}\n\t\tanchor := dest.CreatedAt\n\t\tif dest.LastStartedAt != nil {\n\t\t\tanchor = *dest.LastStartedAt\n\t\t}\n\t\tif schedule.Next(anchor).After(now) {\n\t\t\tcontinue\n\t\t}\n\t\tif _, err := m.QueueServerBackup(ctx, dest.Name, 0, \"scheduler\", true); err != nil {\n\t\t\tif strings.Contains(err.Error(), \"already in flight\") {\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tlog.Printf(\"server backup sweep: queue %s: %v\", dest.Name, err)\n\t\t\t_, _ = m.store.db.ExecContext(ctx,\n\t\t\t\t`UPDATE server_backup_destinations SET last_error=$2, updated_at=now() WHERE id=$1`,\n\t\t\t\tdest.ID, err.Error())\n\t\t}\n\t}\n\treturn nil\n}\n\ntype ServerBackupWorker struct {\n\triver.WorkerDefaults[ServerBackupArgs]\n\tmanager *Manager\n}\n\nfunc NewServerBackupWorker(manager *Manager) *ServerBackupWorker {\n\treturn &ServerBackupWorker{manager: manager}\n}\n\n// Timeout overrides River's one-minute default: a full-server archive plus a\n// remote upload and verification pass can legitimately run for hours.\nfunc (w *ServerBackupWorker) Timeout(job *river.Job[ServerBackupArgs]) time.Duration {\n\treturn 12 * time.Hour\n}\n\nfunc (w *ServerBackupWorker) Work(ctx context.Context, job *river.Job[ServerBackupArgs]) error {\n\tm := w.manager\n\tif m == nil || m.store == nil {\n\t\treturn errors.New(\"server backup worker is not configured\")\n\t}\n\tagent, err := m.backupAgent()\n\tif err != nil {\n\t\treturn err\n\t}\n\tbackupID := job.Args.ServerBackupID\n\n\tvar status string\n\tvar destinationID sql.NullInt64\n\tvar existingArchiveName string\n\terr = m.store.db.QueryRowContext(ctx,\n\t\t`SELECT status, destination_id, archive_name FROM server_backups WHERE id=$1`,\n\t\tbackupID).Scan(&status, &destinationID, &existingArchiveName)\n\tif errors.Is(err, sql.ErrNoRows) {\n\t\treturn nil\n\t}\n\tif err != nil {\n\t\treturn err\n\t}\n\tif status != \"pending\" && status != \"running\" {\n\t\treturn nil\n\t}\n\tif !destinationID.Valid {\n\t\treturn w.fail(ctx, backupID, BackupDestination{}, errors.New(\"backup destination was deleted\"), true)\n\t}\n\tvar dest BackupDestination\n\trow := m.store.db.QueryRowContext(ctx, `\nSELECT id,name,kind,enabled,settings,credential_secret_name,schedule_cron,\n       retention_count,retention_days,include_mail_data,notify_email,\n       last_started_at,last_succeeded_at,last_error,created_at,updated_at\nFROM server_backup_destinations WHERE id=$1`, destinationID.Int64)\n\tdest, err = scanBackupDestination(row)\n\tif err != nil {\n\t\treturn w.fail(ctx, backupID, BackupDestination{}, err, true)\n\t}\n\n\tfinalAttempt := job.Attempt >= job.MaxAttempts\n\n\tspec, err := m.destinationSpec(ctx, dest)\n\tif err != nil {\n\t\treturn w.fail(ctx, backupID, dest, err, finalAttempt)\n\t}\n\tkey, err := m.archiveKey(ctx)\n\tif err != nil {\n\t\treturn w.fail(ctx, backupID, dest, err, finalAttempt)\n\t}\n\n\ttenantDBs, err := listStrings(ctx, m.store.db,\n\t\t`SELECT db_name FROM databases WHERE engine='mariadb' AND status='active' ORDER BY db_name`)\n\tif err != nil {\n\t\treturn w.fail(ctx, backupID, dest, err, finalAttempt)\n\t}\n\tsystemUsers, err := listStrings(ctx, m.store.db,\n\t\t`SELECT username FROM subscription_system_accounts ORDER BY username`)\n\tif err != nil {\n\t\treturn w.fail(ctx, backupID, dest, err, finalAttempt)\n\t}\n\tvar gooseVersion int64\n\tif err := m.store.db.QueryRowContext(ctx,\n\t\t`SELECT COALESCE(max(version_id),0) FROM goose_db_version`).Scan(&gooseVersion); err != nil {\n\t\treturn w.fail(ctx, backupID, dest, err, finalAttempt)\n\t}\n\n\t// Includes the attempt number: the agent dispatcher caches responses by\n\t// RPC ID *including errors*, so a stable ID would make River's retry\n\t// replay the cached failure instead of actually retrying. Within one\n\t// attempt the ID is still stable, which is what makes a lost response\n\t// replay-safe rather than re-archiving.\n\toperationID := fmt.Sprintf(\"server-backup-%d-%d\", backupID, job.Attempt)\n\tif _, err := m.store.db.ExecContext(ctx, `UPDATE server_backups\n\t\tSET status='running', operation_id=$2, started_at=COALESCE(started_at, now()), updated_at=now()\n\t\tWHERE id=$1`, backupID, operationID); err != nil {\n\t\treturn err\n\t}\n\n\t// A deterministic name means a retry (e.g. after a verify failure)\n\t// overwrites the same object instead of leaving the first upload orphaned\n\t// at the destination, where nothing would ever prune it.\n\tarchiveName := existingArchiveName\n\tif archiveName == \"\" {\n\t\thostname, _ := os.Hostname()\n\t\tif hostname == \"\" {\n\t\t\thostname = \"server\"\n\t\t}\n\t\tarchiveName = fmt.Sprintf(\"nakpanel-%s-%d-%s.nkbk\", hostname, backupID,\n\t\t\tm.now().UTC().Format(\"20060102T150405Z\"))\n\t}\n\tcreated, err := agent.CreateServerBackup(ctx, types.CreateServerBackupReq{\n\t\tDestination:     spec,\n\t\tArchiveKey:      key,\n\t\tArchiveName:     archiveName,\n\t\tIncludeMailData: dest.IncludeMailData,\n\t\tTenantDatabases: tenantDBs,\n\t\tSystemUsers:     systemUsers,\n\t\tPanelVersion:    version.String(),\n\t\tGooseVersion:    gooseVersion,\n\t\tOperationID:     operationID,\n\t})\n\tif err != nil {\n\t\treturn w.fail(ctx, backupID, dest, fmt.Errorf(\"create archive: %w\", err), finalAttempt)\n\t}\n\tmanifestSummary, _ := json.Marshal(created)\n\tif _, err := m.store.db.ExecContext(ctx, `UPDATE server_backups\n\t\tSET status='verifying', archive_name=$2, remote_path=$2, size_bytes=$3,\n\t\t    checksum_sha256=$4, key_fingerprint=$5, manifest=$6::jsonb, updated_at=now()\n\t\tWHERE id=$1`, backupID, created.ArchiveName, created.SizeBytes,\n\t\tcreated.SHA256, created.KeyFingerprint, string(manifestSummary)); err != nil {\n\t\treturn err\n\t}\n\n\tverified, err := agent.VerifyServerBackup(ctx, types.VerifyServerBackupReq{\n\t\tDestination:    spec,\n\t\tArchiveKey:     key,\n\t\tArchiveName:    created.ArchiveName,\n\t\tExpectedSHA256: created.SHA256,\n\t})\n\tif err != nil {\n\t\treturn w.fail(ctx, backupID, dest, fmt.Errorf(\"verify archive: %w\", err), finalAttempt)\n\t}\n\tverifyDetail, _ := json.Marshal(verified)\n\tif _, err := m.store.db.ExecContext(ctx, `UPDATE server_backups\n\t\tSET status='active', verified_at=now(), verify_detail=$2::jsonb,\n\t\t    completed_at=now(), last_error='', updated_at=now()\n\t\tWHERE id=$1`, backupID, string(verifyDetail)); err != nil {\n\t\treturn err\n\t}\n\tif _, err := m.store.db.ExecContext(ctx, `UPDATE server_backup_destinations\n\t\tSET last_succeeded_at=now(), last_error='', updated_at=now() WHERE id=$1`, dest.ID); err != nil {\n\t\treturn err\n\t}\n\tif err := resolveBackupFailureNotification(ctx, m.store.db, dest.Name); err != nil {\n\t\treturn err\n\t}\n\tif err := func() error {\n\t\ttx, err := m.store.db.BeginTx(ctx, nil)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tdefer func() { _ = tx.Rollback() }()\n\t\tif _, err := m.river.InsertTx(ctx, tx, PruneServerBackupsArgs{DestinationID: dest.ID}, nil); err != nil {\n\t\t\treturn err\n\t\t}\n\t\treturn tx.Commit()\n\t}(); err != nil {\n\t\t// The next successful backup enqueues pruning again; losing one\n\t\t// enqueue is not fatal.\n\t\tlog.Printf(\"server backup %d: enqueue prune: %v\", backupID, err)\n\t}\n\treturn nil\n}\n\nfunc (w *ServerBackupWorker) fail(ctx context.Context, backupID int64, dest BackupDestination, workErr error, terminal bool) error {\n\tdb := w.manager.store.db\n\tstatus := \"pending\"\n\tif terminal {\n\t\tstatus = \"failed\"\n\t}\n\tif _, err := db.ExecContext(ctx, `UPDATE server_backups\n\t\tSET status=$2, last_error=$3, completed_at=CASE WHEN $2='failed' THEN now() ELSE completed_at END, updated_at=now()\n\t\tWHERE id=$1`, backupID, status, workErr.Error()); err != nil {\n\t\treturn errors.Join(workErr, err)\n\t}\n\tif dest.ID > 0 {\n\t\tif _, err := db.ExecContext(ctx, `UPDATE server_backup_destinations\n\t\t\tSET last_error=$2, updated_at=now() WHERE id=$1`, dest.ID, workErr.Error()); err != nil {\n\t\t\treturn errors.Join(workErr, err)\n\t\t}\n\t}\n\tif terminal {\n\t\tif err := recordBackupFailureNotification(ctx, db, dest, workErr.Error()); err != nil {\n\t\t\treturn errors.Join(workErr, err)\n\t\t}\n\t}\n\treturn workErr\n}\n\nfunc listStrings(ctx context.Context, db *sql.DB, query string) ([]string, error) {\n\trows, err := db.QueryContext(ctx, query)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer rows.Close()\n\tvar result []string\n\tfor rows.Next() {\n\t\tvar value string\n\t\tif err := rows.Scan(&value); err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tresult = append(result, value)\n\t}\n\treturn result, rows.Err()\n}\n\n// recordBackupFailureNotification creates (or refreshes) the open failure\n// notification for a destination and queues SMTP deliveries to the configured\n// address or, when unset, every active administrator.\nfunc recordBackupFailureNotification(ctx context.Context, db *sql.DB, dest BackupDestination, message string) error {\n\tdestName := dest.Name\n\tif destName == \"\" {\n\t\tdestName = \"unknown\"\n\t}\n\tdedupeKey := \"server-backup:\" + destName\n\ttitle := \"Server backup failed\"\n\tbody := fmt.Sprintf(\"The server backup to destination %q failed: %s\", destName, message)\n\ttx, err := db.BeginTx(ctx, nil)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer func() { _ = tx.Rollback() }()\n\tvar notificationID int64\n\tif err := tx.QueryRowContext(ctx, `INSERT INTO notifications(kind,severity,title,body,dedupe_key)\n\t\tVALUES('server_backup_failed','critical',$1,$2,$3)\n\t\tON CONFLICT(dedupe_key) WHERE resolved_at IS NULL\n\t\tDO UPDATE SET body=EXCLUDED.body, updated_at=now()\n\t\tRETURNING id`, title, body, dedupeKey).Scan(&notificationID); err != nil {\n\t\treturn fmt.Errorf(\"record backup failure notification: %w\", err)\n\t}\n\trecipients := []string{}\n\tif email := strings.TrimSpace(dest.NotifyEmail); email != \"\" {\n\t\trecipients = append(recipients, email)\n\t} else {\n\t\trows, err := tx.QueryContext(ctx,\n\t\t\t`SELECT email FROM users WHERE role='admin' AND NOT login_disabled ORDER BY email`)\n\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n\t\tfor rows.Next() {\n\t\t\tvar email string\n\t\t\tif err := rows.Scan(&email); err != nil {\n\t\t\t\trows.Close()\n\t\t\t\treturn err\n\t\t\t}\n\t\t\trecipients = append(recipients, email)\n\t\t}\n\t\trows.Close()\n\t\tif err := rows.Err(); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\tfor _, recipient := range recipients {\n\t\tif _, err := tx.ExecContext(ctx, `INSERT INTO notification_deliveries(notification_id,channel,recipient)\n\t\t\tVALUES($1,'smtp',$2) ON CONFLICT(notification_id,channel,recipient) DO NOTHING`,\n\t\t\tnotificationID, recipient); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\treturn tx.Commit()\n}\n\nfunc resolveBackupFailureNotification(ctx context.Context, db *sql.DB, destName string) error {\n\t_, err := db.ExecContext(ctx, `UPDATE notifications SET resolved_at=now(), updated_at=now()\n\t\tWHERE dedupe_key=$1 AND resolved_at IS NULL`, \"server-backup:\"+destName)\n\treturn err\n}\n\ntype PruneServerBackupsWorker struct {\n\triver.WorkerDefaults[PruneServerBackupsArgs]\n\tmanager *Manager\n}\n\nfunc NewPruneServerBackupsWorker(manager *Manager) *PruneServerBackupsWorker {\n\treturn &PruneServerBackupsWorker{manager: manager}\n}\n\nfunc (w *PruneServerBackupsWorker) Timeout(job *river.Job[PruneServerBackupsArgs]) time.Duration {\n\treturn time.Hour\n}\n\nfunc (w *PruneServerBackupsWorker) Work(ctx context.Context, job *river.Job[PruneServerBackupsArgs]) error {\n\tm := w.manager\n\tif m == nil || m.store == nil {\n\t\treturn errors.New(\"server backup prune worker is not configured\")\n\t}\n\tagent, err := m.backupAgent()\n\tif err != nil {\n\t\treturn err\n\t}\n\trow := m.store.db.QueryRowContext(ctx, `\nSELECT id,name,kind,enabled,settings,credential_secret_name,schedule_cron,\n       retention_count,retention_days,include_mail_data,notify_email,\n       last_started_at,last_succeeded_at,last_error,created_at,updated_at\nFROM server_backup_destinations WHERE id=$1`, job.Args.DestinationID)\n\tdest, err := scanBackupDestination(row)\n\tif errors.Is(err, sql.ErrNoRows) {\n\t\treturn nil\n\t}\n\tif err != nil {\n\t\treturn err\n\t}\n\trows, err := m.store.db.QueryContext(ctx, `\nWITH ranked AS (\n    SELECT id, archive_name, created_at,\n           row_number() OVER (ORDER BY created_at DESC) AS position\n    FROM server_backups WHERE destination_id=$1 AND status='active'\n)\nSELECT id, archive_name FROM ranked\nWHERE position > $2 OR ($3 > 0 AND created_at < now() - make_interval(days => $3))`,\n\t\tdest.ID, dest.RetentionCount, dest.RetentionDays)\n\tif err != nil {\n\t\treturn err\n\t}\n\ttype victim struct {\n\t\tid   int64\n\t\tname string\n\t}\n\tvar victims []victim\n\tfor rows.Next() {\n\t\tvar v victim\n\t\tif err := rows.Scan(&v.id, &v.name); err != nil {\n\t\t\trows.Close()\n\t\t\treturn err\n\t\t}\n\t\tvictims = append(victims, v)\n\t}\n\trows.Close()\n\tif err := rows.Err(); err != nil {\n\t\treturn err\n\t}\n\tif len(victims) == 0 {\n\t\treturn nil\n\t}\n\tspec, err := m.destinationSpec(ctx, dest)\n\tif err != nil {\n\t\treturn err\n\t}\n\tnames := make([]string, 0, len(victims))\n\tids := make([]int64, 0, len(victims))\n\tfor _, v := range victims {\n\t\tif v.name == \"\" {\n\t\t\tcontinue\n\t\t}\n\t\tnames = append(names, v.name)\n\t\tids = append(ids, v.id)\n\t}\n\tif _, err := m.store.db.ExecContext(ctx,\n\t\t`UPDATE server_backups SET status='deleting', updated_at=now() WHERE id = ANY($1::bigint[])`, int64Array(ids)); err != nil {\n\t\treturn err\n\t}\n\tif _, err := agent.PruneServerBackups(ctx, types.PruneServerBackupsReq{Destination: spec, Delete: names}); err != nil {\n\t\t_, _ = m.store.db.ExecContext(ctx,\n\t\t\t`UPDATE server_backups SET status='delete_failed', last_error=$2, updated_at=now() WHERE id = ANY($1::bigint[])`,\n\t\t\tint64Array(ids), err.Error())\n\t\treturn err\n\t}\n\tif _, err := m.store.db.ExecContext(ctx,\n\t\t`DELETE FROM server_backups WHERE id = ANY($1::bigint[])`, int64Array(ids)); err != nil {\n\t\treturn err\n\t}\n\treturn nil\n}\n\nfunc int64Array(values []int64) any {\n\t// lib/pq-style array literal keeps this driver-agnostic for pgx stdlib.\n\tparts := make([]string, len(values))\n\tfor i, v := range values {\n\t\tparts[i] = fmt.Sprintf(\"%d\", v)\n\t}\n\treturn \"{\" + strings.Join(parts, \",\") + \"}\"\n}\n"
+    },
+    "internal/control/serveradmin/backups.go": {
+      "sha256": "bb5ef27d6af7636eb5ad5a37dec67b1b299c6ca799b4e37a7c2cb9a550629ccf",
+      "source": "package serveradmin\n\nimport (\n\t\"context\"\n\t\"database/sql\"\n\t\"encoding/json\"\n\t\"errors\"\n\t\"fmt\"\n\t\"regexp\"\n\t\"strings\"\n\t\"time\"\n\n\t\"github.com/nakroteck/nakpanel/internal/backup\"\n\t\"github.com/nakroteck/nakpanel/internal/types\"\n\t\"github.com/robfig/cron/v3\"\n)\n\n// Server-level backup orchestration. The heavy lifting (dumps, archive\n// assembly, upload, verification) happens in the root agent; the panel owns\n// destination configuration, credential custody, scheduling, row lifecycle,\n// retention, and notifications.\n\nconst (\n\t// BackupQueue serializes server backup work without blocking the system\n\t// queue's power/update operations.\n\tBackupQueue = \"backup\"\n\n\tbackupSecretScope            = \"backup\"\n\tbackupArchiveKeyName         = \"archive-key\"\n\tbackupDestinationSecretScope = \"backup_destination\"\n)\n\nvar backupDestinationNameRE = regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)\n\ntype serverBackupAgent interface {\n\tCreateServerBackup(context.Context, types.CreateServerBackupReq) (types.CreateServerBackupResult, error)\n\tVerifyServerBackup(context.Context, types.VerifyServerBackupReq) (types.VerifyServerBackupResult, error)\n\tPruneServerBackups(context.Context, types.PruneServerBackupsReq) (types.PruneServerBackupsResult, error)\n\tTestBackupDestination(context.Context, types.TestBackupDestinationReq) (types.TestBackupDestinationResult, error)\n}\n\ntype BackupDestination struct {\n\tID                   int64           `json:\"id\"`\n\tName                 string          `json:\"name\"`\n\tKind                 string          `json:\"kind\"`\n\tEnabled              bool            `json:\"enabled\"`\n\tSettings             json.RawMessage `json:\"settings\"`\n\tCredentialSecretName string          `json:\"credential_secret_name,omitempty\"`\n\tScheduleCron         string          `json:\"schedule_cron\"`\n\tRetentionCount       int             `json:\"retention_count\"`\n\tRetentionDays        int             `json:\"retention_days\"`\n\tIncludeMailData      bool            `json:\"include_mail_data\"`\n\tNotifyEmail          string          `json:\"notify_email,omitempty\"`\n\tLastStartedAt        *time.Time      `json:\"last_started_at,omitempty\"`\n\tLastSucceededAt      *time.Time      `json:\"last_succeeded_at,omitempty\"`\n\tLastError            string          `json:\"last_error,omitempty\"`\n\tCreatedAt            time.Time       `json:\"created_at\"`\n\tUpdatedAt            time.Time       `json:\"updated_at\"`\n}\n\ntype SaveBackupDestinationParams struct {\n\tName            string\n\tKind            string\n\tEnabled         bool\n\tSettings        json.RawMessage\n\tCredential      []byte // nil keeps the stored credential\n\tScheduleCron    string\n\tRetentionCount  int\n\tRetentionDays   int\n\tIncludeMailData bool\n\tNotifyEmail     string\n\tActorUserID     int64\n\tActorLabel      string // used when there is no panel user (panelctl)\n}\n\n// backupAudit writes an audit event attributed to a panel user or, for CLI\n// and scheduler callers, a label (the audit table requires one of the two).\nfunc backupAudit(ctx context.Context, tx *sql.Tx, actorUserID int64, actorLabel, action, target string, metadata json.RawMessage) error {\n\tif actorUserID <= 0 && strings.TrimSpace(actorLabel) == \"\" {\n\t\tactorLabel = \"system\"\n\t}\n\tdata, err := normalizedJSONObject(metadata)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"validate backup audit metadata: %w\", err)\n\t}\n\t_, err = tx.ExecContext(ctx, `\nINSERT INTO audit_events(actor_user_id,actor_label,action,target_type,target_id,metadata)\nVALUES (NULLIF($1,0),NULLIF($2,''),$3,$4,NULL,$5::jsonb)`,\n\t\tactorUserID, strings.TrimSpace(actorLabel), action, target, data)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"write backup audit event: %w\", err)\n\t}\n\treturn nil\n}\n\ntype ServerBackup struct {\n\tID              int64           `json:\"id\"`\n\tDestinationID   int64           `json:\"destination_id,omitempty\"`\n\tDestinationName string          `json:\"destination_name,omitempty\"`\n\tOperationID     string          `json:\"operation_id,omitempty\"`\n\tStatus          string          `json:\"status\"`\n\tArchiveName     string          `json:\"archive_name,omitempty\"`\n\tSizeBytes       int64           `json:\"size_bytes\"`\n\tChecksumSHA256  string          `json:\"checksum_sha256,omitempty\"`\n\tKeyFingerprint  string          `json:\"key_fingerprint,omitempty\"`\n\tManifest        json.RawMessage `json:\"manifest,omitempty\"`\n\tVerifiedAt      *time.Time      `json:\"verified_at,omitempty\"`\n\tVerifyDetail    json.RawMessage `json:\"verify_detail,omitempty\"`\n\tScheduled       bool            `json:\"scheduled\"`\n\tStartedAt       *time.Time      `json:\"started_at,omitempty\"`\n\tCompletedAt     *time.Time      `json:\"completed_at,omitempty\"`\n\tLastError       string          `json:\"last_error,omitempty\"`\n\tCreatedAt       time.Time       `json:\"created_at\"`\n}\n\nfunc (m *Manager) backupAgent() (serverBackupAgent, error) {\n\tif m == nil {\n\t\treturn nil, errors.New(\"server backup manager is not configured\")\n\t}\n\tagent, ok := any(m.agent).(serverBackupAgent)\n\tif !ok {\n\t\treturn nil, errors.New(\"server backup agent is not configured\")\n\t}\n\treturn agent, nil\n}\n\nfunc validateDestinationConfig(kind string, settings json.RawMessage, credential []byte) error {\n\t_, err := backup.NewDestination(kind, settings, credential)\n\treturn err\n}\n\nfunc (m *Manager) ListBackupDestinations(ctx context.Context) ([]BackupDestination, error) {\n\tif m == nil || m.store == nil {\n\t\treturn nil, errors.New(\"server backup manager is not configured\")\n\t}\n\trows, err := m.store.db.QueryContext(ctx, `\nSELECT id,name,kind,enabled,settings,credential_secret_name,schedule_cron,\n       retention_count,retention_days,include_mail_data,notify_email,\n       last_started_at,last_succeeded_at,last_error,created_at,updated_at\nFROM server_backup_destinations ORDER BY name`)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"list backup destinations: %w\", err)\n\t}\n\tdefer rows.Close()\n\tvar result []BackupDestination\n\tfor rows.Next() {\n\t\titem, err := scanBackupDestination(rows)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t\tresult = append(result, item)\n\t}\n\treturn result, rows.Err()\n}\n\ntype rowScanner interface {\n\tScan(dest ...any) error\n}\n\nfunc scanBackupDestination(row rowScanner) (BackupDestination, error) {\n\tvar item BackupDestination\n\tvar started, succeeded sql.NullTime\n\tvar settings []byte\n\terr := row.Scan(&item.ID, &item.Name, &item.Kind, &item.Enabled, &settings,\n\t\t&item.CredentialSecretName, &item.ScheduleCron, &item.RetentionCount,\n\t\t&item.RetentionDays, &item.IncludeMailData, &item.NotifyEmail,\n\t\t&started, &succeeded, &item.LastError, &item.CreatedAt, &item.UpdatedAt)\n\tif err != nil {\n\t\treturn item, fmt.Errorf(\"scan backup destination: %w\", err)\n\t}\n\titem.Settings = json.RawMessage(settings)\n\tif started.Valid {\n\t\titem.LastStartedAt = &started.Time\n\t}\n\tif succeeded.Valid {\n\t\titem.LastSucceededAt = &succeeded.Time\n\t}\n\treturn item, nil\n}\n\nfunc (m *Manager) GetBackupDestination(ctx context.Context, name string) (BackupDestination, error) {\n\tif m == nil || m.store == nil {\n\t\treturn BackupDestination{}, errors.New(\"server backup manager is not configured\")\n\t}\n\trow := m.store.db.QueryRowContext(ctx, `\nSELECT id,name,kind,enabled,settings,credential_secret_name,schedule_cron,\n       retention_count,retention_days,include_mail_data,notify_email,\n       last_started_at,last_succeeded_at,last_error,created_at,updated_at\nFROM server_backup_destinations WHERE name=$1`, strings.TrimSpace(name))\n\treturn scanBackupDestination(row)\n}\n\nfunc (m *Manager) SaveBackupDestination(ctx context.Context, params SaveBackupDestinationParams) (BackupDestination, error) {\n\tif m == nil || m.store == nil {\n\t\treturn BackupDestination{}, errors.New(\"server backup manager is not configured\")\n\t}\n\tname := strings.TrimSpace(params.Name)\n\tif !backupDestinationNameRE.MatchString(name) {\n\t\treturn BackupDestination{}, errors.New(\"destination name must be lowercase letters, digits, and dashes, starting with a letter\")\n\t}\n\tkindValid := false\n\tfor _, kind := range backup.DestinationKinds {\n\t\tif params.Kind == kind {\n\t\t\tkindValid = true\n\t\t}\n\t}\n\tif !kindValid {\n\t\treturn BackupDestination{}, fmt.Errorf(\"destination kind must be one of %s\", strings.Join(backup.DestinationKinds, \", \"))\n\t}\n\tschedule := strings.TrimSpace(params.ScheduleCron)\n\tif schedule == \"\" {\n\t\tschedule = \"0 2 * * *\"\n\t}\n\tif _, err := cron.ParseStandard(schedule); err != nil {\n\t\treturn BackupDestination{}, fmt.Errorf(\"invalid schedule: %w\", err)\n\t}\n\tif params.RetentionCount < 1 {\n\t\treturn BackupDestination{}, errors.New(\"retention count must be at least 1\")\n\t}\n\tif params.RetentionDays < 0 {\n\t\treturn BackupDestination{}, errors.New(\"retention days must not be negative\")\n\t}\n\tsettings := params.Settings\n\tif len(settings) == 0 {\n\t\tsettings = json.RawMessage(`{}`)\n\t}\n\n\t// Validate the destination configuration with the credential that will\n\t// actually be stored alongside it.\n\tcredential := params.Credential\n\tif credential == nil && params.Kind != \"local\" {\n\t\texisting, _, err := m.store.GetSecret(ctx, backupDestinationSecretScope, name)\n\t\tif err != nil {\n\t\t\treturn BackupDestination{}, errors.New(\"a credential is required for this destination kind\")\n\t\t}\n\t\tcredential = existing\n\t}\n\tif err := validateDestinationConfig(params.Kind, settings, credential); err != nil {\n\t\treturn BackupDestination{}, err\n\t}\n\n\ttx, err := m.store.db.BeginTx(ctx, nil)\n\tif err != nil {\n\t\treturn BackupDestination{}, err\n\t}\n\tdefer func() { _ = tx.Rollback() }()\n\n\tcredentialSecretName := \"\"\n\tif params.Kind != \"local\" {\n\t\tcredentialSecretName = name\n\t}\n\trow := tx.QueryRowContext(ctx, `\nINSERT INTO server_backup_destinations\n    (name,kind,enabled,settings,credential_secret_name,schedule_cron,\n     retention_count,retention_days,include_mail_data,notify_email)\nVALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10)\nON CONFLICT (name) DO UPDATE SET\n    kind=EXCLUDED.kind, enabled=EXCLUDED.enabled, settings=EXCLUDED.settings,\n    credential_secret_name=EXCLUDED.credential_secret_name,\n    schedule_cron=EXCLUDED.schedule_cron, retention_count=EXCLUDED.retention_count,\n    retention_days=EXCLUDED.retention_days, include_mail_data=EXCLUDED.include_mail_data,\n    notify_email=EXCLUDED.notify_email, updated_at=now()\nRETURNING id,name,kind,enabled,settings,credential_secret_name,schedule_cron,\n          retention_count,retention_days,include_mail_data,notify_email,\n          last_started_at,last_succeeded_at,last_error,created_at,updated_at`,\n\t\tname, params.Kind, params.Enabled, string(settings), credentialSecretName,\n\t\tschedule, params.RetentionCount, params.RetentionDays, params.IncludeMailData,\n\t\tstrings.TrimSpace(params.NotifyEmail))\n\titem, err := scanBackupDestination(row)\n\tif err != nil {\n\t\treturn BackupDestination{}, err\n\t}\n\tif params.Credential != nil && params.Kind != \"local\" {\n\t\tif _, err := m.store.PutSecretTx(ctx, tx, PutSecretParams{\n\t\t\tScope:       backupDestinationSecretScope,\n\t\t\tName:        name,\n\t\t\tPlaintext:   params.Credential,\n\t\t\tActorUserID: params.ActorUserID,\n\t\t}); err != nil {\n\t\t\treturn BackupDestination{}, fmt.Errorf(\"store destination credential: %w\", err)\n\t\t}\n\t}\n\tif err := backupAudit(ctx, tx, params.ActorUserID, params.ActorLabel,\n\t\t\"server.backup_destination_saved\", \"server_backup_destination\",\n\t\tmustJSONObject(map[string]any{\"name\": name, \"kind\": params.Kind, \"enabled\": params.Enabled})); err != nil {\n\t\treturn BackupDestination{}, err\n\t}\n\tif err := tx.Commit(); err != nil {\n\t\treturn BackupDestination{}, err\n\t}\n\treturn item, nil\n}\n\nfunc (m *Manager) DeleteBackupDestination(ctx context.Context, name string, actorUserID int64, actorLabel string) error {\n\tif m == nil || m.store == nil {\n\t\treturn errors.New(\"server backup manager is not configured\")\n\t}\n\tname = strings.TrimSpace(name)\n\ttx, err := m.store.db.BeginTx(ctx, nil)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer func() { _ = tx.Rollback() }()\n\tresult, err := tx.ExecContext(ctx, `DELETE FROM server_backup_destinations WHERE name=$1`, name)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"delete backup destination: %w\", err)\n\t}\n\tif affected, _ := result.RowsAffected(); affected == 0 {\n\t\treturn fmt.Errorf(\"backup destination %q does not exist\", name)\n\t}\n\tif backupDestinationNameRE.MatchString(name) {\n\t\tif err := m.store.DeleteSecretTx(ctx, tx, backupDestinationSecretScope, name); err != nil {\n\t\t\treturn err\n\t\t}\n\t}\n\tif err := backupAudit(ctx, tx, actorUserID, actorLabel,\n\t\t\"server.backup_destination_deleted\", \"server_backup_destination\",\n\t\tmustJSONObject(map[string]any{\"name\": name})); err != nil {\n\t\treturn err\n\t}\n\treturn tx.Commit()\n}\n\n// destinationSpec assembles the agent-facing spec with the decrypted\n// credential for a stored destination.\nfunc (m *Manager) destinationSpec(ctx context.Context, dest BackupDestination) (types.BackupDestinationSpec, error) {\n\tspec := types.BackupDestinationSpec{Kind: dest.Kind, Settings: dest.Settings}\n\tif dest.CredentialSecretName != \"\" {\n\t\tcredential, _, err := m.store.GetSecret(ctx, backupDestinationSecretScope, dest.CredentialSecretName)\n\t\tif err != nil {\n\t\t\treturn spec, fmt.Errorf(\"load destination credential: %w\", err)\n\t\t}\n\t\tspec.Credential = credential\n\t}\n\treturn spec, nil\n}\n\nfunc (m *Manager) TestBackupDestinationByName(ctx context.Context, name string) (types.TestBackupDestinationResult, error) {\n\tagent, err := m.backupAgent()\n\tif err != nil {\n\t\treturn types.TestBackupDestinationResult{}, err\n\t}\n\tdest, err := m.GetBackupDestination(ctx, name)\n\tif err != nil {\n\t\treturn types.TestBackupDestinationResult{}, err\n\t}\n\tspec, err := m.destinationSpec(ctx, dest)\n\tif err != nil {\n\t\treturn types.TestBackupDestinationResult{}, err\n\t}\n\treturn agent.TestBackupDestination(ctx, types.TestBackupDestinationReq{Destination: spec})\n}\n\n// InitBackupKey generates the archive master key, stores it sealed, and\n// returns the operator-custody encoding exactly once. An existing key is\n// never silently replaced: rotating it would orphan every prior archive.\nfunc (m *Manager) InitBackupKey(ctx context.Context, actorUserID int64, actorLabel string, force bool) (encoded, fingerprint string, err error) {\n\tif m == nil || m.store == nil {\n\t\treturn \"\", \"\", errors.New(\"server backup manager is not configured\")\n\t}\n\tif _, _, err := m.store.GetSecret(ctx, backupSecretScope, backupArchiveKeyName); err == nil && !force {\n\t\treturn \"\", \"\", errors.New(\"a backup archive key already exists; pass force to replace it (existing archives stay readable only with the old key)\")\n\t}\n\tkey, err := backup.GenerateKey()\n\tif err != nil {\n\t\treturn \"\", \"\", err\n\t}\n\tencoded, err = backup.EncodeKey(key)\n\tif err != nil {\n\t\treturn \"\", \"\", err\n\t}\n\tfingerprint = backup.Fingerprint(key)\n\ttx, err := m.store.db.BeginTx(ctx, nil)\n\tif err != nil {\n\t\treturn \"\", \"\", err\n\t}\n\tdefer func() { _ = tx.Rollback() }()\n\tif _, err := m.store.PutSecretTx(ctx, tx, PutSecretParams{\n\t\tScope:       backupSecretScope,\n\t\tName:        backupArchiveKeyName,\n\t\tPlaintext:   key,\n\t\tActorUserID: actorUserID,\n\t\tMetadata:    mustJSONObject(map[string]any{\"fingerprint\": fingerprint}),\n\t}); err != nil {\n\t\treturn \"\", \"\", fmt.Errorf(\"store archive key: %w\", err)\n\t}\n\tif err := backupAudit(ctx, tx, actorUserID, actorLabel, \"server.backup_key_initialized\",\n\t\t\"server_backup_key\", mustJSONObject(map[string]any{\"fingerprint\": fingerprint})); err != nil {\n\t\treturn \"\", \"\", err\n\t}\n\tif err := tx.Commit(); err != nil {\n\t\treturn \"\", \"\", err\n\t}\n\treturn encoded, fingerprint, nil\n}\n\n// BackupKeyFingerprint reports whether an archive key exists.\nfunc (m *Manager) BackupKeyFingerprint(ctx context.Context) (string, bool) {\n\tif m == nil || m.store == nil {\n\t\treturn \"\", false\n\t}\n\tkey, _, err := m.store.GetSecret(ctx, backupSecretScope, backupArchiveKeyName)\n\tif err != nil {\n\t\treturn \"\", false\n\t}\n\treturn backup.Fingerprint(key), true\n}\n\nfunc (m *Manager) archiveKey(ctx context.Context) ([]byte, error) {\n\tkey, _, err := m.store.GetSecret(ctx, backupSecretScope, backupArchiveKeyName)\n\tif err != nil {\n\t\treturn nil, errors.New(\"backup archive key is not initialized; run backup-server key init\")\n\t}\n\tif len(key) != backup.KeySize {\n\t\treturn nil, errors.New(\"stored backup archive key is malformed\")\n\t}\n\treturn key, nil\n}\n\n// QueueServerBackup creates the backup row and its job atomically.\nfunc (m *Manager) QueueServerBackup(ctx context.Context, destinationName string, actorUserID int64, actorLabel string, scheduled bool) (int64, error) {\n\tif m == nil || m.store == nil || m.river == nil {\n\t\treturn 0, errors.New(\"server backup queue is not configured\")\n\t}\n\tif _, err := m.backupAgent(); err != nil {\n\t\treturn 0, err\n\t}\n\tif _, err := m.archiveKey(ctx); err != nil {\n\t\treturn 0, err\n\t}\n\tdest, err := m.GetBackupDestination(ctx, destinationName)\n\tif err != nil {\n\t\treturn 0, fmt.Errorf(\"backup destination %q: %w\", destinationName, err)\n\t}\n\ttx, err := m.store.db.BeginTx(ctx, nil)\n\tif err != nil {\n\t\treturn 0, err\n\t}\n\tdefer func() { _ = tx.Rollback() }()\n\tvar inFlight int\n\tif err := tx.QueryRowContext(ctx, `SELECT count(*) FROM server_backups\n\t\tWHERE destination_id=$1 AND status IN ('pending','running','uploading','verifying')`, dest.ID).Scan(&inFlight); err != nil {\n\t\treturn 0, err\n\t}\n\tif inFlight > 0 {\n\t\treturn 0, fmt.Errorf(\"a backup for destination %q is already in flight\", destinationName)\n\t}\n\tvar backupID int64\n\tif err := tx.QueryRowContext(ctx, `INSERT INTO server_backups (destination_id,status,scheduled)\n\t\tVALUES ($1,'pending',$2) RETURNING id`, dest.ID, scheduled).Scan(&backupID); err != nil {\n\t\treturn 0, fmt.Errorf(\"create server backup row: %w\", err)\n\t}\n\tif _, err := tx.ExecContext(ctx, `UPDATE server_backup_destinations SET last_started_at=now(), updated_at=now() WHERE id=$1`, dest.ID); err != nil {\n\t\treturn 0, err\n\t}\n\tif err := backupAudit(ctx, tx, actorUserID, actorLabel, \"server.backup_requested\",\n\t\t\"server_backup\", mustJSONObject(map[string]any{\"backup_id\": backupID, \"destination\": dest.Name, \"scheduled\": scheduled})); err != nil {\n\t\treturn 0, err\n\t}\n\tif _, err := m.river.InsertTx(ctx, tx, ServerBackupArgs{ServerBackupID: backupID}, nil); err != nil {\n\t\treturn 0, fmt.Errorf(\"queue server backup: %w\", err)\n\t}\n\tif err := tx.Commit(); err != nil {\n\t\treturn 0, err\n\t}\n\treturn backupID, nil\n}\n\nfunc (m *Manager) ListServerBackups(ctx context.Context, limit int) ([]ServerBackup, error) {\n\tif m == nil || m.store == nil {\n\t\treturn nil, errors.New(\"server backup manager is not configured\")\n\t}\n\tif limit <= 0 || limit > 200 {\n\t\tlimit = 50\n\t}\n\trows, err := m.store.db.QueryContext(ctx, `\nSELECT b.id,COALESCE(b.destination_id,0),COALESCE(d.name,''),b.operation_id,b.status,\n       b.archive_name,b.size_bytes,b.checksum_sha256,b.key_fingerprint,b.manifest,\n       b.verified_at,b.verify_detail,b.scheduled,b.started_at,b.completed_at,\n       b.last_error,b.created_at\nFROM server_backups b\nLEFT JOIN server_backup_destinations d ON d.id=b.destination_id\nORDER BY b.created_at DESC LIMIT $1`, limit)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"list server backups: %w\", err)\n\t}\n\tdefer rows.Close()\n\tvar result []ServerBackup\n\tfor rows.Next() {\n\t\tvar item ServerBackup\n\t\tvar verifiedAt, startedAt, completedAt sql.NullTime\n\t\tvar manifest, verifyDetail []byte\n\t\tif err := rows.Scan(&item.ID, &item.DestinationID, &item.DestinationName, &item.OperationID,\n\t\t\t&item.Status, &item.ArchiveName, &item.SizeBytes, &item.ChecksumSHA256, &item.KeyFingerprint,\n\t\t\t&manifest, &verifiedAt, &verifyDetail, &item.Scheduled, &startedAt, &completedAt,\n\t\t\t&item.LastError, &item.CreatedAt); err != nil {\n\t\t\treturn nil, fmt.Errorf(\"scan server backup: %w\", err)\n\t\t}\n\t\titem.Manifest = json.RawMessage(manifest)\n\t\tif len(verifyDetail) > 0 {\n\t\t\titem.VerifyDetail = json.RawMessage(verifyDetail)\n\t\t}\n\t\tif verifiedAt.Valid {\n\t\t\titem.VerifiedAt = &verifiedAt.Time\n\t\t}\n\t\tif startedAt.Valid {\n\t\t\titem.StartedAt = &startedAt.Time\n\t\t}\n\t\tif completedAt.Valid {\n\t\t\titem.CompletedAt = &completedAt.Time\n\t\t}\n\t\tresult = append(result, item)\n\t}\n\treturn result, rows.Err()\n}\n"
+    }
+  },
+  "projection_schema_evidence": {
+    "addon_plans": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260706000011_phase12_service_provider.sql",
+          "sha256": "c38473d02d804eda918c7dd2cadec40d5bae58c26937dc25203327f1809ce15d"
+        },
+        {
+          "path": "migrations/20260706000012_phase12_provider_hardening.sql",
+          "sha256": "44b92fd2def72dd73076da993eaf62938a456feabc8e5cac5b2d0f06c65ccf17"
+        },
+        {
+          "path": "migrations/20260711000015_service_plan_designer.sql",
+          "sha256": "107ec3f8a3620aa7dc8b9f14834b51d8aeabb2415b5f11c04afb1a72e5355662"
+        },
+        {
+          "path": "migrations/20260711000016_service_plan_name_integrity.sql",
+          "sha256": "0d55866ee7b42aa0aa629023dbd6f9a89d6783e7a5ec1d685c8ac2798418ac0d"
+        },
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "application_instances": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        },
+        {
+          "path": "migrations/20260712000019_phase15_service_cleanup.sql",
+          "sha256": "a70ed03b7b6e4574ea64d21285305c8f591694dacf178936d85779fcebe7d83e"
+        },
+        {
+          "path": "migrations/20260723000032_application_convergence_revisions.sql",
+          "sha256": "e8809dd63fb2e08f33c49329e2d67e03e2cbe863c080c8555e5932ad52353f6b"
+        },
+        {
+          "path": "migrations/20260724000036_phase28_application_runtime.sql",
+          "sha256": "533050f4d2e91693d4557ec0dd2ace235fd4de88689d916a81209cf9fb62e593"
+        },
+        {
+          "path": "migrations/20260724000037_phase28_manifest_compatibility.sql",
+          "sha256": "676fce7b5adbca9eb9b26a73048f88d98ccc6ce6e7d5635a9fe21383a7734fe8"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "application_manifest_revisions": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260724000036_phase28_application_runtime.sql",
+          "sha256": "533050f4d2e91693d4557ec0dd2ace235fd4de88689d916a81209cf9fb62e593"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "application_presets": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260723000026_phase24_git_apps_staging.sql",
+          "sha256": "be3866b24e3f3d7899eb863ff0a9ad3e161511b474e32b720197fa902e4ee2a9"
+        },
+        {
+          "path": "migrations/20260724000036_phase28_application_runtime.sql",
+          "sha256": "533050f4d2e91693d4557ec0dd2ace235fd4de88689d916a81209cf9fb62e593"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "databases": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260706000004_create_databases.sql",
+          "sha256": "bac6605a7844fc226403931b909293c1e92bdc4b622c2b9c096b8ac85cd1f624"
+        },
+        {
+          "path": "migrations/20260706000008_phase9_plans_subscriptions.sql",
+          "sha256": "20f913944528cde48a6a48e9bd446d5f812b5aeb90ad8693806eb2ff1829049e"
+        },
+        {
+          "path": "migrations/20260706000009_phase10_customers_multi_subscriptions.sql",
+          "sha256": "c80af45311ce2acb2254606da5b401b10c75a689181b3aa62b41be60d2cc83c6"
+        },
+        {
+          "path": "migrations/20260706000013_phase12_integrity_guards.sql",
+          "sha256": "5c3f128ec5c9ada560cfba4444834795735507064c593d3f09b11def6277dcd8"
+        },
+        {
+          "path": "migrations/20260710000014_phase13_domain_workspace.sql",
+          "sha256": "7085587862b80bdaf9563c5f7f8b75ecdafc123e9fe5fb6a734a63653b937b9c"
+        },
+        {
+          "path": "migrations/20260830000048_phase32_wordpress_toolkit.sql",
+          "sha256": "619d811cfcbd9cfec226b26f3f8949f853573b79e6f4268f6e97878c14b450e3"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "dns_records": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260710000014_phase13_domain_workspace.sql",
+          "sha256": "7085587862b80bdaf9563c5f7f8b75ecdafc123e9fe5fb6a734a63653b937b9c"
+        },
+        {
+          "path": "migrations/20260724000035_global_dns_template.sql",
+          "sha256": "3ddec9008b3a790dc0da7cd1f6b8edfc30981b56305a051713190f258a5f951b"
+        },
+        {
+          "path": "migrations/20260724000038_dns_template_integrity.sql",
+          "sha256": "27b9bd55b1bdac9605a36a8d6559a74889db8392e9dbd6e857b5b70ba54b2ada"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "dns_zones": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260706000006_phase6_operations.sql",
+          "sha256": "daba1d7a99d96f55f3811a115dbf29d3312d7041c0d85191eed81d255ae9b0b2"
+        },
+        {
+          "path": "migrations/20260724000035_global_dns_template.sql",
+          "sha256": "3ddec9008b3a790dc0da7cd1f6b8edfc30981b56305a051713190f258a5f951b"
+        },
+        {
+          "path": "migrations/20260724000039_dns_zone_template_pinning.sql",
+          "sha256": "d7cca31e11bc09820e5d4cc25ead87250b931f01dce627bec3d8da08200a883a"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "ftp_accounts": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260723000023_phase21_domain_access.sql",
+          "sha256": "831d06eaa28ecaeb36a202b73df1797becabc595d149fd981f39e38bc87090b4"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "mail_domains": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        },
+        {
+          "path": "migrations/20260712000019_phase15_service_cleanup.sql",
+          "sha256": "a70ed03b7b6e4574ea64d21285305c8f591694dacf178936d85779fcebe7d83e"
+        },
+        {
+          "path": "migrations/20260723000034_effective_mail_delivery.sql",
+          "sha256": "69d9035ad1c5c9d3983eabbf36e281b68acb7cbf82e735b0321f915ab20dc762"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "mailboxes": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        },
+        {
+          "path": "migrations/20260714000021_phase18_mail_hosting.sql",
+          "sha256": "eb607a460d4d3370047cab7694b98bd3566f0f006398c7412fb2f4280d560472"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "php_applications": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260829000044_phase30_production_php.sql",
+          "sha256": "895ef0a6d18244fb6fd1c1209464db9e6a5366aa51658f9bd5b7cee64b1e0cd7"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "php_deployments": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260829000044_phase30_production_php.sql",
+          "sha256": "895ef0a6d18244fb6fd1c1209464db9e6a5366aa51658f9bd5b7cee64b1e0cd7"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "php_environment_bindings": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260829000044_phase30_production_php.sql",
+          "sha256": "895ef0a6d18244fb6fd1c1209464db9e6a5366aa51658f9bd5b7cee64b1e0cd7"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "php_workers": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260829000044_phase30_production_php.sql",
+          "sha256": "895ef0a6d18244fb6fd1c1209464db9e6a5366aa51658f9bd5b7cee64b1e0cd7"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "plan_revisions": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260830000047_phase31_production_service_plans.sql",
+          "sha256": "2c4893b36b4e6238768820dcc06ed5bcdcd6909e1cb582cf27dd3d91500296be"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "plan_service_presets": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260711000015_service_plan_designer.sql",
+          "sha256": "107ec3f8a3620aa7dc8b9f14834b51d8aeabb2415b5f11c04afb1a72e5355662"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "plans": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260706000008_phase9_plans_subscriptions.sql",
+          "sha256": "20f913944528cde48a6a48e9bd446d5f812b5aeb90ad8693806eb2ff1829049e"
+        },
+        {
+          "path": "migrations/20260706000011_phase12_service_provider.sql",
+          "sha256": "c38473d02d804eda918c7dd2cadec40d5bae58c26937dc25203327f1809ce15d"
+        },
+        {
+          "path": "migrations/20260711000015_service_plan_designer.sql",
+          "sha256": "107ec3f8a3620aa7dc8b9f14834b51d8aeabb2415b5f11c04afb1a72e5355662"
+        },
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        },
+        {
+          "path": "migrations/20260714000022_phase20_provisioning_api.sql",
+          "sha256": "14c6d12b1b200807138545f8d646dc15939b51281973b7436885742a33acd2c8"
+        },
+        {
+          "path": "migrations/20260830000047_phase31_production_service_plans.sql",
+          "sha256": "2c4893b36b4e6238768820dcc06ed5bcdcd6909e1cb582cf27dd3d91500296be"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "service_secrets": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260723000028_phase26_tools_settings_foundation.sql",
+          "sha256": "f3098f123ebc0de9ec1513582901742c48ed5c86f2f7706ade45c9172ac3409d"
+        },
+        {
+          "path": "migrations/20260829000044_phase30_production_php.sql",
+          "sha256": "895ef0a6d18244fb6fd1c1209464db9e6a5366aa51658f9bd5b7cee64b1e0cd7"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "sftp_access_identities": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "site_policy_overrides": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "sites": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260706000003_create_sites.sql",
+          "sha256": "1f45b33f207d50fc42a8a3107f48be4966d821c0b3185cea9e1e416d8add0cdc"
+        },
+        {
+          "path": "migrations/20260706000005_add_site_tls.sql",
+          "sha256": "2f388dbd1760ef0978ff0050484a20173db95e3d573cd2724240a9a43bc843f0"
+        },
+        {
+          "path": "migrations/20260706000008_phase9_plans_subscriptions.sql",
+          "sha256": "20f913944528cde48a6a48e9bd446d5f812b5aeb90ad8693806eb2ff1829049e"
+        },
+        {
+          "path": "migrations/20260706000009_phase10_customers_multi_subscriptions.sql",
+          "sha256": "c80af45311ce2acb2254606da5b401b10c75a689181b3aa62b41be60d2cc83c6"
+        },
+        {
+          "path": "migrations/20260706000011_phase12_service_provider.sql",
+          "sha256": "c38473d02d804eda918c7dd2cadec40d5bae58c26937dc25203327f1809ce15d"
+        },
+        {
+          "path": "migrations/20260706000013_phase12_integrity_guards.sql",
+          "sha256": "5c3f128ec5c9ada560cfba4444834795735507064c593d3f09b11def6277dcd8"
+        },
+        {
+          "path": "migrations/20260710000014_phase13_domain_workspace.sql",
+          "sha256": "7085587862b80bdaf9563c5f7f8b75ecdafc123e9fe5fb6a734a63653b937b9c"
+        },
+        {
+          "path": "migrations/20260712000017_operational_sweeps.sql",
+          "sha256": "15a6a19187d57cbcb6a400b0a75cf74b9d2924444d1f4b278fd7782185059760"
+        },
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        },
+        {
+          "path": "migrations/20260724000035_global_dns_template.sql",
+          "sha256": "3ddec9008b3a790dc0da7cd1f6b8edfc30981b56305a051713190f258a5f951b"
+        },
+        {
+          "path": "migrations/20260724000040_dns_template_adoption_state.sql",
+          "sha256": "5364f9b2c20394a3e4ddc5fddc87d4493e5abd79eaf06b551dbd2a4be52b7c15"
+        },
+        {
+          "path": "migrations/20260724000041_dns_root_zone_mode_default.sql",
+          "sha256": "7c5ce7425f7df49b2711c8dc54147496c22d4e6218848a1d8a09e11d616545e9"
+        },
+        {
+          "path": "migrations/20260829000044_phase30_production_php.sql",
+          "sha256": "895ef0a6d18244fb6fd1c1209464db9e6a5366aa51658f9bd5b7cee64b1e0cd7"
+        },
+        {
+          "path": "migrations/20260830000046_phase30_site_php_versions.sql",
+          "sha256": "92a6c0d4e408c4bbeab93fa273d108426315b1e209ab352ef1808a08621d15a4"
+        },
+        {
+          "path": "migrations/20261013000052_integrated_ssl_setup.sql",
+          "sha256": "134e13942198b00e36458a9778ecb5dd25238c95465270ca8a65b2e485bc9c0e"
+        },
+        {
+          "path": "migrations/20261013000053_domain_removal.sql",
+          "sha256": "f4a0449b86bbd880cbf07d2a63c3d389dc91804e84fb405ce88adec6384db73e"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "subscription_addons": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260706000011_phase12_service_provider.sql",
+          "sha256": "c38473d02d804eda918c7dd2cadec40d5bae58c26937dc25203327f1809ce15d"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "subscription_entitlements": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260706000011_phase12_service_provider.sql",
+          "sha256": "c38473d02d804eda918c7dd2cadec40d5bae58c26937dc25203327f1809ce15d"
+        },
+        {
+          "path": "migrations/20260711000015_service_plan_designer.sql",
+          "sha256": "107ec3f8a3620aa7dc8b9f14834b51d8aeabb2415b5f11c04afb1a72e5355662"
+        },
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "subscription_policy_overrides": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260712000018_subscription_accounts.sql",
+          "sha256": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "subscriptions": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260706000008_phase9_plans_subscriptions.sql",
+          "sha256": "20f913944528cde48a6a48e9bd446d5f812b5aeb90ad8693806eb2ff1829049e"
+        },
+        {
+          "path": "migrations/20260706000009_phase10_customers_multi_subscriptions.sql",
+          "sha256": "c80af45311ce2acb2254606da5b401b10c75a689181b3aa62b41be60d2cc83c6"
+        },
+        {
+          "path": "migrations/20260706000011_phase12_service_provider.sql",
+          "sha256": "c38473d02d804eda918c7dd2cadec40d5bae58c26937dc25203327f1809ce15d"
+        },
+        {
+          "path": "migrations/20260706000013_phase12_integrity_guards.sql",
+          "sha256": "5c3f128ec5c9ada560cfba4444834795735507064c593d3f09b11def6277dcd8"
+        },
+        {
+          "path": "migrations/20260711000015_service_plan_designer.sql",
+          "sha256": "107ec3f8a3620aa7dc8b9f14834b51d8aeabb2415b5f11c04afb1a72e5355662"
+        },
+        {
+          "path": "migrations/20260830000047_phase31_production_service_plans.sql",
+          "sha256": "2c4893b36b4e6238768820dcc06ed5bcdcd6909e1cb582cf27dd3d91500296be"
+        },
+        {
+          "path": "migrations/20261013000053_domain_removal.sql",
+          "sha256": "f4a0449b86bbd880cbf07d2a63c3d389dc91804e84fb405ce88adec6384db73e"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    },
+    "webmail_hosts": {
+      "actual_selected_migrations": [
+        {
+          "path": "migrations/20260706000006_phase6_operations.sql",
+          "sha256": "daba1d7a99d96f55f3811a115dbf29d3312d7041c0d85191eed81d255ae9b0b2"
+        }
+      ],
+      "schemas": [
+        20261015000055,
+        20261018000056
+      ],
+      "source_verified": true,
+      "verification": "static selected production SQL sources; runtime read-only query remains mandatory"
+    }
+  },
+  "sources": {
+    "actual_authority": null,
+    "bounded_clarification_evidence": "contract-evidence-v2.json",
+    "custody_reference": {
+      "primitives_path": "/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-18/evidence/candidate26-sury-only-unchanged-diagnostic-implementation-v2/custody_base.py",
+      "primitives_sha256": "bbe68b69d270aae3a253c2848dee8e4145eb546454d767e00ab2d8392e11b8b3",
+      "reference_M_adapter_path": "/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-18/evidence/candidate26-sury-only-unchanged-diagnostic-implementation-v2/prepare_custody.py",
+      "reference_M_adapter_sha256": "81aea3fbf80e914069e252729d1d9b1367344ec9f71e492736d3e02a13799df3",
+      "reference_independent_review_path": "/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-18/evidence/candidate26-sury-only-unchanged-diagnostic-implementation-v2/independent-installer-v2/review-v2.json",
+      "reference_independent_review_sha256": "02d18d738d1d498dbff9a24c2d18458b3dd89fd2386b92dcc0d6bb83e2e4c68e",
+      "scope": "low-level mechanics and terminal fixes only; Sur\u00fd prepare API/day0 run_once are not directly compatible with L1; new fixed adapter requires independent review"
+    },
+    "new_RSA_execution": false,
+    "prerequisite_refs": {
+      "/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-18/evidence/candidate26-legacy-L1-concrete-design-v1/freeze-v1.json": "53ea4ff830ba0ca653e60d74476f25ef0b23e02b18769bf5a55b627bf6d681c4",
+      "/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-18/evidence/candidate26-legacy-L1-concrete-design-v1/independent-design-review-v1/review-v1.json": "0311e2a942b02e412e069c07c208c7606dcd7e7fdc41109c6c3674e4f6f18de2",
+      "/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-18/evidence/candidate26-legacy-recovery-gap-audit-v1/freeze-v1.json": "714167132d9e810bc72c21d8d9824e83d2876c67b97d56c89b24cb4ced48c494",
+      "/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-18/evidence/candidate26-legacy-recovery-gap-audit-v1/independent-review-v1/review-v1.json": "2881902532bf0e764e5aa45edd217257ee3059ece497f6952c3b1bed3ba0196d",
+      "/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-18/evidence/candidate26-legacy-recovery-gap-audit-v1/root-physical-design-review-v1.json": "5203b65afbd68928501935806cd99cd89cbd43ce83d16c7d377eeab258634e4f"
+    },
+    "prior_readonly_contracts": {
+      "cmd/panelctl/backup_server.go": {
+        "scope": "retained ef8 source reference; actual signed-prior behavior remains measured by future execution",
+        "sha256": "4a9fae74f0c02a8ac7c8da3893f813d3ec0d824b5a515aab0988269166e0e2a7"
+      },
+      "internal/agent/ops/server_backup.go": {
+        "scope": "retained ef8 source reference; actual signed-prior behavior remains measured by future execution",
+        "sha256": "16cc98ff502e51b4442d041e2e8a57a9d04e70472d7a626b8891bfd94b622372"
+      },
+      "internal/backup/archive.go": {
+        "scope": "retained ef8 source reference; actual signed-prior behavior remains measured by future execution",
+        "sha256": "1354c2f0ce6de4fc624f9acb624c47e23e0d5f8ad909477c300066e7ecd20043"
+      },
+      "internal/control/operator/backup_server.go": {
+        "scope": "retained ef8 source reference; actual signed-prior behavior remains measured by future execution",
+        "sha256": "04a4d65b1fe22629ec2abadc218aae05fbfe39db1fe66a6cd5f8baec0fdeba4f"
+      },
+      "internal/control/serveradmin/backup_jobs.go": {
+        "scope": "retained ef8 source reference; actual signed-prior behavior remains measured by future execution",
+        "sha256": "cf0b9eff6494f2f5646c36e7b789e430990ffef4eb146134b733d0615eea86cf"
+      },
+      "internal/control/serveradmin/backups.go": {
+        "scope": "retained ef8 source reference; actual signed-prior behavior remains measured by future execution",
+        "sha256": "bb5ef27d6af7636eb5ad5a37dec67b1b299c6ca799b4e37a7c2cb9a550629ccf"
+      }
+    },
+    "read_only_metadata_action_only": true,
+    "schema": "source26-L1-design-source-map-v2",
+    "selected_SQL_files": 60,
+    "selected_application_source": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+    "selected_manifest_sha256": "50a0cc9802629bcdecb50f26a64f0ec8e49a434856f3f3aabb8e36650e8a60cc",
+    "selected_max_schema": 20261018000056,
+    "selected_migration_files": 71,
+    "selected_signed_migration_subset": {
+      "Makefile": "23311af3f058ddf0ead8951d8bb4ef48c4558fd9b2a4fa1ca66825b7e62fc1b0",
+      "VERSION": "b57dce63f7ebe7e57f99c2cb4c35c3aee3159788e16512c8810d5cee7a128023",
+      "go.mod": "43ef6d55cc56a5f07d1d9a2883b8d4ae6deec5aea237f4b507b666582647e0f3",
+      "go.sum": "4cb79e1ce4909c3d5a398503e70ed3013d4c37eb20bd636c1fa2b2db119d3577",
+      "migrations/20260706000001_create_users.sql": "9b8bc1f64160238a8a4ca8d879e8ca2b53236a83eead1419c4f1f9c2de239a15",
+      "migrations/20260706000002_create_sessions_seed_users.sql": "facae40e4fa5ada1ea2c3add0a15429a7a0308f1ed7cea2f9010f9698285cd6b",
+      "migrations/20260706000003_create_sites.sql": "1f45b33f207d50fc42a8a3107f48be4966d821c0b3185cea9e1e416d8add0cdc",
+      "migrations/20260706000004_create_databases.sql": "bac6605a7844fc226403931b909293c1e92bdc4b622c2b9c096b8ac85cd1f624",
+      "migrations/20260706000005_add_site_tls.sql": "2f388dbd1760ef0978ff0050484a20173db95e3d573cd2724240a9a43bc843f0",
+      "migrations/20260706000006_phase6_operations.sql": "daba1d7a99d96f55f3811a115dbf29d3312d7041c0d85191eed81d255ae9b0b2",
+      "migrations/20260706000007_phase8_account_quotas.sql": "89ac099bbae666ed014428f5cdc2d1c9ab3b68789e04c051154a5f732dad7b18",
+      "migrations/20260706000008_phase9_plans_subscriptions.sql": "20f913944528cde48a6a48e9bd446d5f812b5aeb90ad8693806eb2ff1829049e",
+      "migrations/20260706000009_phase10_customers_multi_subscriptions.sql": "c80af45311ce2acb2254606da5b401b10c75a689181b3aa62b41be60d2cc83c6",
+      "migrations/20260706000010_phase11_routed_workspace.sql": "9ff42a4ad5b5485d731d2f1b83de2a30e56c0275c6bd2646539550deaf2a4f3a",
+      "migrations/20260706000011_phase12_service_provider.sql": "c38473d02d804eda918c7dd2cadec40d5bae58c26937dc25203327f1809ce15d",
+      "migrations/20260706000012_phase12_provider_hardening.sql": "44b92fd2def72dd73076da993eaf62938a456feabc8e5cac5b2d0f06c65ccf17",
+      "migrations/20260706000013_phase12_integrity_guards.sql": "5c3f128ec5c9ada560cfba4444834795735507064c593d3f09b11def6277dcd8",
+      "migrations/20260710000014_phase13_domain_workspace.sql": "7085587862b80bdaf9563c5f7f8b75ecdafc123e9fe5fb6a734a63653b937b9c",
+      "migrations/20260711000015_service_plan_designer.sql": "107ec3f8a3620aa7dc8b9f14834b51d8aeabb2415b5f11c04afb1a72e5355662",
+      "migrations/20260711000016_service_plan_name_integrity.sql": "0d55866ee7b42aa0aa629023dbd6f9a89d6783e7a5ec1d685c8ac2798418ac0d",
+      "migrations/20260712000017_operational_sweeps.sql": "15a6a19187d57cbcb6a400b0a75cf74b9d2924444d1f4b278fd7782185059760",
+      "migrations/20260712000018_subscription_accounts.sql": "d0b6aaeeaba36d6ab9d0c0486e1ecfd3917d7dc5828e185ddaa3ee3e1b1a90d0",
+      "migrations/20260712000019_phase15_service_cleanup.sql": "a70ed03b7b6e4574ea64d21285305c8f591694dacf178936d85779fcebe7d83e",
+      "migrations/20260713000019_panelctl_operator_cli.sql": "49c2525082a1f91d4a500b4ca806e3429264a3d6e21e3c6880d570df80bf3629",
+      "migrations/20260713000020_custom_tls.sql": "08402069e0a27e822a2ff53dd7ae3274fb807e7ab1ec59dab02c06e3054ed0a0",
+      "migrations/20260714000021_phase18_mail_hosting.sql": "eb607a460d4d3370047cab7694b98bd3566f0f006398c7412fb2f4280d560472",
+      "migrations/20260714000022_phase20_provisioning_api.sql": "14c6d12b1b200807138545f8d646dc15939b51281973b7436885742a33acd2c8",
+      "migrations/20260723000023_phase21_domain_access.sql": "831d06eaa28ecaeb36a202b73df1797becabc595d149fd981f39e38bc87090b4",
+      "migrations/20260723000024_phase22_site_runtime.sql": "04ae9cd18304b802fbe7f3105957d7780dbd409b03cea02c34cfba52f427b62e",
+      "migrations/20260723000025_phase23_logs_tasks_statistics.sql": "89a7e50b2da3a607d9b8709a84b68e85a38dc719789184e65c92c0244a86e179",
+      "migrations/20260723000026_phase24_git_apps_staging.sql": "be3866b24e3f3d7899eb863ff0a9ad3e161511b474e32b720197fa902e4ee2a9",
+      "migrations/20260723000027_phase25_subscription_valkey.sql": "d84243ed534b926d28fc5241863acc0cf694e3ae580f0dd94ee6a0e27ee8718c",
+      "migrations/20260723000028_phase26_tools_settings_foundation.sql": "f3098f123ebc0de9ec1513582901742c48ed5c86f2f7706ade45c9172ac3409d",
+      "migrations/20260723000029_phase26_operation_hardening.sql": "6439d97d57a70773133c48f74a44dd034c6683ff3ac7a0c525f0df898529792f",
+      "migrations/20260723000030_phase25_entitlement_snapshot_trigger.sql": "0d9701efc6ea950620d341fbac9160ed92b43405575900f759fd363a94cdfd1a",
+      "migrations/20260723000031_subscription_convergence_revisions.sql": "6c2b645aec0f9b342734e876b1a6b81f52d7a7accdd6af91892b1d02c86eb3d5",
+      "migrations/20260723000032_application_convergence_revisions.sql": "e8809dd63fb2e08f33c49329e2d67e03e2cbe863c080c8555e5932ad52353f6b",
+      "migrations/20260723000033_account_teardown_mutation_gate.sql": "1eb2503b9a59cb7d89b2d35472d5d1c437b6bc60ca99952aa45cf196f3aa357c",
+      "migrations/20260723000034_effective_mail_delivery.sql": "69d9035ad1c5c9d3983eabbf36e281b68acb7cbf82e735b0321f915ab20dc762",
+      "migrations/20260724000035_global_dns_template.sql": "3ddec9008b3a790dc0da7cd1f6b8edfc30981b56305a051713190f258a5f951b",
+      "migrations/20260724000036_phase28_application_runtime.sql": "533050f4d2e91693d4557ec0dd2ace235fd4de88689d916a81209cf9fb62e593",
+      "migrations/20260724000037_phase28_manifest_compatibility.sql": "676fce7b5adbca9eb9b26a73048f88d98ccc6ce6e7d5635a9fe21383a7734fe8",
+      "migrations/20260724000038_dns_template_integrity.sql": "27b9bd55b1bdac9605a36a8d6559a74889db8392e9dbd6e857b5b70ba54b2ada",
+      "migrations/20260724000039_dns_zone_template_pinning.sql": "d7cca31e11bc09820e5d4cc25ead87250b931f01dce627bec3d8da08200a883a",
+      "migrations/20260724000040_dns_template_adoption_state.sql": "5364f9b2c20394a3e4ddc5fddc87d4493e5abd79eaf06b551dbd2a4be52b7c15",
+      "migrations/20260724000041_dns_root_zone_mode_default.sql": "7c5ce7425f7df49b2711c8dc54147496c22d4e6218848a1d8a09e11d616545e9",
+      "migrations/20260826000042_phase29_server_backups.sql": "41ee0a62d0d9b946c368fc7b685355274eba39f88b2950084537c74567286aa1",
+      "migrations/20260826000043_phase29_production_security.sql": "9abcedcb31f1da4186992e3a656001495d5e927526f6523292c7200937ee30d3",
+      "migrations/20260829000044_phase30_production_php.sql": "895ef0a6d18244fb6fd1c1209464db9e6a5366aa51658f9bd5b7cee64b1e0cd7",
+      "migrations/20260830000045_phase30_integration.sql": "fb49bcc9e555ea8539d712b95c81c26c01223e9f6271b4f27e9bd4f342108351",
+      "migrations/20260830000046_phase30_site_php_versions.sql": "92a6c0d4e408c4bbeab93fa273d108426315b1e209ab352ef1808a08621d15a4",
+      "migrations/20260830000047_phase31_production_service_plans.sql": "2c4893b36b4e6238768820dcc06ed5bcdcd6909e1cb582cf27dd3d91500296be",
+      "migrations/20260830000048_phase32_wordpress_toolkit.sql": "619d811cfcbd9cfec226b26f3f8949f853573b79e6f4268f6e97878c14b450e3",
+      "migrations/20260830000049_wordpress_uninstall.sql": "86197dae6a93065ca9e2981b165a773edaa46eeafa1cb1ed942bbe0dbe40265a",
+      "migrations/20260908000050_phase34_web_statistics.sql": "9eb5a76a0aa6494836c4681bcd7eaf6459b800bcfff5c16fc8de35932b96558f",
+      "migrations/20260909000044_database_create_idempotency.sql": "8c30503b9c314b501fce4711dda8670ff739f2680336a26c56340f69d5458327",
+      "migrations/20260909000045_database_manager_grants.sql": "dc76f8a1ed5503ad253a2c513a2489d6b891c902cbeee1a716c8839d204d5510",
+      "migrations/20260909000046_git_workspace.sql": "7d84c80c0cebb0d647bbb4e7e56a7c53304ff40599c5c6deb808cddd8fac68ab",
+      "migrations/20260927000051_seeded_php_runtime_defaults.sql": "4774b420c1934b15c83ed5eb5457143c283daba24d5fe8d8ef7da1274dfcfa21",
+      "migrations/20261013000052_integrated_ssl_setup.sql": "134e13942198b00e36458a9778ecb5dd25238c95465270ca8a65b2e485bc9c0e",
+      "migrations/20261013000053_domain_removal.sql": "f4a0449b86bbd880cbf07d2a63c3d389dc91804e84fb405ce88adec6384db73e",
+      "migrations/20261015000054_mail_import.sql": "af4388aadb6dec5bc8f3522ad8d9456a278803205e2d9dcd9ca5b4a3c93888c3",
+      "migrations/20261015000055_dns_template_deletions.sql": "ef525baeed6bcf1f88d2cb041c1dda28943fecf56f512364e3c8d4bcd90f9f2a",
+      "migrations/20261018000056_dns_managed_defaults.sql": "3ce08b4f8f8b4b5de579652c8f691e048e8f12a88e3e3ef5de8be0ffb085c179",
+      "migrations/domain_removal_postgres_test.go": "b3c645aa147b5a2af22d8cdd07f7a16e37d8f1612331473fcced3a8b55040f57",
+      "migrations/migrations_test.go": "0ffc8ee17550be35bd78071e7b99de4ef5eca1a8693fb021a28f2d5045dadc90",
+      "migrations/phase30_postgres_test.go": "a06cd5df6aa667df7e5cdb7769f1ef9fc6853aac8f858236f064df2e3e8f07b1",
+      "migrations/phase31_postgres_test.go": "d6b5b97a8a26bc38ce52d2b45c4a3b208480bf7ac41bc7a1fe4841b817859c48",
+      "migrations/phase32_postgres_test.go": "279018eab55b7ccb221f7576b1ba6da9abd5d24619c35177c31cabd39e531f54",
+      "migrations/phase33_postgres_test.go": "42ec9aa5b6d433b03efaa33f254c2f27546b9c0a56410a2e651b99bd31439e72",
+      "migrations/phase34_postgres_test.go": "e330b670d630846ef76c545ba55402995b8f1ec14103f12c1e0750ba6ec33295"
+    },
+    "source26_contracts": {
+      "cmd/panelctl/backup_server.go": {
+        "bytes": 21825,
+        "sha256": "8b8db4160444fc6c201b354abd38da814706199e022c9c3dc62d3a0f1b300223"
+      },
+      "deploy/install/install.sh": {
+        "bytes": 37625,
+        "sha256": "3b53c29ab1353161471d9aa1e0520f2aa897f4882ec741555efd1538937cef09"
+      },
+      "deploy/install/platform.sh": {
+        "bytes": 10615,
+        "sha256": "936d53c4e81745932ce080d0bcd949ca940fffeb0ed142562f1cee6a4ad6498d"
+      },
+      "deploy/install/platform_state.py": {
+        "bytes": 3429,
+        "sha256": "a0db0d870261deccd05e553d86d2229f5a1b244c498920615ac578cb4d9325fe"
+      },
+      "deploy/multipass/common.sh": {
+        "bytes": 21374,
+        "sha256": "ec22749e3122d5182f79a0ce77af8f0eb1342611a00227fa06b2076ddc71ef8d"
+      },
+      "deploy/multipass/current-install-verify.sh": {
+        "bytes": 15853,
+        "sha256": "bdd1c43ee410417e6beef31bd58f7d7ab9bfa27f452fb41e09848aefc494f931"
+      },
+      "deploy/multipass/internal-tools-verify.sh": {
+        "bytes": 13083,
+        "sha256": "d368c421dc87d9ada7a85f692a74d4fbc29424dc1526f261046f1209b234dca0"
+      },
+      "deploy/multipass/phase29-imap-canary.py": {
+        "bytes": 5492,
+        "sha256": "8e2845b72f997e5b232eb5e0c97a12420c2fe8ca22fde48becb4e101774237c4"
+      },
+      "deploy/multipass/qualification-artifacts.sh": {
+        "bytes": 6352,
+        "sha256": "8b7fadc09affa5cae07c5c66184d11a49bd77f8369b958eb42f7dfabcc3888b7"
+      },
+      "deploy/multipass/qualification_artifacts.py": {
+        "bytes": 11961,
+        "sha256": "9cb0c090e84a6dd7e6aa2ca5667830c1a3b48ce5b0bc1a0244096c67778b09fb"
+      },
+      "deploy/multipass/qualification_maintenance_ready.py": {
+        "bytes": 6760,
+        "sha256": "f2ae856174d4e6d1bc716ddcdfe49fb5e2770fb7834d0b10d100667493b35a32"
+      },
+      "deploy/multipass/roundcube-send-read.py": {
+        "bytes": 48072,
+        "sha256": "db3a1770d867e543152823656e3d173f1a0ca606cad2b1d3f24642b2849e671f"
+      },
+      "deploy/multipass/roundcube_send_read_test.go": {
+        "bytes": 791,
+        "sha256": "c43e1173e833d7cff53ad4db22d999eff39e72e20434fd51da2d392f0bb427f0"
+      },
+      "deploy/multipass/roundcube_send_read_test.py": {
+        "bytes": 86403,
+        "sha256": "d323e00888c64a46a797371b6441969de672fa1883573b5d736fdd69b3f88f6d"
+      },
+      "deploy/multipass/ubuntu-forward-migration-probe.py": {
+        "bytes": 67875,
+        "sha256": "3bf4432a9ffa119066af1df808c67e971989b6ae8fd82f87a54047c3205011c7"
+      },
+      "internal/agent/ops/database_ownership.go": {
+        "bytes": 5308,
+        "sha256": "58788073fdddc0d18f1d6f9c42259ce6ab54c790ae35f2ef8b27f53d1e0132dc"
+      },
+      "internal/backup/archive.go": {
+        "bytes": 15971,
+        "sha256": "7e78464d31b362f1d38844f5c095ebad98c37aaa8eacfe3b675a7faabe5d4a96"
+      },
+      "internal/backup/platform.go": {
+        "bytes": 19722,
+        "sha256": "8b922395ec8c17a59fd0b50365b3d2031d3d5313f26c8ab2362b611daeb72471"
+      },
+      "internal/backup/restore.go": {
+        "bytes": 32721,
+        "sha256": "bfcd06846a83e389114ff844e045ddac7ce05023ae9dcdf654cfd2c999fc131d"
+      },
+      "internal/control/operator/restore_platform.go": {
+        "bytes": 6493,
+        "sha256": "9fc445df051cf8ac562664682b3504409906910214981bdfecfcd9ff2f35527b"
+      }
+    }
+  },
+  "stopped": {
+    "active_primary_fixture": "current-bootstrap.test stays desired active; mail/webmail/file/DB/IMAP untouched",
+    "actual_authority": null,
+    "actual_image_ref": null,
+    "actual_job_revision": null,
+    "actual_observations": null,
+    "actual_parent_ids": null,
+    "actual_resource": null,
+    "checkpoints": [
+      "source-before-backup",
+      "source-after-backup",
+      "target-after-stop-before-migration",
+      "target-after-migration-before-start",
+      "target-after-strict-post",
+      "target-after-reboot1",
+      "target-after-reboot2"
+    ],
+    "create_request": {
+      "form": {
+        "container_port": 8080,
+        "desired_state": "stopped",
+        "environment": "{}",
+        "health_kind": "tcp",
+        "health_timeout_seconds": 5,
+        "image_ref": "<implementation-reviewed fixed immutable docker.io/library/nginx@sha256:non-sentinel digest>",
+        "name": "l1-stopped-<actual_run_id>",
+        "return_to": "site-containers",
+        "route_mode": "prefix",
+        "route_prefix": "/l1-stopped/",
+        "runtime": "oci",
+        "secrets": "{}",
+        "site_id": "<actual_parent_site_id>"
+      },
+      "id_selection": "exact newly created unique subscription/site/name match, never latest/MAX or empty-table fallback",
+      "method": "POST",
+      "no_resource_id_catalog_or_volumes": true,
+      "path": "/subscriptions/<owned_subscription_id>/applications",
+      "required_response": 303
+    },
+    "design_only": true,
+    "empty_selected_row_or_uninspectable_runtime": "FAIL",
+    "image_limit": "stopped configured entity only; no image pull/tag-resolution/start/image-content/OCI filesystem claim. Exact static reference/provenance is required in separately reviewed implementation before execution; null here is no authority.",
+    "name": "l1-stopped-<actual_run_id>",
+    "no_target_recreation_or_manual_stop": true,
+    "policy_request": {
+      "form": {
+        "policy_patch": {
+          "applications": {
+            "allowed_registries": [
+              "docker.io"
+            ],
+            "allowed_runtimes": [
+              "oci"
+            ],
+            "egress_enabled": false,
+            "rootless": true
+          },
+          "permissions": {
+            "application_egress": false,
+            "applications": true,
+            "custom_oci_images": true
+          },
+          "resources": {
+            "max_applications": 1
+          }
+        }
+      },
+      "method": "POST",
+      "path": "/subscriptions/<owned_subscription_id>/policy",
+      "requires": "normal authenticated administrator+CSRF; absent prior override; actual product queue completion/effective policy; no raw SQL/full-plan save"
+    },
+    "required_db_facts": [
+      "selected positive row and all exact parents present",
+      "desired_state=stopped; delete_requested=false",
+      "actual positive desired_revision; applied_revision=desired_revision; applied_state=stopped",
+      "convergence_status=in_sync; no last_error; exact matching completed converge_application job/revision",
+      "observed_state in {stopped,missing}, because genuine periodic observer accepts missing for stopped intent",
+      "entire raw desired row and unknown JSON/revision/endpoint/override preserved"
+    ],
+    "required_runtime_facts": [
+      "successful typed same selected rootless store inspection; no running labelled container or live container PID",
+      "all selected-prefix generation units inactive with MainPID0; absent explicitly recorded; query failures fail",
+      "no listener on allocated primary/alternate ports; actual port bound",
+      "desired/parent identity unchanged around observations; no in-flight current operation"
+    ],
+    "resource": "one non-primary application_instances OCI entity",
+    "schema": "source26-L1-stopped-workload-design-v2",
+    "source_runtime_executed": false,
+    "stopped_boundary_acknowledgment": "restored source acknowledgment before current normal start is not new target convergence; current actual completed convergence required after strict post/boots"
+  }
+}
