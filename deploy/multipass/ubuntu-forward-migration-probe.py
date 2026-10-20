@@ -221,11 +221,16 @@ def roundcube_preflight(c, config_dir=Path('/etc/roundcube')):
     allowed = {'/var/lib/roundcube/roundcube.sqlite', '/var/lib/roundcube/db/roundcube',
                '/var/lib/dbconfig-common/sqlite3/roundcube/roundcube'}
     selected = None
+    package_wrapper = False
     for name in ('debian-db-roundcube.php', 'debian-db.php'):
         config = config_dir / name
         if not config.exists(): continue
         text = config.read_text()
         if name == 'debian-db-roundcube.php':
+            # The fixed Debian wrapper interpolates literals from debian-db.php.
+            if hashlib.sha256(text.strip().encode()).hexdigest() == 'c39d06fa29d90d8343d731f3a49a41670aeae04981090fb570284750fdd4e81a':
+                package_wrapper = True
+                continue
             match = re.search(r"(?m)^\s*\$config\[['\"]db_dsnw['\"]\]\s*=\s*['\"]([^'\"\r\n]*)['\"]\s*;", text)
             if not match: continue
             if not match[1].startswith('sqlite:'):
@@ -236,7 +241,11 @@ def roundcube_preflight(c, config_dir=Path('/etc/roundcube')):
             if not values.get('dbtype'): continue
             if values['dbtype'] not in ('sqlite','sqlite3'):
                 raise RuntimeError('Roundcube configured non-SQLite storage is unsupported for forward migration; preserve the legacy database separately')
-            selected = str(Path(values.get('dbbasepath') or values.get('basepath','')) / values.get('dbname',''))
+            if package_wrapper:
+                # Match its $basepath/$dbname template; dbbasepath is not used.
+                selected = values.get('basepath','').rstrip('/') + '/' + values.get('dbname','')
+            else:
+                selected = str(Path(values.get('dbbasepath') or values.get('basepath','')) / values.get('dbname',''))
         break
     if selected not in allowed:
         raise RuntimeError('forward migration requires an explicitly configured supported Roundcube SQLite database')

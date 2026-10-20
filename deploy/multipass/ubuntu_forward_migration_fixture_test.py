@@ -797,4 +797,121 @@ INSERT INTO addon_plans VALUES(1,true,'8.2','{}'),(2,true,'8.5','{}'),(3,false,'
             self.assertNotEqual(result.returncode,0);self.assertIn('archive digest mismatch',result.stderr)
             self.assertEqual(sorted(p.name for p in root.iterdir()),['bad.tar'])
 
+class RoundcubePreflightTests(unittest.TestCase):
+    # Exact Debian package wrapper already pinned by roundcube-dr-canary.php.
+    DEBIAN_WRAPPER = '''<?php
+require("/etc/roundcube/debian-db.php");
+
+switch ($dbtype) {
+ case "sqlite":
+ case "sqlite3":
+   $config['db_dsnw'] = "sqlite:///$basepath/$dbname?mode=0640";
+   break;
+ default:
+   if ($dbport != '') $dbport=":$dbport";
+   if ($dbserver == '') $dbserver="localhost";
+   $config['db_dsnw'] = "$dbtype://$dbuser:$dbpass@$dbserver$dbport/$dbname";
+   break;
+ }
+?>
+'''
+
+    def sqlite_config(self, kind='sqlite3', base='/var/lib/dbconfig-common/sqlite3/roundcube', name='roundcube'):
+        return "<?php\n$dbtype='"+kind+"';\n$basepath='"+base+"';\n$dbname='"+name+"';\n"
+
+    def inspect_roundcube(self, files, error=None, regular=True, symlink=False, integrity=True):
+        from pathlib import PurePosixPath
+        from unittest.mock import MagicMock
+        contents={'/synthetic/roundcube/'+name:value for name,value in files.items()}
+        reads=[];database_checks=[]
+        class MockPath(PurePosixPath):
+            def exists(self):return str(self) in contents
+            def read_text(self):reads.append(str(self));return contents[str(self)]
+            def is_file(self):database_checks.append(('regular',str(self)));return regular
+            def is_symlink(self):database_checks.append(('symlink',str(self)));return symlink
+        connection=MagicMock()
+        connection.execute.return_value.fetchall.return_value=[('ok',)] if integrity else [('synthetic-invalid',)]
+        with patch.object(probe,'Path',MockPath),patch.object(probe.sqlite3,'connect') as connect,patch.object(probe,'command') as command,patch.object(probe,'pg') as pg,patch.object(probe,'maria') as maria,patch.object(probe.subprocess,'run') as transport:
+            connect.return_value.__enter__.return_value=connection
+            if error:
+                with self.assertRaisesRegex(RuntimeError,error) as failure:
+                    probe.roundcube_preflight({},MockPath('/synthetic/roundcube'))
+                result=None
+                self.assertNotIn('SYNTHETIC_SECRET',str(failure.exception))
+            else:
+                result=probe.roundcube_preflight({},MockPath('/synthetic/roundcube'))
+            command.assert_not_called();pg.assert_not_called();maria.assert_not_called();transport.assert_not_called()
+        return result,reads,database_checks,connect,connection
+
+    def test_known_debian_wrapper_resolves_literal_sqlite_with_readonly_integrity_check(self):
+        self.assertEqual(hashlib.sha256(self.DEBIAN_WRAPPER.strip().encode()).hexdigest(),'c39d06fa29d90d8343d731f3a49a41670aeae04981090fb570284750fdd4e81a')
+        for kind in ('sqlite','sqlite3'):
+            for base,name in (('/var/lib/dbconfig-common/sqlite3/roundcube','roundcube'),('/var/lib/roundcube/db','roundcube'),('/var/lib/roundcube','roundcube.sqlite')):
+                with self.subTest(kind=kind,base=base):
+                    path=base+'/'+name
+                    result,reads,checks,connect,connection=self.inspect_roundcube({'debian-db-roundcube.php':self.DEBIAN_WRAPPER,'debian-db.php':self.sqlite_config(kind,base,name)})
+                    self.assertEqual(result,{'roundcube_sqlite_path':path,'roundcube_storage_preflight':'sqlite-readonly'})
+                    self.assertEqual(reads,['/synthetic/roundcube/debian-db-roundcube.php','/synthetic/roundcube/debian-db.php'])
+                    self.assertEqual(checks,[('regular',path),('symlink',path)])
+                    connect.assert_called_once_with('file://'+path+'?mode=ro',uri=True)
+                    connection.execute.assert_called_once_with('PRAGMA quick_check')
+
+    def test_known_debian_wrapper_rejects_non_sqlite_before_open_without_executing_php(self):
+        for kind in ('mysql','pgsql'):
+            text=self.sqlite_config(kind)+"$dbpass='SYNTHETIC_SECRET';\nfile_put_contents('/synthetic/never-executed','SYNTHETIC_SECRET');\n"
+            with self.subTest(kind=kind):
+                _,reads,checks,connect,connection=self.inspect_roundcube({'debian-db-roundcube.php':self.DEBIAN_WRAPPER,'debian-db.php':text},error='configured non-SQLite')
+                self.assertEqual(len(reads),2);self.assertEqual(checks,[]);connect.assert_not_called();connection.execute.assert_not_called()
+
+    def test_known_debian_wrapper_does_not_adopt_unused_dbbasepath(self):
+        invalid=[self.sqlite_config(base='/outside/supported')+"$dbbasepath='/var/lib/roundcube/db';\n",self.sqlite_config(base='/var/lib/roundcube/db').replace('$basepath','$dbbasepath')]
+        for text in invalid:
+            with self.subTest(text_kind='synthetic'):
+                _,_,checks,connect,_=self.inspect_roundcube({'debian-db-roundcube.php':self.DEBIAN_WRAPPER,'debian-db.php':text},error='explicitly configured supported')
+                self.assertEqual(checks,[]);connect.assert_not_called()
+        result,_,_,_,_=self.inspect_roundcube({'debian-db-roundcube.php':self.DEBIAN_WRAPPER,'debian-db.php':self.sqlite_config()+"$dbbasepath='/var/lib/roundcube/db';\n"})
+        self.assertEqual(result['roundcube_sqlite_path'],'/var/lib/dbconfig-common/sqlite3/roundcube/roundcube')
+
+    def test_known_debian_wrapper_does_not_discard_basepath_for_absolute_database_name(self):
+        _,_,checks,connect,_=self.inspect_roundcube({'debian-db-roundcube.php':self.DEBIAN_WRAPPER,'debian-db.php':self.sqlite_config(base='/outside/supported',name='/var/lib/roundcube/roundcube.sqlite')},error='explicitly configured supported')
+        self.assertEqual(checks,[]);connect.assert_not_called()
+
+    def test_known_debian_wrapper_requires_supported_literal_database_selection(self):
+        for text in (None,'<?php\n',self.sqlite_config(base='/outside/supported'),self.sqlite_config().replace("$dbtype='sqlite3';",'$dbtype=$unknown;'),self.sqlite_config().replace("$dbname='roundcube';",'')):
+            files={'debian-db-roundcube.php':self.DEBIAN_WRAPPER}
+            if text is not None:files['debian-db.php']=text
+            with self.subTest(config_kind='missing' if text is None else 'synthetic'):
+                _,_,checks,connect,_=self.inspect_roundcube(files,error='explicitly configured supported')
+                self.assertEqual(checks,[]);connect.assert_not_called()
+
+    def test_changed_debian_wrapper_is_not_interpreted_as_known_package_template(self):
+        variants=(self.DEBIAN_WRAPPER.replace('switch ($dbtype)','switch ($other)'),self.DEBIAN_WRAPPER+'\n// changed wrapper\n',self.DEBIAN_WRAPPER.replace('?mode=0640','?mode=0600'))
+        for text in variants:
+            with self.subTest(wrapper_hash=hashlib.sha256(text.encode()).hexdigest()):
+                _,reads,checks,connect,_=self.inspect_roundcube({'debian-db-roundcube.php':text,'debian-db.php':self.sqlite_config()},error='explicitly configured supported')
+                self.assertEqual(reads,['/synthetic/roundcube/debian-db-roundcube.php']);self.assertEqual(checks,[]);connect.assert_not_called()
+
+    def test_static_roundcube_sqlite_dsn_retains_precedence(self):
+        files={'debian-db-roundcube.php':"<?php\n$config['db_dsnw']='sqlite:////var/lib/roundcube/roundcube.sqlite';\n",'debian-db.php':self.sqlite_config(kind='mysql')}
+        result,reads,_,connect,connection=self.inspect_roundcube(files)
+        self.assertEqual(result['roundcube_sqlite_path'],'/var/lib/roundcube/roundcube.sqlite');self.assertEqual(len(reads),1)
+        connect.assert_called_once_with('file:///var/lib/roundcube/roundcube.sqlite?mode=ro',uri=True);connection.execute.assert_called_once_with('PRAGMA quick_check')
+
+    def test_standalone_roundcube_literals_retain_basepath_and_dbbasepath_compatibility(self):
+        for variable in ('basepath','dbbasepath'):
+            with self.subTest(variable=variable):
+                text=self.sqlite_config(base='/var/lib/roundcube/db').replace('$basepath','$'+variable)
+                result,_,_,connect,_=self.inspect_roundcube({'debian-db.php':text})
+                self.assertEqual(result['roundcube_sqlite_path'],'/var/lib/roundcube/db/roundcube')
+                connect.assert_called_once_with('file:///var/lib/roundcube/db/roundcube?mode=ro',uri=True)
+
+    def test_known_debian_wrapper_keeps_regular_file_symlink_and_integrity_guards(self):
+        files={'debian-db-roundcube.php':self.DEBIAN_WRAPPER,'debian-db.php':self.sqlite_config()}
+        for options,message in (({'regular':False},'regular existing file'),({'symlink':True},'regular existing file'),({'integrity':False},'integrity check failed')):
+            with self.subTest(options=options):
+                _,_,_,connect,connection=self.inspect_roundcube(files,error=message,**options)
+                if options.get('integrity') is False:
+                    connect.assert_called_once_with('file:///var/lib/dbconfig-common/sqlite3/roundcube/roundcube?mode=ro',uri=True);connection.execute.assert_called_once_with('PRAGMA quick_check')
+                else:connect.assert_not_called();connection.execute.assert_not_called()
+
 if __name__ == '__main__': unittest.main()
