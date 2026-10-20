@@ -401,3 +401,331 @@ func TestDeployApplicationEnablesResourceBoundSupervisorBeforeRouting(t *testing
 		}
 	}
 }
+
+func freshStoppedRootlessIdentityFixture(t *testing.T, runner CommandRunner) (*PodmanProvisioner, types.EnsureApplicationReq, string) {
+	t.Helper()
+	account, err := user.Current()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !accountUsernameRE.MatchString(account.Username) {
+		t.Skip("current account does not match supported application username policy")
+	}
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stateRoot, runtimeRoot := filepath.Join(root, "state"), filepath.Join(root, "run")
+	unitRoot, nginxRoot := filepath.Join(root, "units"), filepath.Join(root, "nginx")
+	for _, dir := range []string{stateRoot, runtimeRoot, unitRoot, nginxRoot} {
+		if err := os.Mkdir(dir, 0o711); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(dir, 0o711); err != nil {
+			t.Fatal(err)
+		}
+	}
+	subIDs := filepath.Join(root, "subids")
+	if err := os.WriteFile(subIDs, []byte(account.Username+":100000:65536\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	req := validApplicationGenerationRequest()
+	req.Username, req.DesiredState = account.Username, "stopped"
+	p := NewPodmanProvisioner(PodmanProvisionerOptions{
+		HomeRoot: filepath.Join(root, "missing-home"), StateRoot: stateRoot, RuntimeRoot: runtimeRoot,
+		SystemdUnitDir: unitRoot, NginxConfigDir: nginxRoot,
+		SubUIDPath: subIDs, SubGIDPath: subIDs, Runner: runner,
+	})
+	return p, req, filepath.Join(stateRoot, "sub-7")
+}
+
+func TestPrepareRootlessIdentityFreshStoppedParentIsTraversable(t *testing.T) {
+	p, req, parent := freshStoppedRootlessIdentityFixture(t, &applicationRuntimeTestRunner{})
+	identity, err := p.prepareRootlessIdentity(req, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, leaf := range []string{identity.stateHome, identity.dataHome, identity.configHome, identity.runtimeHome} {
+		info, err := os.Lstat(leaf)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o700 || !ownedBy(info, identity.uid) {
+			t.Errorf("private rootless leaf %s mode/type/owner = %v, want tenant-owned directory0700", filepath.Base(leaf), info.Mode())
+		}
+	}
+	config := filepath.Join(identity.configHome, "containers", "containers.conf")
+	info, err := os.Lstat(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm() != 0o600 || !ownedBy(info, identity.uid) {
+		t.Errorf("private rootless config mode/type/owner = %v, want tenant-owned regular0600", info.Mode())
+	}
+	info, err = os.Lstat(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("fresh subscription parent=%04o; private leaves=0700; config=0600", info.Mode().Perm())
+	if info.Mode().Perm() != 0o711 {
+		t.Errorf("fresh rootless subscription parent mode = %04o, want 0711 before tenant Podman", info.Mode().Perm())
+	}
+}
+
+type stoppedRootlessParentRunner struct {
+	parent string
+	calls  []string
+	sawPS  bool
+	mode   os.FileMode
+}
+
+func (r *stoppedRootlessParentRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	call := name + " " + strings.Join(args, " ")
+	r.calls = append(r.calls, call)
+	if name == "runuser" && strings.Contains(call, "/podman ps ") {
+		r.sawPS = true
+		info, err := os.Lstat(r.parent)
+		if err != nil {
+			return nil, err
+		}
+		r.mode = info.Mode().Perm()
+		if r.mode != 0o711 {
+			return nil, fmt.Errorf("synthetic tenant traversal refusal: parent mode %04o, want 0711", r.mode)
+		}
+	}
+	return nil, nil
+}
+
+func TestDeployStoppedApplicationPreparesTraversableRootlessParent(t *testing.T) {
+	for _, remove := range []bool{false, true} {
+		t.Run(fmt.Sprintf("remove=%v", remove), func(t *testing.T) {
+			runner := &stoppedRootlessParentRunner{}
+			p, req, parent := freshStoppedRootlessIdentityFixture(t, runner)
+			runner.parent, req.Remove = parent, remove
+			result, err := p.DeployApplicationGeneration(context.Background(), req)
+			if !runner.sawPS {
+				t.Fatal("stopped generation did not reach the actual first tenant Podman ps boundary")
+			}
+			if err != nil {
+				t.Fatalf("fresh stopped generation parent=%04o: %v", runner.mode, err)
+			}
+			if result.ObservedState != "stopped" {
+				t.Fatalf("observed state=%q, want stopped", result.ObservedState)
+			}
+			joined := strings.Join(runner.calls, "\n")
+			for _, forbidden := range []string{"podman pull ", "podman create ", "podman start "} {
+				if strings.Contains(joined, forbidden) {
+					t.Fatalf("stopped generation reached provisioning command %q", forbidden)
+				}
+			}
+		})
+	}
+}
+
+func TestRootlessIdentityRepairsOnlyManagedParentAndPreservesPrivateState(t *testing.T) {
+	for _, initial := range []os.FileMode{0o700, 0o711} {
+		t.Run(fmt.Sprintf("parent=%04o", initial), func(t *testing.T) {
+			p, req, parent := freshStoppedRootlessIdentityFixture(t, &applicationRuntimeTestRunner{})
+			if err := os.Mkdir(parent, initial); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(parent, initial); err != nil {
+				t.Fatal(err)
+			}
+			for pass := 0; pass < 2; pass++ {
+				identity, err := p.prepareRootlessIdentity(req, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				info, err := os.Lstat(parent)
+				if err != nil || info.Mode().Perm() != 0o711 || !ownedBy(info, os.Geteuid()) {
+					t.Fatalf("managed parent not preserved/repaired: %v, %v", info, err)
+				}
+				private := filepath.Join(identity.dataHome, "unrelated-state")
+				if pass == 0 {
+					if err := os.WriteFile(private, []byte("private-state-sentinel"), 0o600); err != nil {
+						t.Fatal(err)
+					}
+				} else {
+					contents, err := os.ReadFile(private)
+					if err != nil || string(contents) != "private-state-sentinel" {
+						t.Fatalf("private state changed: %q, %v", contents, err)
+					}
+				}
+				for _, leaf := range []string{identity.stateHome, identity.dataHome, identity.configHome, identity.runtimeHome} {
+					info, err := os.Lstat(leaf)
+					if err != nil || info.Mode().Perm() != 0o700 || !ownedBy(info, identity.uid) {
+						t.Fatalf("private leaf changed: %v, %v", info, err)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestRootlessIdentityConcurrentPreparationPreservesPrivateState(t *testing.T) {
+	p, req, parent := freshStoppedRootlessIdentityFixture(t, &applicationRuntimeTestRunner{})
+	start := make(chan struct{})
+	results := make(chan error, 8)
+	for worker := 0; worker < cap(results); worker++ {
+		go func() {
+			<-start
+			_, err := p.prepareRootlessIdentity(req, false)
+			results <- err
+		}()
+	}
+	close(start)
+	for worker := 0; worker < cap(results); worker++ {
+		if err := <-results; err != nil {
+			t.Errorf("concurrent preparation refused: %v", err)
+		}
+	}
+	entries, err := os.ReadDir(parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".nakpanel-rootless-") {
+			t.Errorf("temporary rootless staging directory remained: %q", entry.Name())
+		}
+	}
+}
+
+func TestRootlessIdentityRejectsUnsafePathsWithoutOutsideMutation(t *testing.T) {
+	for _, kind := range []string{"state-root-symlink", "parent-symlink", "home-symlink", "data-symlink", "config-symlink", "runtime-root-symlink", "runtime-symlink", "containers-symlink", "config-file-symlink", "config-file-hardlink", "parent-file", "runtime-file", "containers-file"} {
+		t.Run(kind, func(t *testing.T) {
+			runner := &stoppedRootlessParentRunner{}
+			p, req, parent := freshStoppedRootlessIdentityFixture(t, runner)
+			runner.parent = parent
+			outside, err := filepath.EvalSymlinks(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"sentinel", "containers.conf"} {
+				if err := os.WriteFile(filepath.Join(outside, name), []byte("outside-sentinel"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := os.Mkdir(parent, 0o711); err != nil {
+				t.Fatal(err)
+			}
+			target := parent
+			switch kind {
+			case "state-root-symlink":
+				if err := os.Remove(parent); err != nil {
+					t.Fatal(err)
+				}
+				target = p.stateRoot
+			case "home-symlink":
+				target = filepath.Join(parent, "home")
+			case "data-symlink":
+				target = filepath.Join(parent, "data")
+			case "config-symlink":
+				target = filepath.Join(parent, "config")
+			case "runtime-root-symlink":
+				target = p.runtimeRoot
+			case "runtime-symlink", "runtime-file":
+				target = filepath.Join(p.runtimeRoot, "sub-7")
+			case "containers-symlink", "containers-file", "config-file-symlink", "config-file-hardlink":
+				config := filepath.Join(parent, "config")
+				if err := os.Mkdir(config, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				target = filepath.Join(config, "containers")
+				if strings.HasPrefix(kind, "config-file-") {
+					if err := os.Mkdir(target, 0o700); err != nil {
+						t.Fatal(err)
+					}
+					target = filepath.Join(target, "containers.conf")
+				}
+			}
+			if _, err := os.Lstat(target); err == nil {
+				if err := os.Remove(target); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if kind == "config-file-hardlink" {
+				if err := os.Link(filepath.Join(outside, "sentinel"), target); err != nil {
+					t.Fatal(err)
+				}
+			} else if strings.HasSuffix(kind, "-file") {
+				if err := os.WriteFile(target, []byte("managed-file-sentinel"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				link := outside
+				if kind == "config-file-symlink" {
+					link = filepath.Join(outside, "sentinel")
+				}
+				if err := os.Symlink(link, target); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := p.DeployApplicationGeneration(context.Background(), req); err == nil {
+				t.Error("unsafe rootless path accepted")
+			}
+			if len(runner.calls) != 0 {
+				t.Errorf("unsafe path reached tenant runner: %v", runner.calls)
+			}
+			entries, err := os.ReadDir(outside)
+			if err != nil || len(entries) != 2 {
+				t.Errorf("outside directory changed: %v, %v", entries, err)
+			}
+			for _, name := range []string{"sentinel", "containers.conf"} {
+				contents, err := os.ReadFile(filepath.Join(outside, name))
+				if err != nil || string(contents) != "outside-sentinel" {
+					t.Errorf("outside file changed: %s: %q, %v", name, contents, err)
+				}
+			}
+		})
+	}
+}
+
+func TestRootlessIdentityRejectsWritableManagedNamespaces(t *testing.T) {
+	for _, kind := range []string{"state-root", "parent", "runtime-root"} {
+		t.Run(kind, func(t *testing.T) {
+			runner := &stoppedRootlessParentRunner{}
+			p, req, parent := freshStoppedRootlessIdentityFixture(t, runner)
+			runner.parent = parent
+			if err := os.Mkdir(parent, 0o711); err != nil {
+				t.Fatal(err)
+			}
+			target := map[string]string{"state-root": p.stateRoot, "parent": parent, "runtime-root": p.runtimeRoot}[kind]
+			if err := os.Chmod(target, 0o777); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := p.DeployApplicationGeneration(context.Background(), req); err == nil {
+				t.Error("writable managed namespace accepted")
+			}
+			if len(runner.calls) != 0 {
+				t.Errorf("writable namespace reached tenant runner: %v", runner.calls)
+			}
+			info, err := os.Lstat(target)
+			if err != nil || info.Mode().Perm() != 0o777 {
+				t.Errorf("untrusted namespace was changed/adopted: %v, %v", info, err)
+			}
+		})
+	}
+}
+
+func TestRootlessConfigRejectsForeignIdentityWithoutAdoption(t *testing.T) {
+	for _, kind := range []string{"uid", "gid"} {
+		t.Run(kind, func(t *testing.T) {
+			config := t.TempDir()
+			identity := applicationIdentity{uid: os.Getuid(), gid: os.Getgid(), configHome: config}
+			if kind == "uid" {
+				identity.uid++
+			} else {
+				identity.gid++
+			}
+			p := NewPodmanProvisioner(PodmanProvisionerOptions{})
+			if err := p.writeRootlessPodmanConfig(identity); err == nil {
+				t.Error("foreign existing config owner accepted")
+			}
+			entries, err := os.ReadDir(config)
+			if err != nil || len(entries) != 0 {
+				t.Errorf("foreign identity caused config writes: %v, %v", entries, err)
+			}
+		})
+	}
+}

@@ -280,47 +280,30 @@ func (p *PodmanProvisioner) prepareRootlessIdentity(req types.EnsureApplicationR
 			return applicationIdentity{}, errors.New("application document root is missing or unsafe")
 		}
 	}
-	for _, dir := range []string{identity.stateHome, identity.dataHome, identity.configHome, identity.runtimeHome} {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return applicationIdentity{}, err
-		}
-		if os.Geteuid() == 0 {
-			if err := os.Chown(dir, uid, gid); err != nil {
-				return applicationIdentity{}, err
-			}
-		}
+	config, err := p.rootlessPodmanConfigContent()
+	if err != nil {
+		return applicationIdentity{}, err
 	}
-	if err := p.writeRootlessPodmanConfig(identity); err != nil {
+	if err := prepareRootlessFilesystem(p.stateRoot, p.runtimeRoot, identity, config); err != nil {
 		return applicationIdentity{}, err
 	}
 	return identity, nil
 }
 
 func (p *PodmanProvisioner) writeRootlessPodmanConfig(identity applicationIdentity) error {
+	content, err := p.rootlessPodmanConfigContent()
+	if err != nil {
+		return err
+	}
+	return writeExistingRootlessConfig(identity, content)
+}
+
+func (p *PodmanProvisioner) rootlessPodmanConfigContent() ([]byte, error) {
 	networkCommandPath := filepath.Clean(p.networkCommandPath)
 	if !filepath.IsAbs(networkCommandPath) || strings.ContainsAny(networkCommandPath, "\"'\r\n\t ") {
-		return errors.New("rootless Podman network command path is invalid")
+		return nil, errors.New("rootless Podman network command path is invalid")
 	}
-	configDir := filepath.Join(identity.configHome, "containers")
-	if err := os.MkdirAll(configDir, 0o700); err != nil {
-		return err
-	}
-	if os.Geteuid() == 0 {
-		if err := os.Chown(configDir, identity.uid, identity.gid); err != nil {
-			return err
-		}
-	}
-	configPath := filepath.Join(configDir, "containers.conf")
-	content := []byte("[engine]\nnetwork_cmd_path=\"" + networkCommandPath + "\"\n")
-	if err := writeFileAtomic(configPath, content, 0o600); err != nil {
-		return err
-	}
-	if os.Geteuid() == 0 {
-		if err := os.Chown(configPath, identity.uid, identity.gid); err != nil {
-			return err
-		}
-	}
-	return nil
+	return []byte("[engine]\nnetwork_cmd_path=\"" + networkCommandPath + "\"\n"), nil
 }
 
 func (p *PodmanProvisioner) writeApplicationSecrets(req types.EnsureApplicationReq, identity applicationIdentity) (string, error) {

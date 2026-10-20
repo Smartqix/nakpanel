@@ -452,3 +452,52 @@ exceptions. Synthetic control and preparation regressions exercise these guards;
 they establish neither native signatures nor an actual package transaction.
 Fresh hosted recovery qualification remains required. ARM server qualification,
 a genuine PHP security-version advance and elapsed soak remain separate gates.
+
+## Candidate26 results and fresh stopped-application recovery
+
+Application source `1627bba3c681a884255eb91452dbba74a43ebbdc` passed all
+17 product gates on native Ubuntu24.04, native Ubuntu26.04 and Surý Ubuntu26.04;
+Noble also passed the repeated Surý-workflow regression cell. Its
+[required CI](https://github.com/Smartqix/nakpanel/actions/runs/39347428183)
+and [native workflow](https://github.com/Smartqix/nakpanel/actions/runs/39347422589)
+succeeded. The [Surý workflow](https://github.com/Smartqix/nakpanel/actions/runs/39347496239)
+failed its subsequent maintenance rehearsal. These results remain bound to their
+original signed binaries. The qualifier-only Roundcube SQLite-wrapper correction
+`a35a92ea987e6ff9d04e4d321a12e28642093642` separately passed
+[required CI](https://github.com/Smartqix/nakpanel/actions/runs/39431824754).
+
+The [six-case Linux dummy backup fixture](https://github.com/Smartqix/nakpanel/actions/runs/39442920817)
+passed default and explicit UTC, private publication, real FIFO refusal,
+unsafe-directory refusal and old-pidfd restart refusal. Cleanup left zero owned
+objects and the PostgreSQL service-state comparison passed. Both dummy units
+derive `Type=exec` from their authenticated source units before installation;
+this waits for execution before checking exact process identity. Product service
+units are unchanged. This component result does not establish actual scheduled
+backups, maintenance recovery or elapsed soak.
+
+The [genuine format1 source diagnostic](https://github.com/Smartqix/nakpanel/actions/runs/39438462720)
+measured a root-owned0700 subscription namespace containing tenant-owned0700
+home/data/config leaves. Its panel ancestor was0755 and its shared container root
+was0711. The subscription namespace therefore blocks tenant traversal. The
+retained hashed application error does not identify the failing syscall or prove
+sole causation; that run failed before backup or target restore. Owned cleanup
+passed. The [forward diagnostic](https://github.com/Smartqix/nakpanel/actions/runs/39439160213)
+passed the corrected Roundcube preflight but failed its standalone rootless image
+pull before the application POST. Its cause remains unknown and cleanup passed.
+
+A real Go regression reproduces the fresh stopped/remove path reaching its first
+tenant Podman call with the namespace0700. Running-path setup had masked this
+omission. The follow-up prepares manager-owned state/runtime namespaces0711
+before that call and retains tenant-owned private directories0700 and config0600.
+Descriptor-bound traversal, creation and publication reject symlinks, unexpected
+ownership and writable managed namespaces. Only the exact default panel ancestor
+trusts the separately resolved installed `nakpanel` user/group; it is inspected
+without ownership, permission or ACL changes. Existing legitimate private state
+is preserved. No image start or pull is added to the stopped/remove path.
+
+The changed runtime requires fresh signed builds and Ubuntu24.04/26.04 hosted
+qualification. Earlier binaries and component receipts cannot qualify it.
+Full PHP maintenance/recovery and two reboots, forward and genuine legacy restore,
+the three-profile scheduled-backup matrix, ARM server execution, a real security
+patch advance and the required30–60 day elapsed soak remain separate incomplete
+gates. Ubuntu24.04 remains the default and Ubuntu26.04 remains experimental.
