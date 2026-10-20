@@ -1,0 +1,274 @@
+{
+  "application_wait": {
+    "column_end": 270,
+    "column_start": 170,
+    "line": 189
+  },
+  "fixture_loop": {
+    "checks_ast_sha256": "25c900dea72f95b14110192324aa761617ddd19ca58b270787addcd7fbb097d2",
+    "count": 6,
+    "function": "Guest.source_fixtures",
+    "line": 182
+  },
+  "functions": {
+    "Guest.__init__": [
+      102,
+      103
+    ],
+    "Guest.active_readiness": [
+      394,
+      397
+    ],
+    "Guest.admin": [
+      151,
+      163
+    ],
+    "Guest.admin.post": [
+      156,
+      162
+    ],
+    "Guest.app_row": [
+      173,
+      175
+    ],
+    "Guest.authenticate": [
+      297,
+      299
+    ],
+    "Guest.backup": [
+      286,
+      296
+    ],
+    "Guest.canary": [
+      197,
+      198
+    ],
+    "Guest.cli": [
+      120,
+      122
+    ],
+    "Guest.command": [
+      105,
+      116
+    ],
+    "Guest.discover": [
+      164,
+      169
+    ],
+    "Guest.dispatch": [
+      398,
+      417
+    ],
+    "Guest.file_fact": [
+      246,
+      247
+    ],
+    "Guest.go_preflight": [
+      381,
+      388
+    ],
+    "Guest.identity": [
+      131,
+      144
+    ],
+    "Guest.invocation": [
+      145,
+      150
+    ],
+    "Guest.jobs": [
+      170,
+      172
+    ],
+    "Guest.migrate": [
+      389,
+      390
+    ],
+    "Guest.observe": [
+      281,
+      285
+    ],
+    "Guest.parent_facts": [
+      219,
+      222
+    ],
+    "Guest.pg": [
+      118,
+      118
+    ],
+    "Guest.physical": [
+      248,
+      280
+    ],
+    "Guest.prepare_source_namespace": [
+      176,
+      178
+    ],
+    "Guest.quiet": [
+      311,
+      320
+    ],
+    "Guest.quiet_observation": [
+      306,
+      310
+    ],
+    "Guest.remaining": [
+      104,
+      104
+    ],
+    "Guest.restore": [
+      300,
+      301
+    ],
+    "Guest.rootless": [
+      208,
+      218
+    ],
+    "Guest.roundcube": [
+      199,
+      201
+    ],
+    "Guest.row": [
+      119,
+      119
+    ],
+    "Guest.row_units": [
+      236,
+      245
+    ],
+    "Guest.snapshot": [
+      202,
+      207
+    ],
+    "Guest.source_fixtures": [
+      179,
+      196
+    ],
+    "Guest.stage": [
+      321,
+      329
+    ],
+    "Guest.stop": [
+      302,
+      305
+    ],
+    "Guest.stopped": [
+      223,
+      235
+    ],
+    "Guest.strict_post": [
+      391,
+      393
+    ],
+    "Guest.target_baseline": [
+      376,
+      377
+    ],
+    "Guest.text": [
+      117,
+      117
+    ],
+    "Guest.trust_files": [
+      334,
+      375
+    ],
+    "Guest.verify_stage": [
+      330,
+      333
+    ],
+    "Guest.verify_trust": [
+      378,
+      380
+    ],
+    "Guest.wait": [
+      123,
+      130
+    ],
+    "NoRedirect.redirect_request": [
+      100,
+      100
+    ],
+    "absent": [
+      21,
+      24
+    ],
+    "application_form": [
+      19,
+      20
+    ],
+    "cache_root_facts": [
+      70,
+      78
+    ],
+    "directory_fact": [
+      67,
+      68
+    ],
+    "expected_go": [
+      41,
+      42
+    ],
+    "go_config_absent": [
+      33,
+      40
+    ],
+    "intent_sql": [
+      14,
+      18
+    ],
+    "main": [
+      419,
+      435
+    ],
+    "q": [
+      418,
+      418
+    ],
+    "safe_ancestors": [
+      25,
+      32
+    ],
+    "validate_cache_roots": [
+      80,
+      96
+    ],
+    "validate_cache_roots.descriptor": [
+      83,
+      87
+    ],
+    "validate_git_config": [
+      51,
+      59
+    ],
+    "validate_go_effective": [
+      43,
+      50
+    ],
+    "validate_rootless_layout": [
+      61,
+      65
+    ]
+  },
+  "guest_sha256": "819231f2439597ad4b92381522085415b8675264cb1b887807f1217dbc029f0a",
+  "maximum_frames": 12,
+  "schema": "nakpanel-l1-fixed-guest-sites-v4",
+  "tenant_ps_sites": {
+    "Guest.command": {
+      "column_end": 62,
+      "column_start": 19,
+      "line": 116
+    },
+    "Guest.rootless": {
+      "column_end": 217,
+      "column_start": 9,
+      "line": 218
+    },
+    "Guest.stopped": {
+      "column_end": 108,
+      "column_start": 12,
+      "line": 227
+    }
+  },
+  "wait_timeout": {
+    "line": 130
+  }
+}
