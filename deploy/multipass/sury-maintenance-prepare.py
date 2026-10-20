@@ -420,7 +420,7 @@ class Producer:
         for name,version in versions.items():
             M.check_candidate(self.guest(['apt-cache','policy',name]).stdout,version)
         plan=self.guest(['apt-get','--simulate','--no-remove','--reinstall','--fix-broken','install',
-                         *[name+'='+version for name,version in sorted(versions.items())]])
+                         *[name+'='+version for name,version in sorted(versions.items())]],timeout=600)
         M.check_apt_plan(plan.stdout,versions,set(versions))
         self.baseline_stage('retained-package-archives')
         retained=baseline/'retained-baseline';retained.mkdir(mode=0o700);retained=retained/'amd64';retained.mkdir(mode=0o700)

@@ -4,6 +4,89 @@ Baseline: `ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466`.
 This is an implementation and qualification record, not a production support declaration.
 See [qualification procedures](../PLATFORM_QUALIFICATION.md), [recovery boundaries](../RECOVERY.md), and [the original plan](../superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 
+## Qualification checkpoint — 20 October 2026, 22:26 UTC
+
+This checkpoint records the results available when the qualifier corrections
+were integrated. Subsequent hosted outcomes are tracked in
+[pull request11](https://github.com/Smartqix/nakpanel/pull/11). Each result remains
+attributed to its named application build and qualifier.
+
+Application source `6378b0ae9d15f17481b080926af7fb0bf0761724` passed all
+17 product gates on AMD64 Ubuntu24.04, native Ubuntu26.04 and Surý Ubuntu26.04.
+The native and Surý signed development bundles contain the same application
+binaries and runtime manifest. Their signing keys and archive digests remain
+distinct. Ubuntu24.04 remains the default; both Ubuntu26.04 profiles remain
+experimental while the separate operational checks below are incomplete.
+
+| Check | Latest result |
+| --- | --- |
+| Required unit, generated-source, isolated PostgreSQL, static-build and Noble adversarial CI | [Passed](https://github.com/Smartqix/nakpanel/actions/runs/39452274833). |
+| Native Ubuntu24.04 and Ubuntu26.04 product qualification | [Passed](https://github.com/Smartqix/nakpanel/actions/runs/39452265293), 17 gates per profile, including actual upgrade, disaster recovery, reboot checks, database-manager coverage and strict Roundcube send/read. |
+| Surý Ubuntu26.04 product qualification | All 17 product gates passed in [the original workflow](https://github.com/Smartqix/nakpanel/actions/runs/39452451358). Its later PHP maintenance step failed, so that workflow's overall result remains failure. |
+| Linux dummy backup fixture | [Passed six cases](https://github.com/Smartqix/nakpanel/actions/runs/39442920817): default/explicit UTC, private publication, FIFO refusal, unsafe-directory refusal and old-pidfd restart refusal. This is component evidence from source26; the applicable component bytes are unchanged in source28. |
+| PHP same-version delivery, failed-configuration recovery and two reboots | [The corrected qualifier workflow failed](https://github.com/Smartqix/nakpanel/actions/runs/39492726858) during package-candidate preparation after its fresh17 application gates passed. No package transaction, recovery or reboot acceptance yet; the subprocess failure is under investigation. |
+| Genuine Noble format1 recovery | [The corrected qualifier is active](https://github.com/Smartqix/nakpanel/actions/runs/39507139602). [The diagnostic predecessor](https://github.com/Smartqix/nakpanel/actions/runs/39500219976) retained the exact rejected target directory: `/var/lib/nakpanel/.config/go`, expected panel owner/group, mode0775. Its group-write bit triggered the old guard. Backup creation and target installation passed; cleanup/drain passed. No restore or reboot acceptance yet. |
+| Genuine Noble format3 recovery | [The corrected qualifier is active](https://github.com/Smartqix/nakpanel/actions/runs/39507144006). [Its predecessor](https://github.com/Smartqix/nakpanel/actions/runs/39494810035) passed source installation and fixture creation, then failed a public-manifest mode guard before its historical source upgrade. The new reader follows the canonical staging contract while retaining private-key and hash checks. No restore or reboot acceptance yet. |
+| Explicit Ubuntu24.04-to26.04 forward migration | [The certificate-corrected run is active](https://github.com/Smartqix/nakpanel/actions/runs/39505514006). [The prior run failed](https://github.com/Smartqix/nakpanel/actions/runs/39497863142) during certificate preparation; its underlying error was not retained, and cleanup/process drain passed. No target restore or migration acceptance yet. |
+| Three-profile scheduled-backup initialization | Prepared; waits for actual accepted PHP maintenance recovery. A dummy fixture does not establish scheduler execution. |
+| Current ARM64 server qualification | Incomplete; the hosted ARM64 runner lacks KVM. Earlier partial ARM results do not qualify the current source. |
+| Genuine PHP security-version advance | Unproved; retained signed packages provide only one core version per PHP minor. Same-version recovery is a separate result. |
+| 30–60 day endurance window | Not completed. Initialization or an immediate sweep cannot establish elapsed endurance or a later daily02:00 execution. |
+
+The corrected maintenance qualifier is
+`8612b11f485ba2d4c4e6051704ab822dc1de9f5c`; it is separate from the tested
+application source6378. It authenticates both checkouts and keeps the canonical
+driver, installed binaries and signed manifest bound to source6378. Its service
+oracle follows site/subscription state for existing Classic PHP-FPM units and
+retains the stricter application-state checks for managed units and workers.
+The helper passed49 focused tests in Python3.9 and3.12, with and without
+optimization; the separate-source preparation boundary also passed its
+focused tests. These checks do not substitute for a passing hosted rehearsal.
+
+The legacy and forward qualifier corrections give tenant Podman commands an
+explicit accessible working directory. The legacy qualifier also accepts
+`systemctl list-unit-files` exit1 only when its strictly decoded output is an
+empty JSON array and stderr is empty, matching [systemd255.4's source
+behavior](https://github.com/systemd/systemd-stable/blob/v255.4/src/systemctl/systemctl-list-unit-files.c#L260-L267).
+Both listing verbs retain bounded failure diagnostics. Original
+failed runs remain failures, including those whose exact child error was not
+retained. No existing server, production deployment or support promotion is
+implied by these disposable hosted checks.
+
+The previous forward run's fixed exception site rejected an HTTP status outside
+200/202/303. Its actual status and response were not retained. The source FTP
+creation handler returns201, which the checker incorrectly rejected. The
+correction passed its focused positive/negative transport tests and is in the
+latest run, which advanced to certificate fixture preparation. This source
+contract defect does not establish a measured response code for the failed run.
+
+Offline review of the subsequent certificate stage found two missing fixture
+preconditions: its public leaf has no explicit readable mode, and the fixture
+invokes the optional service-certificate helper without installing it.
+[Service TLS setup](../SERVICE_TLS.md) explicitly installs that helper from the
+repository. The corrected fixture provisions the helper from the authenticated
+fixture source and makes only the public leaf readable. Private keys and strict
+CA/hostname checks retain their existing requirements. The actual failed
+certificate operation was not retained, so these source findings do not prove
+which precondition failed in that guest. Both defects reproduce in local tests;
+the corrections and bounded command-error capture pass14 focused test groups
+in Python3.9 and3.12, with and without optimization. Hosted validation is pending.
+
+The measured legacy Go-directory refusal is separate from archive validity.
+Pinned Go1.26.9 creates telemetry and cache directories with mode0777 subject
+to the child umask. The installer invokes migrations as the panel user through
+sudo. This provides a possible creation mechanism, but the actual child umask
+was not retained. The corrected qualifier permits group write only on seven
+fixed Go directories when the directory belongs to the panel account's
+authenticated private primary group. Foreign primary/supplementary members,
+aliases, world write, special bits, symlinks and access/default POSIX ACLs still
+reject. Generic file/ancestor guards remain unchanged; cache identity and group
+membership must match the original baseline at every observation. The two
+qualifiers passed22 and14 focused tests respectively in all four Python modes.
+Linux xattr transport was simulated in the macOS tests; actual hosted group/ACL
+preconditions and recovery outcomes remain unverified. No guest permissions
+were repaired.
+
 ## Implemented contracts
 
 | Profile | Internal PHP | Hosting PHP | Enrollment |
@@ -44,7 +127,11 @@ Rootless application units enforce policy limits in root-managed cgroups. Podman
 
 The following verifier-correction checkpoint passed full pinned Go1.26.9 repository tests, vet, generation/no generated drift and all18 release policies. Independent IMAP, native fixture and CI reviews passed; fresh signed native qualification remains a separate acceptance step.
 
-## Native qualification in progress
+## Historical qualification checkpoints
+
+The following entries preserve the results at their named earlier checkpoints.
+Use the current qualification table above for the latest source and remaining
+gates; a later passing result does not rewrite an earlier failed report.
 
 | Evidence | Result at this checkpoint |
 | --- | --- |

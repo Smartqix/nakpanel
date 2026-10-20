@@ -273,8 +273,10 @@ m.run_canonical([sys.executable,'-c',child,sys.argv[2]],pathlib.Path(sys.argv[3]
             producer.stage='signed-provider-baseline'
             producer.config=dict(self.report(),baseline_directory=str(producer.root/'baseline'),
                                  runtime_commit='a'*40,qualifier_commit='a'*40)
+            self.assertEqual(m.M.command.__kwdefaults__['timeout'],180)
             def guest(args,**kwargs):
                 calls.append(args)
+                if args[0]!='apt-get':self.assertNotIn('timeout',kwargs)
                 if args[0]=='sha256sum':out=m.M.KEY_SHA+'  key'
                 elif args[0]=='gpgv':out='[GNUPG:] VALIDSIG '+m.M.FINGERPRINT
                 elif args[:2]==['dpkg-query','-W']:
@@ -289,6 +291,7 @@ m.run_canonical([sys.executable,'-c',child,sys.argv[2]],pathlib.Path(sys.argv[3]
                 elif args[0]=='apt-get':
                     selectors=[name+'='+installed[name][0] for name in sorted({row['Package'] for row in rows})]
                     self.assertEqual(args,['apt-get','--simulate','--no-remove','--reinstall','--fix-broken','install',*selectors])
+                    self.assertEqual(kwargs,{'timeout':600})
                     out='\n'.join('Inst '+row['Package']+' ('+row['Version']+' fixture)' for row in rows)
                 else:self.fail('unexpected guest operation '+repr(args))
                 return subprocess.CompletedProcess(args,0,out,'')

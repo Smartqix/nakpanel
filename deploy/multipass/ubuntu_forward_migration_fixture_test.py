@@ -914,4 +914,191 @@ switch ($dbtype) {
                     connect.assert_called_once_with('file:///var/lib/dbconfig-common/sqlite3/roundcube/roundcube?mode=ro',uri=True);connection.execute.assert_called_once_with('PRAGMA quick_check')
                 else:connect.assert_not_called();connection.execute.assert_not_called()
 
+class ForwardProbeTransportTests(unittest.TestCase):
+    def login_post(self, status=201, transport_error=None):
+        calls = []
+        testcase = self
+        class Response:
+            def __init__(self, code):
+                self.status = code
+                self.reads = 0
+            def read(self):
+                self.reads += 1
+                return b'offline-response'
+        response = Response(status)
+        class Opener:
+            def open(self, request, data=None, timeout=None):
+                calls.append((request, data, timeout))
+                if isinstance(request, str):
+                    testcase.assertEqual(request, 'https://127.0.0.1:7443/login')
+                    testcase.assertEqual(data, b'email=offline%40example.test&password=offline-password')
+                    testcase.assertEqual(timeout, 30)
+                    return Response(200)
+                testcase.assertEqual(request.full_url, 'https://127.0.0.1:7443/subscriptions/20/ftp')
+                testcase.assertEqual(request.data, b'site_id=7&name=forwardfixture&password=offline-password&enabled=true')
+                testcase.assertEqual(request.get_header('X-nakpanel-csrf'), hashlib.sha256(b'nakpanel-csrf-v1:offline-session').hexdigest())
+                testcase.assertEqual(timeout, 60)
+                if transport_error is not None:
+                    raise transport_error
+                return response
+        opener = Opener()
+        def build(*handlers):
+            jar = next(handler.cookiejar for handler in handlers if isinstance(handler, probe.urllib.request.HTTPCookieProcessor))
+            self.assertIsInstance(jar, probe.http.cookiejar.CookieJar)
+            jar.set_cookie(probe.http.cookiejar.Cookie(0, 'nakpanel_session', 'offline-session', None, False,
+                '127.0.0.1', False, False, '/', True, True, None, True, None, None, {}))
+            return opener
+        with patch.object(probe.urllib.request, 'build_opener', side_effect=build) as builder:
+            post = probe.login({'admin_email': 'offline@example.test', 'admin_password': 'offline-password'})
+        builder.assert_called_once()
+        return post, response, calls
+
+    def ftp_post(self, post):
+        return post('subscriptions/20/ftp', {'site_id': 7, 'name': 'forwardfixture',
+            'password': 'offline-password', 'enabled': 'true'})
+
+    def test_login_post_accepts_created_and_existing_success_contracts(self):
+        for status in (201, 200, 202, 303):
+            with self.subTest(status=status):
+                post, response, calls = self.login_post(status)
+                self.assertEqual(self.ftp_post(post), b'offline-response')
+                self.assertEqual(response.reads, 1)
+                self.assertEqual(len(calls), 2)
+
+    def test_login_post_rejects_unrecognized_success_and_error_statuses(self):
+        for status in (204, 206, 299, 302, 307, 400, 401, 403, 404, 409, 422, 429, 500, 503):
+            with self.subTest(status=status):
+                post, response, calls = self.login_post(status)
+                with self.assertRaises(RuntimeError) as caught:
+                    self.ftp_post(post)
+                self.assertEqual(caught.exception.args, ('fixture API mutation failed',))
+                self.assertEqual(response.reads, 0)
+                self.assertEqual(len(calls), 2)
+
+    def test_login_post_preserves_transport_exception_identity(self):
+        for error in (probe.urllib.error.HTTPError('https://127.0.0.1:7443/subscriptions/20/ftp', 400, 'offline', {}, None),
+                      probe.urllib.error.HTTPError('https://127.0.0.1:7443/subscriptions/20/ftp', 503, 'offline', {}, None),
+                      TimeoutError('offline')):
+            with self.subTest(error_type=type(error).__name__):
+                post, response, calls = self.login_post(transport_error=error)
+                with self.assertRaises(type(error)) as caught:
+                    self.ftp_post(post)
+                self.assertIs(caught.exception, error)
+                self.assertEqual(response.reads, 0)
+                self.assertEqual(len(calls), 2)
+
+    def test_rootless_uses_safe_child_cwd_from_inaccessible_parent(self):
+        calls = []
+        def transport(args, **kwargs):
+            calls.append((args, kwargs))
+            if kwargs.get('cwd', '/home/ubuntu') != '/':
+                return subprocess.CompletedProcess(args, 125, '', 'cannot chdir to /home/ubuntu: Permission denied\n')
+            return subprocess.CompletedProcess(args, 0, 'pulled\n', '')
+        image = 'docker.io/library/nginx@sha256:' + '5' * 64
+        with patch.object(probe.subprocess, 'run', side_effect=transport):
+            self.assertEqual(probe.rootless({'subscription_id': 3, 'username': 'offline-tenant'}, 'pull', image), 'pulled')
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][1], {'input': None, 'text': True, 'capture_output': True, 'env': None, 'timeout': 600, 'cwd': '/'})
+        self.assertEqual(calls[0][0][:5], ['runuser', '-u', 'offline-tenant', '--', 'env'])
+        self.assertEqual(calls[0][0][-3:], ['podman', 'pull', image])
+
+    def test_other_probe_command_callers_keep_transport_and_errors(self):
+        calls = []
+        environment = {'OFFLINE': 'fixture'}
+        def transport(args, **kwargs):
+            calls.append((args, kwargs))
+            return subprocess.CompletedProcess(args, 0, ' value\n', '')
+        with patch.object(probe.subprocess, 'run', side_effect=transport):
+            self.assertEqual(probe.command(['offline-operation'], data='input', env=environment), 'value')
+        self.assertEqual(calls, [(['offline-operation'], {'input': 'input', 'text': True, 'capture_output': True, 'env': environment, 'timeout': 600})])
+        with patch.object(probe.subprocess, 'run', return_value=subprocess.CompletedProcess(['offline-operation'], 9, '', 'offline')):
+            with self.assertRaises(RuntimeError) as caught:
+                probe.command(['offline-operation'])
+        self.assertEqual(caught.exception.args, ('guest operation failed: offline-operation',))
+
+class ForwardCertificateStageTests(unittest.TestCase):
+    def certificate_sandbox(self, program, config=None, mask=0o077, fail=None):
+        import builtins, contextlib, io, types
+        config = dict(source_vm='nakpanel-offline', run_token='offline-certificate-token',
+            remote_src='/var/lib/nakpanel-qualification/offline-certificate-token/source',
+            tls_hostname='fixture.invalid', domain='fixture.invalid', guest_ca='/etc/nakpanel/forward-fixture-ca.crt', site_id=7) if config is None else config
+        commands=[]; owners={}; writes=[]; original_import=builtins.__import__
+        with tempfile.TemporaryDirectory() as td:
+            base=Path(td)
+            def disk(path): return base/str(path).lstrip('/')
+            class GuestPath:
+                def __init__(self, value):self.value=str(value)
+                def __str__(self):return self.value
+                def __truediv__(self, value):return GuestPath(self.value+'/'+str(value))
+                def mkdir(self, **kwargs):disk(self).mkdir(**kwargs)
+                def exists(self):return disk(self).exists()
+                def read_text(self):return disk(self).read_text()
+                def read_bytes(self):return disk(self).read_bytes()
+                def write_text(self, value):writes.append(self.value);return disk(self).write_text(value)
+                def write_bytes(self, value):writes.append(self.value);return disk(self).write_bytes(value)
+            disk('/tmp').mkdir();source=config['remote_src']+'/deploy/install/sync-service-certificates.sh';disk(source).parent.mkdir(parents=True);disk(source).write_bytes(b'#!/bin/sh\n# authenticated test helper\n')
+            def failure(args,kwargs,code,stream):
+                raise subprocess.CalledProcessError(code,args,stderr=stream if kwargs.get('stderr')==subprocess.PIPE else None)
+            def run(args,**kwargs):
+                commands.append((tuple(args),dict(kwargs)))
+                if fail is not None and fail[0](args):
+                    if isinstance(fail[1],BaseException):raise fail[1]
+                    failure(args,kwargs,fail[1],fail[2])
+                if args[0]=='openssl':
+                    target=args[args.index('-out')+1];disk(target).write_bytes(b'PRIVATE-TEST-KEY' if target.endswith('.key') else b'PUBLIC-TEST-CERT')
+                    if target.endswith('.key'):os.chmod(disk(target),0o600)
+                elif args[0]=='install':
+                    mode=int(args[args.index('-m')+1],8);src,target=args[-2:];disk(target).parent.mkdir(parents=True,exist_ok=True);disk(target).write_bytes(disk(src).read_bytes());os.chmod(disk(target),mode)
+                elif args[0]=='chown':owners[args[-1]]=args[1]
+                elif args[0]=='runuser':
+                    cert=args[args.index('--cert')+1];key=args[args.index('--key')+1]
+                    if not disk(cert).stat().st_mode&0o004:failure(args,kwargs,1,b'read certificate: Permission denied\n')
+                    if owners.get(key)!='nakpanel:nakpanel' or disk(key).stat().st_mode&0o077:failure(args,kwargs,1,b'private key permissions\n')
+                elif args[0]=='/usr/local/libexec/nakpanel/sync-service-certificates':
+                    if not disk(args[0]).exists():raise FileNotFoundError(2,'offline missing provisioned helper',args[0])
+                else:self.assertIn(args[0],('update-ca-certificates','systemctl'))
+                return subprocess.CompletedProcess(args,0,stderr=b'' if kwargs.get('stderr')==subprocess.PIPE else None)
+            def check_output(args,**kwargs):
+                commands.append((tuple(args),dict(kwargs)))
+                if fail is not None and fail[0](args):
+                    if isinstance(fail[1],BaseException):raise fail[1]
+                    failure(args,kwargs,fail[1],fail[2])
+                self.assertEqual(args[:5],['runuser','-u','postgres','--','psql'])
+                return 'custom:active\n'.strip()+'\n' if 'tls_issuer' in args[-1] else 'fixture.invalid\n'
+            fake=types.SimpleNamespace(run=run,check_output=check_output,DEVNULL=subprocess.DEVNULL,PIPE=subprocess.PIPE,CalledProcessError=subprocess.CalledProcessError,CompletedProcess=subprocess.CompletedProcess)
+            def imported(name,globals=None,locals=None,fromlist=(),level=0):
+                if name=='subprocess':return fake
+                if name=='pathlib':return types.SimpleNamespace(Path=GuestPath)
+                if name=='os':return types.SimpleNamespace(chmod=lambda path,mode:os.chmod(disk(path),mode))
+                if name=='time':return types.SimpleNamespace(sleep=lambda seconds:None)
+                return original_import(name,globals,locals,fromlist,level)
+            namespace={'__name__':'__main__','__file__':'<offline-certificate-boundary>','__builtins__':dict(vars(builtins),__import__=imported)}
+            out=io.StringIO();err=io.StringIO();error=None;oldmask=os.umask(mask)
+            try:
+                with patch.object(sys,'stdin',io.StringIO(json.dumps(config))),contextlib.redirect_stdout(out),contextlib.redirect_stderr(err):
+                    try:exec(compile(program,'<offline-certificate-boundary>','exec'),namespace)
+                    except Exception as caught:error=caught
+            finally:os.umask(oldmask)
+            root='/tmp/nakpanel-forward-certs-'+config['run_token'];leaf=disk(root+'/site.crt');key=disk(root+'/site.key');installed=disk('/usr/local/libexec/nakpanel/sync-service-certificates')
+            return types.SimpleNamespace(error=error,stdout=out.getvalue(),stderr=err.getvalue(),commands=commands,
+                leaf_mode=leaf.stat().st_mode&0o777 if leaf.exists() else None,key_mode=key.stat().st_mode&0o777 if key.exists() else None,
+                helper_installed=installed.exists(),helper_mode=installed.stat().st_mode&0o777 if installed.exists() else None,
+                helper_bytes_match=installed.exists() and installed.read_bytes()==disk(source).read_bytes(),writes=writes)
+
+    def actual_certificate_program(self):
+        with patch.object(fixture,'guest',side_effect=lambda config,vm,program:program):return fixture.certificates({'source_vm':'nakpanel-offline'})
+
+    def test_certificate_public_leaf_readable_and_private_key_stays_private(self):
+        result=self.certificate_sandbox(self.actual_certificate_program())
+        self.assertIsNone(result.error)
+        self.assertEqual((result.leaf_mode,result.key_mode),(0o644,0o600))
+
+    def test_certificate_provisions_only_required_optional_service_helper(self):
+        result=self.certificate_sandbox(self.actual_certificate_program(),mask=0o022)
+        self.assertIsNone(result.error)
+        self.assertTrue(result.helper_installed);self.assertTrue(result.helper_bytes_match);self.assertEqual(result.helper_mode,0o755)
+        provision=[a for a,k in result.commands if a[0]=='install' and a[-1].startswith('/usr/local/libexec/')]
+        self.assertEqual(len(provision),1);self.assertEqual(provision[0][-1],'/usr/local/libexec/nakpanel/sync-service-certificates')
+        self.assertFalse(any('enable' in a or 'daemon-reload' in a for a,k in result.commands))
+
 if __name__ == '__main__': unittest.main()

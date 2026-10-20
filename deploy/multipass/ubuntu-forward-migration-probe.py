@@ -25,8 +25,8 @@ import urllib.parse
 import urllib.request
 
 
-def command(args, data=None, env=None):
-    result = subprocess.run(args, input=data, text=True, capture_output=True, env=env, timeout=600)
+def command(args, data=None, env=None, cwd=None):
+    result = subprocess.run(args, input=data, text=True, capture_output=True, env=env, timeout=600, **({'cwd': cwd} if cwd is not None else {}))
     if result.returncode:
         raise RuntimeError('guest operation failed: ' + args[0])
     return result.stdout.strip()
@@ -85,7 +85,7 @@ def login(c):
         request = urllib.request.Request('https://127.0.0.1:7443/' + path,
             data=urllib.parse.urlencode(values,doseq=True).encode(), headers={'X-Nakpanel-CSRF': csrf})
         response = opener.open(request, timeout=60)
-        if response.status not in (200, 202, 303):
+        if response.status not in (200, 201, 202, 303):
             raise RuntimeError('fixture API mutation failed')
         return response.read()
     post.get=lambda path:opener.open('https://127.0.0.1:7443/'+path,timeout=60).read().decode()
@@ -114,7 +114,7 @@ def rootless(c, *args):
     runtime = '/run/nakpanel-containers/sub-' + str(c['subscription_id'])
     return command(['runuser', '-u', c['username'], '--', 'env', 'HOME=' + base + '/home',
                     'XDG_DATA_HOME=' + base + '/data', 'XDG_CONFIG_HOME=' + base + '/config',
-                    'XDG_RUNTIME_DIR=' + runtime, 'TMPDIR=' + runtime, 'podman'] + list(args))
+                    'XDG_RUNTIME_DIR=' + runtime, 'TMPDIR=' + runtime, 'podman'] + list(args), cwd='/')
 
 
 
