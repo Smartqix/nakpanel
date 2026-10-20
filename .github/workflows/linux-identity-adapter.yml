@@ -1,0 +1,71 @@
+name: Linux identity adapter fixture only
+
+on:
+  push:
+    branches: [ricky/linux-identity-adapter-candidate26-v1]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-identity-adapter-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fixture:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      # Intentionally nonlaunchable: active rendering and separate root review required.
+      FIXTURE_ADMISSION_SHA256: 9b8df258056eb3fcaa9018d2b4d77cdb5cda1e7ad53132e96785406e1ce1c8bd
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Guard exact fixture branch and source before any fixture work
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = push
+          test "$GITHUB_REPOSITORY" = Smartqix/nakpanel
+          test "$GITHUB_REF" = refs/heads/ricky/linux-identity-adapter-candidate26-v1
+          test "$RUNNER_ENVIRONMENT" = github-hosted
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = 1627bba3c681a884255eb91452dbba74a43ebbdc
+          python3 -I -B .github/fixtures/linux-identity-adapter-v1/guard_inputs.py
+          [[ "$FIXTURE_ADMISSION_SHA256" =~ ^[a-f0-9]{64}$ ]]
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.9'
+          check-latest: false
+          cache: false
+      - name: Compile only the inert dummy and no-connect projector
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(go version | awk '{print $3}')" = go1.26.9
+          mkdir -m 0700 "$RUNNER_TEMP/identity-fixture-build"
+          export CGO_ENABLED=0 GOWORK=off
+          timeout --kill-after=5s 75s go build -trimpath -buildvcs=false -ldflags=-buildid= -o "$RUNNER_TEMP/identity-fixture-build/fixture-sleeper" .github/fixtures/linux-identity-adapter-v1/fixture.go
+          cd .github/fixtures/linux-identity-adapter-v1/projector
+          timeout --kill-after=5s 75s go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$RUNNER_TEMP/identity-fixture-build/projector" .
+      - name: Exercise real kernel adapter against owned dummy units then clean up
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -m 0700 "$RUNNER_TEMP/identity-fixture-public"
+          sudo -n timeout --kill-after=30s 150s /usr/bin/python3 -I -B .github/fixtures/linux-identity-adapter-v1/fixture_driver.py --build-root "$RUNNER_TEMP/identity-fixture-build" --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" --workflow-commit "$GITHUB_SHA" --admission-sha "$FIXTURE_ADMISSION_SHA256" >"$RUNNER_TEMP/identity-fixture-public/outer.json"
+      - name: Preserve only the fixed outer fixture result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-identity-adapter-fixture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/identity-fixture-public/outer.json
+          retention-days: 3
+          if-no-files-found: error
