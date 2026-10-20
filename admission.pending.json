@@ -1,0 +1,18 @@
+{
+  "app_helpers": null,
+  "artifact": null,
+  "authority": null,
+  "baseline_reviews": null,
+  "controller_commit": null,
+  "controller_files": null,
+  "expires_at": null,
+  "nonce": null,
+  "oci_image_ref": null,
+  "payload": null,
+  "repository": null,
+  "schema": "nakpanel-hosted-forward-admission-v1",
+  "source_commit": null,
+  "source_tree": null,
+  "state": "PENDING",
+  "valid_from": null
+}
