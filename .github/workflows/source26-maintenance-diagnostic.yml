@@ -1,0 +1,99 @@
+name: Unchanged source26 Surý maintenance diagnostic
+on:
+  push:
+    branches: [ricky/sury-source26-maintenance-diagnostic-v1]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: source26-sury-diagnostic-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  sury26:
+    if: github.repository == 'Smartqix/nakpanel' && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: operator
+          fetch-depth: 2
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 1627bba3c681a884255eb91452dbba74a43ebbdc
+          path: application
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: application/deploy/release/GO_VERSION
+      - name: Validate reviewed activation and authenticate exact original artifacts before host work
+        timeout-minutes: 20
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B operator/debug/source26-maintenance/bootstrap.py stage
+      - name: Fresh unchanged canonical qualification (one source-owned nested session)
+        timeout-minutes: 200
+        working-directory: application
+        env:
+          GH_TOKEN: ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec python3 -I -B deploy/multipass/sury-maintenance-prepare.py qualify --execution-receipt "${RUNNER_TEMP}/source26-diagnostic-private/canonical-execution.json"
+      - name: One unchanged prepare plus original maintenance under fixed owned-command custody
+        timeout-minutes: 110
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B operator/debug/source26-maintenance/bootstrap.py prepare
+      - name: Fixed safe projection only after current invocation binding and confirmed drain
+        if: always()
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B operator/debug/source26-maintenance/bootstrap.py project
+      - name: Owned cleanup only after separate nested canonical and prepare drain proof
+        if: always()
+        timeout-minutes: 6
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B operator/debug/source26-maintenance/bootstrap.py cleanup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        timeout-minutes: 5
+        with:
+          name: source26-sury-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          include-hidden-files: false
+          path: |
+            ${{ runner.temp }}/source26-diagnostic-public/diagnostic.json
+            ${{ runner.temp }}/source26-diagnostic-public/bootstrap.json
+            ${{ runner.temp }}/source26-diagnostic-public/canonical-report.json
+            ${{ runner.temp }}/source26-diagnostic-public/cleanup.json
+            ${{ runner.temp }}/source26-diagnostic-public/canonical-execution.json
+            ${{ runner.temp }}/source26-diagnostic-public/release-manifest.json
+            ${{ runner.temp }}/source26-diagnostic-public/roundcube-send-read.json
+            ${{ runner.temp }}/source26-diagnostic-public/roundcube-send-read.execution.json
+            ${{ runner.temp }}/source26-diagnostic-public/sury-maintenance-request.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-preparation.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-capacity.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-roundcube_execution_receipt.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-retention_receipt.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-native_gpgv_receipt.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-package-baseline.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-package-layout.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-result.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-recovery.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-reboot-1.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-reboot-2.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-roundcube-recovered.execution.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-roundcube-reboot-1.execution.json
+            ${{ runner.temp }}/source26-diagnostic-public/maintenance-roundcube-reboot-2.execution.json

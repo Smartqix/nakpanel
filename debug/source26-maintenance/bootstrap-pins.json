@@ -1,0 +1,112 @@
+{
+  "artifact": {
+    "created_at": "2026-10-20T00:27:22Z",
+    "digest": "sha256:2433a2c9cec0ebdd4e7712419150ece7c5974bcefb8f76d61db0979607389816",
+    "expires_at": "2026-10-23T00:27:20Z",
+    "id": 12231269532,
+    "name": "hosted-development-bundles-39347496239-1",
+    "size_in_bytes": 73997080
+  },
+  "bundles_metadata": {
+    "architecture": "amd64",
+    "candidate": {
+      "archive": "candidate/nakpanel-29.0.0-linux-amd64.tar.gz",
+      "commit": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+      "directory": "candidate/nakpanel-29.0.0-linux-amd64",
+      "version": "29.0.0"
+    },
+    "development": true,
+    "prior": {
+      "archive": "prior/nakpanel-29.0.0-linux-amd64.tar.gz",
+      "commit": "ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466",
+      "directory": "prior/nakpanel-29.0.0-linux-amd64",
+      "version": "29.0.0"
+    }
+  },
+  "fresh_API_availability_not_checked": true,
+  "images": {
+    "24.04": {
+      "serial": "20261017",
+      "sha256": "04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94",
+      "suite": "noble",
+      "url": "https://cloud-images.ubuntu.com/releases/noble/release-20261017/ubuntu-24.04-server-cloudimg-amd64.img"
+    },
+    "26.04": {
+      "serial": "20260927",
+      "sha256": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+      "suite": "resolute",
+      "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img"
+    }
+  },
+  "local_zip_physically_verified": true,
+  "new_RSA_execution_not_performed_in_this_design_review": true,
+  "original_branch": "ricky/ubuntu-26-sury-candidate26",
+  "original_event": "workflow_dispatch",
+  "original_head_sha": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+  "original_overall_run_conclusion": "failure",
+  "original_run_attempt": 1,
+  "original_run_id": 39347496239,
+  "original_signed_bundles_job_conclusion": "success",
+  "original_signed_bundles_job_id": 118383538478,
+  "public_key_sha256": "b9ba391ccaa3d405509b6a1ec29b2ebcf1ae86880c279e4596ead8d2827f459c",
+  "runtime_sources": {
+    "candidate": {
+      "architecture": "amd64",
+      "archive": "candidate/nakpanel-29.0.0-linux-amd64.tar.gz",
+      "archive_bytes": 37372100,
+      "archive_sha256": "9fc77a2bb7aa8824a7f1f728b6e735f29169e80c3b94fe540bddeb0b239774bf",
+      "commit": "1627bba3c681a884255eb91452dbba74a43ebbdc",
+      "development": true,
+      "installed_binary_sha256": {
+        "agent": "9dea11b8ddb98e0f21863747d50c5778ab6629b1406a2cb0971b876ccf12fd4c",
+        "panel": "535185eb683942313793bcf833f6e71d481a0cf12149103711d1f0e68a0d9c5f",
+        "panelctl": "44319f18d64575dc46afc48d24115634a81e63925a567d9420634cdaf212fc60"
+      },
+      "manifest_sha256": "50a0cc9802629bcdecb50f26a64f0ec8e49a434856f3f3aabb8e36650e8a60cc",
+      "signed_files": 173,
+      "version": "29.0.0"
+    },
+    "prior": {
+      "architecture": "amd64",
+      "archive": "prior/nakpanel-29.0.0-linux-amd64.tar.gz",
+      "archive_bytes": 36724738,
+      "archive_sha256": "90d1c9c3e0198ae7e7aa2aa83243c176accf30b5353fbc09c3ccf9c5fc7cd0d5",
+      "commit": "ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466",
+      "development": true,
+      "installed_binary_sha256": {
+        "agent": "6099a2153b2eb5c4ec2eb31f63ffc8b473f0c6f96c161fb47092e0d3077dc19f",
+        "panel": "4340d84d1b3036be7127ba23574527f8fd8c9e303991308ba48a276c25f1b3a1",
+        "panelctl": "1d3b5a76727870e2addd9b518c9be52f6c76fb500b899062b961aa0419a5a4a9"
+      },
+      "manifest_sha256": "e13277562f168f2f88f005e2e4ef0084b97209b9f95df07a27f52c6e3727cca7",
+      "signed_files": 135,
+      "version": "29.0.0"
+    }
+  },
+  "source26_inputs": {
+    ".github/workflows/ubuntu-hosted-qualification.yml": {
+      "bytes": 21588,
+      "sha256": "fb8825bdd53fe429061e4e161c28466d30d6d7851596c240066b29fbe9e46165"
+    },
+    "deploy/multipass/prepare-hosted-runner.sh": {
+      "bytes": 5903,
+      "sha256": "aab9fb45111e3d45bab421b6bc7d3c35776a50dd2da87bbc3e4a1e339e59dfd9"
+    },
+    "deploy/multipass/roundcube-send-read.py": {
+      "bytes": 48072,
+      "sha256": "db3a1770d867e543152823656e3d173f1a0ca606cad2b1d3f24642b2849e671f"
+    },
+    "deploy/multipass/sury-maintenance-drill.py": {
+      "bytes": 75779,
+      "sha256": "87d2a6f05e6d4ebfa72f960a2a067eb552455c54ba168058204a03fa28f26e8e"
+    },
+    "deploy/multipass/sury-maintenance-prepare.py": {
+      "bytes": 39931,
+      "sha256": "180c2da2874de86b2e03741e334a7faba80c7afb080089d12d38117624e32614"
+    },
+    "deploy/multipass/ubuntu-platform-verify.sh": {
+      "bytes": 8854,
+      "sha256": "c9ea992bb99e4184e8542eed05bce93730ce6f347ae7816145ebcfe2bd70568f"
+    }
+  }
+}
