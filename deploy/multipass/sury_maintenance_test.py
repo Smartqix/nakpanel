@@ -163,6 +163,53 @@ class MaintenanceTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):f.create()
             self.assertEqual(outside.read_bytes(),b'keep');f.path.unlink();f.create();f.remove();self.assertFalse(f.path.exists())
 
+    def postinst_failure_fixture(self, minor, wording, *, returncode=100):
+        path=Path('/etc/php/'+minor+'/fpm/pool.d/zz-nakpanel-maintenance-owned123.conf')
+        config=subprocess.CompletedProcess([],78,'',str(path)+": unknown entry 'nakpanel_owned_drill_invalid'")
+        package='php'+minor+'-fpm'
+        detail={'legacy':'installed '+package+' package post-installation script subprocess returned error exit status 1',
+                'current':'old '+package+' package postinst maintainer script subprocess failed with exit status 1'}[wording]
+        text='dpkg: error processing package '+package+' (--configure):\n '+detail+'\n'
+        return path,config,subprocess.CompletedProcess([],returncode,'',text)
+
+    def test_postinst_failure_accepts_exact_dpkg_122_and_123_diagnostics(self):
+        m=self.module()
+        # dpkg src/main/script.c + lib/dpkg/subproc.c, 1.22.22 / 1.23.7.
+        # https://sources.debian.org/src/dpkg/1.23.7/src/main/script.c/
+        for minor in m.MINORS:
+            for wording in ('legacy','current'):
+                with self.subTest(minor=minor,wording=wording):
+                    path,config,transaction=self.postinst_failure_fixture(minor,wording)
+                    accepted=True
+                    try:m.check_expected_failure(minor,path,config,transaction,'install ok half-configured')
+                    except ValueError:accepted=False
+                    self.assertTrue(accepted,'documented real postinst exit1 diagnostic was rejected')
+
+    def test_postinst_failure_wording_cannot_accept_wrong_package_script_or_exit(self):
+        m=self.module();minor='8.3'
+        for wording in ('legacy','current'):
+            path,config,transaction=self.postinst_failure_fixture(minor,wording)
+            text=transaction.stderr
+            wrong=[text.replace('php8.3-fpm','php8.4-fpm'),
+                   text.replace('(--configure)','(--remove)'),
+                   text.replace('post-installation script','pre-installation script') if wording=='legacy' else text.replace('postinst maintainer script','prerm maintainer script'),
+                   text.replace('exit status 1','exit status 10'),
+                   text.replace('exit status 1','exit status 2')+'unrelated fixture exit status 1\n']
+            for index,value in enumerate(wrong):
+                with self.subTest(wording=wording,case=index),self.assertRaisesRegex(ValueError,'APT failure was not the expected real FPM postinst failure'):
+                    m.check_expected_failure(minor,path,config,subprocess.CompletedProcess([],100,'',value),'install ok half-configured')
+
+    def test_postinst_failure_equivalent_wording_retains_code_status_and_owned_fault_guards(self):
+        m=self.module();minor='8.3'
+        for wording in ('legacy','current'):
+            path,config,transaction=self.postinst_failure_fixture(minor,wording)
+            with self.subTest(wording=wording,guard='APT100'),self.assertRaisesRegex(ValueError,'APT failure was not the expected real FPM postinst failure'):
+                m.check_expected_failure(minor,path,config,subprocess.CompletedProcess([],0,'',transaction.stderr),'install ok half-configured')
+            with self.subTest(wording=wording,guard='dpkg-half-configured'),self.assertRaisesRegex(ValueError,'real dpkg half-configured state required'):
+                m.check_expected_failure(minor,path,config,transaction,'install ok installed')
+            with self.subTest(wording=wording,guard='owned-config'),self.assertRaisesRegex(ValueError,'owned injected FPM configuration did not cause the exact expected failure'):
+                m.check_expected_failure(minor,path,subprocess.CompletedProcess([],78,'','unknown unrelated directive'),transaction,'install ok half-configured')
+
     def test_actual_failed_configuration_is_distinguished_from_unrelated_errors(self):
         m=self.module();path='/etc/php/8.3/fpm/pool.d/zz-nakpanel-maintenance-test1234.conf';test=subprocess.CompletedProcess([],78,'','ERROR: ['+path+":2] unknown entry 'nakpanel_owned_drill_invalid'")
         apt=subprocess.CompletedProcess([],100,'','dpkg: error processing package php8.3-fpm (--configure):\n installed php8.3-fpm package post-installation script subprocess returned error exit status 1')

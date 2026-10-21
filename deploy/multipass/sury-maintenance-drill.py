@@ -168,7 +168,9 @@ def check_expected_failure(minor, path, config_test, transaction, status):
     require(minor in MINORS, 'unsupported PHP minor')
     check_fault_config(path, config_test)
     text = transaction.stdout + transaction.stderr
-    require(transaction.returncode == 100 and 'error processing package php' + minor + '-fpm (--configure)' in text and 'post-installation script' in text and 'exit status 1' in text, 'APT failure was not the expected real FPM postinst failure')
+    package = 'php' + minor + '-fpm'
+    postinst_errors = ('installed ' + package + ' package post-installation script subprocess returned error exit status 1', 'old ' + package + ' package postinst maintainer script subprocess failed with exit status 1')
+    require(transaction.returncode == 100 and 'error processing package ' + package + ' (--configure)' in text and any(re.search(re.escape(message) + r'(?:\n|$)', text) for message in postinst_errors), 'APT failure was not the expected real FPM postinst failure')
     require(status.strip() == 'install ok half-configured', 'real dpkg half-configured state required')
 
 
