@@ -91,5 +91,30 @@ class ScheduledBackupTests(unittest.TestCase):
                     env=dict(os.environ,GITHUB_ACTIONS=actions,RUNNER_ENVIRONMENT=runner,CALLS=str(calls),PATH=str(p)+':/usr/bin:/bin'),capture_output=True,text=True)
                 self.assertNotEqual(result.returncode,0);self.assertFalse(calls.exists())
 
+    def test_control_canary_is_created_by_the_principal_that_dumps_and_restores_it(self):
+        m=self.module()
+        with tempfile.TemporaryDirectory() as td:
+            drill=object.__new__(m.Drill);drill.source='nakpanel-26-04-amd64-scheduled-123-1'
+            drill.token='scheduled-123-1';drill.private=Path(td)
+            rows=[dict(id=i,domain=domain,username='npscheduled',document_root='/home/npscheduled/domains/'+domain+'/public_html',
+                php_version=minor,desired_php_version=minor,status='active') for i,(minor,domain) in enumerate(
+                [('8.3','current-bootstrap.test'),('8.4','scheduled84.test'),('8.5','scheduled85.test')],1)]
+            owners=[]
+            def command(args,**kwargs):
+                if args[0]=='curl':return 'data-np-role="admin"' if args[-1].endswith('/login') else '303'
+                self.assertEqual(args[:4],['multipass','exec',drill.source,'--'])
+                if 'psql' in args:
+                    query=args[-1]
+                    if query.startswith('SELECT subscription_id'):return '9'
+                    self.assertIn('CREATE TABLE nakpanel_qualification_backup_canary',query)
+                    principal=args[args.index('-u')+1]
+                    self.assertEqual(principal,'nakpanel','postgres-owned fixture cannot be dumped by the real nakpanel backup role')
+                    owners.append(principal)
+                return ''
+            with patch.object(drill,'cmd',side_effect=command),patch.object(drill,'ip',return_value='10.0.0.2'),\
+                 patch.object(drill,'shell',return_value='csrf'),patch.object(drill,'sites',return_value=rows):
+                drill.seed()
+            self.assertEqual(owners,['nakpanel'])
+
 
 if __name__=='__main__':unittest.main()

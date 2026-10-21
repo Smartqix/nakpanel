@@ -217,7 +217,8 @@ class Drill:
             code="import json,os,pwd,sys; v=json.load(sys.stdin); u=pwd.getpwnam(v['user']); f=os.open(v['path'],os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o644); os.write(f,v['body'].encode()); os.fchown(f,u.pw_uid,u.pw_gid); os.fchmod(f,0o644); os.close(f)"
             self.guest(self.source,'sudo','python3','-c',code,data=json.dumps(dict(user=username,path=path,body=body)))
             self.expected[minor]=dict(row,path=path,sha256=hashlib.sha256(body.encode()).hexdigest())
-        self.db(self.source,"CREATE TABLE nakpanel_qualification_backup_canary (value text NOT NULL); INSERT INTO nakpanel_qualification_backup_canary VALUES ('"+self.token+"')")
+        self.guest(self.source,'sudo','-u','nakpanel','psql','-XqAt','-d','nakpanel','-v','ON_ERROR_STOP=1','-c',
+            "CREATE TABLE nakpanel_qualification_backup_canary (value text NOT NULL); INSERT INTO nakpanel_qualification_backup_canary VALUES ('"+self.token+"')")
         self.guest(self.source,'sudo','mariadb','np_current_bootstrap','-e',"UPDATE nakpanel_qualification_canary SET value='"+self.token+"' WHERE id=1")
 
     def health(self,vm):
