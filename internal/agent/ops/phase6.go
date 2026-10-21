@@ -844,7 +844,7 @@ $config['smtp_conn_options'] = %s;
 }
 
 func RenderWebmailNginxConfig(req types.ConfigureWebmailReq) string {
-	return renderWebmailNginxConfig(req, distroPHPRuntime("8.3").ManagedSocket)
+	return renderWebmailNginxConfig(req, distroPHPRuntime("8.5").ManagedSocket)
 }
 func renderWebmailNginxConfig(req types.ConfigureWebmailReq, socket string) string {
 	return fmt.Sprintf(`server {
@@ -867,7 +867,7 @@ func renderWebmailNginxConfig(req types.ConfigureWebmailReq, socket string) stri
 }
 
 func renderWebmailTLSNginxConfig(req types.ConfigureWebmailReq, certPath, keyPath string) string {
-	return renderWebmailTLSNginxConfigWithSocket(req, certPath, keyPath, distroPHPRuntime("8.3").ManagedSocket)
+	return renderWebmailTLSNginxConfigWithSocket(req, certPath, keyPath, distroPHPRuntime("8.5").ManagedSocket)
 }
 func renderWebmailTLSNginxConfigWithSocket(req types.ConfigureWebmailReq, certPath, keyPath, socket string) string {
 	return fmt.Sprintf(`server {
@@ -899,10 +899,10 @@ server {
 func (p *WebmailProvisioner) internalRuntime() (PHPRuntimeDescriptor, error) {
 	version := p.phpFPMVersion
 	if version == "" {
-		version = "8.3"
+		version = "8.5"
 	}
-	if version != "8.3" && version != "8.5" {
-		return PHPRuntimeDescriptor{}, errors.New("internal PHP version must be 8.3 or 8.5")
+	if version != "8.5" {
+		return PHPRuntimeDescriptor{}, errors.New("internal PHP version must be 8.5")
 	}
 	return resolvePHPRuntime(p.runtimeResolver, version)
 }

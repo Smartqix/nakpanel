@@ -14,23 +14,17 @@ import (
 )
 
 func platformFixture(version string) PlatformProvenance {
-	p := PlatformProvenance{OSID: "ubuntu", VersionID: version, Codename: "noble", Architecture: "amd64", Profile: "ubuntu-24.04", InternalPHPVersion: "8.3", HostingPHPVersions: []string{"8.3", "8.4"}, RequiredPHPVersions: []string{"8.3"}, PHPInventoryComplete: true, PostgresServerVersion: "16.11", PostgresDumpVersion: "16.11", PostgresRestoreVersion: "16.11", MariaDBServerVersion: "10.11.14", MariaDBDumpVersion: "10.11.14", MariaDBClientVersion: "10.11.14", StalwartVersion: "0.15.4"}
-	if version == "26.04" {
-		p.Profile = "ubuntu-26.04-native"
-		p.Codename = "resolute"
-		p.InternalPHPVersion = "8.5"
-		p.PostgresServerVersion = "18.0"
-		p.PostgresDumpVersion = "18.0"
-		p.PostgresRestoreVersion = "18.0"
-		p.MariaDBServerVersion = "11.8.3"
-		p.MariaDBDumpVersion = "11.8.3"
-		p.MariaDBClientVersion = "11.8.3"
+	p := PlatformProvenance{OSID: "ubuntu", VersionID: version, Codename: "resolute", Architecture: "amd64", Profile: "ubuntu-26.04-sury", InternalPHPVersion: "8.5", HostingPHPVersions: []string{"8.3", "8.4", "8.5"}, RequiredPHPVersions: []string{"8.3"}, PHPInventoryComplete: true, PostgresServerVersion: "18.0", PostgresDumpVersion: "18.0", PostgresRestoreVersion: "18.0", MariaDBServerVersion: "11.8.3", MariaDBDumpVersion: "11.8.3", MariaDBClientVersion: "11.8.3", StalwartVersion: "0.15.4"}
+	if version == "24.04" {
+		p.Codename = "noble"
+		p.Profile = "ubuntu-24.04"
+		p.InternalPHPVersion = "8.3"
 	}
 	return p
 }
 func TestPlatformManifestRoundTripAndLegacy(t *testing.T) {
 	key := testKey(t)
-	for _, p := range []*PlatformProvenance{nil, ptrPlatform(platformFixture("24.04"))} {
+	for _, p := range []*PlatformProvenance{nil, ptrPlatform(platformFixture("26.04"))} {
 		m := Manifest{FormatVersion: 1, Platform: p}
 		data, _ := json.Marshal(m)
 		var buf bytes.Buffer
@@ -63,14 +57,12 @@ func TestRestoreCompatibility(t *testing.T) {
 		mail   bool
 		want   string
 	}{
-		{"same release", "", ptrPlatform(platformFixture("24.04")), platformFixture("24.04"), true, ""},
-		{"legacy 24", RestoreSamePlatform, nil, platformFixture("24.04"), true, ""},
-		{"legacy cannot assume 26", RestoreSamePlatform, nil, platformFixture("26.04"), true, "legacy"},
-		{"legacy forward", RestoreForwardMigration, nil, platformFixture("26.04"), false, "provenance"},
-		{"default blocks cross release", "", ptrPlatform(platformFixture("24.04")), platformFixture("26.04"), false, "same-platform"},
-		{"qualified shape forward", RestoreForwardMigration, ptrPlatform(platformFixture("24.04")), platformFixture("26.04"), true, ""},
-		{"no backward migration", RestoreForwardMigration, ptrPlatform(platformFixture("26.04")), platformFixture("24.04"), false, "direction"},
-		{"bad mode", RestoreMode("anything"), ptrPlatform(platformFixture("24.04")), platformFixture("24.04"), false, "mode"},
+		{"same release", "", ptrPlatform(platformFixture("26.04")), platformFixture("26.04"), true, ""},
+		{"missing provenance", RestoreSamePlatform, nil, platformFixture("26.04"), true, "provenance"},
+		{"retired source", RestoreSamePlatform, ptrPlatform(platformFixture("24.04")), platformFixture("26.04"), false, "OS"},
+		{"retired target", RestoreSamePlatform, ptrPlatform(platformFixture("26.04")), platformFixture("24.04"), false, "OS"},
+		{"retired forward mode", RestoreForwardMigration, ptrPlatform(platformFixture("26.04")), platformFixture("26.04"), false, "mode"},
+		{"bad mode", RestoreMode("anything"), ptrPlatform(platformFixture("26.04")), platformFixture("26.04"), false, "mode"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := CheckRestoreCompatibility(Manifest{Platform: tc.source, IncludeMailData: tc.mail}, tc.target, tc.mode)
@@ -107,9 +99,9 @@ func TestRestoreCompatibilityRejectsUnavailableRequirements(t *testing.T) {
 		{"mail mismatch", func(s, t *PlatformProvenance) { t.StalwartVersion = "0.16.0" }, "Stalwart"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, tgt := platformFixture("24.04"), platformFixture("26.04")
+			s, tgt := platformFixture("26.04"), platformFixture("26.04")
 			tc.mutate(&s, &tgt)
-			err := CheckRestoreCompatibility(Manifest{Platform: &s, IncludeMailData: true}, tgt, RestoreForwardMigration)
+			err := CheckRestoreCompatibility(Manifest{Platform: &s, IncludeMailData: true}, tgt, RestoreSamePlatform)
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err=%v want %q", err, tc.want)
 			}
@@ -140,7 +132,7 @@ func TestRunRestoreCompatibilityBeforeMutation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			key := testKey(t)
-			s, tgt := platformFixture("24.04"), platformFixture("26.04")
+			s, tgt := platformFixture("26.04"), platformFixture("26.04")
 			tc.mutate(&tgt)
 			var buf bytes.Buffer
 			w, _ := NewArchiveWriter(&buf, key)
@@ -156,7 +148,7 @@ func TestRunRestoreCompatibilityBeforeMutation(t *testing.T) {
 			t.Setenv("PATH", calls)
 			t.Setenv("MUTATION_LOG", filepath.Join(calls, "mutations"))
 			opens := 0
-			_, err := RunRestore(context.Background(), RestoreOptions{Key: key, OpenArchive: func() (io.ReadCloser, error) { opens++; return io.NopCloser(bytes.NewReader(buf.Bytes())), nil }, TargetPlatform: &tgt, Mode: RestoreForwardMigration, ReadyPHPVersions: func(context.Context) ([]string, error) { return tgt.HostingPHPVersions, nil }, RegenerateTargetConfiguration: func(context.Context) error { t.Fatal("regeneration before compatibility"); return nil }})
+			_, err := RunRestore(context.Background(), RestoreOptions{Key: key, OpenArchive: func() (io.ReadCloser, error) { opens++; return io.NopCloser(bytes.NewReader(buf.Bytes())), nil }, TargetPlatform: &tgt, Mode: RestoreSamePlatform, ReadyPHPVersions: func(context.Context) ([]string, error) { return tgt.HostingPHPVersions, nil }, RegenerateTargetConfiguration: func(context.Context) error { t.Fatal("regeneration before compatibility"); return nil }})
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("err=%v want %s", err, tc.want)
 			}
@@ -185,9 +177,9 @@ func TestForwardRestoreSkipsSourceNativeConfiguration(t *testing.T) {
 }
 
 func TestCompatibilityRejectsIncompleteForwardProfile(t *testing.T) {
-	s, tgt := platformFixture("24.04"), platformFixture("26.04")
+	s, tgt := platformFixture("26.04"), platformFixture("26.04")
 	tgt.Profile = "unknown"
-	if err := CheckRestoreCompatibility(Manifest{Platform: &s}, tgt, RestoreForwardMigration); err == nil {
+	if err := CheckRestoreCompatibility(Manifest{Platform: &s}, tgt, RestoreSamePlatform); err == nil {
 		t.Fatal("unknown profile accepted")
 	}
 }
@@ -223,7 +215,7 @@ func TestRunRestoreRequiresAuthoritativeReadyPHPBeforeMutation(t *testing.T) {
 	for _, name := range []string{"stray-binary", "profile-disallowed", "missing-extension", "isolated-fpm-not-ready"} {
 		t.Run(name, func(t *testing.T) {
 			key := testKey(t)
-			source, target := platformFixture("24.04"), platformFixture("26.04")
+			source, target := platformFixture("26.04"), platformFixture("26.04")
 			source.RequiredPHPVersions = []string{"8.4"}
 			target.HostingPHPVersions = []string{"8.4", "8.5"}
 			var buf bytes.Buffer
@@ -240,7 +232,7 @@ func TestRunRestoreRequiresAuthoritativeReadyPHPBeforeMutation(t *testing.T) {
 			t.Setenv("PATH", calls)
 			t.Setenv("MUTATION_LOG", filepath.Join(calls, "mutations"))
 			opens := 0
-			_, err := RunRestore(context.Background(), RestoreOptions{Key: key, OpenArchive: func() (io.ReadCloser, error) { opens++; return io.NopCloser(bytes.NewReader(buf.Bytes())), nil }, TargetPlatform: &target, Mode: RestoreForwardMigration, ReadyPHPVersions: func(context.Context) ([]string, error) { return []string{"8.5"}, nil }, RegenerateTargetConfiguration: func(context.Context) error { t.Fatal("mutated before readiness"); return nil }})
+			_, err := RunRestore(context.Background(), RestoreOptions{Key: key, OpenArchive: func() (io.ReadCloser, error) { opens++; return io.NopCloser(bytes.NewReader(buf.Bytes())), nil }, TargetPlatform: &target, Mode: RestoreSamePlatform, ReadyPHPVersions: func(context.Context) ([]string, error) { return []string{"8.5"}, nil }, RegenerateTargetConfiguration: func(context.Context) error { t.Fatal("mutated before readiness"); return nil }})
 			if err == nil || !strings.Contains(err.Error(), "PHP 8.4") {
 				t.Fatalf("err=%v", err)
 			}
@@ -255,22 +247,20 @@ func TestRunRestoreRequiresAuthoritativeReadyPHPBeforeMutation(t *testing.T) {
 }
 
 func TestRestoreCompatibilitySuryProfileIsExplicit(t *testing.T) {
-	native := platformFixture("26.04")
-	sury := native
-	sury.Profile = "ubuntu-26.04-sury"
-	sury.HostingPHPVersions = []string{"8.3", "8.4", "8.5"}
-	if err := CheckRestoreCompatibility(Manifest{Platform: &native}, sury, RestoreSamePlatform); err == nil {
-		t.Fatal("ordinary native-to-Sury restore accepted")
-	}
-	if err := CheckRestoreCompatibility(Manifest{Platform: &sury}, native, RestoreSamePlatform); err == nil {
-		t.Fatal("ordinary Sury-to-native restore accepted")
-	}
-	if err := CheckRestoreCompatibility(Manifest{Platform: &sury}, sury, RestoreSamePlatform); err != nil {
+	source, target := platformFixture("26.04"), platformFixture("26.04")
+	if err := CheckRestoreCompatibility(Manifest{Platform: &source}, target, RestoreSamePlatform); err != nil {
 		t.Fatal(err)
 	}
-	source := platformFixture("24.04")
-	source.RequiredPHPVersions = []string{"8.3", "8.4"}
-	if err := CheckRestoreCompatibility(Manifest{Platform: &source}, sury, RestoreForwardMigration); err != nil {
-		t.Fatal(err)
+	target.Profile = "ubuntu-26.04-native"
+	target.HostingPHPVersions = []string{"8.5"}
+	if err := CheckRestoreCompatibility(Manifest{Platform: &source}, target, RestoreSamePlatform); err == nil {
+		t.Fatal("provider change accepted as same-platform recovery")
+	}
+}
+
+func TestRestoreRejectsRetiredUbuntuEvenForSamePlatform(t *testing.T) {
+	s, target := platformFixture("24.04"), platformFixture("24.04")
+	if err := CheckRestoreCompatibility(Manifest{Platform: &s}, target, RestoreSamePlatform); err == nil {
+		t.Fatal("retired same-platform Ubuntu 24.04 restore accepted")
 	}
 }

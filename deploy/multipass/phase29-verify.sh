@@ -198,7 +198,7 @@ for artifact in panel agent panelctl; do
 done
 cd "${src}"
 args=(--fresh --bin-dir /tmp/nakpanel-bin --yes)
-if [[ "$2" == sury ]]; then args+=(--php-provider sury); fi
+args+=(--php-provider "$2")
 umask 077
 admin_password_file="$(mktemp /root/nakpanel-qualification-admin.XXXXXXXX)"
 trap 'rm -f "${admin_password_file}"' EXIT

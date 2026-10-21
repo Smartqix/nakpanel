@@ -21,7 +21,7 @@ except (OSError, ValueError):
     raise SystemExit("phase30: dependency manifest cannot be read")
 if not isinstance(manifest, dict) or type(manifest.get("schema_version")) is not int or manifest["schema_version"] != 1:
     raise SystemExit("phase30: unsupported dependency manifest schema")
-if sys.argv[2] not in {"ubuntu-24.04", "ubuntu-26.04-native", "ubuntu-26.04-sury"}:
+if sys.argv[2] not in {"ubuntu-26.04-native", "ubuntu-26.04-sury"}:
     raise SystemExit("phase30: unsupported dependency profile")
 profile = manifest.get(sys.argv[2])
 if not isinstance(profile, dict):

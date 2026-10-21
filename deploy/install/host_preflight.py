@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-PROFILES = ('ubuntu-24.04', 'ubuntu-26.04-native', 'ubuntu-26.04-sury')
+PROFILES = ('ubuntu-26.04-native', 'ubuntu-26.04-sury')
 
 
 def collect():
@@ -43,14 +43,9 @@ def validate(host, profile):
     missing = sorted({'cpu', 'memory', 'pids'} - set(host['cgroup_controllers']))
     if missing:
         message = 'cgroup v2 controllers missing: ' + ','.join(missing)
-        if profile != 'ubuntu-24.04':
-            raise ValueError(message)
-        warnings.append(message + '; OCI resource enforcement may be unavailable')
+        raise ValueError(message)
     if host['home_filesystem']['fstype'] != 'ext4':
-        message = 'the experimental Resolute profile requires an ext4 filesystem backing /home'
-        if profile != 'ubuntu-24.04':
-            raise ValueError(message)
-        warnings.append('Noble filesystem behavior preserved; verify quota support for ' + host['home_filesystem']['fstype'])
+        raise ValueError('the experimental Resolute profile requires an ext4 filesystem backing /home')
     return dict(host, profile=profile, warnings=warnings)
 
 

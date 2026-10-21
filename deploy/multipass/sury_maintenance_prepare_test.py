@@ -25,13 +25,13 @@ class PreparationTests(unittest.TestCase):
         return module
 
     def report(self):
-        return dict(schema_version=1, qualification_passed=True, full_php_parity=True,
+        return dict(schema_version=1, qualification_scope="CURRENT_VERSION_ONLY", excluded_gates=["real-upgrade"], qualification_passed=True, full_php_parity=True,
                     pending_gates=[], source_vm='nakpanel-26-04-amd64-hosted-123456-1-26-04',
                     run_token='hosted-123456-1-26-04', release='26.04', architecture='amd64',
                     profile='ubuntu-26.04-sury', php_provider='sury', php_contract=['8.5','8.4','8.3'],
                     features={'database_manager_requested': True},
                     gates=[dict(name=n,status='PASS',exit_code=0) for n in (
-                        'bundle','fresh-install','inventory','real-upgrade','phase28','valkey-platform',
+                        'bundle','fresh-install','inventory','phase28','valkey-platform',
                         'security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace',
                         'phase33','phase34','domain-removal','release-artifacts')])
 
@@ -612,7 +612,7 @@ m.run_canonical([sys.executable,'-c',child,sys.argv[2]],pathlib.Path(sys.argv[3]
                 root=Path(td); requested=mode!='opt-out'
                 manifest=dict(version='29.0.0',commit='a'*40,files={'bin/'+name:str(n)*64 for name,n in (('panel',1),('agent',2),('panelctl',3))})
                 manifest_bytes=m.M.canonical(manifest)
-                for release in ('24.04','26.04'):
+                for release in ('26.04',):
                     cell=root/'hosted-results'/release;cell.mkdir(parents=True)
                     report=self.report();report.update(release=release,promotion_eligible=False,signature_class='development')
                     report_bytes=m.M.canonical(report);(cell/'report.json').write_bytes(report_bytes)

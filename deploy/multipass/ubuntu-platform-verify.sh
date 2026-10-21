@@ -21,12 +21,10 @@ names=['NAKPANEL_RUN_TOKEN','NAKPANEL_MULTIPASS_VM','NAKPANEL_MULTIPASS_SOURCE_V
  'NAKPANEL_MULTIPASS_DR_VM','NAKPANEL_MULTIPASS_IMAGE','NAKPANEL_MULTIPASS_ARCH',
  'NAKPANEL_REMOTE_SRC','NAKPANEL_GUEST_QUALIFICATION_ROOT','NAKPANEL_GUEST_RELEASE_DIR',
  'NAKPANEL_GUEST_RELEASE_PUBLIC_KEY','NAKPANEL_RELEASE_BUNDLE','NAKPANEL_RELEASE_PUBLIC_KEY',
- 'NAKPANEL_RELEASE_VERSION','NAKPANEL_RELEASE_ALLOW_DEVELOPMENT','NAKPANEL_PRIOR_RELEASE_BUNDLE',
- 'NAKPANEL_PRIOR_RELEASE_PUBLIC_KEY','NAKPANEL_PRIOR_RELEASE_VERSION','NAKPANEL_PRIOR_RELEASE_ALLOW_DEVELOPMENT',
+ 'NAKPANEL_RELEASE_VERSION','NAKPANEL_RELEASE_ALLOW_DEVELOPMENT',
  'NAKPANEL_QUALIFICATION_PHP_PROVIDER','NAKPANEL_CELL_REPORT_DIR','NAKPANEL_OWNERSHIP_DIR',
  'NAKPANEL_MULTIPASS_IMAGE_SOURCE','NAKPANEL_MULTIPASS_IMAGE_SHA256',
- 'NAKPANEL_PRIOR_MULTIPASS_IMAGE_SOURCE','NAKPANEL_PRIOR_MULTIPASS_IMAGE_SHA256',
- 'NAKPANEL_QUALIFICATION_RECLAIM_PRIOR','NAKPANEL_QUALIFICATION_VM_CPUS',
+ 'NAKPANEL_QUALIFICATION_VM_CPUS',
  'NAKPANEL_QUALIFICATION_VM_MEMORY','NAKPANEL_QUALIFICATION_VM_DISK',
  'NAKPANEL_QUALIFICATION_DR_CPUS','NAKPANEL_QUALIFICATION_DR_MEMORY','NAKPANEL_QUALIFICATION_DR_DISK',
  'NAKPANEL_VERIFY_DATABASE_MANAGER','NAKPANEL_REMOVAL_BROWSER_SMOKE','PLAYWRIGHT_MODULE','NODE_PATH']
@@ -50,10 +48,10 @@ finish() {
   python3 - "${results}" "${complete}" "${status}" <<'PY'
 import json, os, pathlib, sys
 rows=[line.rstrip('\n').split('\t') for line in open(sys.argv[1])]
-expected=['bundle','fresh-install','inventory','real-upgrade','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace','phase33','phase34','domain-removal','release-artifacts']
+expected=['bundle','fresh-install','inventory','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace','phase33','phase34','domain-removal','release-artifacts']
 passed=sys.argv[2]=='1' and sys.argv[3]=='0' and [r[0] for r in rows]==expected and all(r[1]=='PASS' for r in rows)
-release=os.environ['NAKPANEL_MULTIPASS_IMAGE']; development=os.environ.get('NAKPANEL_RELEASE_ALLOW_DEVELOPMENT')=='1' or os.environ.get('NAKPANEL_PRIOR_RELEASE_ALLOW_DEVELOPMENT')=='1'
-report=dict(schema_version=1,release=release,architecture=os.environ['NAKPANEL_MULTIPASS_ARCH'],run_token=os.environ['NAKPANEL_RUN_TOKEN'],source_vm=os.environ['NAKPANEL_MULTIPASS_VM'],dr_vm=os.environ['NAKPANEL_MULTIPASS_DR_VM'],qualification_passed=passed,promotion_eligible=passed and not development,signature_class='development' if development else 'production',php_contract=os.environ['NAKPANEL_PHP_VERSIONS'].split(','),profile=os.environ['NAKPANEL_QUALIFICATION_PROFILE'],php_provider=os.environ['NAKPANEL_QUALIFICATION_PHP_PROVIDER'],full_php_parity=os.environ['NAKPANEL_PHP_VERSIONS']=='8.5,8.4,8.3',features=dict(native_php=os.environ['NAKPANEL_PHP_VERSIONS'].split(','),rootless_oci_required=True,rootful_valkey_required=True,webmail_required=True,database_manager_requested=os.environ.get('NAKPANEL_VERIFY_DATABASE_MANAGER')=='1',genuine_historical_upgrade_release='24.04',same_profile_26_update_required=release=='26.04'),gates=[dict(name=r[0],status=r[1],exit_code=int(r[2])) for r in rows],pending_gates=[g for g in expected if g not in [r[0] for r in rows]])
+release=os.environ['NAKPANEL_MULTIPASS_IMAGE']; development=os.environ.get('NAKPANEL_RELEASE_ALLOW_DEVELOPMENT')=='1'
+report=dict(schema_version=1,qualification_scope="CURRENT_VERSION_ONLY",excluded_gates=["real-upgrade"],release=release,architecture=os.environ['NAKPANEL_MULTIPASS_ARCH'],run_token=os.environ['NAKPANEL_RUN_TOKEN'],source_vm=os.environ['NAKPANEL_MULTIPASS_VM'],dr_vm=os.environ['NAKPANEL_MULTIPASS_DR_VM'],qualification_passed=passed,promotion_eligible=passed and not development,signature_class='development' if development else 'production',php_contract=os.environ['NAKPANEL_PHP_VERSIONS'].split(','),profile=os.environ['NAKPANEL_QUALIFICATION_PROFILE'],php_provider=os.environ['NAKPANEL_QUALIFICATION_PHP_PROVIDER'],full_php_parity=os.environ['NAKPANEL_PHP_VERSIONS']=='8.5,8.4,8.3',features=dict(native_php=os.environ['NAKPANEL_PHP_VERSIONS'].split(','),rootless_oci_required=True,rootful_valkey_required=True,webmail_required=True,database_manager_requested=os.environ.get('NAKPANEL_VERIFY_DATABASE_MANAGER')=='1',current_version_application_recovery_required=True),gates=[dict(name=r[0],status=r[1],exit_code=int(r[2])) for r in rows],pending_gates=[g for g in expected if g not in [r[0] for r in rows]])
 image_records=pathlib.Path(os.environ['NAKPANEL_OWNERSHIP_DIR'],os.environ['NAKPANEL_RUN_TOKEN']).glob('*.image.json')
 report['requested_image']=dict(expected_release=release,source=os.environ.get('NAKPANEL_MULTIPASS_IMAGE_SOURCE') or release,sha256=os.environ.get('NAKPANEL_MULTIPASS_IMAGE_SHA256') or None)
 report['launch_images']=[dict(vm=path.name.removesuffix('.image.json'),**json.loads(path.read_text())) for path in image_records]
@@ -117,7 +115,6 @@ assert_inventory_user_quota
 '
 }
 run_gate inventory inventory
-run_gate real-upgrade "${SCRIPT_DIR}/ubuntu-upgrade-verify.sh"
 for gate in phase28 valkey-platform security phase29 phase30 phase31 phase32 internal-tools mail-workspace phase33 phase34 domain-removal; do
   if [[ "${gate}" == internal-tools ]]; then
     run_gate "${gate}" env NAKPANEL_SKIP_PRIOR_PHASES=1 python3 "${SCRIPT_DIR}/roundcube-send-read.py" execute-canonical

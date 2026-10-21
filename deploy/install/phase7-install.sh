@@ -13,11 +13,6 @@ nakpanel_require_platform
 
 apt-get update
 webmail_packages=()
-if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]]; then
-  source "${SCRIPT_DIR}/noble-roundcube.sh"
-  nakpanel_prepare_noble_roundcube
-  webmail_packages+=("${NAKPANEL_NOBLE_ROUNDCUBE_PACKAGES[@]}")
-fi
 apt-get install -y \
   adminer \
   bind9 \

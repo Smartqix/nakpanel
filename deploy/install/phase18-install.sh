@@ -57,25 +57,14 @@ sudo -u postgres psql -d nakpanel -tAc "SELECT COUNT(*) FROM pg_views WHERE view
   sudo -u postgres psql -v ON_ERROR_STOP=1 -d nakpanel -c \
     'GRANT SELECT ON stalwart_accounts, stalwart_emails, stalwart_domains TO stalwart_directory;'
 
-# Preserve every existing Roundcube backend. On a genuinely unconfigured Noble
-# host, select SQLite before its first package installation (normally phase 7).
-# Keep the MySQL extension for upgrades with a MariaDB-backed webmail database.
+# Install the verified upstream webmail release on the internal PHP runtime.
 export DEBIAN_FRONTEND=noninteractive
-if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]]; then
-  source "${SCRIPT_DIR}/noble-roundcube.sh"
-  nakpanel_prepare_noble_roundcube
-  apt-get install -y "${NAKPANEL_NOBLE_ROUNDCUBE_PACKAGES[@]}" sqlite3 \
-    "php${NAKPANEL_INTERNAL_PHP_VERSION}-mbstring" "php${NAKPANEL_INTERNAL_PHP_VERSION}-intl" \
-    "php${NAKPANEL_INTERNAL_PHP_VERSION}-xml" "php${NAKPANEL_INTERNAL_PHP_VERSION}-sqlite3" \
-    "php${NAKPANEL_INTERNAL_PHP_VERSION}-mysql" >/dev/null
-else
-  apt-get install -y --no-install-recommends sqlite3 \
-    "php${NAKPANEL_INTERNAL_PHP_VERSION}-mbstring" "php${NAKPANEL_INTERNAL_PHP_VERSION}-intl" \
-    "php${NAKPANEL_INTERNAL_PHP_VERSION}-xml" "php${NAKPANEL_INTERNAL_PHP_VERSION}-sqlite3" \
-    "php${NAKPANEL_INTERNAL_PHP_VERSION}-mysql" >/dev/null
-  source "${SCRIPT_DIR}/roundcube.sh"
-  nakpanel_install_roundcube
-fi
+apt-get install -y --no-install-recommends sqlite3 \
+  "php${NAKPANEL_INTERNAL_PHP_VERSION}-mbstring" "php${NAKPANEL_INTERNAL_PHP_VERSION}-intl" \
+  "php${NAKPANEL_INTERNAL_PHP_VERSION}-xml" "php${NAKPANEL_INTERNAL_PHP_VERSION}-sqlite3" \
+  "php${NAKPANEL_INTERNAL_PHP_VERSION}-mysql" >/dev/null
+source "${SCRIPT_DIR}/roundcube.sh"
+nakpanel_install_roundcube
 # Roundcube may pull in Apache through Ubuntu's recommended packages. Nakpanel
 # serves webmail through nginx, so keep Apache from competing for ports 80/443
 # and clear any package-install failure left behind by that conflict.

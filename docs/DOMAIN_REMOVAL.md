@@ -40,8 +40,11 @@ or ownership markers to force a retry.
 
 ## Verification
 
-`deploy/multipass/domain-removal-verify.sh` installs the current stack and runs Phase 34 first on the shared
-`nakpanel-lab` Ubuntu 24.04 VM, then creates exact, uniquely named QA fixtures.
+The current verification target is Ubuntu 26.04 LTS with hosting PHP
+8.3/8.4/8.5. The verifier and defaults now target this contract; hosted acceptance remains pending.
+`deploy/multipass/domain-removal-verify.sh` must install the current stack and
+run Phase 34 in a disposable run-owned guest, then create uniquely named QA
+fixtures. Preserve pre-existing lab and soak VMs.
 It tests primary protection, child removal, default retention and download,
 same-hostname recreation, stale native RPC rejection, fixture-only failure and
 retry, CSRF, ownership, and native nginx/DNS/SSH validation.

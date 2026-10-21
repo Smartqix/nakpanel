@@ -7,7 +7,7 @@ if (( BASH_VERSINFO[0] < 5 )); then
 fi
 
 NAKPANEL_MULTIPASS_VM="${NAKPANEL_MULTIPASS_VM:-nakpanel-lab}"
-NAKPANEL_MULTIPASS_IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-24.04}"
+NAKPANEL_MULTIPASS_IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-26.04}"
 NAKPANEL_REMOTE_SRC="${NAKPANEL_REMOTE_SRC:-}"
 
 NAKPANEL_LEGACY_PHASE_VMS=(
@@ -50,13 +50,12 @@ NAKPANEL_LEGACY_PHASE_VMS=(
 )
 
 # Qualification fixtures cover every PHP version advertised by the selected
-# installer profile. Sury is an explicit Resolute-only opt-in.
-NAKPANEL_QUALIFICATION_PHP_PROVIDER="${NAKPANEL_QUALIFICATION_PHP_PROVIDER:-native}"
+# installer profile. Sury is the default full-PHP Resolute contract.
+NAKPANEL_QUALIFICATION_PHP_PROVIDER="${NAKPANEL_QUALIFICATION_PHP_PROVIDER:-sury}"
 case "${NAKPANEL_MULTIPASS_IMAGE}:${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" in
-  24.04:native|26.04:sury)
+  26.04:sury)
     NAKPANEL_FIXTURE_PHP=8.4; NAKPANEL_BASELINE_PHP=8.3; NAKPANEL_PHP_VERSIONS=8.5,8.4,8.3
-    NAKPANEL_QUALIFICATION_PROFILE="ubuntu-${NAKPANEL_MULTIPASS_IMAGE}"
-    [[ "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" != sury ]] || NAKPANEL_QUALIFICATION_PROFILE=ubuntu-26.04-sury ;;
+    NAKPANEL_QUALIFICATION_PROFILE=ubuntu-26.04-sury ;;
   26.04:native)
     NAKPANEL_FIXTURE_PHP=8.5; NAKPANEL_BASELINE_PHP=8.5; NAKPANEL_PHP_VERSIONS=8.5
     NAKPANEL_QUALIFICATION_PROFILE=ubuntu-26.04-native ;;
@@ -149,7 +148,7 @@ NAKPANEL_MULTIPASS_ARCH="${NAKPANEL_MULTIPASS_ARCH:-$(multipass_host_arch)}"
 validate_run_identity() {
   [[ "${NAKPANEL_QUALIFICATION_PROFILE}" != unsupported ]] || { echo "unsupported qualification release/PHP provider" >&2; return 1; }
   [[ "${1:-}" =~ ^[A-Za-z0-9][A-Za-z0-9-]{5,63}$ ]] || { echo "explicit safe NAKPANEL_RUN_TOKEN is required" >&2; return 1; }
-  [[ "${NAKPANEL_MULTIPASS_IMAGE}" == 24.04 || "${NAKPANEL_MULTIPASS_IMAGE}" == 26.04 ]] || return 1
+  [[ "${NAKPANEL_MULTIPASS_IMAGE}" == 26.04 ]] || return 1
   [[ "${NAKPANEL_MULTIPASS_ARCH}" == arm64 || "${NAKPANEL_MULTIPASS_ARCH}" == amd64 ]] || return 1
 }
 

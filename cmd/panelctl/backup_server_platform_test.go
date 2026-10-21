@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestRestoreModeRequiresExplicitForwardGate(t *testing.T) {
+func TestRestoreModeRejectsRetiredForwardMigration(t *testing.T) {
 	for _, tc := range []struct {
 		mode                      backup.RestoreMode
 		experimental, skip, check bool
@@ -13,12 +13,12 @@ func TestRestoreModeRequiresExplicitForwardGate(t *testing.T) {
 	}{
 		{mode: backup.RestoreSamePlatform},
 		{mode: backup.RestoreForwardMigration, reject: true},
-		{mode: backup.RestoreForwardMigration, check: true},
-		{mode: backup.RestoreForwardMigration, experimental: true},
+		{mode: backup.RestoreForwardMigration, check: true, reject: true},
+		{mode: backup.RestoreForwardMigration, experimental: true, reject: true},
 		{mode: backup.RestoreForwardMigration, experimental: true, skip: true, reject: true},
 		{mode: "bogus", reject: true},
 	} {
-		if err := validateRestoreMode(tc.mode, tc.experimental, tc.skip, tc.check); (err != nil) != tc.reject {
+		if err := validateRestoreMode(tc.mode); (err != nil) != tc.reject {
 			t.Fatalf("%+v err=%v", tc, err)
 		}
 	}

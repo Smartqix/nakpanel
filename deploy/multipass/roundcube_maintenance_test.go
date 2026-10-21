@@ -17,7 +17,6 @@ import (
 // must not be selected for its internal PHP8.5 webmail database.
 func TestRoundcubeMaintenanceProfiles(t *testing.T) {
 	for _, tc := range []struct{ profile, release, codename, php string }{
-		{"ubuntu-24.04", "24.04", "noble", "8.3"},
 		{"ubuntu-26.04-native", "26.04", "resolute", "8.5"},
 		{"ubuntu-26.04-sury", "26.04", "resolute", "8.5"},
 	} {
@@ -92,7 +91,7 @@ func TestRoundcubeMaintenanceProfiles(t *testing.T) {
 }
 
 func TestRoundcubeMaintenanceConfigurationAndFailureBoundaries(t *testing.T) {
-	for _, profile := range []string{"ubuntu-24.04", "ubuntu-26.04-native", "ubuntu-26.04-sury"} {
+	for _, profile := range []string{"ubuntu-26.04-native", "ubuntu-26.04-sury"} {
 		for _, tc := range []struct {
 			name       string
 			configured bool
@@ -103,9 +102,6 @@ func TestRoundcubeMaintenanceConfigurationAndFailureBoundaries(t *testing.T) {
 		} {
 			t.Run(profile+"/"+tc.name, func(t *testing.T) {
 				release, codename := "26.04", "resolute"
-				if profile == "ubuntu-24.04" {
-					release, codename = "24.04", "noble"
-				}
 				f := newMaintenanceFixture(t, profile, release, codename, tc.configured, tc.phpExit)
 				out, err := f.run(t, false)
 				if (err == nil) != tc.want {

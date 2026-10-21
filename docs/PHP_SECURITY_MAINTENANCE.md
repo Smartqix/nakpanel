@@ -33,8 +33,8 @@ A missed target must remain visible in the tracking issue.
 
 ## Package and platform boundaries
 
-Ubuntu 24.04 keeps its existing profile. Ubuntu 26.04 native and explicit Surý
-profiles have separate package contracts. Never install Noble packages on
+Ubuntu 26.04 is the sole server OS. Its default Surý profile requires hosting
+PHP 8.3/8.4/8.5; native PHP 8.5-only is a diagnostic configuration. Never install Noble packages on
 Resolute, add an unrelated repository to obtain a missing version, switch an
 installed provider implicitly, or broaden PHP-only repository preferences.
 A PHP patch operation must not become an unreviewed operating-system upgrade.

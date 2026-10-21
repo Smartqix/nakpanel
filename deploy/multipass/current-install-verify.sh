@@ -32,7 +32,7 @@ if [[ "$3" != 1 ]]; then chown -R nakpanel:nakpanel "$1"; fi
 test ! -e /etc/nakpanel/version
 export NAKPANEL_RELEASE_ALLOW_DEVELOPMENT="$4"
 install_args=(--yes)
-if [[ "$6" == sury ]]; then install_args+=(--php-provider sury); fi
+install_args+=(--php-provider "$6")
 if [[ "$3" == 1 ]]; then
   install_args+=(--bundle "$7" --release-public-key "$8")
   if [[ "$4" == 1 ]]; then install_args+=(--allow-development-bundle); fi
@@ -120,7 +120,7 @@ configure_bootstrap_mail_profile() {
     ubuntu-26.04-native:26.04)
       bootstrap_default_php=8.5; bootstrap_php_versions=8.5; bootstrap_php_json='["8.5"]'
       [[ "${NAKPANEL_BASELINE_PHP}" == 8.5 ]] || return 1 ;;
-    ubuntu-24.04:24.04|ubuntu-26.04-sury:26.04)
+    ubuntu-26.04-sury:26.04)
       bootstrap_default_php=8.4; bootstrap_php_versions=8.3,8.4,8.5; bootstrap_php_json='["8.3","8.4","8.5"]'
       [[ "${NAKPANEL_BASELINE_PHP}" == 8.3 ]] || return 1 ;;
     *) echo 'current-install: unsupported mail fixture profile' >&2; return 1 ;;

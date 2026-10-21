@@ -16,7 +16,7 @@ class HostPreflightTests(unittest.TestCase):
                                        read_only=False) for path in ('/', '/home', '/var/lib', '/tmp')])
 
     def test_actual_requirements_accept_all_profiles_without_an_invented_capacity_floor(self):
-        for profile in ('ubuntu-24.04', 'ubuntu-26.04-native', 'ubuntu-26.04-sury'):
+        for profile in ('ubuntu-26.04-native', 'ubuntu-26.04-sury'):
             self.host['storage'][0]['available_bytes'] = 1
             report = module.validate(copy.deepcopy(self.host), profile)
             self.assertEqual(report['profile'], profile)
@@ -28,7 +28,7 @@ class HostPreflightTests(unittest.TestCase):
                 host = copy.deepcopy(self.host)
                 host['storage'][1][key] = value
                 with self.assertRaisesRegex(ValueError, '/home'):
-                    module.validate(host, 'ubuntu-24.04')
+                    module.validate(host, 'ubuntu-26.04-sury')
         self.host['init'] = 'bash'
         with self.assertRaisesRegex(ValueError, 'systemd'):
             module.validate(self.host, 'ubuntu-26.04-native')
@@ -43,13 +43,10 @@ class HostPreflightTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'ext4'):
             module.validate(self.host, 'ubuntu-26.04-sury')
 
-    def test_existing_noble_filesystem_and_controller_semantics_remain_eligible(self):
-        self.host['home_filesystem']['fstype'] = 'xfs'
-        self.host['cgroup_controllers'] = []
-        report = module.validate(self.host, 'ubuntu-24.04')
-        self.assertEqual(len(report['warnings']), 2)
-        with self.assertRaisesRegex(ValueError, 'profile'):
-            module.validate(self.host, 'unknown')
+    def test_retired_and_unknown_profiles_are_ineligible(self):
+        for profile in ('ubuntu-24.04', 'unknown'):
+            with self.subTest(profile=profile), self.assertRaisesRegex(ValueError, 'profile'):
+                module.validate(self.host, profile)
 
 
 if __name__ == '__main__':

@@ -133,7 +133,7 @@ func TestCISecurityPhase29RetainsFailedCompanionEvidence(t *testing.T) {
 				}
 			}
 			common := `NAKPANEL_MULTIPASS_VM="${NAKPANEL_MULTIPASS_VM:-nakpanel-primary}"
-NAKPANEL_MULTIPASS_IMAGE=24.04
+NAKPANEL_MULTIPASS_IMAGE=26.04
 NAKPANEL_MULTIPASS_DR_VM="${NAKPANEL_MULTIPASS_DR_VM:-nakpanel-primary-dr}"
 NAKPANEL_REMOTE_SRC=/private/source
 if [[ "${NAKPANEL_PHASE29_FAULT_DRILLS_ONLY:-0}" == 1 ]]; then
@@ -819,7 +819,7 @@ func TestRequiredSecurityGateUsesDisposableHostedRunnerWithoutSkippingBuildFailu
 	}
 }
 
-func TestRequiredSecurityGateStagesAuthenticatedPinnedNobleBeforeLaunch(t *testing.T) {
+func TestRequiredSecurityGateStagesAuthenticatedPinnedResoluteBeforeLaunch(t *testing.T) {
 	data, err := os.ReadFile("../../.github/workflows/ci.yml")
 	if err != nil {
 		t.Fatal(err)
@@ -832,7 +832,7 @@ func TestRequiredSecurityGateStagesAuthenticatedPinnedNobleBeforeLaunch(t *testi
 	pins := map[string]string{}
 	stageIndex, capacityIndex, ownershipIndex := -1, -1, -1
 	for index, step := range workflow.Jobs["security-suite"].Steps {
-		if step.Name == "Stage the pinned signed Noble cloud image" {
+		if step.Name == "Stage the pinned signed Resolute cloud image" {
 			program, pins, stageIndex = step.Run, step.Env, index
 		}
 		if strings.Contains(step.Run, "hosted-runner-preflight.py") {
@@ -857,16 +857,16 @@ import os,pathlib,sys
 assert sys.argv[1:8]==['--fail','--location','--retry','3','--proto','=https','--proto-redir'],sys.argv
 assert sys.argv[8]=='=https' and sys.argv[-2]=='--output',sys.argv
 url=sys.argv[9];name=url.rsplit('/',1)[-1]
-assert url.startswith('https://cloud-images.ubuntu.com/releases/noble/release-20261017/'),url
+assert url.startswith('https://cloud-images.ubuntu.com/releases/resolute/release-20260927/'),url
 root=pathlib.Path(os.environ['FIXTURE'])
 with (root/'calls').open('a') as out:out.write('download:'+name+'\n')
 target=pathlib.Path(sys.argv[-1])
 if name=='SHA256SUMS':
  digest='0'*64 if os.environ['CLIENT_MODE']=='manifest-mismatch' else os.environ['IMAGE_SHA']
- target.write_text(digest+' *ubuntu-24.04-server-cloudimg-amd64.img\n')
+ target.write_text(digest+' *ubuntu-26.04-server-cloudimg-amd64.img\n')
 elif name=='SHA256SUMS.gpg':target.write_text('signature fixture\n')
 else:
- assert name=='ubuntu-24.04-server-cloudimg-amd64.img',name
+ assert name=='ubuntu-26.04-server-cloudimg-amd64.img',name
  assert 'signature-verified' in (root/'calls').read_text(),'image download preceded signature validation'
  target.write_text('corrupt image' if os.environ['CLIENT_MODE']=='image-mismatch' else os.environ['IMAGE_BYTES'])
 `,
@@ -891,11 +891,11 @@ esac
 					t.Fatal(err)
 				}
 			}
-			serial := "20261017"
+			serial := "20260927"
 			if mode == "invalid-serial" {
 				serial = "latest/../unreviewed"
 			}
-			env := append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "FIXTURE="+root, "RUNNER_TEMP="+root, "GITHUB_ENV="+filepath.Join(root, "environment"), "NOBLE_SERIAL="+serial, "NOBLE_SHA256="+digest, "IMAGE_BYTES="+image, "IMAGE_SHA="+digest, "CLIENT_MODE="+mode)
+			env := append(os.Environ(), "PATH="+root+string(os.PathListSeparator)+os.Getenv("PATH"), "FIXTURE="+root, "RUNNER_TEMP="+root, "GITHUB_ENV="+filepath.Join(root, "environment"), "RESOLUTE_SERIAL="+serial, "RESOLUTE_SHA256="+digest, "IMAGE_BYTES="+image, "IMAGE_SHA="+digest, "CLIENT_MODE="+mode)
 			stage := exec.Command("bash", "-c", program)
 			stage.Env = env
 			output, stageErr := stage.CombinedOutput()
@@ -924,7 +924,7 @@ esac
 				lines = lines[3:]
 			}
 			launch := exec.Command("bash", "-c", `set -euo pipefail; source "$1"; multipass launch "$(resolve_multipass_launch_image)"`, "_", common)
-			launch.Env = append(env, "NAKPANEL_MULTIPASS_IMAGE=24.04", "NAKPANEL_MULTIPASS_ARCH=amd64", "NAKPANEL_MULTIPASS_IMAGE_SOURCE="+exports["NAKPANEL_MULTIPASS_IMAGE_SOURCE"], "NAKPANEL_MULTIPASS_IMAGE_SHA256="+exports["NAKPANEL_MULTIPASS_IMAGE_SHA256"])
+			launch.Env = append(env, "NAKPANEL_MULTIPASS_IMAGE=26.04", "NAKPANEL_MULTIPASS_ARCH=amd64", "NAKPANEL_MULTIPASS_IMAGE_SOURCE="+exports["NAKPANEL_MULTIPASS_IMAGE_SOURCE"], "NAKPANEL_MULTIPASS_IMAGE_SHA256="+exports["NAKPANEL_MULTIPASS_IMAGE_SHA256"])
 			if out, err := launch.CombinedOutput(); err != nil {
 				t.Fatalf("required security still depends on the unavailable release alias: %s %v", out, err)
 			}
@@ -944,7 +944,7 @@ esac
 		t.Fatal(err)
 	}
 	inputs := workflow.On["workflow_dispatch"].(map[string]any)["inputs"].(map[string]any)
-	if pins["NOBLE_SERIAL"] != inputs["noble_image_serial"].(map[string]any)["default"] || pins["NOBLE_SHA256"] != inputs["noble_image_sha256"].(map[string]any)["default"] {
-		t.Fatal("required security and full hosted matrix must use the identical pinned Noble image")
+	if pins["RESOLUTE_SERIAL"] != inputs["resolute_image_serial"].(map[string]any)["default"] || pins["RESOLUTE_SHA256"] != inputs["resolute_image_sha256"].(map[string]any)["default"] {
+		t.Fatal("required security and full hosted matrix must use the identical pinned Resolute image")
 	}
 }

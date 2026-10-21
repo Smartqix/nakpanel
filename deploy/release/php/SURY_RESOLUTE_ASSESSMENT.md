@@ -1,5 +1,9 @@
 # Signed Sury Resolute assessment — 2026-10-18
 
+Current scope, 21 October 2026: Ubuntu 26.04-only with the Surý PHP 8.3/8.4/8.5
+profile as default. Older default/Noble statements below are historical
+assessment context, not continuing requirements.
+
 The earlier PPA-only check was incomplete: Ondrej's Launchpad Resolute path is
 404, but the canonical [Sury PHP repository](https://packages.sury.org/php/)
 serves a signed native Resolute distribution. This provides a credible maintained

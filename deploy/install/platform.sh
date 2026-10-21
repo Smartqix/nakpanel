@@ -16,38 +16,35 @@ nakpanel_load_platform() {
   fi
   case "${arch}" in amd64|arm64) NAKPANEL_PLATFORM_ARCH="${arch}" ;; *) echo "platform: unsupported architecture ${arch}" >&2; return 1 ;; esac
   case "${NAKPANEL_OS_ID}/${NAKPANEL_OS_VERSION}/${NAKPANEL_OS_CODENAME}" in
-    ubuntu/24.04/noble)
-      NAKPANEL_PLATFORM_ID=ubuntu-24.04
-      NAKPANEL_INTERNAL_PHP_VERSION=8.3
-      NAKPANEL_HOSTING_PHP_VERSIONS=(8.3 8.4 8.5)
-      NAKPANEL_POSTGRES_PACKAGES=(postgresql postgresql-contrib)
-      ;;
     ubuntu/26.04/resolute)
-      NAKPANEL_PLATFORM_ID=ubuntu-26.04-native
+      NAKPANEL_PLATFORM_ID=ubuntu-26.04-sury
       NAKPANEL_INTERNAL_PHP_VERSION=8.5
-      NAKPANEL_HOSTING_PHP_VERSIONS=(8.5)
+      NAKPANEL_HOSTING_PHP_VERSIONS=(8.3 8.4 8.5)
       # PostgreSQL18 itself provides contrib; the old metapackage is absent.
       NAKPANEL_POSTGRES_PACKAGES=(postgresql postgresql-18)
       ;;
-    *) echo "platform: unsupported OS ${NAKPANEL_OS_ID:-unknown} ${NAKPANEL_OS_VERSION:-unknown} ${NAKPANEL_OS_CODENAME:-unknown}; require Ubuntu 24.04/noble or 26.04/resolute" >&2; return 1 ;;
+    *) echo "platform: unsupported OS ${NAKPANEL_OS_ID:-unknown} ${NAKPANEL_OS_VERSION:-unknown} ${NAKPANEL_OS_CODENAME:-unknown}; require Ubuntu 26.04/resolute" >&2; return 1 ;;
   esac
   export NAKPANEL_PLATFORM_ID NAKPANEL_PLATFORM_ARCH NAKPANEL_INTERNAL_PHP_VERSION
-  NAKPANEL_PLATFORM_PHP_PROVIDER=native
+  NAKPANEL_PLATFORM_PHP_PROVIDER=sury
 }
 
 nakpanel_select_php_provider() {
-  case "${1:-native}" in
-    native) ;;
+  case "${1:-sury}" in
+    native)
+      NAKPANEL_PLATFORM_ID=ubuntu-26.04-native
+      NAKPANEL_HOSTING_PHP_VERSIONS=(8.5)
+      ;;
     sury)
       [[ "${NAKPANEL_OS_VERSION}" == 26.04 && "${NAKPANEL_OS_CODENAME}" == resolute ]] || {
-        echo 'platform: the Surý opt-in requires Ubuntu 26.04/resolute' >&2; return 1;
+        echo 'platform: the Surý provider requires Ubuntu 26.04/resolute' >&2; return 1;
       }
       NAKPANEL_PLATFORM_ID=ubuntu-26.04-sury
       NAKPANEL_HOSTING_PHP_VERSIONS=(8.3 8.4 8.5)
       ;;
     *) echo 'platform: PHP provider must be native or sury' >&2; return 1 ;;
   esac
-  NAKPANEL_PLATFORM_PHP_PROVIDER="${1:-native}"
+  NAKPANEL_PLATFORM_PHP_PROVIDER="${1:-sury}"
 }
 
 # Only an existing trusted record can select an installed optional provider.
@@ -61,7 +58,7 @@ try:
         raise ValueError('installation state must be a root-owned regular file without group/world writes')
     with open(sys.argv[1]) as stream: data = json.load(stream)
     profile = data.get('profile')
-    if profile not in ('ubuntu-24.04', 'ubuntu-26.04-native', 'ubuntu-26.04-sury'):
+    if profile not in ('ubuntu-26.04-native', 'ubuntu-26.04-sury'):
         raise ValueError('unknown installed profile')
     print('sury' if profile == 'ubuntu-26.04-sury' else 'native')
 except (OSError, ValueError, AttributeError) as error:
@@ -100,7 +97,7 @@ nakpanel_platform_bootstrap_pending() {
 
 nakpanel_require_platform() {
   nakpanel_load_platform /etc/os-release || return 1
-  local provider=native requested="${1:-}"
+  local provider=sury requested="${1:-}"
   if [[ -e /etc/nakpanel/platform.json || -L /etc/nakpanel/platform.json ]]; then
     provider="$(nakpanel_installed_php_provider /etc/nakpanel/platform.json)" || return 1
     if [[ -n "${requested}" && "${requested}" != "${provider}" ]]; then
@@ -151,16 +148,6 @@ nakpanel_php_packages() {
   printf 'php%s-sqlite3\n' "${NAKPANEL_INTERNAL_PHP_VERSION}"
 }
 
-# Candidate metadata must be from the actual host release, not a rewritten suite.
-nakpanel_validate_ppa_source() {
-  local source="$1"
-  [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]] || { echo 'platform: PHP PPA is not permitted for this profile' >&2; return 1; }
-  [[ -r "${source}" ]] && grep -qE '^(Signed-By:|deb .*signed-by=)' "${source}" &&
-    grep -qE '^(Suites:[[:space:]]*noble[[:space:]]*$|deb .* noble )' "${source}" || {
-      echo 'platform: PHP PPA must bind its signing key and exact noble suite' >&2; return 1;
-    }
-}
-
 nakpanel_preflight_host() {
   python3 "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/host_preflight.py" "${NAKPANEL_PLATFORM_ID}"
 }
@@ -172,8 +159,6 @@ nakpanel_preflight_packages() {
     openssh-server proftpd-core proftpd-mod-crypto podman slirp4netns uidmap skopeo jq git
     fuse-overlayfs mariadb-client netcat-openbsd redis-tools sqlite3)
   while IFS= read -r package; do required+=("${package}"); done < <(nakpanel_php_packages)
-  # Noble retains distribution webmail. Resolute receives the verified upstream release.
-  if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]]; then required+=(roundcube roundcube-core roundcube-sqlite3); fi
   for package in "${required[@]}"; do
     # Consume the producer completely: apt-cache can otherwise receive SIGPIPE
     # when awk exits at Candidate under the installer's pipefail setting.
@@ -195,14 +180,7 @@ nakpanel_prepare_package_sources() {
   apt-get update
   # Bootstrap only signed distribution tooling, before replacing app files or DBs.
   apt-get install -y --no-install-recommends ca-certificates curl gnupg python3
-  if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]]; then
-    apt-get install -y --no-install-recommends software-properties-common
-    add-apt-repository --yes ppa:ondrej/php
-    local ppa_source
-    ppa_source="$(grep -Rils 'ppa.launchpadcontent.net/ondrej/php' /etc/apt/sources.list.d | head -n1 || true)"
-    nakpanel_validate_ppa_source "${ppa_source}" || return 1
-    apt-get update
-  elif [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-26.04-sury ]]; then
+  if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-26.04-sury ]]; then
     source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/sury.sh"
     sury_prepare_source ubuntu-26.04-sury
     apt-get update

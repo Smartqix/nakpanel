@@ -42,8 +42,8 @@ func runRuntimeProviderInUse(ctx context.Context, service *operator.Service, arg
 func installedInternalPHPVersion(path string) (string, error) {
 	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
 	if os.IsNotExist(err) {
-		return "8.3", nil
-	} // Existing Noble installs predate profiles.
+		return "", errors.New("installed platform state is required")
+	}
 	if err != nil {
 		return "", fmt.Errorf("open installed platform: %w", err)
 	}
@@ -79,9 +79,6 @@ func internalPHPFromProfile(data []byte) (string, error) {
 	}
 	if p.Pending {
 		return "", errors.New("installed platform bootstrap pending")
-	}
-	if p.OS == "ubuntu" && p.Version == "24.04" && p.Profile == "ubuntu-24.04" && p.Internal == "8.3" {
-		return p.Internal, nil
 	}
 	if p.OS == "ubuntu" && p.Version == "26.04" && (p.Profile == "ubuntu-26.04-native" || p.Profile == "ubuntu-26.04-sury") && p.Internal == "8.5" {
 		return p.Internal, nil

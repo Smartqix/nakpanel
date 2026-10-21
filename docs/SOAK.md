@@ -20,18 +20,16 @@ The initializer rejects missing or invalid release inputs before any VM work;
 it never falls back to a working-tree build or historical installer.
 
 ```bash
-NAKPANEL_MULTIPASS_IMAGE=24.04 \
+NAKPANEL_MULTIPASS_IMAGE=26.04 \
 NAKPANEL_RELEASE_BUNDLE=/absolute/path/to/nakpanel-VERSION-linux-arm64 \
 NAKPANEL_RELEASE_PUBLIC_KEY=/absolute/path/to/release-public.pem \
 NAKPANEL_RELEASE_VERSION=VERSION \
 ./deploy/multipass/soak-verify.sh --init
 ```
 
-Start a separate run with the matching bundle architecture and
-`NAKPANEL_MULTIPASS_IMAGE=26.04` for the experimental native Resolute profile.
-For the explicit Sury profile, also set
-`NAKPANEL_QUALIFICATION_PHP_PROVIDER=sury`; preserve that provider throughout
-its own run. Use `NAKPANEL_RELEASE_ALLOW_DEVELOPMENT=1` only for intentionally
+Ubuntu 26.04 with the default Surý provider exercises hosting PHP 8.3/8.4/8.5.
+Each advertised architecture requires its own matching signed bundle and guest.
+Use `NAKPANEL_RELEASE_ALLOW_DEVELOPMENT=1` only for intentionally
 signed development candidates. Their soak evidence cannot promote them to a
 production release.
 

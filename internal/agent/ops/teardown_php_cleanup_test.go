@@ -35,7 +35,6 @@ func (r *purgeInstalledProfileRunner) Run(ctx context.Context, name string, args
 
 func TestNativePurgeInstalledProfileDoesNotNeedUnavailablePHP(t *testing.T) {
 	for _, tc := range []struct{ name, release, codename, internal, hosting string }{
-		{"noble", "24.04", "noble", "8.3", `["8.3","8.4","8.5"]`},
 		{"native26", "26.04", "resolute", "8.5", `["8.5"]`},
 		{"sury26", "26.04", "resolute", "8.5", `["8.3","8.4","8.5"]`},
 	} {
@@ -57,7 +56,7 @@ func TestNativePurgeInstalledProfileDoesNotNeedUnavailablePHP(t *testing.T) {
 			p.valkeyRuntimeRoot = filepath.Join(root, "valkey-run")
 			req.Domains = []string{"purge.example.test"}
 			req.SiteIDs = []int64{17}
-			profile := "ubuntu-24.04"
+			profile := "ubuntu-26.04-sury"
 			if tc.name == "native26" {
 				profile = "ubuntu-26.04-native"
 			}

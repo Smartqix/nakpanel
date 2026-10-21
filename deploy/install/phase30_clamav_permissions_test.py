@@ -13,7 +13,7 @@ SOURCE=Path(__file__).resolve().with_name('phase30-install.sh')
 
 
 class ClamAVPermissionsTests(unittest.TestCase):
-    def run_fixture(self,root,*,release='24.04',layout='cvd',existing=False,unsafe=None,renew=False,updater_needs_read=False):
+    def run_fixture(self,root,*,release='26.04',layout='cvd',existing=False,unsafe=None,renew=False,updater_needs_read=False):
         root=Path(root).resolve();root.chmod(0o755)
         database=root/'var/lib/clamav';database.mkdir(parents=True,exist_ok=True)
         units=root/'etc/systemd/system';units.mkdir(parents=True,exist_ok=True)
@@ -92,7 +92,7 @@ exec(compile(program,'actual-installer-clamav-boundary','exec'))
 '''}
         for name,body in scripts.items():
             path=binary/name;path.write_text(body);path.chmod(0o755)
-        source=SOURCE.read_text();start=source.index('# Managed releases scan');end=source.index('\nif [[ "${NAKPANEL_PLATFORM_ID}"',start)
+        source=SOURCE.read_text();start=source.index('# Managed releases scan');end=source.index('\napt-get update',start)
         block=source[start:end].replace('/var/lib/clamav',str(database)).replace('/etc/systemd/system',str(units))
         env=dict(os.environ,PATH=str(binary)+os.pathsep+os.environ['PATH'],CLAMAV_TEST_ROOT=str(root),CLAMAV_TEST_LAYOUT=layout,
                  CLAMAV_TEST_DAEMON_RENEW='1' if renew else '0',CLAMAV_TEST_WRONG_OWNER='1' if unsafe=='wrong-owner' else '0',
@@ -106,8 +106,8 @@ exec(compile(program,'actual-installer-clamav-boundary','exec'))
         self.assertEqual(outside.read_bytes(),b'private outside target');self.assertEqual(stat.S_IMODE(outside.stat().st_mode),0o600)
         return result,database
 
-    def test_fresh_and_existing_noble_resolute_signature_layouts_are_nonroot_readable(self):
-        for release in ('24.04','26.04'):
+    def test_fresh_and_existing_resolute_signature_layouts_are_nonroot_readable(self):
+        for release in ('26.04',):
             for layout in ('cvd','cld'):
                 for existing in (False,True):
                     with self.subTest(release=release,layout=layout,existing=existing),tempfile.TemporaryDirectory(prefix='nakpanel-clamav-',dir='/tmp') as td:

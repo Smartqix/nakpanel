@@ -5,14 +5,10 @@ on:
     branches: [codex/ubuntu-26-support]
   workflow_dispatch:
     inputs:
-      noble_image_serial:
-        description: Official Noble cloud-image release serial
-        type: string
-        default: '20261017'
-      noble_image_sha256:
-        description: Independently pinned Noble AMD64 image SHA256 (also checked against signed Ubuntu sums)
-        type: string
-        default: '04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94'
+      diagnose_fwupd:
+        description: Only diagnose fwupd on the pinned disposable 26.04 image (no product qualification)
+        type: boolean
+        default: false
       resolute_image_serial:
         description: Official Resolute cloud-image release serial
         type: string
@@ -21,11 +17,6 @@ on:
         description: Independently pinned Resolute AMD64 image SHA256 (also checked against signed Ubuntu sums)
         type: string
         default: '8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2'
-      php_provider:
-        description: PHP provider for Ubuntu 26.04 (Ubuntu 24.04 always uses its original profile)
-        type: choice
-        options: [native, sury]
-        default: native
       verify_database_manager:
         description: Require optional database manager browser and FastCGI coverage
         type: boolean
@@ -43,23 +34,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  diagnose-fwupd:
+    if: github.event.repository.private == false && inputs.diagnose_fwupd
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare this disposable hosted runner
+        run: bash deploy/multipass/prepare-hosted-runner.sh
+      - name: Diagnose firmware metadata refresh on the signed pinned image
+        env:
+          RESOLUTE_SERIAL: ${{ inputs.resolute_image_serial }}
+          RESOLUTE_SHA256: ${{ inputs.resolute_image_sha256 }}
+        run: bash deploy/multipass/fwupd-diagnostic.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fwupd-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fwupd-diagnostic/
+          retention-days: 7
+          if-no-files-found: error
+
   signed-bundles:
-    if: github.event.repository.private == false
+    if: github.event.repository.private == false && !inputs.diagnose_fwupd
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
           path: candidate
-      - uses: actions/checkout@v4
-        with:
-          ref: ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466
-          path: prior
       - uses: actions/setup-go@v5
         with:
           go-version-file: candidate/deploy/release/GO_VERSION
           cache-dependency-path: candidate/go.sum
-      - name: Build actual current and historical AMD64 applications with a test key
+      - name: Build the current AMD64 application with a test key
         shell: bash
         env:
           NAKPANEL_RELEASE_ARCHITECTURES: amd64
@@ -72,32 +80,25 @@ jobs:
           openssl genrsa -out "${RUNNER_TEMP}/hosted-test-private.pem" 3072
           openssl pkey -in "${RUNNER_TEMP}/hosted-test-private.pem" -pubout -out "${output}/test-public.pem"
           export NAKPANEL_RELEASE_SIGNING_KEY="${RUNNER_TEMP}/hosted-test-private.pem"
-          # Copy packaging only. Historical cmd/internal/migrations/installers
-          # remain the actual pinned baseline, not current application sources.
-          cp -R candidate/deploy/release prior/deploy/release
-          for tree in candidate prior; do
+          for tree in candidate; do
             printf '\n<!-- hosted development qualification %s -->\n' "${GITHUB_RUN_ID}" >>"${tree}/README.md"
             (cd "${tree}" && ./deploy/release/build.sh "${output}/${tree}")
           done
           python3 - "${output}" <<'PYBUNDLES'
           import json,pathlib,shutil,sys
           output=pathlib.Path(sys.argv[1]); result={'architecture':'amd64','development':True}
-          for tree in ('candidate','prior'):
+          for tree in ('candidate',):
               root=pathlib.Path(tree); version=(root/'VERSION').read_text().strip()
               name=f'nakpanel-{version}-linux-amd64'
               manifest=json.loads((output/tree/name/'manifest.json').read_text())
               assert manifest['development'] is True and manifest['architecture']=='amd64'
-              if tree=='prior': assert manifest['commit']=='ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466'
               result[tree]=dict(version=version,commit=manifest['commit'],archive=f'{tree}/{name}.tar.gz',directory=f'{tree}/{name}')
               shutil.rmtree(output/tree/name)
-          assert result['candidate']['commit']!=result['prior']['commit'], 'candidate must differ from genuine prior baseline'
           (output/'bundles.json').write_text(json.dumps(result,indent=2)+'\n')
           PYBUNDLES
       - name: Verify and freeze official signed cloud-image selections
         shell: bash
         env:
-          NOBLE_SERIAL: ${{ inputs.noble_image_serial || '20261017' }}
-          NOBLE_SHA256: ${{ inputs.noble_image_sha256 || '04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94' }}
           RESOLUTE_SERIAL: ${{ inputs.resolute_image_serial || '20260927' }}
           RESOLUTE_SHA256: ${{ inputs.resolute_image_sha256 || '8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2' }}
         run: |
@@ -107,7 +108,7 @@ jobs:
           python3 - "${RUNNER_TEMP}/hosted-bundles" <<'PYIMAGES'
           import json,os,pathlib,re,subprocess,sys
           output=pathlib.Path(sys.argv[1]); images={}
-          for release,suite in [('24.04','noble'),('26.04','resolute')]:
+          for release,suite in [('26.04','resolute')]:
               serial=os.environ[suite.upper()+'_SERIAL']; expected=os.environ[suite.upper()+'_SHA256'].lower()
               assert re.fullmatch(r'20[0-9]{6}(\.[0-9]+)?',serial), 'invalid image serial'
               assert re.fullmatch(r'[a-f0-9]{64}',expected), 'exact SHA256 required'
@@ -133,7 +134,7 @@ jobs:
         run: rm -f "${RUNNER_TEMP}/hosted-test-private.pem"
 
   qualify-amd64:
-    if: github.event.repository.private == false
+    if: github.event.repository.private == false && !inputs.diagnose_fwupd
     needs: signed-bundles
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -142,14 +143,12 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - release: '24.04'
           - release: '26.04'
     env:
       NAKPANEL_MULTIPASS_ARCH: amd64
       NAKPANEL_MULTIPASS_IMAGE: ${{ matrix.release }}
-      NAKPANEL_QUALIFICATION_PHP_PROVIDER: ${{ matrix.release == '26.04' && inputs.php_provider == 'sury' && 'sury' || 'native' }}
+      NAKPANEL_QUALIFICATION_PHP_PROVIDER: sury
       NAKPANEL_RELEASE_ALLOW_DEVELOPMENT: '1'
-      NAKPANEL_PRIOR_RELEASE_ALLOW_DEVELOPMENT: '1'
       NAKPANEL_QUALIFICATION_VM_CPUS: '2'
       NAKPANEL_QUALIFICATION_VM_MEMORY: 5G
       NAKPANEL_QUALIFICATION_VM_DISK: 32G
@@ -187,7 +186,7 @@ jobs:
           metadata=json.loads((bundles/'bundles.json').read_text());images=json.loads((bundles/'images.json').read_text())
           assert metadata['development'] is True and metadata['architecture']=='amd64'
           exports={}
-          for tree,prefix in [('candidate','NAKPANEL_RELEASE_'),('prior','NAKPANEL_PRIOR_RELEASE_')]:
+          for tree,prefix in [('candidate','NAKPANEL_RELEASE_')]:
               entry=metadata[tree]
               with tarfile.open(bundles/entry['archive']) as archive:
                   for member in archive.getmembers():
@@ -209,8 +208,6 @@ jobs:
               assert sha.hexdigest()==image['sha256'], 'cloud-image SHA256 mismatch'
               if release==os.environ['NAKPANEL_MULTIPASS_IMAGE']:
                   exports['NAKPANEL_MULTIPASS_IMAGE_SOURCE']=str(target);exports['NAKPANEL_MULTIPASS_IMAGE_SHA256']=image['sha256']
-              if release=='24.04':
-                  exports['NAKPANEL_PRIOR_MULTIPASS_IMAGE_SOURCE']=str(target);exports['NAKPANEL_PRIOR_MULTIPASS_IMAGE_SHA256']=image['sha256']
           with open(os.environ['GITHUB_ENV'],'a') as output:
               for key,value in sorted(exports.items()):
                   delimiter=uuid.uuid4().hex;output.write(f'{key}<<{delimiter}\n{value}\n{delimiter}\n')
@@ -292,7 +289,7 @@ jobs:
           if-no-files-found: error
 
   hosted-evidence-summary:
-    if: always() && github.event.repository.private == false
+    if: always() && github.event.repository.private == false && !inputs.diagnose_fwupd
     needs: [signed-bundles, qualify-amd64]
     runs-on: ubuntu-24.04
     steps:
@@ -300,10 +297,10 @@ jobs:
         with:
           pattern: hosted-cell-*-${{ github.run_id }}-${{ github.run_attempt }}
           path: hosted-results
-      - name: Require both complete AMD64 cells using the identical development artifact
+      - name: Require the complete Ubuntu 26.04 AMD64 cell and full PHP contract
         env:
           JOB_RESULTS: ${{ toJSON(needs) }}
-          SURY_MAINTENANCE_REQUESTED: ${{ inputs.php_provider == 'sury' && inputs.verify_sury_maintenance && '1' || '0' }}
+          SURY_MAINTENANCE_REQUESTED: ${{ (github.event_name != 'workflow_dispatch' || inputs.verify_sury_maintenance) && '1' || '0' }}
         run: |
           python3 - <<'PYSUMMARY'
           import hashlib,json,os,pathlib,sys
@@ -312,6 +309,7 @@ jobs:
               report=json.loads(path.read_text());release=report['release']
               if release in cells: errors.append('duplicate cell '+release)
               cells[release]=report
+              if report.get('release')!='26.04' or report.get('profile')!='ubuntu-26.04-sury' or report.get('full_php_parity') is not True: errors.append('complete Resolute multi-PHP contract required')
               if report.get('architecture')!='amd64' or report.get('qualification_passed') is not True: errors.append('incomplete native AMD64 cell '+release)
               if report.get('promotion_eligible') is not False or report.get('signature_class')!='development': errors.append('test artifact was incorrectly reported promotable '+release)
               manifest=path.parent/'release-manifest.json'
@@ -337,8 +335,8 @@ jobs:
                               if proof.get('result_sha256')!=hashlib.sha256(result_path.read_bytes()).hexdigest() or actual.get('schema')!='nakpanel-sury-maintenance-result-v1' or actual.get('status')!='PASS' or actual.get('operation')!='SAME_VERSION_REINSTALL_AND_FAILED_CONFIGURATION_RECOVERY':errors.append('actual maintenance result failed '+release)
                               if any(actual.get(k)!=proof.get(k) for k in ('source_vm','run_token','runtime_commit','qualifier_commit')):errors.append('actual maintenance source differs '+release)
                               if any(actual.get(k) is not True for k in ('same_version_delivery','failed_configuration_recovery','two_reboots_verified')) or any(actual.get(k) is not False for k in ('genuine_version_advance','apt_version_rollback','application_rollback')) or actual.get('roundcube_send_read_steps')!=3 or type(actual.get('reboots')) is not list or len(actual.get('reboots',[]))!=2 or len(set(actual.get('reboots',[])))!=2:errors.append('actual recovery/reboot/product evidence incomplete '+release)
-          if set(cells)!={'24.04','26.04'}:errors.append('both complete release reports are required')
-          if digests.get('24.04') is None or digests.get('24.04')!=digests.get('26.04'):errors.append('current artifact differs across releases')
+          if set(cells)!={'26.04'}:errors.append('the complete Ubuntu 26.04 report is required')
+          if digests.get('26.04') is None:errors.append('current signed Ubuntu 26.04 artifact is missing')
           for job,status in json.loads(os.environ['JOB_RESULTS']).items():
               if status.get('result')!='success':errors.append('required job failed: '+job)
           result=dict(qualification_passed=not errors,promotion_eligible=False,architecture='amd64',development=True,manifest_sha256=digests,maintenance=maintenance,errors=errors)

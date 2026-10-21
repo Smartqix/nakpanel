@@ -115,10 +115,6 @@ func (r installedPHPRuntimeResolver) ResolvePHP(version string) (PHPRuntimeDescr
 		return PHPRuntimeDescriptor{}, fmt.Errorf("invalid PHP platform identity")
 	}
 	switch profile.Profile {
-	case "ubuntu-24.04":
-		if profile.VersionID != "24.04" || profile.Codename != "noble" || profile.Internal != "8.3" {
-			return PHPRuntimeDescriptor{}, fmt.Errorf("invalid Noble PHP profile")
-		}
 	case "ubuntu-26.04-sury":
 		if profile.VersionID != "26.04" || profile.Codename != "resolute" || profile.Internal != "8.5" || len(profile.Hosting) != len(allowed) {
 			return PHPRuntimeDescriptor{}, fmt.Errorf("invalid Resolute Sury PHP profile")

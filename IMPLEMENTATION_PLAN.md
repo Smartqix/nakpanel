@@ -1,12 +1,35 @@
 # nakpanel — Implementation Plan
 
-> A cPanel/Plesk-class hosting control panel. Full Go. Ubuntu 24.04+ / nginx + PHP-FPM.
+> A cPanel/Plesk-class hosting control panel. Full Go. Ubuntu 26.04 LTS only / nginx + PHP-FPM 8.3/8.4/8.5.
 > This document is the spec of record. Hand each **Phase** to the coding agent as a scoped,
 > independently testable task. The **Invariants** section is non-negotiable — the agent must
 > treat those as hard constraints, not suggestions.
 
 Codename `nakpanel` is a placeholder — rename the module freely.
 Module path used throughout: `github.com/nakroteck/nakpanel`.
+
+Development policy: [AGENTS.md](AGENTS.md) takes precedence over older
+compatibility assumptions. Breaking changes are allowed; legacy adapters,
+backfills, transitional migrations and historical binary/archive recovery are
+not required unless explicitly requested. Keep current-version recovery,
+requested platform support and security requirements.
+
+The authoritative Ubuntu 26.04-only transition checklist is in the
+[support plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md#current-phases).
+The current authorization is **Phase 3 only: diagnose/fix fwupd refresh, then
+hosted Ubuntu 26.04 current-version recovery and PHP maintenance validation**.
+Ubuntu 26.04 LTS is the sole supported server OS; hosting PHP 8.3/8.4/8.5 is
+required and internal tools use validated PHP 8.5. Ubuntu 24.04 support and
+24.04-to-26.04 migration are retired release requirements. Phase 2 alignment is complete locally in the attached implementation worktree;
+its changes remain unmerged. Hosted Phase 3 tests are now authorized; keep PHP
+8.3/8.4/8.5, skip legacy tests and report before Phase 4. No production deployment.
+
+The previous hosted attempts remain failed historical results. The retired
+cross-OS migration is no longer a release blocker; the Ubuntu 26.04 recovery
+prerequisite (`fwupd-refresh.service`) and unexecuted PHP maintenance drill
+remain unresolved. Ubuntu 26.04 is experimental until its required evidence
+passes. Historical Ubuntu 24.04 results below describe past tests and do not
+create an ongoing support obligation.
 
 ---
 
@@ -22,7 +45,7 @@ We build **one vertical slice end to end** first (create a hosting account), bec
 exercises all three pillars. Every later subsystem (mail, DNS, more DB engines) is a repeat of the
 same pattern.
 
-Scope for v1 is deliberately narrow: **Ubuntu 24.04+, nginx, PHP-FPM, MariaDB.** One lane, done correctly.
+Scope for v1 is deliberately narrow: **Ubuntu 26.04 LTS only, nginx, PHP-FPM 8.3/8.4/8.5, MariaDB.** One lane, done correctly.
 
 ---
 
@@ -86,7 +109,7 @@ regardless of how convenient it seems locally.
 | Client DB engine (v1) | **MariaDB only** | `DBEngine` interface built for MySQL 8 / Postgres later. |
 | DB admin UI | **Adminer** | Single PHP file; MySQL + MariaDB + Postgres behind one SSO. |
 | Process mgmt | **systemd** | Units for `panel` and `agent`. |
-| Target OS | **Ubuntu 24.04 LTS+** | MariaDB 10.11 LTS in main. |
+| Target OS | **Ubuntu 26.04 LTS only** | Native database packages and signed Resolute hosting PHP 8.3/8.4/8.5. |
 
 **Distribution goal:** `templ generate` → Go; Tailwind → one CSS file; `go:embed` bakes templates + assets into
 the `panel` binary. Install = drop two binaries + two systemd units. That single-binary property is the moat;

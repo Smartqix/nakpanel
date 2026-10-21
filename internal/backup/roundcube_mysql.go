@@ -52,7 +52,7 @@ func checkRoundcubeMySQLSourceProvenance(source Manifest) error {
 	return completeRoundcubeSQLProvenance(*source.Platform)
 }
 func completeRoundcubeSQLProvenance(p PlatformProvenance) error {
-	known := p.OSID == "ubuntu" && ((p.VersionID == "24.04" && p.Codename == "noble" && p.Profile == "ubuntu-24.04" && p.InternalPHPVersion == "8.3") || (p.VersionID == "26.04" && p.Codename == "resolute" && (p.Profile == "ubuntu-26.04-native" || p.Profile == "ubuntu-26.04-sury") && p.InternalPHPVersion == "8.5"))
+	known := p.OSID == "ubuntu" && (p.VersionID == "26.04" && p.Codename == "resolute" && (p.Profile == "ubuntu-26.04-native" || p.Profile == "ubuntu-26.04-sury") && p.InternalPHPVersion == "8.5")
 	if !known || !p.PHPInventoryComplete || len(p.HostingPHPVersions) == 0 {
 		return errors.New("Roundcube MySQL format-3 recovery requires complete observed platform and PHP provenance")
 	}

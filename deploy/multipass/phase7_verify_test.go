@@ -52,7 +52,6 @@ func TestPhase7InstallerInstallsProductionPackages(t *testing.T) {
 	script := string(data)
 	for _, want := range []string{
 		"adminer",
-		"roundcube",
 		"bind9",
 		"ufw allow 7443/tcp",
 		"systemctl enable --now nakpanel-agent.service nakpanel.service",

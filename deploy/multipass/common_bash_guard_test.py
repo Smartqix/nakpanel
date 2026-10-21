@@ -96,7 +96,6 @@ class BashAdmissionTests(unittest.TestCase):
         self.assertTrue(shell, 'put a real GNU Bash5+ executable first in PATH')
         self.assertGreaterEqual(major(shell), 5, 'qualification requires actual GNU Bash5+ first in PATH')
         for image, provider, profile, php in (
-                ('24.04', 'native', 'ubuntu-24.04', '8.4'),
                 ('26.04', 'native', 'ubuntu-26.04-native', '8.5'),
                 ('26.04', 'sury', 'ubuntu-26.04-sury', '8.4')):
             with self.subTest(image=image, provider=provider):

@@ -105,7 +105,7 @@ case "$1" in
  info) exit 1;;
  launch) test "$2" = "$FAKE_SOURCE_URI" || exit 77;;
  exec) case "$*" in
-  *nakpanel-identity-probe*) printf '26.04\narm64\n';;
+  *nakpanel-identity-probe*) printf '24.04\narm64\n';;
   *'cloud-init status'*) printf 'status: done\n';;
   *) echo UNSAFE >> "$FAKE_LOG";exit 99;;
  esac;;
@@ -116,7 +116,7 @@ esac
 		t.Fatal(err)
 	}
 	cmd := exec.Command("bash", "-c", `set -euo pipefail; source ./common.sh; ensure_vm`)
-	cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"), "FAKE_SOURCE_URI="+sourceURI, "FAKE_LOG="+calls, "NAKPANEL_RUN_TOKEN=pin123", "NAKPANEL_MULTIPASS_VM=nakpanel-24-04-arm64-pin123", "NAKPANEL_MULTIPASS_IMAGE=24.04", "NAKPANEL_MULTIPASS_ARCH=arm64", "NAKPANEL_OWNERSHIP_DIR="+dir, "NAKPANEL_MULTIPASS_IMAGE_SOURCE="+source, "NAKPANEL_MULTIPASS_IMAGE_SHA256="+digest, "NAKPANEL_QUALIFICATION_VM_CPUS=2", "NAKPANEL_QUALIFICATION_VM_MEMORY=5G", "NAKPANEL_QUALIFICATION_VM_DISK=32G")
+	cmd.Env = append(os.Environ(), "PATH="+dir+":"+os.Getenv("PATH"), "FAKE_SOURCE_URI="+sourceURI, "FAKE_LOG="+calls, "NAKPANEL_RUN_TOKEN=pin123", "NAKPANEL_MULTIPASS_VM=nakpanel-26-04-arm64-pin123", "NAKPANEL_MULTIPASS_IMAGE=26.04", "NAKPANEL_MULTIPASS_ARCH=arm64", "NAKPANEL_OWNERSHIP_DIR="+dir, "NAKPANEL_MULTIPASS_IMAGE_SOURCE="+source, "NAKPANEL_MULTIPASS_IMAGE_SHA256="+digest, "NAKPANEL_QUALIFICATION_VM_CPUS=2", "NAKPANEL_QUALIFICATION_VM_MEMORY=5G", "NAKPANEL_QUALIFICATION_VM_DISK=32G")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("wrong guest release accepted: %s", out)
@@ -125,7 +125,7 @@ esac
 	if !strings.Contains(string(data), "launch "+sourceURI+" --name") || !strings.Contains(string(data), "--cpus 2 --memory 5G --disk 32G") || strings.Contains(string(data), "UNSAFE") {
 		t.Fatalf("launch/identity guard: %s %s", data, out)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "pin123", "nakpanel-24-04-arm64-pin123")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(dir, "pin123", "nakpanel-26-04-arm64-pin123")); !os.IsNotExist(err) {
 		t.Fatal("wrong guest claimed")
 	}
 }

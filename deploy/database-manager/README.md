@@ -1,6 +1,9 @@
 # Isolated Database Manager Runtime
 
-Opt-in Ubuntu 24.04 installation from the repository root:
+Target: opt-in installation on Ubuntu 26.04 LTS using validated internal PHP
+8.5. Hosting PHP 8.3/8.4/8.5 remains independent. Installer/service alignment is complete locally;
+operational qualification is pending; this documentation change
+does not establish production readiness. The existing entrypoint is:
 
 ```sh
 sudo bash deploy/install/database-manager-install.sh --yes

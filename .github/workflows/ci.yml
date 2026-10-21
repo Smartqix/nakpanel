@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       qualify_native:
-        description: Run all four native Ubuntu qualification cells (requires configured signed artifacts)
+        description: Run both Ubuntu 26.04 architecture qualification cells (requires configured signed artifacts)
         type: boolean
         default: false
       qualification_artifacts:
@@ -104,8 +104,8 @@ jobs:
       contents: read
     env:
       NAKPANEL_MULTIPASS_ARCH: amd64
-      NAKPANEL_MULTIPASS_IMAGE: '24.04'
-      NAKPANEL_QUALIFICATION_PHP_PROVIDER: native
+      NAKPANEL_MULTIPASS_IMAGE: '26.04'
+      NAKPANEL_QUALIFICATION_PHP_PROVIDER: sury
       NAKPANEL_RELEASE_ALLOW_DEVELOPMENT: '1'
       NAKPANEL_QUALIFICATION_VM_CPUS: '2'
       NAKPANEL_QUALIFICATION_VM_MEMORY: 5G
@@ -161,25 +161,25 @@ jobs:
           PYBUNDLE
       - name: Prepare only this disposable hosted runner
         run: bash deploy/multipass/prepare-hosted-runner.sh
-      - name: Stage the pinned signed Noble cloud image
+      - name: Stage the pinned signed Resolute cloud image
         env:
-          NOBLE_SERIAL: '20261017'
-          NOBLE_SHA256: '04e8f2461a16a44e78a370284471f29616cdd9baf1893df25807b71f985b6c94'
+          RESOLUTE_SERIAL: '20260927'
+          RESOLUTE_SHA256: '8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2'
         run: |
           set -euo pipefail
           python3 - <<'PYIMAGE'
           import hashlib,json,os,pathlib,re,subprocess,uuid
-          serial=os.environ['NOBLE_SERIAL']; expected=os.environ['NOBLE_SHA256'].lower()
-          assert re.fullmatch(r'20[0-9]{6}(\.[0-9]+)?',serial), 'invalid pinned Noble image serial'
+          serial=os.environ['RESOLUTE_SERIAL']; expected=os.environ['RESOLUTE_SHA256'].lower()
+          assert re.fullmatch(r'20[0-9]{6}(\.[0-9]+)?',serial), 'invalid pinned Resolute image serial'
           assert re.fullmatch(r'[a-f0-9]{64}',expected), 'exact pinned image SHA256 required'
           root=pathlib.Path(os.environ['RUNNER_TEMP'])
-          evidence=root/'hosted-evidence'/'noble-image';evidence.mkdir(parents=True,mode=0o700)
+          evidence=root/'hosted-evidence'/'resolute-image';evidence.mkdir(parents=True,mode=0o700)
           images=root/'hosted-images';images.mkdir(mode=0o700)
-          base=f'https://cloud-images.ubuntu.com/releases/noble/release-{serial}/'
+          base=f'https://cloud-images.ubuntu.com/releases/resolute/release-{serial}/'
           for name in ('SHA256SUMS','SHA256SUMS.gpg'):
               subprocess.run(['curl','--fail','--location','--retry','3','--proto','=https','--proto-redir','=https',base+name,'--output',str(evidence/name)],check=True)
           subprocess.run(['gpgv','--keyring','/usr/share/keyrings/ubuntu-cloudimage-keyring.gpg',str(evidence/'SHA256SUMS.gpg'),str(evidence/'SHA256SUMS')],check=True)
-          filename='ubuntu-24.04-server-cloudimg-amd64.img'
+          filename='ubuntu-26.04-server-cloudimg-amd64.img'
           matches=[parts[0] for line in (evidence/'SHA256SUMS').read_text().splitlines() if len(parts:=line.split())==2 and parts[1].lstrip('*')==filename]
           assert matches==[expected], 'pinned SHA256 differs from signed Ubuntu image manifest'
           image=images/filename
@@ -188,7 +188,7 @@ jobs:
           with image.open('rb') as source:
               for block in iter(lambda:source.read(2**20),b''):digest.update(block)
           assert digest.hexdigest()==expected, 'downloaded cloud-image SHA256 mismatch'
-          (evidence/'selection.json').write_text(json.dumps(dict(release='24.04',architecture='amd64',serial=serial,sha256=expected,url=base+filename),indent=2)+'\n')
+          (evidence/'selection.json').write_text(json.dumps(dict(release='26.04',architecture='amd64',serial=serial,sha256=expected,url=base+filename),indent=2)+'\n')
           exports={'NAKPANEL_MULTIPASS_IMAGE_SOURCE':str(image.resolve()),'NAKPANEL_MULTIPASS_IMAGE_SHA256':expected}
           with open(os.environ['GITHUB_ENV'],'a') as output:
               for name,value in sorted(exports.items()):
@@ -212,7 +212,7 @@ jobs:
                       delimiter = uuid.uuid4().hex
                       output.write(f'{key}<<{delimiter}\n{value}\n{delimiter}\n')
           PYENV
-      - name: Install the signed candidate on a fresh Noble guest
+      - name: Install the signed candidate on a fresh Resolute guest
         run: ./deploy/multipass/current-install-verify.sh
       - name: Establish the native container fixture
         env:
@@ -364,10 +364,6 @@ jobs:
       max-parallel: 2
       matrix:
         include:
-          - release: '24.04'
-            architecture: amd64
-          - release: '24.04'
-            architecture: arm64
           - release: '26.04'
             architecture: amd64
           - release: '26.04'
@@ -375,8 +371,8 @@ jobs:
     env:
       NAKPANEL_MULTIPASS_IMAGE: ${{ matrix.release }}
       NAKPANEL_MULTIPASS_ARCH: ${{ matrix.architecture }}
+      NAKPANEL_QUALIFICATION_PHP_PROVIDER: sury
       NAKPANEL_RELEASE_ALLOW_DEVELOPMENT: ${{ inputs.allow_development_artifacts && '1' || '0' }}
-      NAKPANEL_PRIOR_RELEASE_ALLOW_DEVELOPMENT: ${{ inputs.allow_development_artifacts && '1' || '0' }}
       NAKPANEL_VERIFY_DATABASE_MANAGER: ${{ inputs.verify_database_manager && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
@@ -398,10 +394,10 @@ jobs:
           try:
               raw = os.environ.get('QUALIFICATION_ARTIFACTS_JSON', '')
               if not raw:
-                  raise ValueError('Configure qualification_artifacts or repository variable NAKPANEL_QUALIFICATION_ARTIFACTS; signed current/prior bundles, trust anchors and exact versions are required')
+                  raise ValueError('Configure qualification_artifacts or repository variable NAKPANEL_QUALIFICATION_ARTIFACTS; signed current bundles, trust anchors and exact versions are required')
               config = json.loads(raw)[arch]
               exports = {}
-              for prefix, key in [('NAKPANEL_RELEASE_', 'current'), ('NAKPANEL_PRIOR_RELEASE_', 'prior')]:
+              for prefix, key in [('NAKPANEL_RELEASE_', 'current')]:
                   artifact = config[key]
                   for field, suffix in [('bundle', 'BUNDLE'), ('public_key', 'PUBLIC_KEY'), ('version', 'VERSION')]:
                       value = artifact.get(field)
@@ -417,7 +413,7 @@ jobs:
                   if os.environ['NAKPANEL_RELEASE_ALLOW_DEVELOPMENT'] == '1':
                       args.append('--allow-development')
                   subprocess.run(args, check=True)
-              for version, prefix in [(release, 'NAKPANEL_MULTIPASS_IMAGE_'), ('24.04', 'NAKPANEL_PRIOR_MULTIPASS_IMAGE_')]:
+              for version, prefix in [(release, 'NAKPANEL_MULTIPASS_IMAGE_')]:
                   image = config.get('images', {}).get(version, {})
                   source, digest = image.get('source', ''), image.get('sha256', '')
                   if bool(source) != bool(digest):
@@ -500,7 +496,7 @@ jobs:
           python3 - <<'PYSUMMARY'
           import hashlib, json, os, pathlib, sys
           root = pathlib.Path('native-results')
-          expected = {(release, arch) for release in ('24.04', '26.04') for arch in ('amd64', 'arm64')}
+          expected = {(release, arch) for release in ('26.04',) for arch in ('amd64', 'arm64')}
           cells, manifests, errors = {}, {}, []
           for path in root.rglob('report.json'):
               report = json.loads(path.read_text())
@@ -513,16 +509,14 @@ jobs:
                   errors.append('signed release manifest missing: ' + '/'.join(cell))
               else:
                   manifests[cell] = hashlib.sha256(manifest.read_bytes()).hexdigest()
+              if report.get('profile') != 'ubuntu-26.04-sury' or report.get('qualification_scope') != 'CURRENT_VERSION_ONLY' or report.get('full_php_parity') is not True or set(report.get('php_contract', [])) != {'8.3','8.4','8.5'}:
+                  errors.append('required Ubuntu 26.04 multi-PHP contract missing: ' + '/'.join(cell))
               if report.get('qualification_passed') is not True:
                   errors.append('required cell gates did not pass: ' + '/'.join(cell))
           for cell in expected - cells.keys():
               errors.append('missing complete cell report: ' + '/'.join(cell))
           for cell in cells.keys() - expected:
               errors.append('unexpected cell report: ' + '/'.join(cell))
-          for arch in ('amd64', 'arm64'):
-              noble, resolute = manifests.get(('24.04', arch)), manifests.get(('26.04', arch))
-              if noble is None or noble != resolute:
-                  errors.append('current signed artifact differs or is missing across releases: ' + arch)
           baseline = json.loads(os.environ['BASELINE_RESULTS'])
           for job in ('unit', 'security-suite', 'release-build', 'native-qualification'):
               if baseline.get(job, {}).get('result') != 'success':

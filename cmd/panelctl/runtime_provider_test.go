@@ -4,7 +4,7 @@ import "testing"
 
 func TestRuntimeRemovalInternalVersionUsesInstalledPlatform(t *testing.T) {
 	for _, tc := range []struct{ data, want string }{
-		{`{"os_id":"ubuntu","version_id":"24.04","profile":"ubuntu-24.04","internal_php_version":"8.3"}`, "8.3"},
+		{`{"os_id":"ubuntu","version_id":"24.04","profile":"ubuntu-24.04","internal_php_version":"8.3"}`, ""},
 		{`{"os_id":"ubuntu","version_id":"26.04","profile":"ubuntu-26.04-native","internal_php_version":"8.5"}`, "8.5"},
 		{`{"os_id":"ubuntu","version_id":"26.04","profile":"ubuntu-26.04-sury","internal_php_version":"8.5"}`, "8.5"},
 		{`{"os_id":"ubuntu","version_id":"26.04","profile":"ubuntu-26.04-native","internal_php_version":"8.3"}`, ""},
@@ -21,9 +21,9 @@ func TestRuntimeRemovalInternalVersionUsesInstalledPlatform(t *testing.T) {
 		}
 	}
 }
-func TestRuntimeRemovalMissingProfileProtectsLegacyInternalPHP(t *testing.T) {
+func TestRuntimeRemovalMissingProfileRejectsUnknownInternalPHP(t *testing.T) {
 	got, err := installedInternalPHPVersion(t.TempDir() + "/absent")
-	if err != nil || got != "8.3" {
+	if err == nil || got != "" {
 		t.Fatalf("got %q %v", got, err)
 	}
 }

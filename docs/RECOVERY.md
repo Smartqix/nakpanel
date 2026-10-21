@@ -1,5 +1,8 @@
 # nakpanel Recovery
 
+Server recovery targets Ubuntu 26.04 only, hosting PHP 8.3/8.4/8.5 and internal
+PHP 8.5. Operational recovery remains unqualified until Phase 3 passes.
+
 ## Individual Website Removal
 
 See [Domain Removal](DOMAIN_REMOVAL.md) for durable progress, same-scope retry
@@ -194,7 +197,7 @@ discarded provisioning jobs, including `install_custom_cert`, back to River's
 `available` state. Completed and
 in-flight jobs are not retried from the UI.
 
-The full deployment smoke test uses one fresh Ubuntu 24.04 Multipass VM named
+The full deployment smoke test uses one fresh Ubuntu 26.04 Multipass VM named
 `nakpanel-lab`. It removes old `nakpanel-phase*` Nakpanel test VMs, rebuilds
 `nakpanel-lab`, runs the complete Phase 25 hosting-toolkit chain, preserves the
 Phase 26 server-operations checks, and finishes with the adversarial security
@@ -391,7 +394,7 @@ Phase 29 adds whole-server backups and a one-command rebuild. An archive
 (`*.nkbk`) contains the panel PostgreSQL dump, `/etc/nakpanel` (including the
 secret keyring), tenant MariaDB dumps, home directories, mail configuration
 and data, DNS zones, certificates, nginx vhosts, and the managed systemd
-units — everything a fresh Ubuntu 24.04 server needs to become this server
+units — everything a fresh Ubuntu 26.04 server needs to become this server
 again. Archives are always encrypted (chunked AES-256-GCM).
 
 ### Key custody
@@ -428,7 +431,7 @@ the destination's notify address or all administrators.
 
 ### Rebuilding a destroyed server
 
-On a fresh Ubuntu 24.04 host, from a checkout of this repository:
+On a fresh Ubuntu 26.04 host, from a checkout of this repository:
 
 ```bash
 sudo deploy/install/install.sh --restore /path/to/archive.nkbk --backup-key-file /path/to/key --yes
@@ -543,7 +546,7 @@ sudo -u nakpanel panelctl site reconcile example.test
 ```
 
 The canonical live acceptance is `deploy/multipass/phase30-verify.sh`. It
-installs the current worktree on Ubuntu 24.04, proves WordPress 7.1
+installs the current worktree on Ubuntu 26.04, proves WordPress 7.1
 compatibility and Managed PHP rollback/suspension/reboot behavior, and verifies
 cross-subscription access denial. This is compatibility coverage, not a
 WordPress Toolkit, and it does not add Node.js or Python application runtimes.
@@ -692,366 +695,30 @@ the panel and the privileged agent on the existing single-VM stack.
 
 ## Platform checks for whole-server recovery
 
-`panelctl restore-server` defaults to `--mode same-platform`. New archives carry
-optional, non-secret platform provenance: actual OS/architecture, installed
-profile, observed internal and hosted PHP, selected/desired tenant PHP, actual
-PostgreSQL server/dump/restore versions, MariaDB server/dump/client versions,
-Stalwart version and locally observable rootless image digests. Package names
-and configured PHP lists are not treated as evidence of installed tools.
-Missing optional tool observations stay unknown; PHP intent inventory must be
-collected completely. The destination is probed again immediately
-before restore, before services stop or archive state replaces target state.
-The complete encrypted archive is authenticated before that first mutation.
-
-Archives containing Roundcube SQLite contacts/preferences use manifest
-`format_version: 2` and require a restore binary from this version or newer.
-Older restore binaries reject these archives; retain the matching restore
-binary with the backup. Current binaries still read existing format-1 archives.
-The SQLite snapshot uses an online database backup, including committed WAL
-data, and is authenticated inside the encrypted archive.
-Existing Noble installations using Debian's default local MySQL Roundcube
-backend are preserved by archive `format_version: 3`. This path exports the
-`roundcube` database, its active static connection configuration and the private
-`/etc/dbconfig-common/roundcube.conf` package state inside the encrypted archive.
-Same-platform restore recreates only `roundcube`@`localhost` with privileges
-scoped to that database, preserving the source backend even when a fresh target
-initially selected SQLite. The ordinary restore confirmation authorizes this
-source-state restoration; no backend conversion is performed during backup.
-Passwords never appear in command arguments, progress output or the manifest.
-Root runs only fixed database/account setup with password input on stdin; the SQL
-dump imports as the recreated database-scoped account. Its short-lived client
-options file is mode 0600 inside a private 0700 directory and is deleted on every
-exit. The import disables local file loading and uses batch `--binary-mode`,
-which disables client commands such as shell/source commands for noninteractive
-input ([MariaDB client documentation](https://mariadb.com/docs/server/clients-and-utilities/mariadb-client/mariadb-command-line-client)).
-The dump's own CREATE DATABASE preserves the source character set/collation.
-New SQL archives require complete observed platform/tool provenance; known
-unrecorded Noble installations are identified from the actual OS and PHP8.3.
-Format-3 archives require the matching new restore binary; older readers reject
-them before modifying state. Current readers retain format-1 and format-2
-recovery.
-
-Only the reviewed stock Debian wrapper or a static default local connection is
-supported. Remote/custom database names, accounts, wrapper/DSN overrides and SQL
-forward migration reject explicitly before mutation. Full archive authentication
-requires one valid bounded SQL payload and matching active/package configuration.
-Target checks use the actual root MariaDB socket and the trusted internal PHP
-CLI/FPM descriptor with PDO MySQL. Recovery preserves whether internal FPM was
-running before it began. Legacy format-1 archives retain their original coverage
-limitations and must not be assumed to contain webmail contacts or preferences.
-
-
-Use an installed target to check an archive without stopping services:
+Only current-version recovery to a compatible Ubuntu 26.04/resolute host on the
+same architecture and installed PHP profile is supported. Record OS/profile,
+internal PHP, runtime inventory and observed database/tool versions in the
+archive. Missing provenance, unsupported OS releases, profile changes,
+unavailable required PHP, older database targets and incompatible copied mail
+stores reject before stopping services or replacing databases/files.
 
 ```bash
 sudo panelctl restore-server --check-only \
   --archive /offline/server.nkbk --backup-key-file /offline/archive.key
 ```
 
-A provenance-bearing archive must match the destination OS release and
-architecture and installed profile in the default mode. Native and Sury
-26.04 profiles cannot be interchanged by ordinary same-platform restore. Database downgrades, a target `pg_restore`
-older than the dump writer, unavailable selected/desired hosted PHP and
-incompatible copied Stalwart stores are rejected. Existing archives without
-provenance remain recoverable on Ubuntu 24.04 with the existing key/schema
-checks, command and confirmation; repacking or a new legacy prompt is not
-required. An archive without provenance cannot be assumed to originate on a
-26.04 host. `/etc/nakpanel/platform.json` always remains the destination's
-installer-owned identity, including during same-platform restoration.
+The target's installer-owned `/etc/nakpanel/platform.json` is preserved. Runtime
+availability comes from the trusted CLI/extension/isolated-FPM collector. Both
+recorded profiles must satisfy the 26.04/internal-PHP-8.5 contract. Same-profile
+recovery preserves all source-ready runtimes and explicit current/desired
+execution requirements; it never rewrites tenant PHP intent to pass preflight.
+Archive integrity and webmail configuration/payload are authenticated before
+mutation. Verify tenant/mail data, secrets, ownership, quotas, stopped states,
+reconciliation and a second reboot on the fresh recovery host.
 
-New provenance separates actual execution requirements from offered choices.
-`required_php_versions` remains the complete union of current/desired site PHP,
-PHP applications, active hosting-plan offers and retained entitlement offers.
-That conservative field is unchanged for older restore binaries and for forward
-migration. The same authenticated manifest also records
-`execution_php_versions` and `execution_php_inventory_complete`; both projections
-are collected in one database statement, including active addon offers and both
-subscription and site policy overrides. A subscription override that enables
-hosting retains the inherited base PHP offers; JSON-null override fields inherit
-without erasing those offers. Failed or malformed observations
-abort collection. A complete execution inventory must explicitly contain a list
-(`[]` for no selections), valid unique versions and only entries also present in
-the full required union.
-
-For recovery between explicitly recorded matching known profiles with that
-complete execution inventory, the destination must provide every selected/desired execution runtime **and every
-hosted runtime observed ready on the source**. An offer that was already
-unavailable on the source can remain unavailable, while its plan, entitlement,
-revision and policy data are restored unchanged. A selected or desired runtime
-is still required even if it was unavailable on the source. Target availability
-comes from the trusted CLI/extension/isolated-FPM readiness probe, including when
-there are no selected sites or applications.
-
-A missing or false execution-completeness marker, or an unrecorded/unknown
-installed profile, retains the conservative full `required_php_versions` check.
-Both recorded profiles must match their known Ubuntu release, codename and
-internal PHP contract; missing or inconsistent observations also retain that
-full check. It does not infer an execution list by intersecting
-intent with installed packages. Older readers likewise continue checking the
-unchanged full required union. Existing archives remain readable, but an archive
-without the new execution inventory may still reject an unavailable historical
-offer. Produce a fresh backup from the intact source with the updated collector
-to obtain the narrower same-profile proof; do not edit archived provenance or
-rewrite tenant PHP offers to bypass compatibility.
-
-## Forward migration rehearsal (not qualified support)
-
-The implemented rehearsal direction is a **logical restore from Ubuntu 24.04
-(`ubuntu-24.04`) to a separately installed Ubuntu 26.04 (`ubuntu-26.04-native`,
-or the explicit experimental `ubuntu-26.04-sury` profile) on the same architecture**, at compatible application/schema versions. This is an
-experimental path until native installation and complete fixture evidence has
-passed and been reviewed. The repository does not currently advertise a
-qualified cross-release migration cell. In-place OS upgrade, 26.04-to-24.04
-restore, and cross-architecture full-server restore remain unsupported.
-
-Check compatibility first:
-
-```bash
-sudo panelctl restore-server --mode forward-migration --check-only \
-  --archive /offline/server.nkbk --backup-key-file /offline/archive.key
-```
-
-Forward mode requires complete observed platform/database provenance, a
-complete source PHP intent inventory (including active hosting plan offers and
-retained subscription entitlement offers), and format-2 metadata naming a supported
-Roundcube SQLite snapshot. The complete encrypted archive must contain that
-snapshot exactly once, with a valid SQLite header and a successful read-only
-integrity check, before any service is stopped. A provenance review cannot add
-missing webmail data to a legacy archive. Migration of an existing MySQL-backed
-Roundcube installation is unsupported; the rehearsal does not convert the
-backend or alter a working Noble installation. Source 8.3 or 8.4 sites are rejected by a
-target that only provides 8.5; the restore does not rewrite tenant PHP choices.
-The source dump tool and server must fit the target database and import client.
-Copied Stalwart mail stores require the identical observed Stalwart version.
-An unknown field is not a compatibility override.
-
-For a legacy archive only, a reviewer can reconstruct provenance by inspecting
-the retained source, installed tools, databases and tenant intent. Supply
-`--source-platform-file /offline/review.json` with this structure:
-
-```json
-{
-  "archive_sha256": "<SHA256 of the exact encrypted .nkbk file>",
-  "reviewed_by": "<responsible reviewer>",
-  "platform": {
-    "os_id": "ubuntu",
-    "version_id": "24.04",
-    "codename": "noble",
-    "architecture": "<amd64 or arm64>",
-    "profile": "ubuntu-24.04",
-    "internal_php_version": "<observed major.minor>",
-    "hosting_php_versions": ["<observed major.minor>"],
-    "required_php_versions": ["<all selected and desired tenant versions>"],
-    "php_inventory_complete": true,
-    "postgres_server_version": "<observed version>",
-    "postgres_dump_version": "<archive writer version>",
-    "postgres_restore_version": "<observed source tool version>",
-    "mariadb_server_version": "<observed version>",
-    "mariadb_dump_version": "<archive writer version>",
-    "mariadb_client_version": "<observed version>",
-    "stalwart_version": "<observed version when mail data is included>"
-  }
-}
-```
-
-The reviewer and digest bind the reconstruction to one archive; every normal
-forward compatibility requirement still applies. A review cannot replace
-provenance already embedded in a newer archive. Preserve the review with the
-backup evidence, separately from the offline encryption key.
-
-Mutation additionally requires `--experimental-forward-migration --yes` for an
-isolated rehearsal. `--skip-converge` is unavailable in forward mode. Target
-Roundcube configuration, the native internal PHP selector in agent.env, target FTPS service definitions and generated tenant
-vhosts remain native; restored SQL intent regenerates tenant vhosts, DNS, PHP,
-workers, account/SSH/FTPS/quota state and containers through the existing agent
-provisioning boundaries. Forward completion waits for the actual reconciliation
-and child work, fails resource errors/detection-only database findings, and runs
-nginx, DNS, SSH and FTPS configuration/service validators. This is necessary
-implementation behavior, not sufficient evidence to cut over production.
-
-The repository supplies a concrete driver and preparer:
-`deploy/multipass/ubuntu-forward-migration-fixture.py`. It consumes the existing
-Phase 30 managed PHP/worker fixture and a reviewed immutable official nginx
-image from Phase 28 evidence (or an existing active root-provider catalog). Phase
-28 removes its test instance, so preparation creates its own dedicated catalog
-recipe and application through the normal product routes. The image must match
-`docker.io/library/nginx@sha256:<64 lowercase hex digits>`; no mutable-tag lookup
-or alternate registry is accepted by the preparer. Run that real
-phase chain on an **owned disposable 24.04 source**, with the same run token and
-architecture, before preparing the migration fixture. The source must run this
-backup implementation. Preparation creates additional database/account/mail/
-certificate canaries, then stops application writers and makes the databases
-read-only **before** taking the final encrypted backup and baseline. A read-only
-Roundcube storage preflight runs before any output/key generation, PHP fixture
-normalization, seeding, or freezing; unsupported legacy storage is rejected
-without those mutations. It leaves
-the source frozen and intact; it never freezes an ordinary unowned server.
-
-Create a private specification (replace the ownership identity with the source
-run's actual values). The new output directory must not already exist:
-
-```bash
-umask 077
-mkdir -p "$HOME/nakpanel-migration"
-./deploy/multipass/ubuntu-forward-migration-fixture.py --template \
-  > "$HOME/nakpanel-migration/spec.json"
-python3 - "$HOME/nakpanel-migration/spec.json" <<'PYFIXTURE'
-import json, sys
-p = sys.argv[1]
-c = json.load(open(p))
-c.update(source_vm="nakpanel-24-04-arm64-YOUR-RUN-TOKEN",
-         run_token="YOUR-RUN-TOKEN", architecture="arm64")
-# Match the actual source administrator if different. The private persistent
-# source path is derived from this exact run token; arbitrary paths are rejected.
-c["oci_image_ref"] = "docker.io/library/nginx@sha256:REPLACE_WITH_REVIEWED_PHASE28_DIGEST"
-# Default preparation refuses existing 8.3/8.4 tenant intent. Only for this
-# disposable source fixture, explicitly opt in to preparing all-PHP-8.5 intent:
-c["normalize_php85"] = True
-# A stale, unselected/nondefault 8.2 offer also needs its own explicit
-# disposable-fixture opt-in. Leave false for the required rejection probe.
-# c["remediate_stale_php82"] = True
-with open(p, "w") as f:
-    json.dump(c, f, indent=2)
-PYFIXTURE
-./deploy/multipass/ubuntu-forward-migration-fixture.py --prepare \
-  "$HOME/nakpanel-migration/spec.json" "$HOME/nakpanel-migration/prepared"
-```
-
-`normalize_php85` is an explicit source-fixture setup choice; its previous PHP
-intent is retained in the private fixture JSON. Restore never normalizes tenant
-versions. With the explicit fixture flag, active hosting plans and retired plans
-still referenced by synchronized subscriptions are revised
-through their normal product editor/API before the backup: the preparer retains
-all successful form controls, changes only PHP defaults/allowlists, requires a
-new immutable revision and audit event, verifies earlier history is unchanged,
-and waits for ordinary synchronized subscription updates. A retired plan remains
-retired. Compatible source plans with stale synchronized snapshots are refreshed
-only through the product subscription-sync route, with its audit event; the
-preparer verifies subscription identities and all non-PHP contract fields remain
-unchanged. Locked/custom
-subscription snapshots are preserved. A native target rehearsal rejects any
-remaining incompatible offers in those snapshots; use a compatible source or
-the separately selected Surý target. The backup inventory independently retains
-those effective PHP requirements even if every current site uses 8.5. The native variant uses all-8.5 intent. A separate experimental Surý variant
-uses `target_profile=ubuntu-26.04-sury` and `normalize_php85=false` to retain the
-source's exact 8.3/8.4/8.5 site/application choices, plans and custom/locked
-snapshots. It records the managed worker's actual selected PHP and verifies that
-same interpreter after restoration and reboot. Actual supplied runtime and
-migration evidence is still required for every preserved version; the variant's
-presence does not qualify parity.
-
-Both profiles reject an 8.2 offer by default before login, local output/key
-creation, or seeding. For an owned disposable qualification source only,
-`remediate_stale_php82=true` permits removing an unselected, nondefault 8.2 offer
-through a real plan revision and normal synchronized snapshot updates. This is
-useful for the historical retired `Legacy Unlimited` plan whose subscribers may
-still advertise 8.3/8.2 while the ready runtimes are 8.3/8.4/8.5. First retain the
-default-false rejection evidence. The Surý variant removes only that stale 8.2
-offer and verifies all remaining offers, defaults and selected PHP stay intact;
-the native variant also needs its separate `normalize_php85=true` choice.
-Selected/default 8.2, incompatible locked/custom snapshots, add-on offers and
-subscription/site PHP override offers fail before any preparation edits. The
-stale-offer flag never edits overrides. Inventory includes inherited base offers
-when a subscription override enables hosting on a base entitlement that disabled
-it. Complete target-compatible PHP inventory is required again after preparation
-and before seeding. Restore
-never edits an archive's authenticated PHP intent to make it compatible.
-
-After successful read-only preflight, preparation saves a private
-`preparation-receipt.json` before its first source mutation. It records source
-identity, explicit flags and the before-PHP inventory, then retains status and
-stage on failure as well as success. If a product revision commits but a later
-check fails, keep this receipt and the source for inspection; no final fixture
-or accepted archive is produced by that failed preparation.
-
-Choose a separate source preparation and archive/key/baseline per variant. For
-serial reuse of the same owned disposable VM, take a cold pre-seed checkpoint,
-finish and accept the first rehearsal, preserve its frozen source checkpoint and
-offline evidence, then restore the original checkpoint before the second
-preparation. Revalidate the live two-sided ownership before stopping/checkpoint
-operations, and its marker, actual OS and all three selected binary hashes after
-every restart. Each source epoch has its own source-unchanged proof; plain
-preparation cannot be rerun on an already seeded/frozen source.
-Preparation rejects missing phase fixtures, absent/unreviewed immutable image
-selection, failed convergence or protocol checks. Its dedicated container must
-pull the exact digest and become healthy; source, target and post-reboot checks
-require the real mounted volume and decrypted secret, exact tenant process UID,
-kernel memory/PID/CPU limits, loopback endpoint and disabled-egress network
-configuration. Selection of a digest alone is not runtime qualification.
-The signed source remains root-private at
-`/var/lib/nakpanel-qualification/<run-token>/source`; the shared qualification
-helper validates and exposes only the exact Roundcube canary script to
-`www-data` in a recreated `/run` leaf. Use a new disposable source to retry incomplete preparation.
-
-Use a signed release bundle for the exact candidate revision and target
-architecture. It must include its matching installer, migrations, build assets,
-and static `bin/panel`, `bin/agent`, and `bin/panelctl`; a directory of loose
-binaries is rejected. Keep the trusted release public key separately from the
-bundle. Cross-building a bundle alone does not qualify it: retain its native
-installation and runtime evidence. Then run:
-
-```bash
-export NAKPANEL_RUN_TOKEN=YOUR-RUN-TOKEN
-export NAKPANEL_MULTIPASS_ARCH=arm64
-export NAKPANEL_MULTIPASS_SOURCE_VM=nakpanel-24-04-arm64-YOUR-RUN-TOKEN
-export NAKPANEL_FORWARD_FIXTURE_JSON="$HOME/nakpanel-migration/prepared/fixture.json"
-export NAKPANEL_FORWARD_ARCHIVE="$HOME/nakpanel-migration/prepared/source.nkbk"
-export NAKPANEL_FORWARD_KEY="$HOME/nakpanel-migration/prepared/archive.key"
-export NAKPANEL_FORWARD_TARGET_BUNDLE="/offline/nakpanel-29.0.0-linux-arm64"
-export NAKPANEL_FORWARD_TARGET_PUBLIC_KEY="/offline/trusted-release-public.pem"
-export NAKPANEL_FORWARD_TARGET_VERSION="29.0.0"
-# Only for an explicitly isolated development rehearsal, never production:
-# export NAKPANEL_FORWARD_ALLOW_DEVELOPMENT=1
-./deploy/multipass/ubuntu-forward-migration-verify.sh
-```
-
-The verifier validates the private JSON, archive digest, offline input paths and
-driver capabilities, then privately stages and verifies the target signature,
-exact version, architecture, CPU/static policy and complete file inventory before
-any Multipass access. Development bundles require the explicit opt-in above.
-The target authenticates the transferred archive digest and release signature
-again before executing the signed bundle's own installer with `--bundle` and
-its out-of-band public key. Administrator credentials arrive over stdin and
-use a root-owned mode-0600 temporary password file that is removed on success
-or failure. Installer assets and binaries therefore come from the same signed
-candidate. It creates a new owned ephemeral target;
-pre-existing targets are refused. The driver installs the actual selected native
-profile and pre-caches every source OCI digest under its numeric tenant identity
-before real restore convergence. Every numeric UID/GID and subordinate range
-must fit the target without collision; no identity is remapped. Some legacy
-Noble system-account IDs collide with Ubuntu 26.04 base accounts (for example
-UID 995 with `messagebus`) and are rejected. Fresh installs allocate managed
-accounts in a reserved high range, but that does not make existing conflicting
-accounts migratable. Credentials travel over stdin and are not
-included in stage logs. Archive, key and private fixture JSON remain offline on
-the host. Do not publish the fixture bundle or logs containing tenant evidence.
-
-An independently reviewed driver can override `NAKPANEL_FORWARD_FIXTURE_DRIVER`.
-Its interface is `STAGE TARGET_VM SOURCE_VM RUN_TOKEN VERIFIED_BUNDLE_DIR EVIDENCE_DIR`;
-`--capabilities` must advertise `fixture-v1`, `install-native-target`,
-`assert-source-readonly`, `assert-baseline`, `assert-migration-data`,
-`assert-services`, `assert-trusted-tls`, `assert-reboot`, and
-`assert-no-source-writes`. Each assertion must execute its advertised checks and
-return nonzero on failure. A capability list alone is not migration evidence.
-
-The baseline/data assertions must compare real source and restored PostgreSQL
-16-to-18 data, MariaDB 10.11-to-11.8 rows/collations/routines/events/grants,
-numeric identities, decryptable credentials, actual mail message contents,
-worker execution, pinned container images/volumes, and preserved tenant intent.
-Protocol assertions must exercise nginx/PHP/DNS/SSH/FTPS and trusted TLS. The
-orchestrator independently checks actual database versions and target service,
-PHP and quota validators, then reboots and repeats data/TLS/service checks.
-Evidence is retained in a private host directory. Failed targets are retained
-for inspection; successful targets are deleted only after ownership checks
-unless `NAKPANEL_FORWARD_KEEP_TARGET=1` is set. No real migration has been
-qualified merely by running the unit tests or providing a driver's capability
-list.
-
-Keep the intact source and verified offline archive/key through acceptance.
-Freeze source writes before the final archive, lower DNS TTL ahead of the
-planned cutover, and test the target using explicit address/hostname routing
-before changing public DNS or traffic. While the source remains authoritative,
-return traffic to it if target acceptance fails. After allowing new writes on
-the target, returning traffic requires an explicit data reconciliation plan;
-there is no promised downgrade restore to the old database engines. Application
-binary/config rollback does not undo an OS release or APT package transaction.
+Ubuntu 24.04 restores, cross-OS migration, legacy provenance reconstruction,
+in-place OS upgrades and cross-architecture full restores are outside this
+contract. The old forward-migration CLI and verifier entrypoints were removed.
+Historical failed runs remain failures. Current 26.04 recovery and PHP
+maintenance still require successful Phase 3 execution; local tests alone do
+not establish that acceptance.

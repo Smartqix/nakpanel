@@ -93,7 +93,7 @@ func CheckRestoreCompatibility(source Manifest, target PlatformProvenance, mode 
 	if mode == "" {
 		mode = RestoreSamePlatform
 	}
-	if mode != RestoreSamePlatform && mode != RestoreForwardMigration {
+	if mode != RestoreSamePlatform {
 		return fmt.Errorf("unknown restore mode %q", mode)
 	}
 	if err := checkRoundcubeMySQLCompatibility(source, target); err != nil {
@@ -101,10 +101,21 @@ func CheckRestoreCompatibility(source Manifest, target PlatformProvenance, mode 
 	}
 	s := source.Platform
 	if s == nil {
-		if mode == RestoreSamePlatform && target.OSID == "ubuntu" && target.VersionID == "24.04" {
-			return nil
+		return fmt.Errorf("archive requires recorded platform provenance")
+	}
+	for _, p := range []PlatformProvenance{*s, target} {
+		if p.OSID != "ubuntu" || p.VersionID != "26.04" || p.Codename != "resolute" {
+			return fmt.Errorf("restore OS must be Ubuntu 26.04/resolute")
 		}
-		return fmt.Errorf("legacy archive has no platform provenance; same-platform recovery is limited to Ubuntu 24.04; cross-release recovery requires reviewed provenance reconstruction")
+		if (p.Profile != "ubuntu-26.04-sury" && p.Profile != "ubuntu-26.04-native") || p.InternalPHPVersion != "8.5" {
+			return fmt.Errorf("restore requires a recorded Ubuntu 26.04 profile and internal PHP 8.5")
+		}
+		if p.PostgresServerVersion == "" || p.PostgresDumpVersion == "" || p.PostgresRestoreVersion == "" || p.MariaDBServerVersion == "" || p.MariaDBDumpVersion == "" || p.MariaDBClientVersion == "" {
+			return fmt.Errorf("restore requires complete observed database provenance")
+		}
+	}
+	if !s.PHPInventoryComplete {
+		return fmt.Errorf("restore requires complete source PHP inventory")
 	}
 	if err := validateExecutionPHPInventory(*s); err != nil {
 		return err
@@ -120,7 +131,7 @@ func CheckRestoreCompatibility(source Manifest, target PlatformProvenance, mode 
 	}
 	if mode == RestoreSamePlatform {
 		if s.VersionID == "" || s.VersionID != target.VersionID {
-			return fmt.Errorf("same-platform restore requires the same OS release; use the separately qualified forward-migration path")
+			return fmt.Errorf("same-platform restore requires the same Ubuntu 26.04 OS release")
 		}
 		if s.Profile != "" && target.Profile != "" && s.Profile != target.Profile {
 			return fmt.Errorf("same-platform restore requires the same installed profile (%s -> %s)", s.Profile, target.Profile)
@@ -128,29 +139,14 @@ func CheckRestoreCompatibility(source Manifest, target PlatformProvenance, mode 
 		if s.VersionID == "26.04" && (s.Profile == "" || target.Profile == "") {
 			return fmt.Errorf("same-platform 26.04 restore requires recorded installed profiles")
 		}
-	} else {
-		if s.VersionID != "24.04" || target.VersionID != "26.04" {
-			return fmt.Errorf("unsupported forward-migration direction %s -> %s", s.VersionID, target.VersionID)
-		}
-		if s.Profile != "ubuntu-24.04" || (target.Profile != "ubuntu-26.04-native" && target.Profile != "ubuntu-26.04-sury") || s.Codename != "noble" || target.Codename != "resolute" || s.InternalPHPVersion != "8.3" || target.InternalPHPVersion != "8.5" {
-			return fmt.Errorf("forward-migration requires reviewed ubuntu-24.04 to a known ubuntu-26.04 profile")
-		}
-		for _, p := range []PlatformProvenance{*s, target} {
-			if p.Codename == "" || p.Profile == "" || p.InternalPHPVersion == "" || len(p.HostingPHPVersions) == 0 || p.PostgresServerVersion == "" || p.PostgresDumpVersion == "" || p.PostgresRestoreVersion == "" || p.MariaDBServerVersion == "" || p.MariaDBDumpVersion == "" || p.MariaDBClientVersion == "" {
-				return fmt.Errorf("forward-migration requires complete observed platform and database provenance")
-			}
-		}
-		if !s.PHPInventoryComplete {
-			return fmt.Errorf("forward-migration requires a complete source PHP intent inventory")
-		}
 	}
+
 	requiredPHP := append([]string(nil), s.RequiredPHPVersions...)
 	if mode == RestoreSamePlatform {
 		knownSameProfile := s.Profile == target.Profile
 		for _, recorded := range []PlatformProvenance{*s, target} {
 			known := recorded.OSID == "ubuntu" &&
-				((recorded.VersionID == "24.04" && recorded.Codename == "noble" && recorded.Profile == "ubuntu-24.04" && recorded.InternalPHPVersion == "8.3") ||
-					(recorded.VersionID == "26.04" && recorded.Codename == "resolute" && (recorded.Profile == "ubuntu-26.04-native" || recorded.Profile == "ubuntu-26.04-sury") && recorded.InternalPHPVersion == "8.5"))
+				(recorded.VersionID == "26.04" && recorded.Codename == "resolute" && (recorded.Profile == "ubuntu-26.04-native" || recorded.Profile == "ubuntu-26.04-sury") && recorded.InternalPHPVersion == "8.5")
 			knownSameProfile = knownSameProfile && known
 		}
 		if bool(s.ExecutionPHPInventoryComplete) && knownSameProfile {
@@ -320,7 +316,9 @@ func collectPlatform(ctx context.Context, dsn string, probe platformProbe) (Plat
 			p.Codename = v
 		}
 	}
-	legacyProfileAbsent := false
+	if p.OSID != "ubuntu" || p.VersionID != "26.04" || p.Codename != "resolute" {
+		return p, fmt.Errorf("backup OS must be Ubuntu 26.04/resolute")
+	}
 	if data, err = probe.readFile("/etc/nakpanel/platform.json"); err == nil {
 		var installed PlatformProvenance
 		if json.Unmarshal(data, &installed) != nil {
@@ -336,18 +334,8 @@ func collectPlatform(ctx context.Context, dsn string, probe platformProbe) (Plat
 				p.InternalPHPVersion = strings.TrimSpace(string(out))
 			}
 		}
-	} else if os.IsNotExist(err) {
-		legacyProfileAbsent = true
-	}
-	// Existing Noble installations predate platform.json and use the legacy
-	// internal 8.3 interpreter; still observe the actual binary before recording.
-	if p.InternalPHPVersion == "" && p.OSID == "ubuntu" && p.VersionID == "24.04" {
-		if out, e := probe.command(ctx, "php8.3", "-r", "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"); e == nil && strings.TrimSpace(string(out)) == "8.3" {
-			p.InternalPHPVersion = "8.3"
-		}
-	}
-	if legacyProfileAbsent && p.OSID == "ubuntu" && p.VersionID == "24.04" && p.Codename == "noble" && p.InternalPHPVersion == "8.3" {
-		p.Profile = "ubuntu-24.04"
+	} else {
+		return p, fmt.Errorf("installed platform state is required: %w", err)
 	}
 	observe := func(name string, args ...string) string {
 		out, e := probe.command(ctx, name, args...)

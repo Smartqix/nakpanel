@@ -121,7 +121,7 @@ func TestCommonHelperListsLegacyPhaseVMs(t *testing.T) {
 	script := string(data)
 	for _, want := range []string{
 		`NAKPANEL_MULTIPASS_VM="${NAKPANEL_MULTIPASS_VM:-nakpanel-lab}"`,
-		`NAKPANEL_MULTIPASS_IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-24.04}"`,
+		`NAKPANEL_MULTIPASS_IMAGE="${NAKPANEL_MULTIPASS_IMAGE:-26.04}"`,
 		"require_nakpanel_vm_name()",
 		"nakpanel-phase1",
 		"nakpanel-phase4-tls",

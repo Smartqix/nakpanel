@@ -1132,7 +1132,7 @@ class ForwardContainerNetworkTests(unittest.TestCase):
             def command(args,*a,**kw):return 'LISTEN 0 0 127.0.0.1:12345' if args[0]=='ss' else ''
             checker=getattr(probe,'container_network',None)
             defaults=patch.object(checker,'__defaults__',(row.proc,)) if checker else contextlib.nullcontext()
-            with defaults,patch.object(probe,'container_limits'),patch.object(probe,'rootless',side_effect=rootless),patch.object(probe,'pg',side_effect=lambda q:'fixed-container' if 'SELECT container_name' in q else json.dumps(row.endpoint)),patch.object(probe,'command',side_effect=command):
+            with defaults,patch.object(probe,'container_limits'),patch.object(probe,'rootless',side_effect=rootless),patch.object(probe,'pg',side_effect=lambda q:'t' if q.startswith('SELECT EXISTS(') else 'fixed-container' if 'SELECT container_name' in q else json.dumps(row.endpoint)),patch.object(probe,'command',side_effect=command):
                 error=None
                 try:probe.podman_live(row.config)
                 except RuntimeError as caught:error=str(caught)
@@ -1255,7 +1255,7 @@ class ForwardOCIEndpointContractTests(unittest.TestCase):
         calls=[];queries=[]
         def pg(query):
             queries.append(query)
-            return 'fixed-container' if 'SELECT container_name' in query else json.dumps(row.endpoint)
+            return 't' if query.startswith('SELECT EXISTS(') else 'fixed-container' if 'SELECT container_name' in query else json.dumps(row.endpoint)
         def rootless(c,*args):
             if args[0]=='inspect':return json.dumps([row.observed])
             if args[0]=='image':return c['oci_digest']
@@ -1270,17 +1270,17 @@ class ForwardOCIEndpointContractTests(unittest.TestCase):
     def test_actual_podman_live_uses_integer_json_endpoint_and_caches_ss_before_curl(self):
         with ForwardContainerNetworkTests('runTest').network_fixture() as row:
             calls,queries,error=self.check_endpoint(row)
-            self.assertIsNone(error);self.assertEqual([args[0] for args,kw in calls],['ss','curl']);self.assertEqual(calls[1][0][-1],'http://127.0.0.1:12345/');self.assertEqual(len(queries),2);self.assertIn('SELECT json_build_object',queries[1]);self.assertIn('a.id=7 AND a.subscription_id=11',queries[1])
+            self.assertIsNone(error);self.assertEqual([args[0] for args,kw in calls],['ss','curl']);self.assertEqual(calls[1][0][-1],'http://127.0.0.1:12345/');self.assertEqual(len(queries),3);self.assertIn('SELECT json_build_object',queries[2]);self.assertIn('a.id=7 AND a.subscription_id=11',queries[2])
     def test_existing_ss_call_requires_numeric_ports_when_service_name_resolution_exists(self):
         with ForwardContainerNetworkTests('runTest').network_fixture() as row:
             row.endpoint.update(endpoint_port=25000,generation_endpoint_port=25000)
             def listeners(args):return 'LISTEN 0 128 127.0.0.1:'+('25000' if 'n' in args[1].lstrip('-') else 'fixture-service')+' 0.0.0.0:*'
             calls,queries,error=self.check_endpoint(row,listeners=listeners)
-            self.assertIsNone(error,'symbolic ss port rejected by decimal listener guard: '+str(error));self.assertEqual([args[0] for args,kw in calls],['ss','curl']);self.assertEqual(calls[0][0],['ss','-Hltn','sport = :25000']);self.assertEqual(len(queries),2)
+            self.assertIsNone(error,'symbolic ss port rejected by decimal listener guard: '+str(error));self.assertEqual([args[0] for args,kw in calls],['ss','curl']);self.assertEqual(calls[0][0],['ss','-Hltn','sport = :25000']);self.assertEqual(len(queries),3)
     def test_existing_curl_and_postcurl_loopback_guards_remain_strict_without_retry(self):
         for code,listeners in [(7,''),(0,''),(0,'LISTEN 0 128 0.0.0.0:12345 0.0.0.0:*')]:
             with self.subTest(code=code,listeners=listeners),ForwardContainerNetworkTests('runTest').network_fixture() as row:
-                calls,queries,error=self.check_endpoint(row,code,listeners);self.assertIsNotNone(error);self.assertEqual([args[0] for args,kw in calls],['ss','curl']);self.assertEqual(len(queries),2)
+                calls,queries,error=self.check_endpoint(row,code,listeners);self.assertIsNotNone(error);self.assertEqual([args[0] for args,kw in calls],['ss','curl']);self.assertEqual(len(queries),3)
                 self.assertIn('curl' if code else 'not confined',error)
 
 
@@ -1340,6 +1340,60 @@ class ForwardRoundcubeSnapshotTests(unittest.TestCase):
         with patch.object(fixture,'load_spec',return_value=c),patch.object(fixture,'validate_prepared',side_effect=lambda value:value),patch.object(fixture,'identity',side_effect=lambda *a:identities.append(a)),patch.object(fixture,'probe',side_effect=probe_call),patch.object(fixture,'private_write'),patch.object(subprocess,'run',side_effect=AssertionError('no external process')):
             fixture.driver('assert-migration-data','nakpanel-target',c['source_vm'],c['run_token'],'/offline/bundle','/offline/evidence')
         self.assertEqual([v[1:] for v in identities],[('nakpanel-source','24.04'),('nakpanel-target','26.04')]);self.assertEqual(c,before);self.assertEqual(calls[0],(dict(c,target_vm='nakpanel-target'),'nakpanel-target','snapshot'));self.assertEqual(calls[1],(c,'nakpanel-target','live'))
+
+
+class ForwardOCIReadinessTests(unittest.TestCase):
+    def scenario(self,release_after=3,steady=False,curl_code=0,listeners='LISTEN 0 128 127.0.0.1:20000 0.0.0.0:*',wrong_digest=False,global_states=None):
+        from types import SimpleNamespace
+        events=[];queries=[];clock=[0];polls=[];calls=[];error=None;owner=self
+        with ForwardContainerNetworkTests('runTest').network_fixture() as row:
+            state=SimpleNamespace(ready=steady);row.endpoint.update(endpoint_port=20000 if steady else 25000,generation_endpoint_port=20000 if steady else 25000,generation_status='healthy' if steady else 'starting')
+            def pg(query):
+                queries.append(query)
+                if query.startswith('SELECT EXISTS('):
+                    polls.append(query);events.append('readiness')
+                    if global_states is not None:
+                        import re
+                        jobs=global_states[min(len(polls)-1,len(global_states)-1)]
+                        clauses=re.findall(r"j.kind IN \(([^)]*)\) AND j.state='([^']*)'",query)
+                        if any(kind in re.findall(r"'([^']*)'",kinds) and state==expected for kind,state in jobs for kinds,expected in clauses):return 'f'
+                    if len(polls)>=release_after:state.ready=True;row.endpoint.update(endpoint_port=20000,generation_endpoint_port=20000,generation_status='healthy')
+                    return 't' if state.ready else 'f'
+                if 'SELECT container_name' in query:events.append('container-query');return 'fixed-container'
+                if 'SELECT json_build_object' in query:return json.dumps(row.endpoint)
+                raise AssertionError('unexpected SQL request')
+            def rootless(c,*args):
+                events.append('podman-'+args[0])
+                if args[0]=='inspect':return json.dumps([row.observed])
+                if args[0]=='image':return 'wrong' if wrong_digest else c['oci_digest']
+                return c['marker'] if args[-1]=='/forward-data/forward-canary' else c['application_secret']
+            def run(args,**kwargs):
+                calls.append(args);events.append(args[0]);code=curl_code if args[0]=='curl' else 0
+                if args[0]=='curl' and args[-1]!='http://127.0.0.1:20000/':code=7
+                return subprocess.CompletedProcess(args,code,listeners if args[0]=='ss' else '', 'fixed unavailable endpoint' if code else '')
+            def sleep(seconds):owner.assertEqual(seconds,2);clock[0]+=seconds
+            with patch.object(probe.container_network,'__defaults__',(row.proc,)),patch.object(probe,'container_limits'),patch.object(probe,'pg',side_effect=pg),patch.object(probe,'rootless',side_effect=rootless),patch.object(subprocess,'run',side_effect=run),patch.object(probe.time,'monotonic',side_effect=lambda:clock[0]),patch.object(probe.time,'sleep',side_effect=sleep):
+                try:probe.podman_live(row.config)
+                except RuntimeError as caught:error=str(caught)
+        return SimpleNamespace(error=error,queries=queries,polls=polls,calls=calls,events=events,elapsed=clock[0])
+    def test_final_readiness_handles_measured_same_revision_replacement_before_single_curl(self):
+        r=self.scenario();self.assertIsNone(r.error,'strict check raced fixture convergence: '+str(r.error));self.assertEqual(len(r.polls),3);self.assertEqual(r.events[:3],['readiness']*3);self.assertEqual([c[0] for c in r.calls],['ss','curl']);self.assertEqual(r.calls[1][-1],'http://127.0.0.1:20000/');self.assertEqual(r.elapsed,4)
+    def test_owned_queue_account_revision_and_active_generation_are_in_readiness_contract(self):
+        r=self.scenario(release_after=2);self.assertIsNone(r.error);self.assertEqual(len(r.polls),2);query=r.polls[0]
+        for clause in ("a.id=7 AND a.subscription_id=11","s.desired_revision=s.applied_revision","s.convergence_status='in_sync'","a.desired_revision=a.applied_revision","a.active_generation=a.desired_revision","a.convergence_status='in_sync'","a.observed_state='healthy'","g.status='healthy'","g.endpoint_port=a.endpoint_port","j.kind='converge_subscription'","j.args->>'subscription_id'='11'","j.kind='converge_application'","j.args->>'application_id'='7'","j.state IN ('available','pending','retryable','running','scheduled')"):
+            self.assertIn(clause,query)
+        self.assertIn('NOT EXISTS',query);self.assertLess(r.events.index('readiness'),r.events.index('podman-inspect'))
+    def test_never_ready_deadline_executes_no_OCI_or_curl_commands(self):
+        r=self.scenario(release_after=1000);self.assertEqual(r.error,'fixture did not converge before deadline');self.assertEqual(r.elapsed,300);self.assertEqual(len(r.polls),150);self.assertEqual(r.calls,[]);self.assertNotIn('container-query',r.events);self.assertFalse(any(e.startswith('podman-') for e in r.events))
+    def test_running_global_snapshot_producers_finish_before_inspect_but_future_ticks_do_not_block(self):
+        for kind in ('reconcile_applications','converge_pending_subscriptions'):
+            with self.subTest(kind=kind):
+                r=self.scenario(steady=True,release_after=1,global_states=[[(kind,'running')],[(kind,'running')],[]]);self.assertIsNone(r.error);self.assertEqual(len(r.polls),3);self.assertEqual(r.events[:3],['readiness']*3);self.assertEqual(r.elapsed,4);self.assertEqual([c[0] for c in r.calls],['ss','curl'])
+                r=self.scenario(steady=True,release_after=1,global_states=[[(kind,'scheduled'),(kind,'pending'),(kind,'available')]]);self.assertIsNone(r.error);self.assertEqual(len(r.polls),1);self.assertEqual(r.elapsed,0)
+    def test_ready_state_keeps_strict_listener_curl_and_image_guards(self):
+        for options,expected in (({'curl_code':7},'curl'),({'listeners':''},'not confined'),({'listeners':'LISTEN 0 128 0.0.0.0:20000 0.0.0.0:*'},'not confined'),({'wrong_digest':True},'digest changed')):
+            with self.subTest(options=options):
+                r=self.scenario(steady=True,release_after=1,**options);self.assertIsNotNone(r.error);self.assertIn(expected,r.error);self.assertEqual(len(r.polls),1);self.assertEqual([c[0] for c in r.calls],['ss','curl']);self.assertEqual(r.elapsed,0)
 
 
 if __name__ == '__main__': unittest.main()

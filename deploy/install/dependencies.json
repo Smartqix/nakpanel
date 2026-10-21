@@ -1,16 +1,5 @@
 {
   "schema_version": 1,
-  "ubuntu-24.04": {
-    "internal_php": "8.3",
-    "hosting_php": [
-      "8.3",
-      "8.4",
-      "8.5"
-    ],
-    "composer": "2.8.11",
-    "wp_cli": "2.12.0",
-    "roundcube": "distribution"
-  },
   "ubuntu-26.04-native": {
     "experimental": true,
     "internal_php": "8.5",

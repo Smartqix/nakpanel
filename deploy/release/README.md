@@ -65,6 +65,6 @@ compiler, module downloads/cache and the migration assets are prerequisites.
 Prebuilt migration tools, ordering and failure recovery need a separate review.
 
 Static linkage alone does not establish runtime parity. The same artifact digest
-must pass native Noble/Resolute tests for DNS/TLS, Unix credentials, local user
+must pass native Resolute tests for DNS/TLS, Unix credentials, local user
 and supplementary-group lookup and DB access under the hardened units before
 rollout. No CGO/NSS assumptions or security checks are disabled here.

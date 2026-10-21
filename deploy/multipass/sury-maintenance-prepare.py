@@ -62,8 +62,9 @@ def utc():
 
 
 def check_report(report, binding):
+    M.require(report.get("qualification_scope") == "CURRENT_VERSION_ONLY" and report.get("excluded_gates") == ["real-upgrade"], "current-version qualification scope required")
     M.require(report.get('schema_version') == 1 and report.get('qualification_passed') is True and
-              report.get('full_php_parity') is True and report.get('pending_gates') == [], 'complete all17 qualification is required')
+              report.get('full_php_parity') is True and report.get('pending_gates') == [], 'complete current16 qualification is required')
     M.require(report.get('release') == '26.04' and report.get('architecture') == 'amd64' and
               report.get('profile') == 'ubuntu-26.04-sury' and report.get('php_provider') == 'sury', 'hosted Surý26 AMD64 source required')
     M.require(set(report.get('php_contract',[])) == set(M.MINORS) and len(report['php_contract']) == 3 and

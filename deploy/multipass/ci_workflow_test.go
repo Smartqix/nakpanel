@@ -69,13 +69,13 @@ func TestCIQualificationUsesOwnedVMsAndExplicitNativeCells(t *testing.T) {
 	for _, cell := range native.Strategy.Matrix.Include {
 		cells[cell.Release+"/"+cell.Architecture] = true
 	}
-	for _, cell := range []string{"24.04/amd64", "24.04/arm64", "26.04/amd64", "26.04/arm64"} {
+	for _, cell := range []string{"26.04/amd64", "26.04/arm64"} {
 		if !cells[cell] {
 			t.Errorf("missing native cell %s", cell)
 		}
 	}
-	if len(cells) != 4 || native.Strategy.MaxParallel < 1 || native.Strategy.MaxParallel > 2 {
-		t.Error("native qualification must have four cells and bounded parallelism")
+	if len(cells) != 2 || native.Strategy.MaxParallel < 1 || native.Strategy.MaxParallel > 2 {
+		t.Error("native qualification must have two cells and bounded parallelism")
 	}
 	if !strings.Contains(fmt.Sprint(native.RunsOn), "matrix.architecture") {
 		t.Error("runner must match cell architecture")
@@ -122,12 +122,12 @@ func TestCIQualificationMissingArtifactsFailsWithEvidence(t *testing.T) {
 	cmd := exec.Command("python3", "-")
 	cmd.Dir = "../.."
 	cmd.Stdin = strings.NewReader(script)
-	cmd.Env = append(os.Environ(), "RUNNER_TEMP="+dir, "GITHUB_ENV="+filepath.Join(dir, "environment"), "QUALIFICATION_ARTIFACTS_JSON=", "NAKPANEL_MULTIPASS_ARCH=amd64", "NAKPANEL_MULTIPASS_IMAGE=24.04", "NAKPANEL_RELEASE_ALLOW_DEVELOPMENT=0")
+	cmd.Env = append(os.Environ(), "RUNNER_TEMP="+dir, "GITHUB_ENV="+filepath.Join(dir, "environment"), "QUALIFICATION_ARTIFACTS_JSON=", "NAKPANEL_MULTIPASS_ARCH=amd64", "NAKPANEL_MULTIPASS_IMAGE=26.04", "NAKPANEL_RELEASE_ALLOW_DEVELOPMENT=0")
 	out, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("missing artifacts accepted: %s", out)
 	}
-	evidence, err := os.ReadFile(filepath.Join(dir, "native-preflight-24.04-amd64.json"))
+	evidence, err := os.ReadFile(filepath.Join(dir, "native-preflight-26.04-amd64.json"))
 	if err != nil {
 		t.Fatalf("failure evidence missing: %s %v", out, err)
 	}
@@ -161,10 +161,10 @@ func TestCIQualificationSummaryRejectsMissingOrDifferentEvidence(t *testing.T) {
 		t.Fatal("summary missing")
 	}
 	script := strings.TrimSuffix(strings.TrimSpace(parts[1]), "PYSUMMARY")
-	for _, mode := range []string{"missing cell", "different manifest", "development"} {
+	for _, mode := range []string{"missing cell", "missing manifest", "incomplete PHP", "development"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := t.TempDir()
-			for _, release := range []string{"24.04", "26.04"} {
+			for _, release := range []string{"26.04"} {
 				for _, arch := range []string{"amd64", "arm64"} {
 					if mode == "missing cell" && release == "26.04" && arch == "arm64" {
 						continue
@@ -173,13 +173,13 @@ func TestCIQualificationSummaryRejectsMissingOrDifferentEvidence(t *testing.T) {
 					if err := os.MkdirAll(target, 0700); err != nil {
 						t.Fatal(err)
 					}
-					report, _ := json.Marshal(map[string]any{"release": release, "architecture": arch, "qualification_passed": true, "promotion_eligible": mode != "development"})
+					report, _ := json.Marshal(map[string]any{"release": release, "architecture": arch, "qualification_passed": true, "promotion_eligible": mode != "development", "profile": "ubuntu-26.04-sury", "qualification_scope": "CURRENT_VERSION_ONLY", "full_php_parity": mode != "incomplete PHP", "php_contract": []string{"8.3", "8.4", "8.5"}})
 					if err := os.WriteFile(filepath.Join(target, "report.json"), report, 0600); err != nil {
 						t.Fatal(err)
 					}
 					manifest := arch
-					if mode == "different manifest" {
-						manifest += release
+					if mode == "missing manifest" && arch == "amd64" {
+						continue
 					}
 					if err := os.WriteFile(filepath.Join(target, "release-manifest.json"), []byte(manifest), 0600); err != nil {
 						t.Fatal(err)

@@ -23,7 +23,7 @@ func TestRoundcubeUsesVerifiedConfiguredMailTLS(t *testing.T) {
 
 func TestWebmailTLSRedirectsHTTPAndServesSecureRoundcube(t *testing.T) {
 	config := renderWebmailTLSNginxConfig(types.ConfigureWebmailReq{Hostname: "webmail.example.test", RoundcubeRoot: "/usr/share/roundcube"}, "/root/cert.pem", "/root/key.pem")
-	for _, want := range []string{"return 301 https://webmail.example.test$request_uri;", "listen 443 ssl;", "ssl_certificate /root/cert.pem;", "ssl_certificate_key /root/key.pem;", "root /usr/share/roundcube;", "fastcgi_pass unix:/run/php/php8.3-fpm.sock;"} {
+	for _, want := range []string{"return 301 https://webmail.example.test$request_uri;", "listen 443 ssl;", "ssl_certificate /root/cert.pem;", "ssl_certificate_key /root/key.pem;", "root /usr/share/roundcube;", "fastcgi_pass unix:/run/php/php8.5-fpm.sock;"} {
 		if !strings.Contains(config, want) {
 			t.Errorf("secure webmail missing %q", want)
 		}
@@ -84,7 +84,7 @@ func TestWebmailProvisionerUsesSelectedInternalPHPForHTTPAndHTTPS(t *testing.T) 
 		}
 	}
 	legacy := RenderWebmailNginxConfig(req)
-	if !strings.Contains(legacy, "fastcgi_pass unix:/run/php/php8.3-fpm.sock;") {
+	if !strings.Contains(legacy, "fastcgi_pass unix:/run/php/php8.5-fpm.sock;") {
 		t.Fatal("legacy wrapper changed")
 	}
 }
@@ -98,5 +98,17 @@ func TestWebmailRejectsInvalidInternalPHPBeforeWriting(t *testing.T) {
 	entries, err := os.ReadDir(root)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("wrote files for invalid PHP: %v %v", entries, err)
+	}
+}
+
+func TestWebmailInternalRuntimeDefaultsTo85AndRejects83(t *testing.T) {
+	p := NewWebmailProvisioner(WebmailProvisionerOptions{})
+	runtime, err := p.internalRuntime()
+	if err != nil || runtime.Version != "8.5" {
+		t.Fatalf("default internal PHP=%+v err=%v", runtime, err)
+	}
+	p = NewWebmailProvisioner(WebmailProvisionerOptions{PHPFPMVersion: "8.3"})
+	if _, err := p.internalRuntime(); err == nil {
+		t.Fatal("retired internal PHP 8.3 accepted")
 	}
 }

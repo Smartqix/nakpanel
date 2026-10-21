@@ -7,10 +7,25 @@ The panel serves its own HTTPS interface directly on port `7443`. Tenant web
 traffic remains on nginx ports `80` and `443`, so the control plane stays
 reachable even when tenant vhost configuration needs repair.
 
-Nakpanel is in active development. It is suitable for Ubuntu 24.04 lab testing
-and contribution work today, but it should be reviewed carefully before any
-production use because it includes privileged Linux provisioning, quota
-management, and migration-sensitive control-plane behavior.
+Nakpanel is in active development. Ubuntu 26.04 LTS (Resolute) is the only
+supported server OS in the current development scope. Hosting PHP 8.3/8.4/8.5
+remains required; internal tools use validated PHP 8.5. Ubuntu 26.04 remains
+experimental until operational qualification passes.
+
+Phase 2 aligns the local installer, VM defaults and CI with this contract.
+Hosted operational qualification remains incomplete; these local changes do
+not establish a newly qualified release. Ubuntu 24.04 and
+24.04-to-26.04 migration are outside the release requirements. See the
+[transition plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
+
+## Development Policy
+
+Nakpanel is before production release. Breaking changes are allowed; legacy
+compatibility, backfills, and historical upgrade or restore paths are not
+required unless explicitly requested. Development databases, fixtures, and test
+backups may be recreated for the current design. Update code, callers, tests,
+and documentation together while retaining explicitly requested platform support
+and current security requirements. See [AGENTS.md](AGENTS.md) for project guidance.
 
 ## What Works Today
 
@@ -71,7 +86,7 @@ management, and migration-sensitive control-plane behavior.
   for a Toolkit-managed database covered by that backup, and preserves the
   domain, DNS, TLS, PHP, mail, and unrelated databases.
 - Adminer SSO for database access from the authenticated panel.
-- Single-VM Ubuntu 24.04 Multipass deployment verification.
+- Owned Ubuntu 26.04 Multipass deployment verification.
 - Explicit experimental Ubuntu 26.04 profiles and owned, native OS/architecture
   qualification. [Current evidence and limits](docs/verification/2026-10-18-ubuntu-platform-implementation.md).
 
@@ -113,23 +128,21 @@ For local development:
 For full deployment verification:
 
 - Multipass
-- Ubuntu `24.04` VM image
+- Ubuntu `26.04` LTS VM image
 - Enough local disk and memory for PostgreSQL, nginx, PHP-FPM, MariaDB, bind9,
   quota tooling, Podman, ProFTPD, Valkey, ClamAV signatures, PHP 8.3/8.4/8.5,
   Composer 2, WP-CLI, and Go builds
 
-The realistic end-to-end target is Ubuntu 24.04. Some agent operations are
+The end-to-end server target is Ubuntu 26.04 LTS. Some agent operations are
 Linux-specific and cannot be fully exercised on macOS.
 
 | Server profile | Internal PHP | Available hosting PHP | Status |
 | --- | --- | --- | --- |
-| Ubuntu 24.04 | 8.3 | 8.3, 8.4, 8.5 | Existing lab default |
-| Ubuntu 26.04 native | 8.5 | 8.5 | Experimental qualification |
-| Ubuntu 26.04 Surý | 8.5 | 8.3, 8.4, 8.5 | Experimental, explicit fresh opt-in |
+| Ubuntu 26.04 native | 8.5 | 8.5 | Explicit diagnostic-only configuration; not the full product contract |
+| Ubuntu 26.04 Surý | 8.5 | 8.3, 8.4, 8.5 | Default; experimental until operational acceptance |
 
 Ready runtime discovery determines actual availability. Full native, recovery
-and soak evidence is required before production promotion. Existing Ubuntu
-24.04 installations retain their PHP choices and provider. An in-place Ubuntu
+and soak evidence is required before production promotion. Ubuntu 24.04 support and cross-OS migration requirements are retired. An in-place Ubuntu
 release upgrade is unsupported. See [platform qualification](docs/PLATFORM_QUALIFICATION.md).
 
 ## Server Installation
@@ -140,8 +153,8 @@ One command from a checkout on the target server:
 sudo deploy/install/install.sh --yes
 ```
 
-On a genuinely fresh Ubuntu 26.04 host this selects native PHP 8.5. To request
-the separate, signed Resolute Surý PHP source on a fresh host explicitly:
+On a fresh Ubuntu 26.04 host this defaults to the signed Resolute Surý source
+and hosting PHP 8.3/8.4/8.5. The equivalent explicit selection is:
 
 ```bash
 sudo deploy/install/install.sh --yes --php-provider sury
@@ -201,7 +214,7 @@ postgres://postgres@localhost:5432/nakpanel?sslmode=disable
 
 Set `NAKPANEL_DATABASE_URL` when your local database uses a different DSN.
 
-## Full Ubuntu 24.04 Verification
+## Ubuntu 26.04 Verification
 
 Run the single-VM deployment verifier:
 
@@ -209,7 +222,7 @@ Run the single-VM deployment verifier:
 deploy/multipass/deployment-verify.sh
 ```
 
-This creates a fresh, uniquely named owned Ubuntu 24.04 Multipass VM,
+This creates a fresh, uniquely named owned Ubuntu 26.04 Multipass VM,
 installs the service stack, runs migrations, builds the
 panel, agent, and CLI, installs systemd units, and retains the Phase 28 and
 adversarial security gates before Phase 29 reliability/disaster recovery.
@@ -238,7 +251,7 @@ historical phase VMs. A name prefix alone never authorizes deletion.
 To override the lab VM name or Ubuntu image:
 
 ```bash
-NAKPANEL_MULTIPASS_IMAGE=24.04 deploy/multipass/deployment-verify.sh
+NAKPANEL_MULTIPASS_IMAGE=26.04 deploy/multipass/deployment-verify.sh
 ```
 
 After a successful verification, open:
@@ -280,7 +293,7 @@ Important environment variables:
 | `NAKPANEL_BILLING_WEBHOOK_URL` | Optional external billing webhook endpoint; HTTPS is required except for loopback tests. |
 | `NAKPANEL_BILLING_WEBHOOK_SECRET` | HMAC-SHA256 webhook secret. Configure it only with the webhook URL. |
 | `NAKPANEL_MULTIPASS_VM` | Multipass VM name for deployment verification. Defaults to `nakpanel-lab`. |
-| `NAKPANEL_MULTIPASS_IMAGE` | Multipass image for deployment verification. Defaults to `24.04`. |
+| `NAKPANEL_MULTIPASS_IMAGE` | Multipass image for deployment verification. Defaults to `26.04`; the default PHP provider is Surý with 8.3/8.4/8.5. |
 
 The panel always listens on `:7443` using the configured TLS directory. It must
 not bind tenant ports `80` or `443`; those stay reserved for nginx.

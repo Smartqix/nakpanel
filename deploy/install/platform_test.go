@@ -25,8 +25,8 @@ func TestPlatformProfilesResolveOnlyExplicitUbuntuContracts(t *testing.T) {
 		name, data, arch, want string
 		reject                 bool
 	}{
-		{"noble", "ID=ubuntu\nVERSION_ID=\"24.04\"\nVERSION_CODENAME=noble\n", "amd64", "ubuntu-24.04|8.3|8.3 8.4 8.5", false},
-		{"resolute", "ID=ubuntu\nVERSION_ID=\"26.04\"\nVERSION_CODENAME=resolute\n", "arm64", "ubuntu-26.04-native|8.5|8.5", false},
+		{"noble", "ID=ubuntu\nVERSION_ID=\"24.04\"\nVERSION_CODENAME=noble\n", "amd64", "", true},
+		{"resolute", "ID=ubuntu\nVERSION_ID=\"26.04\"\nVERSION_CODENAME=resolute\n", "arm64", "ubuntu-26.04-sury|8.5|8.3 8.4 8.5", false},
 		{"wrong codename", "ID=ubuntu\nVERSION_ID=26.04\nVERSION_CODENAME=noble\n", "arm64", "", true},
 		{"future", "ID=ubuntu\nVERSION_ID=26.10\nVERSION_CODENAME=stonking\n", "amd64", "", true},
 		{"other distro", "ID=debian\nVERSION_ID=13\nVERSION_CODENAME=trixie\n", "amd64", "", true},
@@ -63,7 +63,7 @@ func TestPlatformRejectsMissingMetadataBeforeCallingMutation(t *testing.T) {
 
 func TestPlatformMetadataIsDataAndNotExecuted(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "executed")
-	file := platformFixture(t, "ID=ubuntu\nVERSION_ID=24.04\nVERSION_CODENAME=noble\nIGNORED=$(touch "+marker+")\n")
+	file := platformFixture(t, "ID=ubuntu\nVERSION_ID=26.04\nVERSION_CODENAME=resolute\nIGNORED=$(touch "+marker+")\n")
 	cmd := exec.Command("bash", "-c", `set -eu; source ./platform.sh; nakpanel_load_platform "$1" amd64`, "platform-test", file)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("load: %v: %s", err, out)
@@ -80,7 +80,7 @@ func TestInstalledPlatformMismatchCannotPassNoopPreflight(t *testing.T) {
 		`not JSON`,
 	} {
 		state := platformFixture(t, profile)
-		osRelease := platformFixture(t, "ID=ubuntu\nVERSION_ID=24.04\nVERSION_CODENAME=noble\n")
+		osRelease := platformFixture(t, "ID=ubuntu\nVERSION_ID=26.04\nVERSION_CODENAME=resolute\n")
 		cmd := exec.Command("bash", "-c", `set -eu; source ./platform.sh; nakpanel_load_platform "$1" amd64; nakpanel_check_platform_state "$2"`, "platform-test", osRelease, state)
 		out, err := cmd.CombinedOutput()
 		if err == nil {
@@ -98,7 +98,7 @@ func TestPackagePolicyRejectsWrongCandidateOriginAndRelease(t *testing.T) {
 		reject                 bool
 	}{
 		{"native", "resolute", "php8.5-cli:\n  Installed: (none)\n  Candidate: 8.5.4\n  Version table:\n     8.5.4 500\n        500 http://archive.ubuntu.com/ubuntu resolute-updates/universe arm64 Packages\n", false},
-		{"noble ppa", "noble", "php8.4-cli:\n  Installed: (none)\n  Candidate: 8.4.26\n  Version table:\n     8.4.26 500\n        500 https://ppa.launchpadcontent.net/ondrej/php/ubuntu noble/main amd64 Packages\n", false},
+		{"noble ppa", "noble", "php8.4-cli:\n  Installed: (none)\n  Candidate: 8.4.26\n  Version table:\n     8.4.26 500\n        500 https://ppa.launchpadcontent.net/ondrej/php/ubuntu noble/main amd64 Packages\n", true},
 		{"wrong suite", "resolute", "pkg:\n  Candidate: 1\n  Version table:\n     1 500\n        500 http://archive.ubuntu.com/ubuntu noble/main arm64 Packages\n", true},
 		{"foreign origin", "resolute", "pkg:\n  Candidate: 1\n  Version table:\n     1 500\n        500 https://unknown.example/repo resolute/main arm64 Packages\n", true},
 		{"only noncandidate trusted", "resolute", "pkg:\n  Candidate: 2\n  Version table:\n     2 999\n        999 https://unknown.example/repo resolute/main arm64 Packages\n     1 500\n        500 http://archive.ubuntu.com/ubuntu resolute/main arm64 Packages\n", true},
@@ -147,8 +147,8 @@ func TestPackagePreflightConsumesCompleteAptPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), "--simulate install") || !strings.Contains(string(data), "php8.5-fpm") || strings.Contains(string(data), "php8.3") {
-		t.Fatalf("incorrect native transaction: %s", data)
+	if !strings.Contains(string(data), "--simulate install") || !strings.Contains(string(data), "php8.5-fpm") || !strings.Contains(string(data), "php8.3-fpm") || !strings.Contains(string(data), "php8.4-fpm") {
+		t.Fatalf("incomplete hosting PHP transaction: %s", data)
 	}
 	if strings.Contains(string(data), "postgresql-contrib") || !strings.Contains(string(data), "postgresql-18") {
 		t.Fatalf("Resolute must install actual PostgreSQL18 provider of contrib extensions, not removed metapackage: %s", data)
@@ -161,7 +161,7 @@ func TestLegacyUnrecordedResoluteInstallRejectsBeforeMutation(t *testing.T) {
 		reject                            bool
 	}{
 		{"new resolute", "26.04", "0", "0", false},
-		{"legacy noble", "24.04", "1", "1", false},
+		{"retired noble", "24.04", "1", "1", true},
 		{"same-version binaries", "26.04", "1", "0", true},
 		{"forced fresh database", "26.04", "0", "1", true},
 	} {
@@ -471,7 +471,7 @@ func TestSuryProviderRequiresExplicitResoluteOptIn(t *testing.T) {
 	}{
 		{"unchanged native", "26.04", "native", "ubuntu-26.04-native|8.5|8.5", false},
 		{"explicit sury", "26.04", "sury", "ubuntu-26.04-sury|8.5|8.3 8.4 8.5", false},
-		{"noble unchanged", "24.04", "native", "ubuntu-24.04|8.3|8.3 8.4 8.5", false},
+		{"retired noble", "24.04", "native", "", true},
 		{"noble not enrolled", "24.04", "sury", "", true},
 		{"arbitrary source", "26.04", "custom", "", true},
 	} {
@@ -642,5 +642,19 @@ ADMIN_PASSWORD_FILE=relative-admin-secret
 	}
 	if strings.Contains(string(args), "--bundle\n") {
 		t.Fatal("verified handoff would recursively restage bundle")
+	}
+}
+
+func TestRetiredUbuntuRejectedBeforeMutation(t *testing.T) {
+	for _, arch := range []string{"amd64", "arm64"} {
+		marker := filepath.Join(t.TempDir(), "mutated")
+		metadata := platformFixture(t, "ID=ubuntu\nVERSION_ID=24.04\nVERSION_CODENAME=noble\n")
+		cmd := exec.Command("bash", "-c", `set -eu; source ./platform.sh; nakpanel_load_platform "$1" "$2"; touch "$3"`, "platform-test", metadata, arch, marker)
+		if out, err := cmd.CombinedOutput(); err == nil {
+			t.Fatalf("retired OS accepted: %s", out)
+		}
+		if _, err := os.Stat(marker); !os.IsNotExist(err) {
+			t.Fatal("retired OS reached mutation")
+		}
 	}
 }

@@ -41,7 +41,7 @@ func makeMySQLRoundcubeArchive(t *testing.T, version int, metadata *RoundcubeMyS
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest := Manifest{FormatVersion: version, RoundcubeMySQL: metadata, Platform: ptrPlatform(platformFixture("24.04"))}
+	manifest := Manifest{FormatVersion: version, RoundcubeMySQL: metadata, Platform: ptrPlatform(platformFixture("26.04"))}
 	data, _ := json.Marshal(manifest)
 	if err = w.AddBytes(ManifestName, data, 0600); err != nil {
 		t.Fatal(err)
@@ -253,11 +253,11 @@ func TestRunRestoreMySQLAuthenticatesArchiveBeforeAnyMutation(t *testing.T) {
 	}
 	t.Setenv("PATH", dir)
 	t.Setenv("RESTORE_COMMAND_LOG", log)
-	target := platformFixture("24.04")
+	target := platformFixture("26.04")
 	called := false
 	_, err := RunRestore(context.Background(), RestoreOptions{TargetPlatform: &target, ReadyPHPVersions: func(context.Context) ([]string, error) { return target.HostingPHPVersions, nil }, Key: bytes.Repeat([]byte{7}, KeySize), OpenArchive: func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(archive)), nil }, RoundcubeMySQLRuntimeCheck: func(_ context.Context, version string) error {
 		called = true
-		if version != "8.3" {
+		if version != "8.5" {
 			t.Fatal("wrong target runtime")
 		}
 		return nil
@@ -286,8 +286,8 @@ func TestRoundcubeSQLDumpRejectsWrongDatabaseAndBrokenGzip(t *testing.T) {
 }
 
 func TestMySQLFormat3RequiresCompleteObservedProvenance(t *testing.T) {
-	target := platformFixture("24.04")
-	source := Manifest{FormatVersion: 3, RoundcubeMySQL: defaultRoundcubeMySQLMetadata(), Platform: ptrPlatform(platformFixture("24.04"))}
+	target := platformFixture("26.04")
+	source := Manifest{FormatVersion: 3, RoundcubeMySQL: defaultRoundcubeMySQLMetadata(), Platform: ptrPlatform(platformFixture("26.04"))}
 	for _, mutate := range []func(*Manifest, *PlatformProvenance){func(m *Manifest, _ *PlatformProvenance) { m.Platform = nil }, func(m *Manifest, _ *PlatformProvenance) { m.Platform.MariaDBDumpVersion = "" }, func(m *Manifest, _ *PlatformProvenance) { m.Platform.PostgresDumpVersion = "" }, func(m *Manifest, _ *PlatformProvenance) { m.Platform.Profile = "" }, func(m *Manifest, _ *PlatformProvenance) { m.Platform.PHPInventoryComplete = false }, func(_ *Manifest, p *PlatformProvenance) { p.MariaDBClientVersion = "" }} {
 		copySource := source
 		copyPlatform := *source.Platform
@@ -298,8 +298,8 @@ func TestMySQLFormat3RequiresCompleteObservedProvenance(t *testing.T) {
 			t.Fatal("new format inherited incomplete legacy provenance exemption")
 		}
 	}
-	if err := CheckRestoreCompatibility(Manifest{FormatVersion: 1}, target, RestoreSamePlatform); err != nil {
-		t.Fatalf("legacy format 1 behavior changed: %v", err)
+	if err := CheckRestoreCompatibility(Manifest{FormatVersion: 1}, target, RestoreSamePlatform); err == nil {
+		t.Fatal("archive without platform provenance accepted")
 	}
 }
 
@@ -357,31 +357,6 @@ func TestRoundcubeOverrideDetectionHandlesWhitespaceAndStatementPositions(t *tes
 	for _, code := range []string{"<?php\n// $config['db_dsnw']='example';\n", "<?php\n/* $config [ 'db_dsnw' ] = 'example'; */\n"} {
 		if _, err := ParseRoundcubeDatabaseFiles(map[string][]byte{"debian-db.php": []byte(mysqlRoundcubeConfig), "config.inc.php": []byte(code)}); err != nil {
 			t.Fatalf("commented example rejected: %v", err)
-		}
-	}
-}
-
-func TestObservedLegacyNobleProfileCanProduceRestorableMySQLBackup(t *testing.T) {
-	for _, actual := range []struct {
-		os, version, codename, php string
-		profile                    string
-	}{{"ubuntu", "24.04", "noble", "8.3", "ubuntu-24.04"}, {"ubuntu", "24.04", "noble", "8.5", ""}, {"ubuntu", "26.04", "resolute", "8.3", ""}} {
-		observed, err := collectPlatform(context.Background(), "test", platformProbe{readFile: func(path string) ([]byte, error) {
-			if path == "/etc/os-release" {
-				return []byte("ID=" + actual.os + "\nVERSION_ID=" + actual.version + "\nVERSION_CODENAME=" + actual.codename + "\n"), nil
-			}
-			return nil, os.ErrNotExist
-		}, command: func(_ context.Context, name string, args ...string) ([]byte, error) {
-			if strings.Contains(strings.Join(args, " "), requiredPHPIntentQuery) {
-				return []byte(`{"required":[],"execution":[]}`), nil
-			}
-			if name == "php8.3" {
-				return []byte(actual.php), nil
-			}
-			return nil, os.ErrNotExist
-		}})
-		if err != nil || observed.Profile != actual.profile {
-			t.Fatalf("observed profile=%q wanted=%q err=%v", observed.Profile, actual.profile, err)
 		}
 	}
 }

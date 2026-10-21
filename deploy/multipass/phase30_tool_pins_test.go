@@ -112,16 +112,16 @@ func TestPhase30SelectedDependencyPins(t *testing.T) {
 	for _, tc := range []struct {
 		name, profile, mutation, want string
 	}{
-		{"noble", "ubuntu-24.04", "", "2.8.11\t2.12.0\n"},
+		{"retired-noble", "ubuntu-24.04", "", ""},
 		{"resolute-native", "ubuntu-26.04-native", "", "2.10.3\t2.12.0\n"},
 		{"resolute-sury", "ubuntu-26.04-sury", "", "2.10.3\t2.12.0\n"},
 		{"unknown-profile", "unsupported", "", ""},
-		{"missing-schema", "ubuntu-24.04", "missing-schema", ""},
-		{"wrong-schema", "ubuntu-24.04", "wrong-schema", ""},
+		{"missing-schema", "ubuntu-26.04-sury", "missing-schema", ""},
+		{"wrong-schema", "ubuntu-26.04-sury", "wrong-schema", ""},
 		{"missing-profile", "ubuntu-26.04-native", "missing-profile", ""},
-		{"missing-composer", "ubuntu-24.04", "missing-composer", ""},
-		{"missing-wp-cli", "ubuntu-24.04", "missing-wp-cli", ""},
-		{"invalid-version", "ubuntu-24.04", "invalid-version", ""},
+		{"missing-composer", "ubuntu-26.04-sury", "missing-composer", ""},
+		{"missing-wp-cli", "ubuntu-26.04-sury", "missing-wp-cli", ""},
+		{"invalid-version", "ubuntu-26.04-sury", "invalid-version", ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var data map[string]any

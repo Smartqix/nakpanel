@@ -145,19 +145,6 @@ systemctl enable --now clamav-freshclam.service >/dev/null 2>&1 || {
   echo "ClamAV signature updates could not be enabled" >&2
   exit 1
 }
-if [[ "${NAKPANEL_PLATFORM_ID}" == ubuntu-24.04 ]]; then
-add-apt-repository --yes ppa:ondrej/php
-
-# Ubuntu 24.04 writes PPA sources in deb822 format. Refuse a source that does
-# not bind its signing key, rather than accepting an implicitly trusted PPA.
-ppa_source="$(grep -Rils 'ppa.launchpadcontent.net/ondrej/php' /etc/apt/sources.list.d | head -n1 || true)"
-if [[ -z "${ppa_source}" ]] || ! grep -qsE '^(Signed-By:|deb .*signed-by=)' "${ppa_source}"; then
-  echo "ppa:ondrej/php was added without a Signed-By key binding" >&2
-  exit 1
-fi
-nakpanel_validate_ppa_source "${ppa_source}"
-fi
-
 apt-get update
 
 # PHP extensions may move between a split Debian package and the core SAPI

@@ -817,6 +817,7 @@ def container_limits(c,observed,proc=Path('/proc'),cgroups=Path('/sys/fs/cgroup'
 
 
 def podman_live(c):
+    wait("SELECT EXISTS(SELECT 1 FROM application_instances a JOIN application_generations g ON g.application_id=a.id AND g.desired_revision=a.active_generation JOIN subscription_system_accounts s ON s.subscription_id=a.subscription_id WHERE a.id="+str(c['oci_id'])+" AND a.subscription_id="+str(c['subscription_id'])+" AND a.desired_state='running' AND a.desired_revision=a.applied_revision AND a.active_generation=a.desired_revision AND a.convergence_status='in_sync' AND a.observed_state='healthy' AND g.status='healthy' AND g.endpoint_port=a.endpoint_port AND s.desired_revision=s.applied_revision AND s.convergence_status='in_sync' AND NOT EXISTS(SELECT 1 FROM river_job j WHERE (j.state IN ('available','pending','retryable','running','scheduled') AND ((j.kind='converge_subscription' AND j.args->>'subscription_id'="+quote(str(c['subscription_id']))+") OR (j.kind='converge_application' AND j.args->>'application_id'="+quote(str(c['oci_id']))+"))) OR (j.kind IN ('reconcile_applications','converge_pending_subscriptions') AND j.state='running')))",'t')
     container = pg('SELECT container_name FROM application_generations WHERE application_id=' + str(c['oci_id']) + ' AND desired_revision=(SELECT active_generation FROM application_instances WHERE id=' + str(c['oci_id']) + ')')
     if not container: raise RuntimeError('active OCI generation missing')
     observed = json.loads(rootless(c, 'inspect', container))[0]

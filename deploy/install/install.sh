@@ -57,7 +57,7 @@ usage() {
 Usage: install.sh [--fresh|--upgrade] [--bin-dir DIR | --bundle DIR --release-public-key FILE]
                   [--restore ARCHIVE --backup-key-file FILE]
                   [--admin-email EMAIL --admin-password-file FILE]
-                  [--php-provider native|sury] (fresh Ubuntu 26.04 opt-in)
+                  [--php-provider native|sury] (Ubuntu 26.04; default sury PHP 8.3/8.4/8.5; native is diagnostic-only)
                   [--force] [--allow-downgrade] [--yes] [--rollback-schema auto|manual]
 USAGE
 }

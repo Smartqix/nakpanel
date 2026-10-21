@@ -7,7 +7,7 @@ repository with PHP 8.3/8.4/8.5 for amd64 and arm64. See
 package/dependency evidence and the separate fresh-host opt-in profile. The
 private recipes below remain **unqualified optional fallback machinery**; an
 owned production APT service is not required if the maintained external profile
-passes qualification. Default native and existing Noble profiles remain intact.
+passes qualification. The default supported server profile is Resolute Surý with PHP 8.3/8.4/8.5; native 8.5-only is diagnostic.
 
 `sources.lock.json` freezes PHP 8.3.35 and 8.4.26 (2026-09-24 security releases),
 redis 6.3.0, imagick 3.8.1 and APCu 5.1.28, source URLs/digests/licenses, required

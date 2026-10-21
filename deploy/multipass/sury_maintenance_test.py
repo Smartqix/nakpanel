@@ -17,7 +17,7 @@ from unittest.mock import patch
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / 'sury-maintenance-drill.py'
 MODE = 'SAME_VERSION_REINSTALL_AND_FAILED_CONFIGURATION_RECOVERY'
-GATES = ['bundle','fresh-install','inventory','real-upgrade','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace','phase33','phase34','domain-removal','release-artifacts']
+GATES = ['bundle','fresh-install','inventory','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace','phase33','phase34','domain-removal','release-artifacts']
 
 class MaintenanceTests(unittest.TestCase):
     def snapshot_record(self):
@@ -99,7 +99,7 @@ class MaintenanceTests(unittest.TestCase):
         raw = {'schema':'nakpanel-roundcube-send-read-v1','success':True,'status':'PASS','send_attempts':1,'http_send_completed':True,'self_recipient_verified':True,'imap_arrival_verified':True,'imap_message_id_verified':True,'roundcube_body_verified':True,'message_id':'<real-generated-id@example.test>','uid':'42','subject_sha256':'c'*64,'body_sha256':'d'*64,'recipient_sha256':'e'*64,'qualifier_helper_sha256':'f'*64,'certificate_sha256':'7'*64}
         supplement = dict(b, schema='nakpanel-roundcube-supplement-v1', success=True, qualifier_wrapper_sha256='8'*64,qualifier_helper_sha256='f'*64,raw_receipt=raw,raw_receipt_sha256=hashlib.sha256((json.dumps(raw,sort_keys=True,separators=(',',':'),ensure_ascii=True)+'\n').encode('ascii')).hexdigest())
         report = {k:b[k] for k in ('source_vm','run_token','release','architecture','profile','php_provider')}
-        report.update(schema_version=1,qualification_passed=True,full_php_parity=True,php_contract=['8.3','8.4','8.5'],pending_gates=[],gates=[{'name':name,'status':'PASS','exit_code':0} for name in GATES])
+        report.update(schema_version=1,qualification_scope="CURRENT_VERSION_ONLY",excluded_gates=["real-upgrade"],qualification_passed=True,full_php_parity=True,php_contract=['8.3','8.4','8.5'],pending_gates=[],gates=[{'name':name,'status':'PASS','exit_code':0} for name in GATES])
         retention = dict(b,schema='nakpanel-sury-maintenance-retention-v1',status='PASS',snapshot_name='maintenance-sury-test1234',snapshot_id=b['source_vm']+'.maintenance-sury-test1234',snapshot_info_sha256=hashlib.sha256((json.dumps(self.snapshot_record(),sort_keys=True,separators=(',',':'),ensure_ascii=True)+'\n').encode('ascii')).hexdigest(),cold_snapshot=True,running_revalidated=True,ownership_verified=True)
         handoff = dict(b,schema='nakpanel-sury-maintenance-handoff-v1',exclusive_source_handoff=True,allowed_operations=[MODE],qualification_report_sha256='9'*64,roundcube_receipt_sha256='0'*64,retention_receipt_sha256='6'*64)
         config = dict(b,operation=MODE,qualification_report_sha256='9'*64,roundcube_receipt_sha256='0'*64,retention_receipt_sha256='6'*64,retention_snapshot='maintenance-sury-test1234',qualifier_wrapper_sha256='8'*64,qualifier_helper_sha256='f'*64)
@@ -162,6 +162,53 @@ class MaintenanceTests(unittest.TestCase):
             root=Path(td);outside=root/'outside';outside.write_bytes(b'keep');f=m.FaultFile(root,'test1234');f.path.symlink_to(outside)
             with self.assertRaises(FileExistsError):f.create()
             self.assertEqual(outside.read_bytes(),b'keep');f.path.unlink();f.create();f.remove();self.assertFalse(f.path.exists())
+
+    def postinst_failure_fixture(self, minor, wording, *, returncode=100):
+        path=Path('/etc/php/'+minor+'/fpm/pool.d/zz-nakpanel-maintenance-owned123.conf')
+        config=subprocess.CompletedProcess([],78,'',str(path)+": unknown entry 'nakpanel_owned_drill_invalid'")
+        package='php'+minor+'-fpm'
+        detail={'legacy':'installed '+package+' package post-installation script subprocess returned error exit status 1',
+                'current':'old '+package+' package postinst maintainer script subprocess failed with exit status 1'}[wording]
+        text='dpkg: error processing package '+package+' (--configure):\n '+detail+'\n'
+        return path,config,subprocess.CompletedProcess([],returncode,'',text)
+
+    def test_postinst_failure_accepts_exact_dpkg_122_and_123_diagnostics(self):
+        m=self.module()
+        # dpkg src/main/script.c + lib/dpkg/subproc.c, 1.22.22 / 1.23.7.
+        # https://sources.debian.org/src/dpkg/1.23.7/src/main/script.c/
+        for minor in m.MINORS:
+            for wording in ('legacy','current'):
+                with self.subTest(minor=minor,wording=wording):
+                    path,config,transaction=self.postinst_failure_fixture(minor,wording)
+                    accepted=True
+                    try:m.check_expected_failure(minor,path,config,transaction,'install ok half-configured')
+                    except ValueError:accepted=False
+                    self.assertTrue(accepted,'documented real postinst exit1 diagnostic was rejected')
+
+    def test_postinst_failure_wording_cannot_accept_wrong_package_script_or_exit(self):
+        m=self.module();minor='8.3'
+        for wording in ('legacy','current'):
+            path,config,transaction=self.postinst_failure_fixture(minor,wording)
+            text=transaction.stderr
+            wrong=[text.replace('php8.3-fpm','php8.4-fpm'),
+                   text.replace('(--configure)','(--remove)'),
+                   text.replace('post-installation script','pre-installation script') if wording=='legacy' else text.replace('postinst maintainer script','prerm maintainer script'),
+                   text.replace('exit status 1','exit status 10'),
+                   text.replace('exit status 1','exit status 2')+'unrelated fixture exit status 1\n']
+            for index,value in enumerate(wrong):
+                with self.subTest(wording=wording,case=index),self.assertRaisesRegex(ValueError,'APT failure was not the expected real FPM postinst failure'):
+                    m.check_expected_failure(minor,path,config,subprocess.CompletedProcess([],100,'',value),'install ok half-configured')
+
+    def test_postinst_failure_equivalent_wording_retains_code_status_and_owned_fault_guards(self):
+        m=self.module();minor='8.3'
+        for wording in ('legacy','current'):
+            path,config,transaction=self.postinst_failure_fixture(minor,wording)
+            with self.subTest(wording=wording,guard='APT100'),self.assertRaisesRegex(ValueError,'APT failure was not the expected real FPM postinst failure'):
+                m.check_expected_failure(minor,path,config,subprocess.CompletedProcess([],0,'',transaction.stderr),'install ok half-configured')
+            with self.subTest(wording=wording,guard='dpkg-half-configured'),self.assertRaisesRegex(ValueError,'real dpkg half-configured state required'):
+                m.check_expected_failure(minor,path,config,transaction,'install ok installed')
+            with self.subTest(wording=wording,guard='owned-config'),self.assertRaisesRegex(ValueError,'owned injected FPM configuration did not cause the exact expected failure'):
+                m.check_expected_failure(minor,path,subprocess.CompletedProcess([],78,'','unknown unrelated directive'),transaction,'install ok half-configured')
 
     def test_actual_failed_configuration_is_distinguished_from_unrelated_errors(self):
         m=self.module();path='/etc/php/8.3/fpm/pool.d/zz-nakpanel-maintenance-test1234.conf';test=subprocess.CompletedProcess([],78,'','ERROR: ['+path+":2] unknown entry 'nakpanel_owned_drill_invalid'")

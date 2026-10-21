@@ -14,7 +14,7 @@ func TestPlatformIdentityProfileContracts(t *testing.T) {
 		release, provider, want string
 		valid                   bool
 	}{
-		{"24.04", "native", "8.4:8.3:8.5,8.4,8.3:ubuntu-24.04", true},
+		{"24.04", "native", "", false},
 		{"26.04", "native", "8.5:8.5:8.5:ubuntu-26.04-native", true},
 		{"26.04", "sury", "8.4:8.3:8.5,8.4,8.3:ubuntu-26.04-sury", true},
 		{"24.04", "sury", "", false}, {"26.04", "unknown", "", false},
@@ -30,25 +30,19 @@ func TestPlatformIdentityProfileContracts(t *testing.T) {
 	}
 }
 
-func TestSuryFreshAndDRInstallExplicitlyOptIn(t *testing.T) {
+func TestFreshAndDRInstallForwardSelectedProvider(t *testing.T) {
 	for _, path := range []string{"current-install-verify.sh", "phase29-verify.sh"} {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, want := range []string{"NAKPANEL_QUALIFICATION_PHP_PROVIDER", "--php-provider sury"} {
+		for _, want := range []string{"NAKPANEL_QUALIFICATION_PHP_PROVIDER", "--php-provider"} {
 			if !strings.Contains(string(data), want) {
 				t.Fatalf("%s missing explicit Sury fresh contract %s", path, want)
 			}
 		}
 	}
-	data, err := os.ReadFile("ubuntu-upgrade-verify.sh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "export NAKPANEL_QUALIFICATION_PHP_PROVIDER=native") {
-		t.Fatal("historical Noble guest inherited Sury26 provider")
-	}
+
 }
 
 func TestPlatformCellInvalidBundleRecordsFailureBeforeVMWork(t *testing.T) {

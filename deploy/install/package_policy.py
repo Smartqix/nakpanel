@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 
 def allowed(policy, codename, provider="native", package=""):
-    if codename not in ("noble", "resolute"):
+    if codename != "resolute":
         return False
     match = re.search(r"^\s*Candidate:\s*(\S+)", policy, re.M)
     if match is None or match[1] == "(none)":
@@ -27,12 +27,11 @@ def allowed(policy, codename, provider="native", package=""):
             continue
         host = url.hostname or ""
         ubuntu = host in ("archive.ubuntu.com", "security.ubuntu.com", "ports.ubuntu.com", "esm.ubuntu.com") or host.endswith(".archive.ubuntu.com")
-        ppa = codename == "noble" and host == "ppa.launchpadcontent.net" and url.path.rstrip("/") == "/ondrej/php/ubuntu"
         sury = (provider == "sury" and codename == "resolute" and suite == "resolute"
                 and url.scheme == "https" and host == "packages.sury.org"
                 and url.path.rstrip("/") == "/php"
                 and re.fullmatch(r"php(?:-common|8\.[345]-[a-z0-9]+)", package))
-        if ubuntu or ppa or sury:
+        if ubuntu or sury:
             return True
     return False
 
