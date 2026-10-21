@@ -25,15 +25,53 @@ class PreparationTests(unittest.TestCase):
         return module
 
     def report(self):
-        return dict(schema_version=1, qualification_passed=True, full_php_parity=True,
+        return dict(schema_version=1, qualification_scope='CURRENT_VERSION_ONLY', excluded_gates=['real-upgrade'], qualification_passed=True, full_php_parity=True,
                     pending_gates=[], source_vm='nakpanel-26-04-amd64-hosted-123456-1-26-04',
                     run_token='hosted-123456-1-26-04', release='26.04', architecture='amd64',
                     profile='ubuntu-26.04-sury', php_provider='sury', php_contract=['8.5','8.4','8.3'],
                     features={'database_manager_requested': True},
                     gates=[dict(name=n,status='PASS',exit_code=0) for n in (
-                        'bundle','fresh-install','inventory','real-upgrade','phase28','valkey-platform',
+                        'bundle','fresh-install','inventory','phase28','valkey-platform',
                         'security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace',
                         'phase33','phase34','domain-removal','release-artifacts')])
+
+    def test_current_only_report_requires_exact16_and_never_credits_historical_upgrade(self):
+        m=self.module();report=self.report()
+        report['gates']=[g for g in report['gates'] if g['name']!='real-upgrade']
+        report.update(qualification_scope='CURRENT_VERSION_ONLY',excluded_gates=['real-upgrade'])
+        m.check_report(report,report)
+        for field,value in [('qualification_scope','FULL_HISTORICAL'),('excluded_gates',[]),('gates',report['gates']+[dict(name='real-upgrade',status='PASS',exit_code=0)]),('gates',report['gates'][:-1])]:
+            with self.subTest(field=field),self.assertRaises(ValueError):m.check_report(dict(report,**{field:value}),report)
+
+    def test_actual_current_driver_runs16_gates_on24_and26_without_upgrade_execution(self):
+        driver=(HERE/'ubuntu-platform-verify.sh').read_bytes()
+        for release,provider in [('24.04','native'),('26.04','sury')]:
+            with self.subTest(release=release),tempfile.TemporaryDirectory() as td:
+                root=Path(td);scripts=root/'deploy/multipass';scripts.mkdir(parents=True);(scripts/'ubuntu-platform-verify.sh').write_bytes(driver)
+                (scripts/'common.sh').write_text('init_qualification_run(){ :; }; multipass_host_arch(){ echo amd64; }; multipass(){ [[ "$1" != info ]]; }; assert_current_vm_identity(){ :; }; multipass_exec_short(){ :; }; assert_qualification_installed_release(){ :; }\n')
+                for name in ('current-install','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','mail-workspace','phase33','phase34','domain-removal'):
+                    p=scripts/(name+'-verify.sh');p.write_text('#!/usr/bin/env bash\nexit 0\n');p.chmod(0o700)
+                (scripts/'ubuntu-upgrade-verify.sh').write_text('#!/usr/bin/env bash\nprintf forbidden >"'+str(root/'FORBIDDEN_UPGRADE')+'"\nexit 99\n');(scripts/'ubuntu-upgrade-verify.sh').chmod(0o700)
+                (scripts/'roundcube-send-read.py').write_text('pass\n');release_dir=root/'deploy/release';release_dir.mkdir();(release_dir/'verify.py').write_text('pass\n')
+                tools=root/'tools';tools.mkdir();(tools/'git').write_text('#!/bin/sh\nexit 0\n');(tools/'git').chmod(0o700)
+                bundle=root/'bundle';bundle.mkdir();(bundle/'manifest.json').write_text('{}');reports=root/'reports';owner=root/'ownership';owner.mkdir()
+                env=dict(os.environ,PATH=str(tools)+':'+os.environ['PATH'],NAKPANEL_RELEASE_BUNDLE=str(bundle),NAKPANEL_RELEASE_PUBLIC_KEY=str(root/'key'),NAKPANEL_RELEASE_VERSION='29.0.0',NAKPANEL_MULTIPASS_ARCH='amd64',NAKPANEL_MULTIPASS_IMAGE=release,NAKPANEL_RUN_TOKEN='owned-current123',NAKPANEL_MULTIPASS_VM='owned-current123-source',NAKPANEL_MULTIPASS_DR_VM='owned-current123-dr',NAKPANEL_CELL_REPORT_DIR=str(reports),NAKPANEL_OWNERSHIP_DIR=str(owner),NAKPANEL_PHP_VERSIONS='8.5,8.4,8.3',NAKPANEL_QUALIFICATION_PROFILE='ubuntu-'+release+'-'+provider,NAKPANEL_QUALIFICATION_PHP_PROVIDER=provider,NAKPANEL_VERIFY_DATABASE_MANAGER='1')
+                bash='/opt/homebrew/bin/bash' if Path('/opt/homebrew/bin/bash').is_file() else 'bash'
+                child=subprocess.run([bash,str(scripts/'ubuntu-platform-verify.sh')],env=env,capture_output=True,text=True,timeout=15)
+                self.assertEqual(child.returncode,0,child.stderr);self.assertFalse((root/'FORBIDDEN_UPGRADE').exists())
+                value=json.loads((reports/'report.json').read_text());self.assertEqual(value['qualification_scope'],'CURRENT_VERSION_ONLY');self.assertEqual(value['excluded_gates'],['real-upgrade']);self.assertTrue(value['qualification_passed']);self.assertEqual(len(value['gates']),16);self.assertNotIn('real-upgrade',[g['name'] for g in value['gates']]);self.assertIsNone(value['features']['genuine_historical_upgrade_release']);self.assertFalse(value['features']['same_profile_26_update_required']);self.assertEqual(value['release'],release)
+
+    def test_current_qualify_authenticates_runtime_driver_and_actual_qualifier_maps(self):
+        for separate in (False,True):
+            with self.subTest(separate=separate):
+                m=self.module();qualifier=Path('/qualifier');driver=Path('/driver') if separate else qualifier;env=dict(NAKPANEL_MULTIPASS_VM=self.report()['source_vm'],NAKPANEL_RUN_TOKEN=self.report()['run_token'],NAKPANEL_CELL_REPORT_DIR='/cell');calls=[];observed=[]
+                def mapping(path,files,run):calls.append(path);return ('a'*40 if path==driver else 'c'*40),{'fixture':('b'*64 if path==driver else 'd'*64)}
+                argv=['prepare','qualify','--execution-receipt','/execution']+(['--driver-source',str(driver)] if separate else [])
+                with patch.object(m,'SOURCE',qualifier),patch.object(m.os,'environ',env),patch.object(m.sys,'argv',argv),patch.object(m,'source_map',side_effect=mapping),patch.object(m,'run_canonical',side_effect=lambda *a:observed.append(a)):
+                    m.main()
+                self.assertEqual(observed[0][0],['bash','/qualifier/deploy/multipass/ubuntu-platform-verify.sh'])
+                proof=observed[0][-1];self.assertEqual(proof['runtime_commit'],'a'*40);self.assertEqual(proof['qualifier_commit'],'c'*40 if separate else 'a'*40);self.assertEqual(proof['driver_source_sha256'],{'fixture':'b'*64});self.assertEqual(proof['qualifier_source_sha256'],{'fixture':('d'*64 if separate else 'b'*64)})
+                self.assertEqual(calls,[driver,qualifier] if separate else [qualifier])
 
     def test_import_is_inert_and_missing_or_incomplete_real_baseline_refuses(self):
         m = self.module(); report = self.report()
@@ -555,7 +593,7 @@ m.run_canonical([sys.executable,'-c',child,sys.argv[2]],pathlib.Path(sys.argv[3]
                 bundle=root/'bundle';bundle.mkdir();manifest=dict(commit=('c'*40 if mode=='manifest' else 'a'*40),architecture='amd64',version='29.0.0',development=True,files={'bin/'+name:'1'*64 for name in ('panel','agent','panelctl')})
                 (bundle/'manifest.json').write_bytes(m.M.canonical(manifest));(bundle/'manifest.sig').write_bytes(b'sig');key=root/'key';key.write_bytes(b'key')
                 mapping={name:'b'*64 for name in m.FROZEN};qmapping=dict(mapping,**{'deploy/multipass/sury-maintenance-drill.py':'d'*64})
-                execution=dict(schema='nakpanel-canonical-execution-v1',success=True,process_exited=True,process_group_empty=True,exit_code=0,source_binding={k:report[k] for k in ('source_vm','run_token','release','architecture','profile','php_provider')},qualification_report_sha256=m.M.digest(report_bytes),process_group=99999999,runtime_commit='a'*40,qualifier_source_sha256=(qmapping if mode=='canonical-map' else mapping))
+                execution=dict(schema='nakpanel-canonical-execution-v1',success=True,process_exited=True,process_group_empty=True,exit_code=0,source_binding={k:report[k] for k in ('source_vm','run_token','release','architecture','profile','php_provider')},qualification_report_sha256=m.M.digest(report_bytes),process_group=99999999,runtime_commit='a'*40,driver_source_sha256=mapping,qualifier_commit=('a'*40 if mode=='default' else 'c'*40),qualifier_source_sha256=(mapping if mode in ('default','canonical-map') else qmapping))
                 m.M.write_private(root/'execution.json',execution)
                 env=dict(NAKPANEL_CELL_REPORT_DIR=str(cell),NAKPANEL_MULTIPASS_VM=report['source_vm'],NAKPANEL_RUN_TOKEN=report['run_token'],NAKPANEL_RELEASE_BUNDLE=str(bundle),NAKPANEL_RELEASE_PUBLIC_KEY=str(key),NAKPANEL_OWNERSHIP_DIR=str(root/'ownership'))
                 producer=m.Producer(driver,root/'private',root/'execution.json',env,**({} if mode=='default' else {'qualifier_source':qualifier}));calls=[];maps=[]
@@ -591,7 +629,7 @@ m.run_canonical([sys.executable,'-c',child,sys.argv[2]],pathlib.Path(sys.argv[3]
 
     def test_qualifier_option_is_scoped_to_prepare_and_controller_uses_qualifier(self):
         m=self.module();env=dict(NAKPANEL_MULTIPASS_VM=self.report()['source_vm'],NAKPANEL_RUN_TOKEN=self.report()['run_token'])
-        for operation in ('qualify','request'):
+        for operation in ('request',):
             with self.subTest(operation=operation),patch.object(m.os,'environ',env),patch.object(m.sys,'argv',['producer',operation,'--driver-source','/driver','--execution-receipt','/execution']),patch.object(m,'record_request',side_effect=AssertionError('foreign operation reached work')),patch.object(m,'source_map',side_effect=AssertionError('foreign operation reached work')):
                 with self.assertRaisesRegex(ValueError,'qualifier'):m.main()
         with tempfile.TemporaryDirectory() as td:

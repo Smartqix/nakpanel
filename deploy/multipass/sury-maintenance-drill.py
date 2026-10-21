@@ -28,7 +28,7 @@ MODE = 'SAME_VERSION_REINSTALL_AND_FAILED_CONFIGURATION_RECOVERY'
 MINORS = ('8.3', '8.4', '8.5')
 KEY_SHA = 'b486fd5488185c4c46467960fa69c53d5085fec492cf76b9eaf3db33561c9d7c'
 FINGERPRINT = '15058500A0235D97F5D10063B188E2B695BD4743'
-GATES = {'bundle','fresh-install','inventory','real-upgrade','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace','phase33','phase34','domain-removal','release-artifacts'}
+GATES = {'bundle','fresh-install','inventory','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace','phase33','phase34','domain-removal','release-artifacts'}
 BINDING = ('source_vm','run_token','release','architecture','profile','php_provider','app_version','runtime_commit','manifest_sha256','installed_binary_sha256')
 SERVICES = ('nakpanel.service', 'nakpanel-agent.service')
 HEX = re.compile(r'^[a-f0-9]{64}$')
@@ -76,12 +76,12 @@ def validate_authorization(config, report, supplement, retention, handoff):
     require(config['source_vm'].startswith('nakpanel-26-04-' + config['architecture'] + '-') and config['source_vm'].endswith(config['run_token']), 'VM identity differs from selected run')
     require(re.fullmatch(r'[a-f0-9]{40}', config['runtime_commit']) is not None, 'invalid selected commit')
     require(sha_value(config['manifest_sha256']) and type(config['installed_binary_sha256']) is dict and set(config['installed_binary_sha256']) == {'panel','agent','panelctl'} and all(sha_value(x) for x in config['installed_binary_sha256'].values()), 'invalid selected release hashes')
-    require(report.get('schema_version') == 1 and type(report.get('schema_version')) is int and report.get('qualification_passed') is True and report.get('pending_gates') == [], 'all canonical qualification gates must have passed')
+    require(report.get('schema_version') == 1 and type(report.get('schema_version')) is int and report.get('qualification_passed') is True and report.get('pending_gates') == [] and report.get('qualification_scope') == 'CURRENT_VERSION_ONLY' and report.get('excluded_gates') == ['real-upgrade'], 'all canonical qualification gates must have passed')
     require(report.get('full_php_parity') is True and type(report.get('php_contract')) is list and len(report['php_contract']) == 3 and set(report['php_contract']) == set(MINORS), 'the complete qualified Surý PHP8.3/8.4/8.5 contract is required')
     for key in ('source_vm','run_token','release','architecture','profile','php_provider'):
         require(report.get(key) == config[key], 'qualification report source binding differs')
     gates = report.get('gates')
-    require(type(gates) is list and len(gates) == len(GATES) and all(type(g) is dict and type(g.get('name')) is str for g in gates) and {g.get('name') for g in gates} == GATES, 'exactly all17 canonical gates are required')
+    require(type(gates) is list and len(gates) == len(GATES) and all(type(g) is dict and type(g.get('name')) is str for g in gates) and {g.get('name') for g in gates} == GATES, 'exactly16 current-version canonical gates are required')
     require(all(g.get('status') == 'PASS' and type(g.get('exit_code')) is int and g['exit_code'] == 0 for g in gates), 'a canonical gate did not pass')
     require(supplement.get('schema') == 'nakpanel-roundcube-supplement-v1' and supplement.get('success') is True, 'real Roundcube supplemental receipt required')
     bound(supplement, config)

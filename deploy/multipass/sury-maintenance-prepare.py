@@ -63,7 +63,7 @@ def utc():
 
 def check_report(report, binding):
     M.require(report.get('schema_version') == 1 and report.get('qualification_passed') is True and
-              report.get('full_php_parity') is True and report.get('pending_gates') == [], 'complete all17 qualification is required')
+              report.get('full_php_parity') is True and report.get('pending_gates') == [] and report.get('qualification_scope') == 'CURRENT_VERSION_ONLY' and report.get('excluded_gates') == ['real-upgrade'], 'complete16 current-version qualification is required')
     M.require(report.get('release') == '26.04' and report.get('architecture') == 'amd64' and
               report.get('profile') == 'ubuntu-26.04-sury' and report.get('php_provider') == 'sury', 'hosted Surý26 AMD64 source required')
     M.require(set(report.get('php_contract',[])) == set(M.MINORS) and len(report['php_contract']) == 3 and
@@ -329,8 +329,8 @@ class Producer:
                   type(execution.get('exit_code')) is int and execution['exit_code']==0 and execution.get('source_binding')==binding and
                   execution.get('qualification_report_sha256')==M.digest(report_bytes) and not process_group_exists(execution['process_group']),
                   'canonical process completion/source/report proof differs')
-        M.require(execution.get('runtime_commit')==commit and execution.get('qualifier_source_sha256')==mapping,
-                  'canonical process did not execute the same frozen qualifier source')
+        M.require(execution.get('runtime_commit')==commit and execution.get('driver_source_sha256')==mapping and execution.get('qualifier_commit')==qualifier_commit and execution.get('qualifier_source_sha256')==qualifier_mapping,
+                  'canonical process did not execute the authenticated current qualifier and driver sources')
         bundle=Path(self.env['NAKPANEL_RELEASE_BUNDLE']);manifest_bytes=(bundle/'manifest.json').read_bytes();manifest=json.loads(manifest_bytes)
         M.require(manifest['commit']==commit and manifest['architecture']=='amd64' and type(manifest['development']) is bool,'runtime must be the actual selected driver commit')
         config=dict(binding,operation=M.MODE,app_version=manifest['version'],runtime_commit=commit,qualifier_commit=qualifier_commit,
@@ -536,7 +536,7 @@ def main():
     parser.add_argument('--private-root',type=Path)
     parser.add_argument('--driver-source',type=Path)
     args=parser.parse_args()
-    M.require(args.driver_source is None or args.operation=='prepare','separate qualifier/driver source is only supported by prepare')
+    M.require(args.driver_source is None or args.operation in ('qualify','prepare'),'separate qualifier/driver source is only supported by qualify or prepare')
     env=os.environ.copy()
     if args.operation=='request':
         record_request(env)
@@ -544,10 +544,12 @@ def main():
     M.require(args.execution_receipt is not None,'explicit canonical execution receipt required')
     binding=dict(source_vm=env['NAKPANEL_MULTIPASS_VM'],run_token=env['NAKPANEL_RUN_TOKEN'],release='26.04',architecture='amd64',profile='ubuntu-26.04-sury',php_provider='sury')
     if args.operation=='qualify':
-        commit,mapping=source_map(SOURCE,FROZEN,env.get('GITHUB_RUN_ID',''))
+        driver=SOURCE if args.driver_source is None else args.driver_source
+        commit,mapping=source_map(driver,FROZEN,env.get('GITHUB_RUN_ID',''))
+        qualifier_commit,qualifier_mapping=(commit,mapping) if driver==SOURCE else source_map(SOURCE,FROZEN,env.get('GITHUB_RUN_ID',''))
         run_canonical(['bash',str(SOURCE/'deploy/multipass/ubuntu-platform-verify.sh')],args.execution_receipt,
                       Path(env['NAKPANEL_CELL_REPORT_DIR'])/'report.json',binding,env,
-                      dict(runtime_commit=commit,qualifier_source_sha256=mapping))
+                      dict(runtime_commit=commit,driver_source_sha256=mapping,qualifier_commit=qualifier_commit,qualifier_source_sha256=qualifier_mapping))
         return
     M.require(args.private_root is not None,'prepare requires an explicit fresh private root')
     producer=Producer(SOURCE,args.private_root,args.execution_receipt,env) if args.driver_source is None else Producer(args.driver_source,args.private_root,args.execution_receipt,env,qualifier_source=SOURCE)

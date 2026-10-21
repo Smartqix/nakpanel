@@ -17,7 +17,7 @@ from unittest.mock import patch
 HERE = Path(__file__).resolve().parent
 HELPER = HERE / 'sury-maintenance-drill.py'
 MODE = 'SAME_VERSION_REINSTALL_AND_FAILED_CONFIGURATION_RECOVERY'
-GATES = ['bundle','fresh-install','inventory','real-upgrade','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace','phase33','phase34','domain-removal','release-artifacts']
+GATES = ['bundle','fresh-install','inventory','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace','phase33','phase34','domain-removal','release-artifacts']
 
 class MaintenanceTests(unittest.TestCase):
     def snapshot_record(self):
@@ -99,7 +99,7 @@ class MaintenanceTests(unittest.TestCase):
         raw = {'schema':'nakpanel-roundcube-send-read-v1','success':True,'status':'PASS','send_attempts':1,'http_send_completed':True,'self_recipient_verified':True,'imap_arrival_verified':True,'imap_message_id_verified':True,'roundcube_body_verified':True,'message_id':'<real-generated-id@example.test>','uid':'42','subject_sha256':'c'*64,'body_sha256':'d'*64,'recipient_sha256':'e'*64,'qualifier_helper_sha256':'f'*64,'certificate_sha256':'7'*64}
         supplement = dict(b, schema='nakpanel-roundcube-supplement-v1', success=True, qualifier_wrapper_sha256='8'*64,qualifier_helper_sha256='f'*64,raw_receipt=raw,raw_receipt_sha256=hashlib.sha256((json.dumps(raw,sort_keys=True,separators=(',',':'),ensure_ascii=True)+'\n').encode('ascii')).hexdigest())
         report = {k:b[k] for k in ('source_vm','run_token','release','architecture','profile','php_provider')}
-        report.update(schema_version=1,qualification_passed=True,full_php_parity=True,php_contract=['8.3','8.4','8.5'],pending_gates=[],gates=[{'name':name,'status':'PASS','exit_code':0} for name in GATES])
+        report.update(schema_version=1,qualification_scope='CURRENT_VERSION_ONLY',excluded_gates=['real-upgrade'],qualification_passed=True,full_php_parity=True,php_contract=['8.3','8.4','8.5'],pending_gates=[],gates=[{'name':name,'status':'PASS','exit_code':0} for name in GATES])
         retention = dict(b,schema='nakpanel-sury-maintenance-retention-v1',status='PASS',snapshot_name='maintenance-sury-test1234',snapshot_id=b['source_vm']+'.maintenance-sury-test1234',snapshot_info_sha256=hashlib.sha256((json.dumps(self.snapshot_record(),sort_keys=True,separators=(',',':'),ensure_ascii=True)+'\n').encode('ascii')).hexdigest(),cold_snapshot=True,running_revalidated=True,ownership_verified=True)
         handoff = dict(b,schema='nakpanel-sury-maintenance-handoff-v1',exclusive_source_handoff=True,allowed_operations=[MODE],qualification_report_sha256='9'*64,roundcube_receipt_sha256='0'*64,retention_receipt_sha256='6'*64)
         config = dict(b,operation=MODE,qualification_report_sha256='9'*64,roundcube_receipt_sha256='0'*64,retention_receipt_sha256='6'*64,retention_snapshot='maintenance-sury-test1234',qualifier_wrapper_sha256='8'*64,qualifier_helper_sha256='f'*64)
