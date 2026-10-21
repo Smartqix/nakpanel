@@ -16,9 +16,40 @@ import (
 type bootstrapMailProfile struct{ name, image, baseline, defaultPHP, versions, jsonVersions string }
 
 var bootstrapMailProfiles = []bootstrapMailProfile{
-	{"ubuntu-24.04", "24.04", "8.3", "8.4", "8.3,8.4,8.5", `["8.3","8.4","8.5"]`},
 	{"ubuntu-26.04-sury", "26.04", "8.3", "8.4", "8.3,8.4,8.5", `["8.3","8.4","8.5"]`},
 	{"ubuntu-26.04-native", "26.04", "8.5", "8.5", "8.5", `["8.5"]`},
+}
+
+// Validate profile selection without a database so ordinary local tests also
+// catch a fixture table that requests an unsupported server OS.
+func TestBootstrapMailProfileSelection(t *testing.T) {
+	data, err := os.ReadFile("current-install-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	function := shellFixtureFunction(t, string(data), "configure_bootstrap_mail_profile", true)
+	for _, profile := range bootstrapMailProfiles {
+		t.Run(profile.name, func(t *testing.T) {
+			program := "set -euo pipefail\n" + function + `configure_bootstrap_mail_profile
+printf '%s|%s|%s' "$bootstrap_default_php" "$bootstrap_php_versions" "$bootstrap_php_json"
+`
+			cmd := exec.Command("bash", "-c", program)
+			cmd.Env = append(os.Environ(), "NAKPANEL_RUN_TOKEN=fixture-mail-test", "IMAGE="+profile.image, "NAKPANEL_QUALIFICATION_PROFILE="+profile.name, "NAKPANEL_BASELINE_PHP="+profile.baseline)
+			out, err := cmd.CombinedOutput()
+			want := profile.defaultPHP + "|" + profile.versions + "|" + profile.jsonVersions
+			if err != nil || string(out) != want {
+				t.Fatalf("mail fixture profile selection: %v output=%q want=%q", err, out, want)
+			}
+		})
+	}
+	t.Run("unsupported-os-rejected-before-database", func(t *testing.T) {
+		cmd := exec.Command("bash", "-c", "set -euo pipefail\ndb(){ echo database-was-reached; return 86; }\n"+function+"configure_bootstrap_mail_profile\n")
+		cmd.Env = append(os.Environ(), "NAKPANEL_RUN_TOKEN=fixture-mail-test", "IMAGE=24.04", "NAKPANEL_QUALIFICATION_PROFILE=ubuntu-24.04", "NAKPANEL_BASELINE_PHP=8.3")
+		out, err := cmd.CombinedOutput()
+		if err == nil || !strings.Contains(string(out), "unsupported mail fixture profile") || strings.Contains(string(out), "database-was-reached") {
+			t.Fatalf("unsupported OS reached mail fixture setup: %v %s", err, out)
+		}
+	})
 }
 
 // Small API/policy-boundary model; production compatibility is independently
@@ -205,7 +236,7 @@ func TestBootstrapMailAPISyncAndPolicyFailuresStopDownstreamCreation(t *testing.
 		t.Run(mode, func(t *testing.T) {
 			db, dsn, schema := bootstrapMailSQL(t)
 			before := preservedBootstrapRows(t, db)
-			output, calls, err := runBootstrapMail(t, bootstrapMailProfiles[2], mode, db, dsn, schema)
+			output, calls, err := runBootstrapMail(t, bootstrapMailProfiles[1], mode, db, dsn, schema)
 			if err == nil {
 				t.Fatalf("failed fixture accepted: %s %s", output, calls)
 			}
@@ -288,8 +319,8 @@ func TestBootstrapMailEffectiveEligibilityWithRealPostgres(t *testing.T) {
 		{"wrong-scalar-offers", `UPDATE subscription_entitlements SET php_allowlist='8.3,8.4,8.5' WHERE subscription_id=188`},
 		{"wrong-policy-offers", `UPDATE subscription_entitlements SET hosting_policy=jsonb_set(hosting_policy,'{php,allowed_versions}','["8.3","8.4","8.5"]') WHERE subscription_id=188`},
 	}
-	// Every predicate is exercised against real PostgreSQL. The three ready
-	// profiles and disabled-webmail cases also cover the legacy source profiles.
+	// Every predicate is exercised against real PostgreSQL. Both current 26.04
+	// profiles also cover ready and disabled-webmail behavior.
 	for _, profile := range bootstrapMailProfiles {
 		for _, tc := range cases {
 			if profile.name != "ubuntu-26.04-native" && tc.name != "ready" && tc.name != "webmail-disabled" {

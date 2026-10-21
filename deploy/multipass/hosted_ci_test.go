@@ -787,6 +787,10 @@ func TestRequiredSecurityGateUsesDisposableHostedRunnerWithoutSkippingBuildFailu
 	if security["if"] != "always()" || security["needs"] != "release-build" {
 		t.Fatal("failed artifact builds must produce a failed security check, never a skipped check")
 	}
+	environment := security["env"].(map[string]any)
+	if environment["NAKPANEL_HOSTED_GUEST_FIRMWARE_POLICY"] != "1" {
+		t.Fatal("required security guests must use the explicit hosted firmware policy and retain its owned receipts")
+	}
 	steps := security["steps"].([]any)
 	guard, prep, sequence := "", false, ""
 	for _, raw := range steps {
@@ -798,7 +802,7 @@ func TestRequiredSecurityGateUsesDisposableHostedRunnerWithoutSkippingBuildFailu
 		prep = prep || strings.Contains(run, "prepare-hosted-runner.sh")
 		sequence += run + "\n"
 	}
-	if guard == "" || !prep {
+	if guard == "" || !prep || !strings.Contains(sequence, `export NAKPANEL_OWNERSHIP_DIR="${RUNNER_TEMP}/hosted-evidence/ownership"`) {
 		t.Fatal("strict build dependency or reusable hosted preparation missing")
 	}
 	last := -1
