@@ -9,6 +9,10 @@
 maintenance recovery FAIL, exact guest check unknown. Phase 3 is incomplete.
 No hosted run or observer remains active. Phase 4 has not started.
 
+The requested two-pass recheck is complete locally; see the review record below.
+It fixes failure reporting and a failed health-query guard, and does not establish
+PHP maintenance acceptance. No additional hosted test was launched for this review.
+
 **Goal:** Ship one Ubuntu 26.04 LTS (Resolute) server contract with hosting PHP
 8.3, 8.4 and 8.5 and validated internal PHP 8.5. Ubuntu 26.04 remains experimental
 until its operational qualification passes.
@@ -47,8 +51,8 @@ outside the support claim.
 The support decision is effective now. Phase 2 implementation is complete
 locally in the attached worktree identified below. The primary checkout holds
 the policy/continuation record; its runtime code has not been merged with the
-implementation branch. No commit/push, deployment or hosted qualification is
-implied. A CI host named `ubuntu-24.04` can still build artifacts or host a
+implementation branch, `ricky/ubuntu26-recovery-phase3`. Implementation commits
+are pushed there; they are unmerged. A CI host named `ubuntu-24.04` can still build artifacts or host a
 verified 26.04 guest without being a supported server OS.
 
 ## Current phases
@@ -401,3 +405,38 @@ The remaining Phase 3 work is to identify/fix the guest maintenance failure
 using the improved receipts, then obtain actual RECOVERED, two unassisted reboot
 and three fresh Roundcube-flow receipts before accepting PHP maintenance.
 Report that result before Phase 4.
+
+## Two-pass recheck — 21 October 2026
+
+**Scope:** Review and fix the Phase 3 changes twice, using focused local checks.
+Keep Ubuntu 26.04 only, hosting PHP 8.3/8.4/8.5, and the unresolved hosted PHP
+failure visible. No Phase 4 work, new hosted run, merge or deployment.
+
+1. **Maintenance failure reporting.** Reproduced missing FAIL receipts for early
+   host ownership/identity refusals and a stale STARTED receipt for a helper hash
+   refusal. Put these checks inside the existing guarded failure path, before any
+   guest write, and record explicit stages. Reboot identity, restart, cloud-init,
+   guest health and final identity checks now record their own stages before
+   execution rather than inheriting the previous Roundcube label. Regression
+   cases cover three early refusals and eight reboot failure positions; early
+   refusal performs no guest write or stop, while later failure stops only a
+   still-owned guest. The complete maintenance suite passed: **59 Python cases**.
+2. **Independent health and evidence review.** Reproduced an empty failed
+   systemd query being accepted when the helper is called from a shell
+   conditional, which disables implicit errexit within the function. Failed or
+   incomplete queries now fail explicitly before interpreting their output.
+   Regression cases cover empty and partial query errors, healthy output, real
+   failed units and unavailable journals. Rechecked the maintenance publication,
+   cancellation/ownership guards, firmware exclusion and OS/PHP contracts using
+   **8 focused Go checks**, including the full **59 + 25 Python suites**. All
+   passed. Actionlint, changed Bash syntax, gofmt and `git diff --check` passed.
+
+Both fixes had failing regression cases before implementation. Raw exception
+text and command output remain private. The firmware policy remains limited to
+owned disposable hosted KVM guests and records an exclusion; physical firmware
+is not validated. Protected local VMs, PostgreSQL and services were untouched.
+
+**Remaining blocker:** The completed hosted PHP maintenance failure has no
+recoverable detailed guest diagnostic. These local fixes do not identify its
+root cause or prove recovery. Actual RECOVERED, two unassisted reboot and three
+fresh Roundcube-flow receipts are still required. Phase 3 remains incomplete.

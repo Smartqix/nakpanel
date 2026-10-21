@@ -451,20 +451,14 @@ def check_snapshot_info(value, config, retention):
 
 
 def host_execute(config, packages, release, compressed, receipts, evidence, helper, driver, qualifier):
-    env = clean_environment(config)
-    ownership = host_record(config)
-    host_identity(config,driver,env)
-    state = {'schema':'nakpanel-sury-maintenance-result-v1','operation':MODE,'source_vm':config['source_vm'],'run_token':config['run_token'],'runtime_commit':config['runtime_commit'],'qualifier_commit':config['qualifier_commit'],'maintenance_helper_sha256':config['maintenance_helper_sha256'],'genuine_version_advance':False,'apt_version_rollback':False,'application_rollback':False,'status':'STARTED','guest_state':'identity_verified','reboots':[]}
+    state = {'schema':'nakpanel-sury-maintenance-result-v1','operation':MODE,'source_vm':config['source_vm'],'run_token':config['run_token'],'runtime_commit':config['runtime_commit'],'qualifier_commit':config['qualifier_commit'],'maintenance_helper_sha256':config['maintenance_helper_sha256'],'genuine_version_advance':False,'apt_version_rollback':False,'application_rollback':False,'status':'STARTED','guest_state':'identity_unverified','reboots':[]}
     write_private(evidence/'result.json',state)
     mutated = False
-    code = private_bytes(helper,config['maintenance_helper_sha256'],private=False).decode('utf-8')
-    remote_code = remote_program(code)
-    guest_config = guest_configuration(config)
-    message_ids = {receipts['roundcube_receipt']['raw_receipt']['message_id']}
-    message_uids = {receipts['roundcube_receipt']['raw_receipt']['uid']}
-    def remote(action, **values):
-        state['maintenance_stage']='guest-'+action
+    def stage(name):
+        state['maintenance_stage']=name
         write_private(evidence/'result.json',state)
+    def remote(action, **values):
+        stage('guest-'+action+('-'+values['phase'] if 'phase' in values else ''))
         request = dict(action=action,config=guest_config,**values)
         result = command(['multipass','exec',config['source_vm'],'--','sudo','python3','-c',remote_code],env=env,data=json.dumps(request),timeout=1800,check=False)
         write_private(evidence/(action+'-'+str(values.get('phase','stage'))+'.stdout'),result.stdout.encode())
@@ -479,8 +473,7 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
         require(result.returncode == 0, 'guest '+action+' failed; inspect retained stdout/stderr and cold snapshot')
         return json.loads(result.stdout)
     def product_check(phase):
-        state['maintenance_stage']='roundcube-'+phase
-        write_private(evidence/'result.json',state)
+        stage('roundcube-'+phase)
         for relative,expected in config['qualifier_source_sha256'].items():
             private_bytes(qualifier/relative,expected,private=False)
         output = evidence/('roundcube-'+phase+'.json')
@@ -503,7 +496,20 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
     original_sigterm=signal.signal(signal.SIGTERM,controlled_termination)
     original_sigint=signal.getsignal(signal.SIGINT)
     try:
-        state['maintenance_stage']='snapshot-retention-check'
+        stage('host-environment-check')
+        env = clean_environment(config)
+        stage('host-ownership-check')
+        ownership = host_record(config)
+        stage('host-identity-check')
+        host_identity(config,driver,env)
+        state['guest_state']='identity_verified'
+        stage('host-helper-check')
+        code = private_bytes(helper,config['maintenance_helper_sha256'],private=False).decode('utf-8')
+        remote_code = remote_program(code)
+        guest_config = guest_configuration(config)
+        message_ids = {receipts['roundcube_receipt']['raw_receipt']['message_id']}
+        message_uids = {receipts['roundcube_receipt']['raw_receipt']['uid']}
+        stage('snapshot-retention-check')
         # Receipt booleans alone are not a backup: freshly inspect the exact
         # qualified source snapshot before the first guest write. Multipass
         # exposes VM.SNAPSHOT plus metadata, rather than an opaque snapshot ID.
@@ -516,6 +522,7 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
         # Archive transfer and private staging are the first guest writes. All
         # qualification, real-flow, native signature and cold-retention inputs
         # have already passed host validation before this function is entered.
+        stage('archive-build')
         archive = evidence/'retained-baseline.tar'
         archive_items = {'config.json':canonical(guest_config),'InRelease':release,'Packages.xz':compressed}
         for entry in packages:
@@ -526,7 +533,7 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
                 stream.addfile(entry,io.BytesIO(data))
         archive.chmod(0o600)
         remote_archive = '/tmp/nakpanel-sury-maintenance-'+config['maintenance_id']+'.tar'
-        state['maintenance_stage']='archive-transfer'
+        stage('archive-transfer')
         mutated = True
         command(['multipass','transfer',str(archive),config['source_vm']+':'+remote_archive],env=env,timeout=300)
         guest_packages = [{k:entry[k] for k in ('Package','Version','Architecture','Filename','SHA256','Size')} for entry in packages]
@@ -539,9 +546,13 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
         product_check('recovered')
         previous_boot = original['boot_id']
         for number in (1,2):
+            stage('reboot-'+str(number)+'-identity-before')
             host_identity(config,driver,env)
+            stage('reboot-'+str(number)+'-restart')
             command(['multipass','restart',config['source_vm']],env=env,timeout=300)
+            stage('reboot-'+str(number)+'-cloud-init')
             command(['bash','-c','set -euo pipefail; source "$1"; wait_for_cloud_init "$2"','_',str(driver/'deploy/multipass/common.sh'),config['source_vm']],env=env,timeout=300)
+            stage('reboot-'+str(number)+'-identity-after')
             host_identity(config,driver,env)
             proof = remote('health',phase='reboot-'+str(number))
             require(proof.get('service_repair_performed') is False and sha_value(proof.get('observation_sha256')), 'unassisted postboot service observation is required')
@@ -549,6 +560,7 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
             previous_boot = proof['boot_id'];state['reboots'].append(previous_boot)
             write_private(evidence/('reboot-'+str(number)+'.json'),proof)
             product_check('reboot-'+str(number))
+        stage('host-final-identity-check')
         host_identity(config,driver,env)
         state.update(status='PASS',maintenance_stage='complete',guest_state='running_revalidated',same_version_delivery=True,failed_configuration_recovery=True,two_reboots_verified=True,roundcube_send_read_steps=3)
         write_private(evidence/'result.json',state)

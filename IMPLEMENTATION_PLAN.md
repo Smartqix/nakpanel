@@ -30,7 +30,11 @@ including populated recovery. The measured LVFS HTTP 503 is explicitly excluded
 only for owned disposable KVM test guests; production firmware is unchanged.
 Actual PHP maintenance recovery failed with a ValueError before confirmed
 recovery/reboots; its underlying guest check was not retained. Safe failure
-location reporting is now locally tested. Phase 3 remains incomplete, all
+location reporting is now locally tested. The subsequent two-pass local review
+also fixed early missing failure receipts, incorrect reboot stage labels and a
+failed systemd-query path that could appear healthy in shell conditionals.
+All focused checks passed (59 maintenance + 25 preparation Python cases and
+8 Go checks); these fixes have not been hosted-validated. Phase 3 remains incomplete, all
 hosted runs have ended, and Phase 4 is unstarted. Ubuntu 26.04 is experimental
 until its required evidence passes. Historical Ubuntu 24.04 results below describe past tests and do not
 create an ongoing support obligation.

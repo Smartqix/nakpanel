@@ -504,6 +504,45 @@ class MaintenanceTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()),patch.object(m,'command',side_effect=run):m.host_execute(c,packages,b'release',b'index',receipts,evidence,HELPER,qualifier,qualifier)
         result=json.loads((evidence/'result.json').read_text());self.assertEqual(result['status'],'PASS');self.assertEqual(state['boots'],2);self.assertEqual(state['flows'],3);self.assertFalse(state['stopped']);self.assertIs(result['genuine_version_advance'],False);self.assertIs(result['apt_version_rollback'],False);self.assertEqual(result.get('qualifier_commit'),c['qualifier_commit'])
 
+    def test_early_host_refusals_retain_failure_without_any_guest_write_or_stop(self):
+        for failure,stage in (('ownership','host-ownership-check'),('identity','host-identity-check'),('helper','host-helper-check')):
+            with self.subTest(failure=failure):
+                m,c,packages,receipts,evidence,qualifier,state,run=self.host_case()
+                if failure=='ownership':
+                    (Path(c['ownership_directory'])/c['run_token']/c['source_vm']).write_text('foreign owner')
+                if failure=='helper':c['maintenance_helper_sha256']='0'*64
+                def refused(args,**kwargs):
+                    if failure=='identity':raise ValueError('private identity failure')
+                    return run(args,**kwargs)
+                with patch.object(m,'command',side_effect=refused),self.assertRaises(ValueError):
+                    m.host_execute(c,packages,b'release',b'index',receipts,evidence,HELPER,qualifier,qualifier)
+                self.assertTrue((evidence/'result.json').exists(),'early refusal lost its result receipt')
+                result=json.loads((evidence/'result.json').read_text())
+                self.assertEqual(result['status'],'FAIL')
+                self.assertEqual(result['maintenance_stage'],stage)
+                self.assertEqual(result['guest_state'],'unchanged_before_guest_write')
+                self.assertTrue(result['failure_frames'])
+                self.assertFalse(state['mutated']);self.assertFalse(state['stopped'])
+
+    def test_reboot_failures_keep_exact_stage_and_stop_only_owned_guest(self):
+        for number in (1,2):
+            for step in ('identity-before','restart','cloud-init','identity-after'):
+                with self.subTest(reboot=number,step=step):
+                    m,c,packages,receipts,evidence,qualifier,state,run=self.host_case()
+                    expected='reboot-'+str(number)+'-'+step
+                    def interrupted(args,**kwargs):
+                        receipt=evidence/'result.json'
+                        current=json.loads(receipt.read_text()).get('maintenance_stage') if receipt.exists() else None
+                        if current==expected and args[:2]!=['multipass','stop']:raise RuntimeError('private reboot failure')
+                        return run(args,**kwargs)
+                    with patch.object(m,'command',side_effect=interrupted),self.assertRaisesRegex(RuntimeError,'private reboot failure'):
+                        m.host_execute(c,packages,b'release',b'index',receipts,evidence,HELPER,qualifier,qualifier)
+                    result=json.loads((evidence/'result.json').read_text())
+                    self.assertEqual(result['status'],'FAIL')
+                    self.assertEqual(result['maintenance_stage'],expected)
+                    self.assertEqual(result['guest_state'],'stopped_after_failure')
+                    self.assertTrue(state['stopped'])
+
     def test_missing_or_recreated_retention_snapshot_refuses_before_first_guest_write(self):
         for failure in ('snapshot-missing','snapshot-recreated','snapshot-extra','snapshot-errors','snapshot-wrong-vm','snapshot-command-failed'):
             with self.subTest(failure=failure):

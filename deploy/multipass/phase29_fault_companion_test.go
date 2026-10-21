@@ -14,7 +14,7 @@ func TestPhase29FailedUnitsRetainActualDRDiagnosticsAndStillFail(t *testing.T) {
 		t.Fatal(err)
 	}
 	function := shellFixtureFunction(t, string(data), "assert_no_failed_units", true)
-	for _, state := range []string{"healthy", "failed", "journal-unavailable"} {
+	for _, state := range []string{"healthy", "failed", "journal-unavailable", "query-unavailable", "query-partial"} {
 		t.Run(state, func(t *testing.T) {
 			log := filepath.Join(t.TempDir(), "calls")
 			cmd := exec.Command("bash", "-c", `set -euo pipefail
@@ -24,19 +24,28 @@ multipass_exec_short(){
  [[ "$1" == nakpanel-target-dr ]] || return 97
  echo "$*" >>"$CALLS"
  case "$*" in
-  *'systemctl --failed'*) [[ "$STATE" == healthy ]] || echo 'fwupd-refresh.service loaded failed failed Refresh fwupd metadata';;
+  *'systemctl --failed'*)
+    [[ "$STATE" != query-unavailable ]] || return 97
+    [[ "$STATE" == healthy ]] || echo 'fwupd-refresh.service loaded failed failed Refresh fwupd metadata'
+    [[ "$STATE" != query-partial ]] || return 97;;
   *'systemctl show'*) echo 'Result=exit-code'; echo 'ExecMainStatus=1';;
   *'journalctl'*) [[ "$STATE" != journal-unavailable ]] || return 98; echo 'Failed to obtain auth';;
  esac
 }
 fail(){ echo "$*" >&2; exit 90; }
-`+function+`assert_no_failed_units nakpanel-target-dr 'disaster-recovery deployment'`)
+`+function+`if assert_no_failed_units nakpanel-target-dr 'disaster-recovery deployment'; then exit 0; else exit "$?"; fi`)
 			cmd.Env = append(os.Environ(), "STATE="+state, "CALLS="+log)
 			out, err := cmd.CombinedOutput()
 			if (err == nil) != (state == "healthy") {
 				t.Fatalf("%s health result: %s %v", state, out, err)
 			}
 			calls, _ := os.ReadFile(log)
+			if strings.HasPrefix(state, "query-") {
+				if !strings.Contains(string(out), "unable to query failed systemd units") || strings.Contains(string(calls), "journalctl") {
+					t.Fatalf("%s did not reject incomplete health query: %s %s", state, calls, out)
+				}
+				return
+			}
 			if state != "healthy" && (!strings.Contains(string(calls), "systemctl show") || !strings.Contains(string(calls), "journalctl") || !strings.Contains(string(out), "disaster-recovery deployment has failed")) {
 				t.Fatalf("%s did not retain DR details and fail: %s %s", state, calls, out)
 			}

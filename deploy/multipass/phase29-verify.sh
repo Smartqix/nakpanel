@@ -26,7 +26,9 @@ cli(){ multipass_exec_short "${VM_NAME}" -- sudo -u nakpanel env NAKPANEL_DATABA
 assert_no_failed_units() {
   local vm="$1" label="$2" failed unit ignored
   assert_vm_identity "${vm}" "${IMAGE}" "${NAKPANEL_MULTIPASS_ARCH}" "${NAKPANEL_RUN_TOKEN}" || return "$?"
-  failed="$(multipass_exec_short "${vm}" -- sudo systemctl --failed --no-legend --plain --no-pager | tr -d '\r')"
+  failed="$(multipass_exec_short "${vm}" -- sudo systemctl --failed --no-legend --plain --no-pager | tr -d '\r')" || {
+    fail "unable to query failed systemd units for ${label}: ${vm}"; return 1;
+  }
   if [[ -n "${failed//[[:space:]]/}" ]]; then
     while read -r unit ignored; do
       [[ -n "${unit}" ]] || continue
