@@ -5,6 +5,10 @@ on:
     branches: [codex/ubuntu-26-support]
   workflow_dispatch:
     inputs:
+      scheduled_backups_only:
+        description: Only verify scheduled backups and fresh-host restore using the accepted Phase 3 application
+        type: boolean
+        default: false
       diagnose_php_maintenance:
         description: Only reproduce PHP package recovery on a disposable 26.04 guest (not product qualification)
         type: boolean
@@ -39,7 +43,7 @@ concurrency:
 
 jobs:
   diagnose-fwupd:
-    if: github.event.repository.private == false && inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance
+    if: github.event.repository.private == false && inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -60,7 +64,7 @@ jobs:
           if-no-files-found: error
 
   diagnose-php-maintenance:
-    if: github.event.repository.private == false && inputs.diagnose_php_maintenance
+    if: github.event.repository.private == false && inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -81,8 +85,75 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  scheduled-backups:
+    if: github.event.repository.private == false && inputs.scheduled_backups_only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NAKPANEL_MULTIPASS_IMAGE: '26.04'
+      NAKPANEL_MULTIPASS_ARCH: amd64
+      NAKPANEL_QUALIFICATION_PHP_PROVIDER: sury
+      NAKPANEL_HOSTED_GUEST_FIRMWARE_POLICY: '1'
+      NAKPANEL_QUALIFICATION_VM_CPUS: '2'
+      NAKPANEL_QUALIFICATION_VM_MEMORY: 5G
+      NAKPANEL_QUALIFICATION_VM_DISK: 32G
+      NAKPANEL_QUALIFICATION_DR_CPUS: '2'
+      NAKPANEL_QUALIFICATION_DR_MEMORY: 3G
+      NAKPANEL_QUALIFICATION_DR_DISK: 16G
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require the isolated scheduled-backup selection
+        env:
+          FWUPD_REQUESTED: ${{ inputs.diagnose_fwupd }}
+          PHP_DIAGNOSTIC_REQUESTED: ${{ inputs.diagnose_php_maintenance }}
+        run: test "${FWUPD_REQUESTED}" != true && test "${PHP_DIAGNOSTIC_REQUESTED}" != true
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: '12370348308'
+          run-id: '39652821843'
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/phase3-backup-baseline
+      - name: Prepare only this disposable hosted runner
+        run: bash deploy/multipass/prepare-hosted-runner.sh
+      - name: Authenticate the accepted application and signed pinned Ubuntu image
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash deploy/multipass/scheduled-backup-verify.sh prepare "${RUNNER_TEMP}/phase3-backup-baseline"
+      - name: Prove KVM and measured capacity before backup guests
+        run: python3 deploy/multipass/hosted-runner-preflight.py --output "${RUNNER_TEMP}/scheduled-backup-evidence/host-preflight.json"
+      - name: Prove real scheduling and restore the exact scheduled archive
+        run: bash deploy/multipass/scheduled-backup-verify.sh run
+      - name: Always clean up only the scheduled-backup run's owned guests
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          source deploy/multipass/common.sh
+          expected="scheduled-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          status=0
+          records=0
+          if [[ "${NAKPANEL_CI_OWNERSHIP_READY:-}" == 1 && "${NAKPANEL_RUN_TOKEN:-}" == "${expected}" ]]; then
+            for record in "${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}"/nakpanel-*; do
+              [[ -f "${record}" && "${record}" != *.image.json ]] || continue
+              records=$((records+1))
+              destroy_owned_vm "$(basename "${record}")" "${expected}" || status=1
+            done
+          fi
+          mkdir -p "${RUNNER_TEMP}/scheduled-backup-evidence"
+          printf '{"owned_records":%d,"exit_code":%d}\n' "${records}" "${status}" >"${RUNNER_TEMP}/scheduled-backup-evidence/cleanup.json"
+          exit "${status}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scheduled-backup-26.04-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/scheduled-backup-evidence/
+          retention-days: 7
+          if-no-files-found: error
+
   signed-bundles:
-    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance
+    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -160,7 +231,7 @@ jobs:
         run: rm -f "${RUNNER_TEMP}/hosted-test-private.pem"
 
   qualify-amd64:
-    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance
+    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
     needs: signed-bundles
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -316,7 +387,7 @@ jobs:
           if-no-files-found: error
 
   hosted-evidence-summary:
-    if: always() && github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance
+    if: always() && github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
     needs: [signed-bundles, qualify-amd64]
     runs-on: ubuntu-24.04
     steps:

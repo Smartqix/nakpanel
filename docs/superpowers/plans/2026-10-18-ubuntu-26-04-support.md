@@ -1,9 +1,14 @@
 # Ubuntu 26.04-Only Support Transition Plan
 
-> **Current authorization, 21 October 2026:** Continue Phase 3 only: run hosted
-> Ubuntu 26.04 PHP maintenance with the new diagnostics, fix the observed failure
-> and verify recovery through both reboots. Keep hosting PHP 8.3/8.4/8.5; skip
-> legacy tests. Report before Phase 4; no production deployment.
+> **Current authorization, 21 October 2026:** Phase 4 scheduled backups and
+> restores only on hosted Ubuntu 26.04; keep PHP 8.3/8.4/8.5, skip legacy tests
+> and avoid repeating unchanged checks. Report before merging or deploying.
+
+**Phase 4 status:** Focused verification is in progress under
+[the scheduled-backup checklist](2026-10-21-phase4-scheduled-backups.md).
+The accepted Phase 3 application will be reused with pinned artifacts and a
+runtime-source equality guard. No new full 16-gate qualification is requested.
+No merge or deployment is authorized.
 
 **Current status: Phase 3 PASS on hosted Ubuntu 26.04 AMD64.** Full run
 [39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
@@ -12,7 +17,7 @@ passed on runtime/qualifier commit
 actual PHP maintenance recovery, both unassisted reboots, three fresh Roundcube
 send/read flows and owned cleanup passed. The workflow summary and independently
 checked downloaded receipts agree. The run and its observer have ended.
-**Phase 4 is unstarted.** Runtime changes are pushed on
+**Phase 4 backup/restore verification is now authorized.** Runtime changes are pushed on
 `ricky/ubuntu26-recovery-phase3` and remain unmerged.
 
 The two measured recovery errors are fixed. APT rejected `--reinstall` of the
