@@ -89,6 +89,9 @@ jobs:
     if: github.event.repository.private == false && inputs.scheduled_backups_only
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
     env:
       NAKPANEL_MULTIPASS_IMAGE: '26.04'
       NAKPANEL_MULTIPASS_ARCH: amd64
@@ -113,6 +116,7 @@ jobs:
         with:
           artifact-ids: '12370348308'
           run-id: '39652821843'
+          merge-multiple: true
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/phase3-backup-baseline
       - name: Prepare only this disposable hosted runner
