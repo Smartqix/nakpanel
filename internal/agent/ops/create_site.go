@@ -621,7 +621,7 @@ func (p *SiteProvisioner) ApplySiteRuntime(ctx context.Context, req types.ApplyS
 	return p.reloader.ReloadService(ctx, "nginx")
 }
 
-func (p *SiteProvisioner) SiteRuntimeDrift(_ context.Context, req types.ApplySiteRuntimeReq) (bool, error) {
+func (p *SiteProvisioner) SiteRuntimeDrift(ctx context.Context, req types.ApplySiteRuntimeReq) (bool, error) {
 	state := strings.ToLower(strings.TrimSpace(req.State))
 	if state != "active" && state != "suspended" {
 		return false, errors.New("site runtime state must be active or suspended")
@@ -676,6 +676,19 @@ func (p *SiteProvisioner) SiteRuntimeDrift(_ context.Context, req types.ApplySit
 		if err != nil || target != desired.NginxConfig {
 			return true, nil
 		}
+	}
+	if desired.SiteID > 0 {
+		// Restore retains matching configuration but leaves dedicated PHP units
+		// stopped until reconciliation applies the restored active/suspended intent.
+		output, inspectErr := p.runner.Run(ctx, "systemctl", "show", "--property=ActiveState", "--value", desired.PHPServiceName)
+		if inspectErr != nil {
+			return false, fmt.Errorf("inspect dedicated PHP service: %w", inspectErr)
+		}
+		activeState := strings.TrimSpace(string(output))
+		if state == "active" {
+			return activeState != "active" && activeState != "reloading", nil
+		}
+		return activeState != "inactive" && activeState != "failed", nil
 	}
 	return false, nil
 }

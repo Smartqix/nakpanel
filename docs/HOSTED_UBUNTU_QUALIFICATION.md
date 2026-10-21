@@ -160,3 +160,14 @@ owned guests were cleaned up. Acceptance remains incomplete. The focused
 iteration records HTTP status, selected FPM unit/socket state, nginx error
 categories and reconciliation state without publishing HTTP bodies or raw logs.
 The diagnostics neither repair services nor convert a failed check to success.
+
+
+When a scoped runtime defect requires repair, select
+`scheduled_backups_build_current=true` together with `scheduled_backups_only`.
+The existing signed-bundles job builds the current development candidate;
+unrelated qualification jobs remain skipped. The focused job authenticates that
+same run's candidate, binds its signed manifest to the exact checkout and records
+new archive/manifest/public-key hashes. Only the explicitly scoped classic-site
+runtime repair and regression test are allowed beyond harness/docs changes.
+Old Phase 3 evidence remains attributed to runtime `63c00f6`, rather than being
+relabeled as full qualification of the repaired candidate.

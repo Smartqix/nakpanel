@@ -26,6 +26,7 @@ MINORS=('8.3','8.4','8.5')
 ALLOWED={'.github/workflows/ubuntu-hosted-qualification.yml',
     'deploy/multipass/scheduled-backup-verify.py','deploy/multipass/scheduled-backup-verify.sh',
     'deploy/multipass/scheduled_backup_test.py','deploy/multipass/scheduled_backup_test.go'}
+RUNTIME_REPAIR={'internal/agent/ops/create_site.go','internal/agent/ops/restore_runtime_reconcile_test.go'}
 
 
 def require(value,message):
@@ -49,13 +50,20 @@ def write_failure(path,state,error):
     write_json(path,dict(state,status='FAIL',error_type=type(error).__name__,failure_frames=frames))
 
 
-def check_changed_paths(paths):
-    require(all(p in ALLOWED or (p.endswith('.md') and '..' not in Path(p).parts) for p in paths),
+def check_changed_paths(paths,current_candidate=False):
+    allowed=ALLOWED | (RUNTIME_REPAIR if current_candidate else set())
+    require(all(p in allowed or (p.endswith('.md') and '..' not in Path(p).parts) for p in paths),
         'runtime sources changed; Phase 3 evidence cannot be reused')
 
 
 def check_baseline(identity):
     require(identity==BASELINE,'accepted Phase 3 artifact identity differs')
+
+
+def check_current_candidate(identity,commit):
+    require(set(identity)==set(BASELINE) and re.fullmatch(r'[a-f0-9]{40}',commit) and identity['commit']==commit,
+        'new signed candidate must match the actual qualification checkout')
+    require(all(re.fullmatch(r'[a-f0-9]{64}',identity[k]) for k in BASELINE if k!='commit'),'candidate artifact identity missing')
 
 
 def timestamp(value):
@@ -97,11 +105,19 @@ def export(values):
             stream.write(key+'='+str(value)+'\n')
 
 
-def prepare(directory):
-    """Reuse authenticated bytes already accepted by Phase 3, with no rebuild."""
+def extract_release(archive,directory):
+    with tarfile.open(archive) as source:
+        for member in source.getmembers():
+            path=Path(member.name)
+            require(not path.is_absolute() and '..' not in path.parts and not member.issym() and not member.islnk() and (member.isfile() or member.isdir()),'unsafe release archive member')
+        source.extractall(directory,filter='data')
+
+
+def prepare(directory,candidate_directory=None):
+    """Authenticate the accepted baseline, or explicitly selected repaired bytes."""
     def command(args):return subprocess.run(args,check=True,capture_output=True,text=True).stdout
     require(not command(['git','status','--porcelain','--untracked-files=no']).strip(),'qualification needs committed sources')
-    check_changed_paths(command(['git','diff','--name-only',BASELINE['commit'],'HEAD']).splitlines())
+    check_changed_paths(command(['git','diff','--name-only',BASELINE['commit'],'HEAD']).splitlines(),current_candidate=candidate_directory is not None)
     accepted=json.loads(command(['gh','run','view',str(BASELINE_RUN),'--repo','Smartqix/nakpanel','--json','headSha,status,conclusion']))
     require(accepted==dict(headSha=BASELINE['commit'],status='completed',conclusion='success'),'accepted baseline run differs')
     directory=Path(directory).resolve();meta=json.loads((directory/'bundles.json').read_text())
@@ -110,14 +126,25 @@ def prepare(directory):
     require(entry['archive']=='candidate/nakpanel-29.0.0-linux-amd64.tar.gz' and entry['directory']=='candidate/nakpanel-29.0.0-linux-amd64','unexpected baseline paths')
     archive=directory/entry['archive'];key=directory/'test-public.pem'
     require(sha(archive)==BASELINE['archive_sha256'] and sha(key)==BASELINE['public_key_sha256'],'baseline archive/key bytes differ')
-    with tarfile.open(archive) as source:
-        for member in source.getmembers():
-            path=Path(member.name)
-            require(not path.is_absolute() and '..' not in path.parts and not member.issym() and not member.islnk() and (member.isfile() or member.isdir()),'unsafe release archive member')
-        source.extractall(directory/'candidate',filter='data')
+    extract_release(archive,directory/'candidate')
     bundle=directory/entry['directory'];manifest=bundle/'manifest.json'
     check_baseline(dict(commit=entry['commit'],archive_sha256=sha(archive),manifest_sha256=sha(manifest),public_key_sha256=sha(key)))
     command([sys.executable,str(SOURCE/'deploy/release/verify.py'),'--bundle',str(bundle),'--public-key',str(key),'--version','29.0.0','--architecture','amd64','--allow-development'])
+    runtime_identity=BASELINE
+    if candidate_directory is not None:
+        candidate_directory=Path(candidate_directory).resolve()
+        current=json.loads((candidate_directory/'bundles.json').read_text())
+        commit=command(['git','rev-parse','HEAD']).strip()
+        require(commit==os.environ['GITHUB_SHA'],'hosted qualification checkout differs')
+        require(current.get('architecture')=='amd64' and current.get('development') is True,'AMD64 development candidate required')
+        require(current['candidate']==dict(version='29.0.0',commit=commit,archive='candidate/nakpanel-29.0.0-linux-amd64.tar.gz',directory='candidate/nakpanel-29.0.0-linux-amd64'),'current signed artifact paths/source differ')
+        archive=candidate_directory/current['candidate']['archive'];key=candidate_directory/'test-public.pem'
+        extract_release(archive,candidate_directory/'candidate')
+        bundle=candidate_directory/current['candidate']['directory'];manifest=bundle/'manifest.json'
+        require(json.loads(manifest.read_text()).get('commit')==commit,'signed manifest source differs')
+        command([sys.executable,str(SOURCE/'deploy/release/verify.py'),'--bundle',str(bundle),'--public-key',str(key),'--version','29.0.0','--architecture','amd64','--allow-development'])
+        runtime_identity=dict(commit=commit,archive_sha256=sha(archive),manifest_sha256=sha(manifest),public_key_sha256=sha(key))
+        check_current_candidate(runtime_identity,commit)
     images=json.loads((directory/'images.json').read_text());image=images['26.04']
     require(image==dict(url='https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img',sha256=IMAGE_SHA,serial='20260927',suite='resolute'),'pinned Ubuntu image differs')
     sums=directory/'images/resolute'
@@ -128,7 +155,9 @@ def prepare(directory):
     command(['curl','--fail','--location','--retry','3','--proto','=https','--proto-redir','=https',image['url'],'--output',str(target)])
     require(sha(target)==IMAGE_SHA,'downloaded Ubuntu image bytes differ')
     export(dict(NAKPANEL_RELEASE_BUNDLE=bundle,NAKPANEL_RELEASE_PUBLIC_KEY=key,NAKPANEL_RELEASE_VERSION='29.0.0',
-        NAKPANEL_RELEASE_ALLOW_DEVELOPMENT='1',NAKPANEL_MULTIPASS_IMAGE_SOURCE=target,NAKPANEL_MULTIPASS_IMAGE_SHA256=IMAGE_SHA))
+        NAKPANEL_RELEASE_ALLOW_DEVELOPMENT='1',NAKPANEL_MULTIPASS_IMAGE_SOURCE=target,NAKPANEL_MULTIPASS_IMAGE_SHA256=IMAGE_SHA,
+        NAKPANEL_SCHEDULED_RUNTIME_IDENTITY=json.dumps(runtime_identity)))
+    return runtime_identity
 
 
 class Drill:
@@ -144,10 +173,14 @@ class Drill:
             NAKPANEL_MULTIPASS_IMAGE='26.04',NAKPANEL_MULTIPASS_ARCH='amd64',NAKPANEL_QUALIFICATION_PHP_PROVIDER='sury',
             NAKPANEL_REMOTE_SRC='/var/lib/nakpanel-qualification/'+self.token+'/source',NAKPANEL_OWNERSHIP_DIR=str(self.private/'owners'))
         self.sequence=0
+        qualifier=self.cmd(['git','rev-parse','HEAD']).strip()
+        runtime_identity=json.loads(os.environ['NAKPANEL_SCHEDULED_RUNTIME_IDENTITY'])
+        if runtime_identity==BASELINE:check_baseline(runtime_identity)
+        else:check_current_candidate(runtime_identity,qualifier)
         self.state=dict(schema='nakpanel-scheduled-backup-result-v1',scope='SCHEDULED_BACKUP_RESTORE_ONLY',status='STARTED',
             source_vm=self.source,dr_vm=self.dr,run_token=self.token,release='26.04',architecture='amd64',php=list(MINORS),
-            baseline_run=BASELINE_RUN,runtime_commit=BASELINE['commit'],baseline_identity=BASELINE,
-            qualifier_commit=self.cmd(['git','rev-parse','HEAD']).strip(),promotion_eligible=False,merged=False,deployed=False)
+            baseline_run=BASELINE_RUN,runtime_commit=runtime_identity['commit'],runtime_identity=runtime_identity,baseline_identity=BASELINE,
+            qualifier_commit=qualifier,promotion_eligible=False,merged=False,deployed=False)
 
     def cmd(self,args,*,data=None,env=None,timeout=180,check=True):
         self.sequence+=1
@@ -378,14 +411,14 @@ WHERE b.destination_id="""+str(destination)+" AND b.created_at>='"+since.isoform
 
 def main():
     hosted_guard();os.umask(0o077)
-    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('operation',choices=('prepare','run'));parser.add_argument('baseline_directory',nargs='?')
+    parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('operation',choices=('prepare','run'));parser.add_argument('baseline_directory',nargs='?');parser.add_argument('candidate_directory',nargs='?')
     args=parser.parse_args()
     evidence=Path(os.environ['RUNNER_TEMP'])/'scheduled-backup-evidence';evidence.mkdir(mode=0o700,exist_ok=True)
     if args.operation=='prepare':
         state=dict(schema='nakpanel-scheduled-backup-preparation-v1',stage='baseline-authentication')
-        try:prepare(args.baseline_directory)
+        try:runtime_identity=prepare(args.baseline_directory,args.candidate_directory)
         except BaseException as error:write_failure(evidence/'preparation.json',state,error);raise
-        write_json(evidence/'preparation.json',dict(state,status='PASS',baseline_run=BASELINE_RUN,**BASELINE))
+        write_json(evidence/'preparation.json',dict(state,status='PASS',baseline_run=BASELINE_RUN,runtime_identity=runtime_identity,**BASELINE))
     else:
         drill=Drill()
         try:drill.execute()

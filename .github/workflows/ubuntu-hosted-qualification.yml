@@ -9,6 +9,10 @@ on:
         description: Only verify scheduled backups and fresh-host restore using the accepted Phase 3 application
         type: boolean
         default: false
+      scheduled_backups_build_current:
+        description: Build a fresh signed current candidate for the focused backup/restore runtime repair
+        type: boolean
+        default: false
       diagnose_php_maintenance:
         description: Only reproduce PHP package recovery on a disposable 26.04 guest (not product qualification)
         type: boolean
@@ -86,7 +90,8 @@ jobs:
           if-no-files-found: error
 
   scheduled-backups:
-    if: github.event.repository.private == false && inputs.scheduled_backups_only
+    needs: signed-bundles
+    if: always() && !cancelled() && github.event.repository.private == false && inputs.scheduled_backups_only && ((!inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'skipped') || (inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'success'))
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -119,12 +124,23 @@ jobs:
           merge-multiple: true
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/phase3-backup-baseline
+      - uses: actions/download-artifact@v4
+        if: inputs.scheduled_backups_build_current
+        with:
+          name: hosted-development-bundles-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/current-backup-candidate
       - name: Prepare only this disposable hosted runner
         run: bash deploy/multipass/prepare-hosted-runner.sh
       - name: Authenticate the accepted application and signed pinned Ubuntu image
+        if: '!inputs.scheduled_backups_build_current'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash deploy/multipass/scheduled-backup-verify.sh prepare "${RUNNER_TEMP}/phase3-backup-baseline"
+      - name: Authenticate the repaired current application and signed pinned Ubuntu image
+        if: inputs.scheduled_backups_build_current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash deploy/multipass/scheduled-backup-verify.sh prepare "${RUNNER_TEMP}/phase3-backup-baseline" "${RUNNER_TEMP}/current-backup-candidate"
       - name: Prove KVM and measured capacity before backup guests
         run: python3 deploy/multipass/hosted-runner-preflight.py --output "${RUNNER_TEMP}/scheduled-backup-evidence/host-preflight.json"
       - name: Prove real scheduling and restore the exact scheduled archive
@@ -157,7 +173,7 @@ jobs:
           if-no-files-found: error
 
   signed-bundles:
-    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
+    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && (!inputs.scheduled_backups_only || inputs.scheduled_backups_build_current)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:

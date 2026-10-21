@@ -58,6 +58,17 @@ class ScheduledBackupTests(unittest.TestCase):
         for key in identity:
             with self.subTest(field=key),self.assertRaises(ValueError):m.check_baseline(dict(identity,**{key:'0'*len(identity[key])}))
 
+    def test_runtime_repair_requires_a_new_signed_candidate_at_the_actual_checkout(self):
+        m=self.module();commit='b'*40
+        identity=dict(commit=commit,archive_sha256='a'*64,manifest_sha256='c'*64,public_key_sha256='d'*64)
+        m.check_current_candidate(identity,commit)
+        for key,value in [('commit',m.BASELINE['commit']),('archive_sha256','bad'),('manifest_sha256',''),('public_key_sha256','bad')]:
+            with self.subTest(field=key),self.assertRaises(ValueError):m.check_current_candidate(dict(identity,**{key:value}),commit)
+        for path in ('internal/agent/ops/create_site.go','internal/agent/ops/restore_runtime_reconcile_test.go'):
+            with self.assertRaises(ValueError):m.check_changed_paths([path])
+            m.check_changed_paths([path],current_candidate=True)
+        with self.assertRaises(ValueError):m.check_changed_paths(['internal/backup/restore.go'],current_candidate=True)
+
     def test_restore_proof_requires_all_three_php_intents_bytes_and_nonroot_execution(self):
         m=self.module();expected={minor:{'sha256':'a'*64} for minor in ('8.3','8.4','8.5')}
         observed={minor:dict(sha256='a'*64,cli_version=minor+'.1',http_version=minor+'.1',

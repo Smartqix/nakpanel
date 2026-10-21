@@ -84,7 +84,7 @@ func TestScheduledBackupCanReadPinnedPriorRunArtifactAtExpectedPath(t *testing.T
 	}
 	found := false
 	for _, step := range job.Steps {
-		if strings.HasPrefix(step.Uses, "actions/download-artifact@") {
+		if strings.HasPrefix(step.Uses, "actions/download-artifact@") && step.With["path"] == "${{ runner.temp }}/phase3-backup-baseline" {
 			found = true
 			if step.With["artifact-ids"] != "12370348308" || step.With["run-id"] != "39652821843" || step.With["merge-multiple"] != true {
 				t.Error("pinned ID download must unpack at the verifier's expected root")
@@ -93,5 +93,46 @@ func TestScheduledBackupCanReadPinnedPriorRunArtifactAtExpectedPath(t *testing.T
 	}
 	if !found {
 		t.Fatal("accepted artifact download missing")
+	}
+}
+
+func TestScheduledBackupRepairBuildIsExplicitAndUsesTheCanonicalSignedBuilder(t *testing.T) {
+	data, err := os.ReadFile("../../.github/workflows/ubuntu-hosted-qualification.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workflow struct {
+		Jobs map[string]struct {
+			If    string
+			Needs any
+			Steps []struct {
+				If   string
+				Uses string
+				Run  string
+				With map[string]any
+			}
+		}
+	}
+	if err := yaml.Unmarshal(data, &workflow); err != nil {
+		t.Fatal(err)
+	}
+	job := workflow.Jobs["scheduled-backups"]
+	if job.Needs != "signed-bundles" || !strings.Contains(job.If, "needs.signed-bundles.result") || !strings.Contains(job.If, "always()") {
+		t.Fatal("focused job must wait for exactly the requested builder result, including skipped baseline reuse")
+	}
+	if !strings.Contains(workflow.Jobs["signed-bundles"].If, "inputs.scheduled_backups_build_current") {
+		t.Fatal("runtime repair must explicitly select the existing signed builder")
+	}
+	downloaded, authenticated := false, false
+	for _, step := range job.Steps {
+		if strings.HasPrefix(step.Uses, "actions/download-artifact@") && step.With["path"] == "${{ runner.temp }}/current-backup-candidate" {
+			downloaded = step.If == "inputs.scheduled_backups_build_current" && step.With["name"] == "hosted-development-bundles-${{ github.run_id }}-${{ github.run_attempt }}" && step.With["run-id"] == nil
+		}
+		if strings.Contains(step.Run, `scheduled-backup-verify.sh prepare "${RUNNER_TEMP}/phase3-backup-baseline" "${RUNNER_TEMP}/current-backup-candidate"`) {
+			authenticated = step.If == "inputs.scheduled_backups_build_current"
+		}
+	}
+	if !downloaded || !authenticated {
+		t.Fatal("new signed bytes must come from this run and be authenticated before VM work")
 	}
 }

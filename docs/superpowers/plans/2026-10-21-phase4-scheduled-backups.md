@@ -9,11 +9,13 @@ hosted Ubuntu 26.04 AMD64 with hosting PHP 8.3/8.4/8.5.
 **Spec:** The current user request and the Phase 4 scheduled-backup requirement
 in [the support plan](2026-10-18-ubuntu-26-04-support.md#current-phases).
 
-**Architecture:** Reuse the exact development-signed application from passing
+**Architecture:** Initially reuse the exact development-signed application from passing
 Phase 3 run `39652821843`, runtime commit `63c00f6`, and its pinned Ubuntu image.
 Add a separate focused dispatch to the existing hosted workflow. Use the real
 installer, product APIs, normal River cron sweep and operator restore command
-on two fresh, explicitly owned disposable guests. No canonical 16-gate rerun.
+on two fresh, explicitly owned disposable guests. A locally reproduced runtime
+repair requires a fresh current-source signed build using the existing canonical
+builder, then only this affected verification slice. No canonical 16-gate rerun.
 
 **Tech stack:** GitHub Actions, Multipass/KVM, Bash 5, Python, existing signed
 Go panel/agent/panelctl binaries, PostgreSQL and MariaDB.
@@ -26,6 +28,9 @@ Go panel/agent/panelctl binaries, PostgreSQL and MariaDB.
 - Pin the accepted run, source commit, archive, manifest and public-key hashes.
   Refuse artifact expiry/tampering or changes to previously qualified runtime
   sources before VM creation. New verifier/workflow/docs changes are permitted.
+  The explicit `scheduled_backups_build_current` mode permits only the scoped
+  classic-site reconciliation repair and its regression test, requires a new
+  signed current-run candidate matching the checkout, and records its own hashes.
 - The latest instruction authorizes this hosted backup/restore slice, not a
   full architecture matrix, security-version advance, elapsed soak, merge or
   deployment. Existing Phase 3 evidence remains attributed to its tested source.
@@ -95,3 +100,17 @@ repair, build a new signed candidate and verify the affected slice; retain Phase
 3 attribution to its original source instead of reusing old binaries as new-fix
 proof. Nine Python behavior cases cover the added failure evidence and privacy;
 the two new cases were observed RED before implementation and GREEN afterward.
+
+### Locally reproduced runtime gap
+
+A real filesystem/reconciler regression reproduced matching restored classic PHP
+configuration with a stopped dedicated unit: reconciliation incorrectly returned
+`unchanged` for all three minors. The repair inspects the dedicated unit's actual
+active state before declaring matching configuration unchanged, reusing the
+existing desired-state application path. Active sites restart; suspended sites
+stop; a second healthy reconciliation remains unchanged without service mutation.
+Six cases were RED before the repair and GREEN afterward; affected managed-site
+and suspension/rollback checks also passed. Hosted diagnostic run `39674960173`
+on unchanged runtime is still pending and must confirm the live failure cause.
+The repaired candidate will be built by the existing signed-bundles job only
+when explicitly requested. That build does not enable full qualification jobs.
