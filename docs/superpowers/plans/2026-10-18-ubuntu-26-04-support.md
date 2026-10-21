@@ -5,6 +5,10 @@
 > recovery and PHP maintenance tests with hosting PHP 8.3/8.4/8.5. Skip legacy
 > tests. Report results before Phase 4; no Phase 4 work or production deployment.
 
+**Current status:** Hosted current-version operational recovery PASS; actual PHP
+maintenance recovery FAIL, exact guest check unknown. Phase 3 is incomplete.
+No hosted run or observer remains active. Phase 4 has not started.
+
 **Goal:** Ship one Ubuntu 26.04 LTS (Resolute) server contract with hosting PHP
 8.3, 8.4 and 8.5 and validated internal PHP 8.5. Ubuntu 26.04 remains experimental
 until its operational qualification passes.
@@ -91,10 +95,11 @@ after a new user instruction.
      measured evidence rather than silently masking failed services.
    - [x] Fix and locally verify the diagnosed issue. Expose per-gate progress
      and useful failure details before another long full qualification run.
-   - [ ] After explicit hosted-test authorization, run bounded current-version
-     26.04 recovery and PHP delivery/configuration-failure/recovery checks,
-     including required reboot and webmail assertions.
-   - [ ] Record actual outcomes, skips, cleanup and remaining blockers. A
+   - [ ] Pass the bounded current-version 26.04 recovery and PHP delivery/
+     configuration-failure/recovery checks, including required reboot and
+     webmail assertions. Hosted recovery passed; PHP maintenance was attempted
+     but remains failed as recorded in the terminal report below.
+   - [x] Record actual outcomes, skips, cleanup and remaining blockers. A
      prerequisite failure cannot count as executing or passing the PHP drill.
      No cross-OS migration or legacy test is required. Report before Phase 4.
 4. **Phase 4 — Scheduled backups, final qualification and handover.**
@@ -289,3 +294,110 @@ Retained standalone evidence:
 `/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-21/phase3-fwupd/`.
 Hosted operational recovery and actual PHP maintenance results remain pending.
 Phase 4 has not started.
+
+Phase 3 current-version run: [39601839959](https://github.com/Smartqix/nakpanel/actions/runs/39601839959),
+source `9424e592ab1b1f396f8707c2cb1f98bec0713ebe`, attempt 1, hosted AMD64
+Ubuntu 26.04 / full Surý PHP contract, database-manager coverage and actual PHP
+maintenance requested. Signed bundle/image verification passed. The baseline
+is running; PHP maintenance is not yet executed or accepted. Runtime source is
+pinned to this commit even while these continuation notes are updated locally.
+
+One observer (exec session `62838`) records state at
+`/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-21/phase3-current/`.
+It will retain terminal artifacts/logs and cancel this run after a three-hour
+observation limit. Do not start another run or observer while it is active.
+No Phase 4 scheduler, endurance, ARM64 qualification, promotion or deployment
+is being performed.
+
+Run 39601839959 is terminal: all 16 current-version canonical gates PASS,
+including phase29 populated recovery/rollback/reboot, phase30 all three hosting
+PHP versions and internal-tools/mail/browser assertions. Source, DR and fault
+VM firmware receipts explicitly record `EXCLUDED_HOST_FIRMWARE` and actual
+`exec-condition`; physical firmware is not validated. Owned guest cleanup PASS.
+
+Actual PHP package mutation did not execute: preparation failed closed at
+`signed-provider-baseline/exact-php-closure`, code
+`signed-runtime-row-mismatch`. The retained inventory plus the exact
+native-gpgv-authenticated InRelease and checked index confirm an upstream
+publication changed 44 package rows during qualification. Installed CLI
+versions were 8.3.35/8.4.26/8.5.11; the authenticated current index now contains
+8.3.36/8.4.27/8.5.12 and a new php-common build dated 20261021. Both the index
+bytes and their signed Release digests were checked locally against the
+retained native signature receipt. This is publication drift, not a dpkg parser
+failure. The overall hosted summary correctly FAILs and does not accept missing
+maintenance coverage. No signature/origin/version checks are relaxed.
+
+The first observer has exited after retaining artifacts/logs and the bounded
+provider comparison at `phase3-current/provider-publication-drift.json`. One
+fresh run is authorized within this same phase to test the changed PHP package
+builds; previous runtime results remain attributed to the previous patch
+versions. Keep the original cancellation deadline, 15:43:54 UTC on 21 October,
+and report any remaining blocker rather than launching further attempts.
+Phase 4 remains unstarted.
+
+The one follow-up is [39613417644](https://github.com/Smartqix/nakpanel/actions/runs/39613417644),
+source still `9424e592ab1b1f396f8707c2cb1f98bec0713ebe`. Only active observer:
+exec session `24103`; evidence under
+`/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-21/phase3-new-php/`.
+Original hard cancellation deadline remains `2026-10-21T15:43:54Z`; the
+observer will then wait only for cleanup and terminal collection. Observer
+62838 and run 39601839959 are complete; do not resume them. No further hosted
+retry is planned in this phase.
+
+## Phase 3 terminal report — 21 October 2026
+
+**Outcome: operational recovery passes; PHP maintenance recovery remains an
+unresolved Phase 3 blocker. No Phase 4 work, promotion or deployment.**
+
+| Run | Tested source / packages | Operational baseline | PHP maintenance | Cleanup |
+| --- | --- | --- | --- | --- |
+| [39601839959](https://github.com/Smartqix/nakpanel/actions/runs/39601839959) | `9424e592ab1b1f396f8707c2cb1f98bec0713ebe`; initial inventory 8.3.35/8.4.26/8.5.11 | All 16 gates PASS; 65m55s | FAIL before package mutation: live signed index publication replaced installed-version rows | PASS |
+| [39613417644](https://github.com/Smartqix/nakpanel/actions/runs/39613417644) | Same application source; authenticated baseline 8.3.36/8.4.27/8.5.12 | All 16 gates PASS; 62m59s | FAIL with ValueError before a confirmed RECOVERED receipt; zero verified maintenance reboots | PASS |
+
+Both baselines covered current-format populated fresh-host DR, application
+update/rollback, reboot/reconciliation, full hosting PHP, tenant isolation,
+internal tools, webmail/browser flows and the current product/security gates.
+The 26.04-only current-version scope explicitly excludes `real-upgrade`; no
+legacy archives/binaries, Noble regression or cross-OS migration was run.
+Source/DR/fault firmware receipts record actual ExecCondition skips, not a
+firmware-refresh pass. LVFS's external HTTP 503 is not repaired by this project.
+
+The first run's canonical window was 12:51:57–13:57:52 UTC. Its signed provider
+Release was published at 13:37:15 UTC, inside that window. The initial inventory
+has 44 versions absent from that later authenticated index; this is an inventory
+snapshot comparison, not a reconstructed final guest inventory. The guard
+correctly refused same-version delivery without an authenticated matching row.
+The second run obtained a matching authenticated package baseline, real
+Roundcube baseline, measured capacity and cold retention. Those safeguards
+passed; they are not proof that the subsequent package recovery succeeded.
+
+The second drill's result is `FAIL`, `error_type=ValueError`,
+`guest_state=stopped_after_failure`, `reboots=[]`. No `recovery.json` or reboot
+receipt was published. A guest transfer/staging write occurred, but retained
+public evidence cannot establish how far PHP package mutation progressed.
+Detailed private guest stdout/stderr was not uploaded and is no longer
+available after runner cleanup, so the underlying failing guest check is
+**unknown**. Do not infer a parser, package or runtime root cause from the
+exception type. The overall hosted summaries correctly FAIL both attempts.
+
+A follow-up reporting fix, locally tested after these runs, now records the
+maintenance stage and reviewed source function/line frames, including safe
+frames from a failed guest action. It excludes exception text, paths, locals
+and command output; malformed or foreign guest frame fields are discarded.
+This fix does not change package/signature/health checks or turn a failure into
+a pass. It was **not hosted-validated** and cannot recover the missing details
+from either completed run. Runtime qualification remains attributed to `9424e59`.
+
+Focused local verification passed for recovery unit diagnostics, hosted guest
+ownership/exclusion guards and the maintenance behavior/preparation suites
+(57 + 25 Python cases, including the new privacy and source-location tests).
+The hosted workflow passed actionlint; changed shell syntax and diff checks
+passed. No local VM, database or protected service was started or changed.
+
+Both observers (62838 and 24103) have exited after collecting terminal artifacts
+and logs under the two evidence directories above. There is no active hosted
+run, retry, watcher or scheduled automation. No further hosted retry was made.
+The remaining Phase 3 work is to identify/fix the guest maintenance failure
+using the improved receipts, then obtain actual RECOVERED, two unassisted reboot
+and three fresh Roundcube-flow receipts before accepting PHP maintenance.
+Report that result before Phase 4.

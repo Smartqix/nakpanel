@@ -50,6 +50,26 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def failure_frames(error):
+    """Publish reviewed source locations, never exception text, paths or locals."""
+    frames=[];current=error.__traceback__
+    while current is not None:
+        if current.tb_frame.f_code.co_filename==__file__:
+            frames.append(dict(function=current.tb_frame.f_code.co_name,line=current.tb_lineno))
+        current=current.tb_next
+    return frames[-8:]
+
+
+def validated_failure_frames(value, source):
+    names=set(re.findall(r'^\s*(?:async\s+)?def ([A-Za-z_]\w*)\(',source,re.MULTILINE))|{'<module>'}
+    if (type(value) is not list or len(value)>8 or
+        any(type(row) is not dict or set(row)!={'function','line'} or
+            type(row['function']) is not str or row['function'] not in names or type(row['line']) is not int or
+            not 1<=row['line']<=len(source.splitlines()) for row in value)):
+        return []
+    return value
+
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -443,13 +463,24 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
     message_ids = {receipts['roundcube_receipt']['raw_receipt']['message_id']}
     message_uids = {receipts['roundcube_receipt']['raw_receipt']['uid']}
     def remote(action, **values):
+        state['maintenance_stage']='guest-'+action
+        write_private(evidence/'result.json',state)
         request = dict(action=action,config=guest_config,**values)
         result = command(['multipass','exec',config['source_vm'],'--','sudo','python3','-c',remote_code],env=env,data=json.dumps(request),timeout=1800,check=False)
         write_private(evidence/(action+'-'+str(values.get('phase','stage'))+'.stdout'),result.stdout.encode())
         write_private(evidence/(action+'-'+str(values.get('phase','stage'))+'.stderr'),result.stderr.encode())
+        if result.returncode:
+            try:
+                detail=json.loads(result.stdout)
+                if type(detail) is dict and detail.get('schema')=='nakpanel-maintenance-guest-failure-v1':
+                    state['guest_failure_frames']=validated_failure_frames(detail.get('failure_frames'),code)
+            except (ValueError,TypeError):
+                pass
         require(result.returncode == 0, 'guest '+action+' failed; inspect retained stdout/stderr and cold snapshot')
         return json.loads(result.stdout)
     def product_check(phase):
+        state['maintenance_stage']='roundcube-'+phase
+        write_private(evidence/'result.json',state)
         for relative,expected in config['qualifier_source_sha256'].items():
             private_bytes(qualifier/relative,expected,private=False)
         output = evidence/('roundcube-'+phase+'.json')
@@ -472,6 +503,7 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
     original_sigterm=signal.signal(signal.SIGTERM,controlled_termination)
     original_sigint=signal.getsignal(signal.SIGINT)
     try:
+        state['maintenance_stage']='snapshot-retention-check'
         # Receipt booleans alone are not a backup: freshly inspect the exact
         # qualified source snapshot before the first guest write. Multipass
         # exposes VM.SNAPSHOT plus metadata, rather than an opaque snapshot ID.
@@ -494,6 +526,7 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
                 stream.addfile(entry,io.BytesIO(data))
         archive.chmod(0o600)
         remote_archive = '/tmp/nakpanel-sury-maintenance-'+config['maintenance_id']+'.tar'
+        state['maintenance_stage']='archive-transfer'
         mutated = True
         command(['multipass','transfer',str(archive),config['source_vm']+':'+remote_archive],env=env,timeout=300)
         guest_packages = [{k:entry[k] for k in ('Package','Version','Architecture','Filename','SHA256','Size')} for entry in packages]
@@ -517,7 +550,7 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
             write_private(evidence/('reboot-'+str(number)+'.json'),proof)
             product_check('reboot-'+str(number))
         host_identity(config,driver,env)
-        state.update(status='PASS',guest_state='running_revalidated',same_version_delivery=True,failed_configuration_recovery=True,two_reboots_verified=True,roundcube_send_read_steps=3)
+        state.update(status='PASS',maintenance_stage='complete',guest_state='running_revalidated',same_version_delivery=True,failed_configuration_recovery=True,two_reboots_verified=True,roundcube_send_read_steps=3)
         write_private(evidence/'result.json',state)
         print(evidence/'result.json')
     except BaseException as error:
@@ -526,7 +559,7 @@ def host_execute(config, packages, release, compressed, receipts, evidence, help
         # cannot interrupt the exact known-owner stop or its failure receipt.
         signal.signal(signal.SIGINT,signal.SIG_IGN)
         signal.signal(signal.SIGTERM,signal.SIG_IGN)
-        state.update(status='FAIL',error_type=type(error).__name__,diagnostic=str(error),guest_state='unchanged_before_guest_write')
+        state.update(status='FAIL',error_type=type(error).__name__,failure_frames=failure_frames(error),diagnostic=str(error),guest_state='unchanged_before_guest_write')
         if mutated:
             state['guest_state']='failure_stop_unconfirmed'
             write_private(evidence/'result.json',state)
@@ -636,7 +669,7 @@ def stage_guest(request):
 
 
 def remote_program(source):
-    return "import json,sys\nscope={'__name__':'maintenance_guest','__file__':'reviewed-maintenance-helper'}\nexec(compile("+repr(source)+",'reviewed-maintenance-helper','exec'),scope)\nrequest=json.load(sys.stdin)\ntry:\n print(json.dumps(scope['guest_action'](request),sort_keys=True))\nexcept Exception as error:\n print('maintenance guest failed: '+str(error),file=sys.stderr)\n sys.exit(1)\n"
+    return "import json,sys\nscope={'__name__':'maintenance_guest','__file__':'reviewed-maintenance-helper'}\nexec(compile("+repr(source)+",'reviewed-maintenance-helper','exec'),scope)\nrequest=json.load(sys.stdin)\ntry:\n print(json.dumps(scope['guest_action'](request),sort_keys=True))\nexcept Exception as error:\n print(json.dumps(dict(schema='nakpanel-maintenance-guest-failure-v1',error_type=type(error).__name__,failure_frames=scope['failure_frames'](error)),sort_keys=True))\n print('maintenance guest failed: '+str(error),file=sys.stderr)\n sys.exit(1)\n"
 
 
 def check_frozen_checkout(directory, mapping, commit):

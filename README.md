@@ -12,9 +12,10 @@ supported server OS in the current development scope. Hosting PHP 8.3/8.4/8.5
 remains required; internal tools use validated PHP 8.5. Ubuntu 26.04 remains
 experimental until operational qualification passes.
 
-Phase 2 aligns the local installer, VM defaults and CI with this contract.
-Hosted operational qualification remains incomplete; these local changes do
-not establish a newly qualified release. Ubuntu 24.04 and
+Phase 2 aligns the installer, VM defaults and CI with this contract. Phase 3
+passed the 16 hosted current-version operational gates, including fresh-host
+recovery, but PHP package maintenance recovery failed and remains unresolved.
+This is not a newly qualified release. Ubuntu 24.04 and
 24.04-to-26.04 migration are outside the release requirements. See the
 [transition plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 

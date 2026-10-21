@@ -471,10 +471,13 @@ m.run_canonical([sys.executable,'-c',child,sys.argv[2]],pathlib.Path(sys.argv[3]
             for name in ('spec.json','controller.log','retained-baseline.tar','roundcube-baseline.log'):
                 (private/name).write_text('secret credential')
             m.M.write_private(private/'preparation.json',{'status':'FAIL','stage':'maintenance-handoff'})
-            m.M.write_private(private/'drill'/'result.json',{'status':'FAIL','diagnostic':'secret credential','error_type':'ValueError'})
+            m.M.write_private(private/'drill'/'result.json',{'status':'FAIL','diagnostic':'secret credential','error_type':'ValueError','maintenance_stage':'guest-run','failure_frames':[{'function':'host_main','line':500}]})
             m.publish(private,root/'upload')
             self.assertEqual({p.name for p in (root/'upload').iterdir()},{'preparation.json','result.json'})
             self.assertNotIn('secret',str([p.read_text() for p in (root/'upload').iterdir()]))
+            published=json.loads((root/'upload/result.json').read_text())
+            self.assertEqual(published['maintenance_stage'],'guest-run')
+            self.assertEqual(published['failure_frames'],[{'function':'host_main','line':500}])
 
     def test_prepare_uses_actual_roundcube_then_cold_snapshot_then_signed_baseline_and_bound_handoff(self):
         m=self.module()

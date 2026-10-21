@@ -24,11 +24,15 @@ required and internal tools use validated PHP 8.5. Ubuntu 24.04 support and
 its changes remain unmerged. Hosted Phase 3 tests are now authorized; keep PHP
 8.3/8.4/8.5, skip legacy tests and report before Phase 4. No production deployment.
 
-The previous hosted attempts remain failed historical results. The retired
-cross-OS migration is no longer a release blocker; the Ubuntu 26.04 recovery
-prerequisite (`fwupd-refresh.service`) and unexecuted PHP maintenance drill
-remain unresolved. Ubuntu 26.04 is experimental until its required evidence
-passes. Historical Ubuntu 24.04 results below describe past tests and do not
+The retired cross-OS migration is no longer a release blocker. Phase 3 has
+passed all 16 current-version operational gates on hosted Ubuntu 26.04 AMD64,
+including populated recovery. The measured LVFS HTTP 503 is explicitly excluded
+only for owned disposable KVM test guests; production firmware is unchanged.
+Actual PHP maintenance recovery failed with a ValueError before confirmed
+recovery/reboots; its underlying guest check was not retained. Safe failure
+location reporting is now locally tested. Phase 3 remains incomplete, all
+hosted runs have ended, and Phase 4 is unstarted. Ubuntu 26.04 is experimental
+until its required evidence passes. Historical Ubuntu 24.04 results below describe past tests and do not
 create an ongoing support obligation.
 
 ---

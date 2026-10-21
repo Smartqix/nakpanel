@@ -20,6 +20,22 @@ MODE = 'SAME_VERSION_REINSTALL_AND_FAILED_CONFIGURATION_RECOVERY'
 GATES = ['bundle','fresh-install','inventory','phase28','valkey-platform','security','phase29','phase30','phase31','phase32','internal-tools','mail-workspace','phase33','phase34','domain-removal','release-artifacts']
 
 class MaintenanceTests(unittest.TestCase):
+    def test_failed_remote_retains_reviewed_locations_without_private_values(self):
+        m=self.module()
+        source=HELPER.read_text()+"\ndef guest_action(request):\n raise ValueError('private-password-and-command-output')\n"
+        result=subprocess.run([sys.executable,'-c',m.remote_program(source)],input='{}',capture_output=True,text=True)
+        self.assertNotEqual(result.returncode,0)
+        proof=json.loads(result.stdout)
+        self.assertEqual(proof['schema'],'nakpanel-maintenance-guest-failure-v1')
+        self.assertEqual(proof['error_type'],'ValueError')
+        self.assertTrue(proof['failure_frames'])
+        self.assertEqual(proof['failure_frames'][-1]['function'],'guest_action')
+        self.assertNotIn('private-password',result.stdout)
+        self.assertNotIn(str(HERE),result.stdout)
+        self.assertEqual(m.validated_failure_frames(proof['failure_frames'],source),proof['failure_frames'])
+        for invalid in ([{'function':'private-secret','line':1}],[{'function':{},'line':1}],[{'function':'guest_action','line':10**6}],[{'function':'guest_action','line':1,'filename':'private-path'}]):
+            self.assertEqual(m.validated_failure_frames(invalid,source),[])
+
     def snapshot_record(self):
         return {'children':[],'comment':'Owned cold retention before maintenance','cpu_count':'2','created':'Mon Oct 19 02:05:00 2026 EDT','disk_space':'48.0GiB','memory_size':'5.0GiB','mounts':{},'parent':'','size':''}
 
