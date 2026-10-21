@@ -127,7 +127,7 @@ def validate_authorization(config, report, supplement, retention, handoff):
         require(sha_value(config[k]) and handoff.get(k) == config[k], 'handoff receipt hash differs')
 
 
-def check_apt_plan(text, versions, expected):
+def check_apt_plan(text, versions, expected, *, configuration_only=False):
     seen = set()
     for line in text.splitlines():
         require(not line.startswith('Remv '), 'APT removals are unsupported, including mandatory internal PHP8.5')
@@ -137,10 +137,13 @@ def check_apt_plan(text, versions, expected):
         require(match is not None, 'unrecognized APT package operation')
         operation, package, version = match.groups()
         require(PHP_NAME.fullmatch(package) is not None and package in versions and version == versions[package], 'APT plan changes an unapproved package/version')
-        if operation == 'Inst':
+        if configuration_only:
+            require(operation == 'Conf' and package in expected and package not in seen, 'APT recovery must only configure the exact pending FPM package')
+            seen.add(package)
+        elif operation == 'Inst':
             require(package in expected, 'APT plan installs beyond the exact requested PHP packages')
             seen.add(package)
-    require(seen == set(expected), 'APT did not plan the exact same-version reinstall')
+    require(seen == set(expected), 'APT did not plan the exact '+('pending configuration' if configuration_only else 'same-version reinstall'))
 
 
 def check_candidate(policy, version):
@@ -232,7 +235,7 @@ def drill_minor(minor, token, pool, backend, record):
     record('expected_configuration_failure', {'minor': minor})
     fault.remove()
     require(tree_state(pool) == before, 'preexisting FPM pool settings changed')
-    recovery = backend.reinstall(minor)
+    recovery = backend.configure(minor)
     require(recovery.returncode == 0 and backend.package_status(minor).strip() == 'install ok installed' and backend.config_test(minor).returncode == 0, 'exact cached package configuration recovery failed')
     require(tree_state(pool) == before, 'FPM pool settings differ after recovery')
     record('recovered', {'minor': minor})
@@ -808,13 +811,17 @@ class GuestBackend:
         self.cache=root/'apt-archives'
         self.env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LC_ALL':'C','DEBIAN_FRONTEND':'noninteractive','UCF_FORCE_CONFFOLD':'1'}
         self.sequence=0
+        self.prepared=False
+        self.original_inventory=None
+        self.postinst_sha256={}
 
     def record(self, step, data):
         self.sequence+=1
         write_private(self.root/('step-'+str(self.sequence).zfill(3)+'-'+step+'.json'),data)
 
-    def apt(self, packages, *, simulate=False, print_uris=False):
-        args=['apt-get','-o','Dir::Cache::archives='+str(self.cache),'-o','APT::Keep-Downloaded-Packages=true','--no-remove','--reinstall','--fix-broken']
+    def apt(self, packages, *, simulate=False, print_uris=False, configuration_only=False):
+        args=['apt-get','-o','Dir::Cache::archives='+str(self.cache),'-o','APT::Keep-Downloaded-Packages=true','--no-remove','--fix-broken']
+        if not configuration_only:args+=['--reinstall']
         if simulate:args+=['--simulate']
         elif print_uris:args+=['--print-uris','--download-only','--yes']
         else:args+=['--no-download','--yes']
@@ -824,6 +831,7 @@ class GuestBackend:
     def prepare(self):
         require(command(['dpkg','--audit']).stdout.strip() == '', 'preexisting pending/broken dpkg state cannot enter this drill')
         observed=package_inventory()
+        self.original_inventory={name:list(value) for name,value in observed.items()}
         actual_php={k.removesuffix(':'+self.config['architecture']) for k,v in observed.items() if PHP_NAME.fullmatch(k.removesuffix(':'+self.config['architecture'])) and v[1]=='install ok installed'}
         require(actual_php == set(self.versions), 'installed PHP set differs from retained exact profile dependency closure')
         for entry in self.packages:
@@ -838,6 +846,7 @@ class GuestBackend:
                 require(len(members)==1,'signed FPM postinst missing')
                 expected=archive.extractfile(members[0]).read()
             require(root_regular('/var/lib/dpkg/info/php'+minor+'-fpm.postinst')==expected,'installed FPM postinst differs from signed package')
+            self.postinst_sha256[minor]=digest(expected)
         self.cache.mkdir(mode=0o700);(self.cache/'partial').mkdir(mode=0o700)
         uris=self.apt(set(self.versions),print_uris=True)
         require(uris.returncode==0,'cannot derive exact authenticated APT archive requests')
@@ -848,6 +857,7 @@ class GuestBackend:
             fd=os.open(self.cache/destinations[entry['Package']],os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
             with os.fdopen(fd,'wb') as stream:stream.write(data)
         require(Path('/usr/bin/cgi-fcgi').is_file(),'real FastCGI client is required before mutation')
+        self.prepared=True
 
     def config_test(self, minor):
         return command(['/usr/sbin/php-fpm'+minor,'-t'],check=False,env=self.env)
@@ -863,6 +873,27 @@ class GuestBackend:
         self.record('apt-plan',{'packages':sorted(packages),'stdout':plan.stdout,'stderr':plan.stderr})
         result=self.apt(packages)
         self.record('apt-result',{'packages':sorted(packages),'returncode':result.returncode,'stdout':result.stdout,'stderr':result.stderr})
+        return result
+
+    def configure(self,minor):
+        # APT cannot --reinstall a half-configured package on Resolute: it
+        # reports "Internal Error, No file name" even with a verified cache.
+        # Finish only the installed signed postinst; never unpack or fetch.
+        require(self.prepared and minor in MINORS,'prepared FPM configuration recovery required')
+        package='php'+minor+'-fpm'
+        expected={name:list(value) for name,value in self.original_inventory.items()}
+        key=package if package in expected else package+':'+self.config['architecture']
+        require(expected.get(key)==[self.versions[package],'install ok installed'],'original FPM inventory differs')
+        expected[key]=[self.versions[package],'install ok half-configured']
+        require(package_inventory()==expected,'only the selected FPM package may be half-configured')
+        root_regular('/var/lib/dpkg/info/'+package+'.postinst',self.postinst_sha256[minor])
+        require(self.config_test(minor).returncode==0,'owned FPM fault must be removed before configuration recovery')
+        plan=self.apt({package},simulate=True,configuration_only=True)
+        require(plan.returncode==0,'APT configuration simulation failed before mutation')
+        check_apt_plan(plan.stdout,self.versions,{package},configuration_only=True)
+        self.record('configure-plan',{'packages':[package],'stdout':plan.stdout,'stderr':plan.stderr})
+        result=self.apt({package},configuration_only=True)
+        self.record('configure-result',{'packages':[package],'returncode':result.returncode,'stdout':result.stdout,'stderr':result.stderr})
         return result
 
 

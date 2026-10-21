@@ -398,10 +398,61 @@ class MaintenanceTests(unittest.TestCase):
                 def reinstall(self,minor):
                     if list(pool.glob('zz-nakpanel-maintenance-*')):
                         self.status='install ok half-configured';return subprocess.CompletedProcess([],100,'',f'dpkg: error processing package php{minor}-fpm (--configure): installed php{minor}-fpm package post-installation script subprocess returned error exit status 1')
+                    raise AssertionError('APT --reinstall cannot recover this half-configured package')
+                def configure(self,minor):
+                    if list(pool.glob('zz-nakpanel-maintenance-*')):raise AssertionError('fault must be removed before configuration')
                     self.status='install ok installed';return subprocess.CompletedProcess([],0,'','')
                 def package_status(self,minor):return self.status
             backend=Backend();events=[];m.drill_minor('8.3','test1234',pool,backend,lambda step,data:events.append(step))
             self.assertEqual(backend.status,'install ok installed');self.assertEqual(m.tree_state(pool),baseline);self.assertIn('expected_configuration_failure',events);self.assertIn('recovered',events)
+
+    def test_configuration_only_plan_refuses_unpack_other_packages_and_missing_configuration(self):
+        m=self.module();versions={'php8.3-fpm':'V','php8.4-fpm':'OTHER'}
+        m.check_apt_plan('Conf php8.3-fpm (V provider [amd64])\n',versions,{'php8.3-fpm'},configuration_only=True)
+        for value in ('Inst php8.3-fpm [V] (V provider [amd64])\nConf php8.3-fpm (V provider [amd64])\n',
+                      'Conf php8.4-fpm (OTHER provider [amd64])\n', 'Conf php8.3-fpm (WRONG provider [amd64])\n',
+                      'Remv php8.3-fpm [V]\n', '', 'Conf php8.3-fpm (V provider [amd64])\nConf php8.3-fpm (V provider [amd64])\n'):
+            with self.subTest(plan=value),self.assertRaises(ValueError):
+                m.check_apt_plan(value,versions,{'php8.3-fpm'},configuration_only=True)
+
+    def test_configuration_recovery_requires_exact_pending_package_and_signed_script(self):
+        for failure in ('none','not-prepared','not-pending','foreign-pending','changed-version','changed-script','invalid-config','unpack-plan','foreign-plan','apt-failure'):
+            with self.subTest(failure=failure),tempfile.TemporaryDirectory() as td:
+                m=self.module();root=Path(td);script=root/'postinst';script.write_bytes(b'#!/bin/sh\nexit 0\n');script.chmod(0o600)
+                backend=m.GuestBackend(root,{'architecture':'amd64'},[{'Package':'php8.3-fpm','Version':'V'}])
+                backend.prepared=failure!='not-prepared'
+                backend.original_inventory={'php8.3-fpm':['V','install ok installed'],'unrelated':['U','install ok installed']}
+                backend.postinst_sha256={'8.3':hashlib.sha256(script.read_bytes()).hexdigest()}
+                if failure=='changed-script':script.write_bytes(b'changed postinst')
+                observed={'php8.3-fpm':['V','install ok half-configured'],'unrelated':['U','install ok installed']}
+                if failure=='not-pending':observed['php8.3-fpm'][1]='install ok installed'
+                if failure=='foreign-pending':observed['unrelated'][1]='install ok half-configured'
+                if failure=='changed-version':observed['php8.3-fpm'][0]='WRONG'
+                mutations=[];real_regular=m.root_regular
+                def regular(path,expected=None):
+                    self.assertEqual(str(path),'/var/lib/dpkg/info/php8.3-fpm.postinst')
+                    return real_regular(script,expected)
+                def command(args,**kwargs):
+                    if args[0]=='dpkg-query':
+                        self.assertEqual(args,['dpkg-query','-W','-f=${binary:Package}\t${Version}\t${Status}\n'])
+                        return subprocess.CompletedProcess(args,0,''.join(name+'\t'+'\t'.join(value)+'\n' for name,value in observed.items()),'')
+                    if args[0]=='/usr/sbin/php-fpm8.3':
+                        return subprocess.CompletedProcess(args,78 if failure=='invalid-config' else 0,'','')
+                    self.assertEqual(args[0],'apt-get');self.assertNotIn('--reinstall',args)
+                    self.assertIn('--no-remove',args);self.assertEqual(args[-2:],['install','php8.3-fpm=V'])
+                    if '--simulate' in args:
+                        plan='Conf php8.3-fpm (V provider [amd64])\n'
+                        if failure=='unpack-plan':plan='Inst php8.3-fpm [V] (V provider [amd64])\n'+plan
+                        if failure=='foreign-plan':plan+='Conf unrelated (U provider [amd64])\n'
+                        return subprocess.CompletedProcess(args,0,plan,'')
+                    self.assertIn('--no-download',args);mutations.append(args)
+                    return subprocess.CompletedProcess(args,100 if failure=='apt-failure' else 0,'','')
+                with patch.object(m,'command',side_effect=command),patch.object(m,'root_regular',side_effect=regular):
+                    if failure in ('none','apt-failure'):
+                        result=backend.configure('8.3');self.assertEqual(result.returncode,100 if failure=='apt-failure' else 0)
+                    else:
+                        with self.assertRaises(ValueError):backend.configure('8.3')
+                self.assertEqual(len(mutations),1 if failure in ('none','apt-failure') else 0)
 
     def test_unsupported_cli_operations_refuse_without_any_multipass_call(self):
         self.module();wrapper=HERE/'sury-maintenance-verify.sh';self.assertTrue(wrapper.exists())

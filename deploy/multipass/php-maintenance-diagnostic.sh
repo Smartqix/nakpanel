@@ -30,11 +30,14 @@ export NAKPANEL_OWNERSHIP_DIR="${RUNNER_TEMP}/php-diagnostic-owned"
 source "${SCRIPT_DIR}/common.sh"
 init_qualification_run
 cleanup() {
-  local status=$?
+  local status=$? cleanup_status=0 owned=false
   trap - EXIT
   if [[ -f "${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}/${NAKPANEL_MULTIPASS_VM}" ]]; then
-    destroy_owned_vm "${NAKPANEL_MULTIPASS_VM}" "${NAKPANEL_RUN_TOKEN}" >"${evidence}/cleanup.log" 2>&1 || status=1
+    owned=true
+    destroy_owned_vm "${NAKPANEL_MULTIPASS_VM}" "${NAKPANEL_RUN_TOKEN}" >"${evidence}/cleanup.log" 2>&1 || cleanup_status=$?
   fi
+  printf '{"ownership_record_present":%s,"exit_code":%s}\n' "${owned}" "${cleanup_status}" >"${evidence}/cleanup.json"
+  (( cleanup_status == 0 )) || status=1
   exit "${status}"
 }
 trap cleanup EXIT
