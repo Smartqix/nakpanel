@@ -1,0 +1,487 @@
+{
+  "fixture_loop": {
+    "checks_ast_sha256": "c8f5fcc62d9476289ef92e62cef9d250b9065b7e52d04384650875a417c602ef",
+    "count": 6,
+    "function": "Guest.source_fixtures",
+    "line": 249
+  },
+  "functions": {
+    "Guest.__init__": [
+      170,
+      171
+    ],
+    "Guest.active_readiness": [
+      473,
+      476
+    ],
+    "Guest.admin": [
+      218,
+      230
+    ],
+    "Guest.admin.post": [
+      223,
+      229
+    ],
+    "Guest.app_row": [
+      240,
+      242
+    ],
+    "Guest.authenticate": [
+      376,
+      378
+    ],
+    "Guest.backup": [
+      365,
+      375
+    ],
+    "Guest.canary": [
+      264,
+      265
+    ],
+    "Guest.cli": [
+      188,
+      190
+    ],
+    "Guest.command": [
+      173,
+      184
+    ],
+    "Guest.discover": [
+      231,
+      236
+    ],
+    "Guest.dispatch": [
+      477,
+      497
+    ],
+    "Guest.file_fact": [
+      324,
+      325
+    ],
+    "Guest.go_preflight": [
+      460,
+      467
+    ],
+    "Guest.identity": [
+      197,
+      211
+    ],
+    "Guest.invocation": [
+      212,
+      217
+    ],
+    "Guest.jobs": [
+      237,
+      239
+    ],
+    "Guest.migrate": [
+      468,
+      469
+    ],
+    "Guest.observe": [
+      359,
+      364
+    ],
+    "Guest.parent_facts": [
+      295,
+      298
+    ],
+    "Guest.pg": [
+      186,
+      186
+    ],
+    "Guest.physical": [
+      326,
+      358
+    ],
+    "Guest.prepare_source_namespace": [
+      243,
+      245
+    ],
+    "Guest.quiet": [
+      390,
+      399
+    ],
+    "Guest.quiet_observation": [
+      385,
+      389
+    ],
+    "Guest.remaining": [
+      172,
+      172
+    ],
+    "Guest.restore": [
+      379,
+      380
+    ],
+    "Guest.rootless": [
+      284,
+      294
+    ],
+    "Guest.roundcube": [
+      266,
+      270
+    ],
+    "Guest.row": [
+      187,
+      187
+    ],
+    "Guest.row_units": [
+      312,
+      323
+    ],
+    "Guest.snapshot": [
+      278,
+      283
+    ],
+    "Guest.source_fixtures": [
+      246,
+      263
+    ],
+    "Guest.source_upgrade": [
+      271,
+      277
+    ],
+    "Guest.stage": [
+      400,
+      408
+    ],
+    "Guest.stop": [
+      381,
+      384
+    ],
+    "Guest.stopped": [
+      299,
+      311
+    ],
+    "Guest.strict_post": [
+      470,
+      472
+    ],
+    "Guest.target_baseline": [
+      455,
+      456
+    ],
+    "Guest.text": [
+      185,
+      185
+    ],
+    "Guest.trust_files": [
+      413,
+      454
+    ],
+    "Guest.verify_stage": [
+      409,
+      412
+    ],
+    "Guest.verify_trust": [
+      457,
+      459
+    ],
+    "Guest.wait": [
+      191,
+      196
+    ],
+    "NoRedirect.redirect_request": [
+      168,
+      168
+    ],
+    "absent": [
+      20,
+      23
+    ],
+    "application_form": [
+      18,
+      19
+    ],
+    "cache_root_facts": [
+      138,
+      146
+    ],
+    "directory_fact": [
+      135,
+      136
+    ],
+    "expected_go": [
+      109,
+      110
+    ],
+    "go_ancestors": [
+      92,
+      99
+    ],
+    "go_config_absent": [
+      101,
+      108
+    ],
+    "go_directory_safe": [
+      89,
+      90
+    ],
+    "go_group_shape": [
+      68,
+      69
+    ],
+    "go_nss_sources": [
+      42,
+      53
+    ],
+    "go_private_directory": [
+      75,
+      87
+    ],
+    "go_private_directory.identity": [
+      77,
+      77
+    ],
+    "go_private_group": [
+      55,
+      66
+    ],
+    "go_private_mode": [
+      71,
+      73
+    ],
+    "go_tool_path": [
+      32,
+      40
+    ],
+    "intent_sql": [
+      13,
+      17
+    ],
+    "main": [
+      499,
+      515
+    ],
+    "q": [
+      498,
+      498
+    ],
+    "safe_ancestors": [
+      24,
+      31
+    ],
+    "validate_cache_roots": [
+      148,
+      164
+    ],
+    "validate_cache_roots.descriptor": [
+      151,
+      155
+    ],
+    "validate_git_config": [
+      119,
+      127
+    ],
+    "validate_go_effective": [
+      111,
+      118
+    ],
+    "validate_rootless_layout": [
+      129,
+      133
+    ]
+  },
+  "guest_sha256": "c47abe6fbff07effbeb96a3c05ef7fa01ae037868b67a7d1e81b9c8b6e361eb1",
+  "maximum_frames": 12,
+  "restore_validation_sites": {
+    "core_sha256": "f87932760c3de63fa30f035de292b4573ec8ed4f97bd6886d5a4eedcdfb319da",
+    "guest_site": {
+      "column_end": 284,
+      "column_start": 241,
+      "function": "Guest.restore",
+      "line": 380
+    },
+    "predicates": [
+      {
+        "column_end": 68,
+        "column_start": 1,
+        "function": "validate_restore",
+        "id": "OUTER",
+        "line": 135
+      },
+      {
+        "column_end": 349,
+        "column_start": 88,
+        "function": "validate_restore",
+        "id": "SUMMARY",
+        "line": 135
+      },
+      {
+        "column_end": 680,
+        "column_start": 350,
+        "function": "validate_restore",
+        "id": "SERVICES",
+        "line": 135
+      }
+    ]
+  },
+  "schema": "nakpanel-l3-fixed-guest-sites-v7",
+  "stopped_validation_sites": {
+    "core_sha256": "f87932760c3de63fa30f035de292b4573ec8ed4f97bd6886d5a4eedcdfb319da",
+    "guest_site": {
+      "column_end": 272,
+      "column_start": 234,
+      "function": "Guest.stopped",
+      "line": 311
+    },
+    "predicates": [
+      {
+        "column_end": 83,
+        "column_start": 1,
+        "function": "validate_stopped",
+        "id": "SHAPE",
+        "line": 75
+      },
+      {
+        "column_end": 184,
+        "column_start": 1,
+        "function": "validate_stopped",
+        "id": "SCOPE",
+        "line": 76
+      },
+      {
+        "column_end": 206,
+        "column_start": 1,
+        "function": "validate_stopped",
+        "id": "DESIRED",
+        "line": 77
+      },
+      {
+        "column_end": 282,
+        "column_start": 33,
+        "function": "validate_stopped",
+        "id": "ROW_STATE",
+        "line": 78
+      },
+      {
+        "column_end": 207,
+        "column_start": 1,
+        "function": "validate_stopped",
+        "id": "JOB",
+        "line": 79
+      },
+      {
+        "column_end": 164,
+        "column_start": 1,
+        "function": "validate_stopped",
+        "id": "PHYSICAL",
+        "line": 80
+      },
+      {
+        "column_end": 117,
+        "column_start": 24,
+        "function": "validate_stopped",
+        "id": "PORT",
+        "line": 81
+      },
+      {
+        "column_end": 131,
+        "column_start": 1,
+        "function": "validate_stopped",
+        "id": "INVENTORY",
+        "line": 82
+      },
+      {
+        "column_end": 310,
+        "column_start": 2,
+        "function": "validate_stopped",
+        "id": "CONTAINER",
+        "line": 84
+      },
+      {
+        "column_end": 123,
+        "column_start": 31,
+        "function": "validate_stopped",
+        "id": "UNIT",
+        "line": 85
+      }
+    ]
+  },
+  "strict_post_sites": [
+    {
+      "column_end": 402,
+      "column_start": 229,
+      "function": "Guest.strict_post",
+      "id": "CLI_OUTPUT",
+      "line": 471
+    },
+    {
+      "column_end": 508,
+      "column_start": 477,
+      "function": "Guest.strict_post",
+      "id": "RUN_ID",
+      "line": 471
+    },
+    {
+      "column_end": 719,
+      "column_start": 610,
+      "function": "Guest.strict_post",
+      "id": "RUN_STATE",
+      "line": 471
+    },
+    {
+      "column_end": 611,
+      "column_start": 340,
+      "function": "Guest.strict_post",
+      "id": "JOBS",
+      "line": 472
+    }
+  ],
+  "systemctl_listing_sites": {
+    "accept": {
+      "column_end": 152,
+      "column_start": 3,
+      "function": "Guest.row_units",
+      "line": 317
+    },
+    "command": {
+      "column_end": 62,
+      "column_start": 19,
+      "function": "Guest.command",
+      "line": 184
+    },
+    "decode": {
+      "column_end": 28,
+      "column_start": 7,
+      "function": "Guest.row_units",
+      "line": 316
+    },
+    "listing": {
+      "column_end": 150,
+      "column_start": 10,
+      "function": "Guest.row_units",
+      "line": 315
+    },
+    "stopped": {
+      "column_end": 34,
+      "column_start": 12,
+      "function": "Guest.stopped",
+      "line": 306
+    }
+  },
+  "tenant_ps_sites": {
+    "Guest.command": {
+      "column_end": 62,
+      "column_start": 19,
+      "line": 184
+    },
+    "Guest.rootless": {
+      "column_end": 217,
+      "column_start": 9,
+      "line": 294
+    },
+    "Guest.stopped": {
+      "column_end": 108,
+      "column_start": 12,
+      "line": 303
+    }
+  },
+  "upgrade_intent_site": {
+    "column_end": 276,
+    "column_start": 231,
+    "function": "Guest.source_upgrade",
+    "line": 276
+  }
+}
