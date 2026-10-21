@@ -152,10 +152,13 @@ class Drill:
     def cmd(self,args,*,data=None,env=None,timeout=180,check=True):
         self.sequence+=1
         result=subprocess.run(args,input=data,capture_output=True,text=True,env=env or self.env,timeout=timeout)
+        self.last_exit_code=result.returncode
         log=self.private/('command-'+str(self.sequence).zfill(3)+'.log')
         fd=os.open(log,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(fd,'w') as stream:stream.write(result.stdout);stream.write(result.stderr)
-        if check and result.returncode:raise subprocess.CalledProcessError(result.returncode,args)
+        if result.returncode:
+            self.state['last_command_failure']={'program':Path(args[0]).name,'exit_code':result.returncode}
+            if check:raise subprocess.CalledProcessError(result.returncode,args)
         return result.stdout
 
     def stage(self,name,**values):
@@ -221,6 +224,59 @@ class Drill:
             "CREATE TABLE nakpanel_qualification_backup_canary (value text NOT NULL); INSERT INTO nakpanel_qualification_backup_canary VALUES ('"+self.token+"')")
         self.guest(self.source,'sudo','mariadb','np_current_bootstrap','-e',"UPDATE nakpanel_qualification_canary SET value='"+self.token+"' WHERE id=1")
 
+    def php_http(self,vm,minor,domain,ip,filename):
+        body=self.private/'http-response'
+        code=self.cmd(['curl','-skL','--max-time','20','-o',str(body),'-w','%{http_code}',
+            '--resolve',domain+':80:'+ip,'--resolve',domain+':443:'+ip,'http://'+domain+'/'+filename],check=False).strip()
+        self.state['last_php_http']=dict(vm=vm,minor=minor,http_status=int(code) if re.fullmatch(r'[0-9]{3}',code) else None,curl_exit_code=self.last_exit_code)
+        require(code=='200' and self.last_exit_code==0,'tenant PHP HTTP request failed')
+        return json.loads(body.read_text())
+
+    def runtime_diagnostics(self,vm,label):
+        """Read only; publish reviewed state fields, never command output or HTTP bodies."""
+        receipt=dict(label=label,vm=vm,at=now().isoformat(),service_repair_performed=False)
+        try:
+            fixtures=[dict(id=v['id'],domain=v['domain'],username=v['username']) for v in self.expected.values()]
+            require(all(type(v['id']) is int and v['id']>0 and v['domain'] in ('current-bootstrap.test','scheduled84.test','scheduled85.test')
+                and re.fullmatch(r'[a-z][a-z0-9_-]{0,31}',v['username']) for v in fixtures),'unsafe diagnostic fixture')
+            script=r'''
+import hashlib,json,os,stat,subprocess,sys
+from pathlib import Path
+result=[]
+allowed={'LoadState':{'loaded','not-found','error','masked','bad-setting'},'ActiveState':{'active','inactive','failed','activating','deactivating','reloading'},
+ 'SubState':{'running','dead','failed','start','start-pre','start-post','auto-restart','stop','stop-sigterm','stop-sigkill','exited'},
+ 'UnitFileState':{'enabled','disabled','static','masked','generated','linked','indirect','enabled-runtime'},
+ 'Result':{'success','exit-code','signal','timeout','start-limit-hit','resources','core-dump','protocol'}}
+for fixture in json.load(sys.stdin):
+ i=fixture['id'];unit='nakpanel-php-fpm@'+str(i)+'.service'
+ output=subprocess.run(['systemctl','show',unit,'--property='+','.join([*allowed,'ExecMainStatus','NRestarts'])],capture_output=True,text=True)
+ values={}
+ for line in output.stdout.splitlines():
+  key,sep,value=line.partition('=')
+  if key in allowed:values[key]=value if value in allowed[key] else 'other'
+  elif key in ('ExecMainStatus','NRestarts') and value.isdecimal():values[key]=int(value)
+ sock=Path('/run/nakpanel-php/site-'+str(i)+'.sock');config=Path('/etc/nginx/sites-available/'+fixture['domain']+'.conf')
+ item=dict(site_id=i,systemd=values,socket_exists=sock.exists(),nginx_uses_expected_socket=False)
+ if sock.exists():
+  info=sock.stat();item.update(socket_is_socket=stat.S_ISSOCK(info.st_mode),socket_mode=oct(stat.S_IMODE(info.st_mode)),socket_uid=info.st_uid,socket_gid=info.st_gid)
+ if config.is_file():item['nginx_uses_expected_socket']=('fastcgi_pass unix:'+str(sock)+';') in config.read_text()
+ for key,path in [('fpm_config',Path('/etc/nakpanel/php-fpm/sites/'+str(i)+'.conf')),('fpm_unit',Path('/etc/systemd/system')/unit)]:
+  item[key+'_exists']=path.is_file()
+  if path.is_file():item[key+'_sha256']=hashlib.sha256(path.read_bytes()).hexdigest()
+ log=Path('/var/log/nginx')/(fixture['username']+'-'+fixture['domain'].replace('.','-')+'.error.log')
+ text=log.read_bytes()[-1048576:].decode(errors='replace').lower() if log.is_file() else ''
+ item['nginx_error_categories']={key:phrase in text for key,phrase in {'missing_upstream_socket':'no such file or directory','permission_denied':'permission denied',
+  'upstream_refused':'connection refused','upstream_timeout':'upstream timed out','missing_script':'primary script unknown'}.items()}
+ result.append(item)
+print(json.dumps(result))
+'''
+            receipt['sites']=json.loads(self.guest(vm,'sudo','python3','-c',script,data=json.dumps(fixtures)))
+            receipt['reconciliation_runs']=json.loads(self.db(vm,"SELECT coalesce(json_agg(x),'[]') FROM (SELECT id,status,sites_total,sites_ok,(last_error <> '') has_error FROM reconciliation_runs ORDER BY id DESC LIMIT 3) x"))
+        except (ValueError,subprocess.SubprocessError) as error:receipt['diagnostic_error_type']=type(error).__name__
+        self.state.setdefault('runtime_diagnostics',[]).append(receipt)
+        write_json(self.evidence/'result.json',self.state)
+        print('scheduled-backup: readonly-runtime-diagnostics '+json.dumps(receipt,sort_keys=True),flush=True)
+
     def health(self,vm):
         self.identity(vm);ip=self.ip(vm)
         self.guest(vm,'sudo','systemctl','is-active','--quiet','nakpanel','nakpanel-agent','nginx','postgresql','mariadb',*['php'+m+'-fpm' for m in MINORS])
@@ -236,9 +292,8 @@ class Drill:
             file_sha=self.guest(vm,'sudo','sha256sum',expected['path']).split()[0]
             cli=self.guest(vm,'/usr/bin/php'+minor,'-r','echo PHP_VERSION;').strip()
             uid=int(self.guest(vm,'id','-u',row['username']).strip())
-            output=self.cmd(['curl','-skfL','--max-time','20','--resolve',row['domain']+':80:'+ip,'--resolve',row['domain']+':443:'+ip,
-                'http://'+row['domain']+'/'+Path(expected['path']).name])
-            data=json.loads(output);require(data.get('run')==self.token,'tenant HTTP canary differs')
+            data=self.php_http(vm,minor,row['domain'],ip,Path(expected['path']).name)
+            require(data.get('run')==self.token,'tenant HTTP canary differs')
             observed[minor]=dict(sha256=file_sha,cli_version=cli,http_version=data.get('version'),uid=data.get('uid'),user_uid=uid,
                 php_version=minor,desired_php_version=row['desired_php_version'],status=row['status'])
         check_php_sites(observed,self.expected)
@@ -246,11 +301,13 @@ class Drill:
         return dict(status='HEALTHY',boot_id=boot,php=observed,control_database_canary=True,mariadb_canary=True,service_repair_performed=False)
 
     def wait_health(self,vm):
-        deadline=time.monotonic()+180
+        deadline=time.monotonic()+180;first=True
         while True:
             try:return self.health(vm)
             except (ValueError,subprocess.SubprocessError):
-                if time.monotonic()>=deadline:raise
+                if first:self.runtime_diagnostics(vm,'first-failure');first=False
+                if time.monotonic()>=deadline:
+                    self.runtime_diagnostics(vm,'final-failure');raise
                 time.sleep(3)
 
     def destination(self,vm,disabled=False):

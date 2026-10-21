@@ -115,7 +115,8 @@ The downloaded receipts confirm two distinct new boot IDs, unassisted service
 health, all three PHP minors, three fresh actual Roundcube send/read executions,
 unchanged package/configuration/desired state and database-manager FastCGI
 health. Owned cleanup and the workflow summary passed. Phase 3 is complete for
-this AMD64 development profile; Phase 4 has not started. Genuine security-version
+this AMD64 development profile. Focused Phase 4 verification is described below.
+Genuine security-version
 advancement, ARM64 qualification and elapsed soak remain separate requirements.
 
 ### Hosted firmware scope
@@ -132,3 +133,30 @@ This follows the observed LVFS HTTP 503 failure in run 39600020263. It is not a
 firmware update or LVFS availability pass. Other failed systemd units still fail
 recovery, with their actual VM journal retained. Production installers do not
 apply this test-environment policy.
+
+## Focused scheduled backup and restore verification
+
+Select only `scheduled_backups_only=true` for this Phase 4 slice. The normal
+build, product qualification, PHP maintenance and diagnostic jobs are skipped.
+The job reads the exact accepted Phase 3 artifact from run `39652821843`; its
+archive, public key, manifest and runtime commit are pinned. It rejects runtime
+source changes and authenticates the signed image before launching fresh owned
+Ubuntu 26.04 AMD64 guests. Cross-run artifact access uses only `actions:read`
+and `contents:read`, following the [upstream action contract](https://github.com/actions/download-artifact/tree/v4).
+
+The source uses actual product fixtures and PHP 8.3/8.4/8.5 web/file canaries.
+The normal cron sweep must create an active, verified encrypted backup with a
+completed River job and scheduler-attributed audit event. No manual backup or
+status rewrite can satisfy the check. The exact archive is restored onto a
+separate fresh signed installation. Control/MariaDB and tenant file/PHP canaries
+must survive restore and a real reboot, with no service repairs. The restored
+server must produce another naturally scheduled verified archive after boot.
+Only bounded structured receipts enter uploaded evidence; archive keys and
+arbitrary command output stay private. Always-owned cleanup has its own receipt.
+This is short operational evidence, not an elapsed soak or a new full release
+qualification. Run `39669768594` proved the actual scheduler backup and imported
+the exact archive, then failed restored PHP HTTP execution before reboot. Both
+owned guests were cleaned up. Acceptance remains incomplete. The focused
+iteration records HTTP status, selected FPM unit/socket state, nginx error
+categories and reconciliation state without publishing HTTP bodies or raw logs.
+The diagnostics neither repair services nor convert a failed check to success.

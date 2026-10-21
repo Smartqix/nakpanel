@@ -18,7 +18,9 @@ on `63c00f6`: all 16 current-version gates, PHP 8.3/8.4/8.5 maintenance failure
 recovery, both unassisted reboots, three fresh Roundcube send/read flows and
 owned cleanup. This is development-signed same-version evidence; remaining
 architecture, security-version advancement and elapsed-soak acceptance are
-pending. Phase 4 is unstarted. Ubuntu 24.04 and cross-OS migration are outside
+pending. The first focused Phase 4 run passed scheduled backup creation but
+failed restored PHP HTTP execution before reboot; acceptance is incomplete. No
+merge or deployment has occurred. Ubuntu 24.04 and cross-OS migration are outside
 the release requirements. See the
 [transition plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 

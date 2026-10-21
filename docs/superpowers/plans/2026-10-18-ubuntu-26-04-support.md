@@ -4,11 +4,16 @@
 > restores only on hosted Ubuntu 26.04; keep PHP 8.3/8.4/8.5, skip legacy tests
 > and avoid repeating unchanged checks. Report before merging or deploying.
 
-**Phase 4 status:** Focused verification is in progress under
-[the scheduled-backup checklist](2026-10-21-phase4-scheduled-backups.md).
-The accepted Phase 3 application will be reused with pinned artifacts and a
-runtime-source equality guard. No new full 16-gate qualification is requested.
-No merge or deployment is authorized.
+**Phase 4 status: INCOMPLETE.** Focused run
+[39669768594](https://github.com/Smartqix/nakpanel/actions/runs/39669768594)
+on qualifier `a59bf68` reused the accepted signed runtime `63c00f6`. Actual
+scheduled backup creation, River completion, scheduler audit and archive
+verification passed; fresh-host import completed, but PHP HTTP execution failed
+before reboot. Both owned guests were cleaned up. A bounded diagnostic iteration
+will retain HTTP status, selected unit/socket and reconciliation state before
+changing runtime behavior. No legacy or full product qualification is repeated.
+See [the scoped checklist](2026-10-21-phase4-scheduled-backups.md). No merge or
+deployment has occurred. Actual hosted acceptance remains pending.
 
 **Current status: Phase 3 PASS on hosted Ubuntu 26.04 AMD64.** Full run
 [39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)

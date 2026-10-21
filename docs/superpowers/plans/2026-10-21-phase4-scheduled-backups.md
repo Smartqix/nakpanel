@@ -63,17 +63,35 @@ paths and the explicit run/VM identities, then publishes a bounded outcome.
   current helpers; keep normal product qualification defaults unchanged.
 - [x] Run focused new tests plus affected existing hosted/soak guard checks;
   validate Bash syntax, workflow syntax and the diff. Do not run local VMs.
-- [ ] Commit and push the focused changes to the existing task branch.
+- [x] Commit and push the focused changes to the existing task branch.
 
 ## Task 2: Run hosted verification and report
 
-- [ ] Dispatch only the new focused mode, with a finite 75-minute observer and
+- [x] Dispatch only the new focused mode, with a finite 75-minute observer and
   90-minute workflow bound; fresh installs previously took about ten minutes.
 - [ ] Inspect actual scheduled rows/jobs/audits, exact archive identity, restored
   canaries, all three PHP runtimes, reboot and postboot scheduling receipts.
 - [ ] Diagnose and fix a concrete observed failure if needed, then rerun only
   affected checks; never relabel a failure or silently relax a gate.
-- [ ] Perform one independent review of this Phase 4 change range, address
+- [x] Perform one independent review of this Phase 4 change range, address
   important findings, retain terminal evidence and cleanup results.
 - [ ] Update the support plan and report measured outcomes and remaining limits.
   Keep runtime changes unmerged and undeployed.
+
+## Hosted failure and bounded diagnosis
+
+Run `39669768594` (`a59bf68`, unchanged runtime `63c00f6`) produced a real
+scheduler-created verified encrypted backup, SHA-256
+`c734c0f3d3505ea6ae541205f3c651a546e007f1930c919ab0f3cb99a8e1d922`.
+Fresh-host restore exited successfully and restored PostgreSQL/MariaDB and tenant
+file canaries, but the PHP HTTP check failed before reboot. Owned cleanup passed
+for both guests. This is a FAIL, not completed restore acceptance.
+
+The next focused run adds read-only selected FPM unit/socket, nginx error-category
+and reconciliation diagnostics on first/final failure, plus HTTP status and curl
+exit code. Response bodies, credentials and arbitrary logs remain private. No
+runtime fix is assumed until the failure is identified. If runtime sources need
+repair, build a new signed candidate and verify the affected slice; retain Phase
+3 attribution to its original source instead of reusing old binaries as new-fix
+proof. Nine Python behavior cases cover the added failure evidence and privacy;
+the two new cases were observed RED before implementation and GREEN afterward.

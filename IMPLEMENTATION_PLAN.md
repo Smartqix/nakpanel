@@ -16,14 +16,16 @@ requested platform support and security requirements.
 
 The authoritative Ubuntu 26.04-only transition checklist is in the
 [support plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md#current-phases).
-The current authorization is **Phase 3 only: run hosted Ubuntu 26.04 PHP
-maintenance with the new diagnostics, fix the failure and verify recovery
-through both reboots**. Ubuntu 26.04 is the sole supported server OS; hosting
-PHP 8.3/8.4/8.5 is required and internal tools use validated PHP 8.5. Ubuntu
-24.04 support and cross-OS migration are retired release requirements. Phase 2
-alignment is implemented in the attached `ricky/ubuntu26-recovery-phase3`
-worktree; runtime changes remain unmerged. Report before Phase 4; no production
-deployment.
+The current authorization is **Phase 4 scheduled backups and restores only on
+hosted Ubuntu 26.04**. Keep PHP 8.3/8.4/8.5, skip legacy tests and avoid repeating
+unchanged checks. Report before merging or deploying. The focused verifier
+reuses the exact accepted Phase 3 signed application, with pinned artifact hashes
+and a guard against runtime-source changes. First run `39669768594` proved an
+actual verified scheduler backup and successful archive import, then failed the
+restored PHP HTTP check before reboot. Owned cleanup passed for both guests.
+Acceptance remains incomplete; a focused diagnostic iteration retains HTTP
+status, selected tenant-unit/socket state and reconciliation results. Runtime
+changes remain unmerged in `ricky/ubuntu26-recovery-phase3`.
 
 **Phase 3 is complete for hosted Ubuntu 26.04 AMD64.** Full run
 [39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
@@ -42,7 +44,8 @@ package run `39651263936` also passed all three minors and owned cleanup.
 
 The measured LVFS HTTP 503 is explicitly excluded only for owned disposable KVM
 guests; production firmware is unchanged. All Phase 3 runs/observers have ended.
-Phase 4 is unstarted. This development-signed AMD64 same-version evidence does
+The focused Phase 4 backup/restore run is separate. This development-signed
+AMD64 same-version evidence does
 not establish ARM64 qualification, genuine security-version advancement,
 elapsed soak or production promotion. Historical Ubuntu 24.04 results below
 retain their original attribution and create no ongoing support obligation.

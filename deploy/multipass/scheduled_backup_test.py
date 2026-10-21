@@ -116,5 +116,29 @@ class ScheduledBackupTests(unittest.TestCase):
                 drill.seed()
             self.assertEqual(owners,['nakpanel'])
 
+    def test_http_failure_retains_safe_status_and_readonly_runtime_diagnostics(self):
+        m=self.module()
+        with tempfile.TemporaryDirectory() as td:
+            drill=object.__new__(m.Drill);drill.private=Path(td);drill.sequence=0
+            drill.env=dict(os.environ);drill.state={'stage':'restored-data-validation'};drill.last_exit_code=0
+            def command(args,**kwargs):
+                self.assertEqual(args[0],'curl')
+                self.assertNotIn('-skfL',args)
+                Path(args[args.index('-o')+1]).write_text('private HTTP response nkbk1-SECRET')
+                return '502'
+            with patch.object(drill,'cmd',side_effect=command):
+                with self.assertRaises(ValueError):drill.php_http('dr','8.3','current-bootstrap.test','10.0.0.2','canary.php')
+            receipt=json.dumps(drill.state)
+            self.assertIn('502',receipt);self.assertNotIn('SECRET',receipt);self.assertNotIn('private HTTP response',receipt)
+            self.assertEqual(drill.state['last_php_http']['minor'],'8.3')
+
+    def test_restore_wait_collects_diagnostics_without_repairing_or_accepting_failure(self):
+        m=self.module();drill=object.__new__(m.Drill)
+        with patch.object(drill,'health',side_effect=ValueError('HTTP failed')),\
+             patch.object(drill,'runtime_diagnostics') as diagnostics,\
+             patch.object(m.time,'monotonic',side_effect=[0,181]):
+            with self.assertRaises(ValueError):drill.wait_health('dr')
+        self.assertEqual(diagnostics.call_args_list,[(('dr','first-failure'),),(('dr','final-failure'),)])
+
 
 if __name__=='__main__':unittest.main()
