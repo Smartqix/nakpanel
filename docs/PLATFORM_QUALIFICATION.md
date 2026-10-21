@@ -14,9 +14,10 @@ verified and changes no served runtime.
 
 Ubuntu 26.04 remains experimental pending remaining release qualification.
 Final-branch CI, ARM64 qualification, genuine PHP security-version advancement
-and elapsed-soak evidence remain separate. Current authorization is local
-documentation and PR preparation only; opening a PR triggers CI including hosted
-security guests. No PR opening, hosted test, merge or deployment is authorized.
+and elapsed-soak evidence remain separate. Current authorization permits pushing
+the prepared branch, opening its PR into main and running required CI, including
+hosted security guests. Fix failures and report results before merging or
+deploying; optional hosted qualification is not authorized.
 
 ## Guest and runner requirements
 

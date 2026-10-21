@@ -1,8 +1,9 @@
 # Ubuntu 26.04-Only Support Transition Plan
 
-> **Current authorization, 21 October 2026:** Reconcile documentation and
-> prepare the correct PR locally. Do not open a PR, launch hosted tests, merge
-> or deploy. Keep PHP 8.3/8.4/8.5 and retain the accepted results below.
+> **Current authorization, 21 October 2026:** Push the prepared branch and open
+> its PR into main. Run only required CI, including the hosted security gate,
+> fix failures and report before merging or deploying. Keep PHP 8.3/8.4/8.5.
+> Do not dispatch optional hosted qualification or repeat accepted unchanged tests.
 
 **Phase 4 scheduled-backup/restore slice: PASS on hosted Ubuntu 26.04 AMD64.**
 [Run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
@@ -35,8 +36,8 @@ checked downloaded receipts agree. The run and its observer have ended.
 **Phase 4 backup/restore verification is complete for the requested slice.**
 Implementation/harness source through `1140165` is on
 `ricky/ubuntu26-recovery-phase3` and remains unmerged. The documentation-only
-reconciliation and PR draft are prepared locally without opening a PR or
-starting CI.
+reconciliation and PR draft were prepared locally. The next authorized step is
+to push and open the PR, then obtain required CI results.
 
 The two measured recovery errors are fixed. APT rejected `--reinstall` of the
 half-configured FPM package despite all 56 cached archives being present.
@@ -186,9 +187,10 @@ after a new user instruction.
    - [x] Reconcile active documentation and prepare the PR title/body locally
      with measured source, dependency and architecture attribution. The draft is
      in [the local PR body](../../pull-requests/ubuntu-26-04-only.body.md).
-   - [ ] After explicit authorization, open the correct PR and obtain its
-     final-branch CI results before a merge decision. Opening it triggers the
-     hosted security gate; current authorization does not permit that action.
+   - [ ] Open the authorized PR from `ricky/ubuntu26-recovery-phase3` into main
+     and obtain final-branch required CI results: unit/generated-code checks,
+     the signed release build and the hosted security gate. Fix failures and
+     report before merging or deploying; optional qualification remains off.
 
 ## Historical Phase 1 changes — 21 October 2026
 

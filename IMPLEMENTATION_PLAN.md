@@ -16,8 +16,9 @@ requested platform support and security requirements.
 
 The authoritative Ubuntu 26.04-only transition checklist is in the
 [support plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md#current-phases).
-The current authorization is **documentation reconciliation and local PR
-preparation only**. Do not open a PR, launch hosted tests, merge or deploy.
+The current authorization is to **push the prepared branch, open its PR into
+main and run required CI, including the hosted security gate**. Fix any failures
+and report before merging or deploying. Do not dispatch optional hosted tests.
 The previous Phase 4 scheduled-backup/restore slice passed in
 [run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
 on freshly signed runtime `0654aa39eee180935f8dbed3cc3b1458e156ba1d`. Actual

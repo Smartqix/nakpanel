@@ -31,8 +31,8 @@ matrices are retired development requirements.
 The recheck independently authenticated the retained candidate signature/source
 and hosted receipts. The initial-command diagnostics regression was observed
 failing before the fix and passing afterward. Read-only reviews found no
-important remaining Phase 4 defect. The documentation-only follow-up changes no
-runtime, installer or workflow and launches no tests. Earlier failed runs retain
+important remaining Phase 4 defect. The documentation-only follow-up changed no
+runtime, installer or workflow. This PR runs the required CI described below. Earlier failed runs retain
 their failure status; the focused Phase 4 pass is not a new full-product pass on
 `0654aa3` or `1140165`.
 
@@ -40,8 +40,9 @@ their failure status; the focused Phase 4 pass is not a new full-product pass on
 
 - Final-branch CI is pending: generated code, full unit tests, release policies
   and the required security gate must be checked on the final PR branch.
-  Opening this PR triggers CI, including hosted Multipass security guests; this
-  prepared local description does not authorize opening or dispatching it.
+  Required CI is authorized: unit/generated-code checks, the signed release
+  build and the hosted Multipass security gate. Optional native qualification,
+  private PHP builds and separate hosted qualification dispatches remain off.
 - Hosted acceptance is AMD64 development-signed evidence. ARM64 qualification,
   other backup destinations, genuine PHP security-version advancement and the
   30–60 day elapsed soak remain separate release claims.

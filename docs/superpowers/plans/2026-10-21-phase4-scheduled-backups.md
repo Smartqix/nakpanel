@@ -205,7 +205,7 @@ was performed.
 
 ## Local documentation and PR preparation — 21 October 2026
 
-Current authorization is local preparation only: no PR opening, hosted test,
+At this checkpoint authorization was local preparation only: no PR opening, hosted test,
 merge or deployment. Active platform, recovery, soak, domain-removal, database
 manager and research guidance now use the accepted Phase 3/4 source bindings;
 historical failed checkpoints remain historical. The primary checkout and
@@ -224,3 +224,13 @@ scope. Its remote content has not been changed.
 Only local documentation consistency, link and diff checks apply to this step;
 existing hosted evidence is reused with its original source. No runtime,
 installer, workflow or test implementation changed, and no remote PR was opened.
+
+## Authorized PR and required CI — 21 October 2026
+
+The user subsequently authorized pushing `ricky/ubuntu26-recovery-phase3`,
+opening its prepared PR into main, and running only required CI, including the
+hosted security gate. Fix any failures and report before merging or deploying.
+The three expected jobs are unit/generated-code checks, the signed release build
+and the hosted adversarial security/reliability gate. Optional native
+qualification, private PHP builds and separate hosted qualification dispatches
+remain off. Existing Phase 3/4 evidence retains its original source attribution.

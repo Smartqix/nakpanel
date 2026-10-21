@@ -12,8 +12,10 @@ local-backup/restore slice passed in run `39676085171` on `0654aa3`. The later
 verifier diagnostics fix `1140165` has focused local evidence and changes no
 served runtime. [AGENTS.md](../AGENTS.md) is project policy; the
 [transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md) records
-the source bindings, remaining release requirements and current local-docs/PR
-preparation authorization. No new hosted run or PR opening is authorized.
+the source bindings and remaining release requirements. Current authorization
+permits pushing the prepared branch, opening its PR into main and running only
+required CI, including the hosted security gate. Report before merging or
+deploying; do not dispatch optional hosted qualification.
 Ubuntu 26.04 remains experimental.
 
 ## Decision and rationale

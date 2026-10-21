@@ -5,8 +5,10 @@ using the signed Surý PHP 8.3/8.4/8.5 profile and internal PHP 8.5. Hosted
 Phase 3 operational/maintenance acceptance passed on `63c00f6`; the focused
 Phase 4 scheduled-backup/restore slice passed on `0654aa3`, as recorded below.
 The latest `1140165` verifier diagnostics change has focused local evidence and
-does not change the served runtime. Current authorization permits only local
-documentation and PR preparation, with no new hosted dispatch or PR opening.
+does not change the served runtime. Current authorization permits pushing the
+prepared branch, opening its PR into main and running required CI, including the
+hosted security gate. Optional hosted qualification remains outside this request;
+report required CI results before any merge or deployment.
 Ubuntu 26.04 remains experimental pending remaining release qualification.
 See [platform qualification](PLATFORM_QUALIFICATION.md) and the
 [transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
