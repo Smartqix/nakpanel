@@ -1,0 +1,13 @@
+{
+  "actual_root_approval": null,
+  "admission_state": "APPROVED",
+  "archive_id": 12278288352,
+  "archive_sha256": "0b494e7e817c144c566ec860ac4307328101ebcf3517cc053daa2df93d740c39",
+  "branch": "ricky/sury-source28-maintenance-current-v5",
+  "event": "push",
+  "qualifier_commit": "6381b526c936569876f029c9134c5baca2d465b0",
+  "repository": "Smartqix/nakpanel",
+  "repository_id": 1292416194,
+  "schema": "source26-diagnostic-binding-v1",
+  "source_commit": "6378b0ae9d15f17481b080926af7fb0bf0761724"
+}
