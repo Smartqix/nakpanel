@@ -892,6 +892,16 @@ class GuestBackend:
         require(plan.returncode==0,'APT configuration simulation failed before mutation')
         check_apt_plan(plan.stdout,self.versions,{package},configuration_only=True)
         self.record('configure-plan',{'packages':[package],'stdout':plan.stdout,'stderr':plan.stderr})
+        # The deliberately invalid configuration consumed restart attempts.
+        # Preserve their state, then clear only this unit's counter before its
+        # signed postinst restarts it. Reboot verification never repairs units.
+        unit=package+'.service'
+        observed=command(['systemctl','show','--property=Id,ActiveState,SubState,Result,NRestarts,ExecMainStatus,StartLimitIntervalUSec,StartLimitBurst',unit],check=False,env=self.env)
+        self.record('configure-service-before',{'unit':unit,'returncode':observed.returncode,'stdout':observed.stdout,'stderr':observed.stderr})
+        require(observed.returncode==0,'cannot retain FPM failure state before configuration recovery')
+        reset=command(['systemctl','reset-failed',unit],check=False,env=self.env)
+        self.record('configure-service-counter-reset',{'unit':unit,'returncode':reset.returncode,'stdout':reset.stdout,'stderr':reset.stderr})
+        require(reset.returncode==0,'cannot clear the owned FPM fault restart counter')
         result=self.apt({package},configuration_only=True)
         self.record('configure-result',{'packages':[package],'returncode':result.returncode,'stdout':result.stdout,'stderr':result.stderr})
         return result

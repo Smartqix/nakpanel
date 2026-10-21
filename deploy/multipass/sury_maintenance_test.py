@@ -368,7 +368,7 @@ class MaintenanceTests(unittest.TestCase):
                 (root/name).write_text(json.dumps(value));(root/name).chmod(0o600)
             states=dict(before,**{'nakpanel.service':'inactive'});mutations=[]
             def command(args,**kwargs):
-                if args[:1]==['systemctl'] and args[1] in ('start','stop','restart'):
+                if args[:1]==['systemctl'] and args[1] in ('start','stop','restart','reset-failed'):
                     mutations.append(args);states[args[2]]='active' if args[1]!='stop' else 'inactive'
                 return subprocess.CompletedProcess(args,0,'','')
             def state(unit):return states.get(unit,'active')
@@ -416,7 +416,7 @@ class MaintenanceTests(unittest.TestCase):
                 m.check_apt_plan(value,versions,{'php8.3-fpm'},configuration_only=True)
 
     def test_configuration_recovery_requires_exact_pending_package_and_signed_script(self):
-        for failure in ('none','not-prepared','not-pending','foreign-pending','changed-version','changed-script','invalid-config','unpack-plan','foreign-plan','apt-failure'):
+        for failure in ('none','not-prepared','not-pending','foreign-pending','changed-version','changed-script','invalid-config','unpack-plan','foreign-plan','service-query-failure','reset-failure','apt-failure'):
             with self.subTest(failure=failure),tempfile.TemporaryDirectory() as td:
                 m=self.module();root=Path(td);script=root/'postinst';script.write_bytes(b'#!/bin/sh\nexit 0\n');script.chmod(0o600)
                 backend=m.GuestBackend(root,{'architecture':'amd64'},[{'Package':'php8.3-fpm','Version':'V'}])
@@ -428,16 +428,26 @@ class MaintenanceTests(unittest.TestCase):
                 if failure=='not-pending':observed['php8.3-fpm'][1]='install ok installed'
                 if failure=='foreign-pending':observed['unrelated'][1]='install ok half-configured'
                 if failure=='changed-version':observed['php8.3-fpm'][0]='WRONG'
-                mutations=[];real_regular=m.root_regular
+                mutations=[];service_observed=False;counter_reset=False;real_regular=m.root_regular
                 def regular(path,expected=None):
                     self.assertEqual(str(path),'/var/lib/dpkg/info/php8.3-fpm.postinst')
                     return real_regular(script,expected)
                 def command(args,**kwargs):
+                    nonlocal service_observed,counter_reset
                     if args[0]=='dpkg-query':
                         self.assertEqual(args,['dpkg-query','-W','-f=${binary:Package}\t${Version}\t${Status}\n'])
                         return subprocess.CompletedProcess(args,0,''.join(name+'\t'+'\t'.join(value)+'\n' for name,value in observed.items()),'')
                     if args[0]=='/usr/sbin/php-fpm8.3':
                         return subprocess.CompletedProcess(args,78 if failure=='invalid-config' else 0,'','')
+                    if args[:2]==['systemctl','show']:
+                        self.assertEqual(args[-1],'php8.3-fpm.service')
+                        service_observed=True
+                        return subprocess.CompletedProcess(args,1 if failure=='service-query-failure' else 0,'ActiveState=active\nNRestarts=4\n','')
+                    if args[:2]==['systemctl','reset-failed']:
+                        self.assertTrue(service_observed)
+                        self.assertEqual(args,['systemctl','reset-failed','php8.3-fpm.service'])
+                        mutations.append(args);counter_reset=failure!='reset-failure'
+                        return subprocess.CompletedProcess(args,0 if counter_reset else 1,'','')
                     self.assertEqual(args[0],'apt-get');self.assertNotIn('--reinstall',args)
                     self.assertIn('--no-remove',args);self.assertEqual(args[-2:],['install','php8.3-fpm=V'])
                     if '--simulate' in args:
@@ -446,13 +456,16 @@ class MaintenanceTests(unittest.TestCase):
                         if failure=='foreign-plan':plan+='Conf unrelated (U provider [amd64])\n'
                         return subprocess.CompletedProcess(args,0,plan,'')
                     self.assertIn('--no-download',args);mutations.append(args)
-                    return subprocess.CompletedProcess(args,100 if failure=='apt-failure' else 0,'','')
+                    return subprocess.CompletedProcess(args,100 if failure=='apt-failure' or not counter_reset else 0,'','')
                 with patch.object(m,'command',side_effect=command),patch.object(m,'root_regular',side_effect=regular):
                     if failure in ('none','apt-failure'):
                         result=backend.configure('8.3');self.assertEqual(result.returncode,100 if failure=='apt-failure' else 0)
                     else:
                         with self.assertRaises(ValueError):backend.configure('8.3')
-                self.assertEqual(len(mutations),1 if failure in ('none','apt-failure') else 0)
+                self.assertEqual(len(mutations),2 if failure in ('none','apt-failure') else 1 if failure=='reset-failure' else 0)
+                if failure in ('none','apt-failure','reset-failure'):
+                    observed=json.loads((root/'step-002-configure-service-before.json').read_text())
+                    self.assertIn('NRestarts=4',observed['stdout'])
 
     def test_unsupported_cli_operations_refuse_without_any_multipass_call(self):
         self.module();wrapper=HERE/'sury-maintenance-verify.sh';self.assertTrue(wrapper.exists())
