@@ -17,15 +17,24 @@ requested platform support and security requirements.
 The authoritative Ubuntu 26.04-only transition checklist is in the
 [support plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md#current-phases).
 The current authorization is **Phase 4 scheduled backups and restores only on
-hosted Ubuntu 26.04**. Keep PHP 8.3/8.4/8.5, skip legacy tests and avoid repeating
-unchanged checks. Report before merging or deploying. The focused verifier
-reuses the exact accepted Phase 3 signed application, with pinned artifact hashes
-and a guard against runtime-source changes. First run `39669768594` proved an
-actual verified scheduler backup and successful archive import, then failed the
-restored PHP HTTP check before reboot. Owned cleanup passed for both guests.
-Acceptance remains incomplete; a focused diagnostic iteration retains HTTP
-status, selected tenant-unit/socket state and reconciliation results. Runtime
-changes remain unmerged in `ricky/ubuntu26-recovery-phase3`.
+hosted Ubuntu 26.04**. That requested slice passed in
+[run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
+on freshly signed runtime `0654aa39eee180935f8dbed3cc3b1458e156ba1d`. Actual
+scheduled encrypted backups, exact-archive fresh-host restore, PostgreSQL/MariaDB
+and tenant file canaries, PHP 8.3/8.4/8.5 CLI/HTTP execution before and after a real
+reboot, resumed scheduled backup creation and owned cleanup passed. Independent
+downloaded-evidence validation passed. The active backup job took 25m46s.
+
+The hosted failure was HTTP 502: configuration-only reconciliation ignored
+stopped classic PHP services. The scoped service-state repair passed six new
+active/suspended cases and affected local checks; independent review found no
+important defects. Failed runs retain their failure status. Full product gates,
+PHP maintenance and legacy tests were not repeated. Phase 3 remains attributed
+to its tested source; broader architecture, security-version and elapsed-soak
+qualification are separate. Results are recorded in the
+[scoped report](docs/superpowers/plans/2026-10-21-phase4-scheduled-backups.md).
+Runtime changes remain unmerged in `ricky/ubuntu26-recovery-phase3`; nothing
+was deployed. Report before any merge or deployment.
 
 **Phase 3 is complete for hosted Ubuntu 26.04 AMD64.** Full run
 [39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)

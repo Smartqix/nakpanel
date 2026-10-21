@@ -4,16 +4,26 @@
 > restores only on hosted Ubuntu 26.04; keep PHP 8.3/8.4/8.5, skip legacy tests
 > and avoid repeating unchanged checks. Report before merging or deploying.
 
-**Phase 4 status: INCOMPLETE.** Focused run
-[39669768594](https://github.com/Smartqix/nakpanel/actions/runs/39669768594)
-on qualifier `a59bf68` reused the accepted signed runtime `63c00f6`. Actual
-scheduled backup creation, River completion, scheduler audit and archive
-verification passed; fresh-host import completed, but PHP HTTP execution failed
-before reboot. Both owned guests were cleaned up. A bounded diagnostic iteration
-will retain HTTP status, selected unit/socket and reconciliation state before
-changing runtime behavior. No legacy or full product qualification is repeated.
-See [the scoped checklist](2026-10-21-phase4-scheduled-backups.md). No merge or
-deployment has occurred. Actual hosted acceptance remains pending.
+**Phase 4 scheduled-backup/restore slice: PASS on hosted Ubuntu 26.04 AMD64.**
+[Run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
+verified fresh signed runtime/qualifier `0654aa39eee180935f8dbed3cc3b1458e156ba1d`.
+Actual encrypted local-destination scheduled backup ID 1, exact-archive fresh-host
+restore, PostgreSQL/MariaDB and tenant file canaries, nonroot PHP 8.3/8.4/8.5 HTTP
+and CLI execution before/after a real reboot, new verified scheduled backup ID 3
+after boot, and owned cleanup all passed. The independent downloaded-evidence
+check also passed. The active backup job took 25m46s, including two fresh installs.
+
+The initial run `39669768594` and diagnostic `39674960173` remain FAIL. The latter
+proved HTTP 502: restored classic PHP units stayed inactive with missing sockets
+while configuration-only reconciliation incorrectly reported 3/3 healthy. The
+repair checks actual dedicated service state and applies existing active or
+suspended intent; six new cases and affected local checks pass. Independent
+review found no important defects. The fixed run required no verifier service
+repair. Full product gates, PHP maintenance and legacy tests were not repeated;
+Phase 3 evidence stays attributed to `63c00f6`. Broader architecture, security
+version advancement and elapsed-soak qualification remain outside this slice.
+See [the result and evidence](2026-10-21-phase4-scheduled-backups.md).
+Changes remain unmerged in `ricky/ubuntu26-recovery-phase3`; nothing was deployed.
 
 **Current status: Phase 3 PASS on hosted Ubuntu 26.04 AMD64.** Full run
 [39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
@@ -160,14 +170,16 @@ after a new user instruction.
      prerequisite failure cannot count as executing or passing the PHP drill.
      No cross-OS migration or legacy test is required. Report before Phase 4.
 4. **Phase 4 — Scheduled backups, final qualification and handover.**
-   - [ ] After operational recovery passes and this phase is authorized, prove
+   The current request authorized only the scheduled-backup/restore slice below.
+   Remaining broader qualification and handover work is separate.
+   - [x] After operational recovery passes and this phase is authorized, prove
      real scheduler execution, current-format backup creation and restoration
      on 26.04 with the required hosting PHP inventory.
    - [ ] Run the affected CI/product/security chain and verify PHP 8.3/8.4/8.5,
      internal tools, mail, DNS/TLS, SQL, files, quotas, WordPress, workers,
      containers, Valkey, reboot and fresh-host recovery for each advertised
      architecture. Do not repeat accepted unchanged checks without a reason.
-   - [ ] Keep genuine security-version advancement and 30–60 day endurance
+   - [x] Keep genuine security-version advancement and 30–60 day endurance
      claims separate from same-version package delivery or a short test pass.
    - [ ] Update release documentation and PR evidence with measured source,
      dependency and architecture attribution. Promote only qualified claims.

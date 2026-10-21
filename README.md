@@ -18,9 +18,13 @@ on `63c00f6`: all 16 current-version gates, PHP 8.3/8.4/8.5 maintenance failure
 recovery, both unassisted reboots, three fresh Roundcube send/read flows and
 owned cleanup. This is development-signed same-version evidence; remaining
 architecture, security-version advancement and elapsed-soak acceptance are
-pending. The first focused Phase 4 run passed scheduled backup creation but
-failed restored PHP HTTP execution before reboot; acceptance is incomplete. No
-merge or deployment has occurred. Ubuntu 24.04 and cross-OS migration are outside
+pending. Phase 4's scoped scheduled-backup/restore checks
+[passed on hosted Ubuntu 26.04 AMD64](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
+with freshly signed runtime `0654aa3`: exact scheduled-archive restore, database
+and file canaries, PHP 8.3/8.4/8.5 before/after reboot, resumed scheduling and
+owned cleanup. A classic PHP service-state reconciliation defect was fixed.
+Full product gates and legacy tests were not repeated. Changes remain unmerged;
+nothing was deployed. Ubuntu 24.04 and cross-OS migration are outside
 the release requirements. See the
 [transition plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 

@@ -3,7 +3,7 @@
 The hosted workflow targets one server OS: Ubuntu 26.04/resolute on AMD64,
 using the signed Surý PHP 8.3/8.4/8.5 profile and internal PHP 8.5. Workflow
 alignment in Phase 2 is local only; no hosted dispatch/push is authorized by
-this document. Ubuntu 26.04 remains experimental pending operational acceptance.
+this document. Ubuntu 26.04 remains experimental pending remaining release qualification.
 See [platform qualification](PLATFORM_QUALIFICATION.md) and the
 [transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 
@@ -136,8 +136,10 @@ apply this test-environment policy.
 
 ## Focused scheduled backup and restore verification
 
-Select only `scheduled_backups_only=true` for this Phase 4 slice. The normal
-build, product qualification, PHP maintenance and diagnostic jobs are skipped.
+Select `scheduled_backups_only=true` for this Phase 4 slice. On the repaired
+current branch also select `scheduled_backups_build_current=true`; the canonical
+builder produces new signed bytes. Baseline-only reuse rejects runtime changes.
+Product qualification, PHP maintenance and diagnostic jobs remain skipped.
 The job reads the exact accepted Phase 3 artifact from run `39652821843`; its
 archive, public key, manifest and runtime commit are pinned. It rejects runtime
 source changes and authenticates the signed image before launching fresh owned
@@ -156,8 +158,9 @@ arbitrary command output stay private. Always-owned cleanup has its own receipt.
 This is short operational evidence, not an elapsed soak or a new full release
 qualification. Run `39669768594` proved the actual scheduler backup and imported
 the exact archive, then failed restored PHP HTTP execution before reboot. Both
-owned guests were cleaned up. Acceptance remains incomplete. The focused
-iteration records HTTP status, selected FPM unit/socket state, nginx error
+owned guests were cleaned up. That failed attempt did not establish acceptance.
+The diagnostic iteration recorded HTTP status, selected FPM unit/socket state,
+nginx error
 categories and reconciliation state without publishing HTTP bodies or raw logs.
 The diagnostics neither repair services nor convert a failed check to success.
 
@@ -171,3 +174,20 @@ new archive/manifest/public-key hashes. Only the explicitly scoped classic-site
 runtime repair and regression test are allowed beyond harness/docs changes.
 Old Phase 3 evidence remains attributed to runtime `63c00f6`, rather than being
 relabeled as full qualification of the repaired candidate.
+
+
+### Measured acceptance — 21 October 2026
+
+[Run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
+passed this focused slice on fresh signed runtime `0654aa3`. Source scheduled
+backup ID 1, its exact fresh-host restore, PostgreSQL/MariaDB and tenant file
+canaries, all three PHP CLI/HTTP runtimes and tenant ownership before/after a
+real restored reboot, new postboot scheduled backup ID 3 and owned cleanup
+(two records, exit 0) passed. The active backup job took 25m46s. The downloaded
+candidate signature/source and terminal acceptance receipts were independently
+checked; no archive key appears in public JSON. The confirmed failure and scoped
+classic PHP service-state repair are recorded in the
+[result and evidence](superpowers/plans/2026-10-21-phase4-scheduled-backups.md).
+Full qualification and legacy tests were skipped; other architecture/destination,
+security-version advancement and endurance claims remain separate. Nothing was
+merged or deployed.
