@@ -5,6 +5,10 @@ on:
     branches: [codex/ubuntu-26-support]
   workflow_dispatch:
     inputs:
+      diagnose_php_maintenance:
+        description: Only reproduce PHP package recovery on a disposable 26.04 guest (not product qualification)
+        type: boolean
+        default: false
       diagnose_fwupd:
         description: Only diagnose fwupd on the pinned disposable 26.04 image (no product qualification)
         type: boolean
@@ -35,7 +39,7 @@ concurrency:
 
 jobs:
   diagnose-fwupd:
-    if: github.event.repository.private == false && inputs.diagnose_fwupd
+    if: github.event.repository.private == false && inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -55,8 +59,30 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
+  diagnose-php-maintenance:
+    if: github.event.repository.private == false && inputs.diagnose_php_maintenance
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require exactly one diagnostic selection
+        env:
+          FWUPD_REQUESTED: ${{ inputs.diagnose_fwupd }}
+        run: test "${FWUPD_REQUESTED}" != true
+      - name: Prepare this disposable hosted runner
+        run: bash deploy/multipass/prepare-hosted-runner.sh
+      - name: Reproduce actual PHP package failed-configuration recovery
+        run: bash deploy/multipass/php-maintenance-diagnostic.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: php-maintenance-diagnostic-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/php-maintenance-diagnostic/
+          retention-days: 7
+          if-no-files-found: error
+
   signed-bundles:
-    if: github.event.repository.private == false && !inputs.diagnose_fwupd
+    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -134,7 +160,7 @@ jobs:
         run: rm -f "${RUNNER_TEMP}/hosted-test-private.pem"
 
   qualify-amd64:
-    if: github.event.repository.private == false && !inputs.diagnose_fwupd
+    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance
     needs: signed-bundles
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -290,7 +316,7 @@ jobs:
           if-no-files-found: error
 
   hosted-evidence-summary:
-    if: always() && github.event.repository.private == false && !inputs.diagnose_fwupd
+    if: always() && github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance
     needs: [signed-bundles, qualify-amd64]
     runs-on: ubuntu-24.04
     steps:
