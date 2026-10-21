@@ -79,3 +79,18 @@ underlying failure cause was not retained. Cleanup passed. This remains Phase 3
 work; it is not fixed by retiring Ubuntu 24.04 or by local workflow changes.
 The former cross-OS migration run remains a historical failure outside the new
 release scope. No retry, scheduled-backup run or later phase is launched here.
+
+### Hosted firmware scope
+
+The optional `diagnose_fwupd` dispatch runs a bounded standalone reproduction
+on the pinned image, retains the vendor unit/journal and destroys its owned
+guest. It does not build or qualify Nakpanel.
+
+Product qualification explicitly enables `NAKPANEL_HOSTED_GUEST_FIRMWARE_POLICY=1`
+only on disposable GitHub Actions KVM guests. Physical firmware belongs to the
+hypervisor; fwupd metadata availability is excluded with a guest ExecCondition
+and `EXCLUDED_HOST_FIRMWARE` receipts in `report.json.environment_exclusions`.
+This follows the observed LVFS HTTP 503 failure in run 39600020263. It is not a
+firmware update or LVFS availability pass. Other failed systemd units still fail
+recovery, with their actual VM journal retained. Production installers do not
+apply this test-environment policy.

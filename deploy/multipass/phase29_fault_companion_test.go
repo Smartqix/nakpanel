@@ -8,6 +8,45 @@ import (
 	"testing"
 )
 
+func TestPhase29FailedUnitsRetainActualDRDiagnosticsAndStillFail(t *testing.T) {
+	data, err := os.ReadFile("phase29-verify.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	function := shellFixtureFunction(t, string(data), "assert_no_failed_units", true)
+	for _, state := range []string{"healthy", "failed", "journal-unavailable"} {
+		t.Run(state, func(t *testing.T) {
+			log := filepath.Join(t.TempDir(), "calls")
+			cmd := exec.Command("bash", "-c", `set -euo pipefail
+IMAGE=26.04; NAKPANEL_MULTIPASS_ARCH=amd64; NAKPANEL_RUN_TOKEN=test-owner
+assert_vm_identity(){ [[ "$*" == 'nakpanel-target-dr 26.04 amd64 test-owner' ]]; }
+multipass_exec_short(){
+ [[ "$1" == nakpanel-target-dr ]] || return 97
+ echo "$*" >>"$CALLS"
+ case "$*" in
+  *'systemctl --failed'*) [[ "$STATE" == healthy ]] || echo 'fwupd-refresh.service loaded failed failed Refresh fwupd metadata';;
+  *'systemctl show'*) echo 'Result=exit-code'; echo 'ExecMainStatus=1';;
+  *'journalctl'*) [[ "$STATE" != journal-unavailable ]] || return 98; echo 'Failed to obtain auth';;
+ esac
+}
+fail(){ echo "$*" >&2; exit 90; }
+`+function+`assert_no_failed_units nakpanel-target-dr 'disaster-recovery deployment'`)
+			cmd.Env = append(os.Environ(), "STATE="+state, "CALLS="+log)
+			out, err := cmd.CombinedOutput()
+			if (err == nil) != (state == "healthy") {
+				t.Fatalf("%s health result: %s %v", state, out, err)
+			}
+			calls, _ := os.ReadFile(log)
+			if state != "healthy" && (!strings.Contains(string(calls), "systemctl show") || !strings.Contains(string(calls), "journalctl") || !strings.Contains(string(out), "disaster-recovery deployment has failed")) {
+				t.Fatalf("%s did not retain DR details and fail: %s %s", state, calls, out)
+			}
+			if state == "failed" && !strings.Contains(string(out), "Failed to obtain auth") {
+				t.Fatalf("actual service error missing: %s", out)
+			}
+		})
+	}
+}
+
 func TestSignedFaultDrillsAreIsolatedAndFailurePreventsReclaim(t *testing.T) {
 	data, err := os.ReadFile("phase29-verify.sh")
 	if err != nil {

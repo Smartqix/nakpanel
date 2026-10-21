@@ -319,6 +319,46 @@ ensure_vm() {
     assert_current_vm_identity || return 1
   fi
   wait_for_cloud_init "${NAKPANEL_MULTIPASS_VM}"
+  configure_hosted_guest_firmware || return "$?"
+}
+
+# A disposable KVM guest cannot maintain the runner's physical firmware. Make
+# that environment exclusion explicit; production installers never call this.
+configure_hosted_guest_firmware() {
+  [[ "${NAKPANEL_HOSTED_GUEST_FIRMWARE_POLICY:-0}" == 1 ]] || return 0
+  [[ "${GITHUB_ACTIONS:-}" == true && "${RUNNER_ENVIRONMENT:-}" == github-hosted && "${NAKPANEL_MULTIPASS_IMAGE}" == 26.04 ]] || {
+    echo 'Hosted firmware policy requires a disposable 26.04 Actions guest.' >&2; return 1;
+  }
+  assert_current_vm_identity || return "$?"
+  local records="${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}/firmware"
+  mkdir -p "${records}"
+  multipass_exec_short "${NAKPANEL_MULTIPASS_VM}" -- sudo bash -se -- "${NAKPANEL_RUN_TOKEN}" "${NAKPANEL_MULTIPASS_VM}" <<'FIRMWARE' >"${records}/${NAKPANEL_MULTIPASS_VM}.json"
+set -euo pipefail
+[[ "$(cat /etc/nakpanel-qualification-owner)" == "$1" ]]
+[[ "$(systemd-detect-virt --vm)" == kvm ]]
+unit=fwupd-refresh.service
+previous="$(systemctl show "$unit" --property=Result --value)"
+systemctl show "$unit" --property=Result,ExecMainCode,ExecMainStatus >&2
+journalctl -b -u "$unit" --no-pager -n 80 >&2
+install -d -o root -g root -m 0755 /etc/systemd/system/fwupd-refresh.service.d
+cat >/etc/systemd/system/fwupd-refresh.service.d/nakpanel-qualification.conf <<'UNIT'
+# Qualification VM only: physical firmware belongs to its hypervisor.
+[Service]
+StandardError=journal
+ExecCondition=/bin/sh -c 'if /usr/bin/systemd-detect-virt --quiet --vm; then echo "SKIP: physical firmware is maintained by the qualification hypervisor"; exit 1; fi'
+UNIT
+chmod 0644 /etc/systemd/system/fwupd-refresh.service.d/nakpanel-qualification.conf
+systemctl daemon-reload
+# Execute the condition, rather than resetting a failed unit or accepting a
+# failed download. ExecCondition=1 skips ExecStart and leaves an inactive unit.
+systemctl start "$unit"
+[[ "$(systemctl show "$unit" --property=Result --value)" == exec-condition ]]
+[[ "$(systemctl show "$unit" --property=ActiveState --value)" == inactive ]]
+python3 - "$1" "$2" "$previous" <<'PY'
+import json,sys
+print(json.dumps(dict(schema='nakpanel-hosted-firmware-policy-v1',run_token=sys.argv[1],vm=sys.argv[2],virtualization='kvm',status='EXCLUDED_HOST_FIRMWARE',unit='fwupd-refresh.service',previous_result=sys.argv[3],result='exec-condition',physical_firmware_validated=False)))
+PY
+FIRMWARE
 }
 
 ensure_lab_quota() {

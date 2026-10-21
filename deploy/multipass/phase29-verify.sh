@@ -23,10 +23,19 @@ export NAKPANEL_MULTIPASS_SOURCE_VM="${VM_NAME}"
 fail(){ echo "phase29: $*" >&2; exit 1; }
 db(){ multipass_exec_short "${VM_NAME}" -- sudo -u postgres psql -Atqd nakpanel -c "$1" | tr -d '\r'; }
 cli(){ multipass_exec_short "${VM_NAME}" -- sudo -u nakpanel env NAKPANEL_DATABASE_URL='postgres:///nakpanel?host=/var/run/postgresql&sslmode=disable' NAKPANEL_AGENT_SOCKET='/run/nakpanel/agent.sock' NAKPANEL_SECRET_KEY_FILE='/etc/nakpanel/secret-keys.json' panelctl --actor phase29 "$@"; }
-assert_no_failed_units(){
-  local vm="$1" label="$2" failed
+assert_no_failed_units() {
+  local vm="$1" label="$2" failed unit ignored
+  assert_vm_identity "${vm}" "${IMAGE}" "${NAKPANEL_MULTIPASS_ARCH}" "${NAKPANEL_RUN_TOKEN}" || return "$?"
   failed="$(multipass_exec_short "${vm}" -- sudo systemctl --failed --no-legend --plain --no-pager | tr -d '\r')"
-  [[ -z "${failed//[[:space:]]/}" ]] || fail "${label} has failed systemd units: ${failed}"
+  if [[ -n "${failed//[[:space:]]/}" ]]; then
+    while read -r unit ignored; do
+      [[ -n "${unit}" ]] || continue
+      echo "phase29: ${label}: ${vm}: ${unit} failure details" >&2
+      multipass_exec_short "${vm}" -- sudo systemctl show --no-pager --property=Result,ExecMainCode,ExecMainStatus -- "${unit}" >&2 || true
+      multipass_exec_short "${vm}" -- sudo journalctl -b --no-pager -n 80 --unit="${unit}" >&2 || true
+    done <<<"${failed}"
+    fail "${label} has failed systemd units: ${failed}"
+  fi
 }
 imap_canary() {
   local target_vm="$1" mode="$2"

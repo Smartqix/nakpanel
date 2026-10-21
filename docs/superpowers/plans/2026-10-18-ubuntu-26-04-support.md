@@ -85,11 +85,11 @@ after a new user instruction.
      Review workflow syntax without dispatching it. Report before Phase 3;
      no hosted tests in Phase 2 without a separate explicit instruction.
 3. **Phase 3 — Resolve and validate Ubuntu 26.04 operational recovery.**
-   - [ ] Diagnose the actual `fwupd-refresh.service` failure from the DR
+   - [x] Diagnose the actual `fwupd-refresh.service` failure from the DR
      prerequisite. Retain the unit journal and exact failed command before
      cleanup; distinguish host/image problems from application failures using
      measured evidence rather than silently masking failed services.
-   - [ ] Fix and locally verify the diagnosed issue. Expose per-gate progress
+   - [x] Fix and locally verify the diagnosed issue. Expose per-gate progress
      and useful failure details before another long full qualification run.
    - [ ] After explicit hosted-test authorization, run bounded current-version
      26.04 recovery and PHP delivery/configuration-failure/recovery checks,
@@ -254,3 +254,38 @@ Later completion requires the implemented contract and measured current-version
 A successful cross-build, OS guard change, retired failure or health endpoint
 alone does not qualify a platform. Historical archives, prior binaries,
 compatibility wrappers, backfills and transitional migrations remain excluded.
+
+## Phase 3 diagnosis and hosted execution — 21 October 2026
+
+Active implementation branch: `ricky/ubuntu26-recovery-phase3`, in the same
+attached `ubuntu-26-support` worktree. Commit `c602d66` records the Phase 2
+implementation and the bounded diagnostic entrypoint; the primary checkout's
+runtime remains unmerged.
+
+The standalone [diagnostic run 39600020263](https://github.com/Smartqix/nakpanel/actions/runs/39600020263)
+used the original signed image pin, serial `20260927`, Ubuntu 26.04.1 KVM
+AMD64, fwupd/libfwupd3 `2.1.1-1ubuntu3.1`. With only stderr redirected to the
+journal, the vendor service exited 1: LVFS metadata download returned HTTP
+503, “Timed out while waiting”, Varnish error 54113. Root's manual refresh
+also exceeded its 90-second diagnostic limit (exit 124). The diagnostic job
+succeeded in collecting a real service failure; that is not a firmware-refresh
+pass. Cleanup succeeded. The original run 39582799272 lacked the underlying
+unit journal, so its exact error cannot retrospectively be asserted as 503.
+
+The upstream auth bug was investigated but not reproduced; no polkit privilege
+change is applied. The measured failure is an external firmware metadata
+outage, independent of Nakpanel's data restore. Hosted qualification now has
+an explicit firmware policy enabled only for owned disposable Actions KVM
+guests. An ExecCondition skips physical-firmware metadata refresh in these
+guests and records `EXCLUDED_HOST_FIRMWARE` / `physical_firmware_validated=false`
+in each VM receipt and the canonical report. It does not claim LVFS is repaired,
+accept failed downloads, reset failed units or mask a service. Firmware remains
+the hypervisor's responsibility in this test environment. Production installers
+and physical-host firmware policy are unchanged. All other failed units remain
+fatal. Recovery now also captures the actual target VM's failing-unit result,
+exit code and bounded journal before failing.
+
+Retained standalone evidence:
+`/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-21/phase3-fwupd/`.
+Hosted operational recovery and actual PHP maintenance results remain pending.
+Phase 4 has not started.

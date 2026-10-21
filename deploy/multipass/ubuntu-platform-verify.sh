@@ -23,7 +23,7 @@ names=['NAKPANEL_RUN_TOKEN','NAKPANEL_MULTIPASS_VM','NAKPANEL_MULTIPASS_SOURCE_V
  'NAKPANEL_GUEST_RELEASE_PUBLIC_KEY','NAKPANEL_RELEASE_BUNDLE','NAKPANEL_RELEASE_PUBLIC_KEY',
  'NAKPANEL_RELEASE_VERSION','NAKPANEL_RELEASE_ALLOW_DEVELOPMENT',
  'NAKPANEL_QUALIFICATION_PHP_PROVIDER','NAKPANEL_CELL_REPORT_DIR','NAKPANEL_OWNERSHIP_DIR',
- 'NAKPANEL_MULTIPASS_IMAGE_SOURCE','NAKPANEL_MULTIPASS_IMAGE_SHA256',
+ 'NAKPANEL_MULTIPASS_IMAGE_SOURCE','NAKPANEL_MULTIPASS_IMAGE_SHA256','NAKPANEL_HOSTED_GUEST_FIRMWARE_POLICY',
  'NAKPANEL_QUALIFICATION_VM_CPUS',
  'NAKPANEL_QUALIFICATION_VM_MEMORY','NAKPANEL_QUALIFICATION_VM_DISK',
  'NAKPANEL_QUALIFICATION_DR_CPUS','NAKPANEL_QUALIFICATION_DR_MEMORY','NAKPANEL_QUALIFICATION_DR_DISK',
@@ -55,6 +55,7 @@ report=dict(schema_version=1,qualification_scope="CURRENT_VERSION_ONLY",excluded
 image_records=pathlib.Path(os.environ['NAKPANEL_OWNERSHIP_DIR'],os.environ['NAKPANEL_RUN_TOKEN']).glob('*.image.json')
 report['requested_image']=dict(expected_release=release,source=os.environ.get('NAKPANEL_MULTIPASS_IMAGE_SOURCE') or release,sha256=os.environ.get('NAKPANEL_MULTIPASS_IMAGE_SHA256') or None)
 report['launch_images']=[dict(vm=path.name.removesuffix('.image.json'),**json.loads(path.read_text())) for path in image_records]
+report['environment_exclusions']=[json.loads(path.read_text()) for path in pathlib.Path(os.environ['NAKPANEL_OWNERSHIP_DIR'],os.environ['NAKPANEL_RUN_TOKEN'],'firmware').glob('*.json')]
 pathlib.Path(os.environ['NAKPANEL_CELL_REPORT_DIR'],'report.json').write_text(json.dumps(report,indent=2)+'\n')
 PY
   echo "Cell evidence: ${NAKPANEL_CELL_REPORT_DIR}"
