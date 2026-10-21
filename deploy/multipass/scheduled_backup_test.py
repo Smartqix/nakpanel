@@ -92,6 +92,41 @@ class ScheduledBackupTests(unittest.TestCase):
             self.assertEqual(value['error_type'],'ValueError');self.assertNotIn('PRIVATE',text);self.assertNotIn('stderr',text)
             self.assertEqual(p.stat().st_mode & 0o777,0o600)
 
+    def test_initial_git_failure_keeps_original_exit_and_safe_receipt(self):
+        m=self.module()
+        with tempfile.TemporaryDirectory() as td:
+            environment=dict(GITHUB_ACTIONS='true',RUNNER_ENVIRONMENT='github-hosted',GITHUB_RUN_ID='123',GITHUB_RUN_ATTEMPT='1',
+                GITHUB_SHA='b'*40,RUNNER_TEMP=td,NAKPANEL_SCHEDULED_RUNTIME_IDENTITY=json.dumps(m.BASELINE))
+            failed=subprocess.CompletedProcess(['git','rev-parse','HEAD'],128,'private output','nkbk1-'+'A'*52)
+            old_umask=os.umask(0o077)
+            try:
+                with patch.dict(os.environ,environment),patch.object(m.sys,'argv',['scheduled-backup-verify.py','run']),\
+                     patch.object(m.subprocess,'run',return_value=failed),patch.object(m.Drill,'shell',side_effect=AssertionError('VM work before source identity')):
+                    with self.assertRaises(subprocess.CalledProcessError) as raised:m.main()
+                self.assertEqual(raised.exception.returncode,128)
+                path=Path(td)/'scheduled-backup-evidence/result.json';receipt=path.read_text();value=json.loads(receipt)
+                self.assertEqual(value['status'],'FAIL');self.assertEqual(value['stage'],'initialization')
+                self.assertEqual(value['last_command_failure'],{'program':'git','exit_code':128})
+                self.assertEqual(value['error_type'],'CalledProcessError')
+                self.assertNotIn('private output',receipt);self.assertNotIn('nkbk1-',receipt)
+                self.assertEqual(path.stat().st_mode & 0o777,0o600)
+            finally:os.umask(old_umask)
+
+    def test_checkout_mismatch_rejects_before_vm_work(self):
+        m=self.module()
+        with tempfile.TemporaryDirectory() as td:
+            environment=dict(GITHUB_ACTIONS='true',RUNNER_ENVIRONMENT='github-hosted',GITHUB_RUN_ID='123',GITHUB_RUN_ATTEMPT='1',
+                GITHUB_SHA='b'*40,RUNNER_TEMP=td,NAKPANEL_SCHEDULED_RUNTIME_IDENTITY=json.dumps(m.BASELINE))
+            wrong_checkout=subprocess.CompletedProcess(['git','rev-parse','HEAD'],0,'c'*40+'\n','')
+            old_umask=os.umask(0o077)
+            try:
+                with patch.dict(os.environ,environment),patch.object(m.sys,'argv',['scheduled-backup-verify.py','run']),\
+                     patch.object(m.subprocess,'run',return_value=wrong_checkout),patch.object(m.Drill,'shell',side_effect=AssertionError('VM work before source identity')):
+                    with self.assertRaisesRegex(ValueError,'qualification checkout differs'):m.main()
+                value=json.loads((Path(td)/'scheduled-backup-evidence/result.json').read_text())
+                self.assertEqual(value['status'],'FAIL');self.assertEqual(value['stage'],'initialization')
+            finally:os.umask(old_umask)
+
     def test_cli_refuses_nonhosted_environment_before_external_commands(self):
         self.module()
         with tempfile.TemporaryDirectory() as td:

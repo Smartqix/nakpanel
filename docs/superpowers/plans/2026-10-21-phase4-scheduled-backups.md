@@ -174,3 +174,31 @@ and diff checks. One read-only review of the initial harness found a fixture
 principal defect, fixed RED→GREEN; a narrow review of the new runtime/candidate
 work found no important defects. The bounded observer ended and terminal logs,
 artifacts, independent acceptance and owned cleanup receipts are retained.
+
+## Follow-up recheck — 21 October 2026
+
+The requested recheck independently revalidated the retained run `39676085171`:
+its candidate signature/source binding, actual scheduled archives, restored data
+and PHP, changed boot ID and owned cleanup still pass. Nine affected runtime Go
+checks and four focused harness/workflow Go checks passed again; actionlint and
+diff validation passed. One fresh bounded read-only review found no important
+runtime, scheduling, restore, evidence or cleanup defect in the Phase 4 range.
+Other architecture/destination/endurance claims and unchanged shared helper
+failure paths were outside this recheck; no broader readiness claim is added.
+
+One concrete verifier diagnostics defect was reproduced and fixed: the first
+`git rev-parse HEAD` command ran before the result state existed, outside the
+central failure handler. A command failure raised `AttributeError` and hid its
+original exit code instead of writing the intended receipt. Initialization now
+records the hosted source identity first, then checks the real checkout inside
+the failure handler before any ownership/VM operation. The regression was RED
+before the fix and GREEN after it; it now retains the original exit code and a
+private-mode sanitized receipt. A second regression proves a different checkout
+still rejects before VM work. All 12 Python behavior cases pass through the Go
+harness wrapper after the fix.
+
+Only the verifier, its tests and this report changed. Served runtime, installer,
+workflow and PHP support remain unchanged, so no hosted test was relaunched.
+The existing hosted PASS remains attributed to runtime `0654aa3`; the new
+initialization failure path has focused local evidence. No merge or deployment
+was performed.

@@ -173,11 +173,12 @@ class Drill:
             NAKPANEL_MULTIPASS_IMAGE='26.04',NAKPANEL_MULTIPASS_ARCH='amd64',NAKPANEL_QUALIFICATION_PHP_PROVIDER='sury',
             NAKPANEL_REMOTE_SRC='/var/lib/nakpanel-qualification/'+self.token+'/source',NAKPANEL_OWNERSHIP_DIR=str(self.private/'owners'))
         self.sequence=0
-        qualifier=self.cmd(['git','rev-parse','HEAD']).strip()
+        qualifier=os.environ['GITHUB_SHA']
+        require(re.fullmatch(r'[a-f0-9]{40}',qualifier),'invalid hosted source commit')
         runtime_identity=json.loads(os.environ['NAKPANEL_SCHEDULED_RUNTIME_IDENTITY'])
         if runtime_identity==BASELINE:check_baseline(runtime_identity)
         else:check_current_candidate(runtime_identity,qualifier)
-        self.state=dict(schema='nakpanel-scheduled-backup-result-v1',scope='SCHEDULED_BACKUP_RESTORE_ONLY',status='STARTED',
+        self.state=dict(schema='nakpanel-scheduled-backup-result-v1',scope='SCHEDULED_BACKUP_RESTORE_ONLY',status='STARTED',stage='initialization',
             source_vm=self.source,dr_vm=self.dr,run_token=self.token,release='26.04',architecture='amd64',php=list(MINORS),
             baseline_run=BASELINE_RUN,runtime_commit=runtime_identity['commit'],runtime_identity=runtime_identity,baseline_identity=BASELINE,
             qualifier_commit=qualifier,promotion_eligible=False,merged=False,deployed=False)
@@ -370,6 +371,7 @@ WHERE b.destination_id="""+str(destination)+" AND b.created_at>='"+since.isoform
             time.sleep(5)
 
     def execute(self):
+        require(self.cmd(['git','rev-parse','HEAD']).strip()==self.state['qualifier_commit'],'qualification checkout differs from hosted source')
         self.stage('ownership-initialization')
         self.shell('init_qualification_run')
         export({k:self.env[k] for k in ('NAKPANEL_RUN_TOKEN','NAKPANEL_MULTIPASS_VM','NAKPANEL_MULTIPASS_SOURCE_VM','NAKPANEL_MULTIPASS_DR_VM','NAKPANEL_OWNERSHIP_DIR')})
