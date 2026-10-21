@@ -1,21 +1,64 @@
 # Ubuntu 26.04-Only Support Transition Plan
 
-> **Current authorization, 21 October 2026:** Phase 3 only: diagnose and fix
-> `fwupd-refresh.service`, then run bounded hosted Ubuntu 26.04 current-version
-> recovery and PHP maintenance tests with hosting PHP 8.3/8.4/8.5. Skip legacy
-> tests. Report results before Phase 4; no Phase 4 work or production deployment.
+> **Current authorization, 21 October 2026:** Continue Phase 3 only: run hosted
+> Ubuntu 26.04 PHP maintenance with the new diagnostics, fix the observed failure
+> and verify recovery through both reboots. Keep hosting PHP 8.3/8.4/8.5; skip
+> legacy tests. Report before Phase 4; no production deployment.
 
-**Current status:** Hosted current-version operational recovery PASS; actual PHP
-maintenance recovery FAIL, exact guest check unknown. Phase 3 is incomplete.
-No hosted run or observer remains active. Phase 4 has not started.
+**Current status: Phase 3 PASS on hosted Ubuntu 26.04 AMD64.** Full run
+[39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
+passed on runtime/qualifier commit
+`63c00f6006df3bba1ca9ef474e0f350ff7835165`. All 16 current-version gates,
+actual PHP maintenance recovery, both unassisted reboots, three fresh Roundcube
+send/read flows and owned cleanup passed. The workflow summary and independently
+checked downloaded receipts agree. The run and its observer have ended.
+**Phase 4 is unstarted.** Runtime changes are pushed on
+`ricky/ubuntu26-recovery-phase3` and remain unmerged.
 
-The requested two-pass recheck is complete locally; see the review record below.
-It fixes failure reporting and a failed health-query guard, and does not establish
-PHP maintenance acceptance. No additional hosted test was launched for this review.
+The two measured recovery errors are fixed. APT rejected `--reinstall` of the
+half-configured FPM package despite all 56 cached archives being present.
+Recovery now finishes only its pending configuration after removing the owned
+fault, verifying the original full package inventory and signed installed
+postinst, and accepting only a Conf-only simulation. It forbids unpacking,
+downloads, removals and configuring unrelated packages. The deliberate failures
+also consumed FPM's start counter. The fix retains that unit's actual state
+before clearing only its counter, following the documented
+[systemctl behavior](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html).
+Reboot verification does not start, restart or reset existing application
+services to repair them; its transient smoke probes are separate.
+
+| Run / tested source | Actual outcome |
+| --- | --- |
+| [39632906571](https://github.com/Smartqix/nakpanel/actions/runs/39632906571) / `a82d6ec` | All 16 gates PASS; PHP recovery FAIL at `drill_minor`; zero verified maintenance reboots; owned cleanup PASS. New safe frames identified the package step. |
+| [39647396390](https://github.com/Smartqix/nakpanel/actions/runs/39647396390) / `02fd182` | Isolated diagnostic FAIL: APT `Internal Error, No file name` on the half-configured FPM reinstall. A cleanup log was retained, but no independent cleanup exit receipt; deletion is not promoted from that log alone. |
+| [39649611313](https://github.com/Smartqix/nakpanel/actions/runs/39649611313) / `034284b` | Configuration-only recovery reached signed postinst, then FAIL on the consumed FPM start limit. Owned cleanup receipt PASS. |
+| [39651263936](https://github.com/Smartqix/nakpanel/actions/runs/39651263936) / `63c00f6` | Isolated diagnostic PASS: real postinst failure, half-configured state and recovery for PHP 8.3/8.4/8.5; owned cleanup PASS. Product/reboot qualification explicitly false. |
+| [39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843) / `63c00f6` | Full qualification PASS: 16 gates, real same-version delivery/configuration recovery, both reboots, three fresh actual mail flows, database-manager FastCGI health, unchanged package/configuration/desired state and owned cleanup. |
+
+Final baseline: **77m40s**; maintenance preparation, actual recovery and both
+reboots: **10m11s**. The isolated credential-free package diagnostic avoided
+repeating the full baseline solely to collect APT errors. Local maintenance61/
+preparation25 Python cases and seven focused Go checks passed. One independent
+reviewer found no important defects and independently checked the affected
+recovery tests.
+
+Both reboot receipts are HEALTHY, have different boot IDs and record
+`service_repair_performed=false`:
+
+- Reboot 1: `c7300542-a335-4606-8e75-62410e882e2b`.
+- Reboot 2: `afdd2d61-d723-4a4c-838d-95ce1ae9ec50`.
+
+CLI and nonroot FastCGI checks retained PHP **8.3.36, 8.4.27 and 8.5.12** through
+recovery and both boots, together with tool/worker and isolation assertions.
+This is development-signed AMD64 same-version maintenance evidence. It does not
+qualify ARM64, establish a genuine security-version advance or elapsed soak,
+prove physical firmware servicing, or promote a production release. The
+explicit owned-KVM firmware exclusion remains attributed to the observed LVFS
+HTTP 503. Earlier failed runs below retain their original outcomes.
 
 **Goal:** Ship one Ubuntu 26.04 LTS (Resolute) server contract with hosting PHP
 8.3, 8.4 and 8.5 and validated internal PHP 8.5. Ubuntu 26.04 remains experimental
-until its operational qualification passes.
+until its remaining release qualification passes.
 
 **Architecture:** Reuse the Go panel, privileged agent, panelctl, APT/systemd
 installer, central platform resolver, root-owned PHP runtime descriptors,
@@ -99,10 +142,10 @@ after a new user instruction.
      measured evidence rather than silently masking failed services.
    - [x] Fix and locally verify the diagnosed issue. Expose per-gate progress
      and useful failure details before another long full qualification run.
-   - [ ] Pass the bounded current-version 26.04 recovery and PHP delivery/
-     configuration-failure/recovery checks, including required reboot and
-     webmail assertions. Hosted recovery passed; PHP maintenance was attempted
-     but remains failed as recorded in the terminal report below.
+   - [x] Pass the bounded current-version 26.04 recovery and PHP delivery/
+     configuration-failure/recovery checks, including both required reboots and
+     fresh webmail assertions. Full hosted run `39652821843` passed on `63c00f6`
+     with PHP 8.3/8.4/8.5; the receipts are recorded above.
    - [x] Record actual outcomes, skips, cleanup and remaining blockers. A
      prerequisite failure cannot count as executing or passing the PHP drill.
      No cross-OS migration or legacy test is required. Report before Phase 4.
@@ -348,7 +391,10 @@ observer will then wait only for cleanup and terminal collection. Observer
 62838 and run 39601839959 are complete; do not resume them. No further hosted
 retry is planned in this phase.
 
-## Phase 3 terminal report — 21 October 2026
+## Historical Phase 3 terminal report — 21 October 2026
+
+> Snapshot before the newly authorized diagnostic/recovery work. The failures
+> remain failures; the current acceptance and source are recorded at the top.
 
 **Outcome: operational recovery passes; PHP maintenance recovery remains an
 unresolved Phase 3 blocker. No Phase 4 work, promotion or deployment.**
@@ -406,7 +452,10 @@ using the improved receipts, then obtain actual RECOVERED, two unassisted reboot
 and three fresh Roundcube-flow receipts before accepting PHP maintenance.
 Report that result before Phase 4.
 
-## Two-pass recheck — 21 October 2026
+## Historical two-pass recheck — 21 October 2026
+
+> Local review before the latest hosted authorization. Its pending work was
+> subsequently completed by run `39652821843`, as recorded above.
 
 **Scope:** Review and fix the Phase 3 changes twice, using focused local checks.
 Keep Ubuntu 26.04 only, hosting PHP 8.3/8.4/8.5, and the unresolved hosted PHP

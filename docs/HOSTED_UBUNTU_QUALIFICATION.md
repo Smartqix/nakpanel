@@ -70,15 +70,53 @@ A manual maintenance opt-out must be recorded as `NOT_REQUESTED` and cannot
 claim maintenance acceptance. Same-version delivery does not prove a genuine
 security-version advance, APT downgrade rollback or Nakpanel application rollback.
 
-## Remaining operational blocker
+## Phase 3 diagnosis and verification
 
-Run [39582799272](https://github.com/Smartqix/nakpanel/actions/runs/39582799272)
-failed in the current 26.04 disaster-recovery prerequisite on
-`fwupd-refresh.service`; the actual PHP maintenance drill was skipped. The unit's
-underlying failure cause was not retained. Cleanup passed. This remains Phase 3
-work; it is not fixed by retiring Ubuntu 24.04 or by local workflow changes.
-The former cross-OS migration run remains a historical failure outside the new
-release scope. No retry, scheduled-backup run or later phase is launched here.
+Run [39632906571](https://github.com/Smartqix/nakpanel/actions/runs/39632906571)
+on `a82d6ec` passed all 16 current-version gates, then failed real PHP maintenance
+configuration recovery. Its new safe error frames identified the package step.
+All owned guests were cleaned up; no maintenance reboot was verified.
+
+The optional `diagnose_php_maintenance` dispatch isolates package recovery on a
+fresh owned, credential-free Ubuntu 26.04 AMD64 KVM guest. It reuses the actual
+maintenance backend, signed pinned image and trusted Surý source for PHP
+8.3/8.4/8.5. It cannot run with `diagnose_fwupd`; product jobs and the product
+summary are skipped. Its PASS explicitly sets `product_qualified=false` and
+`reboots_verified=false`. Inspect the separate owned-cleanup exit receipt as
+well as its package log. This diagnostic avoids repeating the full application
+baseline solely to collect an APT error; it never replaces product qualification.
+
+Diagnostic [39647396390](https://github.com/Smartqix/nakpanel/actions/runs/39647396390)
+proved APT rejects `--reinstall` of the half-configured FPM package with
+`Internal Error, No file name`, despite all 56 cached archives being present.
+The next diagnostic
+[39649611313](https://github.com/Smartqix/nakpanel/actions/runs/39649611313)
+confirmed configuration-only APT reached postinst, but its FPM restart hit the
+start limit consumed by the deliberate fault. Owned cleanup passed for this run.
+
+Commit `63c00f6` finishes configuration of only the exact pending FPM package,
+after restoring the owned configuration, verifying the original full package
+inventory and signed installed postinst, and accepting only a Conf-only APT
+simulation. It preserves the affected unit's state before clearing only that
+unit's start counter; the actual transaction forbids downloads and removals.
+Postboot validation still observes unassisted state and performs no service
+repair. Diagnostic
+[39651263936](https://github.com/Smartqix/nakpanel/actions/runs/39651263936)
+passed actual failed-configuration recovery for all three PHP minors and owned
+cleanup on that commit.
+
+Full product run
+[39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
+passed on runtime/qualifier commit
+`63c00f6006df3bba1ca9ef474e0f350ff7835165`, with database-manager and PHP
+maintenance required. All 16 canonical gates passed in 77m40s. Maintenance
+preparation, actual same-version recovery and both reboots passed in 10m11s.
+The downloaded receipts confirm two distinct new boot IDs, unassisted service
+health, all three PHP minors, three fresh actual Roundcube send/read executions,
+unchanged package/configuration/desired state and database-manager FastCGI
+health. Owned cleanup and the workflow summary passed. Phase 3 is complete for
+this AMD64 development profile; Phase 4 has not started. Genuine security-version
+advancement, ARM64 qualification and elapsed soak remain separate requirements.
 
 ### Hosted firmware scope
 

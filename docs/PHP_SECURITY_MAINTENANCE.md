@@ -77,6 +77,17 @@ administrator who replaces its files or bypasses its tools.
    recovery owner and abort conditions. Do not enable unattended provider updates
    or production package publication as a side effect of qualification.
 
+The owned configuration-failure rehearsal finishes the exact half-configured
+FPM package with a configuration-only APT transaction after removing its fault.
+It verifies the original package inventory and signed installed postinst, rejects
+unpacking or configuring other packages, and keeps downloads/removals forbidden.
+Before postinst runs, it retains the affected FPM unit's state and clears only
+that unit's start counter consumed by the deliberate failure, following the
+documented [systemctl behavior](https://www.freedesktop.org/software/systemd/man/latest/systemctl.html).
+Reboot acceptance observes existing application services without starting,
+restarting or resetting them to repair their state; recovery actions cannot be
+used to claim boot persistence. Separate transient smoke probes remain required.
+
 A same-version download/reinstall and interrupted-transaction recovery drill is
 useful delivery evidence. It must be labelled as such; it cannot establish a
 security version advance or rollback between two different signed versions.
@@ -88,7 +99,7 @@ invent package versions or use a different suite/provider to manufacture a pair.
 
 The explicit Surý Ubuntu 26.04 profile remains experimental until its full native
 profile/architecture matrix, genuine security patch and failure recovery evidence,
-forward-migration boundaries and required elapsed soak have been accepted.
+and required elapsed soak have been accepted.
 A development signing key, a passing local test or the presence of this policy
 does not authorize production promotion. Private fallback package publication
 continues to require the separate qualified inventory and supplied managed key.

@@ -10,13 +10,16 @@ reachable even when tenant vhost configuration needs repair.
 Nakpanel is in active development. Ubuntu 26.04 LTS (Resolute) is the only
 supported server OS in the current development scope. Hosting PHP 8.3/8.4/8.5
 remains required; internal tools use validated PHP 8.5. Ubuntu 26.04 remains
-experimental until operational qualification passes.
+experimental pending the remaining release qualification.
 
-Phase 2 aligns the installer, VM defaults and CI with this contract. Phase 3
-passed the 16 hosted current-version operational gates, including fresh-host
-recovery, but PHP package maintenance recovery failed and remains unresolved.
-This is not a newly qualified release. Ubuntu 24.04 and
-24.04-to-26.04 migration are outside the release requirements. See the
+Phase 2 aligned the installer, VM defaults and CI with this contract. Phase 3
+[passed hosted Ubuntu 26.04 AMD64 qualification](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
+on `63c00f6`: all 16 current-version gates, PHP 8.3/8.4/8.5 maintenance failure
+recovery, both unassisted reboots, three fresh Roundcube send/read flows and
+owned cleanup. This is development-signed same-version evidence; remaining
+architecture, security-version advancement and elapsed-soak acceptance are
+pending. Phase 4 is unstarted. Ubuntu 24.04 and cross-OS migration are outside
+the release requirements. See the
 [transition plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 
 ## Development Policy

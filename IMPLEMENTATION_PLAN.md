@@ -16,28 +16,36 @@ requested platform support and security requirements.
 
 The authoritative Ubuntu 26.04-only transition checklist is in the
 [support plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md#current-phases).
-The current authorization is **Phase 3 only: diagnose/fix fwupd refresh, then
-hosted Ubuntu 26.04 current-version recovery and PHP maintenance validation**.
-Ubuntu 26.04 LTS is the sole supported server OS; hosting PHP 8.3/8.4/8.5 is
-required and internal tools use validated PHP 8.5. Ubuntu 24.04 support and
-24.04-to-26.04 migration are retired release requirements. Phase 2 alignment is complete locally in the attached implementation worktree;
-its changes remain unmerged. Hosted Phase 3 tests are now authorized; keep PHP
-8.3/8.4/8.5, skip legacy tests and report before Phase 4. No production deployment.
+The current authorization is **Phase 3 only: run hosted Ubuntu 26.04 PHP
+maintenance with the new diagnostics, fix the failure and verify recovery
+through both reboots**. Ubuntu 26.04 is the sole supported server OS; hosting
+PHP 8.3/8.4/8.5 is required and internal tools use validated PHP 8.5. Ubuntu
+24.04 support and cross-OS migration are retired release requirements. Phase 2
+alignment is implemented in the attached `ricky/ubuntu26-recovery-phase3`
+worktree; runtime changes remain unmerged. Report before Phase 4; no production
+deployment.
 
-The retired cross-OS migration is no longer a release blocker. Phase 3 has
-passed all 16 current-version operational gates on hosted Ubuntu 26.04 AMD64,
-including populated recovery. The measured LVFS HTTP 503 is explicitly excluded
-only for owned disposable KVM test guests; production firmware is unchanged.
-Actual PHP maintenance recovery failed with a ValueError before confirmed
-recovery/reboots; its underlying guest check was not retained. Safe failure
-location reporting is now locally tested. The subsequent two-pass local review
-also fixed early missing failure receipts, incorrect reboot stage labels and a
-failed systemd-query path that could appear healthy in shell conditionals.
-All focused checks passed (59 maintenance + 25 preparation Python cases and
-8 Go checks); these fixes have not been hosted-validated. Phase 3 remains incomplete, all
-hosted runs have ended, and Phase 4 is unstarted. Ubuntu 26.04 is experimental
-until its required evidence passes. Historical Ubuntu 24.04 results below describe past tests and do not
-create an ongoing support obligation.
+**Phase 3 is complete for hosted Ubuntu 26.04 AMD64.** Full run
+[39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
+on `63c00f6006df3bba1ca9ef474e0f350ff7835165` passed all 16 current-version
+operational gates, actual PHP 8.3/8.4/8.5 same-version delivery and failed
+configuration recovery, both unassisted reboots, three fresh real Roundcube
+send/read flows and owned cleanup. CLI/FastCGI/tool/worker checks and unchanged
+package/configuration/desired state were revalidated through both boots.
+
+The new diagnostics identified APT's half-configured reinstall error and the
+FPM start counter consumed by the deliberate fault. The fix uses guarded
+configuration-only recovery and retains the selected FPM unit's state before
+clearing only its counter. Local maintenance61/preparation25 cases and seven
+focused Go checks pass; independent review found no important defects. Isolated
+package run `39651263936` also passed all three minors and owned cleanup.
+
+The measured LVFS HTTP 503 is explicitly excluded only for owned disposable KVM
+guests; production firmware is unchanged. All Phase 3 runs/observers have ended.
+Phase 4 is unstarted. This development-signed AMD64 same-version evidence does
+not establish ARM64 qualification, genuine security-version advancement,
+elapsed soak or production promotion. Historical Ubuntu 24.04 results below
+retain their original attribution and create no ongoing support obligation.
 
 ---
 
