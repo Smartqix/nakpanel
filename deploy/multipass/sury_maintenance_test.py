@@ -7,6 +7,8 @@ import json
 import os
 from pathlib import Path
 import stat
+import socket
+import sys
 import subprocess
 import tempfile
 import unittest
@@ -536,6 +538,73 @@ finally:
         m=self.module();self.assertTrue(callable(getattr(m,'guest_configuration',None)), 'minimal guest configuration projection is missing')
         c=self.inputs()[0];c.update(maintenance_id='drill1234',allow_development=True,public_key_sha256='a'*64,signature_sha256='b'*64,qualifier_commit='c'*40,qualifier_files_sha256={},maintenance_helper_sha256='d'*64,roundcube_execution_sha256='e'*64,mailbox_password='private credential',evidence_directory='/private/host/path',references={'private':'data'})
         guest=m.guest_configuration(c);self.assertNotIn('mailbox_password',guest);self.assertNotIn('references',guest);self.assertNotIn('evidence_directory',guest);self.assertEqual(guest['source_vm'],c['source_vm']);self.assertNotIn('private credential',json.dumps(guest))
+
+    @contextlib.contextmanager
+    def real_php_smoke_fixture(self, mode='pass'):
+        m=self.module();run=subprocess.run;calls=[];sockets=[]
+        with tempfile.TemporaryDirectory(dir='/tmp') as temporary:
+            root=Path(temporary).resolve();runroot=root/'run';runroot.mkdir();public_root=root/'private';public_root.mkdir(mode=0o700)
+            for name in ('usr/sbin','usr/local/bin','usr/bin','bin'):(root/name).mkdir(parents=True,exist_ok=True)
+            runner=root/'usr/sbin/runuser'
+            runner.write_text('#!'+sys.executable+'\n'+"""import json,os,sys
+a=sys.argv[1:]
+if len(a)<5 or a[:3]!=['-u','nobody','--'] or not a[3].startswith('/usr/bin/php'):sys.exit(91)
+minor=a[3][-3:];mode=os.environ['OWNED_SMOKE_FIXTURE']
+if mode=='tool-fail':sys.exit(7)
+if a[4]=='/usr/local/lib/nakpanel/wp-cli.phar':print('WP-CLI version:\\t2.12.0')
+elif '--version' in a:print('Composer version 2.10.3 2026-09-01')
+elif 'run-script' in a:print('NAKPANEL_MAINTENANCE_WORKER='+json.dumps({'version':minor+'.1','uid':0 if mode=='worker-root' else 65534}))
+else:sys.exit(92)
+""")
+            runner.chmod(0o700)
+            def local_path(value):return runroot if str(value)=='/run' else Path(value)
+            def boundary(args,**kwargs):
+                calls.append((args,kwargs))
+                if args[0].startswith('/usr/bin/php'):
+                    minor=args[0][-3:];out=json.dumps(dict(version=minor+'.1',ini='/etc/php/'+minor+'/cli/php.ini',extensions=list(m.REQUIRED_EXTENSIONS)))
+                elif args[0]=='systemd-run':
+                    runtime=next(arg.split('=',2)[2] for arg in args if arg.startswith('--property=RuntimeDirectory='))
+                    target=runroot/runtime;target.mkdir(mode=0o700);sock=socket.socket(socket.AF_UNIX);sock.bind(str(target/'fpm.sock'));sockets.append(sock);out=''
+                elif args[0]=='/usr/bin/cgi-fcgi':
+                    minor=Path(kwargs['env']['SCRIPT_FILENAME']).parent.name[-2:];minor=minor[0]+'.'+minor[1]
+                    proof=dict(version=minor+'.1',uid=0 if mode=='fpm-root' else 65534,ini='/etc/php/'+minor+'/fpm/php.ini',extensions=list(m.REQUIRED_EXTENSIONS),own_read=True,other_denied=True,shell_disabled=True)
+                    out='Content-Type: application/json\r\n\r\n'+json.dumps(proof)
+                elif args[0] in ('runuser','/usr/sbin/runuser'):
+                    self.assertEqual(kwargs['env']['PATH'],'/usr/local/bin:/usr/bin:/bin')
+                    self.assertEqual(args[1:4],['-u','nobody','--']);self.assertRegex(args[4],r'^/usr/bin/php8\.[345]$')
+                    argv=[str(runner) if args[0].startswith('/') else args[0],*args[1:]]
+                    env=dict(kwargs['env'],PATH=':'.join(str(root/name) for name in ('usr/local/bin','usr/bin','bin')),OWNED_SMOKE_FIXTURE=mode)
+                    return run(argv,**dict(kwargs,env=env))
+                elif args[:2]==['systemctl','stop']:out=''
+                else:self.fail('unexpected smoke command boundary')
+                return subprocess.CompletedProcess(args,0,out,'')
+            try:
+                with patch.object(m,'Path',side_effect=local_path),patch.object(m.subprocess,'run',side_effect=boundary):yield m,public_root,calls
+            finally:
+                for sock in sockets:sock.close()
+
+    def test_php_smoke_uses_absolute_runuser_for_all_three_real_tool_launches(self):
+        with self.real_php_smoke_fixture() as (m,root,calls):
+            result=m.php_smoke(root,{'maintenance_id':'drill1234'},'before')
+            self.assertEqual(set(result),set(m.MINORS));self.assertTrue((root/'php-smoke-before.json').is_file())
+            tools=[args for args,kwargs in calls if args[0] in ('runuser','/usr/sbin/runuser')]
+            self.assertEqual(len(tools),9);self.assertTrue(all(args[0]=='/usr/sbin/runuser' for args in tools))
+            for minor in m.MINORS:self.assertEqual(result[minor]['tools']['worker'],{'version':minor+'.1','uid':65534})
+
+    def test_php_smoke_still_refuses_root_fpm_before_tools_and_stops_unit(self):
+        with self.real_php_smoke_fixture('fpm-root') as (m,root,calls):
+            with self.assertRaisesRegex(ValueError,'confinement proof failed'):m.php_smoke(root,{'maintenance_id':'drill1234'},'before')
+            self.assertFalse(any(args[0] in ('runuser','/usr/sbin/runuser') for args,kwargs in calls));self.assertEqual(calls[-1][0][:2],['systemctl','stop'])
+
+    def test_php_smoke_tool_nonzero_remains_failure_and_stops_unit(self):
+        with self.real_php_smoke_fixture('tool-fail') as (m,root,calls):
+            with self.assertRaises(RuntimeError):m.php_smoke(root,{'maintenance_id':'drill1234'},'before')
+            self.assertEqual(calls[-1][0][:2],['systemctl','stop']);self.assertFalse((root/'php-smoke-before.json').exists())
+
+    def test_php_smoke_real_worker_wrong_uid_still_refuses_and_stops_unit(self):
+        with self.real_php_smoke_fixture('worker-root') as (m,root,calls):
+            with self.assertRaisesRegex(ValueError,'wrong interpreter/UID'):m.php_smoke(root,{'maintenance_id':'drill1234'},'before')
+            self.assertEqual(calls[-1][0][:2],['systemctl','stop']);self.assertFalse((root/'php-smoke-before.json').exists())
 
     def test_tool_health_requires_successful_matching_nonroot_composer_php_worker(self):
         m=self.module();self.assertTrue(callable(getattr(m,'parse_tool_results',None)), 'actual tool/@php worker proof is missing')

@@ -847,7 +847,7 @@ def php_smoke(root, config, phase):
             fpm=json.loads(body[1])
             require(fpm['version']==cli_proof['version'] and type(fpm['uid']) is int and fpm['uid']>0 and fpm['ini']=='/etc/php/'+minor+'/fpm/php.ini' and set(REQUIRED_EXTENSIONS)<=set(fpm['extensions']) and all(fpm.get(k) is True for k in ('own_read','other_denied','shell_disabled')),'actual isolated FPM/INI/modules/UID/confinement proof failed')
             tool_env={'PATH':'/usr/local/bin:/usr/bin:/bin','LC_ALL':'C','HOME':str(runtime_path),'COMPOSER_HOME':str(runtime_path/'composer'),'COMPOSER_CACHE_DIR':str(runtime_path/'composer-cache'),'COMPOSER_DISABLE_NETWORK':'1','WP_CLI_DISABLE_AUTO_CHECK_UPDATE':'1','WP_CLI_CONFIG_PATH':'/dev/null','WP_CLI_CACHE_DIR':str(runtime_path/'wp-cache')}
-            interpreter=['runuser','-u','nobody','--','/usr/bin/php'+minor]
+            interpreter=['/usr/sbin/runuser','-u','nobody','--','/usr/bin/php'+minor]
             composer=command(interpreter+['/usr/local/lib/nakpanel/composer.phar','--no-plugins','--no-scripts','--no-interaction','--version'],env=tool_env,cwd=public)
             wp=command(interpreter+['/usr/local/lib/nakpanel/wp-cli.phar','--info','--no-color'],env=tool_env,cwd=public)
             worker_code="echo 'NAKPANEL_MAINTENANCE_WORKER='.json_encode(['version'=>PHP_VERSION,'uid'=>posix_geteuid()]).PHP_EOL;"

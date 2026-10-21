@@ -1116,10 +1116,11 @@ class ForwardContainerNetworkTests(unittest.TestCase):
                 if flags is not None:
                     (entry/'root').symlink_to('/');(entry/'exe').symlink_to('/usr/bin/slirp4netns');args=['/usr/bin/slirp4netns']+flags+['--netns-type=path',str(target or root/'netns/fixture'),'tap0'];(entry/'cmdline').write_bytes(b'\0'.join(x.encode() for x in args)+b'\0')
                 return entry
-            process(42);helper=process(101,['--disable-host-loopback','--outbound-addr=lo']);c={'username':'offline','oci_id':7,'image_ref':'fixed-image','oci_digest':'sha256:'+'d'*64,'oci_image_id':'a'*64,'images':[],'marker':'canary','application_secret':'secret'}
+            process(42);helper=process(101,['--disable-host-loopback','--outbound-addr=lo']);c={'username':'offline','oci_id':7,'subscription_id':11,'image_ref':'fixed-image','oci_digest':'sha256:'+'d'*64,'oci_image_id':'a'*64,'images':[],'marker':'canary','application_secret':'secret'}
             observed={'State':{'Running':True,'Pid':42},'HostConfig':{'NetworkMode':'slirp4netns'},'Image':'sha256:'+'a'*64}
+            endpoint={'application_id':7,'subscription_id':11,'desired_revision':1,'applied_revision':1,'active_generation':1,'endpoint_port':12345,'container_port':80,'health_kind':'http','health_path_matches':True,'health_timeout_seconds':30,'desired_state':'running','observed_state':'healthy','convergence_status':'in_sync','generation_revision':1,'generation_endpoint_port':12345,'generation_status':'healthy','selected_container_matches':True}
             with patch.object(probe.pwd,'getpwnam',return_value=SimpleNamespace(pw_uid=os.getuid())):
-                yield SimpleNamespace(root=root,proc=proc,helper=helper,config=c,observed=observed,process=process)
+                yield SimpleNamespace(root=root,proc=proc,helper=helper,config=c,observed=observed,process=process,endpoint=endpoint)
     def check_network(self,row):
         return probe.container_network(row.config,row.observed,row.proc)
     def test_noble_inspect_shape_passes_only_with_actual_isolated_helper(self):
@@ -1131,7 +1132,7 @@ class ForwardContainerNetworkTests(unittest.TestCase):
             def command(args,*a,**kw):return 'LISTEN 0 0 127.0.0.1:12345' if args[0]=='ss' else ''
             checker=getattr(probe,'container_network',None)
             defaults=patch.object(checker,'__defaults__',(row.proc,)) if checker else contextlib.nullcontext()
-            with defaults,patch.object(probe,'container_limits'),patch.object(probe,'rootless',side_effect=rootless),patch.object(probe,'pg',side_effect=lambda q:'fixed-container' if 'container_name' in q else '12345'),patch.object(probe,'command',side_effect=command):
+            with defaults,patch.object(probe,'container_limits'),patch.object(probe,'rootless',side_effect=rootless),patch.object(probe,'pg',side_effect=lambda q:'fixed-container' if 'SELECT container_name' in q else json.dumps(row.endpoint)),patch.object(probe,'command',side_effect=command):
                 error=None
                 try:probe.podman_live(row.config)
                 except RuntimeError as caught:error=str(caught)
@@ -1189,6 +1190,156 @@ class ForwardContainerNetworkTests(unittest.TestCase):
                 with patch.object(probe.os,'readlink',side_effect=link),patch.object(probe.os,'scandir',side_effect=scan),patch.object(subprocess,'run',side_effect=AssertionError('no extra command')):
                     with self.assertRaises(RuntimeError):self.check_network(row)
                 if edit=='scan':self.assertEqual(closed,[True])
+
+
+class ForwardSubscriptionIntentTests(unittest.TestCase):
+    def subscription(self):
+        return dict(id=7,customer_user_id=8,reseller_user_id=9,plan_id=10,status='active',customer_id=11,name='Fixture',sync_mode='inherit',plan_revision=1,suspension_reason='',expires_at=None,primary_site_id=12,created_at='created',updated_at='updated',sync_error='',last_synced_at='synced',last_reconciled_at='reconciled',sync_status='in_sync',compliance_status='compliant',compliance_error='',compliance_checked_at='2026-10-20T12:00:00Z')
+    def snapshot(self,subscription):
+        import re,sqlite3
+        queries=[];closed=[];owner=self
+        def pg(query):
+            queries.append(query)
+            if query=='SELECT username FROM subscription_system_accounts ORDER BY username':return ''
+            match=re.search(r" FROM \(SELECT (.+) FROM ([a-z_]+)\) q$",query)
+            owner.assertIsNotNone(match,'unexpected SQL transport shape');columns,table=match.groups();owner.assertEqual(columns,probe.intent_projections()[table])
+            if table!='subscriptions':return hashlib.sha256(table.encode()).hexdigest()
+            # Model only the closed JSONB subtraction emitted by the actual probe;
+            # no SQL engine or customer database is opened by this test.
+            excluded=re.findall(r"-'([a-z_]+)'",columns)
+            value={'id':subscription['id'],'contract':{k:v for k,v in subscription.items() if k not in excluded}}
+            return hashlib.sha256(json.dumps([value],sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        class MockPath:
+            def __init__(self,value):self.value=value
+            def read_bytes(self):return b'fixed synthetic durable file'
+            def is_file(self):return self.value=='/var/lib/roundcube/roundcube.sqlite'
+            def is_symlink(self):return False
+        class Database:
+            def execute(self,query,params):
+                owner.assertIn('FROM users u JOIN contacts c USING(user_id)',query);owner.assertEqual(params,('fixture@example.test',));return self
+            def fetchall(self):return [('phase29-roundcube-preference','Fixture','phase29-contact@example.test')]
+            def close(self):closed.append(True)
+        def connect(filename,**kw):
+            owner.assertEqual(filename,'file:/var/lib/roundcube/roundcube.sqlite?mode=ro');owner.assertEqual(kw,{'uri':True});return Database()
+        c={'tenant_file':'/offline/tenant','volume_file':'/offline/volume','database':'offline','database_user':'offline','mailbox':'fixture@example.test','roundcube_snapshot_role':'source','roundcube_sqlite_path':'/var/lib/roundcube/roundcube.sqlite'}
+        with patch.object(probe,'pg',side_effect=pg),patch.object(probe,'maria',return_value='fixed synthetic result'),patch.object(probe,'Path',MockPath),patch.object(probe,'command',side_effect=AssertionError('no commands')),patch.object(sqlite3,'connect',side_effect=connect),patch.object(subprocess,'run',side_effect=AssertionError('no external process')):
+            result=probe.snapshot(c)
+        self.assertEqual(closed,[True]);self.assertEqual(len(queries),len(probe.intent_projections())+1)
+        return result
+    def test_actual_snapshot_compare_ignores_only_derived_subscription_refresh(self):
+        initial=self.subscription();before=self.snapshot(initial)
+        refresh={'sync_status':'pending','compliance_status':'over_limit','compliance_error':'derived usage changed','compliance_checked_at':'2026-10-20T13:00:00Z'}
+        for changes in [{k:v} for k,v in refresh.items()]+[refresh]:
+            with self.subTest(fields=sorted(changes)):
+                after=self.snapshot(dict(initial,**changes));error=None
+                try:fixture.compare_snapshots(before,after)
+                except ValueError as caught:error=str(caught)
+                self.assertIsNone(error,'derived-only refresh rejected by actual compare: '+str(error));self.assertEqual(before,after)
+    def test_each_customer_intent_field_remains_strictly_preserved(self):
+        initial=self.subscription();before=self.snapshot(initial)
+        changes=dict(id=17,customer_user_id=18,reseller_user_id=19,plan_id=20,status='suspended',customer_id=21,name='Changed fixture',sync_mode='pinned',plan_revision=2,suspension_reason='operator',expires_at='2030-01-01T00:00:00Z',primary_site_id=22)
+        self.assertEqual(len(changes),12)
+        for key,value in changes.items():
+            with self.subTest(field=key):
+                after=self.snapshot(dict(initial,**{key:value}))
+                with self.assertRaisesRegex(ValueError,'durable fixture mismatch: intent'):fixture.compare_snapshots(before,after)
+    def test_all_other_durable_tables_and_inventory_remain_strict(self):
+        before=self.snapshot(self.subscription());after=json.loads(json.dumps(before));after['intent']['plans']='0'*64
+        with self.assertRaisesRegex(ValueError,'durable fixture mismatch: intent'):fixture.compare_snapshots(before,after)
+        after=json.loads(json.dumps(before));after['files']['/offline/tenant']='0'*64
+        with self.assertRaisesRegex(ValueError,'durable fixture mismatch: files'):fixture.compare_snapshots(before,after)
+
+
+class ForwardOCIEndpointContractTests(unittest.TestCase):
+    def check_endpoint(self,row,code=0,listeners='LISTEN 0 128 127.0.0.1:12345 0.0.0.0:*'):
+        calls=[];queries=[]
+        def pg(query):
+            queries.append(query)
+            return 'fixed-container' if 'SELECT container_name' in query else json.dumps(row.endpoint)
+        def rootless(c,*args):
+            if args[0]=='inspect':return json.dumps([row.observed])
+            if args[0]=='image':return c['oci_digest']
+            return c['marker'] if args[-1]=='/forward-data/forward-canary' else c['application_secret']
+        def run(args,**kw):
+            calls.append((args,kw));return subprocess.CompletedProcess(args,code if args[0]=='curl' else 0,(listeners(args) if callable(listeners) else listeners) if args[0]=='ss' else '', 'fixed endpoint failure' if args[0]=='curl' and code else '')
+        error=None
+        with patch.object(probe.container_network,'__defaults__',(row.proc,)),patch.object(probe,'container_limits'),patch.object(probe,'pg',side_effect=pg),patch.object(probe,'rootless',side_effect=rootless),patch.object(subprocess,'run',side_effect=run):
+            try:probe.podman_live(row.config)
+            except RuntimeError as caught:error=str(caught)
+        return calls,queries,error
+    def test_actual_podman_live_uses_integer_json_endpoint_and_caches_ss_before_curl(self):
+        with ForwardContainerNetworkTests('runTest').network_fixture() as row:
+            calls,queries,error=self.check_endpoint(row)
+            self.assertIsNone(error);self.assertEqual([args[0] for args,kw in calls],['ss','curl']);self.assertEqual(calls[1][0][-1],'http://127.0.0.1:12345/');self.assertEqual(len(queries),2);self.assertIn('SELECT json_build_object',queries[1]);self.assertIn('a.id=7 AND a.subscription_id=11',queries[1])
+    def test_existing_ss_call_requires_numeric_ports_when_service_name_resolution_exists(self):
+        with ForwardContainerNetworkTests('runTest').network_fixture() as row:
+            row.endpoint.update(endpoint_port=25000,generation_endpoint_port=25000)
+            def listeners(args):return 'LISTEN 0 128 127.0.0.1:'+('25000' if 'n' in args[1].lstrip('-') else 'fixture-service')+' 0.0.0.0:*'
+            calls,queries,error=self.check_endpoint(row,listeners=listeners)
+            self.assertIsNone(error,'symbolic ss port rejected by decimal listener guard: '+str(error));self.assertEqual([args[0] for args,kw in calls],['ss','curl']);self.assertEqual(calls[0][0],['ss','-Hltn','sport = :25000']);self.assertEqual(len(queries),2)
+    def test_existing_curl_and_postcurl_loopback_guards_remain_strict_without_retry(self):
+        for code,listeners in [(7,''),(0,''),(0,'LISTEN 0 128 0.0.0.0:12345 0.0.0.0:*')]:
+            with self.subTest(code=code,listeners=listeners),ForwardContainerNetworkTests('runTest').network_fixture() as row:
+                calls,queries,error=self.check_endpoint(row,code,listeners);self.assertIsNotNone(error);self.assertEqual([args[0] for args,kw in calls],['ss','curl']);self.assertEqual(len(queries),2)
+                self.assertIn('curl' if code else 'not confined',error)
+
+
+class ForwardRoundcubeSnapshotTests(unittest.TestCase):
+    paths=('/var/lib/roundcube/roundcube.sqlite','/var/lib/roundcube/db/roundcube','/var/lib/dbconfig-common/sqlite3/roundcube/roundcube')
+    def snapshot(self,role='source',selected=None,existing=None,links=(),invalid_canary=False):
+        import sqlite3
+        owner=self;opened=[];closed=[];selected=self.paths[2] if selected is None else selected;existing=self.paths if existing is None else existing
+        c={'tenant_file':'/offline/tenant','volume_file':'/offline/volume','database':'offline','database_user':'offline','mailbox':'fixture@example.test','roundcube_sqlite_path':selected,'roundcube_snapshot_role':role}
+        wanted=selected if role=='source' else self.paths[0]
+        class MockPath:
+            def __init__(self,value):self.value=str(value)
+            def read_bytes(self):return b'fixed synthetic durable file'
+            def is_file(self):return self.value in existing
+            def is_symlink(self):return self.value in links
+        class Database:
+            def __init__(self,path):self.path=path
+            def execute(self,query,params):owner.assertEqual(params,(c['mailbox'],));return self
+            def fetchall(self):return [('phase29-roundcube-preference','Fixture','phase29-contact@example.test')] if self.path==wanted and not invalid_canary else []
+            def close(self):closed.append(True)
+        def connect(filename,**kw):
+            owner.assertEqual(kw,{'uri':True});owner.assertTrue(filename.endswith('?mode=ro'));path=filename[len('file:'):-len('?mode=ro')];opened.append(path);return Database(path)
+        error=None;result=None
+        with patch.object(probe,'pg',side_effect=lambda q:'' if 'SELECT username' in q else 'fixed digest'),patch.object(probe,'maria',return_value='fixed result'),patch.object(probe,'Path',MockPath),patch.object(probe,'command',side_effect=AssertionError('no commands')),patch.object(sqlite3,'connect',side_effect=connect),patch.object(subprocess,'run',side_effect=AssertionError('no external process')):
+            try:result=probe.snapshot(c)
+            except RuntimeError as caught:error=caught
+        return result,error,opened,closed
+    def test_source_uses_configured_third_database_despite_stale_earlier_candidates(self):
+        result,error,opened,closed=self.snapshot()
+        self.assertIsNone(error,'configured source database was not selected: '+str(error));self.assertTrue(result['roundcube']);self.assertEqual(opened,[self.paths[2]]);self.assertEqual(closed,[True])
+    def test_target_uses_forward_native_database_instead_of_source_path(self):
+        result,error,opened,closed=self.snapshot(role='target')
+        self.assertIsNone(error);self.assertTrue(result['roundcube']);self.assertEqual(opened,[self.paths[0]]);self.assertEqual(closed,[True])
+    def test_invalid_roles_paths_links_and_missing_database_refuse_before_open(self):
+        for edit in ({'role':None},{'role':'arbitrary'},{'selected':'/tmp/foreign.sqlite'},{'links':(self.paths[2],)},{'existing':self.paths[:2]},{'role':'target','links':(self.paths[0],)},{'role':'target','existing':self.paths[1:]}):
+            with self.subTest(edit=edit):
+                result,error,opened,closed=self.snapshot(**edit);self.assertIsNotNone(error);self.assertIsNone(result);self.assertEqual(opened,[]);self.assertEqual(closed,[])
+    def test_selected_database_canary_failure_stays_strict_and_closes_readonly_connection(self):
+        result,error,opened,closed=self.snapshot(invalid_canary=True)
+        self.assertIsNone(result);self.assertIsNotNone(error);self.assertEqual(opened,[self.paths[2]]);self.assertEqual(closed,[True])
+    def test_canonical_dispatch_binds_only_known_snapshot_vm_without_mutating_config(self):
+        c={'source_vm':'nakpanel-source','target_vm':'nakpanel-target','roundcube_sqlite_path':self.paths[2]};before=json.loads(json.dumps(c));calls=[]
+        def run(args,data=None,**kw):calls.append((args,json.loads(data)));return '{}'
+        with patch.object(fixture,'run',side_effect=run):
+            for vm,role in ((c['source_vm'],'source'),(c['target_vm'],'target')):
+                fixture.probe(c,vm,'snapshot');self.assertEqual(c,before);self.assertEqual(calls[-1][1],{'action':'snapshot','config':dict(c,roundcube_snapshot_role=role)})
+            for vm in ('nakpanel-unknown',None):
+                with self.assertRaises(ValueError):fixture.probe(c,vm,'snapshot')
+            self.assertEqual(len(calls),2);fixture.probe(c,c['source_vm'],'live');self.assertEqual(calls[-1][1],{'action':'live','config':c});self.assertEqual(c,before)
+            with self.assertRaises(ValueError):fixture.probe({'source_vm':c['source_vm']},None,'snapshot')
+            with self.assertRaises(ValueError):fixture.probe({},None,'snapshot')
+
+    def test_target_driver_binds_target_only_after_existing_identity_guards(self):
+        c={'source_vm':'nakpanel-source','run_token':'offline-token','baseline':{'fixed':'inventory'}};before=json.loads(json.dumps(c));identities=[];calls=[]
+        def probe_call(config,vm,action):
+            calls.append((config,vm,action));return c['baseline'] if action=='snapshot' else {'boot_id':'offline-boot'}
+        with patch.object(fixture,'load_spec',return_value=c),patch.object(fixture,'validate_prepared',side_effect=lambda value:value),patch.object(fixture,'identity',side_effect=lambda *a:identities.append(a)),patch.object(fixture,'probe',side_effect=probe_call),patch.object(fixture,'private_write'),patch.object(subprocess,'run',side_effect=AssertionError('no external process')):
+            fixture.driver('assert-migration-data','nakpanel-target',c['source_vm'],c['run_token'],'/offline/bundle','/offline/evidence')
+        self.assertEqual([v[1:] for v in identities],[('nakpanel-source','24.04'),('nakpanel-target','26.04')]);self.assertEqual(c,before);self.assertEqual(calls[0],(dict(c,target_vm='nakpanel-target'),'nakpanel-target','snapshot'));self.assertEqual(calls[1],(c,'nakpanel-target','live'))
 
 
 if __name__ == '__main__': unittest.main()

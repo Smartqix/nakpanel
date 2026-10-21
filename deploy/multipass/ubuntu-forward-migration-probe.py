@@ -742,7 +742,7 @@ def intent_projections():
         'plan_service_presets':"plan_id AS id,to_jsonb(plan_service_presets)-'updated_at' AS contract",
         'addon_plans':"id,to_jsonb(addon_plans)-'created_at'-'updated_at' AS contract",
         'subscription_addons':"subscription_id::text||':'||addon_plan_id::text AS id,to_jsonb(subscription_addons)-'created_at' AS contract",
-        'subscriptions':"id,to_jsonb(subscriptions)-'created_at'-'updated_at'-'sync_error'-'last_synced_at'-'last_reconciled_at' AS contract",
+        'subscriptions':"id,to_jsonb(subscriptions)-'created_at'-'updated_at'-'sync_error'-'last_synced_at'-'last_reconciled_at'-'sync_status'-'compliance_status'-'compliance_error'-'compliance_checked_at' AS contract",
         'plan_revisions':'id,plan_id,revision,lifecycle_status,definition,definition_hash,actor_user_id,actor_label,change_reason',
         'php_applications': "id,to_jsonb(php_applications)-'created_at'-'updated_at'-'last_reconciled_at'-'observed_state'-'observed_message'-'last_error'-'convergence_status'-'applied_revision' AS contract",
         'php_workers': "id,to_jsonb(php_workers)-'created_at'-'updated_at'-'last_reconciled_at'-'observed_state'-'last_error'-'convergence_status'-'applied_revision' AS contract",
@@ -789,8 +789,10 @@ def snapshot(c):
     # Read-only SQLite inspection; never run a write transaction on frozen source.
     import sqlite3
     candidates = ['/var/lib/roundcube/roundcube.sqlite', '/var/lib/roundcube/db/roundcube', '/var/lib/dbconfig-common/sqlite3/roundcube/roundcube']
-    path = next((p for p in candidates if Path(p).is_file()), None)
-    if not path: raise RuntimeError('Roundcube SQLite fixture missing')
+    role = c.get('roundcube_snapshot_role')
+    if role not in ('source','target'): raise RuntimeError('Roundcube snapshot role is missing or invalid')
+    path = c.get('roundcube_sqlite_path') if role == 'source' else candidates[0]
+    if path not in candidates or Path(path).is_symlink() or not Path(path).is_file(): raise RuntimeError('Roundcube selected SQLite fixture is missing or unsafe')
     db = sqlite3.connect('file:' + path + '?mode=ro', uri=True)
     try:
         rows = db.execute("SELECT u.preferences,c.name,c.email FROM users u JOIN contacts c USING(user_id) WHERE u.username=? AND c.email='phase29-contact@example.test'", (c['mailbox'],)).fetchall()
@@ -821,10 +823,11 @@ def podman_live(c):
     if not observed.get('State', {}).get('Running'): raise RuntimeError('restored OCI container is not running')
     container_limits(c,observed)
     container_network(c,observed)
-    endpoint=pg('SELECT endpoint_port FROM application_instances WHERE id='+str(c['oci_id']))
+    endpoint_state=json.loads(pg("SELECT json_build_object('application_id',a.id,'subscription_id',a.subscription_id,'desired_revision',a.desired_revision,'applied_revision',a.applied_revision,'active_generation',a.active_generation,'endpoint_port',a.endpoint_port,'container_port',a.container_port,'desired_state',a.desired_state,'observed_state',a.observed_state,'convergence_status',a.convergence_status,'health_kind',a.health_kind,'health_path_matches',a.health_path='/','health_timeout_seconds',a.health_timeout_seconds,'generation_revision',g.desired_revision,'generation_endpoint_port',g.endpoint_port,'generation_status',g.status,'selected_container_matches',g.container_name="+quote(container)+") FROM application_instances a LEFT JOIN application_generations g ON g.application_id=a.id AND g.desired_revision=a.active_generation WHERE a.id="+str(c['oci_id'])+" AND a.subscription_id="+str(c['subscription_id'])))
+    endpoint=str(endpoint_state['endpoint_port'])
     if not endpoint.isdigit():raise RuntimeError('restored OCI loopback endpoint is missing')
+    listeners=command(['ss','-Hltn','sport = :'+endpoint]).splitlines()
     command(['curl','--fail','--silent','--show-error','--max-time','10','http://127.0.0.1:'+endpoint+'/'])
-    listeners=command(['ss','-Hlt','sport = :'+endpoint]).splitlines()
     if not listeners or any('127.0.0.1:'+endpoint not in line for line in listeners):raise RuntimeError('OCI endpoint is not confined to guest loopback')
     digest = rootless(c, 'image', 'inspect', '--format', '{{.Digest}}', c['image_ref'])
     if digest != c['oci_digest']: raise RuntimeError('actual OCI image digest changed')

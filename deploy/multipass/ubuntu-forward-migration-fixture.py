@@ -140,6 +140,11 @@ def identity(c, vm, version):
 
 
 def probe(c, vm, action):
+    if action == 'snapshot':
+        if c.get('source_vm') and vm == c['source_vm']: role = 'source'
+        elif c.get('target_vm') and vm == c['target_vm']: role = 'target'
+        else: raise ValueError('snapshot VM is not the owned source or target')
+        c = dict(c, roundcube_snapshot_role=role)
     program = (HERE / 'ubuntu-forward-migration-probe.py').read_text()
     output = run(['multipass', 'exec', vm, '--', 'sudo', 'python3', '-c', program],
                  json.dumps({'action': action, 'config': c}))
@@ -460,7 +465,7 @@ def driver(stage, target, source, token, bundle, evidence):
         if hashlib.sha256(Path(archive).read_bytes()).hexdigest() != c['archive_sha256']: raise ValueError('fixture does not describe this offline archive')
     elif stage == 'install-native-target': install_target(c, target, bundle, evidence)
     elif stage == 'assert-migration-data':
-        observed = probe(c, target, 'snapshot')
+        observed = probe(dict(c,target_vm=target), target, 'snapshot')
         compare_snapshots(c['baseline'], observed)
         state = probe(c, target, 'live')
         private_write(Path(evidence) / ('target-data-' + state['boot_id'] + '.json'),json.dumps(observed,sort_keys=True,indent=2)+'\n')

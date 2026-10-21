@@ -4,7 +4,7 @@ Baseline: `ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466`.
 This is an implementation and qualification record, not a production support declaration.
 See [qualification procedures](../PLATFORM_QUALIFICATION.md), [recovery boundaries](../RECOVERY.md), and [the original plan](../superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 
-## Qualification checkpoint — 20 October 2026, 22:26 UTC
+## Qualification checkpoint — 21 October 2026, 01:02 UTC
 
 This checkpoint records the results available when the qualifier corrections
 were integrated. Subsequent hosted outcomes are tracked in
@@ -20,28 +20,39 @@ experimental while the separate operational checks below are incomplete.
 
 | Check | Latest result |
 | --- | --- |
-| Required unit, generated-source, isolated PostgreSQL, static-build and Noble adversarial CI | [Passed](https://github.com/Smartqix/nakpanel/actions/runs/39452274833). |
+| Required unit, generated-source, isolated PostgreSQL, static-build and Noble adversarial CI | [Application6378 passed](https://github.com/Smartqix/nakpanel/actions/runs/39452274833); [integrated qualifier commit8d9d passed](https://github.com/Smartqix/nakpanel/actions/runs/39508342897). [Commit51a5 CI passed](https://github.com/Smartqix/nakpanel/actions/runs/39516850632). |
 | Native Ubuntu24.04 and Ubuntu26.04 product qualification | [Passed](https://github.com/Smartqix/nakpanel/actions/runs/39452265293), 17 gates per profile, including actual upgrade, disaster recovery, reboot checks, database-manager coverage and strict Roundcube send/read. |
 | Surý Ubuntu26.04 product qualification | All 17 product gates passed in [the original workflow](https://github.com/Smartqix/nakpanel/actions/runs/39452451358). Its later PHP maintenance step failed, so that workflow's overall result remains failure. |
 | Linux dummy backup fixture | [Passed six cases](https://github.com/Smartqix/nakpanel/actions/runs/39442920817): default/explicit UTC, private publication, FIFO refusal, unsafe-directory refusal and old-pidfd restart refusal. This is component evidence from source26; the applicable component bytes are unchanged in source28. |
-| PHP same-version delivery, failed-configuration recovery and two reboots | [The corrected qualifier workflow failed](https://github.com/Smartqix/nakpanel/actions/runs/39492726858) during package-candidate preparation after its fresh17 application gates passed. No package transaction, recovery or reboot acceptance yet; the subprocess failure is under investigation. |
-| Genuine Noble format1 recovery | [The corrected qualifier is active](https://github.com/Smartqix/nakpanel/actions/runs/39507139602). [The diagnostic predecessor](https://github.com/Smartqix/nakpanel/actions/runs/39500219976) retained the exact rejected target directory: `/var/lib/nakpanel/.config/go`, expected panel owner/group, mode0775. Its group-write bit triggered the old guard. Backup creation and target installation passed; cleanup/drain passed. No restore or reboot acceptance yet. |
-| Genuine Noble format3 recovery | [The corrected qualifier is active](https://github.com/Smartqix/nakpanel/actions/runs/39507144006). [Its predecessor](https://github.com/Smartqix/nakpanel/actions/runs/39494810035) passed source installation and fixture creation, then failed a public-manifest mode guard before its historical source upgrade. The new reader follows the canonical staging contract while retaining private-key and hash checks. No restore or reboot acceptance yet. |
-| Explicit Ubuntu24.04-to26.04 forward migration | [The certificate-corrected run is active](https://github.com/Smartqix/nakpanel/actions/runs/39505514006). [The prior run failed](https://github.com/Smartqix/nakpanel/actions/runs/39497863142) during certificate preparation; its underlying error was not retained, and cleanup/process drain passed. No target restore or migration acceptance yet. |
+| PHP same-version delivery, failed-configuration recovery and two reboots | [Corrected run active](https://github.com/Smartqix/nakpanel/actions/runs/39522941578), with application6378 and qualifierT. [Its predecessor failed](https://github.com/Smartqix/nakpanel/actions/runs/39509524624) after fresh17 product gates and signed-package/APT preparation passed, at the Composer smoke subprocess. The restricted-PATH tool lookup defect is corrected and regression tested; actual old errno remains unknown. No delivery/recovery/reboot acceptance yet. |
+| Genuine Noble format1 recovery | [Corrected run active](https://github.com/Smartqix/nakpanel/actions/runs/39523931767). [Its predecessor failed](https://github.com/Smartqix/nakpanel/actions/runs/39517909080) after its actual restore CLI returned and decoded JSON failed a strict result guard; the inner predicate/result was not retained. Complete Go inventory and archive authentication passed. No strict post-restore or reboot acceptance yet. |
+| Genuine Noble format3 recovery | [Corrected run active](https://github.com/Smartqix/nakpanel/actions/runs/39524028867). [Its predecessor failed](https://github.com/Smartqix/nakpanel/actions/runs/39518025317) after source upgrade and stopped-workload checks returned: only subscriptions differs (3 rows before and after); all25 other table digests and application desired fields match. Actual changed columns remain unknown. No format3 backup/target restore/reboot acceptance yet. |
+| Explicit Ubuntu24.04-to26.04 forward migration | [Corrected run active](https://github.com/Smartqix/nakpanel/actions/runs/39524834513). [Its predecessor failed](https://github.com/Smartqix/nakpanel/actions/runs/39517370200) after actual runtime network-isolation proof passed, when curl could not connect to127.0.0.1:25000 (rc7). Underlying cause remains unknown. The successor retains complete existing endpoint facts and corrects SQLite source/target selection and numeric socket output. No target restore or migration acceptance yet. |
 | Three-profile scheduled-backup initialization | Prepared; waits for actual accepted PHP maintenance recovery. A dummy fixture does not establish scheduler execution. |
 | Current ARM64 server qualification | Incomplete; the hosted ARM64 runner lacks KVM. Earlier partial ARM results do not qualify the current source. |
 | Genuine PHP security-version advance | Unproved; retained signed packages provide only one core version per PHP minor. Same-version recovery is a separate result. |
 | 30–60 day endurance window | Not completed. Initialization or an immediate sweep cannot establish elapsed endurance or a later daily02:00 execution. |
 
-The corrected maintenance qualifier is
-`8612b11f485ba2d4c4e6051704ab822dc1de9f5c`; it is separate from the tested
-application source6378. It authenticates both checkouts and keeps the canonical
-driver, installed binaries and signed manifest bound to source6378. Its service
-oracle follows site/subscription state for existing Classic PHP-FPM units and
-retains the stricter application-state checks for managed units and workers.
-The helper passed49 focused tests in Python3.9 and3.12, with and without
-optimization; the separate-source preparation boundary also passed its
-focused tests. These checks do not substitute for a passing hosted rehearsal.
+The active maintenance run uses qualifier
+`9226109c0986180af7c5cba815f7669f1cf5a7b4` separately from application6378.
+Its source-backed correction uses the absolute `/usr/sbin/runuser` path because
+the restricted tool environment omits sbin directories.
+Actual `php_smoke` regression tests reproduce the original lookup failure and
+pass with the correction while retaining nonroot FPM/worker and tool-exit checks.
+This does not establish the actual errno from the failed hosted run.
+
+The shared legacy/forward intent comparison also retained four derived fields:
+`sync_status`, `compliance_status`, `compliance_error` and `compliance_checked_at`.
+Usage collection runs on startup and can refresh those observations. The narrow
+correction excludes them while retaining all12 customer intent fields and every
+other table projection. Tests exercise the actual snapshot/compare path and
+reject each customer intent change. This source finding does not identify the
+columns that changed in the failed format3 run. Complete cached restore-result
+and endpoint-state failure reports accompany the corrected experiments.
+The migration snapshot also selects the configured source SQLite database and
+the canonical target database explicitly, rather than the first existing file.
+Its socket check requests numeric service ports while keeping strict loopback
+and HTTP checks. Focused tests cover stale database files and named ports.
 
 The legacy and forward qualifier corrections give tenant Podman commands an
 explicit accessible working directory. The legacy qualifier also accepts
@@ -83,9 +94,10 @@ aliases, world write, special bits, symlinks and access/default POSIX ACLs still
 reject. Generic file/ancestor guards remain unchanged; cache identity and group
 membership must match the original baseline at every observation. The two
 qualifiers passed22 and14 focused tests respectively in all four Python modes.
-Linux xattr transport was simulated in the macOS tests; actual hosted group/ACL
-preconditions and recovery outcomes remain unverified. No guest permissions
-were repaired.
+Linux xattr transport was simulated in the macOS tests. The latest format1
+flight passed the actual complete Go trust check, including directory/group/ACL
+preconditions and official archive inventory; recovery acceptance remains
+unproved. No guest permissions were repaired.
 
 ## Implemented contracts
 
