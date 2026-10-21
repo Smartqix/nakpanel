@@ -1,8 +1,8 @@
 # Ubuntu 26.04-Only Support Transition Plan
 
-> **Current authorization, 21 October 2026:** Phase 4 scheduled backups and
-> restores only on hosted Ubuntu 26.04; keep PHP 8.3/8.4/8.5, skip legacy tests
-> and avoid repeating unchanged checks. Report before merging or deploying.
+> **Current authorization, 21 October 2026:** Reconcile documentation and
+> prepare the correct PR locally. Do not open a PR, launch hosted tests, merge
+> or deploy. Keep PHP 8.3/8.4/8.5 and retain the accepted results below.
 
 **Phase 4 scheduled-backup/restore slice: PASS on hosted Ubuntu 26.04 AMD64.**
 [Run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
@@ -32,8 +32,11 @@ passed on runtime/qualifier commit
 actual PHP maintenance recovery, both unassisted reboots, three fresh Roundcube
 send/read flows and owned cleanup passed. The workflow summary and independently
 checked downloaded receipts agree. The run and its observer have ended.
-**Phase 4 backup/restore verification is now authorized.** Runtime changes are pushed on
-`ricky/ubuntu26-recovery-phase3` and remain unmerged.
+**Phase 4 backup/restore verification is complete for the requested slice.**
+Implementation/harness source through `1140165` is on
+`ricky/ubuntu26-recovery-phase3` and remains unmerged. The documentation-only
+reconciliation and PR draft are prepared locally without opening a PR or
+starting CI.
 
 The two measured recovery errors are fixed. APT rejected `--reinstall` of the
 half-configured FPM package despite all 56 cached archives being present.
@@ -111,12 +114,11 @@ security properties and explicit tenant PHP intent in current-version recovery.
 In-place OS release upgrades and cross-architecture full-server restores remain
 outside the support claim.
 
-The support decision is effective now. Phase 2 implementation is complete
-locally in the attached worktree identified below. The primary checkout holds
-the policy/continuation record; its runtime code has not been merged with the
-implementation branch, `ricky/ubuntu26-recovery-phase3`. Implementation commits
-are pushed there; they are unmerged. A CI host named `ubuntu-24.04` can still build artifacts or host a
-verified 26.04 guest without being a supported server OS.
+The support decision is effective now. Implementation and accepted hosted
+results are recorded above. The primary checkout and attached implementation
+worktree use reconciled documentation, but runtime changes remain unmerged on
+`ricky/ubuntu26-recovery-phase3`. A CI host named `ubuntu-24.04` can build
+artifacts or host a verified 26.04 guest without being a supported server OS.
 
 ## Current phases
 
@@ -181,10 +183,17 @@ after a new user instruction.
      architecture. Do not repeat accepted unchanged checks without a reason.
    - [x] Keep genuine security-version advancement and 30–60 day endurance
      claims separate from same-version package delivery or a short test pass.
-   - [ ] Update release documentation and PR evidence with measured source,
-     dependency and architecture attribution. Promote only qualified claims.
+   - [x] Reconcile active documentation and prepare the PR title/body locally
+     with measured source, dependency and architecture attribution. The draft is
+     in [the local PR body](../../pull-requests/ubuntu-26-04-only.body.md).
+   - [ ] After explicit authorization, open the correct PR and obtain its
+     final-branch CI results before a merge decision. Opening it triggers the
+     hosted security gate; current authorization does not permit that action.
 
-## Phase 1 changes — 21 October 2026
+## Historical Phase 1 changes — 21 October 2026
+
+> This records the initial documentation-only phase. Later implementation and
+> accepted hosted results are recorded at the top of this plan.
 
 Updated AGENTS.md, README.md, IMPLEMENTATION_PLAN.md, the research guidance,
 this plan, recovery/soak/domain-removal guidance and database-manager README.
@@ -193,9 +202,12 @@ source installers, runtime/profile code and workflows are unchanged; their
 alignment is Phase 2 work. No local service/VM/database or hosted test was
 started. Existing protected labs/soaks and source worktrees are untouched.
 
-## Phase 2 local alignment results — 21 October 2026
+## Historical Phase 2 local alignment results — 21 October 2026
 
-Implementation is local and uncommitted in the attached `ubuntu-26-support`
+> This snapshot describes the end of Phase 2, before the later commits and hosted
+> acceptance. It does not describe the current branch or authorization.
+
+At that checkpoint implementation was local and uncommitted in the attached `ubuntu-26-support`
 worktree on `codex/ubuntu-26-support`, based on
 `889c891ed9d4e8b948ef085aa779174a7df0104d`.
 
@@ -239,18 +251,20 @@ worktree on `codex/ubuntu-26-support`, based on
   and 11 changed Python files, Go formatting and `git diff --check`. No hosted workflow,
   existing VM, system service, database, commit, push or deployment was started.
 
-Phase 2 is complete locally. Phase 3 is now authorized and in progress. The actual
-`fwupd-refresh.service` DR failure, unexecuted PHP recovery drill, scheduled
-backup acceptance and other unproved operational claims remain pending.
+At the end of that checkpoint, Phase 2 was complete and Phase 3 had started;
+firmware diagnostics, PHP recovery and scheduled backups were still pending.
+Later accepted Phase 3/4 results and their limits are recorded above.
 
 ## Existing implementation and evidence
 
 The attached implementation worktree is
 `/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel`, on
-`codex/ubuntu-26-support`, based on `889c891ed9d4e8b948ef085aa779174a7df0104d`.
-It now accepts only 26.04 and defaults to the complete Surý PHP profile; the
-native 8.5-only configuration remains explicit and diagnostic. Phase 2 reused
-the existing panel/provider implementation and removed the Noble contract.
+`ricky/ubuntu26-recovery-phase3`, with implementation/harness changes through
+`1140165` and a local documentation-only follow-up. It accepts only 26.04 and
+defaults to the complete Surý PHP profile; native 8.5-only remains diagnostic.
+Phase 2 reused the existing panel/provider implementation and removed the Noble
+contract. The old `codex/ubuntu-26-support` branch and PR #11 are historical;
+they do not represent the final Ubuntu 26.04-only PR.
 
 Previous AMD64 product baselines passed for Ubuntu 24.04, native 26.04 and Surý
 26.04. Those results stay attributed to their tested sources; they do not prove
@@ -267,7 +281,7 @@ scope. Both are closed; there is no continuing launch or retry authorization.
 | Workflow | Hosted run | Original result | Effect of the new scope |
 | --- | --- | --- | --- |
 | Current-version Ubuntu 24.04 → 26.04 migration | [39580017306](https://github.com/Smartqix/nakpanel/actions/runs/39580017306) | FAIL during source preparation; no 26.04 target created; cleanup passed | Retired requirement; not a release blocker and not a pass |
-| Current-version Ubuntu 26.04 PHP maintenance recovery | [39582799272](https://github.com/Smartqix/nakpanel/actions/runs/39582799272) | FAIL in the DR prerequisite (`phase29`); PHP maintenance skipped; cleanup passed | Still relevant to Phase 3 operational acceptance |
+| Current-version Ubuntu 26.04 PHP maintenance recovery | [39582799272](https://github.com/Smartqix/nakpanel/actions/runs/39582799272) | FAIL in the DR prerequisite (`phase29`); PHP maintenance skipped; cleanup passed | Historical failure; later Phase 3 acceptance is separately recorded above |
 
 Migration stopped at `prepare` after 223 commands. Its precise inner error was
 not retained; the public job log contained only a generic refusal. No target
@@ -329,9 +343,13 @@ A successful cross-build, OS guard change, retired failure or health endpoint
 alone does not qualify a platform. Historical archives, prior binaries,
 compatibility wrappers, backfills and transitional migrations remain excluded.
 
-## Phase 3 diagnosis and hosted execution — 21 October 2026
+## Historical Phase 3 diagnosis and execution notes — 21 October 2026
 
-Active implementation branch: `ricky/ubuntu26-recovery-phase3`, in the same
+> These notes preserve the sequence of earlier diagnostics and attempts. Their
+> pending/running labels describe those checkpoints only; all of those observers
+> have ended. Current acceptance and source bindings are recorded at the top.
+
+Implementation branch at these checkpoints: `ricky/ubuntu26-recovery-phase3`, in the same
 attached `ubuntu-26-support` worktree. Commit `c602d66` records the Phase 2
 implementation and the bounded diagnostic entrypoint; the primary checkout's
 runtime remains unmerged.
@@ -361,22 +379,21 @@ exit code and bounded journal before failing.
 
 Retained standalone evidence:
 `/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-21/phase3-fwupd/`.
-Hosted operational recovery and actual PHP maintenance results remain pending.
-Phase 4 has not started.
+At the standalone-diagnostic checkpoint, operational recovery and PHP
+maintenance were still pending and Phase 4 had not started. The later accepted
+Phase 3/4 results are recorded above.
 
 Phase 3 current-version run: [39601839959](https://github.com/Smartqix/nakpanel/actions/runs/39601839959),
 source `9424e592ab1b1f396f8707c2cb1f98bec0713ebe`, attempt 1, hosted AMD64
 Ubuntu 26.04 / full Surý PHP contract, database-manager coverage and actual PHP
 maintenance requested. Signed bundle/image verification passed. The baseline
-is running; PHP maintenance is not yet executed or accepted. Runtime source is
-pinned to this commit even while these continuation notes are updated locally.
+was running at that checkpoint; PHP maintenance had not yet executed or been
+accepted. That run's runtime remained pinned to the recorded source.
 
-One observer (exec session `62838`) records state at
-`/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-21/phase3-current/`.
-It will retain terminal artifacts/logs and cancel this run after a three-hour
-observation limit. Do not start another run or observer while it is active.
-No Phase 4 scheduler, endurance, ARM64 qualification, promotion or deployment
-is being performed.
+The observer (exec session `62838`) recorded state and terminal evidence at
+`/Users/rickynkansah/.local/state/nakpanel/qualification/2026-10-21/phase3-current/`
+with a three-hour bound and has ended. No Phase 4 scheduler, endurance, ARM64
+qualification, promotion or deployment was performed in that checkpoint.
 
 Run 39601839959 is terminal: all 16 current-version canonical gates PASS,
 including phase29 populated recovery/rollback/reboot, phase30 all three hosting
@@ -418,8 +435,9 @@ retry is planned in this phase.
 > Snapshot before the newly authorized diagnostic/recovery work. The failures
 > remain failures; the current acceptance and source are recorded at the top.
 
-**Outcome: operational recovery passes; PHP maintenance recovery remains an
-unresolved Phase 3 blocker. No Phase 4 work, promotion or deployment.**
+**Outcome at this historical checkpoint: operational recovery passed; PHP
+maintenance recovery was unresolved. No Phase 4 work, promotion or deployment
+had occurred. Later Phase 3 acceptance is recorded above.**
 
 | Run | Tested source / packages | Operational baseline | PHP maintenance | Cleanup |
 | --- | --- | --- | --- | --- |
@@ -469,10 +487,10 @@ passed. No local VM, database or protected service was started or changed.
 Both observers (62838 and 24103) have exited after collecting terminal artifacts
 and logs under the two evidence directories above. There is no active hosted
 run, retry, watcher or scheduled automation. No further hosted retry was made.
-The remaining Phase 3 work is to identify/fix the guest maintenance failure
-using the improved receipts, then obtain actual RECOVERED, two unassisted reboot
-and three fresh Roundcube-flow receipts before accepting PHP maintenance.
-Report that result before Phase 4.
+At that terminal checkpoint, the remaining work was to identify/fix the
+maintenance failure and obtain actual RECOVERED, two unassisted reboot and fresh
+Roundcube-flow receipts. The later run `39652821843` supplied that acceptance,
+as recorded above.
 
 ## Historical two-pass recheck — 21 October 2026
 
@@ -507,7 +525,8 @@ text and command output remain private. The firmware policy remains limited to
 owned disposable hosted KVM guests and records an exclusion; physical firmware
 is not validated. Protected local VMs, PostgreSQL and services were untouched.
 
-**Remaining blocker:** The completed hosted PHP maintenance failure has no
-recoverable detailed guest diagnostic. These local fixes do not identify its
-root cause or prove recovery. Actual RECOVERED, two unassisted reboot and three
-fresh Roundcube-flow receipts are still required. Phase 3 remains incomplete.
+**Blocker at that historical checkpoint:** The failed maintenance run had no
+recoverable detailed guest diagnostic, and local fixes alone did not identify
+its cause or prove recovery. The later diagnosis and run `39652821843` supplied
+the required RECOVERED, two unassisted reboot and fresh Roundcube-flow receipts.
+The earlier failures retain their original outcomes.

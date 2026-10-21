@@ -149,7 +149,7 @@ Linux-specific and cannot be fully exercised on macOS.
 | Server profile | Internal PHP | Available hosting PHP | Status |
 | --- | --- | --- | --- |
 | Ubuntu 26.04 native | 8.5 | 8.5 | Explicit diagnostic-only configuration; not the full product contract |
-| Ubuntu 26.04 Surý | 8.5 | 8.3, 8.4, 8.5 | Default; experimental until operational acceptance |
+| Ubuntu 26.04 Surý | 8.5 | 8.3, 8.4, 8.5 | Default; AMD64 operational evidence recorded; experimental pending remaining release qualification |
 
 Ready runtime discovery determines actual availability. Full native, recovery
 and soak evidence is required before production promotion. Ubuntu 24.04 support and cross-OS migration requirements are retired. An in-place Ubuntu

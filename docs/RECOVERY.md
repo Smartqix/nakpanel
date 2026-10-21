@@ -1,7 +1,19 @@
 # nakpanel Recovery
 
-Server recovery targets Ubuntu 26.04 only, hosting PHP 8.3/8.4/8.5 and internal
-PHP 8.5. Operational recovery remains unqualified until Phase 3 passes.
+Current platform contract: Ubuntu 26.04/resolute only, hosting PHP 8.3/8.4/8.5
+and internal PHP 8.5. Current-format backups restore onto a compatible fresh
+26.04 host with the same architecture and PHP profile. Ubuntu 24.04 support,
+cross-OS migration and historical archive compatibility are retired requirements.
+
+Hosted AMD64 operational recovery and same-version PHP maintenance passed in
+[run 39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
+on runtime `63c00f6`. Scheduled local backups, exact-archive fresh-host restore,
+all three PHP runtimes, data persistence, reboot and resumed scheduling passed in
+[run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
+on runtime `0654aa3`. These are separate development-signed results with their
+original source bindings. The implementation remains unmerged; other
+architectures, destinations and remaining release qualification are listed in
+the [transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 
 ## Individual Website Removal
 
@@ -38,12 +50,11 @@ panel. The timer checks for site certificate renewal every 15 minutes. A bad
 managed PEM stops panel startup instead of silently falling back to self-signed
 TLS; restore the previous PEM or remove it for bootstrap recovery.
 
-For Phase 1 Ubuntu/Multipass testing, the seeded accounts are:
-
-```text
-admin@nakpanel.test  / NakpanelAdmin!2026
-client@nakpanel.test / NakpanelClient!2026
-```
+Fresh installs require the explicit administrator bootstrap described in
+[Server Installation](../README.md#server-installation). Public seeded logins
+are disabled. Disposable qualification fixtures supply their administrator
+password through a private bootstrap file; their test credentials are not
+installation defaults.
 
 Operational checks:
 
@@ -197,22 +208,22 @@ discarded provisioning jobs, including `install_custom_cert`, back to River's
 `available` state. Completed and
 in-flight jobs are not retried from the UI.
 
-The full deployment smoke test uses one fresh Ubuntu 26.04 Multipass VM named
-`nakpanel-lab`. It removes old `nakpanel-phase*` Nakpanel test VMs, rebuilds
-`nakpanel-lab`, runs the complete Phase 25 hosting-toolkit chain, preserves the
-Phase 26 server-operations checks, and finishes with the adversarial security
-suite:
+The deployment smoke test creates a fresh, uniquely owned Ubuntu 26.04 source
+guest and uses a separate owned recovery guest for its DR leg. It rejects an
+existing source name and does not sweep old test VMs. Supply the signed bundle,
+trusted public key and exact version described in [platform qualification](PLATFORM_QUALIFICATION.md).
+It runs the current installer and operational, security, recovery, PHP, plan,
+WordPress, statistics and domain-removal gates. This command launches tests and
+requires separate authorization:
 
 ```bash
 deploy/multipass/deployment-verify.sh
 ```
 
-Individual phase verifiers are still useful for debugging. They now reuse the
-same VM by default, or you can set it explicitly:
-
-```bash
-NAKPANEL_MULTIPASS_VM=nakpanel-lab deploy/multipass/phase25-verify.sh
-```
+For an authorized individual verifier, retain the actual run's release,
+architecture, source/DR names and ownership token. Verify ownership before guest
+operations. Preserve all pre-existing lab and soak VMs; a familiar name or name
+prefix does not establish ownership.
 
 ## Phase 26 Upgrade Recovery
 
@@ -719,6 +730,6 @@ reconciliation and a second reboot on the fresh recovery host.
 Ubuntu 24.04 restores, cross-OS migration, legacy provenance reconstruction,
 in-place OS upgrades and cross-architecture full restores are outside this
 contract. The old forward-migration CLI and verifier entrypoints were removed.
-Historical failed runs remain failures. Current 26.04 recovery and PHP
-maintenance still require successful Phase 3 execution; local tests alone do
-not establish that acceptance.
+Historical failed runs remain failures. The accepted AMD64 Phase 3 and
+scheduled-backup results are linked at the top of this document. Preserve each
+result's source and scope; local tests do not establish new hosted acceptance.

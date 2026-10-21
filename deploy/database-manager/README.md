@@ -1,9 +1,12 @@
 # Isolated Database Manager Runtime
 
 Target: opt-in installation on Ubuntu 26.04 LTS using validated internal PHP
-8.5. Hosting PHP 8.3/8.4/8.5 remains independent. Installer/service alignment is complete locally;
-operational qualification is pending; this documentation change
-does not establish production readiness. The existing entrypoint is:
+8.5. Hosting PHP 8.3/8.4/8.5 remains independent. AMD64 database-manager
+coverage passed as part of [Phase 3 run 39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
+on runtime `63c00f6`. Later backup verification is a separate result; remaining
+release qualification is recorded in the [transition plan](../../docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
+The implementation remains unmerged and is not a production release. The
+existing entrypoint is:
 
 ```sh
 sudo bash deploy/install/database-manager-install.sh --yes

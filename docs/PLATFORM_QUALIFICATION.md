@@ -3,8 +3,20 @@
 Ubuntu 26.04 LTS/resolute is the only supported server OS. The product contract
 uses the signed Surý provider with hosting PHP 8.3/8.4/8.5 and internal PHP 8.5.
 The explicit native 8.5-only configuration is diagnostic, not full product
-acceptance. Phase 2 aligns code/defaults/workflows locally; hosted execution
-requires a separate instruction. Operational acceptance remains incomplete.
+acceptance. Code/default/workflow alignment is implemented on the unmerged
+`ricky/ubuntu26-recovery-phase3` branch. Hosted AMD64 operational recovery,
+all 16 current-version gates and same-version PHP maintenance passed in
+[run 39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
+on runtime `63c00f6`. The focused scheduled local-backup/restore and reboot slice
+passed in [run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
+on runtime `0654aa3`. The later `1140165` verifier diagnostics fix is locally
+verified and changes no served runtime.
+
+Ubuntu 26.04 remains experimental pending remaining release qualification.
+Final-branch CI, ARM64 qualification, genuine PHP security-version advancement
+and elapsed-soak evidence remain separate. Current authorization is local
+documentation and PR preparation only; opening a PR triggers CI including hosted
+security guests. No PR opening, hosted test, merge or deployment is authorized.
 
 ## Guest and runner requirements
 
@@ -89,7 +101,11 @@ qualifying that feature; PHP maintenance requires it.
 The summary requires both advertised architecture cells, complete evidence and
 the full Resolute multi-PHP contract. Every failure stays a failure; retain
 useful diagnostics before owned cleanup. Missing/skipped gates cannot promote.
-Current PHP maintenance, scheduled backups, genuine security-version advancement
-and the 30–60 day endurance window retain their separate proof requirements.
-The existing `fwupd-refresh.service` DR failure and unexecuted PHP maintenance
-drill remain unresolved Phase 3 work.
+The accepted AMD64 maintenance and local scheduled-backup results retain the
+source bindings above. Genuine security-version advancement, ARM64 acceptance,
+other destinations and the 30–60 day endurance window remain unproved by those
+runs. The measured LVFS outage is excluded only for explicitly owned disposable
+hosted KVM guests; no physical-firmware or upstream LVFS repair is claimed.
+Failed earlier runs remain failures. See the
+[transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md) for current
+merge preparation and broader release requirements.

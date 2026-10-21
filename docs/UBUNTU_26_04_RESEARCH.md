@@ -5,11 +5,16 @@ Research began on 18 October 2026. The current decision was approved on
 PHP 8.3/8.4/8.5 remains required. This supersedes the former dual-OS proposal,
 Noble-preservation requirements and cross-OS migration milestone.
 
-Phase 2 code/default/workflow alignment is complete locally in the attached
-implementation worktree. Hosted tests remain unauthorized until Phase 3 is
-explicitly started; local alignment does not establish operational acceptance. [AGENTS.md](../AGENTS.md) is the project policy; the
-[transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md) is the
-current phased checklist. Ubuntu 26.04 remains experimental.
+Code/default/workflow alignment is implemented on the unmerged
+`ricky/ubuntu26-recovery-phase3` branch. Hosted AMD64 Phase 3 recovery and PHP
+maintenance passed in run `39652821843` on `63c00f6`; the Phase 4 scheduled
+local-backup/restore slice passed in run `39676085171` on `0654aa3`. The later
+verifier diagnostics fix `1140165` has focused local evidence and changes no
+served runtime. [AGENTS.md](../AGENTS.md) is project policy; the
+[transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md) records
+the source bindings, remaining release requirements and current local-docs/PR
+preparation authorization. No new hosted run or PR opening is authorized.
+Ubuntu 26.04 remains experimental.
 
 ## Decision and rationale
 
@@ -63,9 +68,8 @@ this documentation phase performs no package installation or enrollment.
 
 Keep the Go panel, privileged agent and panelctl, immutable service-plan
 contracts, central installer platform resolver, trusted runtime descriptors,
-APT/systemd deployment and current encrypted backup design. Remove obsolete
-Noble branches in Phase 2 rather than create another panel or generic provider
-framework. Go targets `linux/amd64` or `linux/arm64`; distribution-specific
+APT/systemd deployment and current encrypted backup design. The Phase 2 alignment removed obsolete Noble branches from the supported paths
+and reused this architecture. Go targets `linux/amd64` or `linux/arm64`; distribution-specific
 package and service contracts still require real guest tests.
 [Go targets](https://go.dev/doc/install/source),
 [Go compatibility](https://go.dev/doc/go1compat).
@@ -124,13 +128,18 @@ turn them into acceptance of changed implementation or unexecuted maintenance.
 | Historical attempt | Actual result | Current relevance |
 | --- | --- | --- |
 | [24.04 → 26.04 migration, 39580017306](https://github.com/Smartqix/nakpanel/actions/runs/39580017306) | Failed during source preparation; exact inner cause unknown; cleanup passed | Retired release requirement; remains a failure, not a pass |
-| [26.04 PHP maintenance, 39582799272](https://github.com/Smartqix/nakpanel/actions/runs/39582799272) | Six prerequisite gates passed, then DR failed on `fwupd-refresh.service`; actual PHP drill skipped; cleanup passed | Active recovery blocker; underlying unit failure still needs diagnosis |
+| [26.04 PHP maintenance, 39582799272](https://github.com/Smartqix/nakpanel/actions/runs/39582799272) | Six prerequisite gates passed, then DR failed on `fwupd-refresh.service`; actual PHP drill skipped; cleanup passed | Historical failure; original inner error was not retained. Later diagnosis and accepted recovery are recorded in the transition plan |
 
-The PHP delivery/configuration-failure/recovery drill, its required reboot and
-webmail checks, and scheduled-backup acceptance remain incomplete. ARM64 hosted
-qualification, a genuine PHP security-version advance and 30–60 day endurance
-remain separate unproved claims. Static Go cross-builds and package availability
-do not establish these results.
+Subsequent accepted AMD64 results are separately bound to their tested source:
+[Phase 3 run 39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
+passed all 16 gates, PHP delivery/configuration-failure recovery, both reboots and
+fresh webmail flows on `63c00f6`;
+[Phase 4 run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
+passed actual scheduled local backups, exact-archive fresh-host restore, all
+three PHP runtimes/data before and after reboot, resumed scheduling and cleanup
+on `0654aa3`. Final-branch CI, ARM64 qualification, a genuine PHP security-version
+advance and 30–60 day endurance remain separate. Static Go cross-builds and
+package availability do not establish those remaining claims.
 
 ## Phased rollout and completion
 

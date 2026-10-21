@@ -1,4 +1,10 @@
-# Ubuntu platform implementation evidence — 18 October 2026
+# Historical Ubuntu platform implementation evidence — 18 October 2026
+
+> **Historical checkpoint:** OS defaults, running-job labels and unfinished
+> work below describe that checkpoint only. Ubuntu 24.04 is now retired. The
+> current 26.04-only scope, accepted Phase 3/4 results, source bindings and
+> remaining work are in the [transition plan](../superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
+> PR #11 and its branch are historical references, not the current PR target.
 
 Baseline: `ef8b5a7ebc0462cb90a1ae5b8fa98e4a3af46466`.
 This is an implementation and qualification record, not a production support declaration.

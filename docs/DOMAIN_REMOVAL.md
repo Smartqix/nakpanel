@@ -41,7 +41,11 @@ or ownership markers to force a retry.
 ## Verification
 
 The current verification target is Ubuntu 26.04 LTS with hosting PHP
-8.3/8.4/8.5. The verifier and defaults now target this contract; hosted acceptance remains pending.
+8.3/8.4/8.5. The domain-removal gate passed within the 16-gate hosted AMD64
+[Phase 3 run 39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
+on runtime `63c00f6`. The later `0654aa3` backup/restore run does not replace
+that gate's source attribution. The implementation remains unmerged; see the
+[transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 `deploy/multipass/domain-removal-verify.sh` must install the current stack and
 run Phase 34 in a disposable run-owned guest, then create uniquely named QA
 fixtures. Preserve pre-existing lab and soak VMs.

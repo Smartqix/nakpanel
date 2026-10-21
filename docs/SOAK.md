@@ -1,5 +1,13 @@
 # 30-60 Day Soak Installation
 
+The current server target is Ubuntu 26.04/resolute with hosting PHP 8.3/8.4/8.5
+and internal PHP 8.5. Hosted AMD64 recovery and short scheduled-backup evidence
+are recorded in the [transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md);
+no 30–60 day elapsed-soak acceptance is claimed. Starting or scheduling a new
+soak requires separate authorization. Existing Ubuntu 24.04 labs/soaks and
+historical results remain protected without creating a continuing OS-support
+requirement.
+
 The soak run answers the question the fast reliability gate cannot: does a
 production-shaped nakpanel installation stay healthy for weeks under real
 timers, real certificate renewals, real scheduled backups, and repeated

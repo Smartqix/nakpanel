@@ -202,3 +202,25 @@ workflow and PHP support remain unchanged, so no hosted test was relaunched.
 The existing hosted PASS remains attributed to runtime `0654aa3`; the new
 initialization failure path has focused local evidence. No merge or deployment
 was performed.
+
+## Local documentation and PR preparation — 21 October 2026
+
+Current authorization is local preparation only: no PR opening, hosted test,
+merge or deployment. Active platform, recovery, soak, domain-removal, database
+manager and research guidance now use the accepted Phase 3/4 source bindings;
+historical failed checkpoints remain historical. The primary checkout and
+implementation worktree use the same reconciled versions of these documents.
+
+Prepared PR head: `ricky/ubuntu26-recovery-phase3`; base: `main`. Implementation
+and harness baseline: `1140165`, followed by this documentation-only update.
+The existing PR #11 uses `codex/ubuntu-26-support` and is not the target for this
+scope. Its remote content has not been changed.
+
+- Title: [local title file](../../pull-requests/ubuntu-26-04-only.title.txt).
+- Description: [local PR body](../../pull-requests/ubuntu-26-04-only.body.md).
+- Final-branch CI remains pending. Opening a PR triggers the hosted security
+  gate, so the PR stays unopened until a separate instruction.
+
+Only local documentation consistency, link and diff checks apply to this step;
+existing hosted evidence is reused with its original source. No runtime,
+installer, workflow or test implementation changed, and no remote PR was opened.

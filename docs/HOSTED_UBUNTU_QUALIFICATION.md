@@ -1,9 +1,13 @@
 # Hosted Ubuntu 26.04 AMD64 qualification
 
 The hosted workflow targets one server OS: Ubuntu 26.04/resolute on AMD64,
-using the signed Surý PHP 8.3/8.4/8.5 profile and internal PHP 8.5. Workflow
-alignment in Phase 2 is local only; no hosted dispatch/push is authorized by
-this document. Ubuntu 26.04 remains experimental pending remaining release qualification.
+using the signed Surý PHP 8.3/8.4/8.5 profile and internal PHP 8.5. Hosted
+Phase 3 operational/maintenance acceptance passed on `63c00f6`; the focused
+Phase 4 scheduled-backup/restore slice passed on `0654aa3`, as recorded below.
+The latest `1140165` verifier diagnostics change has focused local evidence and
+does not change the served runtime. Current authorization permits only local
+documentation and PR preparation, with no new hosted dispatch or PR opening.
+Ubuntu 26.04 remains experimental pending remaining release qualification.
 See [platform qualification](PLATFORM_QUALIFICATION.md) and the
 [transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
 
@@ -15,10 +19,13 @@ The hosted runner label `ubuntu-24.04` is a build/VM-host choice, not a supporte
 Nakpanel server OS. Native ARM64 still requires its own qualified runner; this
 AMD64 workflow cannot establish that support.
 
-Build only the current signed AMD64 panel/agent/panelctl bundle with an ephemeral
-test key. Authenticate its exact manifest, executable inventory and architecture
-before staging. Development bundles remain nonpromotable. No historical checkout,
-prior binary or Noble image is built/downloaded for current qualification.
+The canonical full qualification builds the current signed AMD64
+panel/agent/panelctl bundle with an ephemeral test key. Authenticate its exact
+manifest, executable inventory and architecture before staging. Development
+bundles remain nonpromotable; no historical checkout or Noble guest is required.
+The focused backup mode separately authenticates its pinned accepted Phase 3
+artifact; selecting its current-build option installs fresh current-run signed
+bytes. See the focused-mode constraints below.
 
 Both the main CI security job and the dedicated hosted workflow select:
 

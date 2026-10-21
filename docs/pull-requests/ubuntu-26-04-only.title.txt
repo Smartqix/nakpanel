@@ -1,0 +1,1 @@
+Make Ubuntu 26.04 the only server OS and verify multi-PHP recovery
