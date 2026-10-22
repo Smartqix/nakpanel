@@ -12,7 +12,7 @@
 
 ## Current authorization
 
-- Phases 1, 2 and 3 are locally complete; Phase 3 started from `c82f8ad`. The user authorized Phase 3 only on 2026-10-22: subdomain mail quotas, suspension and lifecycle, mailbox-data and parent/sibling preservation, with focused local tests. Phase 4, hosted tests, server changes, GitHub writes, merge and deployment remain unauthorized.
+- Phases 1, 2 and 3 are locally complete; Phase 3 started from `c82f8ad`. The user authorized Phase 3 only on 2026-10-22: subdomain mail quotas, suspension and lifecycle, mailbox-data and parent/sibling preservation, with focused local tests. On 2026-10-22 the user authorized Phase 4 only: focused hosted Ubuntu 26.04 subdomain mail tests and relevant fixes. Publishing this feature ref and dispatching only its focused manual test selection are required for that run. Production server changes, PR, merge and deployment remain unauthorized.
 - Report the result of each phase and stop before the next unless the user explicitly authorizes multiple phases together.
 - Phase 4 requires explicit hosted-test authorization. Phase 5 separates PR/CI, merge and deployment approvals; prior deployment permission for the existing main build does not authorize publishing these future changes.
 - Implementation continues on the local feature branch `ricky/subdomain-mail-phase1` in the existing attached worktree, based on `d992462ead9b617cb068482922a07170a28b9687`. Keep main unchanged; remove the feature branch after a separately authorized merge.
