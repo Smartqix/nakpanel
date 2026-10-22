@@ -201,15 +201,16 @@ type SiteUsage struct {
 }
 
 type MailDomain struct {
-	ID             int64
-	SubscriptionID int64
-	SiteID         int64
-	Domain         string
-	Enabled        bool
-	DKIM           bool
-	DMARCPolicy    string
-	Status         string
-	LastError      string
+	ID               int64
+	SubscriptionID   int64
+	SiteID           int64
+	Domain           string
+	Enabled          bool
+	EffectiveEnabled bool
+	DKIM             bool
+	DMARCPolicy      string
+	Status           string
+	LastError        string
 }
 
 type Mailbox struct {

@@ -155,7 +155,7 @@ func mailWorkspaceData(enabled bool) dashboard.Data {
 		Subscriptions: []types.SubscriptionSummary{{ID: 20, CustomerID: 88, CustomerName: "Mail Owner", SubscriptionName: "Mail Hosting", PlanID: 10, PlanName: "Business", Status: "active", MaxMailboxes: maxMailboxes}},
 		SubscriptionServices: dashboard.SubscriptionServicesData{
 			Accounts:     []types.SubscriptionSystemAccount{{SubscriptionID: 20, EffectivePolicy: policy}},
-			MailDomains:  []dashboard.MailDomain{{ID: 41, SubscriptionID: 20, SiteID: 31, Domain: "mail-owned.test", Enabled: true, DKIM: true, DMARCPolicy: "quarantine", Status: "in_sync"}},
+			MailDomains:  []dashboard.MailDomain{{ID: 41, SubscriptionID: 20, SiteID: 31, Domain: "mail-owned.test", Enabled: true, EffectiveEnabled: true, DKIM: true, DMARCPolicy: "quarantine", Status: "in_sync"}},
 			Mailboxes:    []dashboard.Mailbox{{ID: 51, SubscriptionID: 20, MailDomainID: 41, Address: "hello@mail-owned.test", QuotaMB: 1024, Enabled: true}},
 			MailAliases:  []dashboard.MailAlias{{ID: 61, SubscriptionID: 20, MailDomainID: 41, Address: "sales@mail-owned.test", Destinations: "hello@mail-owned.test"}},
 			WebmailHosts: []dashboard.WebmailHost{{ID: 71, SubscriptionID: 20, SiteID: 31, Domain: "mail-owned.test", Hostname: "webmail.mail-owned.test", Status: "active"}},

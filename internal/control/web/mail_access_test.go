@@ -10,7 +10,7 @@ func TestMailWebmailURLRequiresOwnedActiveHTTPSHostname(t *testing.T) {
 	site := dashboard.Site{ID: 1, SubscriptionID: 2, Domain: "example.test", Status: "active"}
 	sub := types.SubscriptionSummary{ID: 2, Status: "active", MaxMailboxes: 5, ServicePresets: types.PlanServicePresets{}}
 	sub.ServicePresets.Mail.WebmailEnabled = true
-	domain := dashboard.MailDomain{ID: 3, SiteID: 1, SubscriptionID: 2, Enabled: true, Status: "in_sync"}
+	domain := dashboard.MailDomain{ID: 3, SiteID: 1, SubscriptionID: 2, Enabled: true, EffectiveEnabled: true, Status: "in_sync"}
 	data := dashboard.Data{SubscriptionServices: dashboard.SubscriptionServicesData{WebmailHosts: []dashboard.WebmailHost{{SiteID: 1, SubscriptionID: 2, Hostname: "webmail.example.test", Status: "active"}}}}
 	if got := mailWebmailURL(site, sub, domain, data); got != "https://webmail.example.test/" {
 		t.Fatalf("url=%q", got)
@@ -30,5 +30,10 @@ func TestMailWebmailURLRequiresOwnedActiveHTTPSHostname(t *testing.T) {
 	domain.Enabled = false
 	if mailWebmailURL(site, sub, domain, data) != "" {
 		t.Fatal("disabled service allowed")
+	}
+	domain.Enabled = true
+	domain.EffectiveEnabled = false
+	if mailWebmailURL(site, sub, domain, data) != "" {
+		t.Fatal("unavailable mail service allowed")
 	}
 }

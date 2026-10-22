@@ -29,7 +29,7 @@ func TestSubdomainMailDNSReadinessFeedback(t *testing.T) {
 			child.DNSZoneMode = "parent"
 			sub := data.Subscriptions[0]
 			sub.MaxMailboxes = 5
-			domain := dashboard.MailDomain{ID: 42, SiteID: child.ID, SubscriptionID: sub.ID, Domain: child.Domain, Enabled: true, DKIM: true, DMARCPolicy: "none", Status: test.status, LastError: test.note}
+			domain := dashboard.MailDomain{ID: 42, SiteID: child.ID, SubscriptionID: sub.ID, Domain: child.Domain, Enabled: true, EffectiveEnabled: true, DKIM: true, DMARCPolicy: "none", Status: test.status, LastError: test.note}
 			if !test.external {
 				data.Phase6.DNSZones = []dashboard.DNSZone{{ID: 31, SiteID: child.ParentSiteID, Domain: "example.test", Mode: "primary", Address: "192.0.2.1", Status: test.zoneStatus, DesiredRevision: test.desired, AppliedRevision: test.applied, LastError: "named could not apply zone"}}
 				if test.zoneStatus != "failed" {

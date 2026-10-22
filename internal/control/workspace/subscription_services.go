@@ -203,9 +203,9 @@ WHERE ` + where + ` ORDER BY operation.created_at DESC LIMIT 250`, func(rows *sq
 			data.Staging = append(data.Staging, item)
 			return nil
 		}},
-		{`SELECT item.id,item.subscription_id,COALESCE(item.site_id,0),item.domain,item.enabled,item.dkim_enabled,item.dmarc_policy,item.convergence_status,item.last_error FROM mail_domains item JOIN subscriptions sub ON sub.id=item.subscription_id JOIN customers customer ON customer.id=sub.customer_id LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id WHERE ` + where + ` ORDER BY item.id`, func(rows *sql.Rows) error {
+		{`SELECT item.id,item.subscription_id,COALESCE(item.site_id,0),item.domain,item.enabled,item.effective_enabled,item.dkim_enabled,item.dmarc_policy,item.convergence_status,item.last_error FROM mail_domains item JOIN subscriptions sub ON sub.id=item.subscription_id JOIN customers customer ON customer.id=sub.customer_id LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id WHERE ` + where + ` ORDER BY item.id`, func(rows *sql.Rows) error {
 			var item dashboard.MailDomain
-			if err := rows.Scan(&item.ID, &item.SubscriptionID, &item.SiteID, &item.Domain, &item.Enabled, &item.DKIM, &item.DMARCPolicy, &item.Status, &item.LastError); err != nil {
+			if err := rows.Scan(&item.ID, &item.SubscriptionID, &item.SiteID, &item.Domain, &item.Enabled, &item.EffectiveEnabled, &item.DKIM, &item.DMARCPolicy, &item.Status, &item.LastError); err != nil {
 				return err
 			}
 			data.MailDomains = append(data.MailDomains, item)

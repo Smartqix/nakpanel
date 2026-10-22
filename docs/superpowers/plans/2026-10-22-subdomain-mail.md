@@ -144,10 +144,12 @@ The new real-database tests use the `TestSubdomainMail` prefix. Add existing aff
 
 **Files:** Relevant product documentation, the scoped verification record and existing `.github/workflows/ci.yml` only if required to execute the new focused coverage. Do not add a second hosted workflow for the same acceptance claims.
 
-- [ ] Reconcile documentation and obtain a focused review of ownership, DNS record scope, shared quotas and deletion behavior. Resolve material findings with the relevant regression tests.
+- [x] Reconcile documentation and obtain a focused review of ownership, DNS record scope, shared quotas and deletion behavior. One Important finding was fixed: persistently unavailable mail now renders unavailable service/DNS feedback and no webmail link. A real database-to-rendering regression covers customer suspension after convergence, reactivation and website-only suspension; 23 focused tests passed, with one optional browser preview skipped. Vet passed.
 - [ ] When push/PR is authorized, prepare one PR into main and run required CI, including its hosted security gate. Confirm database cases execute and bind evidence to the exact tested source.
 - [ ] Report the PR, final diff, CI result and outstanding limitations before merging. Merge only when explicitly authorized; remove the merged feature branch afterward.
 - [ ] Deploy only when explicitly authorized. Use the tested main build and existing recovery procedure; verify trusted HTTPS, mail health and the affected subdomain flow without disturbing unrelated customer data.
+
+**PR/CI tracking:** [PR #14](https://github.com/Smartqix/nakpanel/pull/14) is open into main. The first CI run was cancelled after review found the availability issue; required CI will run on the corrected head. Its final result is recorded in the PR description and ledger without another docs-only push. Optional hosted mail/qualification suites are not repeated.
 
 **Current authorized exit:** The PR is open, required CI and the focused review are complete, failures are fixed, and results are reported. Stop before merge, branch cleanup or deployment. The later release steps above remain pending explicit authorization.
 

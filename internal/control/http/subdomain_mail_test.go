@@ -128,7 +128,7 @@ func TestSubdomainMailFormsKeepChildContext(t *testing.T) {
 		t.Fatal("enable mail did not use the child site identity")
 	}
 
-	reader.data.SubscriptionServices.MailDomains = append(reader.data.SubscriptionServices.MailDomains, dashboard.MailDomain{ID: 42, SubscriptionID: 20, SiteID: 32, Domain: "shop.mail-owned.test", Enabled: true, Status: "in_sync"})
+	reader.data.SubscriptionServices.MailDomains = append(reader.data.SubscriptionServices.MailDomains, dashboard.MailDomain{ID: 42, SubscriptionID: 20, SiteID: 32, Domain: "shop.mail-owned.test", Enabled: true, EffectiveEnabled: true, Status: "in_sync"})
 	body = get("/sites/32?tab=mail")
 	checkDialog(body, "mail-mailbox-20-42", "/subscriptions/20/mailboxes", "42")
 	body = get("/sites/32?tab=mail&mail_view=aliases")

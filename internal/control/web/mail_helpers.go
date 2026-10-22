@@ -121,7 +121,7 @@ func webmailForSite(items []dashboard.WebmailHost, siteID int64) (dashboard.Webm
 }
 
 func mailWebmailURL(hostedSite dashboard.Site, subscription types.SubscriptionSummary, domain dashboard.MailDomain, data dashboard.Data) string {
-	if hostedSite.Status != "active" || subscription.Status != "active" || !domain.Enabled || domain.Status != "in_sync" || !subscriptionMailEnabled(subscription, data.SubscriptionServices) || !subscriptionWebmailEnabled(subscription, data.SubscriptionServices) {
+	if hostedSite.Status != "active" || subscription.Status != "active" || !domain.Enabled || !domain.EffectiveEnabled || domain.Status != "in_sync" || !subscriptionMailEnabled(subscription, data.SubscriptionServices) || !subscriptionWebmailEnabled(subscription, data.SubscriptionServices) {
 		return ""
 	}
 	for _, customer := range data.Customers {
@@ -162,6 +162,9 @@ func mailDomainState(domain dashboard.MailDomain) string {
 		return "disabled"
 	}
 	if domain.Status == "in_sync" {
+		if !domain.EffectiveEnabled {
+			return "unavailable"
+		}
 		if domain.LastError != "" {
 			return "action required"
 		}
@@ -181,6 +184,9 @@ func mailDNSReadiness(site dashboard.Site, domain dashboard.MailDomain, data das
 	}
 	if domain.Status != "in_sync" {
 		return mailDNSFeedback{"Mail setup pending", "Mail configuration has not been acknowledged yet."}
+	}
+	if !domain.EffectiveEnabled {
+		return mailDNSFeedback{"Mail unavailable", "Mail is unavailable under the account or subscription's current service state."}
 	}
 	zoneSiteID := site.ID
 	if site.DNSZoneMode == "parent" && site.ParentSiteID > 0 {

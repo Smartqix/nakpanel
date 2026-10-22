@@ -100,7 +100,8 @@ custom entitlement writes resolve subscription overrides before revoking access.
 Mail acknowledgements check the current account revision as well as the mail
 settings, preventing an older decision from overriding revocation or reactivation.
 Reactivation still needs current convergence and restores only enabled, entitled
-mail domains.
+mail domains. The Mail page shows unavailable service instead of local DNS
+readiness until mail is effectively enabled and its configuration is acknowledged.
 
 Website-only suspension keeps existing mail. Its existing mail-domain settings
 remain editable while web hosting is off, provided its subscription is active

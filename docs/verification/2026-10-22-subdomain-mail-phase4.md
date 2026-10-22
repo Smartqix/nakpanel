@@ -7,7 +7,10 @@ The owned guest was removed successfully. Stop before PR, merge or deployment;
 main remains `d992462`.
 
 This report is the Phase 4 completion snapshot. Phase 5 PR/CI is now separately
-authorized; current PR checks and its description record that later result.
+authorized; [PR #14](https://github.com/Smartqix/nakpanel/pull/14) records that
+later result. A subsequent customer-suspension readiness-display fix has local
+database/rendering proof and requires CI at its own source; the Phase 4 hosted
+observations below remain attributed to `e856cb1`.
 
 ## Results
 
