@@ -176,6 +176,77 @@
         "owned_records": 1,
         "exit_code": 0
       }
+    },
+    {
+      "run_id": 39798543643,
+      "url": "https://github.com/Smartqix/nakpanel/actions/runs/39798543643",
+      "artifact": {
+        "archive_sha256": "a7c848deb24ea62ae6de925dcb0add29b9be2047fd23ab8379e2e0aae4c01834",
+        "commit": "2de7b5fe6b82b33ee745edf53e8bdb2e4a7cff52",
+        "image": {
+          "serial": "20260927",
+          "sha256": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+          "suite": "resolute",
+          "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img"
+        },
+        "key_sha256": "993b95acd6c8f671cc9cec501235faa5bfd25d44911d4920620fbd1273f37e98",
+        "manifest_sha256": "4dcff6ed9d9a66beac7338934a1a977c7e67aac7bd542cfa2580e38149116223"
+      },
+      "result": {
+        "actual_os": "ubuntu:26.04:resolute",
+        "apt_translation_policy": "installer-process-only:none",
+        "architecture": "amd64",
+        "checks": [],
+        "commit": "2de7b5fe6b82b33ee745edf53e8bdb2e4a7cff52",
+        "deployed": false,
+        "error": "command failed: multipass exit=1 private-log=command-042.log",
+        "error_type": "ValueError",
+        "failure_frames": [
+          {
+            "function": "main",
+            "line": 266
+          },
+          {
+            "function": "run",
+            "line": 176
+          },
+          {
+            "function": "protocol",
+            "line": 135
+          },
+          {
+            "function": "guest",
+            "line": 109
+          },
+          {
+            "function": "cmd",
+            "line": 106
+          },
+          {
+            "function": "require",
+            "line": 9
+          }
+        ],
+        "guest": "nakpanel-26-04-amd64-submail-39798543643-1",
+        "merged": false,
+        "php": {
+          "8.3": "8.3.36",
+          "8.4": "8.4.27",
+          "8.5": "8.5.12"
+        },
+        "promotion_eligible": false,
+        "release": "26.04",
+        "run_token": "submail-39798543643-1",
+        "scope": "SUBDOMAIN_MAIL_ONLY",
+        "stage": "owned-fixtures",
+        "status": "FAIL",
+        "updated_at": 1792681323.2480657
+      },
+      "cleanup": {
+        "owned_records": 1,
+        "exit_code": 0
+      },
+      "failure_diagnostic": "Traceback (most recent call last):\n  File \"/var/lib/nakpanel-qualification/submail-39798543643-1/source/deploy/multipass/subdomain-mail-protocol.py\", line 32, in <module>\n    assert time.monotonic()<deadline,'preserved message missing';time.sleep(2)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: preserved message missing"
     }
   ],
   "hosted_mail_gates_passed": 0,
@@ -184,5 +255,13 @@
   "main_unchanged": "d992462ead9b617cb068482922a07170a28b9687",
   "pull_request_opened": false,
   "merged": false,
-  "deployed": false
+  "deployed": false,
+  "additional_authorization": {
+    "allowed_runs": 1,
+    "dispatched_runs": 1,
+    "remaining_runs": 0,
+    "reason": "Ubuntu mirror repair and one focused hosted rerun",
+    "outcome": "FAIL before child-mail mutation: seed message not found through IMAP within 90 seconds"
+  },
+  "mirror_repair_verified": true
 }
