@@ -155,6 +155,8 @@ class Drill:
   self.accounts=[];self.domains={}
   for site,sub,domain in ((self.parent,self.sub,'current-bootstrap.test'),(self.sibling,self.sub,'news.current-bootstrap.test'),(foreign_site,foreign_sub,'foreign-submail.test')):
    mid=self.mail(site,sub);self.domains[site]=mid;self.accounts.append(self.account(mid,sub,domain));self.ready(mid)
+  self.expected=self.protocol('seed',self.accounts);before=self.canaries()
+  self.state['initial_parent_sibling_fingerprint']=before
   self.domains[self.child]=self.mail(self.child,self.sub);self.ready(self.domains[self.child])
   self.stage('child-browser-mailbox-alias')
   admin_password=self.private/'admin-password';admin_password.write_text('NakpanelAdmin!2026');admin_password.chmod(0o600)
@@ -164,7 +166,9 @@ class Drill:
   child=json.loads(state.read_text());require(child['domain']=='shop.current-bootstrap.test','browser mailbox lost child identity')
   self.child_account={k:child[k] for k in ('address','password','domain')};self.accounts.append(self.child_account);self.ready(self.domains[self.child])
   self.cmd(['multipass','exec',self.vm,'--','sudo','env','NAKPANEL_QA_MAIL_CA_FILE=/etc/stalwart/tls/cert.pem','bash','-c','export NAKPANEL_QA_MAIL_HOST="$(hostname -f)"; exec python3 "$1"','_',self.env['NAKPANEL_REMOTE_SRC']+'/deploy/multipass/mail-workspace-protocol-verify.py'],data=json.dumps(child))
-  self.expected=self.protocol('seed',self.accounts);before=self.canaries()
+  self.protocol('verify',self.accounts[:3],self.expected)
+  require(self.canaries()==before,'initial child mail setup mutated parent/sibling resources')
+  self.expected+=self.protocol('seed',[self.child_account])
   self.state['message_canaries']=[dict(address=a['address'],**p) for a,p in zip(self.accounts,self.expected)]
   self.state['initial_parent_sibling_fingerprint']=before
   self.passed('child browser CRUD, rotated password denial, SMTP TLS/STARTTLS, alias delivery and IMAP retrieval')
@@ -177,6 +181,13 @@ class Drill:
   self.stage('quotas-and-foreign-requests')
   mid=self.domains[self.child];prefix='/subscriptions/'+str(self.sub)
   extra=dict(mail_domain_id=mid,local_part='last-slot',password='Np!'+secrets.token_urlsafe(24),quota_mb=128,enabled='true')
+  require(int(self.db('SELECT count(*) FROM mailboxes m JOIN mail_domains d ON d.id=m.mail_domain_id WHERE d.subscription_id='+str(self.sub)))<4,'foreign probes require spare shared capacity')
+  scope_before=self.db("SELECT md5(COALESCE(jsonb_agg(to_jsonb(m) ORDER BY id),'[]'::jsonb)::text) FROM mailboxes m")
+  self.http.request(prefix+'/mailboxes',dict(extra,mail_domain_id=self.domains[foreign_site],local_part='forbidden'),ok=(400,403,404))
+  isolated=HTTP(self.http.base);isolated.login(foreign_email,foreign_password)
+  isolated.request('/sites/'+str(self.child)+'?tab=mail',ok=(404,))
+  isolated.request(prefix+'/mailboxes',dict(extra,local_part='forbidden'),ok=(400,403,404))
+  require(self.db("SELECT md5(COALESCE(jsonb_agg(to_jsonb(m) ORDER BY id),'[]'::jsonb)::text) FROM mailboxes m")==scope_before,'foreign probes changed mailbox resources')
   self.http.request(prefix+'/mailboxes',extra)
   require(self.db('SELECT quota_mb FROM mailboxes WHERE mail_domain_id='+str(mid)+" AND local_part='last-slot'")=='64','mailbox storage cap bypassed')
   self.http.request(prefix+'/mailboxes',dict(extra,local_part='over-limit'),ok=(400,409,422))
@@ -184,10 +195,6 @@ class Drill:
   alias=dict(mail_domain_id=mid,local_part='last-slot',destinations=child['address'])
   self.http.request(prefix+'/mail-aliases',alias)
   self.http.request(prefix+'/mail-aliases',dict(alias,local_part='over-limit'),ok=(400,409,422))
-  self.http.request(prefix+'/mailboxes',dict(extra,mail_domain_id=self.domains[foreign_site],local_part='forbidden'),ok=(400,403,404))
-  isolated=HTTP(self.http.base);isolated.login(foreign_email,foreign_password)
-  isolated.request('/sites/'+str(self.child)+'?tab=mail',ok=(404,))
-  isolated.request(prefix+'/mailboxes',dict(extra,local_part='forbidden'),ok=(400,403,404))
   require(self.canaries()==before,'quota/foreign operation mutated parent/sibling resources')
   self.passed('shared mailbox/alias counts, finite storage cap and forbidden foreign read/write')
   self.stage('disable-suspend-reactivate')
@@ -221,6 +228,8 @@ class Drill:
    if result['state']=='completed':break
    require(result['state']!='failed' and time.monotonic()<deadline,'reviewed child cleanup did not complete');time.sleep(2)
   require(self.canaries()==before,'child removal mutated parent/sibling resources')
+  self.protocol('denied',[self.child_account])
+  require(self.db('SELECT count(*) FROM mail_domains WHERE site_id='+str(self.child))=='0','removed child retains its mail domain')
   self.state['final_parent_sibling_fingerprint']=self.canaries()
   self.protocol('verify',self.accounts[:3],self.expected[:3])
   self.passed('confirmed child cleanup only; parent/sibling mailbox, alias, DNS and message canaries unchanged')
