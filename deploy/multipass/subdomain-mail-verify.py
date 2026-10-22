@@ -62,7 +62,14 @@ class HTTP:
   try:response=self.opener.open(req,timeout=30)
   except urllib.error.HTTPError as e:response=e
   with response:code=response.code;body=response.read(2**20)
-  require(code in ok,'HTTP '+path+' returned '+str(code))
+  if code not in ok:
+   detail=''
+   try:
+    payload=json.loads(body);detail=payload.get('error',payload.get('message',''))
+   except (ValueError,AttributeError):pass
+   if not isinstance(detail,str):detail=''
+   detail=re.sub(r'Np![A-Za-z0-9_-]+','[synthetic-secret]',detail.replace('NakpanelAdmin!2026','[synthetic-secret]'))
+   raise ValueError('HTTP '+path+' returned '+str(code)+(': '+detail[:512] if detail else ''))
   return code,body
  def login(self,email,password):self.request('/login',dict(email=email,password=password))
 class Drill:
@@ -140,6 +147,7 @@ class Drill:
   self.customer=int(self.db('SELECT customer_id FROM subscriptions WHERE id='+str(self.sub)))
   self.plan=int(self.db('SELECT plan_id FROM subscriptions WHERE id='+str(self.sub)))
   self.post('/subscriptions/'+str(self.sub)+'/policy',policy_patch=json.dumps({'resources':{'max_mail_aliases':4}}))
+  self.wait('SELECT status FROM sites WHERE id='+str(self.parent),'active')
   for label in ('shop','news'):self.post('/sites/'+str(self.parent)+'/subdomains',label=label,issue_certificate='false')
   self.child=int(self.db("SELECT id FROM sites WHERE domain='shop.current-bootstrap.test'"))
   self.sibling=int(self.db("SELECT id FROM sites WHERE domain='news.current-bootstrap.test'"))
@@ -210,7 +218,9 @@ class Drill:
    for site in (self.parent,self.child,self.sibling):self.ready(self.domains[site],status=='active')
    if status=='suspended':
     self.protocol('denied',[self.accounts[0],self.accounts[1],self.child_account]);self.protocol('verify',[self.accounts[2]],[self.expected[2]])
-   else:self.protocol('verify',self.accounts,self.expected)
+   else:
+    self.protocol('verify',self.accounts,self.expected)
+    for site in (self.parent,self.child,self.sibling):self.wait('SELECT status FROM sites WHERE id='+str(site),'active')
   require(self.canaries(True)==before_semantic,'lifecycle failed to restore parent/sibling resource intent')
   before=self.canaries()
   self.passed('child disable/re-enable and subscription suspension/reactivation preserve actual messages and parent/sibling resources')

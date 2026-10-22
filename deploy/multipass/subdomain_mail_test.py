@@ -100,4 +100,32 @@ class AcceptanceOrder(unittest.TestCase):
     except ValueError:pass
    self.assertFalse(accepted,'quota exhaustion masked broken foreign ownership enforcement')
 
+ def test_policy_fixture_waits_for_active_parent_before_child_creation(self):
+  with tempfile.TemporaryDirectory() as temp:
+   f,http=self.harness(Path(temp));ready=[True]
+   def post(path,**fields):
+    if path=='/subscriptions/1/policy':ready[0]=False
+    if path=='/sites/1/subdomains':m.require(ready[0],'parent domain must be active before adding a subdomain')
+   def wait(query,want,seconds=240):
+    if query=='SELECT status FROM sites WHERE id=1' and want=='active':ready[0]=True
+   f.post=post;f.wait=wait;accepted=False
+   with patch.object(m,'HTTP',http):
+    try:f.run()
+    except self.Accepted:accepted=True
+    except ValueError:pass
+   self.assertTrue(accepted,'fixture raced parent hosting reconvergence after policy edit')
+
+class HTTPDiagnostics(unittest.TestCase):
+ def test_json_error_detail_survives_without_request_fields(self):
+  import io
+  from types import SimpleNamespace
+  client=m.HTTP('https://192.0.2.1:7443')
+  response=io.BytesIO(b'{"error":"parent domain must be active","password":"never-export-this"}')
+  response.code=400
+  client.opener=SimpleNamespace(open=lambda *a,**k:response)
+  with self.assertRaisesRegex(ValueError,'parent domain must be active') as caught:
+   client.request('/sites/1/subdomains',dict(password='private-request'))
+  self.assertNotIn('private-request',str(caught.exception))
+  self.assertNotIn('never-export-this',str(caught.exception))
+
 if __name__=='__main__':unittest.main()
