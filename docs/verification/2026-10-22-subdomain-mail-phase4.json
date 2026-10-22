@@ -1,5 +1,5 @@
 {
-  "status": "INCOMPLETE",
+  "status": "PASS",
   "scope": "SUBDOMAIN_MAIL_ONLY",
   "hosted_attempts": [
     {
@@ -337,9 +337,137 @@
         "owned_records": 1,
         "exit_code": 0
       }
+    },
+    {
+      "run_id": 39815224111,
+      "url": "https://github.com/Smartqix/nakpanel/actions/runs/39815224111",
+      "artifact": {
+        "archive_sha256": "943ec991907a702ff80aa0041723e62099d1060ae9890f6c97a7f22854a37706",
+        "commit": "e856cb1d2e0e0cac4e7b7654e65fcd7610cda205",
+        "image": {
+          "serial": "20260927",
+          "sha256": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+          "suite": "resolute",
+          "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img"
+        },
+        "key_sha256": "1c0f472b3c7d5c481ffa6742f5b6e6b093742e7cfa5bd6ea45fdc9bb41b4cb22",
+        "manifest_sha256": "748d9dc503985295a59b246f8c66782b5221d03e24366bbb865f7744b0b02a1c"
+      },
+      "result": {
+        "actual_os": "ubuntu:26.04:resolute",
+        "apt_translation_policy": "installer-process-only:none",
+        "architecture": "amd64",
+        "checks": [
+          "child browser CRUD, rotated password denial, SMTP TLS/STARTTLS, alias delivery and IMAP retrieval",
+          "child Roundcube login, compose, local delivery and rendered message",
+          "shared mailbox/alias counts, finite storage cap and forbidden foreign read/write",
+          "child disable/re-enable and subscription suspension/reactivation preserve actual messages and parent/sibling resources",
+          "confirmed child cleanup only; parent/sibling mailbox, alias, DNS and message canaries unchanged"
+        ],
+        "child_removal": {
+          "checkpoints": [
+            "artifact:03fc4b826b88ad917f8081be1c7188c7ecf951e1efff5a8baed01bb909d351a9",
+            "artifact:08404abca4d972ea97295e8d4ea16e2b44db6677b88753b298c66839992392f0",
+            "artifact:2411a5284ac75c8c8d78b47cec2d5b15c609415cf075196fdafd386c012bed17",
+            "artifact:334c4b99e0cd8fbc54f9b25fdda584258398d0eae453b4c1589563996b1bb9fd",
+            "artifact:4153abdd82caa3f8cdf097660bc623e0614246d2cb29b64ae3f0f3a10a184ce5",
+            "artifact:4304330a7b5f1389f9458c555dc38df3d91d8026112d688a0db6faa02ae9a06e",
+            "artifact:5c6a3c2f2a41677be4800ac8855c1f31b1c5c6f788ab193b3c824c2871ebb21f",
+            "artifact:6231f971f67494fbb573527638488c4c8ab787b72d1034b90870e99cc94db4df",
+            "artifact:623f056703589fef8e780d6e264fb1e40dda1a5e2a04dfc9d2494414a969d40e",
+            "artifact:65a74a26941900df63258997fa8a1e82a508ff75e3edfb3d44f57ba45dc65ee3",
+            "artifact:69c52f49826a639b4f435d278072c5db6a7f99bea6660f242b9b958f4ea46bfd",
+            "artifact:879f4bfb5498e25003fad77695af8bd3cec6a92aabc3c8595f7e745641404a92",
+            "artifact:97793023f1f23a61e81891913ecf9f53e5630ac44ad646fd89b78546a9cb9c09",
+            "artifact:9f95ce84aaf98e5f83d526f4e2959ecd312a0a6a2d3a2f8d6fa2ee703eb0af5e",
+            "artifact:aaf2842bd11cda3acecfb3ba432a34c92e6a56125d1e1ba1ac19cbbc750ddc6c",
+            "artifact:b3e9fba3a7ca2e2904059e42bcdf5ecfbb008fbad8f6797b51eca5a0f6ff02eb",
+            "artifact:c86fae1f137d9b89ef1ead5716599e9155c1ae4c3d96b0931219e0ea38c74f63",
+            "artifact:d032e0a1de9e2b27cee38629a73ebd26682570d3e3fa6cf5c7dcd3f65bedb67d",
+            "artifact:d6572cef55315a0c5a74c26569062727eaac59dd04696a2a8ffac6dcfa17292e",
+            "artifact:e750b42a6e1b845196522a4eca1ea995359cba9e00818a446bb8ab59a8dfe34f",
+            "artifact:ea1f92082f4dd9c2fa9782b30719789849f4fca547cfa49fca9572c70babd288",
+            "artifact:eba3aaac3c55ad2508213a90a987e58673db30c89f1c9f336a2440adc89b29e4",
+            "artifact:f1be4300db1d9c744cf90eccc1975abfbd8a4428914b3648d9fb04c6646bf6f9",
+            "artifact:f6a71624fd646b8ce7d0ce9e7c7f1e90b3533d33fa41b9570e8ea387e0f95170",
+            "artifact:f9cb0d75f2084487574aa47000df59f1235febc35395aa86d79e9e45b2397474",
+            "artifact:fd6109d8a8ead6fc2d38c3ebd99604392c8c40e8467cfa0deeaba97d5e00ecf6",
+            "finalize",
+            "mailbox-removed:4",
+            "mailbox-removed:5",
+            "parent-dns:1:17",
+            "reconcile_shared",
+            "remove_hosting",
+            "shared-dns-intent",
+            "stop_services",
+            "stopped:nakpanel-php-fpm@2.service",
+            "surviving-access",
+            "surviving-mail",
+            "unit-file:nakpanel-php-fpm@2.service"
+          ],
+          "message": "",
+          "operation_id": 1,
+          "stage": "completed",
+          "state": "completed"
+        },
+        "commit": "e856cb1d2e0e0cac4e7b7654e65fcd7610cda205",
+        "deployed": false,
+        "final_parent_sibling_fingerprint": "033785ff8961c735e82410b4029d534f",
+        "guest": "nakpanel-26-04-amd64-submail-39815224111-1",
+        "initial_parent_sibling_fingerprint": "af4f350e3719daeb7564909ca8136580",
+        "merged": false,
+        "message_canaries": [
+          {
+            "address": "preserve@current-bootstrap.test",
+            "message_id": "<e9c51923ecd55c7a9f66d4a9a65d14cb@submail-39815224111-1.test>",
+            "sha256": "78659834e8d6c5c1ba9026e2dabd4b58cf1d89b815fa90f5284753ffe1fc6d32",
+            "uid": "1"
+          },
+          {
+            "address": "preserve@news.current-bootstrap.test",
+            "message_id": "<912b0926b82f09e42f5d5780314576ae@submail-39815224111-1.test>",
+            "sha256": "85144427703cdf284bcd6ee834baa9298f33e30c39dba046112d820e2b01bd13",
+            "uid": "1"
+          },
+          {
+            "address": "preserve@foreign-submail.test",
+            "message_id": "<d5691a64170adfb5f42e17381ba7a603@submail-39815224111-1.test>",
+            "sha256": "73da0e8b8351de8c8d1d7ab80d7082151f46831bcf27e3e7f8aa77c620d54649",
+            "uid": "1"
+          },
+          {
+            "address": "mailux-mvjs71ru@shop.current-bootstrap.test",
+            "message_id": "<2c0a07cd7a6515bb21cafac788dfd82d@submail-39815224111-1.test>",
+            "sha256": "a0da1974ad9e0795c9e7a68164a792acb0b597430e83e3016a5d9c47b85080a4",
+            "uid": "2"
+          }
+        ],
+        "php": {
+          "8.3": "8.3.36",
+          "8.4": "8.4.27",
+          "8.5": "8.5.12"
+        },
+        "promotion_eligible": false,
+        "release": "26.04",
+        "run_token": "submail-39815224111-1",
+        "scope": "SUBDOMAIN_MAIL_ONLY",
+        "stage": "complete",
+        "status": "PASS",
+        "updated_at": 1792688193.0604327
+      },
+      "cleanup": {
+        "owned_records": 1,
+        "exit_code": 0
+      },
+      "receipt_sha256": {
+        "artifact.json": "c37dee9ea2a73a0136fe2f03d8a218b15602bc4d45c0d40199b505030431356b",
+        "result.json": "992df4396d28739bfff1d1f9c3f6c2e6a545952c1181e9163b087920e648d88f",
+        "child-removal.json": "3d7290dd3ab21f14167d1808a54308efd0237e8bcaaa76bd2ba9a25b40d02a52",
+        "cleanup.json": "02d08ef02e801b4d9701bc6f8f0a8fa87e04d3a56a15ab3bc70354a4780ab194"
+      }
     }
   ],
-  "hosted_mail_gates_passed": 4,
+  "hosted_mail_gates_passed": 5,
   "repair_cycles_used": 2,
   "repair_cycles_limit": 2,
   "main_unchanged": "d992462ead9b617cb068482922a07170a28b9687",
@@ -354,7 +482,7 @@
     "outcome": "FAIL before child-mail mutation: seed message not found through IMAP within 90 seconds"
   },
   "mirror_repair_verified": true,
-  "latest_hosted_source": "8abe2800edd3d06e687c814e11861f47e0dac735",
+  "latest_hosted_source": "e856cb1d2e0e0cac4e7b7654e65fcd7610cda205",
   "imap_repair_verified": true,
   "imap_repair_authorization": {
     "allowed_runs": 1,
@@ -366,5 +494,47 @@
     "passed_gate_groups": 4,
     "required_gate_groups": 5,
     "outstanding": "Reviewed child removal and its post-removal parent/sibling preservation checks"
+  },
+  "child_removal_repair_verified": true,
+  "child_removal_authorization": {
+    "allowed_runs": 1,
+    "dispatched_runs": 1,
+    "remaining_runs": 0,
+    "run_id": 39815224111,
+    "status": "PASS",
+    "reason": "Capture/diagnose/fix child-removal failure and one focused rerun",
+    "passed_gate_groups": 5,
+    "required_gate_groups": 5,
+    "outstanding": null
+  },
+  "local_child_removal_reproduction": {
+    "platform": "Darwin ARM64, local component proof only",
+    "provider": "official Stalwart0.11.8, GitHub release attestation verified",
+    "observed_requests": [
+      {
+        "method": "GET",
+        "status": 200,
+        "data_name": "child@shop.parent.test",
+        "data_type": "individual",
+        "error": null
+      },
+      {
+        "method": "DELETE",
+        "status": 200,
+        "data_name": null,
+        "data_type": null,
+        "error": null
+      },
+      {
+        "method": "GET",
+        "status": 200,
+        "data_name": null,
+        "data_type": null,
+        "error": "notFound"
+      }
+    ],
+    "pre_fix_error": "mailbox principal removal has not converged",
+    "previous_deleted_guest_exact_error_recovered": false,
+    "local_services_stopped_before_hosted_dispatch": true
   }
 }
