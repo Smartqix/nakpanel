@@ -12,6 +12,17 @@ if [[ "${NAKPANEL_INSTALL_ONLY:-0}" == 1 && "${NAKPANEL_RELEASE_LEGACY_INSTALLER
   echo 'install-only recovery qualification requires modern secure administrator setup' >&2
   exit 1
 fi
+# Only the explicitly selected disposable hosted mail run may opt into this
+# process-scoped APT policy. Reject misuse before any guest operation.
+case "${NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS:-0}" in
+  0) ;;
+  1)
+    [[ "${GITHUB_ACTIONS:-}" == true && "${RUNNER_ENVIRONMENT:-}" == github-hosted ]] || {
+      echo 'translation policy requires a disposable GitHub hosted runner' >&2
+      exit 1
+    } ;;
+  *) echo 'invalid qualification APT translation policy' >&2; exit 1 ;;
+esac
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
 require_nakpanel_vm_name "${VM_NAME}"
@@ -22,7 +33,7 @@ if [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
   stage_qualification_release
   assert_qualification_bundle_staged
 fi
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_REMOTE_SRC}" "${IMAGE}" "${NAKPANEL_RELEASE_BUNDLE:+1}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" "${NAKPANEL_RELEASE_LEGACY_INSTALLER:-0}" "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" "${NAKPANEL_GUEST_RELEASE_DIR:-}" "${NAKPANEL_GUEST_RELEASE_PUBLIC_KEY:-}" <<'REMOTE'
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_REMOTE_SRC}" "${IMAGE}" "${NAKPANEL_RELEASE_BUNDLE:+1}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" "${NAKPANEL_RELEASE_LEGACY_INSTALLER:-0}" "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" "${NAKPANEL_GUEST_RELEASE_DIR:-}" "${NAKPANEL_GUEST_RELEASE_PUBLIC_KEY:-}" "${NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS:-0}" <<'REMOTE'
 set -euo pipefail
 cd "$1"
 if ! id nakpanel >/dev/null 2>&1; then
@@ -47,7 +58,11 @@ else
   trap 'rm -f "${admin_password_file}"' EXIT
   printf '%s' 'NakpanelAdmin!2026' >"${admin_password_file}"
   install_args+=(--admin-email admin@nakpanel.test --admin-password-file "${admin_password_file}")
-  timeout 45m deploy/install/install.sh "${install_args[@]}"
+  if [[ "$9" == 1 ]]; then
+    bash deploy/multipass/qualification-install-apt.sh timeout 45m deploy/install/install.sh "${install_args[@]}"
+  else
+    timeout 45m deploy/install/install.sh "${install_args[@]}"
+  fi
 fi
 # The installer restores the distribution's normal APT timers. Their first run
 # can restart PostgreSQL and other core services; wait read-only before fixtures.

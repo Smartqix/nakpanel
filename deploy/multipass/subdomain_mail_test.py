@@ -20,6 +20,16 @@ class Guards(unittest.TestCase):
   with self.assertRaises(ValueError):m.check_identity(valid,'b'*40)
   with self.assertRaises(ValueError):m.check_identity(dict(valid,architecture='arm64'),'a'*40)
 
+class InstallerPolicy(unittest.TestCase):
+ def test_mail_drill_opts_into_process_scoped_policy_without_parent_env_mutation(self):
+  with tempfile.TemporaryDirectory() as temp:
+   env=dict(GITHUB_ACTIONS='true',RUNNER_ENVIRONMENT='github-hosted',GITHUB_RUN_ID='123',GITHUB_RUN_ATTEMPT='1',GITHUB_SHA='a'*40,RUNNER_TEMP=temp,GITHUB_ENV=str(Path(temp)/'exports'))
+   with patch.dict(os.environ,env,clear=True):
+    drill=m.Drill()
+    self.assertEqual(drill.env['NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS'],'1')
+    self.assertNotIn('NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS',os.environ)
+    self.assertNotIn('APT_CONFIG',os.environ)
+
 class AcceptanceOrder(unittest.TestCase):
  class Accepted(Exception):pass
  def harness(self,root,corrupt=None,bypass=False):

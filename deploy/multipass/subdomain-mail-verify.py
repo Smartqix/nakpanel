@@ -80,8 +80,8 @@ class Drill:
   self.token='submail-'+run+'-'+attempt;self.vm='nakpanel-26-04-amd64-'+self.token
   root=Path(os.environ['RUNNER_TEMP']);self.private=root/'subdomain-mail-private';self.private.mkdir(mode=0o700)
   self.evidence=root/'subdomain-mail-evidence';self.evidence.mkdir(mode=0o700,exist_ok=True)
-  self.env=dict(os.environ,NAKPANEL_RUN_TOKEN=self.token,NAKPANEL_MULTIPASS_VM=self.vm,NAKPANEL_MULTIPASS_SOURCE_VM=self.vm,NAKPANEL_MULTIPASS_DR_VM=self.vm+'-dr',NAKPANEL_MULTIPASS_IMAGE='26.04',NAKPANEL_MULTIPASS_ARCH='amd64',NAKPANEL_QUALIFICATION_PHP_PROVIDER='sury',NAKPANEL_OWNERSHIP_DIR=str(self.private/'owners'),NAKPANEL_REMOTE_SRC='/var/lib/nakpanel-qualification/'+self.token+'/source')
-  self.state=dict(scope='SUBDOMAIN_MAIL_ONLY',status='STARTED',commit=os.environ['GITHUB_SHA'],run_token=self.token,guest=self.vm,release='26.04',architecture='amd64',checks=[],promotion_eligible=False,merged=False,deployed=False)
+  self.env=dict(os.environ,NAKPANEL_RUN_TOKEN=self.token,NAKPANEL_MULTIPASS_VM=self.vm,NAKPANEL_MULTIPASS_SOURCE_VM=self.vm,NAKPANEL_MULTIPASS_DR_VM=self.vm+'-dr',NAKPANEL_MULTIPASS_IMAGE='26.04',NAKPANEL_MULTIPASS_ARCH='amd64',NAKPANEL_QUALIFICATION_PHP_PROVIDER='sury',NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS='1',NAKPANEL_OWNERSHIP_DIR=str(self.private/'owners'),NAKPANEL_REMOTE_SRC='/var/lib/nakpanel-qualification/'+self.token+'/source')
+  self.state=dict(scope='SUBDOMAIN_MAIL_ONLY',apt_translation_policy='installer-process-only:none',status='STARTED',commit=os.environ['GITHUB_SHA'],run_token=self.token,guest=self.vm,release='26.04',architecture='amd64',checks=[],promotion_eligible=False,merged=False,deployed=False)
   self.sequence=0;self.deadline=time.monotonic()+2700
   with open(os.environ['GITHUB_ENV'],'a') as f:
    for k in ('NAKPANEL_RUN_TOKEN','NAKPANEL_MULTIPASS_VM','NAKPANEL_MULTIPASS_SOURCE_VM','NAKPANEL_MULTIPASS_DR_VM','NAKPANEL_OWNERSHIP_DIR','NAKPANEL_REMOTE_SRC'):f.write(k+'='+self.env[k]+'\n')
