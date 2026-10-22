@@ -84,6 +84,35 @@ enforced in front of provisioning: the (limit+1)th mailbox returns
 per-mailbox storage quota comes from the plan policy (`mail.mailbox_quota_mb`)
 and is enforced by Stalwart's account quota.
 
+## Mail lifecycle and subdomain limits
+
+Parent and child mailboxes/aliases consume the subscription's shared allowances.
+Two creates competing for the last slot use the existing subscription mutation
+lock; only one succeeds. A finite mailbox storage cap also applies to requests
+for a larger or unlimited mailbox. An edit must name an existing account in the
+selected mail domain; a supplied unused ID cannot insert an account or bypass
+the create limit.
+
+Customer/subscription suspension revokes directory entries in the lifecycle
+transaction. Explicitly revoking mail permission through subscription policy,
+or disabling a mail domain, also revokes directory access immediately. The
+mail intent changes in the same transaction, preventing a stale acknowledgement
+from reversing that revocation. Reactivation still needs current convergence
+and restores only enabled, entitled mail domains.
+
+Website-only suspension keeps existing mail. Its existing mail-domain settings
+remain editable while web hosting is off, provided its subscription is active
+and the site is not being removed. Mail disable and suspension retain mailbox
+IDs, password hashes, aliases, message storage and signing keys; they are not
+permanent deletion requests.
+
+Permanent child removal uses the existing dependency preview, current digest,
+hostname confirmation and permanent-removal acknowledgement. The preview lists
+the child's mail domain, mailbox and alias dependencies without mailbox secrets.
+The reservation is scoped to the selected child and records the owning customer,
+subscription and actor. A permanent deletion has a different scope from disable;
+review its listed dependencies before confirming it.
+
 ## Deliverability
 
 - **Outbound rate limiting** — every domain is capped by
