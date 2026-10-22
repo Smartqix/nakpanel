@@ -92,7 +92,17 @@ class Drill:
   if r.returncode:
    excerpt=(r.stdout[-4000:]+'\n'+r.stderr[-4000:]).replace('NakpanelAdmin!2026','[synthetic-secret]')
    excerpt=re.sub(r'Np![A-Za-z0-9_-]+','[synthetic-secret]',excerpt)
+   excerpt=re.sub(r'\x1b\[[0-9;]*[A-Za-z]','',excerpt).replace('\b','')
+   excerpt=re.sub(r'[\\|/-]{16,}','[progress omitted]',excerpt)
    (self.evidence/'failure-diagnostic.log').write_text(excerpt)
+   if self.state.get('stage')=='fresh-signed-install' and 'timed out waiting for initialization' in r.stderr:
+    diagnostics=[]
+    for command in (['multipass','info',self.vm,'--format','json'],['sudo','journalctl','-u','snap.multipass.multipassd.service','--no-pager','-n','120']):
+     try:
+      observed=subprocess.run(command,capture_output=True,text=True,timeout=20,env=self.env)
+      diagnostics.append(dict(program=command[0],exit_code=observed.returncode,stdout=observed.stdout[-16000:],stderr=observed.stderr[-2000:]))
+     except subprocess.TimeoutExpired:diagnostics.append(dict(program=command[0],status='diagnostic timeout'))
+    write(self.evidence/'launch-diagnostic.json',diagnostics)
   require(r.returncode==0,'command failed: '+Path(args[0]).name+' exit='+str(r.returncode)+' private-log='+log.name)
   return r.stdout
  def shell(self,function,*args):return self.cmd(['bash','-c','set -euo pipefail; source "$1"; shift; "$@"','_',str(SOURCE/'deploy/multipass/common.sh'),function,*args])

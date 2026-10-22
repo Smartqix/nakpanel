@@ -285,6 +285,12 @@ ensure_vm() {
   local cpus="${1:-2}"
   local memory="${2:-3G}"
   local disk="${3:-16G}"
+  local launch_timeout="${NAKPANEL_QUALIFICATION_LAUNCH_TIMEOUT:-}"
+  local -a launch_args=()
+  if [[ -n "${launch_timeout}" ]]; then
+    [[ "${launch_timeout}" =~ ^[1-9][0-9]{0,2}$ && "${launch_timeout}" -le 600 ]] || { echo 'invalid bounded guest launch timeout' >&2; return 1; }
+    launch_args+=(--timeout "${launch_timeout}" --verbose)
+  fi
   # Dedicated hosted qualification may lower guest allocation without changing
   # any product gate. DR keeps its own bounded allocation, defaults unchanged.
   if [[ "${NAKPANEL_MULTIPASS_VM}" == "${NAKPANEL_MULTIPASS_DR_VM:-}" ]]; then
@@ -308,7 +314,7 @@ ensure_vm() {
     launch_image="$(resolve_multipass_launch_image)" || return 1
     manifest="${NAKPANEL_OWNERSHIP_DIR}/${NAKPANEL_RUN_TOKEN}/${NAKPANEL_MULTIPASS_VM}"
     [[ ! -e "${manifest}" && ! -L "${manifest}" && ! -e "${manifest}.image.json" && ! -L "${manifest}.image.json" ]] || { echo "stale ownership or image evidence; use a new run token" >&2; return 1; }
-    multipass launch "${launch_image}" --name "${NAKPANEL_MULTIPASS_VM}" --cpus "${cpus}" --memory "${memory}" --disk "${disk}" || return 1
+    multipass launch "${launch_image}" --name "${NAKPANEL_MULTIPASS_VM}" --cpus "${cpus}" --memory "${memory}" --disk "${disk}" "${launch_args[@]}" || return 1
     wait_for_cloud_init "${NAKPANEL_MULTIPASS_VM}"
     identity="$(probe_vm_identity "${NAKPANEL_MULTIPASS_VM}")" || return 1
     expected="$(printf '%s\n%s' "${NAKPANEL_MULTIPASS_IMAGE}" "${NAKPANEL_MULTIPASS_ARCH}")"

@@ -188,6 +188,7 @@ jobs:
       NAKPANEL_QUALIFICATION_VM_CPUS: '2'
       NAKPANEL_QUALIFICATION_VM_MEMORY: 5G
       NAKPANEL_QUALIFICATION_VM_DISK: 32G
+      NAKPANEL_QUALIFICATION_LAUNCH_TIMEOUT: '600'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
