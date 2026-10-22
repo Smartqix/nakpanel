@@ -1,18 +1,19 @@
 # Subdomain mail — Phase 4 hosted verification
 
-**Status: incomplete. The mirror repair passed hosted installation; the single
-additional run failed during initial message-canary setup.** No complete hosted
-mail acceptance gate passed. The additional authorization is exhausted. Stop
-before PR, merge or deployment. Main remains `d992462`.
+**Status: incomplete. The IMAP probe repair passed hosted verification; four
+of five focused acceptance groups passed. The final reviewed child-removal
+gate failed.** The single authorized rerun has finished, with no further run
+authorized. Stop before PR, merge or deployment. Main remains `d992462`.
 
 ## Results
 
-| Attempt | Tested source | Outcome | Owned cleanup |
+| Attempt | Tested source | Outcome | Owned guest cleanup |
 | --- | --- | --- | --- |
 | [Initial](https://github.com/Smartqix/nakpanel/actions/runs/39781138752) | `0e53e46` | HTTP 400 creating a subdomain; no mail gates reached | 1 record, exit 0 |
 | [Repair 1](https://github.com/Smartqix/nakpanel/actions/runs/39785595967) | `6c2c2ab` | Multipass initialization timeout before installation | 0 established records, exit 0 |
 | [Repair 2](https://github.com/Smartqix/nakpanel/actions/runs/39788828299) | `8f41eea` | Installation stopped on an Ubuntu mirror index mismatch, exit 100 | 1 record, exit 0 |
 | [Authorized mirror rerun](https://github.com/Smartqix/nakpanel/actions/runs/39798543643) | `2de7b5f` | Signed install and all PHP runtimes passed; initial message-canary setup failed before child-mail mutation | 1 record, exit 0 |
+| [Authorized IMAP rerun](https://github.com/Smartqix/nakpanel/actions/runs/39806681641) | `8abe280` | IMAP repair and four acceptance groups passed; reviewed child removal failed | 1 record, exit 0 |
 
 Full commits, signed-development artifact/archive/key/manifest hashes, pinned
 image identity, original result fields and cleanup receipts are preserved in
@@ -71,8 +72,7 @@ are harness checks; they do not replace hosted mail acceptance.
 
 The user authorized one additional run after the original budget was exhausted.
 [Run 39798543643](https://github.com/Smartqix/nakpanel/actions/runs/39798543643)
-tests source `2de7b5fe6b82b33ee745edf53e8bdb2e4a7cff52`. No second additional
-run is authorized.
+tests source `2de7b5fe6b82b33ee745edf53e8bdb2e4a7cff52`. No second run was dispatched under that mirror-repair authorization.
 
 The disposable guest installer uses a temporary private `APT_CONFIG` with
 `Acquire::Languages "none";` to skip optional package-description translations,
@@ -90,7 +90,7 @@ rejects non-hosted use before guest operations, and checks mail-drill opt-in
 without altering the parent environment. One fresh review of this narrow repair
 found no issues. No product mail code changed.
 
-## Additional hosted result and remaining blocker
+## Mirror-rerun result (historical)
 
 Run `39798543643` completed with failure. Signed installation finished in about
 nine minutes, without the previous translation-index error. The run observed
@@ -113,11 +113,77 @@ server queue/delivery logs and mailbox-folder evidence. Such diagnostics would
 be the next narrowly scoped investigation if authorized; no new hosted run was
 launched.
 
-The result has zero completed mail gates. Browser child CRUD, alias delivery,
-Roundcube, quota/isolation, suspension/reactivation and child removal therefore
-remain unverified. Cleanup removed the one proven-owned disposable guest with
+That source had zero completed mail gates. Browser child CRUD, alias delivery,
+Roundcube, quota/isolation, suspension/reactivation and child removal were
+unverified at that point; current-source results are recorded below. Cleanup removed the one proven-owned disposable guest with
 exit 0. Production and existing local VMs/databases were untouched. No PR,
 merge or deployment occurred.
+
+## IMAP probe repair and current rerun
+
+The user authorized diagnosing/fixing the missing initial message and exactly
+one further focused run, [39806681641](https://github.com/Smartqix/nakpanel/actions/runs/39806681641),
+source `8abe2800edd3d06e687c814e11861f47e0dac735`. This run completed with four passing groups and a final child-removal failure;
+no second run is authorized under this continuation.
+
+The pinned Stalwart0.11.8 source establishes a probe defect: [IMAP header search](https://github.com/stalwartlabs/stalwart/blob/v0.11.8/crates/imap/src/op/search.rs)
+passes Message-ID search text into a literal keyword lookup, while [email indexing](https://github.com/stalwartlabs/stalwart/blob/v0.11.8/crates/email/src/index.rs)
+uses the parsed identifier. Its locked [mail-parser0.10.2 parser](https://docs.rs/crate/mail-parser/0.10.2/source/src/parsers/fields/id.rs)
+removes angle brackets. The old probe searched for `<id@host>`, which cannot
+match the stored `id@host` keyword. The parser archive SHA256 was verified
+against Stalwart's Cargo.lock before source inspection.
+
+The fix normalizes only the lookup value, retaining the full wire Message-ID
+and checking that the fetched message has exactly one matching Message-ID.
+UID and message-byte SHA256 remain the unchanged preservation oracle.
+Verification never resends or resets a failed baseline. INBOX selection is
+read-only and body reads use `BODY.PEEK[]`. A missing-message timeout records
+only account index, mode, INBOX message count and search status, with no
+credentials or message body.
+
+Five new tests execute the actual probe CLI against a model of the pinned
+keyword behavior. They failed before the repair and passed after it, including
+changed UID/bytes, wrong or duplicate Message-ID, no resubmission during
+verification, read-only reads and bounded nonsecret timeout context. Six
+focused Go tests, covering thirteen Python cases, passed without skips, plus
+vet, Python syntax and diff checks. One fresh narrow review found no issues.
+No product mail or mailbox-store code changed. The current rerun verified delivery with exact canaries. Delivery in the prior
+failed attempt remains unknown; it is not backfilled from the new result.
+
+## Current hosted results and remaining work
+
+Run `39806681641` completed on source `8abe2800edd3d06e687c814e11861f47e0dac735`.
+It observed Ubuntu `26.04:resolute`, PHP 8.3.36, 8.4.27 and 8.5.12, and all
+three active FPM services. Fresh signed installation passed again. The initial
+IMAP seed succeeded; all four parent/sibling/control/child Message-ID, UID and
+byte-digest canaries are retained in the evidence index.
+
+| Focused gate group | Result |
+| --- | --- |
+| Child browser CRUD, rotated-password denial, SMTP TLS/STARTTLS, local alias delivery and IMAP retrieval | PASS |
+| Child Roundcube login, compose, local delivery and rendered-message read | PASS |
+| Shared mailbox/alias counts, finite storage cap and forbidden foreign read/write | PASS |
+| Child disable/re-enable and subscription suspension/reactivation; actual message and parent/sibling resource preservation | PASS |
+| Reviewed child removal, denied child login and final parent/sibling preservation | FAIL / downstream checks not reached |
+
+The final stage started at `2026-10-22T15:59:33Z` and failed approximately five
+seconds later with `reviewed child cleanup did not complete`. The status-poll
+failure path can reject an operation in `failed` state or an expired 360-second
+budget; the observed short interval indicates the operation-failure path.
+The retained evidence does not include its detailed removal state, stage or
+server error. Do not attribute a specific deletion bug without those details.
+
+**Outstanding:** diagnose the reviewed child-removal operation, capture its
+state/stage/error, and verify completion, child authentication denial and exact
+parent/sibling account/alias/DNS/message preservation afterward. The successful
+lifecycle canary checks establish preservation before this removal attempt;
+post-removal preservation was not reached and remains unverified. No further
+hosted run was launched under this authorization.
+
+Always-run infrastructure cleanup separately removed the one proven-owned
+disposable guest with exit 0. This VM cleanup is not a passing child-removal
+gate. Production, existing local VMs and databases were untouched. The tracked
+report/evidence update after the run changes documentation only.
 
 ## Previous mirror blocker
 
@@ -130,36 +196,13 @@ exited 100. This was a package-index failure before mail fixtures, not a
 measured mailbox or subdomain failure. No signature/hash check was bypassed.
 The sanitized original diagnostic remains with the run artifacts.
 
-## Outstanding acceptance
+## Acceptance boundary
 
-All of the following remain unverified on the current hosted feature branch:
-
-- Child browser mailbox/alias CRUD, rotated-password denial, SMTP TLS/STARTTLS,
-  local alias delivery and IMAP retrieval.
-- Child Roundcube login, compose, delivery and rendered-message read.
-- Shared mailbox/alias allowances, finite storage caps and forbidden tenant
-  read/write requests under actual runtime conditions.
-- Disable/re-enable and subscription suspension/reactivation with actual
-  parent/sibling/child message UID and byte canaries.
-- Confirmed child removal, denied child login and preserved parent/sibling
-  accounts, aliases, DNS and messages.
-
-The one additionally authorized, bounded run has finished. No further hosted
-run is authorized. Do not open a PR, merge or deploy based on these
-results. Unchanged restore/reboot, PHP maintenance, historical compatibility
-and full platform checks were not repeated. No external-inbox or public DNS
-acceptance is claimed. SMTP/IMAP require trusted TLS in the selected probes;
-the browser uses an explicit private-lab certificate override, and Roundcube
-uses its internal HTTP vhost, not public HTTPS acceptance.
-
-## Protection and cleanup
-
-No production server, existing local VM or unrelated PostgreSQL instance was
-used. Initial and final guests with established ownership were removed, each
-with a one-record/exit-zero receipt. The initialization-timeout attempt had no
-ownership record; the cleanup helper made no explicit deletion claim for it.
-That disposable GitHub job ended. Mail acceptance fixtures never completed, so
-no hosted message-preservation result is claimed. Credentials/private command
-logs were excluded from uploaded artifacts. Feature refs were published solely
-for authorized hosted execution; main, PRs and production deployment were left
-untouched.
+Four current-source acceptance groups passed as listed above. Phase 4 remains
+incomplete until reviewed child removal and its final preservation checks pass.
+The single additionally authorized IMAP-repair run is consumed. No PR, merge,
+deployment or further hosted run was performed. Unchanged restore/reboot,
+PHP-maintenance, historical compatibility and full platform checks were not
+repeated. No external-inbox or public-DNS acceptance is claimed. SMTP/IMAP use
+trusted TLS in the selected probes; the browser uses an explicit private-lab
+certificate override, and Roundcube uses its internal HTTP vhost.

@@ -247,9 +247,99 @@
         "exit_code": 0
       },
       "failure_diagnostic": "Traceback (most recent call last):\n  File \"/var/lib/nakpanel-qualification/submail-39798543643-1/source/deploy/multipass/subdomain-mail-protocol.py\", line 32, in <module>\n    assert time.monotonic()<deadline,'preserved message missing';time.sleep(2)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: preserved message missing"
+    },
+    {
+      "run_id": 39806681641,
+      "url": "https://github.com/Smartqix/nakpanel/actions/runs/39806681641",
+      "artifact": {
+        "archive_sha256": "46d5c2129cfada88e0115fd6bda0a7be26f02b99f5ba1eb5f996c383ffea2acb",
+        "commit": "8abe2800edd3d06e687c814e11861f47e0dac735",
+        "image": {
+          "serial": "20260927",
+          "sha256": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+          "suite": "resolute",
+          "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img"
+        },
+        "key_sha256": "5bdd7221ca20ba712a5f0c1fb4b2d5ea4943d6b3fffaa92caceb6ccadf544a01",
+        "manifest_sha256": "094a9958ccbc4f332e296bbe2fc70471eec7d0fdf0bea21b6ccefd41cd77ed3e"
+      },
+      "result": {
+        "actual_os": "ubuntu:26.04:resolute",
+        "apt_translation_policy": "installer-process-only:none",
+        "architecture": "amd64",
+        "checks": [
+          "child browser CRUD, rotated password denial, SMTP TLS/STARTTLS, alias delivery and IMAP retrieval",
+          "child Roundcube login, compose, local delivery and rendered message",
+          "shared mailbox/alias counts, finite storage cap and forbidden foreign read/write",
+          "child disable/re-enable and subscription suspension/reactivation preserve actual messages and parent/sibling resources"
+        ],
+        "commit": "8abe2800edd3d06e687c814e11861f47e0dac735",
+        "deployed": false,
+        "error": "reviewed child cleanup did not complete",
+        "error_type": "ValueError",
+        "failure_frames": [
+          {
+            "function": "main",
+            "line": 266
+          },
+          {
+            "function": "run",
+            "line": 249
+          },
+          {
+            "function": "require",
+            "line": 9
+          }
+        ],
+        "guest": "nakpanel-26-04-amd64-submail-39806681641-1",
+        "initial_parent_sibling_fingerprint": "0c553faf17ae79ea9186f49bc47561a0",
+        "merged": false,
+        "message_canaries": [
+          {
+            "address": "preserve@current-bootstrap.test",
+            "message_id": "<258945614b709e6357266f34405d28ba@submail-39806681641-1.test>",
+            "sha256": "4725695cbe468985bfec2d88aadcfa01d910ddcc7d809493442a3e60bca01cf3",
+            "uid": "1"
+          },
+          {
+            "address": "preserve@news.current-bootstrap.test",
+            "message_id": "<a9e6ab8394a6cf4bc4b1dfda92080b85@submail-39806681641-1.test>",
+            "sha256": "86c0491c139d792bf20ff1d09c739b00be9973732e0666c8fa535911701332fe",
+            "uid": "1"
+          },
+          {
+            "address": "preserve@foreign-submail.test",
+            "message_id": "<69d7495679fba111992b1650cfe0fc7f@submail-39806681641-1.test>",
+            "sha256": "a6a186c87b6080cefb760f10debe1e67a5ca08bb99419ee731a962f91ca7dff2",
+            "uid": "1"
+          },
+          {
+            "address": "mailux-mvjq65hl@shop.current-bootstrap.test",
+            "message_id": "<c63031b61477bbb8abfb5bd186b27a7f@submail-39806681641-1.test>",
+            "sha256": "ef8f424228db778a8756992e2f444f7800669c8e2815fc3a7d7371262b54e9ab",
+            "uid": "2"
+          }
+        ],
+        "php": {
+          "8.3": "8.3.36",
+          "8.4": "8.4.27",
+          "8.5": "8.5.12"
+        },
+        "promotion_eligible": false,
+        "release": "26.04",
+        "run_token": "submail-39806681641-1",
+        "scope": "SUBDOMAIN_MAIL_ONLY",
+        "stage": "reviewed-child-removal",
+        "status": "FAIL",
+        "updated_at": 1792684773.5120437
+      },
+      "cleanup": {
+        "owned_records": 1,
+        "exit_code": 0
+      }
     }
   ],
-  "hosted_mail_gates_passed": 0,
+  "hosted_mail_gates_passed": 4,
   "repair_cycles_used": 2,
   "repair_cycles_limit": 2,
   "main_unchanged": "d992462ead9b617cb068482922a07170a28b9687",
@@ -263,5 +353,18 @@
     "reason": "Ubuntu mirror repair and one focused hosted rerun",
     "outcome": "FAIL before child-mail mutation: seed message not found through IMAP within 90 seconds"
   },
-  "mirror_repair_verified": true
+  "mirror_repair_verified": true,
+  "latest_hosted_source": "8abe2800edd3d06e687c814e11861f47e0dac735",
+  "imap_repair_verified": true,
+  "imap_repair_authorization": {
+    "allowed_runs": 1,
+    "dispatched_runs": 1,
+    "remaining_runs": 0,
+    "run_id": 39806681641,
+    "status": "FAIL",
+    "reason": "Diagnose/fix initial IMAP message and one focused rerun",
+    "passed_gate_groups": 4,
+    "required_gate_groups": 5,
+    "outstanding": "Reviewed child removal and its post-removal parent/sibling preservation checks"
+  }
 }
