@@ -9,8 +9,10 @@ templ mailDomainWorkspace(site dashboard.Site, subscription types.SubscriptionSu
 	{{ mailboxes:=mailboxesForWorkspace(data.SubscriptionServices.Mailboxes,[]dashboard.MailDomain{domain}); aliases:=mailAliasesForWorkspace(data.SubscriptionServices.MailAliases,[]dashboard.MailDomain{domain}); webmailURL:=mailWebmailURL(site,subscription,domain,data) }}
 	<div class="np-mail-service-row"><dl class="np-mail-service-strip"><div><dt>Mail service</dt><dd>@statusPill(mailDomainState(domain))</dd></div><div><dt>DKIM</dt><dd>{ formatEnabled(domain.DKIM) }</dd></div><div><dt>DMARC</dt><dd>{ mailDMARCLabel(domain.DMARCPolicy) }</dd></div><div><dt>Webmail</dt><dd>{ mailWebmailReadiness(webmailURL) }</dd></div></dl><span class="np-mail-mobile-count">{ formatPlanLimit(len(mailboxes)) } mailboxes</span><a class="np-icon-button np-mail-mobile-settings" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"settings")) } data-np-mail-settings={ mailDialogID("domain",subscription.ID,domain.ID) } title="Mail domain settings" aria-label="Mail domain settings">@icon("settings")</a></div>
 	if domain.LastError!="" {
-		<p class="np-inline-error" role="alert">{ domain.LastError }</p>
+		<p class="np-inline-error np-mail-dns-records" role="alert">{ domain.LastError }</p>
 	}
+	{{ dns := mailDNSReadiness(site,domain,data) }}
+	<div class="np-mail-notice" role="status"><strong>{ dns.Label }</strong><p>{ dns.Message }</p></div>
 	if !domain.Enabled {
 		<div class="np-mail-notice" role="status">Mail service is disabled. Enable it in Mail domain settings before connecting to this domain.</div>
 	}

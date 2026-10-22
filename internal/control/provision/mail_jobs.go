@@ -167,18 +167,20 @@ WHERE id=$1 AND effective_enabled AND `+mailDomainIntentVersionSQL+`=$2`, domain
 		err = errors.New(response.Error)
 	}
 	if err != nil {
-		_, markErr := w.db.ExecContext(ctx, `UPDATE mail_domains SET convergence_status='failed',last_error=$1,updated_at=now() WHERE convergence_status='pending'`, err.Error())
-		return errors.Join(err, markErr)
+		return w.markMailFailure(ctx, domains, err)
 	}
 	var result types.ConfigureMailResult
 	if err := json.Unmarshal(response.Data, &result); err != nil {
-		return err
+		return w.markMailFailure(ctx, domains, err)
 	}
 	dkimRecords := make(map[string]string, len(result.DKIM))
 	for _, item := range result.DKIM {
 		dkimRecords[item.Domain] = item.Record
 	}
 	for _, domain := range domains {
+		if domain.Enabled && !domain.DeleteRequested && domain.DKIM && strings.TrimSpace(dkimRecords[domain.Domain]) == "" {
+			return w.markMailFailure(ctx, []mailDomainRow{domain}, fmt.Errorf("mail agent did not return the required DKIM public record for %s", domain.Domain))
+		}
 		if domain.DeleteRequested {
 			if err := w.reconcileZoneRecords(ctx, domain, nil); err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
@@ -195,10 +197,13 @@ WHERE id=$1 AND effective_enabled AND `+mailDomainIntentVersionSQL+`=$2`, domain
 		zoneNote := ""
 		if err := w.reconcileZoneRecords(ctx, domain, desired); err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
-				return err
+				return w.markMailFailure(ctx, []mailDomainRow{domain}, err)
 			}
-			if domain.Enabled {
-				zoneNote = "no managed DNS zone for this domain: publish MX, SPF, DKIM, and DMARC records externally"
+		}
+		if domain.Enabled {
+			zoneNote, err = w.mailDNSNotice(ctx, domain, desired)
+			if err != nil {
+				return w.markMailFailure(ctx, []mailDomainRow{domain}, err)
 			}
 		}
 		update, err := w.db.ExecContext(ctx, `UPDATE mail_domains domain
@@ -270,15 +275,18 @@ FOR UPDATE OF zone`, domain.Domain, domain.SiteID).Scan(&zoneID, &siteID, &addre
 		}
 		return value + "." + prefix
 	}
-	for i := range desired {
-		desired[i].Host = host(desired[i].Host)
-		if desired[i].Type == "A" && desired[i].Value == "" {
-			desired[i].Value = address
-		}
-	}
+	desired = scopedMailRecords(domain, zoneDomain, address, desired)
 	current, err := loadDNSRecordsTx(ctx, tx, zoneID)
 	if err != nil {
 		return err
+	}
+	if len(desired) > 0 {
+		if err := mailDNSConflicts(domain, zoneDomain, current, desired); err != nil {
+			return err
+		}
+		if prefix != "" && mailDNSDelegated(current, prefix) {
+			return tx.Commit()
+		}
 	}
 	add, remove, _ := PlanServiceDNSRecords(current, desired, func(record types.DNSRecord) bool {
 		return record.Origin == "system" && (record.OwnerSiteID == siteID || record.OwnerSiteID == 0) && !IsEndpointDNSRecord(record) &&

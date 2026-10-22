@@ -162,9 +162,56 @@ func mailDomainState(domain dashboard.MailDomain) string {
 		return "disabled"
 	}
 	if domain.Status == "in_sync" {
+		if domain.LastError != "" {
+			return "action required"
+		}
 		return "active"
 	}
 	return domain.Status
+}
+
+type mailDNSFeedback struct{ Label, Message string }
+
+func mailDNSReadiness(site dashboard.Site, domain dashboard.MailDomain, data dashboard.Data) mailDNSFeedback {
+	if !domain.Enabled {
+		return mailDNSFeedback{"Mail disabled", "Enable mail service before configuring delivery."}
+	}
+	if domain.Status == "failed" {
+		return mailDNSFeedback{"Mail setup failed", "Review the mail configuration error and retry after correcting it."}
+	}
+	if domain.Status != "in_sync" {
+		return mailDNSFeedback{"Mail setup pending", "Mail configuration has not been acknowledged yet."}
+	}
+	zoneSiteID := site.ID
+	if site.DNSZoneMode == "parent" && site.ParentSiteID > 0 {
+		zoneSiteID = site.ParentSiteID
+	}
+	zone, found := dnsZoneForSite(data.Phase6.DNSZones, zoneSiteID)
+	if !found || zone.Mode != "primary" {
+		return mailDNSFeedback{"External DNS action required", "Publish MX " + domain.Domain + " → 10 mail." + domain.Domain + "; A mail." + domain.Domain + " → your mail server's public IPv4 address; TXT " + domain.Domain + " → v=spf1 mx ~all; TXT nak1._domainkey." + domain.Domain + " → the generated DKIM public key; TXT _dmarc." + domain.Domain + " → v=DMARC1; p=" + domain.DMARCPolicy + ". Preserve existing external routing unless you explicitly move mail here."}
+	}
+	if zone.Status == "failed" || zone.LastError != "" {
+		return mailDNSFeedback{"DNS update failed", zone.LastError}
+	}
+	if domain.LastError != "" {
+		return mailDNSFeedback{"DNS action required", "Review the DNS requirements below. Existing custom records and delegation are preserved."}
+	}
+	if zone.Status != "active" || zone.AppliedRevision < zone.DesiredRevision || zone.AppliedRevision == 0 {
+		return mailDNSFeedback{"DNS pending", "Mail records are waiting for the authoritative DNS zone to apply."}
+	}
+	if site.DNSZoneMode == "separate" && site.ParentSiteID > 0 {
+		parent, ok := dnsZoneForSite(data.Phase6.DNSZones, site.ParentSiteID)
+		if !ok || parent.Mode != "primary" {
+			return mailDNSFeedback{"External DNS action required", "Confirm the separate child zone's NS delegation with the authoritative parent DNS provider."}
+		}
+		if parent.Status == "failed" || parent.LastError != "" {
+			return mailDNSFeedback{"DNS update failed", parent.LastError}
+		}
+		if parent.Status != "active" || parent.AppliedRevision < parent.DesiredRevision || parent.AppliedRevision == 0 {
+			return mailDNSFeedback{"DNS pending", "The parent zone's NS delegation is waiting to apply."}
+		}
+	}
+	return mailDNSFeedback{"DNS applied locally", "The configured records are applied on this server. Public delegation and external delivery require separate verification."}
 }
 func mailDMARCLabel(policy string) string {
 	switch policy {

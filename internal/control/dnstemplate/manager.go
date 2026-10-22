@@ -924,6 +924,9 @@ WHERE id=$1 AND zone_id=$2 AND origin='custom'`,
 }
 
 func (m *Manager) enqueueTwoZonesTx(ctx context.Context, tx *sql.Tx, firstZoneID, secondZoneID int64, bulk bool) error {
+	if err := provision.NewSQLPhase6Repository(m.db, m.river).EnqueueMailDNSRecheckTx(ctx, tx, firstZoneID, secondZoneID); err != nil {
+		return err
+	}
 	for _, zoneID := range []int64{firstZoneID, secondZoneID} {
 		var revision int64
 		serial, err := m.nextZoneSerialTx(ctx, tx, zoneID)
@@ -1659,6 +1662,9 @@ func expandSOA(settings types.DNSSOASettings, domain, hostname string) types.DNS
 }
 
 func (m *Manager) enqueueZoneTx(ctx context.Context, tx *sql.Tx, zoneID int64, bulk bool) error {
+	if err := provision.NewSQLPhase6Repository(m.db, m.river).EnqueueMailDNSRecheckTx(ctx, tx, zoneID); err != nil {
+		return err
+	}
 	var revision int64
 	serial, err := m.nextZoneSerialTx(ctx, tx, zoneID)
 	if err != nil {

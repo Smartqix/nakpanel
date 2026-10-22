@@ -12,10 +12,10 @@
 
 ## Current authorization
 
-- The user authorized Phase 1 only on 2026-10-22: verify and fix subdomain mail enablement, mailbox creation and aliases, with focused local tests. Phase 2, hosted tests, server changes, GitHub writes, merge and deployment remain unauthorized.
+- Phase 1 is locally complete at `87044f1`. The user authorized Phase 2 only on 2026-10-22: verify and fix subdomain mail DNS handling and readiness feedback, preserve parent/sibling records and run focused local tests. Phase 3, hosted tests, server changes, GitHub writes, merge and deployment remain unauthorized.
 - Report the result of each phase and stop before the next unless the user explicitly authorizes multiple phases together.
 - Phase 4 requires explicit hosted-test authorization. Phase 5 separates PR/CI, merge and deployment approvals; prior deployment permission for the existing main build does not authorize publishing these future changes.
-- Phase 1 uses the local feature branch `ricky/subdomain-mail-phase1` in the existing attached worktree, based on `d992462ead9b617cb068482922a07170a28b9687`. Keep main unchanged; remove the feature branch after a separately authorized merge.
+- Implementation continues on the local feature branch `ricky/subdomain-mail-phase1` in the existing attached worktree, based on `d992462ead9b617cb068482922a07170a28b9687`. Keep main unchanged; remove the feature branch after a separately authorized merge.
 
 ## Global constraints
 
@@ -76,15 +76,17 @@ The initial observations above were source inspection. Phase 1 subsequently repr
 
 ## Phase 2 — Complete DNS handling and readiness feedback
 
-**Files:** `internal/control/provision/mail_jobs.go`, `internal/control/provision/dns_services.go`, `internal/control/provision/dns_service_convergence.go`, `internal/control/provision/dns_defaults_test.go`, `internal/control/http/mail_client.go`, `internal/control/web/mail_workspace.templ`, `internal/control/web/mail_helpers.go` as required by observed gaps.
+**Files:** `internal/control/provision/mail_dns.go`, `internal/control/provision/subdomain_mail_dns_test.go`, `internal/control/dnstemplate/manager.go`, `internal/control/dnstemplate/subdomain_mail_dns_test.go`, `internal/control/provision/phase6_repository.go`, `internal/control/web/subdomain_mail_dns_test.go`, `internal/control/web/mail_design.templ` and generated output, `internal/control/web/static/mail.css`, `docs/MAIL.md`; `internal/control/provision/mail_jobs.go`, `internal/control/provision/dns_services.go`, `internal/control/provision/dns_service_convergence.go`, `internal/control/provision/dns_defaults_test.go`, `internal/control/http/mail_client.go`, `internal/control/web/mail_workspace.templ`, `internal/control/web/mail_helpers.go` as required by observed gaps.
 
 **Interfaces:** Keep `ConfigureMailWorker.reconcileZoneRecords(ctx, mailDomainRow, []types.DNSRecord) error` and the existing mail-domain convergence status/error reporting. Preserve record ownership through `owner_site_id` and the selected zone.
 
-- [ ] Run the existing child-parent DNS regression with its real database fixture before changing reconciliation.
-- [ ] Add missing cases for CNAME conflicts, custom external MX/SPF, a separate child zone with delegation, external DNS guidance, repeated reconciliation and failed agent application.
-- [ ] Assert parent/sibling records are unchanged, no duplicate SPF is published, custom records survive disable/removal, and a failed convergence is visibly failed rather than ready.
-- [ ] Fix only uncovered cases; show actionable DNS requirements and pending/failed status in the existing child Mail workspace.
-- [ ] Run affected provision/HTTP/template checks and update the relevant mail guidance with exact parent-zone record examples.
+- [x] Run the existing child-parent DNS regression with its real database fixture before changing reconciliation.
+- [x] Add missing cases for CNAME conflicts, custom external MX/SPF, a separate child zone with delegation, external DNS guidance, repeated reconciliation and failed agent application.
+- [x] Assert parent/sibling records are unchanged, no duplicate SPF is published, custom records survive disable/removal, and a failed convergence is visibly failed rather than ready.
+- [x] Fix only uncovered cases; show actionable DNS requirements and pending/failed status in the existing child Mail workspace.
+- [x] Run affected provision/HTTP/template checks and update the relevant mail guidance with exact parent-zone record examples.
+
+**Result:** Focused real-database and rendered feedback checks pass for parent-zone scoping, preservation, CNAME/service conflicts, custom routing, delegation, external requirements and failed/pending application. Record and DNS mode edits queue the existing mail recheck atomically. See the [Phase 2 verification record](../../verification/2026-10-22-subdomain-mail-phase2.md). Report before Phase 3.
 
 **Exit:** Each supported DNS mode has an explicit ready, pending, conflict or external-action result. Child changes preserve parent and sibling routing.
 
