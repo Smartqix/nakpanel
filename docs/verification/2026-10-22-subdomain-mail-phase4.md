@@ -6,6 +6,9 @@ child removal, denied child login and final parent/sibling preservation passed.
 The owned guest was removed successfully. Stop before PR, merge or deployment;
 main remains `d992462`.
 
+This report is the Phase 4 completion snapshot. Phase 5 PR/CI is now separately
+authorized; current PR checks and its description record that later result.
+
 ## Results
 
 | Attempt | Tested source | Outcome | Owned guest cleanup |

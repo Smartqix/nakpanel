@@ -12,10 +12,11 @@
 
 ## Current authorization
 
-- Phases 1, 2 and 3 are locally complete; Phase 3 started from `c82f8ad`. The user authorized Phase 3 only on 2026-10-22: subdomain mail quotas, suspension and lifecycle, mailbox-data and parent/sibling preservation, with focused local tests. On 2026-10-22 the user authorized Phase 4 only: focused hosted Ubuntu 26.04 subdomain mail tests and relevant fixes. Publishing this feature ref and dispatching only its focused manual test selection are required for that run. Phase 4 was incomplete after the initial run and two allowed repair cycles; that original budget is exhausted. The user subsequently authorized the Ubuntu mirror repair and exactly one additional focused hosted run. That run completed: installation/PHP passed, initial message-canary setup failed before child-mail mutation. That additional run failed and exhausted its authorization. The user authorized diagnosing/fixing the missing IMAP seed message and exactly one further focused hosted run. That run `39806681641` completed: the IMAP repair and four acceptance groups passed, but the final reviewed child-removal gate failed. That authorization is consumed. The user subsequently authorized capturing/diagnosing/fixing the child-removal failure and exactly one focused hosted rerun. That run `39815224111` passed all five focused groups and final PHP readiness. The one-run authorization is consumed; Phase 4 is complete. No further run is authorized under this continuation. Production server changes, PR, merge and deployment remain unauthorized.
-- Report the result of each phase and stop before the next unless the user explicitly authorizes multiple phases together.
-- Phase 4 requires explicit hosted-test authorization. Phase 5 separates PR/CI, merge and deployment approvals; prior deployment permission for the existing main build does not authorize publishing these future changes.
-- Implementation continues on the local feature branch `ricky/subdomain-mail-phase1` in the existing attached worktree, based on `d992462ead9b617cb068482922a07170a28b9687`. Keep main unchanged; remove the feature branch after a separately authorized merge.
+- Phases 1–3 are locally complete. Phase 4 is complete: hosted run `39815224111`, source `e856cb1`, passed all five focused groups, PHP 8.3/8.4/8.5 readiness and owned guest cleanup. Earlier failed runs remain failed and retain their original source attribution in the verification report.
+- The user now authorizes Phase 5 PR/CI only: open one PR into main, run required CI including the hosted security/reliability gate, and fix failures. Do not repeat unchanged optional hosted tests. Do not merge, delete the feature branch or deploy. The required security gate is authorized even though it uses disposable hosted guests.
+- Work continues on `ricky/subdomain-mail-phase1` in the existing attached worktree, based on `d992462ead9b617cb068482922a07170a28b9687`. Keep main unchanged.
+- Report the PR, exact tested source, required CI results and any limitations. CI results are recorded in the PR description and the plan ledger after execution; avoid a documentation-only follow-up push that would repeat the unchanged hosted gate.
+- Merge, branch cleanup and deployment require separate explicit authorization. Prior deployment permission for the existing main build does not authorize this feature release.
 
 ## Global constraints
 
@@ -148,7 +149,7 @@ The new real-database tests use the `TestSubdomainMail` prefix. Add existing aff
 - [ ] Report the PR, final diff, CI result and outstanding limitations before merging. Merge only when explicitly authorized; remove the merged feature branch afterward.
 - [ ] Deploy only when explicitly authorized. Use the tested main build and existing recovery procedure; verify trusted HTTPS, mail health and the affected subdomain flow without disturbing unrelated customer data.
 
-**Exit:** The approved change is merged, and deployed only if requested, with a concise evidence-backed report. No remaining feature branch is retained after an authorized cleanup.
+**Current authorized exit:** The PR is open, required CI and the focused review are complete, failures are fixed, and results are reported. Stop before merge, branch cleanup or deployment. The later release steps above remain pending explicit authorization.
 
 ## Separate follow-up — Mail-only subdomains
 
