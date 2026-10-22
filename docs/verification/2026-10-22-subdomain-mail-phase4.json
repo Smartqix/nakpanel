@@ -1,0 +1,188 @@
+{
+  "status": "INCOMPLETE",
+  "scope": "SUBDOMAIN_MAIL_ONLY",
+  "hosted_attempts": [
+    {
+      "run_id": 39781138752,
+      "url": "https://github.com/Smartqix/nakpanel/actions/runs/39781138752",
+      "artifact": {
+        "archive_sha256": "c7d9c2cd8e384cc75a1e150195780b646fb1747a670e2f8564c1b6174edd25ce",
+        "commit": "0e53e463813512acc54d9938f846a63f0f648343",
+        "image": {
+          "serial": "20260927",
+          "sha256": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+          "suite": "resolute",
+          "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img"
+        },
+        "key_sha256": "d30d1db069f9f8ed4f77993e41774e4a7cf3574e19c18ee4698143fbf048d217",
+        "manifest_sha256": "e1e615b08201e02dff440d971e1df678fbf46e5d26ef66dc733a9b2fd187f881"
+      },
+      "result": {
+        "actual_os": "ubuntu:26.04:resolute",
+        "architecture": "amd64",
+        "checks": [],
+        "commit": "0e53e463813512acc54d9938f846a63f0f648343",
+        "deployed": false,
+        "error": "HTTP /sites/1/subdomains returned 400",
+        "error_type": "ValueError",
+        "failure_frames": [
+          {
+            "function": "main",
+            "line": 246
+          },
+          {
+            "function": "run",
+            "line": 143
+          },
+          {
+            "function": "post",
+            "line": 106
+          },
+          {
+            "function": "request",
+            "line": 65
+          },
+          {
+            "function": "require",
+            "line": 9
+          }
+        ],
+        "guest": "nakpanel-26-04-amd64-submail-39781138752-1",
+        "merged": false,
+        "php": {
+          "8.3": "8.3.36",
+          "8.4": "8.4.27",
+          "8.5": "8.5.12"
+        },
+        "promotion_eligible": false,
+        "release": "26.04",
+        "run_token": "submail-39781138752-1",
+        "scope": "SUBDOMAIN_MAIL_ONLY",
+        "stage": "owned-fixtures",
+        "status": "FAIL",
+        "updated_at": 1792674693.3403325
+      },
+      "cleanup": {
+        "owned_records": 1,
+        "exit_code": 0
+      }
+    },
+    {
+      "run_id": 39785595967,
+      "url": "https://github.com/Smartqix/nakpanel/actions/runs/39785595967",
+      "artifact": {
+        "archive_sha256": "6d82eb5ef141cd7486a9a37d39d1fbbc90b9c9af9ebd8fa948bac5e083db0d2b",
+        "commit": "6c2c2ab289cde3d21862fcaf8084dbb791fcf722",
+        "image": {
+          "serial": "20260927",
+          "sha256": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+          "suite": "resolute",
+          "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img"
+        },
+        "key_sha256": "7b81ff3eaa4ffbc9c6947f48cb3447484b1b3900bf197ae8736107e3b9997952",
+        "manifest_sha256": "6ad5dcb5e663f90d139f63ca10ee3350716fc584fb176e0a4678f235e897b13e"
+      },
+      "result": {
+        "architecture": "amd64",
+        "checks": [],
+        "commit": "6c2c2ab289cde3d21862fcaf8084dbb791fcf722",
+        "deployed": false,
+        "error": "command failed: bash exit=1 private-log=command-002.log",
+        "error_type": "ValueError",
+        "failure_frames": [
+          {
+            "function": "main",
+            "line": 256
+          },
+          {
+            "function": "run",
+            "line": 133
+          },
+          {
+            "function": "cmd",
+            "line": 96
+          },
+          {
+            "function": "require",
+            "line": 9
+          }
+        ],
+        "guest": "nakpanel-26-04-amd64-submail-39785595967-1",
+        "merged": false,
+        "promotion_eligible": false,
+        "release": "26.04",
+        "run_token": "submail-39785595967-1",
+        "scope": "SUBDOMAIN_MAIL_ONLY",
+        "stage": "fresh-signed-install",
+        "status": "FAIL",
+        "updated_at": 1792675555.064459
+      },
+      "cleanup": {
+        "owned_records": 0,
+        "exit_code": 0
+      }
+    },
+    {
+      "run_id": 39788828299,
+      "url": "https://github.com/Smartqix/nakpanel/actions/runs/39788828299",
+      "artifact": {
+        "archive_sha256": "69862c98e99fa0cd7c359a18cfc30832d0639f28d0035866e5be48e1ff9a46cc",
+        "commit": "8f41eeac10fa905848c23d5064f52a676e6a13d2",
+        "image": {
+          "serial": "20260927",
+          "sha256": "8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2",
+          "suite": "resolute",
+          "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20260927/ubuntu-26.04-server-cloudimg-amd64.img"
+        },
+        "key_sha256": "f7c12521d40828ba955fdf422ad19ac41f851608d10391794047f9af1826da87",
+        "manifest_sha256": "8f5383b5f61d830d7d99307b4c7fc86ca74c9e1aa59d8c7e449c8cc07c9bdcdb"
+      },
+      "result": {
+        "architecture": "amd64",
+        "checks": [],
+        "commit": "8f41eeac10fa905848c23d5064f52a676e6a13d2",
+        "deployed": false,
+        "error": "command failed: bash exit=100 private-log=command-002.log",
+        "error_type": "ValueError",
+        "failure_frames": [
+          {
+            "function": "main",
+            "line": 266
+          },
+          {
+            "function": "run",
+            "line": 143
+          },
+          {
+            "function": "cmd",
+            "line": 106
+          },
+          {
+            "function": "require",
+            "line": 9
+          }
+        ],
+        "guest": "nakpanel-26-04-amd64-submail-39788828299-1",
+        "merged": false,
+        "promotion_eligible": false,
+        "release": "26.04",
+        "run_token": "submail-39788828299-1",
+        "scope": "SUBDOMAIN_MAIL_ONLY",
+        "stage": "fresh-signed-install",
+        "status": "FAIL",
+        "updated_at": 1792676691.8764808
+      },
+      "cleanup": {
+        "owned_records": 1,
+        "exit_code": 0
+      }
+    }
+  ],
+  "hosted_mail_gates_passed": 0,
+  "repair_cycles_used": 2,
+  "repair_cycles_limit": 2,
+  "main_unchanged": "d992462ead9b617cb068482922a07170a28b9687",
+  "pull_request_opened": false,
+  "merged": false,
+  "deployed": false
+}

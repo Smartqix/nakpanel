@@ -12,7 +12,7 @@
 
 ## Current authorization
 
-- Phases 1, 2 and 3 are locally complete; Phase 3 started from `c82f8ad`. The user authorized Phase 3 only on 2026-10-22: subdomain mail quotas, suspension and lifecycle, mailbox-data and parent/sibling preservation, with focused local tests. On 2026-10-22 the user authorized Phase 4 only: focused hosted Ubuntu 26.04 subdomain mail tests and relevant fixes. Publishing this feature ref and dispatching only its focused manual test selection are required for that run. Production server changes, PR, merge and deployment remain unauthorized.
+- Phases 1, 2 and 3 are locally complete; Phase 3 started from `c82f8ad`. The user authorized Phase 3 only on 2026-10-22: subdomain mail quotas, suspension and lifecycle, mailbox-data and parent/sibling preservation, with focused local tests. On 2026-10-22 the user authorized Phase 4 only: focused hosted Ubuntu 26.04 subdomain mail tests and relevant fixes. Publishing this feature ref and dispatching only its focused manual test selection are required for that run. Phase 4 is incomplete after the initial run and two allowed repair cycles; no further hosted run is authorized under this budget. Production server changes, PR, merge and deployment remain unauthorized.
 - Report the result of each phase and stop before the next unless the user explicitly authorizes multiple phases together.
 - Phase 4 requires explicit hosted-test authorization. Phase 5 separates PR/CI, merge and deployment approvals; prior deployment permission for the existing main build does not authorize publishing these future changes.
 - Implementation continues on the local feature branch `ricky/subdomain-mail-phase1` in the existing attached worktree, based on `d992462ead9b617cb068482922a07170a28b9687`. Keep main unchanged; remove the feature branch after a separately authorized merge.
@@ -131,7 +131,9 @@ The new real-database tests use the `TestSubdomainMail` prefix. Add existing aff
 - [ ] Enable child mail and create a mailbox/alias through the actual interface. Verify SMTP submission, local delivery, IMAP retrieval and Roundcube login for the child, plus parent mail continuity.
 - [ ] Check shared quota rejection, forbidden foreign-resource requests, explicit disable/re-enable and reviewed child cleanup. Check the demonstrated fixes from Phases 1–3; avoid an unrelated full platform matrix.
 - [ ] Exercise restore or reboot only if those runtime paths changed or the approved acceptance scope requires them. Preserve PHP 8.3/8.4/8.5 readiness; do not repeat unchanged PHP maintenance drills.
-- [ ] Enforce the run budget and capture the first actionable failure. Retry only after a relevant fix, then repeat the affected slice. Clean up only resources proven to belong to this run.
+- [x] Enforce the run budget and capture the first actionable failure. Retry only after a relevant fix, then repeat the affected slice. Clean up only resources proven to belong to this run.
+
+**Result: incomplete.** Three bounded runs failed before mail acceptance: fixture HTTP 400, initialization timeout, then an Ubuntu mirror index size/hash mismatch. Harness readiness/evidence and launch-budget fixes pass locally; hosted mail, data preservation and child cleanup remain unverified. No further hosted runs within the exhausted budget. See the [Phase 4 report](../../verification/2026-10-22-subdomain-mail-phase4.md).
 
 **Exit:** Report exact source, actual OS, named checks, failures/retries, parent preservation and cleanup. Distinguish local mailbox delivery from external-inbox acceptance; an external delivery claim requires an explicitly authorized recipient and separate evidence. Stop before release work.
 
