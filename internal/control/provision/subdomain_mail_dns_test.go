@@ -131,6 +131,7 @@ type childMailDNSAgent struct {
 	failure     string
 	malformed   bool
 	missingDKIM bool
+	omitDomain  string
 }
 
 func (a childMailDNSAgent) ConfigureMail(_ context.Context, req types.ConfigureMailReq) (types.Response, error) {
@@ -146,6 +147,9 @@ func (a childMailDNSAgent) ConfigureMail(_ context.Context, req types.ConfigureM
 		return types.Response{OK: true, Data: data}, nil
 	}
 	for _, domain := range req.Domains {
+		if domain.Domain == a.omitDomain {
+			continue
+		}
 		result.DKIM = append(result.DKIM, types.MailDomainDKIM{MailDomainID: domain.MailDomainID, Domain: domain.Domain, Selector: "nak1", Record: "v=DKIM1; p=public-child-key"})
 	}
 	data, _ := json.Marshal(result)
@@ -294,5 +298,55 @@ func TestSubdomainMailDNSAllowsUnusedServiceLabel(t *testing.T) {
 	desired := scopedMailRecords(domain, "example.test", "192.0.2.1", mailZoneRecords(domain, ""))
 	if err := mailDNSConflicts(domain, "example.test", []types.DNSRecord{{OwnerSiteID: 1, Host: "@", Type: "A", Value: "192.0.2.1"}}, desired); err != nil {
 		t.Fatalf("unused mail label was banned: %v", err)
+	}
+}
+
+func TestSubdomainMailDNSFailureDoesNotBlockOtherDomains(t *testing.T) {
+	for _, failure := range []string{"CNAME", "missing DKIM"} {
+		t.Run(failure, func(t *testing.T) {
+			f := newChildMailDNSFixture(t)
+			later := removaldb.Site(t, f.db, 1, "zulu.parent-mail.test", f.parent)
+			if _, err := f.db.Exec(`UPDATE sites SET dns_zone_mode='parent' WHERE id=$1`, later); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.Exec(`INSERT INTO mail_domains(subscription_id,site_id,domain,enabled,dkim_enabled,dmarc_policy) VALUES(1,$1,$2,true,true,'none'),(1,$3,'zulu.parent-mail.test',true,true,'none')`, f.child, f.domain.Domain, later); err != nil {
+				t.Fatal(err)
+			}
+			foreign := removaldb.Site(t, f.db, 2, "zzz.foreign.test", nil)
+			var foreignZone int64
+			if err := f.db.QueryRow(`INSERT INTO dns_zones(owner_user_id,site_id,domain,address,serial,status,template_revision) VALUES(1,$1,'zzz.foreign.test','192.0.2.1',1,'active',1) RETURNING id`, foreign).Scan(&foreignZone); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := f.db.Exec(`INSERT INTO mail_domains(subscription_id,site_id,domain,enabled,dkim_enabled,dmarc_policy) VALUES(1,$1,'parent-mail.test',true,true,'none'),(2,$2,'zzz.foreign.test',true,true,'none')`, f.parent, foreign); err != nil {
+				t.Fatal(err)
+			}
+			agent := childMailDNSAgent{}
+			if failure == "CNAME" {
+				if _, err := f.db.Exec(`INSERT INTO dns_records(zone_id,owner_site_id,host,record_type,value,ttl,origin) VALUES($1,$2,'child','CNAME','external.test',300,'custom')`, f.zone, f.child); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				agent.omitDomain = f.domain.Domain
+			}
+			f.worker.agent = agent
+			if err := f.worker.Work(context.Background(), &river.Job[controlquota.ConfigureMailArgs]{Args: controlquota.NewConfigureMailArgs()}); err == nil {
+				t.Fatal("child failure was swallowed")
+			}
+			for _, healthy := range []struct{ site, zone int64 }{{f.parent, f.zone}, {later, f.zone}, {foreign, foreignZone}} {
+				var status string
+				var effective bool
+				var records int
+				if err := f.db.QueryRow(`SELECT convergence_status,effective_enabled FROM mail_domains WHERE site_id=$1`, healthy.site).Scan(&status, &effective); err != nil {
+					t.Fatal(err)
+				}
+				if err := f.db.QueryRow(`SELECT count(*) FROM dns_records WHERE zone_id=$1 AND owner_site_id=$2`, healthy.zone, healthy.site).Scan(&records); err != nil {
+					t.Fatal(err)
+				}
+				if status != "in_sync" || !effective || records != 5 {
+					t.Errorf("early child failure blocked domain %d: status=%s effective=%t records=%d", healthy.site, status, effective, records)
+				}
+			}
+
+		})
 	}
 }

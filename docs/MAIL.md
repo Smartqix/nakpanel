@@ -70,10 +70,11 @@ policy; explicitly choose or edit the routing policy first.
 The Mail page distinguishes mail setup pending/failed, DNS pending/failed,
 DNS action required and DNS applied locally. The latter requires the current
 zone revision to be acknowledged; it does not verify public delegation,
-propagation or external delivery. DNS record and mode edits queue a mail
-readiness recheck. After resolving a reported conflict, that existing worker
+propagation or external delivery. DNS record edits, mode changes and applied
+template changes queue a mail readiness recheck. After resolving a reported conflict, that existing worker
 refreshes the notice. Mail setup failure, malformed acknowledgements and missing
-requested DKIM output remain failures.
+requested DKIM output remain failures. A child DNS failure is reported without
+blocking the reconciliation of independent mail domains.
 
 ## Plan limits
 

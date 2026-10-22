@@ -177,9 +177,11 @@ WHERE id=$1 AND effective_enabled AND `+mailDomainIntentVersionSQL+`=$2`, domain
 	for _, item := range result.DKIM {
 		dkimRecords[item.Domain] = item.Record
 	}
+	var domainErrors []error
 	for _, domain := range domains {
 		if domain.Enabled && !domain.DeleteRequested && domain.DKIM && strings.TrimSpace(dkimRecords[domain.Domain]) == "" {
-			return w.markMailFailure(ctx, []mailDomainRow{domain}, fmt.Errorf("mail agent did not return the required DKIM public record for %s", domain.Domain))
+			domainErrors = append(domainErrors, w.markMailFailure(ctx, []mailDomainRow{domain}, fmt.Errorf("mail agent did not return the required DKIM public record for %s", domain.Domain)))
+			continue
 		}
 		if domain.DeleteRequested {
 			if err := w.reconcileZoneRecords(ctx, domain, nil); err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -197,13 +199,15 @@ WHERE id=$1 AND effective_enabled AND `+mailDomainIntentVersionSQL+`=$2`, domain
 		zoneNote := ""
 		if err := w.reconcileZoneRecords(ctx, domain, desired); err != nil {
 			if !errors.Is(err, sql.ErrNoRows) {
-				return w.markMailFailure(ctx, []mailDomainRow{domain}, err)
+				domainErrors = append(domainErrors, w.markMailFailure(ctx, []mailDomainRow{domain}, err))
+				continue
 			}
 		}
 		if domain.Enabled {
 			zoneNote, err = w.mailDNSNotice(ctx, domain, desired)
 			if err != nil {
-				return w.markMailFailure(ctx, []mailDomainRow{domain}, err)
+				domainErrors = append(domainErrors, w.markMailFailure(ctx, []mailDomainRow{domain}, err))
+				continue
 			}
 		}
 		update, err := w.db.ExecContext(ctx, `UPDATE mail_domains domain
@@ -217,7 +221,7 @@ WHERE id=$1 AND `+mailDomainIntentVersionSQL+`=$4`, domain.ID, domain.Enabled, z
 			return errors.New("mail intent changed during convergence")
 		}
 	}
-	return nil
+	return errors.Join(domainErrors...)
 }
 
 func effectiveMailDomainEnabled(domain mailDomainRow, policy types.HostingPolicy) bool {

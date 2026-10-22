@@ -62,21 +62,27 @@ not live BIND, Stalwart or external DNS evidence.
 | Evidence | Result |
 | --- | --- |
 | Existing DNS baseline before changes | 5 top-level tests passed, no skips |
-| Main final provision/web/HTTP slice | 20 top-level tests passed, no skips |
-| Final DNS-mode/template/record-edit slice | 6 top-level tests passed, no skips |
-| Distinct tests across both final slices | **24 top-level tests passed** |
-| `go vet` on provision/web/HTTP, then affected DNS-template/provision packages | Passed |
+| Final provision/DNS-template/web/HTTP run after review fixes | **26 top-level tests passed, no failures or skips** |
+| `go vet` on all four affected packages after review fixes | Passed |
 | Pinned templ 0.3.960 regeneration comparison | Passed; generated output identical |
 | `gofmt` and `git diff --check` | Passed |
 
-The second final slice repeats two tests because the shared transactional recheck
-helper changed to support DNS mode transitions. Unchanged hosted, PHP, recovery
-or historical checks were not repeated. JavaScript did not change.
+The pre-review slices passed 24 distinct tests. Review then identified two
+additional failures; both were reproduced before fixes. The final 26-test run
+covers the complete affected slice after those fixes. Unchanged hosted, PHP,
+recovery or historical checks were not repeated. JavaScript did not change.
 
 The exact Go commands, complete outputs and exit metadata are retained in this
-plan's ignored `.superpowers/sdd/2026-10-22-subdomain-mail/` directory under
-`phase2-final.*`, `phase2-mode-green.*`, `phase2-vet-final.*`,
-`phase2-mode-vet.*` and `phase2-generated-check.*`.
+plan's ignored `.superpowers/sdd/2026-10-22-subdomain-mail/` directory. The
+final proof is `phase2-review-final.*`, `phase2-review-vet.*` and
+`phase2-generated-check.*`; prior runs and failures are retained separately.
+
+Reproduce the final test selection against an explicitly disposable current
+`NAKPANEL_REMOVAL_TEST_DSN` with the pinned Go toolchain:
+
+```sh
+go test ./internal/control/provision ./internal/control/dnstemplate ./internal/control/web ./internal/control/http -run '^Test(SubdomainMailDNS.*|ChildMailDNSUsesParentZoneWithoutChangingParentMail|MailDNS.*|DisabledMailPreservesNameserverEndpoint|MailDeletionDoesNotRequireActiveDNSZone|ConfigureMailWorkerClearsLastHostedDomain|ConfiguredServiceQueuesDNSOnceAndPreservesCustomEndpoint|RootDNSRefreshKeepsChildServiceEndpoints|DeletedTemplateRecordLeavesSuppression|DNSQueuedRevisionDoesNotSuppressNewerChange|MailWebmailURLRequiresOwnedActiveHTTPSHostname|SubdomainMailFormsKeepChildContext|MailDomainRequestUsesHostedSiteAndCrossTenantWebmailIsHidden|MailEnableDomainFallback|DNSPreviewRejectsServicesEnabledAfterReview|AdoptionPreviewPersistsAndLeavesDifferentTTLUnchanged|ProviderDefaultsDoNotChangeExistingZones)$' -count=1 -v
+```
 
 Failure evidence remains in the same directory. The first four direct CNAME
 fixtures incorrectly assigned MX-only priority to CNAME and failed SQL validation.
@@ -88,8 +94,31 @@ recheck failures were separately observed before their fixes.
 
 ## Review and phase boundary
 
-Independent review is pending before the final phase report. The phase stops
-before Phase 3 quota/lifecycle work. No live agent, authoritative DNS query,
+One fresh independent reviewer inspected `87044f1..6953ab6`, the surrounding
+mutation paths and retained evidence without rerunning tests. It found two
+Important issues, no Critical issues and no Minor issues. Both Important
+findings were reproduced and fixed in one pass:
+
+1. An early child CNAME or missing-DKIM error stopped the global domain loop.
+   The worker now records the domain failure, continues independent domains and
+   returns accumulated errors. `TestSubdomainMailDNSFailureDoesNotBlockOtherDomains`
+   failed before the fix and now proves a later parent, sibling and foreign
+   subscription's domain all configure their five records and reach `in_sync`.
+2. Template synchronization applied records through a separate queue path.
+   That changed-template transaction now calls the same atomic readiness recheck.
+   `TestSubdomainMailDNSTemplateApplyQueuesReadinessRecheck` changes an actual
+   separate child's template NS target, preserves the parent's custom delegation
+   and proves mail becomes pending with a recheck job. It failed before the fix.
+
+No findings remain deferred. The final affected suite passed 26/26 after both
+fixes; a second unchanged review was not commissioned.
+
+The reviewer set aside unchanged Phase 1 ownership and Phase 3 quota/lifecycle
+behavior, later hosted DNS/mail acceptance and unchanged OS/PHP/backup runtime
+acceptance, plus CI/merge/deployment. Those boundaries follow the user's phase
+authorization; this phase does not create acceptance evidence for them.
+
+The phase stops before Phase 3 quota/lifecycle work. No live agent, authoritative DNS query,
 public delegation/propagation, SMTP, IMAP, Roundcube or external delivery was
 verified. Those claims require later explicitly authorized acceptance.
 

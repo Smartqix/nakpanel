@@ -76,7 +76,7 @@ The initial observations above were source inspection. Phase 1 subsequently repr
 
 ## Phase 2 — Complete DNS handling and readiness feedback
 
-**Files:** `internal/control/provision/mail_dns.go`, `internal/control/provision/subdomain_mail_dns_test.go`, `internal/control/dnstemplate/manager.go`, `internal/control/dnstemplate/subdomain_mail_dns_test.go`, `internal/control/provision/phase6_repository.go`, `internal/control/web/subdomain_mail_dns_test.go`, `internal/control/web/mail_design.templ` and generated output, `internal/control/web/static/mail.css`, `docs/MAIL.md`; `internal/control/provision/mail_jobs.go`, `internal/control/provision/dns_services.go`, `internal/control/provision/dns_service_convergence.go`, `internal/control/provision/dns_defaults_test.go`, `internal/control/http/mail_client.go`, `internal/control/web/mail_workspace.templ`, `internal/control/web/mail_helpers.go` as required by observed gaps.
+**Files:** `internal/control/provision/mail_dns.go`, `internal/control/provision/subdomain_mail_dns_test.go`, `internal/control/dnstemplate/manager.go`, `internal/control/dnstemplate/jobs.go`, `internal/control/dnstemplate/subdomain_mail_dns_test.go`, `internal/control/provision/phase6_repository.go`, `internal/control/web/subdomain_mail_dns_test.go`, `internal/control/web/mail_design.templ` and generated output, `internal/control/web/static/mail.css`, `docs/MAIL.md`; `internal/control/provision/mail_jobs.go`, `internal/control/provision/dns_services.go`, `internal/control/provision/dns_service_convergence.go`, `internal/control/provision/dns_defaults_test.go`, `internal/control/http/mail_client.go`, `internal/control/web/mail_workspace.templ`, `internal/control/web/mail_helpers.go` as required by observed gaps.
 
 **Interfaces:** Keep `ConfigureMailWorker.reconcileZoneRecords(ctx, mailDomainRow, []types.DNSRecord) error` and the existing mail-domain convergence status/error reporting. Preserve record ownership through `owner_site_id` and the selected zone.
 
@@ -86,7 +86,7 @@ The initial observations above were source inspection. Phase 1 subsequently repr
 - [x] Fix only uncovered cases; show actionable DNS requirements and pending/failed status in the existing child Mail workspace.
 - [x] Run affected provision/HTTP/template checks and update the relevant mail guidance with exact parent-zone record examples.
 
-**Result:** Focused real-database and rendered feedback checks pass for parent-zone scoping, preservation, CNAME/service conflicts, custom routing, delegation, external requirements and failed/pending application. Record and DNS mode edits queue the existing mail recheck atomically. See the [Phase 2 verification record](../../verification/2026-10-22-subdomain-mail-phase2.md). Report before Phase 3.
+**Result:** Focused real-database and rendered feedback checks pass for parent-zone scoping, preservation, CNAME/service conflicts, custom routing, delegation, external requirements and failed/pending application. Record, DNS mode and applied template changes queue the existing mail recheck atomically. A child failure no longer blocks independent domains. The final affected run passed 26 tests without skips after both review findings were fixed. See the [Phase 2 verification record](../../verification/2026-10-22-subdomain-mail-phase2.md). Report before Phase 3.
 
 **Exit:** Each supported DNS mode has an explicit ready, pending, conflict or external-action result. Child changes preserve parent and sibling routing.
 

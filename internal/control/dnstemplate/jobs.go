@@ -210,6 +210,9 @@ detail=$10,adopted_count=$11,updated_at=now() WHERE run_id=$1 AND zone_id=$2`,
 		plan.item.RemovedCount, plan.item.OverrideCount, plan.item.ConflictCount, plan.item.Detail, plan.item.AdoptedCount); err != nil {
 		return err
 	}
+	if err := provision.NewSQLPhase6Repository(m.db, m.river).EnqueueMailDNSRecheckTx(ctx, tx, zoneID); err != nil {
+		return err
+	}
 	if _, err := m.river.InsertTx(ctx, tx, provision.ConfigureDNSZoneArgs{
 		ZoneID: zoneID, DesiredRevision: desiredRevision, Bulk: true,
 	}, nil); err != nil {
