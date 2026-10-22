@@ -30,6 +30,39 @@ class InstallerPolicy(unittest.TestCase):
     self.assertNotIn('NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS',os.environ)
     self.assertNotIn('APT_CONFIG',os.environ)
 
+class RemovalEvidence(unittest.TestCase):
+ def test_failed_status_is_retained_before_raising_without_html_or_secrets(self):
+  from types import SimpleNamespace
+  with tempfile.TemporaryDirectory() as temp:
+   drill=m.Drill.__new__(m.Drill);drill.evidence=Path(temp);drill.state={}
+   response=dict(operation_id=7,state='failed',stage='reconcile_shared',message='fixture Np!privateValue',checkpoints=['stop_services','remove_hosting'],html='PRIVATE_HTML_SECRET')
+   drill.http=SimpleNamespace(request=lambda path:(200,m.json.dumps(response).encode()))
+   with self.assertRaisesRegex(ValueError,'reconcile_shared'):drill.wait_removal(7)
+   saved=m.json.loads((Path(temp)/'child-removal.json').read_text())
+   self.assertEqual(saved['state'],'failed');self.assertEqual(saved['stage'],'reconcile_shared')
+   self.assertEqual(saved['operation_id'],7);self.assertNotIn('html',saved)
+   self.assertNotIn('privateValue',m.json.dumps(saved));self.assertNotIn('PRIVATE_HTML_SECRET',m.json.dumps(saved))
+ def test_new_operation_accepts_nullable_empty_checkpoints(self):
+  from types import SimpleNamespace
+  with tempfile.TemporaryDirectory() as temp:
+   drill=m.Drill.__new__(m.Drill);drill.evidence=Path(temp);drill.state={}
+   responses=iter([dict(operation_id=7,state='queued',stage='queued',message='',checkpoints=None),dict(operation_id=7,state='completed',stage='completed',message='',checkpoints=['finalize'])])
+   drill.http=SimpleNamespace(request=lambda path:(200,m.json.dumps(next(responses)).encode()))
+   with patch.object(m.time,'sleep'):drill.wait_removal(7)
+   self.assertEqual(m.json.loads((Path(temp)/'child-removal.json').read_text())['state'],'completed')
+ def test_completed_and_timeout_keep_last_observation(self):
+  from types import SimpleNamespace
+  for state in ('completed','running'):
+   with self.subTest(state=state),tempfile.TemporaryDirectory() as temp:
+    drill=m.Drill.__new__(m.Drill);drill.evidence=Path(temp);drill.state={}
+    response=dict(operation_id=7,state=state,stage='finalize',message='',checkpoints=[])
+    drill.http=SimpleNamespace(request=lambda path:(200,m.json.dumps(response).encode()))
+    with patch.object(m.time,'monotonic',side_effect=[0,361]),patch.object(m.time,'sleep'):
+     if state=='completed':drill.wait_removal(7)
+     else:
+      with self.assertRaisesRegex(ValueError,'timed out'):drill.wait_removal(7)
+    self.assertEqual(m.json.loads((Path(temp)/'child-removal.json').read_text())['state'],state)
+
 class AcceptanceOrder(unittest.TestCase):
  class Accepted(Exception):pass
  def harness(self,root,corrupt=None,bypass=False):

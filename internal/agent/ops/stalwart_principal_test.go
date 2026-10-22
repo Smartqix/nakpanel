@@ -25,7 +25,8 @@ func TestRemovalMailboxPrincipalIsExactAndPrivate(t *testing.T) {
 			return
 		}
 		if deleted {
-			w.WriteHeader(404)
+			// Pinned0.11.8 reports management errors inside HTTP200.
+			w.Write([]byte(`{"error":"notFound"}`))
 			return
 		}
 		w.Write([]byte(`{"data":{"name":"box@addon.test","type":"individual"}}`))
@@ -71,6 +72,29 @@ func TestRemovalMailboxRejectsVersionRedirectAndNonIndividual(t *testing.T) {
 			p := NewMailProvisioner(MailProvisionerOptions{ManagementURL: url, AdminSecretPath: secret, Runner: &teardownRunner{outputs: map[string][]byte{"stalwart-mail": []byte(version)}}})
 			if err := p.removeMailboxPrincipal(context.Background(), "box@addon.test"); err == nil || deleted {
 				t.Fatalf("unsafe mailbox deletion mode %s: %v", mode, err)
+			}
+		})
+	}
+}
+
+func TestRemovalMailboxPrincipalErrorEnvelopeFailsClosed(t *testing.T) {
+	for _, body := range []string{`{"error":"forbidden"}`, `{"error":"notFound","data":{"name":"box@addon.test","type":"individual"}}`, `{"error":"notFound","data":null}`, `{"error":23}`, `null`, `{`} {
+		t.Run(body, func(t *testing.T) {
+			deleted := false
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method == http.MethodDelete {
+					deleted = true
+				}
+				w.Write([]byte(body))
+			}))
+			defer server.Close()
+			secret := filepath.Join(t.TempDir(), "admin-secret")
+			if err := os.WriteFile(secret, []byte("synthetic-secret"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			p := NewMailProvisioner(MailProvisionerOptions{ManagementURL: server.URL, AdminSecretPath: secret, Runner: &teardownRunner{outputs: map[string][]byte{"stalwart-mail": []byte("0.11.8")}}})
+			if err := p.removeMailboxPrincipal(context.Background(), "box@addon.test"); err == nil || deleted {
+				t.Fatalf("ambiguous or failed response allowed deletion: deleted=%t error=%v", deleted, err)
 			}
 		})
 	}

@@ -134,6 +134,23 @@ class Drill:
  def protocol(self,mode,accounts,expected=None):
   out=self.guest('sudo','python3',self.env['NAKPANEL_REMOTE_SRC']+'/deploy/multipass/subdomain-mail-protocol.py',data=json.dumps(dict(token=self.token,mode=mode,accounts=accounts,expected=expected)))
   return json.loads(out)
+ def wait_removal(self,operation):
+  deadline=time.monotonic()+360
+  def safe(value,limit=512):
+   if not isinstance(value,str):return ''
+   value=re.sub(r'Np![A-Za-z0-9_-]+','[synthetic-secret]',value.replace('NakpanelAdmin!2026','[synthetic-secret]'))
+   return re.sub(r'[\x00-\x1f\x7f]',' ',value)[:limit]
+  while True:
+   code,body=self.http.request('/site-removals/'+str(operation)+'/status');result=json.loads(body)
+   checkpoints=result.get('checkpoints')
+   require(checkpoints is None or isinstance(checkpoints,list),'invalid child-removal checkpoints')
+   observed=dict(operation_id=result.get('operation_id'),state=safe(result.get('state'),64),stage=safe(result.get('stage'),128),message=safe(result.get('message')),checkpoints=[safe(x,256) for x in (checkpoints or [])[:256]])
+   self.state['child_removal']=observed;write(self.evidence/'child-removal.json',observed)
+   require(type(observed['operation_id']) is int and observed['operation_id']==operation,'child-removal operation identity differs')
+   if observed['state']=='completed':return
+   require(observed['state']!='failed','reviewed child removal failed at '+observed['stage']+': '+observed['message'])
+   require(time.monotonic()<deadline,'reviewed child removal timed out at '+observed['stage'])
+   time.sleep(2)
  def canaries(self,semantic=False):
   ids=','.join(map(str,(self.parent,self.sibling)))
   return self.db("SELECT md5(jsonb_build_array((SELECT jsonb_agg(to_jsonb(m) ORDER BY m.id) FROM mailboxes m JOIN mail_domains d ON d.id=m.mail_domain_id WHERE d.site_id IN ("+ids+")),(SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM mail_aliases a JOIN mail_domains d ON d.id=a.mail_domain_id WHERE d.site_id IN ("+ids+")),(SELECT jsonb_agg("+("jsonb_build_array(r.owner_site_id,r.host,r.record_type,r.value,r.priority,r.ttl) ORDER BY r.host,r.record_type,r.value" if semantic else "to_jsonb(r) ORDER BY r.id")+") FROM dns_records r WHERE r.owner_site_id IN ("+ids+")))::text)")
@@ -242,11 +259,7 @@ class Drill:
   require(self.db('SELECT removal_state FROM sites WHERE id='+str(self.child))=='none','unconfirmed child deletion mutated state')
   code,body=self.http.request('/sites/'+str(self.child)+'/remove',dict(removal,acknowledge_permanent='true',include_children='true'))
   operation=json.loads(body)['operation_id'];require(type(operation) is int and operation>0,'removal operation missing')
-  deadline=time.monotonic()+360
-  while True:
-   code,body=self.http.request('/site-removals/'+str(operation)+'/status');result=json.loads(body)
-   if result['state']=='completed':break
-   require(result['state']!='failed' and time.monotonic()<deadline,'reviewed child cleanup did not complete');time.sleep(2)
+  self.wait_removal(operation)
   require(self.canaries()==before,'child removal mutated parent/sibling resources')
   self.protocol('denied',[self.child_account])
   require(self.db('SELECT count(*) FROM mail_domains WHERE site_id='+str(self.child))=='0','removed child retains its mail domain')
