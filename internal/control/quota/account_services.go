@@ -118,11 +118,8 @@ func (s *SQLStore) SetSubscriptionPolicy(ctx context.Context, subscriptionID, ac
 VALUES($1,$2,$3) ON CONFLICT(subscription_id) DO UPDATE SET policy_patch=EXCLUDED.policy_patch,updated_by=EXCLUDED.updated_by,updated_at=now()`, subscriptionID, []byte(patch), nullableInt64(actorID)); err != nil {
 		return err
 	}
-	if !effective.Permissions.Mail || !effective.Mail.Enabled {
-		if _, err = tx.ExecContext(ctx, `UPDATE mail_domains domain SET effective_enabled=false,convergence_status='pending',last_error='',updated_at=now()
-WHERE subscription_id=$1 AND NOT EXISTS(SELECT 1 FROM sites site WHERE site.id=domain.site_id AND site.removal_state<>'none')`, subscriptionID); err != nil {
-			return err
-		}
+	if err = revokeDisallowedMailTx(ctx, tx, subscriptionID, effective); err != nil {
+		return err
 	}
 	if err = s.markSubscriptionPendingTx(ctx, tx, subscriptionID); err != nil {
 		return err
@@ -131,6 +128,17 @@ WHERE subscription_id=$1 AND NOT EXISTS(SELECT 1 FROM sites site WHERE site.id=d
 		return err
 	}
 	return tx.Commit()
+}
+
+// Revoke directory access in the policy transaction. Granting access still
+// requires a mail acknowledgement against the current account revision.
+func revokeDisallowedMailTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, policy types.HostingPolicy) error {
+	if policy.Permissions.Mail && policy.Mail.Enabled {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE mail_domains domain SET effective_enabled=false,convergence_status='pending',last_error='',updated_at=now()
+WHERE subscription_id=$1 AND NOT EXISTS(SELECT 1 FROM sites site WHERE site.id=domain.site_id AND site.removal_state<>'none')`, subscriptionID)
+	return err
 }
 
 func (s *SQLStore) SetSitePolicy(ctx context.Context, siteID, actorID int64, patch json.RawMessage) error {

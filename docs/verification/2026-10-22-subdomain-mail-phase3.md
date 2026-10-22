@@ -17,9 +17,12 @@ operations, deployment, push, PR or merge were performed. Phase 4 has not starte
    entries immediately and advances their mail intent. An older agent response
    cannot re-enable that captured intent. Inactive reseller ownership is included
    in the same lifecycle predicate; removing sites remain protected.
-3. Revoking mail permission through the subscription policy left effective mail
-   active until convergence. That policy transaction now revokes it immediately
-   and changes the captured mail intent as well.
+3. Revoking mail through a subscription policy or a synchronized plan left
+   effective mail active until convergence. The policy transaction and shared
+   entitlement writer now revoke it immediately using the resolved subscription
+   policy, including valid overrides. Mail acknowledgements also check the
+   account's desired revision, covering inherited entitlement changes and
+   reactivation even when explicit mail settings do not change.
 4. Explicit mail disable also left accounts visible until the worker ran. A
    disabled mail domain now clears `effective_enabled` in the same write;
    re-enable preserves its account/alias identities and requires convergence.
@@ -49,6 +52,11 @@ JavaScript changed. Ubuntu 26.04 and PHP 8.3/8.4/8.5 requirements are unchanged.
 - A fixture agent suspends the subscription after the worker captures its intent
   but before acknowledgement. The stale response is rejected and cannot restore
   directory access. No live service is involved.
+- Actual plan save/synchronization tests prove immediate mail revocation and
+  preservation of a valid explicit subscription override. In-flight plan
+  revocation and owner reactivation both reject the old acknowledgement, leave
+  mail pending and preserve account/alias rows. A current convergence then
+  applies the resolved decision, keeping the explicitly disabled sibling off.
 - The actual site-settings API changes website-only intent; the test models the
   hosting acknowledgement and proves mail stays enabled. Mail disable/re-enable
   then keeps mailbox rows, aliases and parent/sibling DNS fingerprints intact.
@@ -80,10 +88,10 @@ runtime was removed or substituted.
 Final local command:
 
 ```sh
-go test ./internal/control/quota ./internal/control/provision ./internal/agent/ops -run '^Test(SubdomainMail(SharedQuotaLastSlot|RejectsMissingUpdateIDs|MailboxStorageCap|SuspensionAndReactivation|WebsiteAndMailDisablePreserveData|StaleAcknowledgementCannotUndoSuspension|DisableImmediatelyPreservesData|RemovalRequiresReviewedScope|DisableKeepsStoreAndSigningKeys|EnableMailboxAndAlias|RepeatedEnableKeepsAccounts|RejectsRetargetedDomainID)|CustomerLifecycleQueuesAccountsEvenWithoutSites|SubscriptionLifecycleQueuesAccountServices|ResellerLifecycleQueuesAllCustomerAccounts|CustomerLifecycleRollsBackWhenAccountQueueFails|ExplicitSubscriptionLifecycleUpdatesAccountIntent|CustomerProviderTransferQueuesInheritedLifecycle|UpsertMailboxRejectsInvalidInputBeforeSQL|EnforceMailCountTxScopesCountToSubscription|EnsureMailDomainBelongsTxRejectsForeignDomain|EnsureAliasDestinationTxRejectsForeignMailbox|DeleteMailboxAndAliasScopeToSubscription|LockActiveSubscriptionRejectsSuspendedCustomerOrSubscription|LockActiveSubscriptionRejectsSuspendedResellerOrMissingAllocation|DeleteExternalServicesMarksCleanupBeforeConvergence|RemoveChildPreservesParentZone|SiteRemovalEachFailedStageRetainsIntentAndRequiresRetry|SiteRemovalDoesNotCancelSiblingJobs|RemovalKeepsSiblingMailAndPrimaryAccess|ConfigureMailIsIdempotentAndKeepsDKIMKeys)$' -count=1 -v
+go test ./internal/control/quota ./internal/control/provision ./internal/agent/ops -run '^Test(SubdomainMail(PlanSyncRevokesResolvedEntitlement|StaleAcknowledgementAfterAccountRevision|SharedQuotaLastSlot|RejectsMissingUpdateIDs|MailboxStorageCap|SuspensionAndReactivation|WebsiteAndMailDisablePreserveData|StaleAcknowledgementCannotUndoSuspension|DisableImmediatelyPreservesData|RemovalRequiresReviewedScope|DisableKeepsStoreAndSigningKeys|EnableMailboxAndAlias|RepeatedEnableKeepsAccounts|RejectsRetargetedDomainID)|ConfigureMailWorkerClearsLastHostedDomain|EffectiveMailDomainEnabledHonorsLifecycleAndEntitlement|SetSubscriptionModeCustomQueuesHostConvergence|NewCustomerSubscriptionCanRetryAfterCapacityFailure|PlanSyncCopiesWordPressPermissionAndCapacity|CustomerLifecycleQueuesAccountsEvenWithoutSites|SubscriptionLifecycleQueuesAccountServices|ResellerLifecycleQueuesAllCustomerAccounts|CustomerLifecycleRollsBackWhenAccountQueueFails|ExplicitSubscriptionLifecycleUpdatesAccountIntent|CustomerProviderTransferQueuesInheritedLifecycle|UpsertMailboxRejectsInvalidInputBeforeSQL|EnforceMailCountTxScopesCountToSubscription|EnsureMailDomainBelongsTxRejectsForeignDomain|EnsureAliasDestinationTxRejectsForeignMailbox|DeleteMailboxAndAliasScopeToSubscription|LockActiveSubscriptionRejectsSuspendedCustomerOrSubscription|LockActiveSubscriptionRejectsSuspendedResellerOrMissingAllocation|DeleteExternalServicesMarksCleanupBeforeConvergence|RemoveChildPreservesParentZone|SiteRemovalEachFailedStageRetainsIntentAndRequiresRetry|SiteRemovalDoesNotCancelSiblingJobs|RemovalKeepsSiblingMailAndPrimaryAccess|ConfigureMailIsIdempotentAndKeepsDKIMKeys)$' -count=1 -v
 ```
 
-**31 top-level tests passed, no failures or skips.** `go vet` on quota,
+**38 top-level tests passed, no failures or skips.** `go vet` on quota,
 provision and agent/ops passed. Formatting and `git diff --check` passed.
 No generated frontend check was needed because its sources did not change.
 The exact commands, full output and exit metadata remain in this plan's ignored
@@ -96,7 +104,18 @@ rehearsal was launched. This does not establish new hosted backup acceptance.
 
 ## Review and acceptance boundary
 
-A fresh independent review is pending before the final report. Stop before
-Phase 4. No live BIND/Stalwart, SMTP, IMAP, Roundcube, external delivery, public
+One fresh independent review of `c82f8ad..61e0902` found zero critical, one
+important and zero minor issues: plan synchronization bypassed immediate mail
+revocation, and acknowledgements did not include the inherited account revision.
+The single review fix pass reproduced both cases before changing product code,
+then passed the new regressions and final affected suite. No finding is deferred;
+no second review or unrelated test matrix was launched.
+
+The first plan regression changed only typed mail flags, which the current plan
+composition derives from `max_mailboxes`; that fixture did not revoke the resolved
+policy. The corrected fixture uses the actual plan allowance and reproduced the
+directory visibility failure before the product fix. Both logs are retained.
+
+Stop before Phase 4. No live BIND/Stalwart, SMTP, IMAP, Roundcube, external delivery, public
 DNS, hosted Ubuntu acceptance or production message preservation is claimed
 from these local fixtures. Those require the later explicitly authorized phase.

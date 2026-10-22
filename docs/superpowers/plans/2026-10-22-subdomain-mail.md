@@ -12,7 +12,7 @@
 
 ## Current authorization
 
-- Phases 1 and 2 are locally complete, most recently at `c82f8ad`. The user authorized Phase 3 only on 2026-10-22: subdomain mail quotas, suspension and lifecycle, mailbox-data and parent/sibling preservation, with focused local tests. Phase 4, hosted tests, server changes, GitHub writes, merge and deployment remain unauthorized.
+- Phases 1, 2 and 3 are locally complete; Phase 3 started from `c82f8ad`. The user authorized Phase 3 only on 2026-10-22: subdomain mail quotas, suspension and lifecycle, mailbox-data and parent/sibling preservation, with focused local tests. Phase 4, hosted tests, server changes, GitHub writes, merge and deployment remain unauthorized.
 - Report the result of each phase and stop before the next unless the user explicitly authorizes multiple phases together.
 - Phase 4 requires explicit hosted-test authorization. Phase 5 separates PR/CI, merge and deployment approvals; prior deployment permission for the existing main build does not authorize publishing these future changes.
 - Implementation continues on the local feature branch `ricky/subdomain-mail-phase1` in the existing attached worktree, based on `d992462ead9b617cb068482922a07170a28b9687`. Keep main unchanged; remove the feature branch after a separately authorized merge.
@@ -92,7 +92,7 @@ The initial observations above were source inspection. Phase 1 subsequently repr
 
 ## Phase 3 — Enforce limits, lifecycle and data preservation
 
-**Files:** `internal/control/quota/subdomain_mail_limits_test.go`, `internal/control/quota/lifecycle.go`, `internal/control/quota/inherited_lifecycle_test.go`, `internal/control/provision/subdomain_mail_lifecycle_test.go`, `internal/control/provision/subdomain_mail_removal_test.go`, `internal/agent/ops/subdomain_mail_lifecycle_test.go`; `internal/control/quota/mail_accounts.go`, `internal/control/quota/account_services.go`, their existing tests, `internal/control/quota/subdomain_mail_postgres_test.go`, `internal/control/provision/mail_jobs_test.go`, `internal/control/provision/site_removal.go`, `internal/control/provision/site_removal_jobs.go`, and matching removal tests where a demonstrated failure requires a change.
+**Files:** `internal/control/quota/subdomain_mail_limits_test.go`, `internal/control/quota/lifecycle.go`, `internal/control/quota/inherited_lifecycle_test.go`, `internal/control/provision/subdomain_mail_lifecycle_test.go`, `internal/control/provision/subdomain_mail_removal_test.go`, `internal/agent/ops/subdomain_mail_lifecycle_test.go`; `internal/control/quota/mail_accounts.go`, `internal/control/quota/account_services.go`, `internal/control/quota/provider.go`, `internal/control/provision/mail_jobs.go`, their existing tests, `internal/control/quota/subdomain_mail_postgres_test.go`, `internal/control/provision/mail_jobs_test.go`, `internal/control/provision/site_removal.go`, `internal/control/provision/site_removal_jobs.go`, and matching removal tests where a demonstrated failure requires a change.
 
 **Interfaces:** Reuse subscription mutation locking, effective mail policy, mailbox/alias ownership checks, mail convergence and the existing removal preview/confirmation workflow. Do not introduce independent child resource grants or a second mail identity model.
 
@@ -102,7 +102,7 @@ The initial observations above were source inspection. Phase 1 subsequently repr
 - [x] Verify child operations preserve parent/sibling accounts, aliases, records and audit ownership. Fix demonstrated failures with focused regressions.
 - [x] If changes affect serialized mail identities, backup collection, restore or removal, run the affected current-format backup/restore fixtures. Reuse unchanged acceptance evidence; do not launch a new historical or full-server test matrix.
 
-**Local result:** Focused tests cover shared counts and concurrent last-slot requests, finite storage caps, absent update-ID rejection, immediate directory revocation, stale acknowledgements, website/mail disable separation, reactivation, data/key canaries and reviewed child removal scope. No serialized identity, backup, restore or removal implementation changed; their historical/hosted checks were not repeated. See the [Phase 3 verification record](../../verification/2026-10-22-subdomain-mail-phase3.md). Report before Phase 4.
+**Local result:** Focused tests cover shared counts and concurrent last-slot requests, finite storage caps, absent update-ID rejection, immediate directory revocation through lifecycle and resolved plan/policy changes, account-revision acknowledgement guards, website/mail disable separation, reactivation, data/key canaries and reviewed child removal scope. The final affected suite passed 38 tests without failures or skips; vet passed, and the one important review finding was fixed. No serialized identity, backup, restore or removal implementation changed; their historical/hosted checks were not repeated. See the [Phase 3 verification record](../../verification/2026-10-22-subdomain-mail-phase3.md). Report before Phase 4.
 
 **Exit:** Limits cannot be bypassed through children; suspension is effective; disable is non-destructive; permanent deletion has explicit scope and confirmation. Report local evidence and any remaining hosted uncertainty.
 

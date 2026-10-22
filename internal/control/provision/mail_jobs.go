@@ -59,7 +59,9 @@ type mailDomainRow struct {
 	IntentVersion   string
 }
 
-const mailDomainIntentVersionSQL = `jsonb_build_array(domain.subscription_id,domain.site_id,domain.domain,domain.enabled,domain.delete_requested,domain.dkim_enabled,domain.dmarc_policy,domain.updated_at AT TIME ZONE 'UTC')::text`
+// Account revisions also change when inherited policy or owner state changes,
+// even if the mail domain's explicit settings remain the same.
+const mailDomainIntentVersionSQL = `jsonb_build_array(domain.subscription_id,domain.site_id,domain.domain,domain.enabled,domain.delete_requested,domain.dkim_enabled,domain.dmarc_policy,domain.updated_at AT TIME ZONE 'UTC',(SELECT account.desired_revision FROM subscription_system_accounts account WHERE account.subscription_id=domain.subscription_id))::text`
 
 func (w *ConfigureMailWorker) Work(ctx context.Context, _ *river.Job[controlquota.ConfigureMailArgs]) error {
 	if w.db == nil || w.agent == nil || w.phase6 == nil {

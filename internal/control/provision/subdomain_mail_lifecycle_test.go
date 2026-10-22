@@ -200,3 +200,103 @@ func TestSubdomainMailDisableImmediatelyPreservesData(t *testing.T) {
 		t.Fatal("disabling mail changed persisted mailboxes or aliases")
 	}
 }
+
+func (f childMailLifecycleFixture) syncPlanMail(t *testing.T, enabled bool) {
+	t.Helper()
+	if _, err := f.db.Exec(`UPDATE subscriptions SET sync_mode=CASE WHEN id=1 THEN 'synced' ELSE 'locked' END`); err != nil {
+		t.Fatal(err)
+	}
+	var planID int64
+	if err := f.db.QueryRow(`SELECT plan_id FROM subscriptions WHERE id=1`).Scan(&planID); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := f.store.GetPlan(context.Background(), planID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan.HostingPolicy.Permissions.Mail = enabled
+	plan.HostingPolicy.Mail.Enabled = enabled
+	plan.MaxMailboxes = 0
+	if enabled {
+		plan.MaxMailboxes = -1
+	}
+	plan.HostingPolicy.Resources.MaxMailboxes = plan.MaxMailboxes
+	if _, err := f.store.UpsertPlan(context.Background(), plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.store.SyncPlan(context.Background(), planID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSubdomainMailPlanSyncRevokesResolvedEntitlement(t *testing.T) {
+	for _, override := range []bool{false, true} {
+		t.Run(strconv.FormatBool(override), func(t *testing.T) {
+			f := newChildMailLifecycleFixture(t)
+			before := f.mailData(t)
+			if override {
+				if err := f.store.SetSubscriptionPolicy(context.Background(), 1, 1, json.RawMessage(`{"permissions":{"mail":true},"mail":{"enabled":true}}`), true); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f.syncPlanMail(t, false)
+			policy, err := f.store.EffectiveSubscriptionPolicy(context.Background(), 1)
+			if err != nil || policy.Permissions.Mail != override || policy.Mail.Enabled != override {
+				t.Fatalf("unexpected resolved mail policy after plan sync: %+v %v", policy.Mail, err)
+			}
+			f.visible(t, f.child, override)
+			f.visible(t, f.parent, override)
+			f.visible(t, f.foreign, true)
+			f.converge(t)
+			f.visible(t, f.child, override)
+			f.syncPlanMail(t, true)
+			f.visible(t, f.child, override) // Newly granted mail waits for a current acknowledgement.
+			f.converge(t)
+			f.visible(t, f.child, true)
+			f.visible(t, f.parent, true)
+			f.visible(t, f.sibling, false)
+			f.visible(t, f.foreign, true)
+			if f.mailData(t) != before {
+				t.Fatal("plan synchronization changed stored mailbox data or aliases")
+			}
+		})
+	}
+}
+
+func TestSubdomainMailStaleAcknowledgementAfterAccountRevision(t *testing.T) {
+	for _, kind := range []string{"plan revocation", "owner reactivation"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newChildMailLifecycleFixture(t)
+			before := f.mailData(t)
+			if kind == "owner reactivation" {
+				if err := f.store.SetSubscriptionStatus(context.Background(), 1, "suspended"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			f.worker.agent = childMailLifecycleAgent{hook: func() {
+				if kind == "plan revocation" {
+					f.syncPlanMail(t, false)
+				} else if err := f.store.SetSubscriptionStatus(context.Background(), 1, "active"); err != nil {
+					t.Fatal(err)
+				}
+			}}
+			if err := f.worker.Work(context.Background(), &river.Job[controlquota.ConfigureMailArgs]{Args: controlquota.NewConfigureMailArgs()}); err == nil {
+				t.Error("obsolete mail decision was acknowledged after account revision changed")
+			}
+			f.visible(t, f.child, false)
+			f.visible(t, f.parent, false)
+			f.visible(t, f.foreign, true)
+			var state string
+			if err := f.db.QueryRow(`SELECT convergence_status FROM mail_domains WHERE id=$1`, f.domains[f.child]).Scan(&state); err != nil || state != "pending" {
+				t.Errorf("obsolete acknowledgement cleared pending state: %q %v", state, err)
+			}
+			f.worker.agent = childMailDNSAgent{}
+			f.converge(t)
+			f.visible(t, f.child, kind == "owner reactivation")
+			f.visible(t, f.sibling, false)
+			if f.mailData(t) != before {
+				t.Fatal("account revision race changed stored mailbox data or aliases")
+			}
+		})
+	}
+}

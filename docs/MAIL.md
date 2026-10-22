@@ -94,11 +94,13 @@ selected mail domain; a supplied unused ID cannot insert an account or bypass
 the create limit.
 
 Customer/subscription suspension revokes directory entries in the lifecycle
-transaction. Explicitly revoking mail permission through subscription policy,
-or disabling a mail domain, also revokes directory access immediately. The
-mail intent changes in the same transaction, preventing a stale acknowledgement
-from reversing that revocation. Reactivation still needs current convergence
-and restores only enabled, entitled mail domains.
+transaction. Revoking mail through subscription policy or a synchronized plan,
+or disabling a mail domain, also revokes directory access immediately. Plan and
+custom entitlement writes resolve subscription overrides before revoking access.
+Mail acknowledgements check the current account revision as well as the mail
+settings, preventing an older decision from overriding revocation or reactivation.
+Reactivation still needs current convergence and restores only enabled, entitled
+mail domains.
 
 Website-only suspension keeps existing mail. Its existing mail-domain settings
 remain editable while web hosting is off, provided its subscription is active
