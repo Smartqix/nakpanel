@@ -32,12 +32,11 @@ func TestQualificationMaintenanceReadinessBeforeCoreChecksAndFixtures(t *testing
 	if start < 0 || end <= start {
 		t.Fatal("post-installer qualification boundary missing")
 	}
-	for _, mode := range []string{"modern", "legacy", "installer-failed", "readiness-failed"} {
+	for _, mode := range []string{"modern", "installer-failed", "readiness-failed"} {
 		t.Run(mode, func(t *testing.T) {
 			directory := t.TempDir()
 			body := `set -euo pipefail
-set -- /frozen/controller 26.04 1 1 0 native /staged/release /staged/public.pem
-[[ "$MODE" != legacy ]] || set -- /frozen/controller 24.04 1 1 1 native /staged/release /staged/public.pem
+set -- /frozen/controller 26.04 1 1 0 sury /staged/release /staged/public.pem 0
 mktemp(){ command mktemp "$TEST_DIRECTORY/password.XXXXXXXX"; }
 timeout(){ echo installer >> "$CALL_LOG"; [[ "$MODE" != installer-failed ]]; }
 python3(){
@@ -50,7 +49,7 @@ systemctl(){ echo core-check >> "$CALL_LOG"; }
 			log := filepath.Join(directory, "calls")
 			command.Env = append(os.Environ(), "MODE="+mode, "TEST_DIRECTORY="+directory, "CALL_LOG="+log)
 			output, err := command.CombinedOutput()
-			if (err == nil) != (mode == "modern" || mode == "legacy") {
+			if (err == nil) != (mode == "modern") {
 				t.Fatalf("%s: %v\n%s", mode, err, output)
 			}
 			calls, _ := os.ReadFile(log)

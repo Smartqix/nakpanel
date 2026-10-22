@@ -149,7 +149,7 @@ The new real-database tests use the `TestSubdomainMail` prefix. Add existing aff
 - [ ] Report the PR, final diff, CI result and outstanding limitations before merging. Merge only when explicitly authorized; remove the merged feature branch afterward.
 - [ ] Deploy only when explicitly authorized. Use the tested main build and existing recovery procedure; verify trusted HTTPS, mail health and the affected subdomain flow without disturbing unrelated customer data.
 
-**PR/CI tracking:** [PR #14](https://github.com/Smartqix/nakpanel/pull/14) is open into main. The first CI run was cancelled after review found the availability issue; required CI will run on the corrected head. Its final result is recorded in the PR description and ledger without another docs-only push. Optional hosted mail/qualification suites are not repeated.
+**PR/CI tracking:** [PR #14](https://github.com/Smartqix/nakpanel/pull/14) is open into main. The first CI run was cancelled after review found the availability issue. The next unit run exposed an eight-argument maintenance fixture for the current nine-argument installer. That fixture now uses Resolute/Surý and the explicit ninth argument; its retired Ubuntu 24.04/legacy case was removed. Eight focused harness tests and vet passed. Required CI will run on the corrected head. Its final result is recorded in the PR description and ledger without another docs-only push. Optional hosted mail/qualification suites are not repeated.
 
 **Current authorized exit:** The PR is open, required CI and the focused review are complete, failures are fixed, and results are reported. Stop before merge, branch cleanup or deployment. The later release steps above remain pending explicit authorization.
 
