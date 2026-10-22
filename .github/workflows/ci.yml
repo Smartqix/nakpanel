@@ -67,17 +67,18 @@ jobs:
           mkdir -m 0700 "${pg_root}/socket"
           printf 'NAKPANEL_UNIT_PG_OWNED=1\n' >>"${GITHUB_ENV}"
           "${pg_bin}/initdb" -D "${pg_root}/data" -U "${pg_user}" --auth-local=trust --auth-host=reject --encoding=UTF8 --no-locale >/dev/null
-          "${pg_bin}/pg_ctl" -D "${pg_root}/data" -l "${pg_root}/server.log" -o "-c listen_addresses='' -k ${pg_root}/socket -p 55439" -w -t 30 start
+          "${pg_bin}/pg_ctl" -D "${pg_root}/data" -l "${pg_root}/server.log" -o "-c listen_addresses='' -c max_locks_per_transaction=512 -k ${pg_root}/socket -p 55439" -w -t 30 start
           # Production advisory-lock keys are database-wide. Separate fixture
           # databases keep package-concurrent tests isolated, including seed IDs.
-          for pg_database in nakpanel_native_fixture nakpanel_plan_php; do
+          for pg_database in nakpanel_native_fixture nakpanel_plan_php nakpanel_removal_test; do
             "${pg_bin}/createdb" --host="${pg_root}/socket" --port=55439 --username="${pg_user}" "${pg_database}"
           done
           observed="$("${pg_bin}/psql" -XAt --host="${pg_root}/socket" --port=55439 --username="${pg_user}" --dbname=nakpanel_native_fixture -c "SELECT current_setting('data_directory') || '|' || (inet_server_addr() IS NULL AND current_setting('listen_addresses')='')::text")"
           [[ "${observed}" == "${pg_root}/data|true" ]]
           native_dsn="host=${pg_root}/socket port=55439 user=${pg_user} dbname=nakpanel_native_fixture sslmode=disable"
           plan_dsn="host=${pg_root}/socket port=55439 user=${pg_user} dbname=nakpanel_plan_php sslmode=disable"
-          printf 'NAKPANEL_NATIVE_FIXTURE_TEST_DSN=%s\nNAKPANEL_PLAN_PHP_TEST_DSN=%s\n' "${native_dsn}" "${plan_dsn}" >>"${GITHUB_ENV}"
+          removal_dsn="postgresql://${pg_user}@/nakpanel_removal_test?host=${pg_root}/socket&port=55439&sslmode=disable"
+          printf 'NAKPANEL_NATIVE_FIXTURE_TEST_DSN=%s\nNAKPANEL_PLAN_PHP_TEST_DSN=%s\nNAKPANEL_REMOVAL_TEST_DSN=%s\n' "${native_dsn}" "${plan_dsn}" "${removal_dsn}" >>"${GITHUB_ENV}"
           printf '%s\n' "${pg_bin}" >>"${GITHUB_PATH}"
       - name: go test (includes the in-process security guards)
         run: go test ./... -count=1

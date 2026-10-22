@@ -50,16 +50,7 @@ type PruneSiteArgs struct {
 func (PruneSiteArgs) Kind() string                 { return "maintenance_prune_site_backups" }
 func (PruneSiteArgs) InsertOpts() river.InsertOpts { return uniqueSweepOpts() }
 
-type DeleteBackupArgs struct {
-	BackupID int64 `json:"backup_id" river:"unique"`
-}
-
-func (DeleteBackupArgs) Kind() string { return "maintenance_delete_backup" }
-func (DeleteBackupArgs) InsertOpts() river.InsertOpts {
-	opts := uniqueSweepOpts()
-	opts.MaxAttempts = 3
-	return opts
-}
+type DeleteBackupArgs = provision.DeleteBackupArgs
 
 type ReconcileArgs struct {
 	Scope string `json:"scope" river:"unique"`
@@ -284,7 +275,15 @@ ORDER BY site.id`, window)
 			return err
 		}
 		var backupID int64
-		if err = tx.QueryRowContext(ctx, `SELECT id FROM sites WHERE id=$1 FOR UPDATE`, siteID).Scan(&siteID); err == nil {
+		err = provision.GuardScheduledBackupTx(ctx, tx, subscriptionID, domain)
+		if errors.Is(err, controlquota.ErrExceeded) || errors.Is(err, controlquota.ErrNoActiveSubscription) {
+			_ = tx.Rollback()
+			continue
+		}
+		if err == nil {
+			err = tx.QueryRowContext(ctx, `SELECT id FROM sites WHERE id=$1 FOR UPDATE`, siteID).Scan(&siteID)
+		}
+		if err == nil {
 			err = tx.QueryRowContext(ctx, `INSERT INTO backups(owner_user_id,customer_id,site_id,subscription_id,target_kind,target_name,status,scheduled_for)
 SELECT $1,$2,$3,$4,'site',$5,'pending',$6::timestamptz WHERE NOT EXISTS(SELECT 1 FROM backups existing WHERE existing.site_id=$3 AND existing.status='active' AND existing.created_at >= $6::timestamptz AND existing.created_at < $6::timestamptz+interval '1 day')
 ON CONFLICT(site_id,scheduled_for) WHERE scheduled_for IS NOT NULL DO NOTHING RETURNING id`, ownerID, customerID, siteID, subscriptionID, domain, window).Scan(&backupID)
@@ -349,45 +348,16 @@ func (w *PruneSiteWorker) Work(ctx context.Context, j *river.Job[PruneSiteArgs])
 }
 
 func (s *Service) enqueuePrunes(ctx context.Context, siteID int64) error {
-	rows, err := s.db.QueryContext(ctx, `WITH ranked AS (
-SELECT b.id,b.site_id,b.created_at,e.max_backups,e.backup_retention_days,row_number() OVER(PARTITION BY b.site_id ORDER BY b.created_at DESC,b.id DESC) rank
-FROM backups b JOIN sites site ON site.id=b.site_id JOIN subscription_entitlements e ON e.subscription_id=site.subscription_id
-WHERE b.status='active' AND b.archive_path<>'' AND ($1::bigint=0 OR b.site_id=$1)
-AND NOT EXISTS(SELECT 1 FROM river_job job JOIN backups in_flight ON in_flight.id=(job.args->>'backup_id')::bigint WHERE job.kind='create_backup' AND job.state IN('available','retryable','running','scheduled') AND in_flight.site_id=b.site_id AND in_flight.status<>'active'))
-SELECT id FROM ranked WHERE (max_backups>=0 AND rank>max_backups) OR (backup_retention_days>0 AND created_at < now()-(backup_retention_days*interval '1 day')) ORDER BY id`, siteID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int64
-		if err = rows.Scan(&id); err != nil {
-			return err
-		}
-		tx, e := s.db.BeginTx(ctx, nil)
-		if e != nil {
-			return e
-		}
-		res, e := tx.ExecContext(ctx, `UPDATE backups SET status='deleting',last_error='',updated_at=now() WHERE id=$1 AND status='active'`, id)
-		if e == nil {
-			var n int64
-			n, _ = res.RowsAffected()
-			if n > 0 {
-				a := DeleteBackupArgs{BackupID: id}
-				o := a.InsertOpts()
-				_, e = s.river.InsertTx(ctx, tx, a, &o)
-			}
-		}
-		if e == nil {
-			e = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-		if e != nil {
-			return e
-		}
-	}
-	return rows.Err()
+	// Keep legacy sweep jobs compatible, but never turn a limit or an expired
+	// retention window into authorization to destroy a recovery point.
+	_, err := s.db.ExecContext(ctx, `UPDATE backups backup SET status='delete_failed',last_error='Removal did not complete. The recovery point is preserved; review it before retrying.',updated_at=now()
+ WHERE backup.status='deleting' AND ($1::bigint=0 OR backup.site_id=$1)
+ AND NOT EXISTS(SELECT 1 FROM river_job job JOIN audit_events approval ON approval.id::text=job.args->>'approval_id'
+ WHERE job.kind='maintenance_delete_backup' AND job.args->>'backup_id'=backup.id::text
+ AND job.state IN('available','pending','running','retryable','scheduled')
+ AND approval.action='backup.deletion_requested' AND approval.target_type='backup' AND approval.target_id=backup.id
+ AND approval.metadata->>'confirmed'='true' AND approval.metadata->>'source'='backup-manager')`, siteID)
+	return err
 }
 
 type DeleteBackupWorker struct {
@@ -397,46 +367,96 @@ type DeleteBackupWorker struct {
 
 func NewDeleteBackupWorker(s *Service) *DeleteBackupWorker { return &DeleteBackupWorker{service: s} }
 func (w *DeleteBackupWorker) Work(ctx context.Context, j *river.Job[DeleteBackupArgs]) error {
-	return w.service.deleteBackup(ctx, j.Args.BackupID)
+	if j.Args.ApprovalID <= 0 {
+		if _, err := w.service.db.ExecContext(ctx, `UPDATE backups SET status='delete_failed',last_error='Automatic deletion was canceled. The recovery point is preserved.',updated_at=now() WHERE id=$1 AND status='deleting'`, j.Args.BackupID); err != nil {
+			return err
+		}
+		return river.JobCancel(errors.New("backup deletion requires explicit confirmation"))
+	}
+	return w.service.deleteBackup(ctx, j.Args.BackupID, j.Args.ApprovalID)
 }
 
-func (s *Service) deleteBackup(ctx context.Context, id int64) error {
+func (s *Service) deleteBackup(ctx context.Context, id, approvalID int64) error {
+	if approvalID <= 0 {
+		return river.JobCancel(errors.New("backup deletion requires explicit confirmation"))
+	}
 	if s.agent == nil {
 		return errors.New("delete backup agent is not configured")
-	}
-	actorID, err := s.schedulerID(ctx)
-	if err != nil {
-		return err
-	}
-	var path string
-	var customerID, subscriptionID int64
-	err = s.db.QueryRowContext(ctx, `UPDATE backups backup SET status='deleting',updated_at=now() FROM sites site WHERE backup.id=$1 AND backup.status IN('deleting','delete_failed') AND site.id=backup.site_id RETURNING backup.archive_path,site.customer_id,site.subscription_id`, id).Scan(&path, &customerID, &subscriptionID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	resp, err := s.agent.DeleteBackup(ctx, types.DeleteBackupReq{ArchivePath: path})
-	if err == nil && !resp.OK {
-		err = errors.New(resp.Error)
-	}
-	if err != nil {
-		_, _ = s.db.ExecContext(ctx, `UPDATE backups SET status='delete_failed',last_error=$2,updated_at=now() WHERE id=$1`, id, err.Error())
-		if reportErr := s.recordFailure(ctx, actorID, customerID, subscriptionID, "backup.delete_failed", "backup", id, "Backup deletion failed", err.Error(), fmt.Sprintf("maintenance:backup-delete:%d", id)); reportErr != nil {
-			return errors.Join(err, reportErr)
-		}
-		return err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
+	var subscriptionID int64
+	err = tx.QueryRowContext(ctx, `SELECT subscription_id FROM backups WHERE id=$1`, id).Scan(&subscriptionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err = controlquota.LockSubscriptionMutationTx(ctx, tx, subscriptionID); err != nil {
+		return err
+	}
+	var path string
+	var customerID, actorID int64
+	err = tx.QueryRowContext(ctx, `SELECT backup.archive_path,backup.customer_id,backup.subscription_id,approval.actor_user_id
+ FROM backups backup JOIN audit_events approval ON approval.id=$2 AND approval.target_type='backup' AND approval.target_id=backup.id
+ AND approval.action='backup.deletion_requested' AND approval.customer_id=backup.customer_id AND approval.subscription_id=backup.subscription_id
+ AND approval.actor_user_id IS NOT NULL AND approval.metadata->>'confirmed'='true' AND approval.metadata->>'source'='backup-manager'
+ WHERE backup.id=$1 AND backup.status IN('deleting','delete_failed')
+ AND NOT EXISTS(SELECT 1 FROM site_removal_operations operation WHERE operation.state<>'completed' AND operation.snapshot->'backups' @> jsonb_build_array(jsonb_build_object('id',backup.id)))
+ FOR UPDATE OF backup`, id, approvalID).Scan(&path, &customerID, &subscriptionID, &actorID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return river.JobCancel(errors.New("backup deletion confirmation is unavailable or the recovery point is protected"))
+	}
+	if err != nil {
+		return err
+	}
+	// The row lock prevents new foreign-key references while archive deletion is
+	// in flight. Use a fresh statement after acquiring it so a WordPress attach
+	// that committed while this worker waited is visible before any agent call.
+	var wordpressReferenced bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM wordpress_operations WHERE backup_id=$1)`, id).Scan(&wordpressReferenced); err != nil {
+		return err
+	}
+	if wordpressReferenced {
+		return river.JobCancel(errors.New("this recovery point is protected by a WordPress operation"))
+	}
+	sharedArchive := false
+	if path != "" {
+		if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended('backup-archive:'||$1,0))`, path); err != nil {
+			return err
+		}
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM backups WHERE archive_path=$1 AND id<>$2)`, path, id).Scan(&sharedArchive); err != nil {
+			return err
+		}
+	}
+	if path != "" && !sharedArchive {
+		var resp types.Response
+		resp, err = s.agent.DeleteBackup(ctx, types.DeleteBackupReq{ArchivePath: path})
+		if err == nil && !resp.OK {
+			err = errors.New(resp.Error)
+		}
+	}
+	if err != nil {
+		failure := errors.New("The backup archive could not be removed. It remains recorded; check storage availability before retrying.")
+		if _, updateErr := tx.ExecContext(ctx, `UPDATE backups SET status='delete_failed',last_error=$2,updated_at=now() WHERE id=$1`, id, failure.Error()); updateErr != nil {
+			return errors.Join(err, updateErr)
+		}
+		if commitErr := tx.Commit(); commitErr != nil {
+			return errors.Join(err, commitErr)
+		}
+		if reportErr := s.recordFailure(ctx, actorID, customerID, subscriptionID, "backup.delete_failed", "backup", id, "Backup deletion failed", failure.Error(), fmt.Sprintf("maintenance:backup-delete:%d", id)); reportErr != nil {
+			return errors.Join(err, reportErr)
+		}
+		return failure
+	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM backups WHERE id=$1`, id); err != nil {
 		return err
 	}
-	if err = s.auditTx(ctx, tx, actorID, customerID, subscriptionID, "backup.deleted", "backup", id, map[string]any{"archive_path": path}); err != nil {
+	if err = s.auditTx(ctx, tx, actorID, customerID, subscriptionID, "backup.deleted", "backup", id, map[string]any{"approval_id": approvalID, "shared_archive_preserved": sharedArchive}); err != nil {
 		return err
 	}
 	return tx.Commit()

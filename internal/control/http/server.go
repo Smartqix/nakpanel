@@ -383,6 +383,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /databases", s.handleCreateDatabase)
 	s.registerDatabaseWorkspaceRoutes(mux)
 	s.registerSiteRemovalRoutes(mux)
+	s.registerBackupManagerRoutes(mux)
 	mux.HandleFunc("POST /certificates", s.handleIssueCertificate)
 	mux.HandleFunc("POST /sites/{id}/certificates/custom", s.handleInstallCustomCertificate)
 	mux.HandleFunc("POST /jobs/retry", s.handleRetryJob)
@@ -693,6 +694,9 @@ func (s *Server) handleWorkspace(route string) http.HandlerFunc {
 		if !validWorkspaceTab(route, view.Tab) {
 			view.Tab = "overview"
 		}
+		if !s.loadBackupManager(w, r, user, &data, &view) {
+			return
+		}
 		if route == "subscription-new" {
 			view.DetailID = parseQueryInt64(r, "customer_id")
 		}
@@ -967,6 +971,9 @@ func (s *Server) handleSupportWorkspace(w http.ResponseWriter, r *http.Request) 
 		tab = "overview"
 	}
 	view := web.WorkspaceView{Route: page, Title: "Support view", DetailID: detailID, Tab: tab, Drawer: workspaceDrawerID(r.URL.Query().Get("drawer")), ApplicationTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("app_tab"))), WordPressTab: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("wp_tab"))), LogSource: strings.ToLower(strings.TrimSpace(r.URL.Query().Get("source"))), CSRFToken: csrfToken(r), SupportCustomerID: customerID, SupportCustomerName: name}
+	if !s.loadBackupManager(w, r, user, &data, &view) {
+		return
+	}
 	if page == "site-detail" && tab == "mail" && !s.loadMailClientWorkspace(w, r, user, data, &view) {
 		return
 	}
@@ -1995,6 +2002,15 @@ func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
 		customerID, _ = s.workspace.CustomerIDForSubscription(r.Context(), req.SubscriptionID)
 	}
 	s.recordAudit(r.Context(), user, customerID, req.SubscriptionID, "backup.queued", "backup", backupID, map[string]any{"domain": req.Domain})
+	if r.Form.Get("return_to") == "subscription-backups" && req.SubscriptionID > 0 {
+		path := supportRedirectPath(r, user, "/subscriptions/"+strconv.FormatInt(req.SubscriptionID, 10)+"?tab=backups&notice=backup-queued")
+		if wantsSPAJSON(r) {
+			writeSPAJSON(w, 202, map[string]any{"ok": true, "backup_id": backupID, "redirect": path})
+		} else {
+			http.Redirect(w, r, path, 303)
+		}
+		return
+	}
 	if siteID := parseFormInt64Default(r, "site_id", 0); siteID > 0 {
 		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=backups&notice=backup-queued"), http.StatusSeeOther)
 		return
@@ -2065,6 +2081,21 @@ func (s *Server) handleRestoreBackup(w http.ResponseWriter, r *http.Request) {
 		customerID, _ = s.workspace.CustomerIDForBackup(r.Context(), backupID)
 	}
 	s.recordAudit(r.Context(), user, customerID, 0, "restore.queued", "restore", restoreID, map[string]any{"backup_id": backupID})
+	if r.Form.Get("return_to") == "subscription-backups" {
+		if store, ok := s.workspace.(interface {
+			SubscriptionIDForBackup(context.Context, int64) (int64, error)
+		}); ok {
+			if subscriptionID, e := store.SubscriptionIDForBackup(r.Context(), backupID); e == nil && subscriptionID > 0 {
+				path := supportRedirectPath(r, user, "/subscriptions/"+strconv.FormatInt(subscriptionID, 10)+"?tab=backups&notice=restore-queued")
+				if wantsSPAJSON(r) {
+					writeSPAJSON(w, 202, map[string]any{"ok": true, "restore_id": restoreID, "redirect": path})
+				} else {
+					http.Redirect(w, r, path, 303)
+				}
+				return
+			}
+		}
+	}
 	if siteID := parseFormInt64Default(r, "site_id", 0); siteID > 0 {
 		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"?tab=backups&notice=restore-queued"), http.StatusSeeOther)
 		return
@@ -3641,6 +3672,7 @@ var noticeCatalogue = map[string]noticeEntry{
 	"database-password-queued": {"Password change queued. Wait for Ready to connect before updating your application.", dashboard.NoticeSuccess},
 	"certificate-queued":       {"Certificate request queued. Check the domain's SSL/TLS status for the result.", dashboard.NoticeInfo},
 	"backup-queued":            {"Backup queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
+	"backups-removing":         {"Backup removal queued. Recovery points remain counted until their archives are removed.", dashboard.NoticeInfo},
 	"restore-queued":           {"Restore queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
 	"webmail-queued":           {"Webmail configuration queued.", dashboard.NoticeSuccess},
 	"dns-queued":               {"DNS zone configuration queued.", dashboard.NoticeSuccess},

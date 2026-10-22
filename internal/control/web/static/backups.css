@@ -1,0 +1,66 @@
+.np-backup-manager{min-width:0}
+.np-backup-native-create{padding:16px 20px}
+.np-backup-native-create form{display:flex;gap:12px;align-items:end;flex-wrap:wrap;padding-top:12px}
+.np-dialog.np-backup-dialog{width:min(680px,calc(100vw - 32px));max-height:calc(100dvh - 32px);padding:0;border:1px solid #dce3ee;border-radius:8px;color:#1f2937}
+.np-backup-dialog form,.np-backup-confirmation form{display:flex;flex-direction:column;gap:0;margin:0;padding:0}
+.np-backup-dialog .np-dialog-body,.np-backup-confirmation .np-dialog-body{padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.np-backup-dialog .np-dialog-body label:not(.np-backup-ack){display:flex;flex-direction:column;gap:8px;font-size:14px}
+.np-backup-dialog .np-dialog-body select{width:100%;min-height:42px;font-size:14px}
+.np-backup-dialog .np-dialog-foot,.np-backup-confirmation .np-dialog-foot{display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:16px 20px;border-top:1px solid #dce3ee;background:white;position:sticky;bottom:0;z-index:2}
+.np-backup-dialog p,.np-backup-confirmation p{margin:0}
+.np-backup-dialog .np-error[hidden]{display:none}
+.np-backup-confirmation{max-width:720px;margin:24px auto}
+.np-backup-confirmation .np-dialog-head>button{display:none}
+.np-backup-compliance{padding:0 20px;color:#52627a;font-size:13px}
+.np-backup-restore-state{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 20px;border-top:1px solid #e1e6ee;font-size:14px}
+.np-backup-manager .np-panel-title{align-items:center;gap:16px;flex-wrap:wrap}
+.np-backup-preservation{display:flex;align-items:center;gap:8px;margin:0;padding:12px 20px;color:#425168;font-size:14px;border-bottom:1px solid #e1e6ee}
+.np-backup-preservation svg{width:18px;height:18px;flex-shrink:0;color:#228247}
+.np-backup-toolbar{display:flex;align-items:center;gap:12px;padding:16px 20px;flex-wrap:wrap}
+.np-backup-toolbar label{margin:0;min-width:0}
+.np-backup-toolbar .np-backup-search{flex:1 1 220px}
+.np-backup-toolbar input[type=search],.np-backup-toolbar select{height:40px;width:100%;font-size:14px}
+.np-backup-table{width:100%;table-layout:auto}
+.np-backup-table th:first-child,.np-backup-table td:first-child{width:44px;min-width:44px;text-align:center}
+.np-backup-table .np-backup-check-target{width:28px;height:28px;display:flex;align-items:center;justify-content:center;margin:0 auto}
+.np-backup-table input[type=checkbox]{width:18px;min-width:18px;height:18px;min-height:18px;padding:0;margin:0;accent-color:#2459de;cursor:pointer}
+.np-backup-table td{vertical-align:middle}
+.np-backup-table td[data-label="Recovery point"]{min-width:200px;overflow-wrap:anywhere}
+.np-backup-table td strong,.np-backup-table td small{display:block}
+.np-backup-table td small{color:#52627a;margin-top:4px;font-size:13px}
+.np-backup-table td[data-label="Actions"]{width:210px}
+.np-backup-row-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.np-backup-row-actions .np-icon-button{width:36px;height:36px;flex-shrink:0}
+.np-backup-row-actions .np-backup-remove{color:#bd302d}
+.np-backup-retained{position:relative;max-width:280px;font-size:14px}
+.np-backup-retained summary{cursor:pointer;padding:8px 10px;border:1px solid #ccd5e4;border-radius:6px;list-style:none}
+.np-backup-retained[open]{min-width:200px}
+.np-backup-impact{list-style:none;margin:16px 0;padding:0;max-height:240px;overflow:auto;border:1px solid #dce3ee;border-radius:6px}
+.np-backup-impact li{padding:12px 14px;border-bottom:1px solid #e1e6ee}
+.np-backup-impact li:last-child{border:0}
+.np-backup-impact strong,.np-backup-impact span,.np-backup-impact small{display:block;overflow-wrap:anywhere}
+.np-backup-impact span,.np-backup-impact small{margin-top:4px;color:#52627a;font-size:13px}
+.np-backup-ack{display:flex;align-items:flex-start;gap:10px;font-size:14px;line-height:1.5}
+.np-backup-ack input{margin-top:3px;width:18px;min-width:18px;height:18px;min-height:18px;padding:0;flex-shrink:0;accent-color:#2459de}
+[data-np-backup-progress]{margin:12px 20px}
+.np-backup-manager [hidden]{display:none!important}
+@media(max-width:700px){
+ .np-backup-toolbar{padding:12px;gap:10px}
+ .np-backup-toolbar .np-backup-search{flex-basis:100%}
+ .np-backup-toolbar label:not(.np-backup-search){flex:1}
+ .np-backup-toolbar input[type=search],.np-backup-toolbar select{min-height:44px}
+ .np-backup-table thead{display:none}
+ .np-backup-table tbody{display:block}
+ .np-backup-table tr{display:grid!important;grid-template-columns:44px minmax(0,1fr);gap:6px 10px;padding:14px 12px;border-bottom:1px solid #dce3ee}
+ .np-backup-table td{display:block!important;border:0!important;padding:0!important;min-width:0!important;width:auto!important;text-align:left!important}
+ .np-backup-table td:before{display:none!important}
+ .np-backup-table td:first-child{grid-row:1/5;align-self:start}
+ .np-backup-table td[data-label="Size"],.np-backup-table td[data-label="Status"],.np-backup-table td[data-label="Actions"]{grid-column:2}
+ .np-backup-row-actions{justify-content:flex-start;flex-wrap:wrap;margin-top:6px}
+ .np-backup-manager .np-backup-row-actions .np-icon-button,.np-backup-manager .np-backup-row-actions button,.np-backup-manager .np-backup-retained summary{min-width:44px;min-height:44px}
+ .np-backup-manager .np-panel-title button,.np-backup-manager .np-backup-toolbar button,.np-backup-dialog .np-dialog-foot button,.np-backup-dialog .np-dialog-foot a{min-height:44px}
+ .np-backup-dialog .np-dialog-head>button[data-np-dialog-close]{width:44px;height:44px;min-height:44px}
+ .np-backup-table .np-backup-check-target{width:44px;height:44px}
+ .np-backup-table input[type=checkbox]{width:22px;height:22px;min-height:22px;min-width:22px}
+ .np-backup-preservation{padding:12px;align-items:flex-start}
+}

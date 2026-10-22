@@ -163,10 +163,13 @@ func TestSQLJobRetryStoreRetriesOnlyDiscardedProvisioningJob(t *testing.T) {
 		t.Fatalf("sqlmock.New returned error: %v", err)
 	}
 	defer db.Close()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT kind,COALESCE`).WithArgs(int64(41)).WillReturnRows(sqlmock.NewRows([]string{"kind", "backup_id"}).AddRow("create_site", 0))
 
 	mock.ExpectExec(regexp.QuoteMeta(retryDiscardedProvisioningJobSQL)).
 		WithArgs(int64(41)).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectCommit()
 
 	store := &SQLJobRetryStore{db: db}
 	if err := store.RetryDiscardedProvisioningJob(context.Background(), 41); err != nil {
@@ -183,10 +186,13 @@ func TestSQLJobRetryStoreRejectsUnchangedRows(t *testing.T) {
 		t.Fatalf("sqlmock.New returned error: %v", err)
 	}
 	defer db.Close()
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT kind,COALESCE`).WithArgs(int64(41)).WillReturnRows(sqlmock.NewRows([]string{"kind", "backup_id"}).AddRow("create_site", 0))
 
 	mock.ExpectExec(regexp.QuoteMeta(retryDiscardedProvisioningJobSQL)).
 		WithArgs(int64(41)).
 		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectRollback()
 
 	store := &SQLJobRetryStore{db: db}
 	err = store.RetryDiscardedProvisioningJob(context.Background(), 41)

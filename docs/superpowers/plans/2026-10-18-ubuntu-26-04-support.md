@@ -1,9 +1,19 @@
 # Ubuntu 26.04-Only Support Transition Plan
 
-> **Current authorization, 21 October 2026:** Push the prepared branch and open
-> its PR into main. Run only required CI, including the hosted security gate,
-> fix failures and report before merging or deploying. Keep PHP 8.3/8.4/8.5.
-> Do not dispatch optional hosted qualification or repeat accepted unchanged tests.
+> **Current authorization, 21 October 2026:** Consolidate all branches and PRs
+> into main, then delete merged branches so only main remains. Keep Ubuntu
+> 26.04-only and PHP 8.3/8.4/8.5. Preserve current work and branch history,
+> verify the combined result, and do not deploy or dispatch optional qualification.
+> See the [consolidation record](../../verification/2026-10-21-main-consolidation.md).
+
+**PR #13 required CI: PASS.** [Run 39696504919](https://github.com/Smartqix/nakpanel/actions/runs/39696504919)
+passed unit/generated-code/release policies, full Go tests and vet, static signed
+builds for both architectures, and the hosted AMD64 security/reliability gate
+on proposed merge `72a2cd7e07416258b033c5bf58aa920e35bfead7`. The source branch
+head was `0f54398`. Rollback fault drills, reboot, fresh-host restore, the DR
+second reboot and all three owned guest deletions passed; downloaded evidence
+was independently checked. This result precedes the local Backup Manager
+consolidation, whose validation is separate.
 
 **Phase 4 scheduled-backup/restore slice: PASS on hosted Ubuntu 26.04 AMD64.**
 [Run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
@@ -24,7 +34,8 @@ repair. Full product gates, PHP maintenance and legacy tests were not repeated;
 Phase 3 evidence stays attributed to `63c00f6`. Broader architecture, security
 version advancement and elapsed-soak qualification remain outside this slice.
 See [the result and evidence](2026-10-21-phase4-scheduled-backups.md).
-Changes remain unmerged in `ricky/ubuntu26-recovery-phase3`; nothing was deployed.
+Original implementation and review are recorded in
+[PR #13](https://github.com/Smartqix/nakpanel/pull/13); deployment is not authorized.
 
 **Current status: Phase 3 PASS on hosted Ubuntu 26.04 AMD64.** Full run
 [39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
@@ -35,9 +46,9 @@ send/read flows and owned cleanup passed. The workflow summary and independently
 checked downloaded receipts agree. The run and its observer have ended.
 **Phase 4 backup/restore verification is complete for the requested slice.**
 Implementation/harness source through `1140165` is on
-`ricky/ubuntu26-recovery-phase3` and remains unmerged. The documentation-only
-reconciliation and PR draft were prepared locally. The next authorized step is
-to push and open the PR, then obtain required CI results.
+`ricky/ubuntu26-recovery-phase3` at the original checkpoint. PR #13 was then
+opened and passed required CI. Current repository consolidation supersedes the
+former local-preparation/PR-opening hold.
 
 The two measured recovery errors are fixed. APT rejected `--reinstall` of the
 half-configured FPM package despite all 56 cached archives being present.
@@ -117,8 +128,8 @@ outside the support claim.
 
 The support decision is effective now. Implementation and accepted hosted
 results are recorded above. The primary checkout and attached implementation
-worktree use reconciled documentation, but runtime changes remain unmerged on
-`ricky/ubuntu26-recovery-phase3`. A CI host named `ubuntu-24.04` can build
+worktree use reconciled documentation. PR #13 records the runtime changes, and
+repository consolidation into main is now authorized. A CI host named `ubuntu-24.04` can build
 artifacts or host a verified 26.04 guest without being a supported server OS.
 
 ## Current phases
@@ -187,10 +198,12 @@ after a new user instruction.
    - [x] Reconcile active documentation and prepare the PR title/body locally
      with measured source, dependency and architecture attribution. The draft is
      in [the local PR body](../../pull-requests/ubuntu-26-04-only.body.md).
-   - [ ] Open the authorized PR from `ricky/ubuntu26-recovery-phase3` into main
-     and obtain final-branch required CI results: unit/generated-code checks,
-     the signed release build and the hosted security gate. Fix failures and
-     report before merging or deploying; optional qualification remains off.
+   - [x] Open PR #13 and obtain required CI results. Run `39696504919` passed
+     unit/generated-code checks, the signed release build and hosted security.
+     Report delivered; subsequent authorization permits consolidation into main.
+   - [ ] Complete the [repository consolidation](../../verification/2026-10-21-main-consolidation.md),
+     verify the combined Backup Manager result and retain only main. Optional
+     qualification and deployment remain outside the request.
 
 ## Historical Phase 1 changes — 21 October 2026
 

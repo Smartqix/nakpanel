@@ -11,9 +11,32 @@ on runtime `63c00f6`. Scheduled local backups, exact-archive fresh-host restore,
 all three PHP runtimes, data persistence, reboot and resumed scheduling passed in
 [run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
 on runtime `0654aa3`. These are separate development-signed results with their
-original source bindings. The implementation remains unmerged; other
-architectures, destinations and remaining release qualification are listed in
+original source bindings. The implementation is recorded in
+[PR #13](https://github.com/Smartqix/nakpanel/pull/13); other architectures,
+destinations and remaining release qualification are listed in
 the [transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
+
+## Website Backup Manager
+
+Open a subscription's **Backups** tab to create, download, restore, or remove
+website recovery points, including backups retained after website removal.
+Removal requires selecting the exact recovery points, reviewing their domain,
+date and total size, and explicitly acknowledging permanent deletion.
+Preview and Cancel never change a backup.
+
+Website backup count and storage allowances apply to the entire subscription.
+Queued or failed archive deletion continues to consume storage until the archive
+is removed successfully. Existing recovery points are not automatically purged
+to satisfy a count limit or retention age. The plan's retention age is advisory;
+operators must review and confirm website backup removal. Server disaster-recovery
+backup destinations retain their separately configured retention policy.
+
+If removal fails, review its error and confirm a fresh removal request. Legacy
+unconfirmed deletion jobs are canceled. Maintenance recovers orphaned removal
+states to **Removal failed** without deleting their archives. A backup in use by
+an active restore, backup creation, or website-removal operation cannot be removed.
+WordPress-linked safety backups remain protected while operation history
+references them, including completed operations.
 
 ## Individual Website Removal
 

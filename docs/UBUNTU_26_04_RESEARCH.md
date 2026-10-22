@@ -5,17 +5,19 @@ Research began on 18 October 2026. The current decision was approved on
 PHP 8.3/8.4/8.5 remains required. This supersedes the former dual-OS proposal,
 Noble-preservation requirements and cross-OS migration milestone.
 
-Code/default/workflow alignment is implemented on the unmerged
-`ricky/ubuntu26-recovery-phase3` branch. Hosted AMD64 Phase 3 recovery and PHP
+Code/default/workflow alignment is implemented in
+[PR #13](https://github.com/Smartqix/nakpanel/pull/13). Hosted AMD64 Phase 3 recovery and PHP
 maintenance passed in run `39652821843` on `63c00f6`; the Phase 4 scheduled
 local-backup/restore slice passed in run `39676085171` on `0654aa3`. The later
 verifier diagnostics fix `1140165` has focused local evidence and changes no
 served runtime. [AGENTS.md](../AGENTS.md) is project policy; the
 [transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md) records
-the source bindings and remaining release requirements. Current authorization
-permits pushing the prepared branch, opening its PR into main and running only
-required CI, including the hosted security gate. Report before merging or
-deploying; do not dispatch optional hosted qualification.
+the source bindings and remaining release requirements. PR #13 required CI
+passed in run `39696504919`. Current authorization permits consolidation of all
+branches and PRs into main, then deletion of merged branches. The combined
+result has separate verification in the
+[consolidation record](verification/2026-10-21-main-consolidation.md).
+No deployment or optional hosted qualification is authorized.
 Ubuntu 26.04 remains experimental.
 
 ## Decision and rationale
@@ -139,8 +141,9 @@ fresh webmail flows on `63c00f6`;
 [Phase 4 run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
 passed actual scheduled local backups, exact-archive fresh-host restore, all
 three PHP runtimes/data before and after reboot, resumed scheduling and cleanup
-on `0654aa3`. Final-branch CI, ARM64 qualification, a genuine PHP security-version
-advance and 30–60 day endurance remain separate. Static Go cross-builds and
+on `0654aa3`. PR #13 required CI passed separately in run `39696504919`.
+ARM64 qualification, a genuine PHP security-version advance and 30–60 day
+endurance remain separate. Static Go cross-builds and
 package availability do not establish those remaining claims.
 
 ## Phased rollout and completion

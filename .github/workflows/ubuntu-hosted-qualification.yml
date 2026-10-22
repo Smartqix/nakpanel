@@ -1,8 +1,6 @@
 name: Hosted Ubuntu AMD64 qualification
 
 on:
-  push:
-    branches: [codex/ubuntu-26-support]
   workflow_dispatch:
     inputs:
       scheduled_backups_only:

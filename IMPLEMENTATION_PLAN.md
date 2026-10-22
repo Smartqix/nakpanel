@@ -16,9 +16,10 @@ requested platform support and security requirements.
 
 The authoritative Ubuntu 26.04-only transition checklist is in the
 [support plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md#current-phases).
-The current authorization is to **push the prepared branch, open its PR into
-main and run required CI, including the hosted security gate**. Fix any failures
-and report before merging or deploying. Do not dispatch optional hosted tests.
+The current authorization is to **consolidate all branches and PRs into main,
+then delete the merged branches so only main remains**. Preserve current code
+and history, verify the combined result, and do not deploy. See the
+[consolidation record](docs/verification/2026-10-21-main-consolidation.md).
 The previous Phase 4 scheduled-backup/restore slice passed in
 [run 39676085171](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
 on freshly signed runtime `0654aa39eee180935f8dbed3cc3b1458e156ba1d`. Actual
@@ -35,8 +36,9 @@ PHP maintenance and legacy tests were not repeated. Phase 3 remains attributed
 to its tested source; broader architecture, security-version and elapsed-soak
 qualification are separate. Results are recorded in the
 [scoped report](docs/superpowers/plans/2026-10-21-phase4-scheduled-backups.md).
-Runtime changes remain unmerged in `ricky/ubuntu26-recovery-phase3`; nothing
-was deployed. Report before any merge or deployment.
+The Ubuntu implementation and its passing required CI are recorded in
+[PR #13](https://github.com/Smartqix/nakpanel/pull/13). The current consolidation
+also includes the local Backup Manager commits. No deployment is authorized.
 
 **Phase 3 is complete for hosted Ubuntu 26.04 AMD64.** Full run
 [39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)

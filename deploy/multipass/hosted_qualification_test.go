@@ -25,13 +25,8 @@ func TestHostedQualificationRequiresActualNativeGatesAndPinnedBaseline(t *testin
 	if _, ok := workflow.On["pull_request"]; ok {
 		t.Fatal("hosted qualification must not run implicitly for pull requests")
 	}
-	push, ok := workflow.On["push"].(map[string]any)
-	if !ok {
-		t.Fatal("dedicated review branch push trigger missing")
-	}
-	branches, ok := push["branches"].([]any)
-	if !ok || len(branches) != 1 || branches[0] != "codex/ubuntu-26-support" {
-		t.Fatal("push trigger must be limited to isolated review branch")
+	if _, ok := workflow.On["push"]; ok {
+		t.Fatal("optional hosted qualification must not run on a push or branch deletion")
 	}
 	job, ok := workflow.Jobs["qualify-amd64"]
 	if !ok {

@@ -1,0 +1,136 @@
+package web
+
+import (
+	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/types"
+)
+
+templ BackupRemovalContent(view WorkspaceView, model BackupRemovalView) {
+	<header class="np-dialog-head"><div><span class="np-eyebrow">Backup Manager</span><h2 id="np-backup-removal-title">Remove selected backups?</h2><p>Only the selected recovery points will be permanently removed.</p></div><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close confirmation">@icon("x")</button></header>
+	<form method="post" action={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(model.Preview.SubscriptionID)+"/backups/remove")) } data-np-backup-remove-form>
+		@csrfInput(view)
+		<input type="hidden" name="approval" value={ model.Approval }/>
+		<div class="np-dialog-body">
+			<p><strong>{ backupCountLabel(len(model.Preview.Items)) } · { formatBytes(model.Preview.SizeBytes) }</strong></p>
+			<ul class="np-backup-impact">
+				for _,item:=range model.Preview.Items {
+					<li><input type="hidden" name="backup_id" value={ formatJobID(item.ID) }/><div><strong>{ item.Domain }</strong><span>{ formatStampLabel(item.CreatedAt) } · { formatBytes(item.SizeBytes) }</span>
+						if item.Retained {
+							<small>Retained after website removal</small>
+						}
+					</div></li>
+				}
+			</ul>
+			<p class="np-gate is-blocked">This cannot be undone. Live websites, databases and other backups are not changed.</p>
+			<label class="np-backup-ack"><input type="checkbox" name="acknowledge_permanent" value="true" required/><span>I understand that these selected backups will be permanently deleted.</span></label>
+			<p class="np-error" role="alert" data-np-backup-error hidden></p>
+		</div>
+		<footer class="np-dialog-foot"><a class="np-secondary-button" href={ subscriptionTabPath(view,model.Preview.SubscriptionID,"backups") } data-np-backup-cancel autofocus>Cancel</a><button type="submit" class="np-danger-button">@icon("trash")<span>Remove { backupCountLabel(len(model.Preview.Items)) }</span></button></footer>
+	</form>
+}
+
+templ backupManagerPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
+	{{ backups:=subscriptionBackupsForID(data.Phase6.Backups,subscription.ID) }}
+	{{ sites:=sitesForSubscription(data.Sites,subscription.ID) }}
+	<section class="np-panel np-backup-manager" data-np-backup-manager data-np-backup-subscription={ formatJobID(subscription.ID) }>
+		<div class="np-panel-title"><div><h2>Backup Manager</h2><span class="np-muted">{ backupCountLabel(subscription.BackupsUsed) } · { formatBytes(subscription.BackupBytesUsed) } stored</span></div><button class="np-primary-link" type="button" data-np-dialog-open="np-backup-create-dialog">@icon("plus")<span>Back Up Now</span></button></div>
+		<p class="np-backup-compliance"><span>Compliance:</span>
+			@compliancePill(subscription)
+		</p>
+		<p class="np-backup-preservation">@icon("shield-check")<span>Existing recovery points are kept until you select and confirm removal.</span></p>
+		if subscription.MaxBackups>=0 && subscription.BackupsUsed>subscription.MaxBackups {
+			<p class="np-gate is-blocked">This subscription holds more than its plan allows: backups { formatPlanLimit(subscription.BackupsUsed) } against a limit of { formatPlanLimit(subscription.MaxBackups) }. No existing backup will be removed automatically.</p>
+		}
+		<p class="np-gate" role="status" aria-live="polite" data-np-backup-progress hidden></p>
+		<noscript>
+			<details class="np-backup-native-create"><summary>Back Up Now</summary>
+				<form method="post" action="/backups">@csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><input type="hidden" name="return_to" value="subscription-backups"/><label>Website<select name="domain" required><option value="">Select a website</option>
+					for _,site:=range sites {
+						if site.Status=="active" {
+						<option value={ site.Domain }>{ site.Domain }</option>
+						}
+					}
+				</select></label><button type="submit" class="np-primary-link">Create backup</button></form>
+			</details>
+		</noscript>
+		<form id="np-backup-selection" method="get" action={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(subscription.ID)+"/backups/remove")) } data-np-backup-selection>
+			<div class="np-backup-toolbar"><label class="np-backup-search"><span class="np-sr-only">Search backups</span><input type="search" placeholder="Search backups" data-np-backup-search/></label><label><span class="np-sr-only">Filter backup domain</span><select aria-label="Filter backup domain" data-np-backup-domain><option value="">All domains</option>
+				for _,domain:=range backupDomains(backups) {
+					<option value={ domain }>{ domain }</option>
+				}
+			</select></label><button type="submit" class="np-secondary-button" data-np-backup-remove-selected>@icon("trash")<span>Remove selected</span></button><span class="np-muted" data-np-backup-selection-count>0 selected</span></div>
+		</form>
+		if len(backups)==0 {
+			<div class="np-empty-block"><span class="np-empty-icon">@icon("archive")</span><strong>No backups yet</strong><p>Create a recovery point before making changes to a website.</p></div>
+		} else {
+			<div class="np-table-wrap"><table class="np-table np-backup-table"><thead><tr><th><label class="np-backup-check-target"><input type="checkbox" aria-label="Select visible backups" data-np-backup-select-all/></label></th><th>Recovery point</th><th>Size</th><th>Status</th><th><span class="np-sr-only">Actions</span></th></tr></thead><tbody>
+				for _,item:=range backups {
+					<tr data-np-backup-row data-backup-domain={ item.TargetName } data-backup-status={ item.Status } data-backup-id={ formatJobID(item.ID) }>
+						<td data-label="Select"><label class="np-backup-check-target"><input type="checkbox" name="backup_id" value={ formatJobID(item.ID) } form="np-backup-selection" aria-label={ "Select backup for "+item.TargetName+" from "+formatStampLabel(item.CreatedAt) } data-np-backup-check disabled?={ !backupRemovable(item.Status) }/></label></td>
+						<td data-label="Recovery point"><strong>{ item.TargetName }</strong><small>{ formatStampLabel(item.CreatedAt) }</small>
+							if item.SiteID==0 {
+								<span class="np-plan-pill">Retained backup</span>
+							}
+						</td>
+						<td data-label="Size">{ formatBytes(item.SizeBytes) }</td>
+						<td data-label="Status">@statusPill(backupStatusLabel(item.Status))
+							if item.LastError!="" {
+								<details><summary>View error</summary><p class="np-form-help">{ item.LastError }</p></details>
+							}
+						</td>
+						<td data-label="Actions"><div class="np-backup-row-actions">
+							if canRestoreBackup(item) {
+								<a class="np-icon-button" href={ templ.SafeURL(workspacePath(view,"/backups/"+formatJobID(item.ID)+"/download")) } title="Download backup" aria-label="Download backup">@icon("download")</a>
+								@backupRestoreAction(item,data.Sites,view)
+							}
+							if backupRemovable(item.Status) {
+								<a class="np-icon-button np-backup-remove" href={ templ.SafeURL(workspacePath(view,"/subscriptions/"+formatJobID(subscription.ID)+"/backups/remove?backup_id="+formatJobID(item.ID))) } data-np-backup-remove title="Remove backup" aria-label="Remove backup">@icon("trash")</a>
+							}
+						</div></td>
+					</tr>
+				}
+			</tbody></table></div><p class="np-empty" data-np-backup-no-results hidden>No backups match these filters.</p>
+		}
+		if view.BackupPage>0 || view.BackupHasMore {
+			<nav class="np-backup-toolbar" aria-label="Backup pages"><span>Page { formatPlanLimit(view.BackupPage+1) } · up to 50 recovery points per page</span>
+				if view.BackupPage>0 {
+					<a class="np-secondary-button" href={ templ.SafeURL(string(subscriptionTabPath(view,subscription.ID,"backups"))+"&backup_page="+formatPlanLimit(view.BackupPage-1)) }>Newer backups</a>
+				}
+				if view.BackupHasMore {
+					<a class="np-secondary-button" href={ templ.SafeURL(string(subscriptionTabPath(view,subscription.ID,"backups"))+"&backup_page="+formatPlanLimit(view.BackupPage+1)) }>Older backups</a>
+				}
+			</nav>
+		}
+		for _,run:=range backupRestores(data.Phase6.Restores,backups) {
+			<div class="np-backup-restore-state" data-backup-status={ run.Status }><strong>Restore · { run.TargetName }</strong><span>{ formatStampLabel(run.CreatedAt) }</span>@statusPill(run.Status)
+				if run.LastError!="" {
+					<p class="np-error">{ run.LastError }</p>
+				}
+			</div>
+		}
+	</section>
+	<dialog class="np-dialog np-backup-dialog" id="np-backup-create-dialog" aria-labelledby="np-backup-create-title" data-np-dialog>
+		<header class="np-dialog-head"><div><h2 id="np-backup-create-title">Back Up Now</h2><p>Capture one website and its linked databases.</p></div><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close backup creation">@icon("x")</button></header>
+		<form method="post" action="/backups" data-np-backup-create-form>@csrfInput(view)<input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><input type="hidden" name="return_to" value="subscription-backups"/><div class="np-dialog-body"><label>Website<select name="domain" required><option value="">Select a website</option>
+			for _,site:=range sites {
+				if site.Status=="active" {
+					<option value={ site.Domain }>{ site.Domain }</option>
+				}
+			}
+		</select></label><p class="np-form-help">Your plan's backup and storage limits apply. Existing backups are never replaced automatically.</p><p class="np-error" role="alert" data-np-backup-error hidden></p></div><footer class="np-dialog-foot"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit" class="np-primary-link">Create backup</button></footer></form>
+	</dialog>
+}
+
+templ backupRestoreAction(backup dashboard.Backup,sites []dashboard.Site,view WorkspaceView) {
+	if backup.SiteID>0 {
+		<form method="post" action="/restores" class="np-inline-form" data-np-backup-restore-form>@csrfInput(view)<input type="hidden" name="backup_id" value={ formatJobID(backup.ID) }/><input type="hidden" name="subscription_id" value={ formatJobID(backup.SubscriptionID) }/><input type="hidden" name="return_to" value="subscription-backups"/><button type="submit" class="np-secondary-button" data-np-confirm={ restoreConfirmation(backup) }>Restore</button></form>
+	} else {
+		<details class="np-backup-retained"><summary>Restore</summary><p class="np-form-help">The original website was removed. This recovery point is preserved.</p>
+			if target,ok:=retainedBackupTarget(backup,sites);ok {
+				<form method="post" action="/restores" data-np-backup-restore-form>@csrfInput(view)<input type="hidden" name="backup_id" value={ formatJobID(backup.ID) }/><input type="hidden" name="subscription_id" value={ formatJobID(backup.SubscriptionID) }/><input type="hidden" name="return_to" value="subscription-backups"/><input type="hidden" name="target_site_id" value={ formatJobID(target.ID) }/><button type="submit" class="np-secondary-button" data-np-confirm={ "Restore to "+target.Domain+"? Current website files and covered databases will be replaced." }>Restore to { target.Domain }</button></form>
+			} else {
+				<p class="np-form-help">Recreate { backup.TargetName } in this subscription before restoring.</p>
+			}
+		</details>
+	}
+}

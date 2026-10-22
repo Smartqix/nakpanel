@@ -122,7 +122,7 @@ func (w *CollectUsageWorker) collectSubscription(ctx context.Context, subscripti
 		trafficDelta += site.TrafficBytes
 	}
 	var backupBytes int64
-	if err := w.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(size_bytes),0)::bigint FROM backups WHERE subscription_id=$1 AND status='active'`, subscriptionID).Scan(&backupBytes); err != nil {
+	if err := w.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(size_bytes),0)::bigint FROM backups WHERE subscription_id=$1`, subscriptionID).Scan(&backupBytes); err != nil {
 		return err
 	}
 	tx, err := w.db.BeginTx(ctx, nil)

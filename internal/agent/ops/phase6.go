@@ -153,7 +153,15 @@ func (p *BackupProvisioner) CreateBackup(ctx context.Context, req types.CreateBa
 	}
 
 	timestamp := p.now().UTC().Format("20060102T150405Z")
-	baseName := normalized.Domain + "-" + timestamp + ".tar.gz"
+	var nonce [16]byte
+	if _, err = rand.Read(nonce[:]); err != nil {
+		return types.CreateBackupResult{}, fmt.Errorf("generate backup identity: %w", err)
+	}
+	prefix := normalized.Domain
+	if len(prefix) > 180 {
+		prefix = prefix[:180]
+	}
+	baseName := prefix + "-" + timestamp + "-" + hex.EncodeToString(nonce[:]) + ".tar.gz"
 	archivePath := filepath.Join(normalized.OutputDir, baseName)
 	tmp, err := os.CreateTemp(normalized.OutputDir, ".nakpanel-backup-*.tar.gz")
 	if err != nil {
@@ -193,10 +201,13 @@ func (p *BackupProvisioner) CreateBackup(ctx context.Context, req types.CreateBa
 	if err := tmp.Close(); err != nil {
 		return types.CreateBackupResult{}, fmt.Errorf("close backup archive: %w", err)
 	}
-	if err := os.Rename(tmpName, archivePath); err != nil {
+	// Publish without replacing an existing recovery point, even on collision.
+	if err := os.Link(tmpName, archivePath); err != nil {
 		return types.CreateBackupResult{}, fmt.Errorf("publish backup archive: %w", err)
 	}
-	cleanup = false
+	if err := os.Remove(tmpName); err == nil {
+		cleanup = false
+	}
 	if err := syncDir(normalized.OutputDir); err != nil {
 		return types.CreateBackupResult{}, fmt.Errorf("sync backup directory: %w", err)
 	}

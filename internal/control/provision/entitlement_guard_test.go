@@ -145,7 +145,7 @@ func TestSiteIntentGuardRejectsAnotherSubscriptionsParentDomain(t *testing.T) {
 	}
 }
 
-func TestBackupIntentGuardAllowsOneReplacementAtLimit(t *testing.T) {
+func TestBackupIntentGuardPreservesExistingBackupsAtSubscriptionLimit(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
@@ -158,11 +158,10 @@ func TestBackupIntentGuardAllowsOneReplacementAtLimit(t *testing.T) {
 	}
 	expectMutableSubscription(mock, 7)
 	mock.ExpectQuery(`SELECT e.max_sites`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"max_sites", "max_subdomains", "max_databases", "max_backups", "backup_storage_mb", "overuse_policy", "hosting_enabled", "allow_backups"}).AddRow(2, 2, 2, 2, 128, "block", true, true))
-	mock.ExpectQuery(`SELECT COUNT\(b.id\)`).WithArgs(int64(7), "owned.test").WillReturnRows(sqlmock.NewRows([]string{"used", "active_jobs"}).AddRow(2, 0))
-	mock.ExpectQuery(`SELECT COALESCE\(SUM\(size_bytes\)`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"used"}).AddRow(int64(1024)))
+	mock.ExpectQuery(`SELECT COUNT\(\*\)::int FROM backups WHERE subscription_id`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"used"}).AddRow(2))
 	mock.ExpectRollback()
-	if err = guardBackupIntentTx(context.Background(), tx, 7, "owned.test"); err != nil {
-		t.Fatalf("guardBackupIntentTx error=%v, want bounded replacement", err)
+	if err = guardBackupIntentTx(context.Background(), tx, 7, "owned.test"); !errors.Is(err, controlquota.ErrExceeded) {
+		t.Fatalf("guardBackupIntentTx error=%v, want subscription count limit", err)
 	}
 	_ = tx.Rollback()
 	if err = mock.ExpectationsWereMet(); err != nil {
@@ -183,7 +182,7 @@ func TestBackupIntentGuardBlocksReplacementWhileRetryIsActive(t *testing.T) {
 	}
 	expectMutableSubscription(mock, 7)
 	mock.ExpectQuery(`SELECT e.max_sites`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"max_sites", "max_subdomains", "max_databases", "max_backups", "backup_storage_mb", "overuse_policy", "hosting_enabled", "allow_backups"}).AddRow(2, 2, 2, 2, 128, "block", true, true))
-	mock.ExpectQuery(`SELECT COUNT\(b.id\)`).WithArgs(int64(7), "owned.test").WillReturnRows(sqlmock.NewRows([]string{"used", "active_jobs"}).AddRow(2, 1))
+	mock.ExpectQuery(`SELECT COUNT\(\*\)::int FROM backups WHERE subscription_id`).WithArgs(int64(7)).WillReturnRows(sqlmock.NewRows([]string{"used"}).AddRow(2))
 	mock.ExpectRollback()
 	err = guardBackupIntentTx(context.Background(), tx, 7, "owned.test")
 	if !errors.Is(err, controlquota.ErrExceeded) {

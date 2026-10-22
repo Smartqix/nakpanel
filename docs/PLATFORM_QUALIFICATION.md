@@ -3,8 +3,8 @@
 Ubuntu 26.04 LTS/resolute is the only supported server OS. The product contract
 uses the signed Surý provider with hosting PHP 8.3/8.4/8.5 and internal PHP 8.5.
 The explicit native 8.5-only configuration is diagnostic, not full product
-acceptance. Code/default/workflow alignment is implemented on the unmerged
-`ricky/ubuntu26-recovery-phase3` branch. Hosted AMD64 operational recovery,
+acceptance. Code/default/workflow alignment is implemented in
+[PR #13](https://github.com/Smartqix/nakpanel/pull/13). Hosted AMD64 operational recovery,
 all 16 current-version gates and same-version PHP maintenance passed in
 [run 39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
 on runtime `63c00f6`. The focused scheduled local-backup/restore and reboot slice
@@ -13,11 +13,14 @@ on runtime `0654aa3`. The later `1140165` verifier diagnostics fix is locally
 verified and changes no served runtime.
 
 Ubuntu 26.04 remains experimental pending remaining release qualification.
-Final-branch CI, ARM64 qualification, genuine PHP security-version advancement
-and elapsed-soak evidence remain separate. Current authorization permits pushing
-the prepared branch, opening its PR into main and running required CI, including
-hosted security guests. Fix failures and report results before merging or
-deploying; optional hosted qualification is not authorized.
+PR #13 required CI passed in
+[run 39696504919](https://github.com/Smartqix/nakpanel/actions/runs/39696504919).
+ARM64 qualification, genuine PHP security-version advancement and elapsed-soak
+evidence remain separate. Current authorization is repository consolidation into
+main and deletion of merged branches. The combined Backup Manager and Ubuntu
+result has its own verification requirement; see the
+[consolidation record](verification/2026-10-21-main-consolidation.md).
+Do not deploy or dispatch optional hosted qualification.
 
 ## Guest and runner requirements
 

@@ -127,19 +127,17 @@ func guardBackupIntentTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, 
 		if limits.MaxBackups == 0 {
 			return fmt.Errorf("%w: backups 0 / 0", controlquota.ErrExceeded)
 		}
-		var used, activeJobs int
-		if err := tx.QueryRowContext(ctx, `SELECT COUNT(b.id) FILTER (WHERE b.status<>'failed')::int,
-(SELECT COUNT(*)::int FROM river_job job WHERE job.kind='create_backup' AND job.state IN ('available','retryable','running','scheduled') AND job.args->>'site_id'=site.id::text)
-FROM sites site LEFT JOIN backups b ON b.site_id=site.id AND b.subscription_id=$1 WHERE site.domain=$2 GROUP BY site.id`, subscriptionID, domain).Scan(&used, &activeJobs); err != nil {
+		var used int
+		if err := tx.QueryRowContext(ctx, `SELECT COUNT(*)::int FROM backups WHERE subscription_id=$1 AND status<>'failed'`, subscriptionID).Scan(&used); err != nil {
 			return err
 		}
-		if used > limits.MaxBackups || (used >= limits.MaxBackups && activeJobs > 0) {
+		if used >= limits.MaxBackups {
 			return fmt.Errorf("%w: backups %d / %d", controlquota.ErrExceeded, used, limits.MaxBackups)
 		}
 	}
 	if limits.BackupStorageMB >= 0 {
 		var used int64
-		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(size_bytes),0)::bigint FROM backups WHERE subscription_id=$1 AND status='active'`, subscriptionID).Scan(&used); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(size_bytes),0)::bigint FROM backups WHERE subscription_id=$1`, subscriptionID).Scan(&used); err != nil {
 			return err
 		}
 		allowed := int64(limits.BackupStorageMB) * 1024 * 1024
@@ -148,6 +146,11 @@ FROM sites site LEFT JOIN backups b ON b.site_id=site.id AND b.subscription_id=$
 		}
 	}
 	return nil
+}
+
+// GuardScheduledBackupTx shares the locked manual backup gate with the scheduler.
+func GuardScheduledBackupTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, domain string) error {
+	return guardBackupIntentTx(ctx, tx, subscriptionID, domain)
 }
 
 func enforceCountLimitTx(ctx context.Context, tx *sql.Tx, table string, subscriptionID int64, allowed int, policy types.PlanOverusePolicy) error {
