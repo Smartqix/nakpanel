@@ -163,3 +163,10 @@ ensure_vm(){ echo VM_WORK; exit 91; }
 		})
 	}
 }
+
+func TestSubdomainMailProtocolCanaries(t *testing.T) {
+	out, err := exec.Command("python3", "-m", "unittest", "discover", "-s", ".", "-p", "subdomain_mail_protocol_test.py").CombinedOutput()
+	if err != nil {
+		t.Fatalf("subdomain mail preservation protocol: %v %s", err, out)
+	}
+}
