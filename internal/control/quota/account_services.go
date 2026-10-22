@@ -519,8 +519,29 @@ func (s *SQLStore) UpsertMailDomain(ctx context.Context, subscriptionID, actorID
 		} else if err := ensureSiteBelongsTx(ctx, tx, subscriptionID, input.SiteID); err != nil {
 			return 0, err
 		}
+		// A repeated enable uses the same mail identity. An explicit edit may
+		// change settings, but must never move mailboxes to another hosted site.
+		var existingID int64
+		var existingSite sql.NullInt64
+		var existingDomain string
+		err := tx.QueryRowContext(ctx, `SELECT id,site_id,domain FROM mail_domains
+WHERE subscription_id=$1 AND (($2::bigint=0 AND domain=$3) OR id=$2)
+FOR UPDATE`, subscriptionID, input.ID, input.Domain).Scan(&existingID, &existingSite, &existingDomain)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			if input.ID != 0 {
+				return 0, errors.New("mail domain does not belong to the hosted site")
+			}
+		} else {
+			if existingSite.Int64 != input.SiteID || existingDomain != input.Domain {
+				return 0, errors.New("mail domain does not belong to the hosted site")
+			}
+			input.ID = existingID
+		}
 		var id int64
-		err := tx.QueryRowContext(ctx, `INSERT INTO mail_domains(id,subscription_id,site_id,domain,enabled,dkim_enabled,dmarc_policy,catch_all)
+		err = tx.QueryRowContext(ctx, `INSERT INTO mail_domains(id,subscription_id,site_id,domain,enabled,dkim_enabled,dmarc_policy,catch_all)
 VALUES(CASE WHEN $1=0 THEN nextval('mail_domains_id_seq') ELSE $1 END,$2,NULLIF($3,0),$4,$5,$6,$7,$8)
 ON CONFLICT(id) DO UPDATE SET site_id=EXCLUDED.site_id,domain=EXCLUDED.domain,enabled=EXCLUDED.enabled,dkim_enabled=EXCLUDED.dkim_enabled,dmarc_policy=EXCLUDED.dmarc_policy,catch_all=EXCLUDED.catch_all,delete_requested=false,convergence_status='pending',last_error='',updated_at=now()
 WHERE mail_domains.subscription_id=EXCLUDED.subscription_id RETURNING id`, input.ID, subscriptionID, input.SiteID, input.Domain, input.Enabled, input.DKIM, input.DMARCPolicy, strings.TrimSpace(input.CatchAll)).Scan(&id)
