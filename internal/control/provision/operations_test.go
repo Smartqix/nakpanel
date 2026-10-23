@@ -7,6 +7,8 @@ import (
 	"errors"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/operations"
+	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/control/workspace"
 	"github.com/nakroteck/nakpanel/internal/testutil/operationsdb"
 	"github.com/nakroteck/nakpanel/internal/testutil/removaldb"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -278,5 +280,63 @@ func TestOperationsCorrelatesDomainFailureNoticeWithoutDuplicateInboxEntry(t *te
 	p, err := m.Page(ctx, actor, "inbox", operations.Filter{})
 	if err != nil || len(p.Notifications) != 1 || p.Notifications[0].IssueID == 0 || p.Notifications[0].OperationID == 0 {
 		t.Fatalf("duplicate or unlinked source notice: %#v %v", p, err)
+	}
+}
+
+func TestAdministratorBackupUsesCurrentSiteOwnerAndRuns(t *testing.T) {
+	for _, staleOwner := range []bool{false, true} {
+		name := "current-owner"
+		if staleOwner {
+			name = "stale-owner-rejected"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			db, op, _, _, siteID := operationsFixture(t)
+			if _, err := db.Exec(`INSERT INTO users(id,email,password_hash,role) VALUES(9001,'other-admin@example.test','unused','admin')`); err != nil {
+				t.Fatal(err)
+			}
+			actor := auth.SessionUser{ID: 9001, Role: auth.RoleAdmin}
+			manager := NewManager(nil, WithPhase6Repository(NewSQLPhase6Repository(db, op.queue)), WithQuotaStore(controlquota.NewSQLStore(db)), WithAccessPolicy(workspace.NewStore(db)))
+			backupID, err := manager.CreateBackupForSubscription(ctx, actor, 1, types.CreateBackupReq{Domain: "studio.example"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var owner, siteOwner int64
+			if err = db.QueryRow(`SELECT b.owner_user_id,s.owner_user_id FROM backups b JOIN sites s ON s.id=b.site_id WHERE b.id=$1`, backupID).Scan(&owner, &siteOwner); err != nil {
+				t.Fatal(err)
+			}
+			if owner != siteOwner || owner == actor.ID {
+				t.Fatalf("backup owner=%d site owner=%d acting administrator=%d", owner, siteOwner, actor.ID)
+			}
+			var raw []byte
+			if err = db.QueryRow(`SELECT args FROM river_job WHERE kind='create_backup' AND args->>'backup_id'=$1::bigint::text`, backupID).Scan(&raw); err != nil {
+				t.Fatal(err)
+			}
+			var args CreateBackupArgs
+			if err = json.Unmarshal(raw, &args); err != nil {
+				t.Fatal(err)
+			}
+			agent := &capturedBackupAgent{}
+			worker := NewCreateBackupWorker(agent, NewSQLPhase6StatusStore(db))
+			if staleOwner {
+				if _, err = db.Exec(`UPDATE backups SET owner_user_id=$2 WHERE id=$1`, backupID, actor.ID); err != nil {
+					t.Fatal(err)
+				}
+				if err = worker.Work(ctx, &river.Job[CreateBackupArgs]{Args: args}); err == nil || agent.calls != 0 {
+					t.Fatalf("stale ownership reached the agent: err=%v calls=%d", err, agent.calls)
+				}
+				return
+			}
+			if err = worker.Work(ctx, &river.Job[CreateBackupArgs]{Args: args}); err != nil {
+				t.Fatal(err)
+			}
+			var state string
+			if err = db.QueryRow(`SELECT status FROM backups WHERE id=$1`, backupID).Scan(&state); err != nil {
+				t.Fatal(err)
+			}
+			if state != "active" || agent.calls != 1 || agent.req.SiteID != siteID {
+				t.Fatalf("state=%s calls=%d request=%+v", state, agent.calls, agent.req)
+			}
+		})
 	}
 }

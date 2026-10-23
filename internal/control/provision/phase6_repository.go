@@ -419,12 +419,14 @@ func (r *SQLPhase6Repository) CreateBackup(ctx context.Context, ownerID int64, r
 	}
 	var backupID int64
 	if req.SubscriptionID > 0 {
+		// The caller may be an administrator acting for another customer.
+		// Resource ownership comes from the site locked above, never the actor.
 		err = tx.QueryRowContext(ctx, `INSERT INTO backups (owner_user_id, customer_id, site_id, subscription_id, target_kind, target_name, status)
-SELECT $1, s.customer_id, $2, s.id, 'site', $3, 'pending'
-FROM subscriptions s
-WHERE s.id = $4
+SELECT site.owner_user_id, s.customer_id, site.id, s.id, 'site', site.domain, 'pending'
+FROM subscriptions s JOIN sites site ON site.subscription_id = s.id
+WHERE s.id = $1 AND site.id = $2
   AND s.status = 'active'
-RETURNING id`, ownerID, site.id, site.domain, req.SubscriptionID).Scan(&backupID)
+RETURNING id`, req.SubscriptionID, site.id).Scan(&backupID)
 	} else {
 		err = tx.QueryRowContext(ctx, `INSERT INTO backups (owner_user_id, customer_id, site_id, subscription_id, target_kind, target_name, status)
 VALUES ($1, (SELECT customer_id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1), $2, (SELECT id FROM subscriptions WHERE customer_user_id = $1 AND status = 'active' LIMIT 1), 'site', $3, 'pending')
