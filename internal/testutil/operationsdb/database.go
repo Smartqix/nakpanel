@@ -17,6 +17,9 @@ func New(t *testing.T) *sql.DB {
 	t.Helper()
 	dsn := os.Getenv("NAKPANEL_OPERATIONS_TEST_DSN")
 	if dsn == "" {
+		if os.Getenv("GITHUB_ACTIONS") == "true" {
+			t.Fatal("CI requires NAKPANEL_OPERATIONS_TEST_DSN for current Operations regression tests")
+		}
 		t.Skip("requires dedicated local operations test database")
 	}
 	c, err := pgx.ParseConfig(dsn)
