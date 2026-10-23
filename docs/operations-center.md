@@ -4,13 +4,22 @@ Activity provides Issues, Tasks, History and a personal Notifications inbox.
 Every request uses current ownership and role; support and subscription views
 keep their resource scope. Reading is personal. Acknowledgement records that
 someone is looking; it never resolves an issue. Original failed attempts remain
-in history after a retry or verified recovery.
+in history after a retry or verified recovery. Global task results show manual
+completions, cancellations, failures and verified recovery, including results
+received after a hidden tab reconnects. Routine successful reconciliation stays
+quiet. Navigation retains the consumed cursor within the current user/resource
+scope; changing scope clears the old result surface.
+
+Use Mark read for personal inbox receipts. Opening an issue currently leaves its
+notification unread; it never acknowledges or resolves that issue.
 
 The first automatic recovery action is backup retry. Its preflight checks current
 ownership, permissions, quota, conflicting work, agent reachability, Ubuntu 26.04
 and a minimum free-space reserve. It does not promise the backup will fit or that
 the destination is writable. The worker reloads current intent before execution.
-Other problems link to their resource settings. Restores have no generic retry.
+For other problems, open the existing resource settings through Websites or
+Subscriptions; direct settings links in issue details are a remaining UX item.
+Restores have no generic retry.
 
 Scheduled observation checks certificates within 14 days of expiry and overdue
 backup protection, with UTC schedule evaluation and 30 minutes of grace. A
@@ -66,3 +75,20 @@ for visual checks; it never contacts an agent or sends external mail.
 
 Hosted Ubuntu 26.04 acceptance, external mail, a PR, merge and deployment require
 separate authorization. Local results do not establish hosted acceptance.
+
+## Local browser acceptance
+
+The opt-in `TestOperationsBrowserPreview` fixture uses fictional data and does
+not access PostgreSQL, the agent or external recipients. Run the browser check
+with `NP_OPERATIONS_PREVIEW_URL` pointing to its printed loopback URL,
+`NP_PLAYWRIGHT_MODULE` pointing to an installed Playwright module and
+`NP_CHROME_BINARY` pointing to Chrome:
+
+```sh
+node internal/control/web/operations_browser_acceptance.cjs
+```
+
+The script verifies all terminal outcomes beyond the quick-view window, cursor
+continuity, replay deduplication, scope clearing, delayed preference loading and
+mobile overflow. Backend authorization, transaction and delivery checks use
+separate PostgreSQL/River/SMTP fixtures.

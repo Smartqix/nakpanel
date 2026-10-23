@@ -195,10 +195,10 @@ server email failure does not silence the inbox.
 an evidence report under `docs/verification/`; update the active support plan if
 authorization changes. Reuse existing required CI workflows.
 
-- [ ] Review the full scenario matrix: backup failure/retry, mail readiness, TLS
+- [x] Review the full scenario matrix: backup failure/retry, mail readiness, TLS
   expiry/recovery, duplicate alerts, permission changes, disconnect/reconnect,
   both personal inboxes and original-failure preservation.
-- [ ] Run complete required local checks once, including generated-file checks.
+- [x] Run complete required local checks once, including generated-file checks.
   Fix failures and rerun affected checks; do not repeat unchanged suites.
 - [ ] Request authorization before launching focused hosted Ubuntu 26.04 checks
   or sending to an external test mailbox. No Ubuntu 24.04 or legacy matrices.
@@ -206,8 +206,13 @@ authorization changes. Reuse existing required CI workflows.
   Current support remains PHP 8.3/8.4/8.5 with internal PHP 8.5.
 - [ ] Prepare/open a PR only when requested. Run required CI, including the
   hosted security gate, under that authorization; do not skip required gates.
-- [ ] Report exact source revision, checks, skips and remaining limits before
+- [x] Report exact source revision, checks, skips and remaining limits before
   merge or deployment. Merge/deployment remain separate user decisions.
 
 **Exit:** requirements have evidence, with code and hosted claims clearly
 separated. A visually complete Figma file is never treated as system acceptance.
+
+Local acceptance is recorded at implementation commit `d2eedb9` in
+[phase 6 evidence](../../verification/2026-10-23-operations-phase6.md). Two minor
+UX follow-ups remain explicit. Hosted/CI/release checkboxes above remain gated;
+local checks do not satisfy those gates.

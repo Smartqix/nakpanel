@@ -1,0 +1,48 @@
+ok  	github.com/nakroteck/nakpanel/cmd/agent	(cached)
+ok  	github.com/nakroteck/nakpanel/cmd/panel	0.164s
+ok  	github.com/nakroteck/nakpanel/cmd/panelctl	(cached)
+ok  	github.com/nakroteck/nakpanel/deploy/install	(cached)
+ok  	github.com/nakroteck/nakpanel/deploy/multipass	(cached)
+?   	github.com/nakroteck/nakpanel/deploy/multipass/agentprobe	[no test files]
+ok  	github.com/nakroteck/nakpanel/deploy/multipass/mailimportprobe	(cached)
+?   	github.com/nakroteck/nakpanel/deploy/multipass/smtpsink	[no test files]
+ok  	github.com/nakroteck/nakpanel/internal/agent/ops	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/agent/rpc	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/backup	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/certificates	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/config	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/agentclient	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/auth	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/capabilities	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/dashboard	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/databaseadmin	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/dnstemplate	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/filemanager	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/http	1.047s
+ok  	github.com/nakroteck/nakpanel/internal/control/mailimport	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/maintenance	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/operations	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/operator	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/phpapp	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/platformadmin	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/policy	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/provision	4.700s
+ok  	github.com/nakroteck/nakpanel/internal/control/provisioningapi	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/quota	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/serveradmin	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/servertiming	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/store	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/tls	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/web	0.239s
+ok  	github.com/nakroteck/nakpanel/internal/control/webstatistics	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/wordpress	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/control/workspace	(cached)
+?   	github.com/nakroteck/nakpanel/internal/database	[no test files]
+ok  	github.com/nakroteck/nakpanel/internal/gitremote	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/mailimport	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/site	(cached)
+?   	github.com/nakroteck/nakpanel/internal/testutil/operationsdb	[no test files]
+ok  	github.com/nakroteck/nakpanel/internal/testutil/removaldb	(cached)
+ok  	github.com/nakroteck/nakpanel/internal/types	(cached)
+?   	github.com/nakroteck/nakpanel/internal/version	[no test files]
+ok  	github.com/nakroteck/nakpanel/migrations	(cached)
