@@ -517,6 +517,31 @@ type GitWebhookDelivery struct {
 	ReceivedAt   time.Time
 }
 
+type Issue struct {
+	ID              int64
+	ResourceKind    string
+	ResourceID      int64
+	Kind            string
+	Condition       string
+	Severity        string
+	Title           string
+	Summary         string
+	State           string
+	Generation      int64
+	Occurrences     int32
+	LatestEventID   int64
+	IntentRevision  int64
+	OperationID     sql.NullInt64
+	PreviousIssueID sql.NullInt64
+	AcknowledgedBy  sql.NullInt64
+	AcknowledgedAt  sql.NullTime
+	ObservedAt      time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	ResolvedAt      sql.NullTime
+	Verification    pqtype.NullRawMessage
+}
+
 type LoginAttempt struct {
 	ID          int64
 	Email       string
@@ -652,7 +677,6 @@ type Notification struct {
 	Title           string
 	Body            string
 	DedupeKey       string
-	ReadAt          sql.NullTime
 	ResolvedAt      sql.NullTime
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
@@ -669,6 +693,55 @@ type NotificationDelivery struct {
 	SentAt         sql.NullTime
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type NotificationReceipt struct {
+	NotificationID int64
+	UserID         int64
+	ReadAt         time.Time
+	ArchivedAt     sql.NullTime
+}
+
+type Operation struct {
+	ID             int64
+	OperationKey   string
+	Kind           string
+	ResourceKind   string
+	ResourceID     int64
+	Title          string
+	Trigger        string
+	State          string
+	Stage          string
+	IntentRevision int64
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type OperationAttempt struct {
+	ID           int64
+	OperationID  int64
+	Number       int32
+	RiverJobID   int64
+	State        string
+	ErrorCode    string
+	StartedAt    time.Time
+	FinishedAt   sql.NullTime
+	Verification pqtype.NullRawMessage
+}
+
+type OperationEvent struct {
+	ID              int64
+	EventKey        string
+	ResourceKind    string
+	ResourceID      int64
+	Kind            string
+	OperationID     sql.NullInt64
+	IssueID         sql.NullInt64
+	NotificationID  sql.NullInt64
+	RecipientUserID sql.NullInt64
+	Summary         string
+	CreatedAt       time.Time
+	DispatchedAt    sql.NullTime
 }
 
 type Phase25EntitlementSnapshotBackup struct {

@@ -758,15 +758,16 @@ type SubscriptionUsage struct {
 }
 
 type UsageAlert struct {
-	ID             int64     `json:"id"`
-	SubscriptionID int64     `json:"subscription_id"`
-	Kind           string    `json:"kind"`
-	Severity       string    `json:"severity"`
-	Title          string    `json:"title"`
-	Body           string    `json:"body"`
-	ReadAt         time.Time `json:"read_at,omitempty"`
-	ResolvedAt     time.Time `json:"resolved_at,omitempty"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID             int64  `json:"id"`
+	SubscriptionID int64  `json:"subscription_id"`
+	Kind           string `json:"kind"`
+	Severity       string `json:"severity"`
+	Title          string `json:"title"`
+	Body           string `json:"body"`
+	// ReadAt is the current viewer's receipt, never shared notification state.
+	ReadAt     time.Time `json:"read_at,omitempty"`
+	ResolvedAt time.Time `json:"resolved_at,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type UsageCursor struct {

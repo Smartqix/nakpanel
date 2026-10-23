@@ -16,9 +16,9 @@ Nakpanel CSS tokens. No SPA rewrite or new message broker.
 **Spec:** [proposed design and research](../specs/2026-10-23-notifications-tasks-issues-design.md).
 **Figma:** [editable UI/UX flows](https://www.figma.com/design/xKb9jZ6VvLAWEwwsKRZeG5).
 
-**Authorization:** Research, plans and Figma only. All implementation tasks below
-remain unstarted. Report each authorized phase before starting another. Hosted
-tests, external email tests, PR, merge and deployment require explicit approval.
+**Authorization:** The owner authorized local implementation on 23 October 2026
+(“implement now”). Report each phase before continuing to the next. Hosted tests,
+external email tests, PR, merge and deployment still require explicit approval.
 
 ## Global constraints
 
@@ -58,19 +58,19 @@ tests, external email tests, PR, merge and deployment require explicit approval.
 under `migrations/`; update notification contracts in `internal/types/envelope.go`
 and their callers in `internal/control/quota/usage.go`.
 
-- [ ] Add failing PostgreSQL tests for per-user receipts, identical-title
+- [x] Add failing PostgreSQL tests for per-user receipts, identical-title
   incidents on different resources, repeated failures on one resource and
   transactional event/outbox uniqueness.
-- [ ] Introduce operations/attempts, issues and typed scope. Replace shared
+- [x] Introduce operations/attempts, issues and typed scope. Replace shared
   notification read state with receipts. Recreate development fixtures for the
   new contract; do not backfill historical jobs or notifications.
-- [ ] Define one state vocabulary, event identity, public error summary, role
+- [x] Define one state vocabulary, event identity, public error summary, role
   visibility and per-kind recovery capability. Separate acknowledgement from
   verified resolution in both schema and methods. Include incident generation,
   latest occurrence and resource intent revision in the verification contract.
-- [ ] Run the new focused package tests with a dedicated local test database.
+- [x] Run the new focused package tests with a dedicated local test database.
   Confirm rollback, concurrent dedupe and independent user state.
-- [ ] Report schema/contracts and exact local results. Stop before phase 2.
+- [x] Report schema/contracts and exact local results before phase 2.
 
 **Exit:** durable state and tenant boundaries pass; no UI or hosted acceptance
 claim is made.

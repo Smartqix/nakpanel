@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -625,18 +626,13 @@ func (s *SQLStore) ListUsageAlerts(ctx context.Context, actor auth.SessionUser, 
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	query := `SELECT n.id,COALESCE(n.subscription_id,0),n.kind,n.severity,n.title,n.body,n.read_at,n.resolved_at,n.created_at
-FROM notifications n LEFT JOIN subscriptions sub ON sub.id=n.subscription_id LEFT JOIN customers c ON c.id=sub.customer_id`
-	args := []any{}
-	if actor.Role == auth.RoleClient {
-		query += ` WHERE c.login_user_id=$1`
-		args = append(args, actor.ID)
-	} else if actor.Role == auth.RoleReseller {
-		query += ` WHERE c.reseller_id=(SELECT id FROM reseller_accounts WHERE login_user_id=$1)`
-		args = append(args, actor.ID)
+	if !actor.Role.Valid() || actor.ID <= 0 {
+		return []types.UsageAlert{}, nil
 	}
-	args = append(args, limit)
-	query += fmt.Sprintf(` ORDER BY n.created_at DESC LIMIT $%d`, len(args))
+	query := `SELECT n.id,COALESCE(n.subscription_id,0),n.kind,n.severity,n.title,n.body,receipt.read_at,n.resolved_at,n.created_at
+FROM notifications n LEFT JOIN notification_receipts receipt ON receipt.notification_id=n.id AND receipt.user_id=$1
+WHERE ` + operations.NotificationVisibilitySQL("n", 1, 2) + ` AND receipt.archived_at IS NULL ORDER BY n.created_at DESC,n.id DESC LIMIT $3`
+	args := []any{actor.ID, string(actor.Role), limit}
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

@@ -1,7 +1,8 @@
 # Notifications, Tasks and Issues — proposed design
 
-Status: research and design proposal, 23 October 2026. Implementation, hosted
-tests, PR creation and deployment are not authorized by this document.
+Status: local implementation authorized by the owner on 23 October 2026.
+Report each phase before continuing. Hosted tests, PR creation, merge and
+deployment require separate authorization.
 
 **Figma:** [editable designs and flows](https://www.figma.com/design/xKb9jZ6VvLAWEwwsKRZeG5).
 **Primary flow:** [notifications to recovery](https://www.figma.com/proto/xKb9jZ6VvLAWEwwsKRZeG5?node-id=3-1711).
