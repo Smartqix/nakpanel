@@ -266,9 +266,10 @@ func TestWordPressNotificationsUseCurrentSchemaAndResolve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mock.ExpectExec(regexp.QuoteMeta("WITH recipient AS (SELECT login_user_id,reseller_id,email FROM customers WHERE id=$1), upserted AS (")).
+	mock.ExpectQuery(regexp.QuoteMeta("WITH recipient AS (SELECT login_user_id,reseller_id,email FROM customers WHERE id=$1), upserted AS (")).
 		WithArgs(int64(5), int64(3), "wordpress_operation_failed", "critical", "WordPress operation failed", "safe failure", "wordpress:7:operation-failed").
-		WillReturnResult(sqlmock.NewResult(0, 1))
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(17)))
+	mock.ExpectQuery("SELECT u.id,p.email_mode").WithArgs(int64(17), "").WillReturnRows(sqlmock.NewRows([]string{"id", "mode"}))
 	if err = upsertWordPressNotificationTx(context.Background(), tx, 3, 5, "wordpress_operation_failed", "critical", "WordPress operation failed", "safe failure", wordpressNotificationKey(7, "operation-failed")); err != nil {
 		t.Fatal(err)
 	}

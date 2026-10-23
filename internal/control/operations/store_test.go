@@ -66,6 +66,7 @@ func testDB(t *testing.T) *sql.DB {
  CREATE TABLE subscriptions(id bigint PRIMARY KEY,customer_id bigint,status text DEFAULT 'active',name text DEFAULT 'Example subscription');
  CREATE TABLE sites(id bigint PRIMARY KEY,subscription_id bigint,status text DEFAULT 'active',domain text DEFAULT 'example.test');
  CREATE TABLE backups(id bigserial PRIMARY KEY);
+ CREATE TABLE security_settings(id boolean PRIMARY KEY,alert_email text);
  CREATE TABLE notifications(id bigserial PRIMARY KEY,recipient_user_id bigint,customer_id bigint,reseller_id bigint,subscription_id bigint,kind text,severity text,title text,body text,dedupe_key text,read_at timestamptz,resolved_at timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
  CREATE UNIQUE INDEX notifications_open_dedupe_idx ON notifications(dedupe_key) WHERE resolved_at IS NULL;
  ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check CHECK(kind IS NOT NULL);
@@ -73,7 +74,8 @@ func testDB(t *testing.T) *sql.DB {
  INSERT INTO reseller_accounts(id,login_user_id) VALUES(7,100),(8,200);
  INSERT INTO customers(id,login_user_id,reseller_id) VALUES(10,11,7),(20,22,8);
  INSERT INTO subscriptions(id,customer_id) VALUES(42,10),(99,20);
- INSERT INTO sites(id,subscription_id) VALUES(51,42),(52,42),(91,99);`)
+ INSERT INTO sites(id,subscription_id) VALUES(51,42),(52,42),(91,99);
+ ALTER TABLE users ADD COLUMN login_disabled boolean NOT NULL DEFAULT false;`)
 	if err != nil {
 		t.Fatal(err)
 	}

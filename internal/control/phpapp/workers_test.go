@@ -364,10 +364,11 @@ FROM php_applications application JOIN sites site ON site.id=application.site_id
 	mock.ExpectExec(`UPDATE php_applications SET convergence_status='failed'`).
 		WithArgs(int64(7), int64(13), "dial agent socket: connection refused").
 		WillReturnResult(sqlmock.NewResult(0, 1))
-	mock.ExpectExec(`WITH recipient AS`).
+	mock.ExpectQuery(`WITH recipient AS`).
 		WithArgs(int64(5), int64(3), "php_deployment_failed", "critical", "PHP deployment failed",
 			"dial agent socket: connection refused", deploymentFailureKey(7)).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(17)))
+	mock.ExpectQuery("SELECT u.id,p.email_mode").WithArgs(int64(17), "").WillReturnRows(sqlmock.NewRows([]string{"id", "mode"}))
 	mock.ExpectExec(`INSERT INTO audit_events`).
 		WithArgs(int64(0), int64(5), int64(3), "php.convergence.failed", "php_application", int64(7), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))

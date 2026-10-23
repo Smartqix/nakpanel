@@ -321,3 +321,73 @@ func (s *Server) loadOperationsView(r *http.Request, actor auth.SessionUser, vie
 		view.OperationsError = "Task status is unavailable. Check again shortly."
 	}
 }
+
+type OperationsPreferencesService interface {
+	Preferences(context.Context, auth.SessionUser) (operations.Preferences, error)
+	SavePreferences(context.Context, auth.SessionUser, operations.Preferences) error
+	DeliveryPolicy(context.Context, auth.SessionUser) (operations.DeliveryPolicy, error)
+	SaveDeliveryPolicy(context.Context, auth.SessionUser, operations.DeliveryPolicy) error
+}
+
+func (s *Server) handleOperationsPreferences(w http.ResponseWriter, r *http.Request) {
+	actor, ok := s.operationsUser(w, r)
+	if !ok {
+		return
+	}
+	service, ok := s.operations.(OperationsPreferencesService)
+	if !ok {
+		operationsError(w, errors.New("unavailable"))
+		return
+	}
+	policy := r.URL.Path == "/api/workspace/operations/delivery-policy"
+	if policy && actor.Role != auth.RoleAdmin {
+		operationsError(w, operations.ErrNotFound)
+		return
+	}
+	if r.Method == "GET" {
+		var p any
+		var err error
+		if policy {
+			p, err = service.DeliveryPolicy(r.Context(), actor)
+		} else {
+			p, err = service.Preferences(r.Context(), actor)
+		}
+		if err != nil {
+			operationsError(w, err)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(p)
+		return
+	}
+	decode := func(v any) error {
+		d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048))
+		d.DisallowUnknownFields()
+		return d.Decode(v)
+	}
+	if policy {
+		var p struct {
+			Enabled *bool `json:"enabled"`
+		}
+		if decode(&p) != nil || p.Enabled == nil {
+			operationsError(w, operations.ErrInvalid)
+			return
+		}
+		if err := service.SaveDeliveryPolicy(r.Context(), actor, operations.DeliveryPolicy{Enabled: *p.Enabled}); err != nil {
+			operationsError(w, err)
+			return
+		}
+	} else {
+		var p struct {
+			EmailMode string `json:"email_mode"`
+		}
+		if decode(&p) != nil {
+			operationsError(w, operations.ErrInvalid)
+			return
+		}
+		if err := service.SavePreferences(r.Context(), actor, operations.Preferences{EmailMode: p.EmailMode}); err != nil {
+			operationsError(w, err)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 	"log"
 	"net"
 	"net/http"
@@ -162,13 +163,13 @@ func (s *Server) auditAuth(ctx context.Context, action string, userID int64, ema
 
 // --- security settings ----------------------------------------------------
 
-func (s *Server) securitySettings(ctx context.Context) (requireTOTPAdmin bool, alertEmail string) {
+func (s *Server) securitySettings(ctx context.Context) (requireTOTPAdmin bool) {
 	if s.securityDB == nil {
-		return false, ""
+		return false
 	}
 	_ = s.securityDB.QueryRowContext(ctx,
-		`SELECT require_totp_admin, alert_email FROM security_settings WHERE id`).Scan(&requireTOTPAdmin, &alertEmail)
-	return requireTOTPAdmin, alertEmail
+		`SELECT require_totp_admin FROM security_settings WHERE id`).Scan(&requireTOTPAdmin)
+	return requireTOTPAdmin
 }
 
 // --- TOTP persistence ------------------------------------------------------
@@ -435,27 +436,7 @@ func clearChallengeCookie(w http.ResponseWriter) {
 
 // --- login alerts ----------------------------------------------------------
 
-func (s *Server) alertRecipients(ctx context.Context, alertEmail string) []string {
-	if email := strings.TrimSpace(alertEmail); email != "" {
-		return []string{email}
-	}
-	rows, err := s.securityDB.QueryContext(ctx,
-		`SELECT email FROM users WHERE role='admin' AND NOT login_disabled ORDER BY email`)
-	if err != nil {
-		return nil
-	}
-	defer rows.Close()
-	var recipients []string
-	for rows.Next() {
-		var email string
-		if rows.Scan(&email) == nil {
-			recipients = append(recipients, email)
-		}
-	}
-	return recipients
-}
-
-func (s *Server) insertLoginNotification(ctx context.Context, kind, severity, title, body, dedupeKey string, recipientUserID int64, recipients []string) {
+func (s *Server) insertLoginNotification(ctx context.Context, kind, severity, title, body, dedupeKey string, recipientUserID int64) {
 	tx, err := s.securityDB.BeginTx(ctx, nil)
 	if err != nil {
 		return
@@ -470,20 +451,16 @@ func (s *Server) insertLoginNotification(ctx context.Context, kind, severity, ti
 		log.Printf("insert %s notification: %v", kind, err)
 		return
 	}
-	for _, recipient := range recipients {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO notification_deliveries(notification_id,channel,recipient)
-			VALUES ($1,'smtp',$2) ON CONFLICT (notification_id,channel,recipient) DO NOTHING`,
-			notificationID, recipient); err != nil {
-			log.Printf("queue %s delivery: %v", kind, err)
-			return
-		}
+	if err := operations.EnqueueNotificationTx(ctx, tx, notificationID); err != nil {
+		log.Printf("queue login notification failed")
+		return
 	}
 	_ = tx.Commit()
 }
 
-// alertNewDevice notifies the account owner (and ops for admin accounts) when
+// alertNewDevice notifies the account owner when
 // a session is minted from an IP the account has not used in 90 days.
-func (s *Server) alertNewDevice(ctx context.Context, userID int64, email, role, ip, tokenHash string) {
+func (s *Server) alertNewDevice(ctx context.Context, userID int64, email, ip, tokenHash string) {
 	if s.securityDB == nil || ip == "" {
 		return
 	}
@@ -494,19 +471,10 @@ func (s *Server) alertNewDevice(ctx context.Context, userID int64, email, role, 
 	if err != nil || known {
 		return
 	}
-	_, alertEmail := s.securitySettings(ctx)
-	recipients := []string{email}
-	if role == "admin" {
-		for _, extra := range s.alertRecipients(ctx, alertEmail) {
-			if extra != email {
-				recipients = append(recipients, extra)
-			}
-		}
-	}
 	title := "New sign-in address"
 	body := fmt.Sprintf("Account %s signed in from %s, an address it has not used in the last 90 days.", email, ip)
 	dedupe := fmt.Sprintf("login_new_device:%d:%s", userID, ip)
-	s.insertLoginNotification(ctx, "login_new_device", "info", title, body, dedupe, userID, recipients)
+	s.insertLoginNotification(ctx, "login_new_device", "info", title, body, dedupe, userID)
 }
 
 // alertFailedBurst notifies ops once per hour bucket when the throttle trips.
@@ -514,12 +482,10 @@ func (s *Server) alertFailedBurst(ctx context.Context, email, ip string) {
 	if s.securityDB == nil {
 		return
 	}
-	_, alertEmail := s.securitySettings(ctx)
-	recipients := s.alertRecipients(ctx, alertEmail)
 	title := "Login failure burst"
 	body := fmt.Sprintf("Repeated failed logins for %s (latest from %s); further attempts are being throttled.", email, ip)
 	dedupe := fmt.Sprintf("login_failed_burst:%s:%s", email, time.Now().UTC().Format("2006-01-02-15"))
-	s.insertLoginNotification(ctx, "login_failed_burst", "warning", title, body, dedupe, 0, recipients)
+	s.insertLoginNotification(ctx, "login_failed_burst", "warning", title, body, dedupe, 0)
 }
 
 // --- login flow ------------------------------------------------------------
@@ -616,7 +582,7 @@ func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request, userID int6
 		SameSite: http.SameSiteLaxMode,
 	})
 	s.auditAuth(r.Context(), "auth.login_succeeded", userID, email, map[string]any{"ip": ip, "totp": usedTOTP})
-	s.alertNewDevice(r.Context(), userID, email, role, ip, auth.TokenHash(token))
+	s.alertNewDevice(r.Context(), userID, email, ip, auth.TokenHash(token))
 
 	legacy := r.Form.Get("legacy") == "1" || r.URL.Query().Get("legacy") == "1"
 	target := "/dashboard"
@@ -624,7 +590,7 @@ func (s *Server) finishLogin(w http.ResponseWriter, r *http.Request, userID int6
 		target = "/?legacy=1"
 	}
 	if role == "admin" && !usedTOTP {
-		if requireTOTP, _ := s.securitySettings(r.Context()); requireTOTP {
+		if requireTOTP := s.securitySettings(r.Context()); requireTOTP {
 			// Soft enforcement: the session exists, but administrators are
 			// steered into enrollment until a confirmed authenticator exists.
 			if _, exists, _ := s.getUserTOTP(r.Context(), userID); !exists {
@@ -705,11 +671,10 @@ func (s *Server) handleTOTPChallenge(w http.ResponseWriter, r *http.Request) {
 		s.recordLoginAttempt(r.Context(), email, ip, "recovery", true)
 		s.auditAuth(r.Context(), "auth.recovery_code_used", challenge.UserID, email, map[string]any{"ip": ip, "remaining": remaining})
 		if remaining <= 2 {
-			recipients := []string{email}
 			s.insertLoginNotification(r.Context(), "login_new_device", "warning",
 				"Recovery codes running low",
 				fmt.Sprintf("Account %s has %d unused two-factor recovery codes left. Generate a fresh set from Account Security.", email, remaining),
-				fmt.Sprintf("login_new_device:recovery-low:%d", challenge.UserID), challenge.UserID, recipients)
+				fmt.Sprintf("login_new_device:recovery-low:%d", challenge.UserID), challenge.UserID)
 		}
 		s.deleteLoginChallenge(r.Context(), challenge.TokenHash)
 		clearChallengeCookie(w)

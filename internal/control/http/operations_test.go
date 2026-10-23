@@ -146,3 +146,47 @@ func TestOperationsRecoveryRequiresAdminConfirmationAndCSRF(t *testing.T) {
 		})
 	}
 }
+
+type preferencesOperations struct {
+	fakeOperations
+	mode    string
+	enabled bool
+}
+
+func (f *preferencesOperations) Preferences(context.Context, auth.SessionUser) (operations.Preferences, error) {
+	return operations.Preferences{EmailMode: f.mode, CriticalInApp: true, SecurityInApp: true}, nil
+}
+func (f *preferencesOperations) SavePreferences(_ context.Context, _ auth.SessionUser, p operations.Preferences) error {
+	f.mode = p.EmailMode
+	return nil
+}
+func (f *preferencesOperations) DeliveryPolicy(context.Context, auth.SessionUser) (operations.DeliveryPolicy, error) {
+	return operations.DeliveryPolicy{Enabled: f.enabled}, nil
+}
+func (f *preferencesOperations) SaveDeliveryPolicy(_ context.Context, _ auth.SessionUser, p operations.DeliveryPolicy) error {
+	f.enabled = p.Enabled
+	return nil
+}
+func TestOperationsPreferenceMutationsCannotDisableMandatoryInbox(t *testing.T) {
+	svc := &preferencesOperations{}
+	h, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{Operations: svc})
+	cookie := login(t, h, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	for _, tc := range []struct {
+		path, body string
+		code       int
+	}{{"preferences", `{"email_mode":"digest","critical_in_app":false}`, 400}, {"delivery-policy", `{}`, 400}, {"preferences", `{"email_mode":"digest"}`, 204}, {"delivery-policy", `{"enabled":true}`, 204}} {
+		r := httptest.NewRequest("POST", "https://panel.test/api/workspace/operations/"+tc.path, strings.NewReader(tc.body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Accept", "application/json")
+		r.AddCookie(cookie)
+		r.Header.Set("X-Nakpanel-CSRF", csrfToken(r))
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		if w.Code != tc.code {
+			t.Fatal(tc.path, w.Code, w.Body.String())
+		}
+	}
+	if svc.mode != "digest" || !svc.enabled {
+		t.Fatal("policy not persisted")
+	}
+}

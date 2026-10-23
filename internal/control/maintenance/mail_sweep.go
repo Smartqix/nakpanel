@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/types"
@@ -105,17 +106,18 @@ WHERE md.enabled AND NOT md.delete_requested ORDER BY md.domain`)
 			return err
 		}
 		body := fmt.Sprintf("%d outbound messages from %s are queued (alert threshold %d). The per-domain rate limit is throttling them; check the tenant's sites for compromise.", backlog, tenant.domain, settings.QueueAlertThreshold)
-		if _, err = tx.ExecContext(ctx, `WITH recipient AS (
+		var notificationID int64
+		if err = tx.QueryRowContext(ctx, `WITH recipient AS (
 SELECT id,login_user_id,reseller_id,email FROM customers WHERE id=$1
 ), upserted AS (
 INSERT INTO notifications(recipient_user_id,customer_id,reseller_id,subscription_id,kind,severity,title,body,dedupe_key)
 SELECT login_user_id,id,reseller_id,NULLIF($2,0),'mail_outbound_spike','warning','Outbound mail spike',$3,$4 FROM recipient
 ON CONFLICT(dedupe_key) WHERE resolved_at IS NULL DO UPDATE SET body=EXCLUDED.body,updated_at=now()
-RETURNING id
-)
-INSERT INTO notification_deliveries(notification_id,channel,recipient)
-SELECT upserted.id,'smtp',recipient.email FROM upserted CROSS JOIN recipient WHERE recipient.email<>''
-ON CONFLICT(notification_id,channel,recipient) DO NOTHING`, tenant.customerID, tenant.subscriptionID, body, key); err != nil {
+RETURNING id) SELECT id FROM upserted`, tenant.customerID, tenant.subscriptionID, body, key).Scan(&notificationID); err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if err = operations.EnqueueNotificationTx(ctx, tx, notificationID); err != nil {
 			_ = tx.Rollback()
 			return err
 		}

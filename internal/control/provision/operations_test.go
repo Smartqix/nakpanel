@@ -240,3 +240,43 @@ func TestOperationsRetryKeepsOriginalFailedAttempt(t *testing.T) {
 		t.Fatalf("attempt history was rewritten: %#v", detail.Attempts)
 	}
 }
+
+func TestOperationsCorrelatesDomainFailureNoticeWithoutDuplicateInboxEntry(t *testing.T) {
+	db, m, _, actor, id := operationsFixture(t)
+	ctx := context.Background()
+	job, err := m.queue.Insert(ctx, CreateBackupArgs{SiteID: id, SubscriptionID: 1, Domain: "studio.example"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE river_job SET state='running',attempt=1,attempted_at=now() WHERE id=$1`, job.Job.ID); err != nil {
+		t.Fatal(err)
+	}
+	err = (&operations.JobContextMiddleware{}).Work(ctx, job.Job, func(workCtx context.Context) error {
+		tx, err := db.BeginTx(workCtx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		var notificationID int64
+		if err = tx.QueryRowContext(workCtx, `INSERT INTO notifications(subscription_id,kind,severity,title,body,dedupe_key) VALUES(1,'maintenance_failed','critical','Backup failed','Existing data was preserved','current-source-failure') RETURNING id`).Scan(&notificationID); err != nil {
+			return err
+		}
+		if err = operations.EnqueueNotificationTx(workCtx, tx, notificationID); err != nil {
+			return err
+		}
+		return tx.Commit()
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE river_job SET state='discarded',finalized_at=now() WHERE id=$1`, job.Job.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Dispatch(ctx, 100); err != nil {
+		t.Fatal(err)
+	}
+	p, err := m.Page(ctx, actor, "inbox", operations.Filter{})
+	if err != nil || len(p.Notifications) != 1 || p.Notifications[0].IssueID == 0 || p.Notifications[0].OperationID == 0 {
+		t.Fatalf("duplicate or unlinked source notice: %#v %v", p, err)
+	}
+}

@@ -389,7 +389,7 @@ func operationsCenter(user auth.SessionUser, view WorkspaceView) templ.Component
 			return templ_7745c5c3_Err
 		}
 		if view.OperationsTab == "preferences" {
-			templ_7745c5c3_Err = operationsPreferences().Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = operationsPreferences(user).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1063,7 +1063,7 @@ func operationsRows(page operations.Page, tab string) templ.Component {
 	})
 }
 
-func operationsPreferences() templ.Component {
+func operationsPreferences(user auth.SessionUser) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -1087,6 +1087,12 @@ func operationsPreferences() templ.Component {
 		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 108, "<form class=\"np-panel np-op-preferences\" data-np-op-preferences><h2>Notification preferences</h2><p>Critical and security notices always remain available in your inbox.</p><label><input type=\"checkbox\" checked disabled>Critical and security notices in app · required</label><label>Email updates<select name=\"email_mode\"><option value=\"off\">Off</option><option value=\"immediate\">Immediate</option><option value=\"digest\">Daily digest · UTC</option></select></label><p data-np-op-delivery-health>Loading delivery settings…</p><button type=\"submit\">Save preferences</button><p data-np-op-preference-status role=\"status\"></p></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
+		}
+		if user.Role == auth.RoleAdmin {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, "<form class=\"np-panel np-op-preferences\" data-np-op-delivery-policy><h2>Server email policy</h2><p>The server operator configures SMTP. Each user also chooses their own email updates. Critical and security notices always remain in app.</p><label><input type=\"checkbox\" name=\"enabled\">Allow notification email on this server</label><p data-np-op-policy-health></p><button type=\"submit\">Save server policy</button><p data-np-op-policy-status role=\"status\"></p></form>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
 		return nil
 	})
@@ -1113,7 +1119,7 @@ func operationsDetailDialog() templ.Component {
 			templ_7745c5c3_Var55 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 109, "<dialog id=\"np-operation-detail\" class=\"np-dialog np-op-dialog\" aria-labelledby=\"np-op-detail-title\"><div class=\"np-op-dialog-head\"><h2 id=\"np-op-detail-title\">Activity details</h2><button type=\"button\" class=\"np-secondary-button\" data-np-op-close aria-label=\"Close activity details\">Close</button></div><div data-np-op-detail-body></div><p data-np-op-detail-status role=\"status\" tabindex=\"-1\"></p></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 110, "<dialog id=\"np-operation-detail\" class=\"np-dialog np-op-dialog\" aria-labelledby=\"np-op-detail-title\"><div class=\"np-op-dialog-head\"><h2 id=\"np-op-detail-title\">Activity details</h2><button type=\"button\" class=\"np-secondary-button\" data-np-op-close aria-label=\"Close activity details\">Close</button></div><div data-np-op-detail-body></div><p data-np-op-detail-status role=\"status\" tabindex=\"-1\"></p></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

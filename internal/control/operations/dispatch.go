@@ -83,8 +83,12 @@ func (s *Store) DispatchTx(ctx context.Context, tx *sql.Tx, limit int) (int, err
 }
 
 func (s *Store) projectIncidentTx(ctx context.Context, tx *sql.Tx, eventID int64) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO notifications(issue_id,operation_id,kind,severity,title,body,dedupe_key)
- SELECT i.id,i.operation_id,'operation_failed',i.severity,i.title,i.summary,'issue:'||i.id FROM operation_events e JOIN issues i ON i.id=e.issue_id WHERE e.id=$1 AND i.resolved_at IS NULL
+	_, err := tx.ExecContext(ctx, `UPDATE notifications n SET issue_id=i.id FROM operation_events e JOIN issues i ON i.id=e.issue_id WHERE e.id=$1 AND i.resolved_at IS NULL AND n.resolved_at IS NULL AND n.operation_id=i.operation_id AND n.kind IN `+workerFailureNoticeKinds, eventID)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO notifications(issue_id,operation_id,kind,severity,title,body,dedupe_key)
+ SELECT i.id,i.operation_id,'operation_failed',i.severity,i.title,i.summary,'issue:'||i.id FROM operation_events e JOIN issues i ON i.id=e.issue_id WHERE e.id=$1 AND i.resolved_at IS NULL AND NOT EXISTS(SELECT 1 FROM notifications linked WHERE linked.issue_id=i.id AND linked.resolved_at IS NULL)
  ON CONFLICT(dedupe_key) WHERE resolved_at IS NULL DO UPDATE SET severity=EXCLUDED.severity,title=EXCLUDED.title,body=EXCLUDED.body,updated_at=now()`, eventID)
 	if err != nil {
 		return err
@@ -92,5 +96,31 @@ func (s *Store) projectIncidentTx(ctx context.Context, tx *sql.Tx, eventID int64
 	_, err = tx.ExecContext(ctx, `INSERT INTO notifications(issue_id,operation_id,kind,severity,title,body,dedupe_key)
  SELECT i.id,i.operation_id,'issue_recovered','info','Recovery verified',e.summary,'issue:'||i.id||':recovered' FROM operation_events e JOIN issues i ON i.id=e.issue_id WHERE e.id=$1 AND e.kind='issue.resolved' AND i.resolved_at IS NOT NULL
  ON CONFLICT(dedupe_key) WHERE resolved_at IS NULL DO NOTHING`, eventID)
-	return err
+	if err != nil {
+		return err
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT n.id FROM notifications n JOIN operation_events e ON e.issue_id=n.issue_id WHERE e.id=$1 AND n.resolved_at IS NULL AND ((e.kind IN ('task.failed','issue.observed') AND n.kind='operation_failed') OR (e.kind='issue.resolved' AND n.kind='issue_recovered'))`, eventID)
+	if err != nil {
+		return err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if err = EnqueueNotificationTx(ctx, tx, id); err != nil {
+			return err
+		}
+	}
+	return nil
 }

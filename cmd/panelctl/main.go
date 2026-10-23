@@ -182,7 +182,7 @@ func runCreateAdmin(ctx context.Context, service *operator.Service, args []strin
 
 func runSecurity(ctx context.Context, service *operator.Service, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: panelctl security show | security set [--require-admin-2fa=BOOL] [--alert-email ADDRESS]")
+		return errors.New("usage: panelctl security show | security set [--require-admin-2fa=BOOL]")
 	}
 	switch args[0] {
 	case "show":
@@ -191,17 +191,11 @@ func runSecurity(ctx context.Context, service *operator.Service, args []string, 
 			return err
 		}
 		fmt.Fprintf(stdout, "require_admin_2fa: %t\n", settings.RequireTOTPAdmin)
-		alert := settings.AlertEmail
-		if alert == "" {
-			alert = "(unset; alerts go to every active administrator)"
-		}
-		fmt.Fprintf(stdout, "alert_email:       %s\n", alert)
 		return nil
 	case "set":
 		set := flag.NewFlagSet("security set", flag.ContinueOnError)
 		set.SetOutput(stderr)
 		requireAdmin2FA := set.String("require-admin-2fa", "", "true or false")
-		alertEmail := set.String("alert-email", "", "address for security alerts (empty clears)")
 		if err := set.Parse(args[1:]); err != nil {
 			return err
 		}
@@ -213,22 +207,14 @@ func runSecurity(ctx context.Context, service *operator.Service, args []string, 
 			}
 			requirePtr = &parsed
 		}
-		var alertPtr *string
-		set.Visit(func(f *flag.Flag) {
-			if f.Name == "alert-email" {
-				value := *alertEmail
-				alertPtr = &value
-			}
-		})
-		if requirePtr == nil && alertPtr == nil {
-			return errors.New("nothing to change: pass --require-admin-2fa and/or --alert-email")
+		if requirePtr == nil {
+			return errors.New("nothing to change: pass --require-admin-2fa")
 		}
-		settings, err := service.SetSecuritySettings(ctx, requirePtr, alertPtr)
+		settings, err := service.SetSecuritySettings(ctx, requirePtr)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(stdout, "Security settings updated: require_admin_2fa=%t alert_email=%q\n",
-			settings.RequireTOTPAdmin, settings.AlertEmail)
+		fmt.Fprintf(stdout, "Security settings updated: require_admin_2fa=%t\n", settings.RequireTOTPAdmin)
 		return nil
 	default:
 		return fmt.Errorf("unknown security command %q", args[0])
@@ -952,7 +938,7 @@ Commands:
   backup-server destination list | remove NAME --yes | test NAME
   backup-server run --destination NAME [--wait] | backup-server list
   restore-server --archive FILE --backup-key-file FILE [--yes] [--allow-schema-mismatch]
-  security show | security set [--require-admin-2fa=BOOL] [--alert-email ADDRESS]
+  security show | security set [--require-admin-2fa=BOOL]
   secret-key init [--path FILE]
   reconcile --system | agent ping | version`)
 }

@@ -697,17 +697,36 @@ type Notification struct {
 	OperationID     sql.NullInt64
 }
 
-type NotificationDelivery struct {
-	ID             int64
+type NotificationDeliveryPolicy struct {
+	Singleton bool
+	Enabled   bool
+	UpdatedAt time.Time
+}
+
+type NotificationEmailBatch struct {
+	ID              int64
+	BatchKey        string
+	RecipientUserID int64
+	Mode            string
+	Status          string
+	Attempts        int32
+	NextAttemptAt   time.Time
+	AcceptedAt      sql.NullTime
+	LastError       string
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+type NotificationEmailItem struct {
+	BatchID        int64
 	NotificationID int64
-	Channel        string
-	Recipient      string
-	Status         string
-	Attempts       int32
-	LastError      string
-	SentAt         sql.NullTime
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	UserID         int64
+}
+
+type NotificationPreference struct {
+	UserID    int64
+	EmailMode string
+	UpdatedAt time.Time
 }
 
 type NotificationReceipt struct {
@@ -1053,7 +1072,6 @@ type ScheduledTaskRun struct {
 type SecuritySetting struct {
 	ID               bool
 	RequireTotpAdmin bool
-	AlertEmail       string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

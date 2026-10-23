@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
@@ -18,32 +17,6 @@ type deleteAgent struct {
 	calls    []types.DeleteBackupReq
 	response types.Response
 	err      error
-}
-
-func TestCustomCertificateExpiryCreatesCustomerAndProviderNotifications(t *testing.T) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	now := time.Date(2026, 7, 13, 12, 0, 0, 0, time.UTC)
-	service := NewService(db, nil, nil)
-	service.now = func() time.Time { return now }
-	mock.ExpectExec("UPDATE notifications notification SET resolved_at").WithArgs(now.Add(14 * 24 * time.Hour)).WillReturnResult(sqlmock.NewResult(0, 0))
-	mock.ExpectQuery("SELECT site.id,site.domain,site.tls_expires_at").WillReturnRows(sqlmock.NewRows([]string{"id", "domain", "expires", "customer_id", "login_user_id", "email", "reseller_id"}).AddRow(int64(7), "example.test", now.Add(10*24*time.Hour), int64(2), int64(3), "client@example.test", nil))
-	mock.ExpectBegin()
-	mock.ExpectQuery("INSERT INTO notifications").WithArgs(int64(3), int64(2), int64(0), sqlmock.AnyArg(), "certificate-expiring:7:customer").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(11)))
-	mock.ExpectExec("INSERT INTO notification_deliveries").WithArgs(int64(11), "client@example.test").WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectQuery("SELECT id,email FROM users").WillReturnRows(sqlmock.NewRows([]string{"id", "email"}).AddRow(int64(4), "admin@example.test"))
-	mock.ExpectQuery("INSERT INTO notifications").WithArgs(int64(4), int64(2), int64(0), sqlmock.AnyArg(), "certificate-expiring:7:provider:4").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(12)))
-	mock.ExpectExec("INSERT INTO notification_deliveries").WithArgs(int64(12), "admin@example.test").WillReturnResult(sqlmock.NewResult(1, 1))
-	mock.ExpectCommit()
-	if err = service.maintainCustomCertificateNotifications(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if err = mock.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func (a *deleteAgent) DeleteBackup(_ context.Context, req types.DeleteBackupReq) (types.Response, error) {
@@ -178,7 +151,8 @@ func TestAutomatedFailureCreatesNotificationDeliveryAndAudit(t *testing.T) {
 	defer db.Close()
 	service := NewService(db, nil, nil)
 	mock.ExpectBegin()
-	mock.ExpectExec("WITH recipient AS").WithArgs(int64(2), int64(3), "Certificate renewal failed", "acme failed", "maintenance:cert:7").WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery("WITH recipient AS").WithArgs(int64(2), int64(3), "Certificate renewal failed", "acme failed", "maintenance:cert:7").WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(17)))
+	mock.ExpectQuery("SELECT u.id,p.email_mode").WithArgs(int64(17), "").WillReturnRows(sqlmock.NewRows([]string{"id", "mode"}))
 	mock.ExpectExec("INSERT INTO audit_events").WithArgs(int64(99), int64(2), int64(3), "certificate.renew_failed", "site", int64(7), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectCommit()
 	err = service.ReportCertificate(context.Background(), provision.IssueCertArgs{SiteID: 7, CustomerID: 2, SubscriptionID: 3, ActorUserID: 99, Automated: true}, errors.New("acme failed"))

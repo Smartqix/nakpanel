@@ -7,9 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"sync/atomic"
 )
 
-type Store struct{ db *sql.DB }
+type Store struct {
+	db             *sql.DB
+	smtpConfigured atomic.Bool
+}
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 

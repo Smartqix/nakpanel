@@ -23,6 +23,8 @@ func TestOperationsBrowserPreview(t *testing.T) {
 	var mu sync.Mutex
 	now := time.Now()
 	state := "open"
+	emailMode := "off"
+	emailEnabled := false
 	issue := func() operations.Issue {
 		return operations.Issue{ID: 9, OperationID: 41, Kind: "backup", Condition: "protection", Title: "Scheduled backup failed", Target: "studio.example", Summary: "The scheduled backup could not finish. Existing archives are preserved.", Severity: "critical", State: state, Occurrences: 2, ObservedAt: now}
 	}
@@ -59,7 +61,33 @@ func TestOperationsBrowserPreview(t *testing.T) {
 			result = map[string]bool{"queued": true}
 			w.WriteHeader(202)
 		case strings.HasSuffix(path, "/preferences"):
-			result = map[string]any{"email_mode": "off", "delivery_health": "Email is disabled by server policy. Your inbox remains available."}
+			if r.Method == "POST" {
+				var p struct {
+					EmailMode string `json:"email_mode"`
+				}
+				if json.NewDecoder(r.Body).Decode(&p) != nil {
+					w.WriteHeader(400)
+					return
+				}
+				emailMode = p.EmailMode
+				w.WriteHeader(204)
+				return
+			}
+			result = map[string]any{"email_mode": emailMode, "delivery_health": "Fixture SMTP is disabled. Your inbox remains available."}
+		case strings.HasSuffix(path, "/delivery-policy"):
+			if r.Method == "POST" {
+				var p struct {
+					Enabled bool `json:"enabled"`
+				}
+				if json.NewDecoder(r.Body).Decode(&p) != nil {
+					w.WriteHeader(400)
+					return
+				}
+				emailEnabled = p.Enabled
+				w.WriteHeader(204)
+				return
+			}
+			result = map[string]any{"enabled": emailEnabled, "smtp_configured": false}
 		case strings.Contains(path, "/issues/"):
 			result = issue()
 		case strings.Contains(path, "/tasks/"):

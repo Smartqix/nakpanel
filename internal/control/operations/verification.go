@@ -65,6 +65,10 @@ func (s *Store) ResolveVerifiedTx(ctx context.Context, tx *sql.Tx, r Verificatio
 		if _, err := hex.DecodeString(r.Checksum); err != nil {
 			return ErrInvalid
 		}
+	case "smtp_acceptance":
+		if r.SourceID <= 0 {
+			return ErrInvalid
+		}
 	case "local_tls", "local_hosting", "mail_runtime", "webmail_https":
 	default:
 		return ErrInvalid
@@ -79,7 +83,7 @@ func (s *Store) ResolveVerifiedTx(ctx context.Context, tx *sql.Tx, r Verificatio
 	if i.Generation != r.Token.Generation || i.LatestEventID != r.Token.LatestEventID || i.IntentRevision != r.Token.IntentRevision || r.ObservedAt.Before(i.ObservedAt) {
 		return ErrConflict
 	}
-	expectedSource := map[string][]string{"backup": {"archive_checksum"}, "tls": {"local_tls"}, "hosting": {"local_hosting"}, "mail": {"mail_runtime", "webmail_https"}}
+	expectedSource := map[string][]string{"backup": {"archive_checksum"}, "tls": {"local_tls"}, "hosting": {"local_hosting"}, "mail": {"mail_runtime", "webmail_https"}, "notification_delivery": {"smtp_acceptance"}}
 	matched := false
 	for _, source := range expectedSource[i.Kind] {
 		if source == r.Source {
@@ -88,6 +92,15 @@ func (s *Store) ResolveVerifiedTx(ctx context.Context, tx *sql.Tx, r Verificatio
 	}
 	if !matched {
 		return ErrInvalid
+	}
+	if r.Source == "smtp_acceptance" {
+		var accepted bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM notification_email_batches WHERE id=$1 AND recipient_user_id=$2 AND status='accepted' AND accepted_at=$3)`, r.SourceID, i.Resource.ID, r.ObservedAt).Scan(&accepted); err != nil {
+			return err
+		}
+		if i.Resource.Kind != ResourceUser || !accepted {
+			return ErrInvalid
+		}
 	}
 	if i.ResolvedAt != nil {
 		return nil

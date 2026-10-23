@@ -111,3 +111,41 @@ func TestRecorderAndSourceTransitionRollbackTogether(t *testing.T) {
 		t.Fatalf("event survived source rollback: %d %v", n, err)
 	}
 }
+
+type trackedScheduledArgs struct {
+	RunID int64 `json:"run_id"`
+}
+
+func (trackedScheduledArgs) Kind() string { return "run_scheduled_task" }
+func TestRecorderUsesScheduledCommandOutcomeInsteadOfSuccessfulQueueCompletion(t *testing.T) {
+	db := testDB(t)
+	if _, err := db.Exec(`CREATE TABLE scheduled_tasks(id bigint PRIMARY KEY,site_id bigint,subscription_id bigint);CREATE TABLE scheduled_task_runs(id bigint PRIMARY KEY,task_id bigint,status text);INSERT INTO scheduled_tasks VALUES(10,51,42);INSERT INTO scheduled_task_runs VALUES(20,10,'failed')`); err != nil {
+		t.Fatal(err)
+	}
+	driver := riverdatabasesql.New(db)
+	m, err := rivermigrate.New(driver, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = m.Migrate(ctx, rivermigrate.DirectionUp, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err = operations.InstallRecorder(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	q, err := river.NewClient(driver, &river.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	job, err := q.Insert(ctx, trackedScheduledArgs{RunID: 20}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`UPDATE river_job SET state='completed',attempt=1,finalized_at=now() WHERE id=$1`, job.Job.ID); err != nil {
+		t.Fatal(err)
+	}
+	p, err := operations.NewStore(db).Page(ctx, client, "tasks", operations.Filter{})
+	if err != nil || len(p.Tasks) != 1 || p.Tasks[0].State != operations.StateFailed || p.Counts.OpenIssues != 1 {
+		t.Fatalf("failed command reported success: %#v %v", p, err)
+	}
+}

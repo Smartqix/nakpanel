@@ -18,7 +18,10 @@ import (
 // databases are eligible; this test never contacts a remote database host.
 func subscriptionScopePostgres(t *testing.T) *sql.DB {
 	t.Helper()
-	dsn := os.Getenv("NAKPANEL_TEST_DATABASE_URL")
+	dsn := os.Getenv("NAKPANEL_OPERATIONS_TEST_DSN")
+	if dsn == "" {
+		dsn = os.Getenv("NAKPANEL_TEST_DATABASE_URL")
+	}
 	if dsn == "" {
 		dsn = "postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable"
 	}

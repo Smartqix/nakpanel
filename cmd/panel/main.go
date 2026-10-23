@@ -100,6 +100,7 @@ func main() {
 	phase6Repo := provision.NewSQLPhase6Repository(db, riverClient)
 	quotaStore := controlquota.NewSQLStore(db, riverClient)
 	operationsStore := provision.NewOperationsManager(db, riverClient, agentCapabilities)
+	operationsStore.SetSMTPConfigured(cfg.SMTPHost != "" && cfg.SMTPFrom != "")
 	quotaStore.SetServiceSecretStore(serverAdminManager.Store())
 	workspaceStore := workspace.NewStore(db)
 	fileManager := controlfiles.NewManager(controlfiles.ManagerOptions{
@@ -373,7 +374,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
-		WorkerMiddleware: []rivertype.WorkerMiddleware{provision.NewSiteJobFence(db)},
+		WorkerMiddleware: []rivertype.WorkerMiddleware{&operations.JobContextMiddleware{}, provision.NewSiteJobFence(db)},
 		PeriodicJobs: []*river.PeriodicJob{
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return provision.SweepOperationsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(2*time.Second), func() (river.JobArgs, *river.InsertOpts) { return operations.DispatchArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),

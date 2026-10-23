@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/mail"
 	"strings"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
@@ -154,17 +153,16 @@ func (s *Service) UnlockUserLogin(ctx context.Context, email string) error {
 }
 
 // SecuritySettings is the singleton policy row backing admin-2FA enforcement
-// and alert routing.
+// for administrator two-factor enforcement.
 type SecuritySettings struct {
 	RequireTOTPAdmin bool
-	AlertEmail       string
 }
 
 func (s *Service) GetSecuritySettings(ctx context.Context) (SecuritySettings, error) {
 	var settings SecuritySettings
 	err := s.db.QueryRowContext(ctx,
-		`SELECT require_totp_admin, alert_email FROM security_settings WHERE id`).
-		Scan(&settings.RequireTOTPAdmin, &settings.AlertEmail)
+		`SELECT require_totp_admin FROM security_settings WHERE id`).
+		Scan(&settings.RequireTOTPAdmin)
 	if errors.Is(err, sql.ErrNoRows) {
 		// The migration seeds this row; a restore or a hand-edited database
 		// can lose it. Recreate rather than reporting policy-off silently.
@@ -178,7 +176,7 @@ func (s *Service) GetSecuritySettings(ctx context.Context) (SecuritySettings, er
 }
 
 // SetSecuritySettings updates the policy row. Nil fields are left unchanged.
-func (s *Service) SetSecuritySettings(ctx context.Context, requireTOTPAdmin *bool, alertEmail *string) (SecuritySettings, error) {
+func (s *Service) SetSecuritySettings(ctx context.Context, requireTOTPAdmin *bool) (SecuritySettings, error) {
 	var current SecuritySettings
 	current, err := s.GetSecuritySettings(ctx)
 	if err != nil {
@@ -187,31 +185,20 @@ func (s *Service) SetSecuritySettings(ctx context.Context, requireTOTPAdmin *boo
 	if requireTOTPAdmin != nil {
 		current.RequireTOTPAdmin = *requireTOTPAdmin
 	}
-	if alertEmail != nil {
-		trimmed := strings.TrimSpace(*alertEmail)
-		if trimmed != "" {
-			if _, err := mail.ParseAddress(trimmed); err != nil {
-				return current, fmt.Errorf("alert email is not a valid address: %s", trimmed)
-			}
-		}
-		current.AlertEmail = trimmed
-	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return current, err
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO security_settings (id, require_totp_admin, alert_email)
-		 VALUES (true, $1, $2)
-		 ON CONFLICT (id) DO UPDATE SET require_totp_admin=EXCLUDED.require_totp_admin,
-		     alert_email=EXCLUDED.alert_email, updated_at=now()`,
-		current.RequireTOTPAdmin, current.AlertEmail); err != nil {
+		`INSERT INTO security_settings (id, require_totp_admin)
+		 VALUES (true, $1)
+		 ON CONFLICT (id) DO UPDATE SET require_totp_admin=EXCLUDED.require_totp_admin, updated_at=now()`,
+		current.RequireTOTPAdmin); err != nil {
 		return current, err
 	}
 	if err := s.auditTx(ctx, tx, "security.settings_updated", "security", 0, map[string]any{
 		"require_totp_admin": current.RequireTOTPAdmin,
-		"alert_email_set":    current.AlertEmail != "",
 	}); err != nil {
 		return current, err
 	}

@@ -175,16 +175,16 @@ controls are usable and state changes do not fabricate healthy results.
 worker in `quota/usage.go`, notification security producers in
 `http/login_security.go`, preference routes/views and operator documentation.
 
-- [ ] Add failing tests for mandatory in-app categories, invalid recipient scope,
+- [x] Add failing tests for mandatory in-app categories, invalid recipient scope,
   digest dedupe, role changes before send, repeated SMTP failure and suppressed
   delivery-failure recursion.
-- [ ] Implement per-user channel/digest preferences and administrator delivery
+- [x] Implement per-user channel/digest preferences and administrator delivery
   policy. Keep in-app state independent from SMTP availability.
-- [ ] Reuse bounded delivery retries; label SMTP acceptance accurately and show
+- [x] Reuse bounded delivery retries; label SMTP acceptance accurately and show
   delivery degradation. Redact secrets from diagnostics and exports.
-- [ ] Test with a local SMTP capture and owned fixture recipients only. Prove
+- [x] Test with a local SMTP capture and owned fixture recipients only. Prove
   one event cannot create an unbounded alert/email loop.
-- [ ] Report effective defaults and local results before phase 6.
+- [x] Report effective defaults and local results before phase 6.
 
 **Exit:** preference changes are enforceable, delivery status is truthful and
 server email failure does not silence the inbox.
