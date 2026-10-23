@@ -6,13 +6,20 @@ import (
 )
 
 templ mailDomainWorkspace(site dashboard.Site, subscription types.SubscriptionSummary, domain dashboard.MailDomain, data dashboard.Data, view WorkspaceView) {
-	{{ mailboxes:=mailboxesForWorkspace(data.SubscriptionServices.Mailboxes,[]dashboard.MailDomain{domain}); aliases:=mailAliasesForWorkspace(data.SubscriptionServices.MailAliases,[]dashboard.MailDomain{domain}); webmailURL:=mailWebmailURL(site,subscription,domain,data) }}
-	<div class="np-mail-service-row"><dl class="np-mail-service-strip"><div><dt>Mail service</dt><dd>@statusPill(mailDomainState(domain))</dd></div><div><dt>DKIM</dt><dd>{ formatEnabled(domain.DKIM) }</dd></div><div><dt>DMARC</dt><dd>{ mailDMARCLabel(domain.DMARCPolicy) }</dd></div><div><dt>Webmail</dt><dd>{ mailWebmailReadiness(webmailURL) }</dd></div></dl><span class="np-mail-mobile-count">{ formatPlanLimit(len(mailboxes)) } mailboxes</span><a class="np-icon-button np-mail-mobile-settings" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"settings")) } data-np-mail-settings={ mailDialogID("domain",subscription.ID,domain.ID) } title="Mail domain settings" aria-label="Mail domain settings">@icon("settings")</a></div>
+	{{ mailboxes:=mailboxesForWorkspace(data.SubscriptionServices.Mailboxes,[]dashboard.MailDomain{domain}); aliases:=mailAliasesForWorkspace(data.SubscriptionServices.MailAliases,[]dashboard.MailDomain{domain}); webmailState:=mailWebmailReadiness(site,subscription,domain,data) }}
+	<div class="np-mail-service-row"><dl class="np-mail-service-strip"><div><dt>Mail service</dt><dd>@statusPill(mailDomainState(domain))</dd></div><div><dt>DKIM</dt><dd>{ formatEnabled(domain.DKIM) }</dd></div><div><dt>DMARC</dt><dd>{ mailDMARCLabel(domain.DMARCPolicy) }</dd></div><div><dt>Webmail</dt><dd>{ webmailState.Label }</dd></div></dl><span class="np-mail-mobile-count">{ formatPlanLimit(len(mailboxes)) } mailboxes</span><a class="np-icon-button np-mail-mobile-settings" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"settings")) } data-np-mail-settings={ mailDialogID("domain",subscription.ID,domain.ID) } title="Mail domain settings" aria-label="Mail domain settings">@icon("settings")</a></div>
 	if domain.LastError!="" {
 		<p class="np-inline-error np-mail-dns-records" role="alert">{ domain.LastError }</p>
 	}
 	{{ dns := mailDNSReadiness(site,domain,data) }}
 	<div class="np-mail-notice" role="status"><strong>{ dns.Label }</strong><p>{ dns.Message }</p></div>
+	if webmailState.Message!="" {
+		<div class="np-mail-notice" role="status"><div><strong>Webmail: { webmailState.Label }</strong><p>{ webmailState.Message }</p></div>
+			if subscriptionWebmailEnabled(subscription,data.SubscriptionServices) && domain.Enabled && domain.EffectiveEnabled && domain.Status=="in_sync" && site.Status=="active" && subscription.Status=="active" {
+				<a class="np-secondary-button" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"webmail")) } data-np-dialog-open={ mailDialogID("webmail",subscription.ID,domain.ID) }>{ mailWebmailSiteAction(site,subscription,data) }</a>
+			}
+		</div>
+	}
 	if !domain.Enabled {
 		<div class="np-mail-notice" role="status">Mail service is disabled. Enable it in Mail domain settings before connecting to this domain.</div>
 	}
@@ -20,9 +27,9 @@ templ mailDomainWorkspace(site dashboard.Site, subscription types.SubscriptionSu
 		<a class="np-mail-back" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"addresses")) }>@icon("arrow-left") Back to email addresses</a>
 		<section class="np-mail-form-page np-mail-settings-page">
 			if view.MailView=="webmail" {
-				<h3>Reconfigure webmail</h3>
+				<h3>{ mailWebmailSiteAction(site,subscription,data) }</h3>
 				if subscriptionWebmailEnabled(subscription,data.SubscriptionServices) {
-					@mailWebmailForm(site,subscription,view,"site-mail")
+					@mailWebmailForm(site,subscription,view,"site-mail",mailWebmailSiteAction(site,subscription,data))
 				} else {
 					<p>Webmail is not included in this subscription.</p>
 				}
@@ -95,7 +102,7 @@ templ mailWebmailControls(site dashboard.Site, subscription types.SubscriptionSu
 			if url:=mailWebmailURL(site,subscription,domain,data);url!="" {
 				<a class="np-secondary-button" href={ templ.SafeURL(url) } target="_blank" rel="noopener noreferrer">@icon("external-link") Open webmail</a>
 			}
-			<a class="np-secondary-button" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"webmail")) } data-np-dialog-open={ mailDialogID("webmail",subscription.ID,domain.ID) }>@icon("refresh-cw") Reconfigure webmail</a>
+			<a class="np-secondary-button" href={ templ.SafeURL(mailWorkspaceURL(view,site.ID,"webmail")) } data-np-dialog-open={ mailDialogID("webmail",subscription.ID,domain.ID) }>@icon("refresh-cw") { mailWebmailSiteAction(site,subscription,data) }</a>
 		</section>
 	} else {
 		<p class="np-muted">Webmail is not included in this subscription.</p>
@@ -104,10 +111,10 @@ templ mailWebmailControls(site dashboard.Site, subscription types.SubscriptionSu
 
 templ mailWebmailDialog(site dashboard.Site, subscription types.SubscriptionSummary, domain dashboard.MailDomain, data dashboard.Data, view WorkspaceView, returnTo string) {
 	if subscriptionWebmailEnabled(subscription,data.SubscriptionServices) {
-		<dialog class="np-dialog np-mail-dialog" id={ mailDialogID("webmail",subscription.ID,domain.ID) } data-np-dialog><div class="np-dialog-head"><h2>Reconfigure webmail</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close">@icon("x")</button><p>Configure Roundcube for { site.Domain }. Existing messages and mailbox passwords stay unchanged.</p></div>@mailWebmailForm(site,subscription,view,returnTo)</dialog>
+		<dialog class="np-dialog np-mail-dialog" id={ mailDialogID("webmail",subscription.ID,domain.ID) } data-np-dialog><div class="np-dialog-head"><h2>{ mailWebmailSiteAction(site,subscription,data) }</h2><button type="button" class="np-icon-button" data-np-dialog-close aria-label="Close">@icon("x")</button><p>Configure Roundcube for { site.Domain }. Existing messages and mailbox passwords stay unchanged.</p></div>@mailWebmailForm(site,subscription,view,returnTo,mailWebmailSiteAction(site,subscription,data))</dialog>
 	}
 }
 
-templ mailWebmailForm(site dashboard.Site, subscription types.SubscriptionSummary, view WorkspaceView, returnTo string) {
-	<form class="np-form np-dialog-form" method="post" action="/webmail">@csrfInput(view)@mailReturnFields(view,returnTo,site.ID)<input type="hidden" name="domain" value={ site.Domain }/><input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">Reconfigure webmail</button></div></form>
+templ mailWebmailForm(site dashboard.Site, subscription types.SubscriptionSummary, view WorkspaceView, returnTo string, action string) {
+	<form class="np-form np-dialog-form" method="post" action="/webmail">@csrfInput(view)@mailReturnFields(view,returnTo,site.ID)<input type="hidden" name="domain" value={ site.Domain }/><input type="hidden" name="subscription_id" value={ formatJobID(subscription.ID) }/><div class="np-dialog-actions"><button type="button" class="np-secondary-button" data-np-dialog-close>Cancel</button><button type="submit">{ action }</button></div></form>
 }

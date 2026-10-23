@@ -229,11 +229,38 @@ func mailDMARCLabel(policy string) string {
 		return "Monitoring only"
 	}
 }
-func mailWebmailReadiness(url string) string {
-	if url != "" {
-		return "Ready"
+
+type mailWebmailState struct{ Label, Message string }
+
+func mailWebmailReadiness(hostedSite dashboard.Site, subscription types.SubscriptionSummary, domain dashboard.MailDomain, data dashboard.Data) mailWebmailState {
+	if mailWebmailURL(hostedSite, subscription, domain, data) != "" {
+		return mailWebmailState{Label: "Ready"}
 	}
-	return "Unavailable"
+	if !domain.Enabled || !domain.EffectiveEnabled || domain.Status != "in_sync" || hostedSite.Status != "active" || subscription.Status != "active" || !subscriptionMailEnabled(subscription, data.SubscriptionServices) {
+		return mailWebmailState{"Mail unavailable", "Activate this domain's mail service and account before opening webmail."}
+	}
+	if !subscriptionWebmailEnabled(subscription, data.SubscriptionServices) {
+		return mailWebmailState{"Disabled by policy", "An administrator must enable webmail in this subscription's service plan or policy."}
+	}
+	host, found := webmailForSite(data.SubscriptionServices.WebmailHosts, hostedSite.ID)
+	if !found || host.SubscriptionID != subscription.ID {
+		return mailWebmailState{"Not configured", "Enable Roundcube for this domain. Its webmail DNS name and trusted HTTPS certificate must be configured first."}
+	}
+	if host.LastError != "" {
+		return mailWebmailState{"Setup failed", host.LastError}
+	}
+	if host.Status == "failed" {
+		return mailWebmailState{"Setup failed", "Review the webmail configuration and HTTPS certificate, then retry setup."}
+	}
+	if host.Status == "pending" || host.Status == "" {
+		return mailWebmailState{"Setting up", "Webmail setup is queued. Open Tasks to check its progress."}
+	}
+	return mailWebmailState{"Unavailable", "Webmail is unavailable under the current account state or hostname configuration."}
+}
+
+func mailWebmailSiteAction(hostedSite dashboard.Site, subscription types.SubscriptionSummary, data dashboard.Data) string {
+	host, found := webmailForSite(data.SubscriptionServices.WebmailHosts, hostedSite.ID)
+	return mailWebmailAction(found && host.SubscriptionID == subscription.ID)
 }
 func mailMailboxLabel(enabled bool) string {
 	if enabled {
