@@ -10,15 +10,18 @@ received after a hidden tab reconnects. Routine successful reconciliation stays
 quiet. Navigation retains the consumed cursor within the current user/resource
 scope; changing scope clears the old result surface.
 
-Use Mark read for personal inbox receipts. Opening an issue currently leaves its
-notification unread; it never acknowledges or resolves that issue.
+Opening a notification’s issue or task marks that notification read for you after
+its details load successfully. This never acknowledges or resolves the issue.
+Closing before details load leaves it unread. If saving the receipt fails, the
+details explain how to retry with Mark read; other viewers keep their own state.
 
 The first automatic recovery action is backup retry. Its preflight checks current
 ownership, permissions, quota, conflicting work, agent reachability, Ubuntu 26.04
 and a minimum free-space reserve. It does not promise the backup will fit or that
 the destination is writable. The worker reloads current intent before execution.
-For other problems, open the existing resource settings through Websites or
-Subscriptions; direct settings links in issue details are a remaining UX item.
+Issue details link directly to the relevant current resource settings. Customer
+support links keep their customer context. Removed resources have an unavailable
+settings state, and each destination checks current access again.
 Restores have no generic retry.
 
 Scheduled observation checks certificates within 14 days of expiry and overdue
@@ -92,3 +95,10 @@ The script verifies all terminal outcomes beyond the quick-view window, cursor
 continuity, replay deduplication, scope clearing, delayed preference loading and
 mobile overflow. Backend authorization, transaction and delivery checks use
 separate PostgreSQL/River/SMTP fixtures.
+
+The focused UX regression script uses the same loopback preview and browser
+environment variables described above:
+
+```sh
+node internal/control/web/operations_ux_acceptance.cjs
+```

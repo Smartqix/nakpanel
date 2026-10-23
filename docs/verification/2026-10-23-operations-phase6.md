@@ -76,10 +76,11 @@ remains the design reference; exact pixel equivalence was not claimed.
 
 ## Remaining work and limits
 
-Two minor UX findings are deferred: issue details lack a direct resource/settings
+At this initial acceptance revision, two minor UX findings were deferred: issue details lack a direct resource/settings
 link for unsupported automatic actions, and opening an inbox issue does not
-mark its notification read automatically. Existing resource navigation and the
-explicit personal Mark read action work. Neither changes issue recovery state.
+mark its notification read automatically. Both have since been resolved at
+`51eeb1d`; see [focused follow-up evidence](2026-10-23-operations-ux-followup.md).
+The original review observations remain attributed to the revision above.
 
 Focused hosted Ubuntu 26.04 acceptance and external delivery/public DNS checks
 need separate authorization. Required CI, including the hosted security gate,

@@ -47,8 +47,15 @@ plan and repository development policy remain authoritative.
 
 22. Final: Ruling: Keep the feature branch local after local acceptance — pushing, PR, merge and deployment are explicitly gated by the active plan — cost if wrong: work is not available on the remote until separately requested.
 
-## Deferred minor findings
+## Minor findings deferred at initial acceptance
 
 - Final: minor (deferred): Unsupported automatic-recovery details have explanatory text but no direct resource/settings link; use the existing Websites/Subscriptions navigation.
 
 - Final: minor (deferred): Opening an inbox issue does not automatically mark its notification read; the explicit personal Mark read action remains available. Neither action acknowledges or resolves an issue.
+
+## Follow-up resolution
+
+The owner subsequently authorized both deferred UX fixes. They are now resolved
+at `51eeb1d`: current scoped settings destinations and personal read-on-open after
+successful detail loading. See the [focused follow-up report](2026-10-23-operations-ux-followup.md).
+The deferral entries above retain the initial review history.

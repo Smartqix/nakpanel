@@ -213,6 +213,6 @@ authorization changes. Reuse existing required CI workflows.
 separated. A visually complete Figma file is never treated as system acceptance.
 
 Local acceptance is recorded at implementation commit `d2eedb9` in
-[phase 6 evidence](../../verification/2026-10-23-operations-phase6.md). Two minor
-UX follow-ups remain explicit. Hosted/CI/release checkboxes above remain gated;
+[phase 6 evidence](../../verification/2026-10-23-operations-phase6.md). The two minor
+UX follow-ups were resolved in [focused follow-up evidence](../../verification/2026-10-23-operations-ux-followup.md). Hosted/CI/release checkboxes above remain gated;
 local checks do not satisfy those gates.
