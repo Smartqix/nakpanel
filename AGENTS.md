@@ -32,3 +32,20 @@ This policy supersedes backward-compatibility and backfill requirements in older
 plans and verification documents. Historical reports describe past work; they
 do not create continuing legacy-support obligations. A later explicit user
 request can require a specific compatibility or migration path.
+
+# Operator installation credentials
+
+- For new development installations authorized by the repository owner, reuse
+  the approved administrator bootstrap password from the operator workstation's
+  `~/.config/nakpanel/admin-bootstrap-password`. The private installation record
+  is `~/.config/nakpanel/INSTALLATION.md`.
+- Transfer that credential through verified SSH to the target server's
+  `/root/nakpanel-admin-password`, owned by root with mode `0600`. Supply the
+  installation's administrator email and `--admin-password-file` explicitly.
+  The nakpanel.com panel administrator is `admin@nakpanel.com`.
+- Keep the credential in private operator configuration. Do not commit its value
+  to source, documentation or fixtures, or add a universal installer password.
+  If the private credential is unavailable, obtain it from the operator.
+- Reset an existing account with the recovery CLI's `user set-password` command,
+  which records the change and revokes existing sessions. Verify a new trusted
+  HTTPS login afterward; preserve the account's role and two-factor settings.

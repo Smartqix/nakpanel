@@ -189,6 +189,14 @@ the administrator before starting the panel, disables the other known test
 logins, and removes its temporary password copy. Without an explicit
 administrator, migration-seeded logins are for isolated lab testing only.
 
+For the repository owner's development installations, reuse the approved
+credential in `~/.config/nakpanel/admin-bootstrap-password` on the operator
+workstation. The private installation record is
+`~/.config/nakpanel/INSTALLATION.md`. Transfer the credential through verified SSH
+to `/root/nakpanel-admin-password`, retain root ownership and mode `0600`, and
+use the explicit bootstrap options above. The password value stays in private
+operator configuration; it is not a shared installer default.
+
 The installer detects fresh installs versus upgrades (`panelctl version` /
 `/etc/nakpanel/version`). Upgrades take a full pre-upgrade backup set and
 roll back automatically when migrations or the post-upgrade health gate fail;
