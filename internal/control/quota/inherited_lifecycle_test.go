@@ -9,6 +9,7 @@ import (
 )
 
 func expectInheritedAccountQueue(mock sqlmock.Sqlmock, customerID int64, accounts ...int64) {
+	mock.ExpectExec(`UPDATE mail_domains domain SET effective_enabled=false`).WithArgs(customerID).WillReturnResult(sqlmock.NewResult(0, 0))
 	rows := sqlmock.NewRows([]string{"subscription_id"})
 	for _, id := range accounts {
 		rows.AddRow(id)
@@ -101,6 +102,7 @@ func TestCustomerLifecycleRollsBackWhenAccountQueueFails(t *testing.T) {
 	defer db.Close()
 	mock.ExpectBegin()
 	mock.ExpectExec(`UPDATE customers SET status=\$2`).WithArgs(int64(4), "suspended").WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(`UPDATE mail_domains domain SET effective_enabled=false`).WithArgs(int64(4)).WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectQuery(`SELECT account.subscription_id`).WithArgs(int64(4)).WillReturnRows(sqlmock.NewRows([]string{"subscription_id"}).AddRow(42))
 	mock.ExpectQuery(`UPDATE subscription_system_accounts`).WithArgs(int64(42)).WillReturnError(errors.New("queue failure"))
 	mock.ExpectRollback()

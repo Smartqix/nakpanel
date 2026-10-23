@@ -772,7 +772,18 @@ allow_backups=EXCLUDED.allow_backups,allow_php_settings=EXCLUDED.allow_php_setti
 		e.DiskWarningPercent, e.TrafficWarningPercent, e.MaxSubdomains,
 		e.MaxDomainAliases, e.MaxFTPAccounts, e.ValidityDays, e.HostingEnabled,
 		e.DefaultPHPVersion, e.AllowTLS, e.AllowBackups, e.AllowPHPSettings, presets, hostingPolicy)
-	return err
+	if err != nil {
+		return err
+	}
+	var patch []byte
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE((SELECT policy_patch FROM subscription_policy_overrides WHERE subscription_id=$1),'{}'::jsonb)`, e.SubscriptionID).Scan(&patch); err != nil {
+		return err
+	}
+	effective, err := controlpolicy.Resolve(policy, patch, nil)
+	if err != nil {
+		return err
+	}
+	return revokeDisallowedMailTx(ctx, tx, e.SubscriptionID, effective)
 }
 
 // ValidateProvisioningCapacityTx applies the same provider and server-capacity

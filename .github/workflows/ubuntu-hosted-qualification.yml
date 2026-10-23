@@ -3,6 +3,10 @@ name: Hosted Ubuntu AMD64 qualification
 on:
   workflow_dispatch:
     inputs:
+      subdomain_mail_only:
+        description: Only verify current subdomain mail on an owned disposable Ubuntu 26.04 guest
+        type: boolean
+        default: false
       scheduled_backups_only:
         description: Only verify scheduled backups and fresh-host restore using the accepted Phase 3 application
         type: boolean
@@ -45,7 +49,7 @@ concurrency:
 
 jobs:
   diagnose-fwupd:
-    if: github.event.repository.private == false && inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
+    if: github.event.repository.private == false && inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -66,7 +70,7 @@ jobs:
           if-no-files-found: error
 
   diagnose-php-maintenance:
-    if: github.event.repository.private == false && inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
+    if: github.event.repository.private == false && inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -89,7 +93,7 @@ jobs:
 
   scheduled-backups:
     needs: signed-bundles
-    if: always() && !cancelled() && github.event.repository.private == false && inputs.scheduled_backups_only && ((!inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'skipped') || (inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'success'))
+    if: always() && !cancelled() && github.event.repository.private == false && inputs.scheduled_backups_only && ((!inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'skipped') || (inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'success')) && !inputs.subdomain_mail_only
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -167,6 +171,73 @@ jobs:
         with:
           name: scheduled-backup-26.04-amd64-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/scheduled-backup-evidence/
+          retention-days: 7
+          if-no-files-found: error
+
+
+  subdomain-mail:
+    if: github.event.repository.private == false && inputs.subdomain_mail_only && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
+    needs: signed-bundles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      NAKPANEL_MULTIPASS_IMAGE: '26.04'
+      NAKPANEL_MULTIPASS_ARCH: amd64
+      NAKPANEL_QUALIFICATION_PHP_PROVIDER: sury
+      NAKPANEL_HOSTED_GUEST_FIRMWARE_POLICY: '1'
+      NAKPANEL_QUALIFICATION_VM_CPUS: '2'
+      NAKPANEL_QUALIFICATION_VM_MEMORY: 5G
+      NAKPANEL_QUALIFICATION_VM_DISK: 32G
+      NAKPANEL_QUALIFICATION_LAUNCH_TIMEOUT: '600'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: deploy/release/GO_VERSION
+      - uses: actions/download-artifact@v4
+        with:
+          name: hosted-development-bundles-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/subdomain-mail-bundle
+      - name: Prepare only this disposable hosted runner
+        run: bash deploy/multipass/prepare-hosted-runner.sh
+      - name: Authenticate current source, signed application and pinned Resolute image
+        run: bash deploy/multipass/subdomain-mail-verify.sh prepare "${RUNNER_TEMP}/subdomain-mail-bundle"
+      - name: Check KVM and capacity before creating the owned guest
+        run: python3 deploy/multipass/hosted-runner-preflight.py --output "${RUNNER_TEMP}/subdomain-mail-evidence/host-preflight.json"
+      - name: Prepare the existing focused browser probe
+        run: |
+          set -euo pipefail
+          google-chrome --version
+          npm install --prefix "${RUNNER_TEMP}/qualification-browser" --no-audit --no-fund playwright@1.64.1
+          cp "${RUNNER_TEMP}/qualification-browser/package-lock.json" "${RUNNER_TEMP}/subdomain-mail-evidence/browser-package-lock.json"
+          echo "PLAYWRIGHT_MODULE=${RUNNER_TEMP}/qualification-browser/node_modules/playwright" >>"${GITHUB_ENV}"
+      - name: Run only the bounded subdomain mail acceptance
+        run: timeout --kill-after=20s 45m bash deploy/multipass/subdomain-mail-verify.sh run
+      - name: Always remove only this run's owned disposable guest
+        if: always()
+        run: |
+          set -euo pipefail
+          source deploy/multipass/common.sh
+          expected="submail-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          status=0
+          records=0
+          if [[ "${NAKPANEL_RUN_TOKEN:-}" == "${expected}" && "${NAKPANEL_OWNERSHIP_DIR:-}" == "${RUNNER_TEMP}/subdomain-mail-private/owners" ]]; then
+            for record in "${NAKPANEL_OWNERSHIP_DIR}/${expected}"/nakpanel-*; do
+              [[ -f "${record}" && "${record}" != *.image.json ]] || continue
+              records=$((records+1))
+              destroy_owned_vm "$(basename "${record}")" "${expected}" || status=1
+            done
+          fi
+          mkdir -p "${RUNNER_TEMP}/subdomain-mail-evidence"
+          printf '{"owned_records":%d,"exit_code":%d}\n' "${records}" "${status}" >"${RUNNER_TEMP}/subdomain-mail-evidence/cleanup.json"
+          exit "${status}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: subdomain-mail-26.04-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/subdomain-mail-evidence/
+            ${{ runner.temp }}/hosted-evidence/
           retention-days: 7
           if-no-files-found: error
 
@@ -249,7 +320,7 @@ jobs:
         run: rm -f "${RUNNER_TEMP}/hosted-test-private.pem"
 
   qualify-amd64:
-    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
+    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only
     needs: signed-bundles
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -405,7 +476,7 @@ jobs:
           if-no-files-found: error
 
   hosted-evidence-summary:
-    if: always() && github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only
+    if: always() && github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only
     needs: [signed-bundles, qualify-amd64]
     runs-on: ubuntu-24.04
     steps:

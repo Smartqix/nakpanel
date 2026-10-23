@@ -171,3 +171,5 @@
  .np-mail-address-input>span {max-width:60%;padding:8px;}
  .np-mail-settings-page {padding:20px;}
 }
+
+.np-mail-dns-records { white-space:pre-wrap; overflow-wrap:anywhere; }

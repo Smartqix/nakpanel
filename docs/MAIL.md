@@ -12,8 +12,9 @@ nginx and BIND: intent lives in PostgreSQL, the agent renders
   the subscription's Mail tab) inserts a `mail_domains` row. The
   `configure_mail` job then generates an RSA-2048 DKIM keypair (selector
   `nak1`, private key root-only under `/var/lib/nakpanel/dkim/<domain>/`),
-  renders the Stalwart config, and publishes `MX`, `SPF`, `DKIM`, and `DMARC`
-  records through the panel's own BIND zone for the domain. Re-running is
+  renders the Stalwart config, and reconciles `MX`, `SPF`, `DKIM`, and `DMARC`
+  records in the selected primary BIND zone. External DNS receives publication
+  requirements instead. Re-running is
   idempotent: the key is never regenerated and unchanged intent skips the
   service restart. (Stalwart normalizes and rewrites `config.toml` at boot,
   so the agent tracks the last rendered intent in
@@ -33,6 +34,48 @@ nginx and BIND: intent lives in PostgreSQL, the agent renders
   `stalwart_domains` (an expression in `queue.outbound.next-hop`), so a
   disabled or deleted domain stops receiving mail as soon as the row changes.
 
+## Subdomain DNS and readiness
+
+Enable mail from an existing active subdomain's Mail tab. Parent and child
+mail identities are separate; `hello@shop.example.test` and
+`hello@example.test` do not share a mailbox automatically.
+
+For `shop.example.test` using the `example.test` parent zone, the managed
+records are scoped to the child:
+
+| Host in parent zone | Type | Value |
+| --- | --- | --- |
+| `shop` | MX | `10 mail.shop.example.test` |
+| `mail.shop` | A | The mail server's public IPv4 address |
+| `shop` | TXT | `v=spf1 mx ~all` |
+| `nak1._domainkey.shop` | TXT | The generated public DKIM record for this child |
+| `_dmarc.shop` | TXT | `v=DMARC1; p=<selected policy>; rua=mailto:postmaster@shop.example.test` |
+
+Custom/external MX, SPF and authentication records are preserved. Conflicting
+custom routing receives a DNS action notice instead of another SPF or mixed
+local/external MX records. CNAME conflicts and active service-hostname
+collisions stop mail DNS changes and report the reason. A label such as `mail`
+is allowed when it does not collide with an active endpoint.
+
+An NS delegation at `shop` means the delegated provider controls that child;
+Nakpanel does not publish ineffective mail records below that cut in the
+parent zone. A separate local child zone uses apex hosts (`@`, `mail`,
+`nak1._domainkey`, `_dmarc`) and needs matching parent/child NS sets. Nakpanel
+reports a missing or different delegation and preserves the parent's records.
+With external DNS, publish the requirements shown in the Mail page, including
+the actual public DKIM key returned by the agent. The private key stays on the
+server. Do not combine the local SPF example with a separate existing SPF
+policy; explicitly choose or edit the routing policy first.
+
+The Mail page distinguishes mail setup pending/failed, DNS pending/failed,
+DNS action required and DNS applied locally. The latter requires the current
+zone revision to be acknowledged; it does not verify public delegation,
+propagation or external delivery. DNS record edits, mode changes and applied
+template changes queue a mail readiness recheck. After resolving a reported conflict, that existing worker
+refreshes the notice. Mail setup failure, malformed acknowledgements and missing
+requested DKIM output remain failures. A child DNS failure is reported without
+blocking the reconciliation of independent mail domains.
+
 ## Plan limits
 
 `plans.max_mailboxes` flows into the subscription's hosting policy and is
@@ -40,6 +83,38 @@ enforced in front of provisioning: the (limit+1)th mailbox returns
 `quota exceeded`, the same fail-closed gate sites and databases use. The
 per-mailbox storage quota comes from the plan policy (`mail.mailbox_quota_mb`)
 and is enforced by Stalwart's account quota.
+
+## Mail lifecycle and subdomain limits
+
+Parent and child mailboxes/aliases consume the subscription's shared allowances.
+Two creates competing for the last slot use the existing subscription mutation
+lock; only one succeeds. A finite mailbox storage cap also applies to requests
+for a larger or unlimited mailbox. An edit must name an existing account in the
+selected mail domain; a supplied unused ID cannot insert an account or bypass
+the create limit.
+
+Customer/subscription suspension revokes directory entries in the lifecycle
+transaction. Revoking mail through subscription policy or a synchronized plan,
+or disabling a mail domain, also revokes directory access immediately. Plan and
+custom entitlement writes resolve subscription overrides before revoking access.
+Mail acknowledgements check the current account revision as well as the mail
+settings, preventing an older decision from overriding revocation or reactivation.
+Reactivation still needs current convergence and restores only enabled, entitled
+mail domains. The Mail page shows unavailable service instead of local DNS
+readiness until mail is effectively enabled and its configuration is acknowledged.
+
+Website-only suspension keeps existing mail. Its existing mail-domain settings
+remain editable while web hosting is off, provided its subscription is active
+and the site is not being removed. Mail disable and suspension retain mailbox
+IDs, password hashes, aliases, message storage and signing keys; they are not
+permanent deletion requests.
+
+Permanent child removal uses the existing dependency preview, current digest,
+hostname confirmation and permanent-removal acknowledgement. The preview lists
+the child's mail domain, mailbox and alias dependencies without mailbox secrets.
+The reservation is scoped to the selected child and records the owning customer,
+subscription and actor. A permanent deletion has a different scope from disable;
+review its listed dependencies before confirming it.
 
 ## Deliverability
 

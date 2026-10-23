@@ -28,7 +28,7 @@ func TestMailWorkspaceBrowserPreview(t *testing.T) {
 	policy.Mail.Webmail = true
 	policy.Resources.MaxMailboxes = 5
 	data.SubscriptionServices.Accounts = []types.SubscriptionSystemAccount{{SubscriptionID: 20, EffectivePolicy: policy}}
-	data.SubscriptionServices.MailDomains = []dashboard.MailDomain{{ID: 41, SubscriptionID: 20, SiteID: 1, Domain: "example.test", Enabled: true, DKIM: true, DMARCPolicy: "none", Status: "in_sync"}}
+	data.SubscriptionServices.MailDomains = []dashboard.MailDomain{{ID: 41, SubscriptionID: 20, SiteID: 1, Domain: "example.test", Enabled: true, EffectiveEnabled: true, DKIM: true, DMARCPolicy: "none", Status: "in_sync"}}
 	data.SubscriptionServices.Mailboxes = []dashboard.Mailbox{{ID: 51, SubscriptionID: 20, MailDomainID: 41, Address: "admin@example.test", QuotaMB: 1024, Enabled: true}, {ID: 52, SubscriptionID: 20, MailDomainID: 41, Address: "notifications@example.test", QuotaMB: 1024, Enabled: true}}
 	data.SubscriptionServices.MailAliases = []dashboard.MailAlias{{ID: 61, SubscriptionID: 20, MailDomainID: 41, Address: "sales@example.test", Destinations: "admin@example.test"}}
 	data.SubscriptionServices.WebmailHosts = []dashboard.WebmailHost{{ID: 71, SubscriptionID: 20, SiteID: 1, Hostname: "webmail.example.test", Status: "active"}}

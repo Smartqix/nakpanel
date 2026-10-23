@@ -237,6 +237,9 @@ zone_id,owner_site_id,host,record_type,value,priority,weight,port,ttl,origin
 			return err
 		}
 	}
+	if err := r.EnqueueMailDNSRecheckTx(ctx, tx, zoneID); err != nil {
+		return err
+	}
 	return r.enqueueDNSZoneTx(ctx, tx, zoneID)
 }
 
@@ -273,6 +276,9 @@ WHERE id=$1 AND zone_id=$2 AND origin<>'system' AND (owner_site_id=$3 OR $3=$4)`
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return sql.ErrNoRows
+	}
+	if err := r.EnqueueMailDNSRecheckTx(ctx, tx, zoneID); err != nil {
+		return err
 	}
 	return r.enqueueDNSZoneTx(ctx, tx, zoneID)
 }

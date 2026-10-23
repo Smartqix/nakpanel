@@ -199,6 +199,10 @@ func TestSetSubscriptionModeCustomQueuesHostConvergence(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`INSERT INTO subscription_entitlements`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectQuery(`SELECT COALESCE\(\(SELECT policy_patch FROM subscription_policy_overrides`).WithArgs(int64(91)).
+		WillReturnRows(sqlmock.NewRows([]string{"policy_patch"}).AddRow([]byte(`{}`)))
+	mock.ExpectExec(`UPDATE mail_domains domain SET effective_enabled=false`).WithArgs(int64(91)).
+		WillReturnResult(sqlmock.NewResult(0, 0))
 	mock.ExpectExec(`UPDATE subscriptions SET plan_id=NULL`).
 		WithArgs(int64(91)).
 		WillReturnResult(sqlmock.NewResult(0, 1))

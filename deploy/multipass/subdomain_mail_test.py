@@ -1,0 +1,174 @@
+import importlib.util,os,tarfile,tempfile,unittest
+from pathlib import Path
+from unittest.mock import patch
+spec=importlib.util.spec_from_file_location('submail',Path(__file__).with_name('subdomain-mail-verify.py'))
+m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+class Guards(unittest.TestCase):
+ def test_hosted_guard_rejects_local_even_with_github_flag(self):
+  with patch.dict(os.environ,{'GITHUB_ACTIONS':'true','RUNNER_ENVIRONMENT':'self-hosted'},clear=True):
+   with self.assertRaises(ValueError):m.hosted_guard()
+ def test_archive_rejects_links_and_parent_escape_before_extract(self):
+  for name,kind in [('../escape',tarfile.REGTYPE),('bundle/link',tarfile.SYMTYPE)]:
+   with self.subTest(name=name),tempfile.TemporaryDirectory() as temp:
+    root=Path(temp); archive=root/'bundle.tar'
+    with tarfile.open(archive,'w') as stream:
+     item=tarfile.TarInfo(name);item.type=kind;item.linkname='/tmp/foreign';stream.addfile(item)
+    with self.assertRaises(ValueError):m.extract_release(archive,root/'out')
+    self.assertFalse((root/'out').exists())
+ def test_identity_rejects_wrong_commit_and_architecture(self):
+  valid={'commit':'a'*40,'architecture':'amd64','development':True}
+  with self.assertRaises(ValueError):m.check_identity(valid,'b'*40)
+  with self.assertRaises(ValueError):m.check_identity(dict(valid,architecture='arm64'),'a'*40)
+
+class InstallerPolicy(unittest.TestCase):
+ def test_mail_drill_opts_into_process_scoped_policy_without_parent_env_mutation(self):
+  with tempfile.TemporaryDirectory() as temp:
+   env=dict(GITHUB_ACTIONS='true',RUNNER_ENVIRONMENT='github-hosted',GITHUB_RUN_ID='123',GITHUB_RUN_ATTEMPT='1',GITHUB_SHA='a'*40,RUNNER_TEMP=temp,GITHUB_ENV=str(Path(temp)/'exports'))
+   with patch.dict(os.environ,env,clear=True):
+    drill=m.Drill()
+    self.assertEqual(drill.env['NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS'],'1')
+    self.assertNotIn('NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS',os.environ)
+    self.assertNotIn('APT_CONFIG',os.environ)
+
+class RemovalEvidence(unittest.TestCase):
+ def test_failed_status_is_retained_before_raising_without_html_or_secrets(self):
+  from types import SimpleNamespace
+  with tempfile.TemporaryDirectory() as temp:
+   drill=m.Drill.__new__(m.Drill);drill.evidence=Path(temp);drill.state={}
+   response=dict(operation_id=7,state='failed',stage='reconcile_shared',message='fixture Np!privateValue',checkpoints=['stop_services','remove_hosting'],html='PRIVATE_HTML_SECRET')
+   drill.http=SimpleNamespace(request=lambda path:(200,m.json.dumps(response).encode()))
+   with self.assertRaisesRegex(ValueError,'reconcile_shared'):drill.wait_removal(7)
+   saved=m.json.loads((Path(temp)/'child-removal.json').read_text())
+   self.assertEqual(saved['state'],'failed');self.assertEqual(saved['stage'],'reconcile_shared')
+   self.assertEqual(saved['operation_id'],7);self.assertNotIn('html',saved)
+   self.assertNotIn('privateValue',m.json.dumps(saved));self.assertNotIn('PRIVATE_HTML_SECRET',m.json.dumps(saved))
+ def test_new_operation_accepts_nullable_empty_checkpoints(self):
+  from types import SimpleNamespace
+  with tempfile.TemporaryDirectory() as temp:
+   drill=m.Drill.__new__(m.Drill);drill.evidence=Path(temp);drill.state={}
+   responses=iter([dict(operation_id=7,state='queued',stage='queued',message='',checkpoints=None),dict(operation_id=7,state='completed',stage='completed',message='',checkpoints=['finalize'])])
+   drill.http=SimpleNamespace(request=lambda path:(200,m.json.dumps(next(responses)).encode()))
+   with patch.object(m.time,'sleep'):drill.wait_removal(7)
+   self.assertEqual(m.json.loads((Path(temp)/'child-removal.json').read_text())['state'],'completed')
+ def test_completed_and_timeout_keep_last_observation(self):
+  from types import SimpleNamespace
+  for state in ('completed','running'):
+   with self.subTest(state=state),tempfile.TemporaryDirectory() as temp:
+    drill=m.Drill.__new__(m.Drill);drill.evidence=Path(temp);drill.state={}
+    response=dict(operation_id=7,state=state,stage='finalize',message='',checkpoints=[])
+    drill.http=SimpleNamespace(request=lambda path:(200,m.json.dumps(response).encode()))
+    with patch.object(m.time,'monotonic',side_effect=[0,361]),patch.object(m.time,'sleep'):
+     if state=='completed':drill.wait_removal(7)
+     else:
+      with self.assertRaisesRegex(ValueError,'timed out'):drill.wait_removal(7)
+    self.assertEqual(m.json.loads((Path(temp)/'child-removal.json').read_text())['state'],state)
+
+class AcceptanceOrder(unittest.TestCase):
+ class Accepted(Exception):pass
+ def harness(self,root,corrupt=None,bypass=False):
+  from types import SimpleNamespace
+  f=m.Drill.__new__(m.Drill)
+  f.token='submail-owned-test';f.vm='nakpanel-owned-test';f.private=root;f.env={'NAKPANEL_REMOTE_SRC':'/owned/source'};f.state={'checks':[]}
+  f.evidence=root;self.lost=False;self.mutated=False;self.mailboxes=3
+  def stage(name):
+   if name=='disable-suspend-reactivate':raise self.Accepted()
+  f.stage=stage
+  f.shell=lambda *args:'192.0.2.1'
+  f.wait=lambda *args:None
+  f.ready=lambda *args:None
+  def db(query):
+   if 'quota_mb' in query:return '64'
+   if 'count(*) FROM mailboxes' in query:return str(self.mailboxes)
+   if 'shop.current' in query:return '2'
+   if 'news.current' in query:return '3'
+   if 'foreign-submail' in query:return '4'
+   if 'customers WHERE email' in query:return '5'
+   if 'subscriptions WHERE customer_id' in query:return '6'
+   return '1'
+  f.db=db
+  f.post=lambda *args,**kwargs:None
+  def mail(site,*args,**kwargs):
+   if site==2:
+    self.lost=corrupt=='message';self.mutated=corrupt=='resource'
+   return site*10
+  f.mail=mail
+  f.account=lambda domain,sub,address:dict(address='preserve@'+address,password='fixture',domain=address)
+  f.guest=lambda *args,**kwargs:'ubuntu:26.04:resolute' if args[0]=='bash' else (args[1].removeprefix('/usr/bin/php')+'.1' if args[0]=='sudo' and args[1].startswith('/usr/bin/php') else 'active')
+  def cmd(args,**kwargs):
+   if args[0]=='node':
+    (root/'child-mail.json').write_text(m.json.dumps(dict(address='child@shop.current-bootstrap.test',password='fixture',domain='shop.current-bootstrap.test')))
+   return ''
+  f.cmd=cmd
+  def protocol(mode,accounts,expected=None):
+   if mode=='seed':return [{'message':'replacement' if self.lost else 'original'} for a in accounts]
+   m.require(not self.lost or all(x['message']=='replacement' for x in expected),'prior message lost')
+   return expected
+  f.protocol=protocol
+  f.canaries=lambda *args:'changed' if self.mutated else 'original'
+  def passed(name):
+   if not bypass:raise self.Accepted()
+  f.passed=passed
+  owner=self
+  class HTTP:
+   def __init__(self,base):self.base=base
+   def login(self,*args):pass
+   def request(self,path,fields=None,ok=(200,202,303)):
+    code=200
+    if fields is None and path.startswith('/sites/'):code=404
+    if fields is not None and path.endswith('/mailboxes'):
+     if fields['local_part']=='forbidden':code=400 if owner.mailboxes>=4 else 303
+     elif fields['local_part']=='over-limit':code=400
+     else:owner.mailboxes+=1;code=303
+    if fields is not None and path.endswith('/mail-aliases'):
+     code=400 if fields['local_part']=='over-limit' else 303
+    m.require(code in ok,'foreign ownership bypass accepted with spare capacity')
+    return code,b'{}'
+  return f,HTTP
+ def test_child_corruption_cannot_become_new_preservation_baseline(self):
+  for kind in ('message','resource'):
+   with self.subTest(kind=kind),tempfile.TemporaryDirectory() as temp:
+    f,http=self.harness(Path(temp),corrupt=kind)
+    accepted=False
+    with patch.object(m,'HTTP',http):
+     try:f.run()
+     except self.Accepted:accepted=True
+     except ValueError:pass
+    self.assertFalse(accepted,'initial child corruption became the accepted baseline')
+ def test_foreign_write_bypass_is_detected_with_capacity_available(self):
+  with tempfile.TemporaryDirectory() as temp:
+   f,http=self.harness(Path(temp),bypass=True);accepted=False
+   with patch.object(m,'HTTP',http):
+    try:f.run()
+    except self.Accepted:accepted=True
+    except ValueError:pass
+   self.assertFalse(accepted,'quota exhaustion masked broken foreign ownership enforcement')
+
+ def test_policy_fixture_waits_for_active_parent_before_child_creation(self):
+  with tempfile.TemporaryDirectory() as temp:
+   f,http=self.harness(Path(temp));ready=[True]
+   def post(path,**fields):
+    if path=='/subscriptions/1/policy':ready[0]=False
+    if path=='/sites/1/subdomains':m.require(ready[0],'parent domain must be active before adding a subdomain')
+   def wait(query,want,seconds=240):
+    if query=='SELECT status FROM sites WHERE id=1' and want=='active':ready[0]=True
+   f.post=post;f.wait=wait;accepted=False
+   with patch.object(m,'HTTP',http):
+    try:f.run()
+    except self.Accepted:accepted=True
+    except ValueError:pass
+   self.assertTrue(accepted,'fixture raced parent hosting reconvergence after policy edit')
+
+class HTTPDiagnostics(unittest.TestCase):
+ def test_json_error_detail_survives_without_request_fields(self):
+  import io
+  from types import SimpleNamespace
+  client=m.HTTP('https://192.0.2.1:7443')
+  response=io.BytesIO(b'{"error":"parent domain must be active","password":"never-export-this"}')
+  response.code=400
+  client.opener=SimpleNamespace(open=lambda *a,**k:response)
+  with self.assertRaisesRegex(ValueError,'parent domain must be active') as caught:
+   client.request('/sites/1/subdomains',dict(password='private-request'))
+  self.assertNotIn('private-request',str(caught.exception))
+  self.assertNotIn('never-export-this',str(caught.exception))
+
+if __name__=='__main__':unittest.main()

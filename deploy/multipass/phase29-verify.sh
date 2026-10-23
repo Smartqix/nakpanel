@@ -370,10 +370,34 @@ assert_baseline "pre-upgrade" "${VM_IP}" ""
 assert_mariadb_canary "pre-upgrade" "${VM_NAME}"
 
 if [[ -z "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
-run_installer(){ # EXTRA-ENV... (returns installer exit status)
+run_installer() { # EXTRA-ENV... (returns installer exit status)
+  local installer_result=0
   multipass exec "${VM_NAME}" -- sudo env "$@" bash -c \
     "cd '${REMOTE_SRC}' && deploy/install/install.sh --yes" \
-    > "${tmpdir}/install.log" 2>&1
+    > "${tmpdir}/install.log" 2>&1 || installer_result=$?
+  if [[ -n "${NAKPANEL_CELL_REPORT_DIR:-}" ]]; then
+    # Expected fault failures must retain their real cause too: cleanup removes
+    # tmpdir, and a missing rollback marker alone cannot identify a failure.
+    python3 - "${tmpdir}/install.log" "${NAKPANEL_CELL_REPORT_DIR}" "${installer_result}" <<'PYINSTALLDIAG' || return "$?"
+import json, pathlib, re, sys, tempfile
+with open(sys.argv[1], 'rb') as source:
+    source.seek(0, 2)
+    source.seek(max(0, source.tell() - 65536))
+    text = source.read().decode('utf-8', errors='replace')
+for secret in ('NakpanelAdmin!2026', 'Phase29Mail!2026'):
+    text = text.replace(secret, '[synthetic-secret]')
+text = re.sub(r'(?i)\b(password|token|secret|api_key)\s*[=:]\s*\S+', r'\1=[redacted]', text)
+text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+text = text.encode('utf-8')[-65536:].decode('utf-8', errors='ignore')
+root = pathlib.Path(sys.argv[2]) / 'installer-attempts'
+root.mkdir(mode=0o700, parents=True, exist_ok=True)
+with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', prefix='attempt.', suffix='.json', dir=root, delete=False) as receipt:
+    json.dump(dict(exit_code=int(sys.argv[3]), log=text), receipt)
+    receipt.write('\n')
+print('phase29: retained installer diagnostic ' + receipt.name, file=sys.stderr)
+PYINSTALLDIAG
+  fi
+  return "${installer_result}"
 }
 set_remote_version(){
   multipass_exec_short "${VM_NAME}" -- sudo bash -c "echo '$1' > '${REMOTE_SRC}/VERSION' && chown --reference='${REMOTE_SRC}/go.mod' '${REMOTE_SRC}/VERSION'"

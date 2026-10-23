@@ -118,6 +118,9 @@ func (s *SQLStore) SetSubscriptionPolicy(ctx context.Context, subscriptionID, ac
 VALUES($1,$2,$3) ON CONFLICT(subscription_id) DO UPDATE SET policy_patch=EXCLUDED.policy_patch,updated_by=EXCLUDED.updated_by,updated_at=now()`, subscriptionID, []byte(patch), nullableInt64(actorID)); err != nil {
 		return err
 	}
+	if err = revokeDisallowedMailTx(ctx, tx, subscriptionID, effective); err != nil {
+		return err
+	}
 	if err = s.markSubscriptionPendingTx(ctx, tx, subscriptionID); err != nil {
 		return err
 	}
@@ -125,6 +128,17 @@ VALUES($1,$2,$3) ON CONFLICT(subscription_id) DO UPDATE SET policy_patch=EXCLUDE
 		return err
 	}
 	return tx.Commit()
+}
+
+// Revoke directory access in the policy transaction. Granting access still
+// requires a mail acknowledgement against the current account revision.
+func revokeDisallowedMailTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, policy types.HostingPolicy) error {
+	if policy.Permissions.Mail && policy.Mail.Enabled {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, `UPDATE mail_domains domain SET effective_enabled=false,convergence_status='pending',last_error='',updated_at=now()
+WHERE subscription_id=$1 AND NOT EXISTS(SELECT 1 FROM sites site WHERE site.id=domain.site_id AND site.removal_state<>'none')`, subscriptionID)
+	return err
 }
 
 func (s *SQLStore) SetSitePolicy(ctx context.Context, siteID, actorID int64, patch json.RawMessage) error {
@@ -510,7 +524,8 @@ func (s *SQLStore) UpsertMailDomain(ctx context.Context, subscriptionID, actorID
 			return 0, errors.New("mail is disabled by the subscription policy")
 		}
 		if input.SiteID > 0 {
-			if err := tx.QueryRowContext(ctx, `SELECT domain FROM sites WHERE id=$1 AND subscription_id=$2 AND status='active'`, input.SiteID, subscriptionID).Scan(&input.Domain); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT site.domain FROM sites site WHERE site.id=$1 AND site.subscription_id=$2 AND site.removal_state='none'
+AND (site.status='active' OR EXISTS(SELECT 1 FROM mail_domains domain WHERE domain.site_id=site.id AND domain.subscription_id=site.subscription_id))`, input.SiteID, subscriptionID).Scan(&input.Domain); err != nil {
 				if errors.Is(err, sql.ErrNoRows) {
 					return 0, errors.New("active domain does not belong to the subscription")
 				}
@@ -519,10 +534,31 @@ func (s *SQLStore) UpsertMailDomain(ctx context.Context, subscriptionID, actorID
 		} else if err := ensureSiteBelongsTx(ctx, tx, subscriptionID, input.SiteID); err != nil {
 			return 0, err
 		}
+		// A repeated enable uses the same mail identity. An explicit edit may
+		// change settings, but must never move mailboxes to another hosted site.
+		var existingID int64
+		var existingSite sql.NullInt64
+		var existingDomain string
+		err := tx.QueryRowContext(ctx, `SELECT id,site_id,domain FROM mail_domains
+WHERE subscription_id=$1 AND (($2::bigint=0 AND domain=$3) OR id=$2)
+FOR UPDATE`, subscriptionID, input.ID, input.Domain).Scan(&existingID, &existingSite, &existingDomain)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return 0, err
+		}
+		if errors.Is(err, sql.ErrNoRows) {
+			if input.ID != 0 {
+				return 0, errors.New("mail domain does not belong to the hosted site")
+			}
+		} else {
+			if existingSite.Int64 != input.SiteID || existingDomain != input.Domain {
+				return 0, errors.New("mail domain does not belong to the hosted site")
+			}
+			input.ID = existingID
+		}
 		var id int64
-		err := tx.QueryRowContext(ctx, `INSERT INTO mail_domains(id,subscription_id,site_id,domain,enabled,dkim_enabled,dmarc_policy,catch_all)
+		err = tx.QueryRowContext(ctx, `INSERT INTO mail_domains(id,subscription_id,site_id,domain,enabled,dkim_enabled,dmarc_policy,catch_all)
 VALUES(CASE WHEN $1=0 THEN nextval('mail_domains_id_seq') ELSE $1 END,$2,NULLIF($3,0),$4,$5,$6,$7,$8)
-ON CONFLICT(id) DO UPDATE SET site_id=EXCLUDED.site_id,domain=EXCLUDED.domain,enabled=EXCLUDED.enabled,dkim_enabled=EXCLUDED.dkim_enabled,dmarc_policy=EXCLUDED.dmarc_policy,catch_all=EXCLUDED.catch_all,delete_requested=false,convergence_status='pending',last_error='',updated_at=now()
+ON CONFLICT(id) DO UPDATE SET site_id=EXCLUDED.site_id,domain=EXCLUDED.domain,enabled=EXCLUDED.enabled,effective_enabled=CASE WHEN NOT EXCLUDED.enabled THEN false ELSE mail_domains.effective_enabled END,dkim_enabled=EXCLUDED.dkim_enabled,dmarc_policy=EXCLUDED.dmarc_policy,catch_all=EXCLUDED.catch_all,delete_requested=false,convergence_status='pending',last_error='',updated_at=now()
 WHERE mail_domains.subscription_id=EXCLUDED.subscription_id RETURNING id`, input.ID, subscriptionID, input.SiteID, input.Domain, input.Enabled, input.DKIM, input.DMARCPolicy, strings.TrimSpace(input.CatchAll)).Scan(&id)
 		return id, err
 	})

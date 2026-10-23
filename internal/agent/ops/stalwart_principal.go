@@ -91,5 +91,22 @@ func (p *MailProvisioner) removalPrincipalRequest(ctx context.Context, method, n
 	if err != nil || len(body) > 65536 {
 		return 0, nil, errors.New("mail principal response exceeded its safe limit")
 	}
+	// Pinned Stalwart0.11.8 returns management errors as JSON with HTTP200.
+	// Only an explicit notFound without principal data proves absence. Do not
+	// turn authorization, malformed or contradictory responses into success.
+	if response.StatusCode == http.StatusOK {
+		var envelope map[string]json.RawMessage
+		if json.Unmarshal(body, &envelope) != nil || envelope == nil {
+			return 0, nil, errors.New("invalid mail principal response")
+		}
+		if raw, exists := envelope["error"]; exists {
+			var code string
+			_, hasData := envelope["data"]
+			if json.Unmarshal(raw, &code) == nil && code == "notFound" && !hasData {
+				return http.StatusNotFound, body, nil
+			}
+			return 0, nil, errors.New("mail principal API rejected the request")
+		}
+	}
 	return response.StatusCode, body, nil
 }

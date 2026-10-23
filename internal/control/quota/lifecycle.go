@@ -330,6 +330,17 @@ FROM sites s CROSS JOIN LATERAL (SELECT id FROM users WHERE role='admin' ORDER B
 }
 
 func (s *SQLStore) enqueueCustomerHostingStateTx(ctx context.Context, tx *sql.Tx, customerID int64) error {
+	// Directory revocation is part of the lifecycle transaction. Advancing the
+	// mail intent also prevents an older agent acknowledgement from re-enabling it.
+	if _, err := tx.ExecContext(ctx, `UPDATE mail_domains domain SET effective_enabled=false,convergence_status='pending',last_error='',updated_at=now()
+FROM subscriptions subscription JOIN customers customer ON customer.id=subscription.customer_id
+LEFT JOIN reseller_accounts reseller ON reseller.id=customer.reseller_id
+WHERE domain.subscription_id=subscription.id AND customer.id=$1
+AND (subscription.status<>'active' OR customer.status<>'active' OR (customer.reseller_id IS NOT NULL AND
+ (reseller.status<>'active' OR NOT EXISTS(SELECT 1 FROM reseller_subscriptions allocation WHERE allocation.reseller_id=customer.reseller_id AND allocation.status='active'))))
+AND NOT EXISTS(SELECT 1 FROM sites site WHERE site.id=domain.site_id AND site.removal_state<>'none')`, customerID); err != nil {
+		return err
+	}
 	// Site-only jobs cannot converge shared services or subscriptions with no
 	// websites. Advance every live account in this same lifecycle transaction.
 	accounts, err := tx.QueryContext(ctx, `SELECT account.subscription_id

@@ -51,6 +51,15 @@ func (s *SQLStore) UpsertMailbox(ctx context.Context, subscriptionID, actorID in
 		if err := ensureMailDomainBelongsTx(ctx, tx, subscriptionID, input.MailDomainID); err != nil {
 			return 0, err
 		}
+		if input.ID != 0 {
+			var id int64
+			if err := tx.QueryRowContext(ctx, `SELECT id FROM mailboxes WHERE id=$1 AND mail_domain_id=$2 FOR UPDATE`, input.ID, input.MailDomainID).Scan(&id); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return 0, errors.New("mailbox does not belong to the subscription")
+				}
+				return 0, err
+			}
+		}
 		if input.ID == 0 {
 			if err := enforceMailCountTx(ctx, tx, "mailboxes", subscriptionID, policy.Resources.MaxMailboxes); err != nil {
 				return 0, err
@@ -104,6 +113,15 @@ func (s *SQLStore) UpsertMailAlias(ctx context.Context, subscriptionID, actorID 
 		}
 		if err := ensureMailDomainBelongsTx(ctx, tx, subscriptionID, input.MailDomainID); err != nil {
 			return 0, err
+		}
+		if input.ID != 0 {
+			var id int64
+			if err := tx.QueryRowContext(ctx, `SELECT id FROM mail_aliases WHERE id=$1 AND mail_domain_id=$2 FOR UPDATE`, input.ID, input.MailDomainID).Scan(&id); err != nil {
+				if errors.Is(err, sql.ErrNoRows) {
+					return 0, errors.New("alias does not belong to the subscription")
+				}
+				return 0, err
+			}
 		}
 		if input.ID == 0 {
 			// No plan knob exists for aliases yet, so an unset alias limit

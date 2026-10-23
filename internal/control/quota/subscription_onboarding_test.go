@@ -127,6 +127,8 @@ func TestNewCustomerSubscriptionCanRetryAfterCapacityFailure(t *testing.T) {
 				mock.ExpectQuery(`SELECT EXISTS`).WithArgs("nps77").WillReturnRows(onboardingRows(false))
 				mock.ExpectExec(`INSERT INTO subscription_system_accounts`).WithArgs(int64(77), "nps77", "active").WillReturnResult(sqlmock.NewResult(0, 1))
 				mock.ExpectExec(`INSERT INTO subscription_entitlements`).WillReturnResult(sqlmock.NewResult(0, 1))
+				mock.ExpectQuery(`SELECT COALESCE\(\(SELECT policy_patch FROM subscription_policy_overrides`).WithArgs(int64(77)).WillReturnRows(onboardingRows([]byte(`{}`)))
+				mock.ExpectExec(`UPDATE mail_domains domain SET effective_enabled=false`).WithArgs(int64(77)).WillReturnResult(sqlmock.NewResult(0, 0))
 				for _, table := range []string{"sites", "databases", "backups"} {
 					mock.ExpectExec(`UPDATE `+table+` SET customer_id`).WithArgs(int64(77), int64(88)).WillReturnResult(sqlmock.NewResult(0, 0))
 				}
