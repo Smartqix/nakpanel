@@ -2,8 +2,11 @@ package quota
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"database/sql"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -13,6 +16,7 @@ import (
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/auth"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"github.com/riverqueue/river"
 	"github.com/riverqueue/river/rivertype"
@@ -351,7 +355,7 @@ func upsertUsageAlertTx(ctx context.Context, tx *sql.Tx, subscriptionID, custome
 WHERE subscription_id=$1 AND resolved_at IS NULL AND id<>$2 AND dedupe_key LIKE $3`, subscriptionID, id, "usage:"+strconv.FormatInt(subscriptionID, 10)+":"+resource+":%:"+period); err != nil {
 		return 0, err
 	}
-	if err := enqueueNotificationRecipientsTx(ctx, tx, id, email, resellerID); err != nil {
+	if err := operations.EnqueueNotificationTx(ctx, tx, id); err != nil {
 		return 0, err
 	}
 	return id, nil
@@ -367,42 +371,6 @@ func usageResourceLabel(resource string) string {
 	return "Resource"
 }
 
-func enqueueNotificationRecipientsTx(ctx context.Context, tx *sql.Tx, notificationID int64, customerEmail string, resellerID int64) error {
-	recipients := map[string]struct{}{}
-	if email := strings.TrimSpace(customerEmail); email != "" {
-		recipients[email] = struct{}{}
-	}
-	query := `SELECT email FROM users WHERE role='admin' ORDER BY id`
-	args := []any{}
-	if resellerID > 0 {
-		query = `SELECT email FROM reseller_accounts WHERE id=$1`
-		args = append(args, resellerID)
-	}
-	rows, err := tx.QueryContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var email string
-		if err := rows.Scan(&email); err != nil {
-			rows.Close()
-			return err
-		}
-		if email = strings.TrimSpace(email); email != "" {
-			recipients[email] = struct{}{}
-		}
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	for email := range recipients {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO notification_deliveries (notification_id,channel,recipient) VALUES ($1,'smtp',$2) ON CONFLICT DO NOTHING`, notificationID, email); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func upsertNotificationTx(ctx context.Context, tx *sql.Tx, subscriptionID int64, kind, severity, title, body, key string) (int64, error) {
 	var customerID, userID, resellerID int64
 	var email string
@@ -414,7 +382,7 @@ FROM subscriptions s JOIN customers c ON c.id=s.customer_id WHERE s.id=$1`, subs
 	if err != nil {
 		return 0, err
 	}
-	if err := enqueueNotificationRecipientsTx(ctx, tx, id, email, resellerID); err != nil {
+	if err := operations.EnqueueNotificationTx(ctx, tx, id); err != nil {
 		return 0, err
 	}
 	return id, nil
@@ -484,35 +452,11 @@ func (w *DeliverNotificationsWorker) Work(ctx context.Context, _ *river.Job[Deli
 	if w.db == nil || !w.config.Enabled() {
 		return nil
 	}
-	rows, err := w.db.QueryContext(ctx, `SELECT d.id,d.recipient,n.title,n.body FROM notification_deliveries d JOIN notifications n ON n.id=d.notification_id WHERE d.status IN ('pending','failed') AND d.attempts<8 ORDER BY d.id LIMIT 25`)
-	if err != nil {
-		return err
-	}
-	type delivery struct {
-		id                     int64
-		recipient, title, body string
-	}
-	var deliveries []delivery
-	for rows.Next() {
-		var item delivery
-		if err := rows.Scan(&item.id, &item.recipient, &item.title, &item.body); err != nil {
-			rows.Close()
-			return err
-		}
-		deliveries = append(deliveries, item)
-	}
-	rows.Close()
-	var deliveryErrors []error
-	for _, item := range deliveries {
-		err := sendSMTP(ctx, w.config, item.recipient, item.title, item.body)
-		if err != nil {
-			deliveryErrors = append(deliveryErrors, err)
-			_, _ = w.db.ExecContext(ctx, `UPDATE notification_deliveries SET status='failed',attempts=attempts+1,last_error=$2,updated_at=now() WHERE id=$1`, item.id, truncateError(err))
-			continue
-		}
-		_, _ = w.db.ExecContext(ctx, `UPDATE notification_deliveries SET status='sent',attempts=attempts+1,last_error='',sent_at=now(),updated_at=now() WHERE id=$1`, item.id)
-	}
-	return errors.Join(deliveryErrors...)
+	profileBytes, _ := json.Marshal(w.config)
+	profile := sha256.Sum256(profileBytes)
+	return operations.NewEmailService(w.db, func(ctx context.Context, to, subject, body string) error {
+		return sendSMTP(ctx, w.config, to, subject, body)
+	}, hex.EncodeToString(profile[:])).Deliver(ctx)
 }
 
 func sendSMTP(ctx context.Context, config SMTPConfig, recipient, subject, body string) error {
@@ -582,7 +526,11 @@ func sendSMTP(ctx context.Context, config SMTPConfig, recipient, subject, body s
 	if err := writer.Close(); err != nil {
 		return err
 	}
-	return client.Quit()
+	// DATA's final positive reply establishes acceptance. QUIT is connection
+	// cleanup; a disconnect here must not retry an already accepted message.
+	_ = conn.SetDeadline(time.Now().Add(time.Second))
+	_ = client.Quit()
+	return nil
 }
 
 func (s *SQLStore) ListSubscriptionUsage(ctx context.Context, actor auth.SessionUser) ([]types.SubscriptionUsage, error) {
@@ -625,18 +573,13 @@ func (s *SQLStore) ListUsageAlerts(ctx context.Context, actor auth.SessionUser, 
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
-	query := `SELECT n.id,COALESCE(n.subscription_id,0),n.kind,n.severity,n.title,n.body,n.read_at,n.resolved_at,n.created_at
-FROM notifications n LEFT JOIN subscriptions sub ON sub.id=n.subscription_id LEFT JOIN customers c ON c.id=sub.customer_id`
-	args := []any{}
-	if actor.Role == auth.RoleClient {
-		query += ` WHERE c.login_user_id=$1`
-		args = append(args, actor.ID)
-	} else if actor.Role == auth.RoleReseller {
-		query += ` WHERE c.reseller_id=(SELECT id FROM reseller_accounts WHERE login_user_id=$1)`
-		args = append(args, actor.ID)
+	if !actor.Role.Valid() || actor.ID <= 0 {
+		return []types.UsageAlert{}, nil
 	}
-	args = append(args, limit)
-	query += fmt.Sprintf(` ORDER BY n.created_at DESC LIMIT $%d`, len(args))
+	query := `SELECT n.id,COALESCE(n.subscription_id,0),n.kind,n.severity,n.title,n.body,receipt.read_at,n.resolved_at,n.created_at
+FROM notifications n LEFT JOIN notification_receipts receipt ON receipt.notification_id=n.id AND receipt.user_id=$1
+WHERE ` + operations.NotificationVisibilitySQL("n", 1, 2) + ` AND receipt.archived_at IS NULL ORDER BY n.created_at DESC,n.id DESC LIMIT $3`
+	args := []any{actor.ID, string(actor.Role), limit}
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

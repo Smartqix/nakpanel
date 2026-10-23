@@ -95,6 +95,7 @@ func (s *Server) fragmentRequests(next http.Handler) http.Handler {
 }
 
 func (s *Server) renderRoutedPage(w http.ResponseWriter, r *http.Request, title string, user auth.SessionUser, data dashboard.Data, actions web.DashboardActions, view web.WorkspaceView) {
+	s.loadOperationsView(r, user, &view)
 	view.InstantNavDisabled = s.disableInstantNav
 	if wantsWorkspaceFragment(r) {
 		w.Header().Set("Cache-Control", "no-store")

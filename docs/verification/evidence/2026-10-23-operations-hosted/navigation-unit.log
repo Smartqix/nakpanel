@@ -1,0 +1,94 @@
+TAP version 13
+# Subtest: the deferred DNS script waits for interaction/navigation on an interactive document
+ok 1 - the deferred DNS script waits for interaction/navigation on an interactive document
+  ---
+  duration_ms: 1.752417
+  type: 'test'
+  ...
+# Subtest: dns-template ignores a late form response after leaving its page
+ok 2 - dns-template ignores a late form response after leaving its page
+  ---
+  duration_ms: 16.911166
+  type: 'test'
+  ...
+# Subtest: mail-import ignores a late form response after leaving its page
+ok 3 - mail-import ignores a late form response after leaving its page
+  ---
+  duration_ms: 1.720208
+  type: 'test'
+  ...
+# Subtest: shared removal-dialog work belongs to the main content lifetime
+ok 4 - shared removal-dialog work belongs to the main content lifetime
+  ---
+  duration_ms: 2.310875
+  type: 'test'
+  ...
+# Subtest: bodyless acknowledgements and accepted checks still use CSRF
+ok 5 - bodyless acknowledgements and accepted checks still use CSRF
+  ---
+  duration_ms: 14.882917
+  type: 'test'
+  ...
+# Subtest: old response cannot replace a new navigation scope
+ok 6 - old response cannot replace a new navigation scope
+  ---
+  duration_ms: 3.937083
+  type: 'test'
+  ...
+# Subtest: reconnect replays durable events and preserves data on failure
+ok 7 - reconnect replays durable events and preserves data on failure
+  ---
+  duration_ms: 1.0915
+  type: 'test'
+  ...
+# Subtest: stopping aborts in-flight fetch and ignores its result
+ok 8 - stopping aborts in-flight fetch and ignores its result
+  ---
+  duration_ms: 0.552291
+  type: 'test'
+  ...
+# Subtest: late response from prior scope is discarded even if abort is ignored
+ok 9 - late response from prior scope is discarded even if abort is ignored
+  ---
+  duration_ms: 1.186917
+  type: 'test'
+  ...
+# Subtest: hidden tabs cancel polling; reconnect retains the committed feed cursor
+ok 10 - hidden tabs cancel polling; reconnect retains the committed feed cursor
+  ---
+  duration_ms: 0.576458
+  type: 'test'
+  ...
+# Subtest: navigation preserves consumed cursor within authenticated scope, including cached fragments
+ok 11 - navigation preserves consumed cursor within authenticated scope, including cached fragments
+  ---
+  duration_ms: 0.816625
+  type: 'test'
+  ...
+# Subtest: all relevant terminal results beyond eight rows are presented once
+ok 12 - all relevant terminal results beyond eight rows are presented once
+  ---
+  duration_ms: 0.68175
+  type: 'test'
+  ...
+# Subtest: preferences remain unavailable until loaded and stale loads cannot overwrite newer settings
+ok 13 - preferences remain unavailable until loaded and stale loads cannot overwrite newer settings
+  ---
+  duration_ms: 0.6465
+  type: 'test'
+  ...
+# Subtest: settings destinations preserve support context and reject external URLs
+ok 14 - settings destinations preserve support context and reject external URLs
+  ---
+  duration_ms: 0.833917
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 75.906916

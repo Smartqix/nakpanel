@@ -15,7 +15,6 @@ func TestPhaseVerifiersUseSingleDefaultVM(t *testing.T) {
 		"phase4-tls-verify.sh",
 		"phase5-ui-verify.sh",
 		"phase6-verify.sh",
-		"phase6-recovery-verify.sh",
 		"phase7-verify.sh",
 		"phase8-verify.sh",
 		"phase9-verify.sh",

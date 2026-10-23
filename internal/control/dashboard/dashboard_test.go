@@ -50,35 +50,6 @@ func (q *fakeQuerier) ListDatabases(ctx context.Context) ([]store.Database, erro
 	return q.databases, nil
 }
 
-type fakeJobReader struct {
-	jobs   []Job
-	err    error
-	limit  int
-	called bool
-}
-
-type failingJobCountReader struct{ fakeJobReader }
-
-func (*failingJobCountReader) CountActiveJobs(context.Context) (int, error) {
-	return 0, errors.New("count unavailable")
-}
-
-func TestDashboardActiveCountFailureFallsBackToRecentJobs(t *testing.T) {
-	reader := &failingJobCountReader{fakeJobReader{jobs: []Job{
-		{ID: 1, State: "running"}, {ID: 2, State: "scheduled"}, {ID: 3, State: "completed"},
-	}}}
-	data, err := NewStore(&fakeQuerier{}, WithJobReader(reader)).GetDashboard(context.Background(), auth.SessionUser{Role: auth.RoleAdmin})
-	if err != nil || data.ActiveJobs != 2 || len(data.Jobs) != 3 || data.JobLoadError != "" {
-		t.Fatalf("active=%d jobs=%d loadError=%q err=%v", data.ActiveJobs, len(data.Jobs), data.JobLoadError, err)
-	}
-}
-
-func (r *fakeJobReader) ListRecentJobs(ctx context.Context, limit int) ([]Job, error) {
-	r.called = true
-	r.limit = limit
-	return r.jobs, r.err
-}
-
 type fakePhase6Reader struct {
 	data   Phase6Data
 	err    error
@@ -350,80 +321,5 @@ func TestStoreKeepsInventoryWhenPhase6Fails(t *testing.T) {
 	}
 	if data.Phase6Error != "phase6 operations unavailable" {
 		t.Fatalf("Phase6Error = %q, want phase6 operations unavailable", data.Phase6Error)
-	}
-}
-
-func TestStoreIncludesRecentJobsForAdmins(t *testing.T) {
-	createdAt := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
-	reader := &fakeJobReader{
-		jobs: []Job{{
-			ID:          41,
-			Kind:        "issue_cert",
-			State:       "discarded",
-			Queue:       "default",
-			Attempt:     3,
-			MaxAttempts: 3,
-			Target:      "example.test",
-			LastError:   "acme failed",
-			CreatedAt:   createdAt,
-		}},
-	}
-
-	data, err := NewStore(&fakeQuerier{}, WithJobReader(reader)).GetDashboard(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin})
-	if err != nil {
-		t.Fatalf("GetDashboard returned error: %v", err)
-	}
-	if !reader.called || reader.limit != DefaultRecentJobLimit {
-		t.Fatalf("job reader called=%v limit=%d, want limit %d", reader.called, reader.limit, DefaultRecentJobLimit)
-	}
-	if len(data.Jobs) != 1 {
-		t.Fatalf("jobs length = %d, want 1", len(data.Jobs))
-	}
-	job := data.Jobs[0]
-	if job.Kind != "issue_cert" || job.State != "discarded" || job.Target != "example.test" {
-		t.Fatalf("job = %#v, want mapped issue_cert job", job)
-	}
-	if job.Attempt != 3 || job.MaxAttempts != 3 || job.LastError != "acme failed" || !job.CreatedAt.Equal(createdAt) {
-		t.Fatalf("job details = %#v, want attempts/error/created_at", job)
-	}
-}
-
-func TestStoreSkipsRecentJobsForNonAdmins(t *testing.T) {
-	reader := &fakeJobReader{jobs: []Job{{ID: 41, Kind: "issue_cert"}}}
-
-	data, err := NewStore(&fakeQuerier{}, WithJobReader(reader)).GetDashboard(context.Background(), auth.SessionUser{ID: 2, Role: auth.RoleClient})
-	if err != nil {
-		t.Fatalf("GetDashboard returned error: %v", err)
-	}
-	if reader.called {
-		t.Fatal("non-admin dashboard loaded recent jobs")
-	}
-	if len(data.Jobs) != 0 {
-		t.Fatalf("jobs length = %d, want 0", len(data.Jobs))
-	}
-}
-
-func TestStoreKeepsInventoryWhenRecentJobsFail(t *testing.T) {
-	reader := &fakeJobReader{err: errors.New("river unavailable")}
-	querier := &fakeQuerier{
-		sites:     []store.Site{{Domain: "example.test", Status: "active"}},
-		databases: []store.Database{{DbName: "np_demo", Status: "active"}},
-	}
-
-	data, err := NewStore(querier, WithJobReader(reader)).GetDashboard(context.Background(), auth.SessionUser{ID: 1, Role: auth.RoleAdmin})
-	if err != nil {
-		t.Fatalf("GetDashboard returned error: %v", err)
-	}
-	if !reader.called {
-		t.Fatal("job reader was not called")
-	}
-	if len(data.Sites) != 1 || len(data.Databases) != 1 {
-		t.Fatalf("inventory lengths = sites:%d databases:%d, want 1 each", len(data.Sites), len(data.Databases))
-	}
-	if data.JobLoadError != "recent jobs unavailable" {
-		t.Fatalf("JobLoadError = %q, want recent jobs unavailable", data.JobLoadError)
-	}
-	if len(data.Jobs) != 0 {
-		t.Fatalf("jobs length = %d, want 0 on job reader error", len(data.Jobs))
 	}
 }

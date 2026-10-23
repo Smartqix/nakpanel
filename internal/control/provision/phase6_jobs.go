@@ -164,11 +164,16 @@ type AutomatedReporter interface {
 type CreateBackupWorker struct {
 	river.WorkerDefaults[CreateBackupArgs]
 	agent    AgentBackupClient
-	store    Phase6StatusStore
+	store    BackupStatusStore
 	reporter AutomatedReporter
 }
 
-func NewCreateBackupWorker(agent AgentBackupClient, store Phase6StatusStore, reporters ...AutomatedReporter) *CreateBackupWorker {
+type BackupStatusStore interface {
+	Phase6StatusStore
+	RefreshBackupIntent(context.Context, CreateBackupArgs) (CreateBackupArgs, error)
+}
+
+func NewCreateBackupWorker(agent AgentBackupClient, store BackupStatusStore, reporters ...AutomatedReporter) *CreateBackupWorker {
 	w := &CreateBackupWorker{agent: agent, store: store}
 	if len(reporters) > 0 {
 		w.reporter = reporters[0]
@@ -177,41 +182,40 @@ func NewCreateBackupWorker(agent AgentBackupClient, store Phase6StatusStore, rep
 }
 
 func (w *CreateBackupWorker) Work(ctx context.Context, job *river.Job[CreateBackupArgs]) error {
-	if gate, ok := w.store.(interface {
-		BackupJobAllowed(context.Context, int64) (bool, error)
-	}); ok {
-		allowed, err := gate.BackupJobAllowed(ctx, job.Args.BackupID)
-		if err != nil {
-			return err
+	if w.store == nil {
+		return errors.New("backup intent store is unavailable")
+	}
+	args, err := w.store.RefreshBackupIntent(ctx, job.Args)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) || errors.Is(err, controlquota.ErrNoActiveSubscription) || errors.Is(err, controlquota.ErrExceeded) || errors.Is(err, controlquota.ErrSiteRemoving) || errors.Is(err, controlquota.ErrSubscriptionTerminating) {
+			return river.JobCancel(errors.New("backup creation is no longer authorized by current intent"))
 		}
-		if !allowed {
-			return river.JobCancel(errors.New("backup creation intent is no longer current"))
-		}
+		return err
 	}
 	if w.agent == nil {
 		return errors.New("agent backup client is not configured")
 	}
 	resp, err := w.agent.CreateBackup(ctx, types.CreateBackupReq{
-		SiteID: job.Args.SiteID, SubscriptionID: job.Args.SubscriptionID,
-		Domain:    job.Args.Domain,
-		Username:  job.Args.Username,
-		Docroot:   job.Args.Docroot,
-		Databases: job.Args.Databases,
+		SiteID: args.SiteID, SubscriptionID: args.SubscriptionID,
+		Domain:    args.Domain,
+		Username:  args.Username,
+		Docroot:   args.Docroot,
+		Databases: args.Databases,
 	})
 	if err != nil {
-		return errors.Join(err, w.markBackupFailed(ctx, job.Args.BackupID, err.Error()), w.reportBackup(ctx, job.Args, err))
+		return errors.Join(err, w.markBackupFailed(ctx, args.BackupID, err.Error()), w.reportBackup(ctx, args, err))
 	}
 	var result types.CreateBackupResult
 	if err := decodeAgentResult(resp, &result); err != nil {
-		return errors.Join(err, w.markBackupFailed(ctx, job.Args.BackupID, err.Error()), w.reportBackup(ctx, job.Args, err))
+		return errors.Join(err, w.markBackupFailed(ctx, args.BackupID, err.Error()), w.reportBackup(ctx, args, err))
 	}
 	if w.store != nil {
-		if err := w.store.MarkBackupActive(ctx, job.Args.BackupID, result, append([]string(nil), job.Args.Databases...)); err != nil {
+		if err := w.store.MarkBackupActive(ctx, args.BackupID, result, append([]string(nil), args.Databases...)); err != nil {
 			return err
 		}
 	}
 	if w.reporter != nil {
-		if err := w.reporter.ReportBackup(ctx, job.Args, nil); err != nil {
+		if err := w.reporter.ReportBackup(ctx, args, nil); err != nil {
 			return err
 		}
 	}

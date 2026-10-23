@@ -602,12 +602,12 @@ func (s *Server) handleRunScheduledTask(w http.ResponseWriter, r *http.Request) 
 		writeQuotaError(w, r, "Could not run scheduled task", err)
 		return
 	}
-	s.recordAudit(r.Context(), user, 0, subscriptionID, "scheduled_task.ran", "scheduled_task", taskID, map[string]any{"run_id": run.ID, "status": run.Status})
+	s.recordAudit(r.Context(), user, 0, subscriptionID, "scheduled_task.queued", "scheduled_task", taskID, map[string]any{"run_id": run.ID, "status": run.Status})
 	if siteID := parseFormInt64Default(r, "site_id", 0); siteID > 0 {
-		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"/scheduled-tasks?notice=task-ran"), http.StatusSeeOther)
+		http.Redirect(w, r, supportRedirectPath(r, user, "/sites/"+strconv.FormatInt(siteID, 10)+"/scheduled-tasks?notice=task-queued"), http.StatusSeeOther)
 		return
 	}
-	http.Redirect(w, r, supportRedirectPath(r, user, "/subscriptions/"+strconv.FormatInt(subscriptionID, 10)+"?tab=tasks&notice=task-ran"), http.StatusSeeOther)
+	http.Redirect(w, r, supportRedirectPath(r, user, "/subscriptions/"+strconv.FormatInt(subscriptionID, 10)+"?tab=tasks&notice=task-queued"), http.StatusSeeOther)
 }
 
 func (s *Server) handleMailDomain(w http.ResponseWriter, r *http.Request) {

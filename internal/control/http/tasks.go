@@ -1,47 +1,31 @@
 package panelhttp
 
 import (
-	"context"
 	"encoding/json"
-	"net/http"
-
-	"github.com/nakroteck/nakpanel/internal/control/auth"
-	"github.com/nakroteck/nakpanel/internal/control/dashboard"
 	"github.com/nakroteck/nakpanel/internal/control/web"
+	"net/http"
 )
 
-type taskReader interface {
-	GetTasks(context.Context) (dashboard.Tasks, error)
-}
-
 func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	user, ok := s.currentUser(w, r, func() {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	})
+	actor, ok := s.operationsUser(w, r)
 	if !ok {
 		return
 	}
-	if user.Role != auth.RoleAdmin {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	var tasks dashboard.Tasks
-	var err error
-	if reader, ok := s.dashboard.(taskReader); ok {
-		tasks, err = reader.GetTasks(r.Context())
-	} else {
-		var data dashboard.Data
-		data, err = s.loadDashboard(r.Context(), user)
-		tasks = dashboard.Tasks{Active: dashboard.ActiveJobs(data.Jobs), Items: data.Jobs}
-	}
+	f, err := operationsFilter(r)
 	if err != nil {
-		http.Error(w, "Could not load tasks", http.StatusServiceUnavailable)
+		operationsError(w, err)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	f.Limit = 8
+	f.ActiveFirst = true
+	p, err := s.operations.Page(r.Context(), actor, "tasks", f)
+	if err != nil {
+		operationsError(w, err)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(struct {
 		Active int            `json:"active"`
 		Items  []web.TaskItem `json:"items"`
-	}{tasks.Active, web.TaskItems(tasks.Items)})
+		Cursor int64          `json:"cursor"`
+	}{p.Counts.ActiveTasks, web.OperationTaskItems(p.Tasks), p.Cursor})
 }

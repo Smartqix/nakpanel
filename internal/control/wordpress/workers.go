@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 	"strings"
 	"sync"
 	"time"
@@ -615,14 +616,16 @@ func wordpressNotificationKey(instanceID int64, kind string) string {
 }
 
 func upsertWordPressNotificationTx(ctx context.Context, tx *sql.Tx, subscriptionID, customerID int64, kind, severity, title, body, key string) error {
-	_, err := tx.ExecContext(ctx, `WITH recipient AS (SELECT login_user_id,reseller_id,email FROM customers WHERE id=$1), upserted AS (
+	var notificationID int64
+	err := tx.QueryRowContext(ctx, `WITH recipient AS (SELECT login_user_id,reseller_id,email FROM customers WHERE id=$1), upserted AS (
 INSERT INTO notifications(recipient_user_id,customer_id,reseller_id,subscription_id,kind,severity,title,body,dedupe_key)
 SELECT login_user_id,$1,reseller_id,$2,$3,$4,$5,$6,$7 FROM recipient
 ON CONFLICT(dedupe_key) WHERE resolved_at IS NULL DO UPDATE SET severity=EXCLUDED.severity,title=EXCLUDED.title,body=EXCLUDED.body,updated_at=now()
-RETURNING id) INSERT INTO notification_deliveries(notification_id,channel,recipient)
-SELECT upserted.id,'smtp',recipient.email FROM upserted CROSS JOIN recipient WHERE recipient.email<>''
-ON CONFLICT(notification_id,channel,recipient) DO NOTHING`, customerID, subscriptionID, kind, severity, title, boundedError(errors.New(body)), key)
-	return err
+RETURNING id) SELECT id FROM upserted`, customerID, subscriptionID, kind, severity, title, boundedError(errors.New(body)), key).Scan(&notificationID)
+	if err != nil {
+		return err
+	}
+	return operations.EnqueueNotificationTx(ctx, tx, notificationID)
 }
 
 func resolveWordPressNotificationTx(ctx context.Context, tx *sql.Tx, key string) error {

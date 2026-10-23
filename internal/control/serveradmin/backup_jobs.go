@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 	"log"
 	"os"
 	"strings"
@@ -351,7 +352,7 @@ func listStrings(ctx context.Context, db *sql.DB, query string) ([]string, error
 
 // recordBackupFailureNotification creates (or refreshes) the open failure
 // notification for a destination and queues SMTP deliveries to the configured
-// address or, when unset, every active administrator.
+// registered administrator address or, when unset, authorized opted-in administrators.
 func recordBackupFailureNotification(ctx context.Context, db *sql.DB, dest BackupDestination, message string) error {
 	destName := dest.Name
 	if destName == "" {
@@ -373,34 +374,8 @@ func recordBackupFailureNotification(ctx context.Context, db *sql.DB, dest Backu
 		RETURNING id`, title, body, dedupeKey).Scan(&notificationID); err != nil {
 		return fmt.Errorf("record backup failure notification: %w", err)
 	}
-	recipients := []string{}
-	if email := strings.TrimSpace(dest.NotifyEmail); email != "" {
-		recipients = append(recipients, email)
-	} else {
-		rows, err := tx.QueryContext(ctx,
-			`SELECT email FROM users WHERE role='admin' AND NOT login_disabled ORDER BY email`)
-		if err != nil {
-			return err
-		}
-		for rows.Next() {
-			var email string
-			if err := rows.Scan(&email); err != nil {
-				rows.Close()
-				return err
-			}
-			recipients = append(recipients, email)
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return err
-		}
-	}
-	for _, recipient := range recipients {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO notification_deliveries(notification_id,channel,recipient)
-			VALUES($1,'smtp',$2) ON CONFLICT(notification_id,channel,recipient) DO NOTHING`,
-			notificationID, recipient); err != nil {
-			return err
-		}
+	if err := operations.EnqueueNotificationForEmailTx(ctx, tx, notificationID, strings.TrimSpace(dest.NotifyEmail)); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

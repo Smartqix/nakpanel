@@ -229,6 +229,17 @@ type Backup struct {
 	CustomerID     int64
 	ScheduledFor   sql.NullTime
 	DatabaseNames  []string
+	CompletedAt    sql.NullTime
+}
+
+type BackupReadinessCheck struct {
+	BackupID        int64
+	Checksum        string
+	SizeBytes       int64
+	VerifiedAt      sql.NullTime
+	DataScopeHash   string
+	LastCheckStatus string
+	LastCheckedAt   time.Time
 }
 
 type BillingAccount struct {
@@ -517,6 +528,33 @@ type GitWebhookDelivery struct {
 	ReceivedAt   time.Time
 }
 
+type Issue struct {
+	ID              int64
+	ResourceKind    string
+	ResourceID      int64
+	Kind            string
+	Condition       string
+	Severity        string
+	Title           string
+	Summary         string
+	State           string
+	Generation      int64
+	Occurrences     int32
+	LatestEventID   int64
+	IntentRevision  int64
+	OperationID     sql.NullInt64
+	PreviousIssueID sql.NullInt64
+	AcknowledgedBy  sql.NullInt64
+	AcknowledgedAt  sql.NullTime
+	ObservedAt      time.Time
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	ResolvedAt      sql.NullTime
+	Verification    pqtype.NullRawMessage
+	LastCheckAt     sql.NullTime
+	LastCheckStatus string
+}
+
 type LoginAttempt struct {
 	ID          int64
 	Email       string
@@ -652,23 +690,110 @@ type Notification struct {
 	Title           string
 	Body            string
 	DedupeKey       string
-	ReadAt          sql.NullTime
 	ResolvedAt      sql.NullTime
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+	IssueID         sql.NullInt64
+	OperationID     sql.NullInt64
+}
+
+type NotificationDeliveryPolicy struct {
+	Singleton bool
+	Enabled   bool
+	UpdatedAt time.Time
+}
+
+type NotificationEmailBatch struct {
+	ID              int64
+	BatchKey        string
+	RecipientUserID int64
+	Mode            string
+	Status          string
+	Attempts        int32
+	NextAttemptAt   time.Time
+	AcceptedAt      sql.NullTime
+	LastError       string
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }
 
-type NotificationDelivery struct {
-	ID             int64
+type NotificationEmailItem struct {
+	BatchID        int64
 	NotificationID int64
-	Channel        string
-	Recipient      string
-	Status         string
-	Attempts       int32
-	LastError      string
-	SentAt         sql.NullTime
+	UserID         int64
+}
+
+type NotificationPreference struct {
+	UserID    int64
+	EmailMode string
+	UpdatedAt time.Time
+}
+
+type NotificationReceipt struct {
+	NotificationID int64
+	UserID         int64
+	ReadAt         time.Time
+	ArchivedAt     sql.NullTime
+}
+
+type Operation struct {
+	ID             int64
+	OperationKey   string
+	Kind           string
+	ResourceKind   string
+	ResourceID     int64
+	Title          string
+	Trigger        string
+	State          string
+	Stage          string
+	IntentRevision int64
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+type OperationAttempt struct {
+	ID           int64
+	OperationID  int64
+	Number       int32
+	RiverJobID   int64
+	State        string
+	ErrorCode    string
+	StartedAt    time.Time
+	FinishedAt   sql.NullTime
+	Verification pqtype.NullRawMessage
+	RiverAttempt int32
+}
+
+type OperationConditionObservation struct {
+	ResourceKind string
+	ResourceID   int64
+	Kind         string
+	Condition    string
+	Signature    string
+	Unhealthy    bool
+	Generation   int64
+	ObservedAt   time.Time
+}
+
+type OperationEvent struct {
+	ID              int64
+	EventKey        string
+	ResourceKind    string
+	ResourceID      int64
+	Kind            string
+	OperationID     sql.NullInt64
+	IssueID         sql.NullInt64
+	NotificationID  sql.NullInt64
+	RecipientUserID sql.NullInt64
+	Summary         string
+	CreatedAt       time.Time
+	DispatchedAt    sql.NullTime
+	FeedCursor      sql.NullInt64
+}
+
+type OperationFeedClock struct {
+	Singleton bool
+	Cursor    int64
 }
 
 type Phase25EntitlementSnapshotBackup struct {
@@ -947,7 +1072,6 @@ type ScheduledTaskRun struct {
 type SecuritySetting struct {
 	ID               bool
 	RequireTotpAdmin bool
-	AlertEmail       string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

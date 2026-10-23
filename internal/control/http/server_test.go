@@ -190,18 +190,6 @@ func (r *fakeDashboardReader) GetDashboard(ctx context.Context, user auth.Sessio
 	return r.data, r.err
 }
 
-type fakeJobRetrier struct {
-	jobID  int64
-	err    error
-	called bool
-}
-
-func (r *fakeJobRetrier) RetryProvisioningJob(ctx context.Context, jobID int64) error {
-	r.jobID = jobID
-	r.called = true
-	return r.err
-}
-
 type fakeQuotaManager struct {
 	owner                auth.SessionUser
 	limits               controlquota.Limits
@@ -686,17 +674,6 @@ func TestAdminDashboardRendersOperationalInventoryAndForms(t *testing.T) {
 				Status:    "failed",
 				LastError: "access denied",
 			}},
-			Jobs: []dashboard.Job{{
-				ID:          41,
-				Kind:        "issue_cert",
-				State:       "discarded",
-				Queue:       "default",
-				Attempt:     2,
-				MaxAttempts: 3,
-				Target:      "example.test",
-				LastError:   "<acme failed>",
-				CreatedAt:   time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC),
-			}},
 		},
 	}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{
@@ -729,11 +706,7 @@ func TestAdminDashboardRendersOperationalInventoryAndForms(t *testing.T) {
 		"np_demo",
 		"np_demo_user",
 		"access denied",
-		"Recent jobs",
-		"issue_cert",
-		"discarded",
-		"2 / 3",
-		"&lt;acme failed&gt;",
+		"Open Activity for issues, tasks and history",
 		`action="/sites"`,
 		`action="/certificates"`,
 		`action="/databases"`,
@@ -759,15 +732,6 @@ func TestAdminDashboardRendersMobileTableLabels(t *testing.T) {
 				User:   "np_demo_user",
 				Status: "active",
 			}},
-			Jobs: []dashboard.Job{{
-				ID:          41,
-				Kind:        "create_site",
-				State:       "completed",
-				Target:      "example.test",
-				Attempt:     1,
-				MaxAttempts: 25,
-				CreatedAt:   time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC),
-			}},
 		},
 	}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
@@ -790,109 +754,10 @@ func TestAdminDashboardRendersMobileTableLabels(t *testing.T) {
 		`data-label="TLS"><span class="np-table-value">none`,
 		`data-label="Name"><span class="np-table-value">np_demo`,
 		`data-label="Engine"><span class="np-table-value">mariadb`,
-		`data-label="Kind"><span class="np-table-value">create_site`,
-		`data-label="Attempts"><span class="np-table-value">1 / 25`,
-		`data-label="Created"><span class="np-table-value">2026-07-07 12:00`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("dashboard body missing responsive table label %q:\n%s", want, body)
 		}
-	}
-}
-
-func TestAdminDashboardRendersRetryActionForDiscardedJobs(t *testing.T) {
-	reader := &fakeDashboardReader{
-		data: dashboard.Data{
-			Jobs: []dashboard.Job{
-				{
-					ID:          41,
-					Kind:        "create_site",
-					State:       "discarded",
-					Target:      "example.test",
-					Attempt:     25,
-					MaxAttempts: 25,
-					CreatedAt:   time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC),
-				},
-				{
-					ID:          42,
-					Kind:        "create_database",
-					State:       "completed",
-					Target:      "np_demo",
-					Attempt:     1,
-					MaxAttempts: 25,
-					CreatedAt:   time.Date(2026, 7, 7, 12, 1, 0, 0, time.UTC),
-				},
-			},
-		},
-	}
-	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{
-		DashboardReader: reader,
-		JobRetrier:      &fakeJobRetrier{},
-	})
-	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
-
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
-	addAuthenticatedCookie(req, cookie)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET / status = %d, want 200", rec.Code)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{
-		`action="/jobs/retry"`,
-		`name="job_id" value="41"`,
-		`Retry job`,
-		`data-label="Action"`,
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("dashboard body missing retry action %q:\n%s", want, body)
-		}
-	}
-	if strings.Contains(body, `name="job_id" value="42"`) {
-		t.Fatalf("dashboard rendered retry action for completed job:\n%s", body)
-	}
-}
-
-func TestAdminCanRetryDiscardedJob(t *testing.T) {
-	retrier := &fakeJobRetrier{}
-	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{JobRetrier: retrier})
-	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
-
-	form := url.Values{"job_id": {"41"}}
-	req := httptest.NewRequest(http.MethodPost, "https://panel.test/jobs/retry", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addAuthenticatedCookie(req, cookie)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST /jobs/retry status = %d, want 303; body:\n%s", rec.Code, rec.Body.String())
-	}
-	if location := rec.Header().Get("Location"); location != "/?notice=job-retried" {
-		t.Fatalf("Location = %q, want /?notice=job-retried", location)
-	}
-	if !retrier.called || retrier.jobID != 41 {
-		t.Fatalf("retrier called=%v jobID=%d, want called with 41", retrier.called, retrier.jobID)
-	}
-}
-
-func TestRetryJobShowsSuccessNotice(t *testing.T) {
-	reader := &fakeDashboardReader{}
-	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
-	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
-
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1&notice=job-retried", nil)
-	addAuthenticatedCookie(req, cookie)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /?notice=job-retried status = %d, want 200", rec.Code)
-	}
-	if !strings.Contains(rec.Body.String(), "Retry queued. Refresh in a moment to see the updated status.") {
-		t.Fatalf("dashboard body missing retry notice:\n%s", rec.Body.String())
 	}
 }
 
@@ -914,86 +779,6 @@ func TestDashboardNoticeToneDistinguishesFailures(t *testing.T) {
 		if got := dashboardNoticeTone(test.code); got != test.want {
 			t.Errorf("dashboardNoticeTone(%q) = %q, want %q", test.code, got, test.want)
 		}
-	}
-}
-
-func TestClientDashboardIgnoresRetryNotice(t *testing.T) {
-	handler, _ := newTestHandler(t, auth.RoleClient)
-	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
-
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1&notice=job-retried", nil)
-	addAuthenticatedCookie(req, cookie)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET /?notice=job-retried status = %d, want 200", rec.Code)
-	}
-	if strings.Contains(rec.Body.String(), "Retry queued") {
-		t.Fatalf("client dashboard rendered admin retry notice:\n%s", rec.Body.String())
-	}
-}
-
-func TestClientCannotRetryJob(t *testing.T) {
-	retrier := &fakeJobRetrier{}
-	handler, _ := newTestHandlerWithOptions(t, auth.RoleClient, ServerOptions{JobRetrier: retrier})
-	cookie := login(t, handler, "client@nakpanel.test", "NakpanelClient!2026")
-
-	req := httptest.NewRequest(http.MethodPost, "https://panel.test/jobs/retry", strings.NewReader("job_id=41"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addAuthenticatedCookie(req, cookie)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusForbidden {
-		t.Fatalf("POST /jobs/retry status = %d, want 403", rec.Code)
-	}
-	if retrier.called {
-		t.Fatal("client retry invoked retrier")
-	}
-}
-
-func TestUnauthenticatedRetryJobRedirectsToLogin(t *testing.T) {
-	retrier := &fakeJobRetrier{}
-	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{JobRetrier: retrier})
-
-	req := httptest.NewRequest(http.MethodPost, "https://panel.test/jobs/retry", strings.NewReader("job_id=41"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST /jobs/retry status = %d, want 303", rec.Code)
-	}
-	if location := rec.Header().Get("Location"); location != "/login" {
-		t.Fatalf("Location = %q, want /login", location)
-	}
-	if retrier.called {
-		t.Fatal("unauthenticated retry invoked retrier")
-	}
-}
-
-func TestRetryJobRejectsInvalidJobID(t *testing.T) {
-	retrier := &fakeJobRetrier{}
-	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{JobRetrier: retrier})
-	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
-
-	req := httptest.NewRequest(http.MethodPost, "https://panel.test/jobs/retry", strings.NewReader("job_id=not-a-number"))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	addAuthenticatedCookie(req, cookie)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	// A bad form value returns the operator to the page they submitted from,
-	// carrying the reason, rather than replacing the panel with a bare 400.
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("POST /jobs/retry status = %d, want 303", rec.Code)
-	}
-	if message := formErrorFromRecorder(rec); !strings.Contains(message, "job") {
-		t.Fatalf("form error = %q, want it to name the invalid field", message)
-	}
-	if retrier.called {
-		t.Fatal("invalid job id invoked retrier")
 	}
 }
 
@@ -1368,7 +1153,6 @@ func TestAdminDashboardRendersQuotaManagement(t *testing.T) {
 		`name="plan_id"`,
 		`name="site_disk_quota_mb"`,
 		"1 / 2",
-		"2 / 3",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("dashboard body missing %q:\n%s", want, body)
@@ -1387,15 +1171,6 @@ func TestAdminDashboardRendersPrototypeShellAndCreateGateData(t *testing.T) {
 				Domain:     "example.test",
 				PHPVersion: "8.3",
 				Status:     "active",
-			}},
-			Jobs: []dashboard.Job{{
-				ID:          41,
-				Kind:        "create_site",
-				State:       "running",
-				Target:      "example.test",
-				Attempt:     1,
-				MaxAttempts: 3,
-				CreatedAt:   time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC),
 			}},
 			Quotas: []controlquota.Summary{{
 				UserID:         2,
@@ -1965,33 +1740,6 @@ func TestAdminDashboardRendersAllSiteErrorsSafely(t *testing.T) {
 	}
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Fatalf("dashboard body rendered unescaped TLS error:\n%s", body)
-	}
-}
-
-func TestAdminDashboardRendersJobLoadErrorWithInventory(t *testing.T) {
-	reader := &fakeDashboardReader{
-		data: dashboard.Data{
-			Sites:        []dashboard.Site{{Domain: "example.test", Status: "active"}},
-			Databases:    []dashboard.Database{{Name: "np_demo", Status: "active"}},
-			JobLoadError: "recent jobs unavailable",
-		},
-	}
-	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
-	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
-
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
-	addAuthenticatedCookie(req, cookie)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET / status = %d, want 200", rec.Code)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{"example.test", "np_demo", "Recent jobs", "recent jobs unavailable"} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("dashboard body missing %q:\n%s", want, body)
-		}
 	}
 }
 
@@ -2700,7 +2448,7 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 	cases := map[string]string{
-		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Files &amp; access", "/sites/7?tab=hosting": "Hosting settings", "/sites/7?tab=databases": "Database allocation summary", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "Audit events", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/addons/new": "Create Add-on", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
+		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Files &amp; access", "/sites/7?tab=hosting": "Hosting settings", "/sites/7?tab=databases": "Database allocation summary", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "data-np-operations", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/addons/new": "Create Add-on", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
 	}
 	for path, marker := range cases {
 		req := httptest.NewRequest(http.MethodGet, "https://panel.test"+path, nil)
@@ -3335,7 +3083,7 @@ func TestSanitizeNoticeTextBoundsAndFlattensInput(t *testing.T) {
 // renders nothing, which is how creating a website used to confirm silently.
 func TestEveryEmittedNoticeCodeResolves(t *testing.T) {
 	for _, code := range []string{
-		"site-queued", "database-queued", "certificate-queued", "task-ran",
+		"site-queued", "database-queued", "certificate-queued", "task-queued",
 		"policy-saved", "provider-saved", "reseller-saved", "reseller-status-saved",
 		"reseller-plan-saved", "addon-saved", "addons-saved", "subscription-mode-saved",
 		"subscription-synced", "dns-record-restored", "dns-soa-saved",

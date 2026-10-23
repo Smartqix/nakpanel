@@ -200,7 +200,12 @@ provision_resources() { # LABEL
   backup_output="$(cli backup create "${dom}")"
   backup_id="$(sed -nE 's/^Backup queued \(backup ([0-9]+)\)\.$/\1/p' <<<"${backup_output}")"
   require_fixture_id "${label} backup queue" "${backup_id}"
-  wait_for "SELECT status FROM backups WHERE id=${backup_id} AND subscription_id=${sub}" active
+  if ! wait_for "SELECT status FROM backups WHERE id=${backup_id} AND subscription_id=${sub}" active; then
+    # Preserve bounded ownership/queue facts before owned-guest teardown.
+    # Job arguments, error payloads and credentials are deliberately excluded.
+    db "SELECT b.id,b.status,b.site_id,b.subscription_id,(b.owner_user_id IS NOT DISTINCT FROM s.owner_user_id) AS owner_matches_site,j.state AS job_state,j.attempt,j.max_attempts,j.queue FROM backups b JOIN sites s ON s.id=b.site_id LEFT JOIN LATERAL (SELECT state,attempt,max_attempts,queue FROM river_job WHERE kind='create_backup' AND args->>'backup_id'=b.id::text ORDER BY id DESC LIMIT 1) j ON true WHERE b.id=${backup_id} AND b.subscription_id=${sub}" >&2 || true
+    return 1
+  fi
   eval "${label}_DB=\"${dbname}\"; ${label}_DBUSER=\"${dbuser}\""
 }
 provision_resources A

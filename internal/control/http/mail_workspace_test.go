@@ -92,7 +92,7 @@ func TestSubscriptionTaskRunPreservesSupportContext(t *testing.T) {
 	addAuthenticatedCookie(req, cookie)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
-	want := "/support/customers/88/subscriptions/20?tab=tasks&notice=task-ran"
+	want := "/support/customers/88/subscriptions/20?tab=tasks&notice=task-queued"
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != want {
 		t.Fatalf("task run status=%d location=%q, want %q", rec.Code, rec.Header().Get("Location"), want)
 	}

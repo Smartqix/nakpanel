@@ -1187,10 +1187,13 @@ if v['mode'] in {'background','failure-background'}:
         for mode in modes:
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as folder:
                 source, case, manifest, bindings, env, _ = self.fixture(folder, mode)
-                with self.assertRaises(helper.QualificationError):
+                with self.assertRaises(helper.QualificationError) as failure:
                     helper.execute_canonical(source, manifest, case, bindings, environment=env, timeout=0.2 if mode == "hang" else 5)
                 self.assertFalse((case / "roundcube-send-read.execution.json").exists())
-                outcome = json.loads((case / ".roundcube-canonical-execution/outcome.json").read_text())
+                outcome_path = case / ".roundcube-canonical-execution/outcome.json"
+                diagnostic = case / "internal-tools-diagnostic.json"
+                self.assertTrue(outcome_path.exists(), str(failure.exception) + " " + (diagnostic.read_text() if diagnostic.exists() else "no diagnostic"))
+                outcome = json.loads(outcome_path.read_text())
                 self.assertEqual(outcome["exit_code"], 17 if mode in {"early-exit", "dbmanager-failed", "failure-background"} else -9 if mode in {"hang", "interrupt"} else 0)
                 self.assertIs(outcome["success"], False)
                 self.assertEqual(outcome["timed_out"], mode == "hang")

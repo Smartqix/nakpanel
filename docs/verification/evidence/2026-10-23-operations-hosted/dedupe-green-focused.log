@@ -1,0 +1,10 @@
+=== RUN   TestRepeatedManualFailuresPublishOneIncidentNotification
+=== RUN   TestRepeatedManualFailuresPublishOneIncidentNotification/delayed_dispatch
+=== RUN   TestRepeatedManualFailuresPublishOneIncidentNotification/between_runs
+=== RUN   TestRepeatedManualFailuresPublishOneIncidentNotification/before_second_worker
+--- PASS: TestRepeatedManualFailuresPublishOneIncidentNotification (3.29s)
+    --- PASS: TestRepeatedManualFailuresPublishOneIncidentNotification/delayed_dispatch (1.97s)
+    --- PASS: TestRepeatedManualFailuresPublishOneIncidentNotification/between_runs (0.68s)
+    --- PASS: TestRepeatedManualFailuresPublishOneIncidentNotification/before_second_worker (0.64s)
+PASS
+ok  	github.com/nakroteck/nakpanel/internal/control/provision	3.958s

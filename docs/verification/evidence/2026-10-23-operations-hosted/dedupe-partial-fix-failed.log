@@ -1,0 +1,7 @@
+--- FAIL: TestRepeatedManualFailuresPublishOneIncidentNotification (4.24s)
+    --- FAIL: TestRepeatedManualFailuresPublishOneIncidentNotification/delayed_dispatch (2.01s)
+        scheduled_operations_test.go:82: repeated failure notices=2 occurrences=2; want one notice with two occurrences
+FAIL
+FAIL	github.com/nakroteck/nakpanel/internal/control/provision	27.211s
+ok  	github.com/nakroteck/nakpanel/internal/control/operations	13.040s
+FAIL

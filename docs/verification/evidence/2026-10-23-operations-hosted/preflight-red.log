@@ -1,0 +1,9 @@
+--- FAIL: TestRunNowUsesDurableQueueInsteadOfUntrackedSynchronousExecution (0.00s)
+    scheduled_operations_test.go:31: Run Now bypassed the durable worker: types.ScheduledTaskRun{ID:1, TaskID:7, Status:"", ExitCode:(*int)(nil), Output:"", StartedAt:time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC), FinishedAt:time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC), ScheduledFor:time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC), CreatedAt:time.Date(1, time.January, 1, 0, 0, 0, 0, time.UTC)} queued=false err=<nil>
+FAIL
+FAIL	github.com/nakroteck/nakpanel/internal/control/provision	0.255s
+--- FAIL: TestOperationsSelectionRunsOnlyFocusedHostedAcceptance (0.00s)
+    operations_hosted_test.go:21: focused operations selection missing
+FAIL
+FAIL	github.com/nakroteck/nakpanel/deploy/multipass	0.249s
+FAIL

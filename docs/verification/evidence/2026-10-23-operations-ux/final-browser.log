@@ -1,0 +1,34 @@
+[
+  {
+    "name": "SSR notification opening marks only its personal receipt read",
+    "passed": true
+  },
+  {
+    "name": "polled notification and quick inbox opening mark read",
+    "passed": true
+  },
+  {
+    "name": "task notification opening records read without issue mutations",
+    "passed": true
+  },
+  {
+    "name": "closing before details load does not mark a notification read",
+    "passed": true
+  },
+  {
+    "name": "issue settings link preserves customer support context",
+    "passed": true
+  },
+  {
+    "name": "removed and denied issue details expose no stale settings action or read receipt",
+    "passed": true
+  },
+  {
+    "name": "removed resource has an explicit unavailable settings state",
+    "passed": true
+  },
+  {
+    "name": "failed read receipt keeps issue open and reports that read was not saved",
+    "passed": true
+  }
+]

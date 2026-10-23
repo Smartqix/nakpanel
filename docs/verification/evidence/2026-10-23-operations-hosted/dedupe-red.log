@@ -1,0 +1,12 @@
+=== RUN   TestRepeatedManualFailuresPublishOneIncidentNotification
+=== RUN   TestRepeatedManualFailuresPublishOneIncidentNotification/delayed_dispatch
+=== RUN   TestRepeatedManualFailuresPublishOneIncidentNotification/between_runs
+=== RUN   TestRepeatedManualFailuresPublishOneIncidentNotification/before_second_worker
+    scheduled_operations_test.go:82: repeated failure notices=2 occurrences=2; want one notice with two occurrences
+--- FAIL: TestRepeatedManualFailuresPublishOneIncidentNotification (2.99s)
+    --- PASS: TestRepeatedManualFailuresPublishOneIncidentNotification/delayed_dispatch (1.15s)
+    --- PASS: TestRepeatedManualFailuresPublishOneIncidentNotification/between_runs (0.93s)
+    --- FAIL: TestRepeatedManualFailuresPublishOneIncidentNotification/before_second_worker (0.91s)
+FAIL
+FAIL	github.com/nakroteck/nakpanel/internal/control/provision	3.188s
+FAIL

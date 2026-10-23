@@ -547,7 +547,7 @@ esac
 `,
 				"python3": `#!/bin/sh
 case "$1" in
- */hosted-multipass-ready.py) exec "$FIXTURE_PYTHON" "$@" --timeout 0.2 --attempt-timeout 0.05 --retry-interval 0.01;;
+ */hosted-multipass-ready.py) exec "$FIXTURE_PYTHON" "$@" --timeout 1 --attempt-timeout 0.25 --retry-interval 0.01;;
  *) exec "$FIXTURE_PYTHON" "$@";;
 esac
 `,

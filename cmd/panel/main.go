@@ -24,6 +24,7 @@ import (
 	panelhttp "github.com/nakroteck/nakpanel/internal/control/http"
 	controlmailimport "github.com/nakroteck/nakpanel/internal/control/mailimport"
 	controlmaintenance "github.com/nakroteck/nakpanel/internal/control/maintenance"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
 	"github.com/nakroteck/nakpanel/internal/control/provisioningapi"
@@ -81,6 +82,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("create river client: %v", err)
 	}
+	if err := operations.InstallRecorder(ctx, db); err != nil {
+		log.Fatalf("install operation recorder: %v", err)
+	}
 	serverAdminManager.SetCapabilityInvalidator(capabilityCache)
 	if err := riverClient.Start(ctx); err != nil {
 		log.Fatalf("start river client: %v", err)
@@ -95,6 +99,8 @@ func main() {
 	databaseRepo := provision.NewSQLDatabaseRepository(db, queries, riverClient, serverAdminManager.Store())
 	phase6Repo := provision.NewSQLPhase6Repository(db, riverClient)
 	quotaStore := controlquota.NewSQLStore(db, riverClient)
+	operationsStore := provision.NewOperationsManager(db, riverClient, agentCapabilities)
+	operationsStore.SetSMTPConfigured(cfg.SMTPHost != "" && cfg.SMTPFrom != "")
 	quotaStore.SetServiceSecretStore(serverAdminManager.Store())
 	workspaceStore := workspace.NewStore(db)
 	fileManager := controlfiles.NewManager(controlfiles.ManagerOptions{
@@ -110,7 +116,6 @@ func main() {
 	phpApplicationManager := controlphpapp.NewManager(phpApplicationStore, workspaceStore, agentCapabilities)
 	dashboardStore := dashboard.NewStore(
 		dashboardQuerier{queries: queries},
-		dashboard.WithJobReader(dashboard.NewSQLJobStore(db)),
 		dashboard.WithPhase6Reader(dashboard.NewSQLPhase6Store(db)),
 		dashboard.WithQuotaReader(quotaStore),
 		dashboard.WithScopedReader(workspaceStore),
@@ -144,7 +149,6 @@ func main() {
 		log.Printf("sweep stale custom TLS staging files: %v", err)
 	}
 	go sweepCustomTLSStaging(ctx, db)
-	jobRetrier := provision.NewSQLJobRetrier(db)
 	databaseManager, closeDatabaseManager, err := startDatabaseManager(ctx, db, serverAdminManager.Store())
 	if err != nil {
 		log.Fatalf("start database manager bridge: %v", err)
@@ -152,13 +156,13 @@ func main() {
 	defer closeDatabaseManager()
 	instantNav := strings.ToLower(strings.TrimSpace(os.Getenv("NAKPANEL_INSTANT_NAV")))
 	uiHandler := panelhttp.NewServer(authStore, sessionManager, panelhttp.ServerOptions{
+		Operations:                 operationsStore,
 		SiteCreator:                siteManager,
 		SiteRemoval:                siteManager,
 		DatabaseCreator:            siteManager,
 		CertificateIssuer:          siteManager,
 		CustomCertificateInstaller: siteManager,
 		DashboardReader:            dashboardStore,
-		JobRetrier:                 jobRetrier,
 		Phase6Manager:              siteManager,
 		QuotaManager:               siteManager,
 		Workspace:                  workspaceStore,
@@ -237,7 +241,12 @@ func (q dashboardQuerier) ListDatabases(ctx context.Context) ([]store.Database, 
 
 func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelRuntimeConfig) (*river.Client[*sql.Tx], *serveradmin.Manager, *databaseadmin.Manager, *dnstemplate.Manager, *controlphpapp.SQLStore, *controlwordpress.SQLStore, error) {
 	workers := river.NewWorkers()
+	river.AddWorker(workers, &operations.DispatchWorker{Store: operations.NewStore(db)})
 	agent := agentclient.New(config.AgentSocket)
+	operationsManager := provision.NewOperationsManager(db, nil, agent)
+	river.AddWorker(workers, &provision.SweepOperationsWorker{Manager: operationsManager})
+	river.AddWorker(workers, &provision.VerifyIssueWorker{Manager: operationsManager})
+	river.AddWorker(workers, &provision.VerifyArchiveWorker{Manager: operationsManager})
 	var runtimeConfig config.PanelRuntimeConfig
 	if len(configs) > 0 {
 		runtimeConfig = configs[0]
@@ -365,8 +374,10 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 		return nil, nil, nil, nil, nil, nil, err
 	}
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
-		WorkerMiddleware: []rivertype.WorkerMiddleware{provision.NewSiteJobFence(db)},
+		WorkerMiddleware: []rivertype.WorkerMiddleware{&operations.JobContextMiddleware{}, provision.NewSiteJobFence(db)},
 		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return provision.SweepOperationsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
+			river.NewPeriodicJob(river.PeriodicInterval(2*time.Second), func() (river.JobArgs, *river.InsertOpts) { return operations.DispatchArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return controlmailimport.ExpirePreviewsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return provision.SweepSiteRemovalsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Hour), func() (river.JobArgs, *river.InsertOpts) { return webstatistics.SweepArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
@@ -439,6 +450,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
+	operationsManager.SetQueue(client)
 	usageWorker.SetRiverClient(client)
 	mailImportStore.SetQueue(client)
 	autoSubdomainDNS.SetRiverClient(client)

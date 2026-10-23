@@ -182,12 +182,12 @@ func TestCustomerNavigationKeepsAdvancedResourcesUnderWebsites(t *testing.T) {
 		t.Fatalf("customer navigation missing: status=%d", rec.Code)
 	}
 	nav := body[start:end]
-	for _, label := range []string{"Home", "Websites &amp; Domains", "Mail", "Backups", "Account &amp; Usage"} {
+	for _, label := range []string{"Home", "Websites &amp; Domains", "Mail", "Backups", "Account &amp; Usage", "Activity"} {
 		if !strings.Contains(nav, label) {
 			t.Fatalf("customer navigation missing %q: %s", label, nav)
 		}
 	}
-	for _, path := range []string{`href="/databases"`, `href="/dns"`, `href="/certificates"`, `href="/activity"`} {
+	for _, path := range []string{`href="/databases"`, `href="/dns"`, `href="/certificates"`} {
 		if strings.Contains(nav, path) {
 			t.Fatalf("advanced route %s should not crowd customer navigation: %s", path, nav)
 		}

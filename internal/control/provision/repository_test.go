@@ -72,7 +72,7 @@ func TestMarkBackupActivePersistsNormalizedDatabaseCoverage(t *testing.T) {
 	defer db.Close()
 	store := NewSQLPhase6StatusStore(db)
 	mock.ExpectExec(regexp.QuoteMeta(`UPDATE backups SET status='active',archive_path=$2,size_bytes=$3,
-checksum_sha256=$4,database_names=$5,last_error='',updated_at=now() WHERE id=$1`)).
+checksum_sha256=$4,database_names=$5,last_error='',completed_at=CASE WHEN checksum_sha256=$4 AND archive_path=$2 THEN COALESCE(completed_at,now()) ELSE now() END,updated_at=now() WHERE id=$1 AND status IN('pending','failed','active')`)).
 		WithArgs(int64(41), "/backup.tar.zst", int64(4096), strings.Repeat("a", 64), `{"db_a","db_b"}`).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	if err := store.MarkBackupActive(context.Background(), 41, types.CreateBackupResult{

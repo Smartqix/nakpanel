@@ -104,10 +104,6 @@ type MailImportService interface {
 	MapFolders(context.Context, auth.SessionUser, string, []types.MailImportMapping) error
 }
 
-type JobRetrier interface {
-	RetryProvisioningJob(ctx context.Context, jobID int64) error
-}
-
 type Phase6Manager interface {
 	CreateBackupFor(ctx context.Context, owner auth.SessionUser, resourceOwnerID int64, req types.CreateBackupReq) (int64, error)
 	RestoreBackup(ctx context.Context, owner auth.SessionUser, backupID int64) (int64, error)
@@ -257,7 +253,7 @@ type ServerOptions struct {
 	CertificateIssuer          CertificateIssuer
 	CustomCertificateInstaller CustomCertificateInstaller
 	DashboardReader            DashboardReader
-	JobRetrier                 JobRetrier
+	Operations                 OperationsService
 	Phase6Manager              Phase6Manager
 	QuotaManager               QuotaManager
 	Workspace                  WorkspaceService
@@ -292,7 +288,7 @@ type Server struct {
 	certificates       CertificateIssuer
 	customCertificates CustomCertificateInstaller
 	dashboard          DashboardReader
-	jobs               JobRetrier
+	operations         OperationsService
 	phase6             Phase6Manager
 	quotas             QuotaManager
 	workspace          WorkspaceService
@@ -330,7 +326,7 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		certificates:       opts.CertificateIssuer,
 		customCertificates: opts.CustomCertificateInstaller,
 		dashboard:          opts.DashboardReader,
-		jobs:               opts.JobRetrier,
+		operations:         opts.Operations,
 		phase6:             opts.Phase6Manager,
 		quotas:             opts.QuotaManager,
 		workspace:          opts.Workspace,
@@ -386,7 +382,6 @@ func (s *Server) Handler() http.Handler {
 	s.registerBackupManagerRoutes(mux)
 	mux.HandleFunc("POST /certificates", s.handleIssueCertificate)
 	mux.HandleFunc("POST /sites/{id}/certificates/custom", s.handleInstallCustomCertificate)
-	mux.HandleFunc("POST /jobs/retry", s.handleRetryJob)
 	mux.HandleFunc("POST /backups", s.handleCreateBackup)
 	mux.HandleFunc("POST /restores", s.handleRestoreBackup)
 	mux.HandleFunc("POST /webmail", s.handleConfigureWebmail)
@@ -487,6 +482,18 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /db", s.handleAdminer)
 	mux.HandleFunc("GET /search", s.handleSearch)
 	mux.HandleFunc("GET /api/workspace/tasks", s.handleTasks)
+	mux.HandleFunc("GET /api/workspace/operations/preferences", s.handleOperationsPreferences)
+	mux.HandleFunc("POST /api/workspace/operations/preferences", s.handleOperationsPreferences)
+	mux.HandleFunc("GET /api/workspace/operations/delivery-policy", s.handleOperationsPreferences)
+	mux.HandleFunc("POST /api/workspace/operations/delivery-policy", s.handleOperationsPreferences)
+	mux.HandleFunc("GET /api/workspace/operations/issues/{id}/{action}", s.handleIssueRecovery)
+	mux.HandleFunc("POST /api/workspace/operations/issues/{id}/{action}", s.handleIssueRecovery)
+	mux.HandleFunc("GET /api/workspace/operations", s.handleOperations)
+	mux.HandleFunc("GET /api/workspace/operations/events", s.handleOperationEvents)
+	mux.HandleFunc("GET /api/workspace/operations/{type}/{id}", s.handleOperationDetail)
+	mux.HandleFunc("POST /api/workspace/operations/notifications/read-all", s.handleOperationsReadAll)
+	mux.HandleFunc("POST /api/workspace/operations/notifications/{id}/{action}", s.handleOperationReceipt)
+	mux.HandleFunc("POST /api/workspace/operations/issues/{id}/acknowledge", s.handleIssueAcknowledge)
 	mux.HandleFunc("GET /mail/status", s.handleMailStatus)
 	mux.HandleFunc("GET /email", s.handleEmailRedirect)
 	mux.HandleFunc("GET /dashboard", s.handleWorkspace("dashboard"))
@@ -613,7 +620,6 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		CanCreateSite:       s.sites != nil,
 		CanCreateDatabase:   s.databases != nil,
 		CanIssueCertificate: s.certificates != nil,
-		CanRetryJob:         s.jobs != nil,
 		CanUsePhase6:        s.phase6 != nil,
 		CanManageQuotas:     s.quotas != nil,
 	}))
@@ -626,7 +632,6 @@ func (s *Server) dashboardActions(user auth.SessionUser) web.DashboardActions {
 		CanUseWordPress:     selfService && s.sites != nil && s.wordpress != nil,
 		CanCreateDatabase:   selfService && s.databases != nil,
 		CanIssueCertificate: selfService && s.certificates != nil,
-		CanRetryJob:         user.Role == auth.RoleAdmin && s.jobs != nil,
 		CanUsePhase6:        selfService && s.phase6 != nil,
 		CanManageQuotas:     (user.Role == auth.RoleAdmin || user.Role == auth.RoleReseller) && s.quotas != nil,
 		CanUseFileManager:   selfService && s.files != nil,
@@ -1025,6 +1030,9 @@ func workspaceDrawerID(raw string) string {
 }
 
 func validWorkspaceTab(route, tab string) bool {
+	if route == "activity" {
+		return map[string]bool{"overview": true, "issues": true, "tasks": true, "history": true, "inbox": true, "preferences": true}[tab]
+	}
 	if route == "subscription-detail" {
 		return map[string]bool{"overview": true, "resources": true, "access": true, "cache": true, "mail": true, "tasks": true, "applications": true, "backups": true, "activity": true}[tab]
 	}
@@ -1260,7 +1268,6 @@ func filterDashboardForCustomer(data dashboard.Data, customerID int64) dashboard
 	data.Sites = sites
 	data.Databases = databases
 	data.Subscriptions = subscriptions
-	data.Jobs = nil
 	data.AuditEvents = audit
 	data.Phase6 = dashboard.Phase6Data{Backups: backups, Restores: restores, DNSZones: zones}
 	data.SubscriptionServices = dashboard.SubscriptionServicesData{
@@ -1926,36 +1933,6 @@ func readCertificateUpload(r *http.Request, name string, required bool) ([]byte,
 		return nil, fmt.Errorf("%s file must be 256 KiB or smaller", strings.ReplaceAll(name, "_", " "))
 	}
 	return data, nil
-}
-
-func (s *Server) handleRetryJob(w http.ResponseWriter, r *http.Request) {
-	user, ok := s.currentUser(w, r)
-	if !ok {
-		return
-	}
-	if user.Role != auth.RoleAdmin {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	if s.jobs == nil {
-		http.Error(w, "Job recovery is not configured", http.StatusServiceUnavailable)
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		formFailure(w, r, "Invalid job retry form")
-		return
-	}
-
-	jobID, err := strconv.ParseInt(strings.TrimSpace(r.Form.Get("job_id")), 10, 64)
-	if err != nil || jobID <= 0 {
-		formFailure(w, r, "Invalid job id")
-		return
-	}
-	if err := s.jobs.RetryProvisioningJob(r.Context(), jobID); err != nil {
-		formFailure(w, r, "Could not retry job: "+err.Error())
-		return
-	}
-	http.Redirect(w, r, "/?notice=job-retried", http.StatusSeeOther)
 }
 
 func (s *Server) handleCreateBackup(w http.ResponseWriter, r *http.Request) {
@@ -3679,8 +3656,7 @@ var noticeCatalogue = map[string]noticeEntry{
 	"reconcile-queued":         {"Reconciliation queued. Generated configs will be refreshed from intent.", dashboard.NoticeSuccess},
 	"staging-queued":           {"Staging operation queued. A rollback point will be created before the target changes.", dashboard.NoticeSuccess},
 	"git-deploy-queued":        {"Git deployment queued. The previous revision remains available as a rollback point.", dashboard.NoticeSuccess},
-	"job-retried":              {"Retry queued. Refresh in a moment to see the updated status.", dashboard.NoticeSuccess},
-	"task-ran":                 {"Scheduled task started. Its run appears in the task history.", dashboard.NoticeSuccess},
+	"task-queued":              {"Scheduled task queued. Follow its result in Tasks.", dashboard.NoticeSuccess},
 
 	// Mail
 	"mail-settings-saved":     {"Mail server settings saved and convergence queued.", dashboard.NoticeSuccess},

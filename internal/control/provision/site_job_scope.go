@@ -11,6 +11,8 @@ import (
 // Shared jobs must reload or filter current surviving intent, not be cancelled
 // merely because their payload used to include a removed website.
 var removalJobClassification = map[string]string{
+	"dispatch_operation_events": "node",
+	"sweep_operations":          "node", "verify_operation_issue": "shared", "verify_operation_archive": "shared",
 	"create_site": "target", "issue_cert": "target", "install_custom_cert": "target", "set_hosting_state": "target",
 	"create_backup": "target", "restore_backup": "target", "configure_webmail": "target", "configure_dns_zone": "target", "create_database": "target",
 	"deploy_php_release": "target", "rollback_php_release": "target", "reconcile_php_application": "target", "reconcile_php_workers": "target",
@@ -25,8 +27,8 @@ var removalJobClassification = map[string]string{
 	"finalize_billing_account": "shared", "teardown_billing_account": "shared",
 	"system_refresh_inventory": "node", "system_control_service": "node", "system_apply_fail2ban": "node", "system_stage_firewall": "node", "system_apply_updates": "node", "system_host_power": "node",
 	"sweep_billing_webhooks": "node", "deliver_billing_webhook": "node", "deliver_notifications": "node", "server_backup": "node", "server_backup_prune": "node", "server_backup_sweep": "node",
-	"remove_site":         "removal",
-	"sweep_site_removals": "shared",
+	"remove_site":                 "removal",
+	"sweep_site_removals":         "shared",
 	"expire_mail_import_previews": "shared",
 }
 

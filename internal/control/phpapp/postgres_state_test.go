@@ -50,8 +50,13 @@ CREATE TABLE notifications(id BIGSERIAL PRIMARY KEY,recipient_user_id BIGINT,cus
  subscription_id BIGINT,kind TEXT NOT NULL,severity TEXT NOT NULL,title TEXT NOT NULL,body TEXT NOT NULL,
  dedupe_key TEXT NOT NULL,resolved_at TIMESTAMPTZ,updated_at TIMESTAMPTZ NOT NULL DEFAULT now());
 CREATE UNIQUE INDEX notifications_active_dedupe ON notifications(dedupe_key) WHERE resolved_at IS NULL;
-CREATE TABLE notification_deliveries(notification_id BIGINT NOT NULL,channel TEXT NOT NULL,recipient TEXT NOT NULL,
- UNIQUE(notification_id,channel,recipient));
+CREATE TABLE users(id BIGINT PRIMARY KEY,role TEXT,email TEXT,login_disabled BOOLEAN NOT NULL DEFAULT false);
+ALTER TABLE reseller_accounts ADD COLUMN login_user_id BIGINT;
+ALTER TABLE notifications ADD COLUMN issue_id BIGINT;
+CREATE TABLE issues(id BIGINT PRIMARY KEY,kind TEXT,resource_kind TEXT,resource_id BIGINT);
+CREATE TABLE notification_preferences(user_id BIGINT,email_mode TEXT);
+CREATE TABLE notification_delivery_policy(singleton BOOLEAN,enabled BOOLEAN);
+INSERT INTO notification_delivery_policy VALUES(true,false);
 CREATE TABLE audit_events(
  actor_user_id BIGINT,actor_label TEXT,customer_id BIGINT,subscription_id BIGINT,action TEXT,
  target_type TEXT,target_id BIGINT,metadata JSONB
@@ -354,7 +359,11 @@ INSERT INTO php_applications VALUES(9,2,NULL,NULL,'pending','',1,'pending','',NU
 
 func phpApplicationPostgres(t *testing.T) *sql.DB {
 	t.Helper()
-	candidates := []string{os.Getenv("NAKPANEL_TEST_DATABASE_URL")}
+	fixtureDSN := os.Getenv("NAKPANEL_OPERATIONS_TEST_DSN")
+	if fixtureDSN == "" {
+		fixtureDSN = os.Getenv("NAKPANEL_TEST_DATABASE_URL")
+	}
+	candidates := []string{fixtureDSN}
 	if candidates[0] == "" {
 		candidates = []string{
 			"postgres://postgres@127.0.0.1:5432/postgres?sslmode=disable",

@@ -175,7 +175,7 @@
         }
         if (options.allowPageResponse && (!json && method === 'POST' || response.ok && (response.redirected || (response.headers.get('Content-Type') || '').includes('text/html')))) return response;
         if (response.redirected && json) throw new Error('The server returned a page instead of an operation result. Check status before resubmitting.');
-        if (json) {
+        if (json && response.status !== 204 && !(response.status === 202 && !(response.headers.get("Content-Type") || "").includes("json"))) {
           var payload;
           try { payload = await response.clone().json(); }
           catch (_) { throw new Error('The server returned an unexpected response (HTTP ' + response.status + '). Check status before retrying.'); }

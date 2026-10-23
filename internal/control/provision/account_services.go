@@ -392,32 +392,17 @@ func (m *Manager) ReadSiteLog(ctx context.Context, actor auth.SessionUser, siteI
 }
 
 func (m *Manager) RunScheduledTask(ctx context.Context, actor auth.SessionUser, subscriptionID, taskID int64) (types.ScheduledTaskRun, error) {
-	if m.hostingToolkitAgent == nil {
-		return types.ScheduledTaskRun{}, errors.New("scheduled task runner is not configured")
-	}
-	store, err := m.authorizedAccountServices(ctx, actor, subscriptionID)
-	if err != nil {
+	if _, err := m.authorizedAccountServices(ctx, actor, subscriptionID); err != nil {
 		return types.ScheduledTaskRun{}, err
 	}
-	req, err := store.ScheduledTaskRunRequest(ctx, subscriptionID, taskID)
-	if err != nil {
-		return types.ScheduledTaskRun{}, err
+	queue, ok := m.siteRepo.(interface {
+		EnqueueManualScheduledTask(context.Context, auth.SessionUser, int64, int64) (int64, error)
+	})
+	if !ok {
+		return types.ScheduledTaskRun{}, errors.New("scheduled task queue is not configured")
 	}
-	if req.SiteID == 0 {
-		return types.ScheduledTaskRun{}, errors.New("Run Now requires a domain-scoped task")
-	}
-	runID, err := store.CreateScheduledTaskRun(ctx, taskID)
-	if err != nil {
-		return types.ScheduledTaskRun{}, err
-	}
-	result, runErr := m.hostingToolkitAgent.RunScheduledTask(ctx, req)
-	if runErr != nil {
-		result = types.RunScheduledTaskResult{Status: "failed", ExitCode: -1, Output: runErr.Error()}
-	}
-	if finishErr := store.FinishScheduledTaskRun(ctx, runID, result); finishErr != nil {
-		return types.ScheduledTaskRun{}, errors.Join(runErr, finishErr)
-	}
-	return types.ScheduledTaskRun{ID: runID, TaskID: taskID, Status: result.Status, Output: result.Output}, runErr
+	id, err := queue.EnqueueManualScheduledTask(ctx, actor, subscriptionID, taskID)
+	return types.ScheduledTaskRun{ID: id, TaskID: taskID, Status: "pending"}, err
 }
 
 func (m *Manager) DeleteSubscriptionService(ctx context.Context, actor auth.SessionUser, subscriptionID int64, kind string, id int64) error {
