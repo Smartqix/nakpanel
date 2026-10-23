@@ -17,7 +17,7 @@ DECLARE
  rk text := 'server'; rid bigint := 0; sub_id bigint := 0;
  op_id bigint; linked_id bigint; event_id bigint; incident_id bigint;
  op_state text; attempt_state text; label text; incident_kind text; incident_condition text;
- revision bigint := 0;
+ revision bigint := 0; subject_id bigint := 0;
 BEGIN
  IF NEW.kind NOT IN ('create_site','create_database','issue_cert','install_custom_cert','create_backup','restore_backup','configure_webmail','configure_dns_zone','reconcile_system','configure_mail','set_hosting_state','deploy_php_release','rollback_php_release','wordpress_operation','run_scheduled_task','run_staging_operation','mail_import','system_apply_updates','system_control_service','server_backup') THEN RETURN NEW; END IF;
  IF TG_OP='UPDATE' AND OLD.state=NEW.state AND OLD.attempt=NEW.attempt THEN RETURN NEW; END IF;
@@ -43,12 +43,21 @@ BEGIN
  -- River completion describes queue execution. Domain workers may finish
  -- without retrying a failed command, or cancel after persisting a terminal failure.
  IF NEW.state::text IN ('completed','cancelled') THEN
-  IF NEW.kind='run_scheduled_task' AND EXISTS(SELECT 1 FROM scheduled_task_runs WHERE id=nakpanel_operation_arg_id(NEW.args,'run_id') AND status IN ('failed','timed_out')) THEN op_state:='failed';
-  ELSIF NEW.kind IN ('deploy_php_release','rollback_php_release') AND EXISTS(SELECT 1 FROM php_deployments WHERE id=nakpanel_operation_arg_id(NEW.args,'deployment_id') AND status='failed') THEN op_state:='failed';
-  ELSIF NEW.kind='wordpress_operation' AND EXISTS(SELECT 1 FROM wordpress_operations WHERE id=nakpanel_operation_arg_id(NEW.args,'operation_id') AND status='failed') THEN op_state:='failed';
-  ELSIF NEW.kind='run_staging_operation' AND EXISTS(SELECT 1 FROM staging_operations WHERE id=nakpanel_operation_arg_id(NEW.args,'operation_id') AND status='failed') THEN op_state:='failed';
-  ELSIF NEW.kind='mail_import' AND EXISTS(SELECT 1 FROM mail_imports WHERE id=NEW.args->>'import_id' AND state='failed') THEN op_state:='failed';
-  END IF;
+  CASE NEW.kind
+   WHEN 'issue_cert' THEN
+    IF NEW.state::text='cancelled' AND NEW.args->>'after_provisioning'='true' AND EXISTS(SELECT 1 FROM sites WHERE id=rid AND tls_status='failed' AND updated_at>=COALESCE(NEW.attempted_at,NEW.created_at)) THEN op_state:='failed'; END IF;
+   WHEN 'run_scheduled_task' THEN
+    IF EXISTS(SELECT 1 FROM scheduled_task_runs WHERE id=nakpanel_operation_arg_id(NEW.args,'run_id') AND status IN ('failed','timed_out')) THEN op_state:='failed'; END IF;
+   WHEN 'deploy_php_release','rollback_php_release' THEN
+    IF EXISTS(SELECT 1 FROM php_deployments WHERE id=nakpanel_operation_arg_id(NEW.args,'deployment_id') AND status='failed') THEN op_state:='failed'; END IF;
+   WHEN 'wordpress_operation' THEN
+    IF EXISTS(SELECT 1 FROM wordpress_operations WHERE id=nakpanel_operation_arg_id(NEW.args,'operation_id') AND status='failed') THEN op_state:='failed'; END IF;
+   WHEN 'run_staging_operation' THEN
+    IF EXISTS(SELECT 1 FROM staging_operations WHERE id=nakpanel_operation_arg_id(NEW.args,'operation_id') AND status='failed') THEN op_state:='failed'; END IF;
+   WHEN 'mail_import' THEN
+    IF EXISTS(SELECT 1 FROM mail_imports WHERE id=NEW.args->>'import_id' AND state='failed') THEN op_state:='failed'; END IF;
+   ELSE NULL;
+  END CASE;
  END IF;
  linked_id:=nakpanel_operation_arg_id(NEW.metadata,'nakpanel_operation_id');
  IF linked_id>0 THEN
@@ -72,6 +81,23 @@ BEGIN
   ON CONFLICT(event_key) DO NOTHING RETURNING id INTO event_id;
   incident_kind:=CASE NEW.kind WHEN 'create_backup' THEN 'backup' WHEN 'issue_cert' THEN 'tls' WHEN 'install_custom_cert' THEN 'tls' WHEN 'create_site' THEN 'hosting' WHEN 'configure_mail' THEN 'mail' WHEN 'configure_webmail' THEN 'mail' WHEN 'configure_dns_zone' THEN 'dns' ELSE 'operation_failed' END;
   incident_condition:=CASE incident_kind WHEN 'backup' THEN 'protection' WHEN 'tls' THEN 'certificate' WHEN 'hosting' THEN 'readiness' WHEN 'mail' THEN 'readiness' WHEN 'dns' THEN 'configuration' ELSE NEW.kind END;
+  -- Authorization stays at the owning resource, but independent subjects
+  -- within it must not share acknowledgement, recurrence or recovery.
+  IF incident_kind='operation_failed' THEN
+   IF NEW.kind='run_scheduled_task' THEN
+    SELECT task_id INTO subject_id FROM scheduled_task_runs WHERE id=nakpanel_operation_arg_id(NEW.args,'run_id');
+    incident_condition:=NEW.kind||':task:'||COALESCE(subject_id,nakpanel_operation_arg_id(NEW.args,'run_id'));
+   ELSIF NEW.kind='server_backup' THEN
+    SELECT destination_id INTO subject_id FROM server_backups WHERE id=nakpanel_operation_arg_id(NEW.args,'server_backup_id');
+    incident_condition:=NEW.kind||CASE WHEN subject_id IS NULL THEN ':backup:'||nakpanel_operation_arg_id(NEW.args,'server_backup_id') ELSE ':destination:'||subject_id END;
+   ELSIF NEW.kind='create_database' THEN incident_condition:=NEW.kind||':'||nakpanel_operation_arg_id(NEW.args,'database_id');
+   ELSIF NEW.kind IN ('deploy_php_release','rollback_php_release') THEN incident_condition:=NEW.kind||':'||nakpanel_operation_arg_id(NEW.args,'application_id');
+   ELSIF NEW.kind='wordpress_operation' THEN incident_condition:=NEW.kind||':'||nakpanel_operation_arg_id(NEW.args,'instance_id');
+   ELSIF NEW.kind='restore_backup' THEN incident_condition:=NEW.kind||':'||nakpanel_operation_arg_id(NEW.args,'backup_id');
+   ELSIF NEW.kind='mail_import' THEN incident_condition:=NEW.kind||':'||COALESCE(NEW.args->>'import_id','');
+   ELSIF NEW.kind='system_control_service' THEN incident_condition:=NEW.kind||':'||md5(COALESCE(NEW.args->>'service',''));
+   END IF;
+  END IF;
  IF op_state<>'failed' AND event_id IS NOT NULL THEN
   UPDATE issues SET generation=generation+1,latest_event_id=event_id,operation_id=op_id,last_check_status='unknown',updated_at=now() WHERE resource_kind=rk AND resource_id=rid AND kind=incident_kind AND condition=incident_condition AND resolved_at IS NULL RETURNING id INTO incident_id;
   IF incident_id IS NOT NULL THEN UPDATE operation_events SET issue_id=incident_id WHERE id=event_id; END IF;

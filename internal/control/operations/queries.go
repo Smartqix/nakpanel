@@ -57,7 +57,7 @@ func (f Filter) validate() error {
 		return ErrInvalid
 	}
 	switch f.Status {
-	case "", "open", "resolved", "active", "finished", "unread", "all":
+	case "", "open", "acknowledged", "resolved", "active", "finished", "unread", "all":
 	default:
 		return ErrInvalid
 	}
@@ -86,6 +86,9 @@ func resourceFilter(alias string, f Filter, args *[]any) string {
 	id := bind(args, f.Resource.ID)
 	if f.Resource.Kind == ResourceSubscription {
 		return ` AND ((` + alias + `.resource_kind=` + kind + ` AND ` + alias + `.resource_id=` + id + `) OR (` + alias + `.resource_kind='site' AND EXISTS(SELECT 1 FROM sites filter_site WHERE filter_site.id=` + alias + `.resource_id AND filter_site.subscription_id=` + id + `)))`
+	}
+	if f.Resource.Kind == ResourceCustomer {
+		return ` AND ((` + alias + `.resource_kind=` + kind + ` AND ` + alias + `.resource_id=` + id + `) OR (` + alias + `.resource_kind='subscription' AND EXISTS(SELECT 1 FROM subscriptions filter_sub WHERE filter_sub.id=` + alias + `.resource_id AND filter_sub.customer_id=` + id + `)) OR (` + alias + `.resource_kind='site' AND EXISTS(SELECT 1 FROM sites filter_site JOIN subscriptions filter_sub ON filter_sub.id=filter_site.subscription_id WHERE filter_site.id=` + alias + `.resource_id AND filter_sub.customer_id=` + id + `)))`
 	}
 	return ` AND ` + alias + `.resource_kind=` + kind + ` AND ` + alias + `.resource_id=` + id
 }
@@ -185,6 +188,11 @@ func listIssues(ctx context.Context, q queryer, actor auth.SessionUser, f Filter
 		where += ` AND resolved_at IS NOT NULL`
 	} else if f.Status != "all" {
 		where += ` AND resolved_at IS NULL`
+	}
+	if f.Status == "acknowledged" {
+		where += ` AND acknowledged_at IS NOT NULL`
+	} else if f.Status == "open" {
+		where += ` AND acknowledged_at IS NULL`
 	}
 	if f.Severity != "" {
 		where += ` AND severity=` + bind(&args, f.Severity)

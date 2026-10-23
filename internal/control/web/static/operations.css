@@ -3,3 +3,5 @@
 @media(prefers-reduced-motion:reduce){.np-op-dialog,.np-op-popover{animation:none;transition:none}}
 
 .np-op-top [hidden],[data-np-operations] [hidden]{display:none!important}.np-domain-tabs a[aria-current=page]{color:#245ded;border-bottom:3px solid #245ded}.np-op-row .np-status-pill{white-space:nowrap}
+
+.np-op-results{position:fixed;right:24px;bottom:24px;width:min(440px,calc(100vw - 32px));max-height:45vh;overflow:auto;z-index:80;padding:16px;box-shadow:0 12px 36px #16203326}.np-op-results h2{font-size:16px;margin:0}.np-op-results .np-op-dialog-head{position:static;gap:12px}.np-op-result{border-top:1px solid #dce3ee;padding:12px 0}.np-op-result p{margin:0 0 8px}.np-op-results[hidden]{display:none!important}

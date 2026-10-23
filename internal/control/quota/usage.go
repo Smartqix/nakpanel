@@ -526,7 +526,11 @@ func sendSMTP(ctx context.Context, config SMTPConfig, recipient, subject, body s
 	if err := writer.Close(); err != nil {
 		return err
 	}
-	return client.Quit()
+	// DATA's final positive reply establishes acceptance. QUIT is connection
+	// cleanup; a disconnect here must not retry an already accepted message.
+	_ = conn.SetDeadline(time.Now().Add(time.Second))
+	_ = client.Quit()
+	return nil
 }
 
 func (s *SQLStore) ListSubscriptionUsage(ctx context.Context, actor auth.SessionUser) ([]types.SubscriptionUsage, error) {

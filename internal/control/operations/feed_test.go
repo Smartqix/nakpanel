@@ -1,10 +1,45 @@
 package operations_test
 
 import (
+	"encoding/json"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/operations"
+	"strings"
 	"testing"
 )
+
+func TestFeedIncludesTerminalPresentationMetadata(t *testing.T) {
+	db := testDB(t)
+	s := operations.NewStore(db)
+	op, err := s.CreateOperation(ctx, operations.NewOperation{Key: "manual-result", Kind: "create_backup", Resource: operations.Resource{Kind: operations.ResourceSite, ID: 51}, Title: "Backup", Trigger: "manual"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := s.StartAttempt(ctx, op.ID, 900)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.FinishAttempt(ctx, a.ID, operations.StateSucceeded, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Exec(`INSERT INTO operation_events(event_key,resource_kind,resource_id,kind,operation_id,summary) VALUES('manual-result','site',51,'task.succeeded',$1,'Backup completed')`, op.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Dispatch(ctx, 100); err != nil {
+		t.Fatal(err)
+	}
+	feed, err := s.Feed(ctx, client, 0, operations.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.Marshal(feed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"operation_kind":"create_backup"`) || !strings.Contains(string(data), `"trigger":"manual"`) {
+		t.Fatalf("terminal result cannot be classified for presentation: %s", data)
+	}
+}
 
 func TestDispatchReplayAndLateCommitCannotLoseTransitions(t *testing.T) {
 	db := testDB(t)

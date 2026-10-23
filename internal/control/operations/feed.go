@@ -7,14 +7,16 @@ import (
 )
 
 type Event struct {
-	ID          int64     `json:"id"`
-	Cursor      int64     `json:"cursor"`
-	Kind        string    `json:"kind"`
-	Resource    Resource  `json:"resource"`
-	OperationID int64     `json:"operation_id,omitempty"`
-	IssueID     int64     `json:"issue_id,omitempty"`
-	Summary     string    `json:"summary"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID            int64     `json:"id"`
+	Cursor        int64     `json:"cursor"`
+	Kind          string    `json:"kind"`
+	Resource      Resource  `json:"resource"`
+	OperationID   int64     `json:"operation_id,omitempty"`
+	IssueID       int64     `json:"issue_id,omitempty"`
+	Summary       string    `json:"summary"`
+	CreatedAt     time.Time `json:"created_at"`
+	OperationKind string    `json:"operation_kind,omitempty"`
+	Trigger       string    `json:"trigger,omitempty"`
 }
 type Feed struct {
 	Events []Event `json:"events"`
@@ -22,11 +24,11 @@ type Feed struct {
 	More   bool    `json:"more"`
 }
 
-const eventColumns = `e.id,COALESCE(e.feed_cursor,0),e.kind,e.resource_kind,e.resource_id,COALESCE(e.operation_id,0),COALESCE(e.issue_id,0),e.summary,e.created_at`
+const eventColumns = `e.id,COALESCE(e.feed_cursor,0),e.kind,e.resource_kind,e.resource_id,COALESCE(e.operation_id,0),COALESCE(e.issue_id,0),e.summary,e.created_at,COALESCE((SELECT kind FROM operations WHERE id=e.operation_id),''),COALESCE((SELECT trigger FROM operations WHERE id=e.operation_id),'')`
 
 func scanEvent(row scanner) (Event, error) {
 	var e Event
-	err := row.Scan(&e.ID, &e.Cursor, &e.Kind, &e.Resource.Kind, &e.Resource.ID, &e.OperationID, &e.IssueID, &e.Summary, &e.CreatedAt)
+	err := row.Scan(&e.ID, &e.Cursor, &e.Kind, &e.Resource.Kind, &e.Resource.ID, &e.OperationID, &e.IssueID, &e.Summary, &e.CreatedAt, &e.OperationKind, &e.Trigger)
 	return e, err
 }
 func (s *Store) Feed(ctx context.Context, actor auth.SessionUser, after int64, f Filter) (Feed, error) {

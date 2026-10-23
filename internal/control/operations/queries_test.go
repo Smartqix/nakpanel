@@ -8,6 +8,78 @@ import (
 	"testing"
 )
 
+func TestAcknowledgedFilterKeepsOnlyUnresolvedAcknowledgedIssues(t *testing.T) {
+	db := testDB(t)
+	s := operations.NewStore(db)
+	var wanted int64
+	for n, condition := range []string{"open", "acknowledged", "resolved"} {
+		o := observation(condition, 51)
+		o.Condition = condition
+		i, err := s.ObserveIssue(ctx, o)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n > 0 {
+			if err = s.AcknowledgeIssue(ctx, client, i.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if n == 1 {
+			wanted = i.ID
+		}
+		if n == 2 {
+			if _, err = db.Exec(`UPDATE issues SET state='resolved',resolved_at=now() WHERE id=$1`, i.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	p, err := s.Page(ctx, client, "issues", operations.Filter{Status: "acknowledged"})
+	if err != nil || len(p.Issues) != 1 || p.Issues[0].ID != wanted {
+		t.Fatalf("acknowledged filter: %#v %v", p, err)
+	}
+}
+
+func TestCustomerSupportScopeIncludesCurrentDescendantsEverywhere(t *testing.T) {
+	db := testDB(t)
+	s := operations.NewStore(db)
+	resources := []operations.Resource{{Kind: operations.ResourceCustomer, ID: 10}, {Kind: operations.ResourceSubscription, ID: 42}, {Kind: operations.ResourceSite, ID: 51}, {Kind: operations.ResourceSite, ID: 91}}
+	for n, r := range resources {
+		o := observation(fmt.Sprintf("customer-%d", n), 51)
+		o.Resource = r
+		if _, err := s.ObserveIssue(ctx, o); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := s.CreateOperation(ctx, operations.NewOperation{Key: fmt.Sprintf("customer-op-%d", n), Kind: "create_backup", Resource: r, Title: "Backup", Trigger: "manual"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.Dispatch(ctx, 100); err != nil {
+		t.Fatal(err)
+	}
+	f := operations.Filter{Resource: resources[0]}
+	for _, view := range []string{"issues", "tasks", "inbox", "history"} {
+		p, err := s.Page(ctx, admin, view, f)
+		if err != nil || p.Counts.OpenIssues != 3 || p.Counts.ActiveTasks != 3 || p.Counts.Unread != 3 {
+			t.Fatalf("support %s omitted descendants: %#v %v", view, p, err)
+		}
+	}
+	feed, err := s.Feed(ctx, admin, 0, f)
+	if err != nil || len(feed.Events) != 3 {
+		t.Fatalf("support feed: %#v %v", feed, err)
+	}
+	if _, err = db.Exec(`UPDATE subscriptions SET customer_id=20 WHERE id=42`); err != nil {
+		t.Fatal(err)
+	}
+	p, err := s.Page(ctx, admin, "issues", f)
+	if err != nil || p.Counts.OpenIssues != 1 || p.Counts.ActiveTasks != 1 || p.Counts.Unread != 1 {
+		t.Fatalf("support retained transferred descendants: %#v %v", p, err)
+	}
+	feed, err = s.Feed(ctx, admin, 0, f)
+	if err != nil || len(feed.Events) != 1 {
+		t.Fatalf("feed retained transferred descendants: %#v %v", feed, err)
+	}
+}
+
 func TestScopedCountsPaginationAndDetailAgree(t *testing.T) {
 	db := testDB(t)
 	s := operations.NewStore(db)

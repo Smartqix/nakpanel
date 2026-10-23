@@ -15,6 +15,15 @@ import (
 )
 
 func TestNotificationEmailRecordsSMTPAcceptanceWithLoopbackCapture(t *testing.T) {
+	testNotificationEmailAcceptance(t, false)
+}
+
+func TestSMTPAcceptedDataSurvivesQuitDisconnect(t *testing.T) {
+	testNotificationEmailAcceptance(t, true)
+}
+
+func testNotificationEmailAcceptance(t *testing.T, disconnectOnQuit bool) {
+	t.Helper()
 	db := operationsdb.New(t)
 	ctx := context.Background()
 	s := operations.NewStore(db)
@@ -76,7 +85,9 @@ func TestNotificationEmailRecordsSMTPAcceptanceWithLoopbackCapture(t *testing.T)
 				reading = true
 				fmt.Fprint(conn, "354 continue\r\n")
 			case strings.HasPrefix(upper, "QUIT"):
-				fmt.Fprint(conn, "221 bye\r\n")
+				if !disconnectOnQuit {
+					fmt.Fprint(conn, "221 bye\r\n")
+				}
 				return
 			default:
 				fmt.Fprint(conn, "250 OK\r\n")

@@ -28,7 +28,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<link rel="stylesheet" href="/assets/mail.css"/>
 			<link rel="stylesheet" href="/assets/backups.css"/><link rel="stylesheet" href="/assets/operations.css"/>
 		</head>
-		<body class={ domainWorkspaceClass(view) } data-np-role={ string(user.Role) }
+		<body class={ domainWorkspaceClass(view) } data-np-role={ string(user.Role) } data-np-operations-actor={ formatJobID(user.ID)+":"+string(user.Role) }
 			if workspaceRequiresDocument(view) {
 				data-np-document-only
 			}

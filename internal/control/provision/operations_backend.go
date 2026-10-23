@@ -148,9 +148,17 @@ func (m *OperationsManager) probeOperation(ctx context.Context, i operations.Iss
 		if !slices.Equal(normalizedDatabaseNames(in.Archive.Databases), normalizedDatabaseNames(in.Databases)) {
 			return r, errors.New("the archive does not cover the current database scope")
 		}
-		due, err := backupDeadline(in.Policy.Backups.Schedule, *in.Archive.CompletedAt)
-		if err != nil || time.Now().UTC().After(due) {
-			return r, errors.New("backup protection is still overdue")
+		if in.Policy.Backups.Schedule == "manual" || in.Policy.Backups.Schedule == "disabled" {
+			// Manual recovery needs a completed archive for this occurrence;
+			// absence of an automatic schedule is not a failed archive check.
+			if in.Archive.CompletedAt.Before(i.ObservedAt) || in.Archive.CompletedAt.After(time.Now().Add(time.Minute)) {
+				return r, errors.New("a current completed archive is required")
+			}
+		} else {
+			due, err := backupDeadline(in.Policy.Backups.Schedule, *in.Archive.CompletedAt)
+			if err != nil || time.Now().UTC().After(due) {
+				return r, errors.New("backup protection is still overdue")
+			}
 		}
 		result, err := m.agent.ReadBackupChunk(ctx, types.ReadBackupChunkReq{BackupID: in.Archive.ID, SubscriptionID: in.SubscriptionID, Domain: in.Domain, ArchivePath: in.Archive.Path, SHA256: in.Archive.Checksum, Offset: 0, Limit: 1})
 		if err != nil {
