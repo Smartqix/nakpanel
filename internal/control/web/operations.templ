@@ -97,7 +97,9 @@ Unread
 Read
 }</small></div><div class="np-op-actions">
 if n.IssueID>0 {
-<button type="button" class="np-secondary-button" data-np-op-detail="issues" data-np-op-id={ formatJobID(n.IssueID) }>View issue</button>
+<button type="button" class="np-secondary-button" data-np-op-detail="issues" data-np-op-id={ formatJobID(n.IssueID) } data-np-op-open-notification={ formatJobID(n.ID) }>View issue</button>
+} else if n.OperationID>0 {
+<button type="button" class="np-secondary-button" data-np-op-detail="tasks" data-np-op-id={ formatJobID(n.OperationID) } data-np-op-open-notification={ formatJobID(n.ID) }>View task</button>
 }
 if n.ReadAt==nil {
 <button type="button" class="np-secondary-button" data-np-op-read={ formatJobID(n.ID) }>Mark read</button>

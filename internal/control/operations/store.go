@@ -21,11 +21,11 @@ const issueColumns = `id,resource_kind,resource_id,kind,condition,severity,title
 
 type scanner interface{ Scan(...any) error }
 
-func scanIssue(row scanner, target ...*string) (Issue, error) {
+func scanIssue(row scanner, extra ...any) (Issue, error) {
 	var i Issue
 	var receipt []byte
 	args := []any{&i.ID, &i.Resource.Kind, &i.Resource.ID, &i.Kind, &i.Condition, &i.Severity, &i.Title, &i.Summary, &i.State, &i.Generation, &i.Occurrences, &i.LatestEventID, &i.IntentRevision, &i.OperationID, &i.ObservedAt, &i.AcknowledgedAt, &i.ResolvedAt, &i.LastCheckAt, &i.LastCheckStatus, &receipt}
-	for _, p := range target {
+	for _, p := range extra {
 		args = append(args, p)
 	}
 	err := row.Scan(args...)

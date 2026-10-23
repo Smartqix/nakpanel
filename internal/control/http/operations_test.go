@@ -2,6 +2,7 @@ package panelhttp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/operations"
@@ -16,6 +17,7 @@ type fakeOperations struct {
 	actor auth.SessionUser
 	calls int
 	err   error
+	issue *operations.Issue
 }
 
 func (f *fakeOperations) Page(_ context.Context, a auth.SessionUser, _ string, _ operations.Filter) (operations.Page, error) {
@@ -31,7 +33,73 @@ func (f *fakeOperations) Feed(_ context.Context, a auth.SessionUser, _ int64, _ 
 func (f *fakeOperations) Issue(_ context.Context, a auth.SessionUser, _ int64) (operations.Issue, error) {
 	f.actor = a
 	f.calls++
+	if f.issue != nil {
+		return *f.issue, f.err
+	}
 	return operations.Issue{}, operations.ErrNotFound
+}
+
+func TestIssueDetailsOfferCurrentRoleSettingsDestinations(t *testing.T) {
+	for _, tc := range []struct {
+		name                      string
+		role                      auth.Role
+		resource, kind, condition string
+		available                 bool
+		want                      string
+	}{
+		{"site TLS", auth.RoleClient, "site", "tls", "certificate", true, "/sites/51?tab=ssl"},
+		{"site backup", auth.RoleClient, "site", "backup", "protection", true, "/sites/51?tab=backups"},
+		{"site mail", auth.RoleClient, "site", "mail", "readiness", true, "/sites/51?tab=mail"},
+		{"site DNS", auth.RoleClient, "site", "dns", "configuration", true, "/sites/51?tab=dns"},
+		{"site runtime", auth.RoleClient, "site", "hosting", "readiness", true, "/sites/51?tab=hosting"},
+		{"site tasks", auth.RoleReseller, "site", "operation_failed", "run_scheduled_task:task:9", true, "/sites/51/scheduled-tasks"},
+		{"site database", auth.RoleClient, "site", "operation_failed", "create_database:9", true, "/sites/51?tab=databases"},
+		{"site application", auth.RoleClient, "site", "operation_failed", "deploy_php_release:9", true, "/sites/51/applications"},
+		{"site WordPress", auth.RoleClient, "site", "operation_failed", "wordpress_operation:9", true, "/sites/51/wordpress"},
+		{"site import", auth.RoleClient, "site", "operation_failed", "mail_import:fixture", true, "/sites/51?tab=mail-imports"},
+		{"subscription backups", auth.RoleClient, "subscription", "backup", "protection", true, "/subscriptions/51?tab=backups"},
+		{"server mail", auth.RoleAdmin, "server", "mail", "readiness", true, "/tools-settings/mail"},
+		{"server backup", auth.RoleAdmin, "server", "operation_failed", "server_backup:destination:9", true, "/tools-settings/backups"},
+		{"customer", auth.RoleReseller, "customer", "quota", "limit", true, "/customers/51"},
+		{"customer unavailable to client", auth.RoleClient, "customer", "quota", "limit", true, ""},
+		{"personal delivery", auth.RoleClient, "user", "notification_delivery", "smtp", true, "/activity?tab=preferences"},
+		{"removed site", auth.RoleAdmin, "site", "tls", "certificate", false, ""},
+		{"server unavailable to client", auth.RoleClient, "server", "mail", "readiness", true, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var issue operations.Issue
+			data, _ := json.Marshal(map[string]any{"id": 9, "resource": map[string]any{"kind": tc.resource, "id": 51}, "kind": tc.kind, "condition": tc.condition, "resource_available": tc.available})
+			if err := json.Unmarshal(data, &issue); err != nil {
+				t.Fatal(err)
+			}
+			if tc.resource == "server" {
+				issue.Resource.ID = 0
+			}
+			svc := &fakeOperations{issue: &issue}
+			h, _ := newTestHandlerWithOptions(t, tc.role, ServerOptions{Operations: svc})
+			password := "Nakpanel" + strings.ToUpper(string(tc.role[:1])) + string(tc.role[1:]) + "!2026"
+			cookie := login(t, h, string(tc.role)+"@nakpanel.test", password)
+			r := httptest.NewRequest("GET", "https://panel.test/api/workspace/operations/issues/9", nil)
+			r.AddCookie(cookie)
+			r.Header.Set("Accept", "application/json")
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			var got struct {
+				SettingsURL         string `json:"settings_url"`
+				SettingsLabel       string `json:"settings_label"`
+				SettingsUnavailable string `json:"settings_unavailable"`
+			}
+			if w.Code != 200 {
+				t.Fatal(w.Code, w.Body.String())
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.SettingsURL != tc.want || (tc.want != "" && got.SettingsLabel == "") || (tc.want == "" && got.SettingsUnavailable == "") {
+				t.Fatalf("settings destination: %+v want %q", got, tc.want)
+			}
+		})
+	}
 }
 func (f *fakeOperations) MarkNotificationRead(_ context.Context, a auth.SessionUser, _ int64) error {
 	f.actor = a
@@ -76,6 +144,8 @@ func TestOperationsEndpointsAuthenticateAndBindTheViewer(t *testing.T) {
 			}
 			if w := call("GET", "/api/workspace/operations/issues/99", true, false); w.Code != 404 {
 				t.Fatal("foreign issue was not hidden")
+			} else if !strings.Contains(w.Header().Get("Content-Type"), "application/json") || !json.Valid(w.Body.Bytes()) {
+				t.Fatal("removed/denied issue is unreadable by the JSON client", w.Body.String())
 			}
 			if w := call("POST", "/api/workspace/operations/notifications/1/read", true, false); w.Code != 403 {
 				t.Fatalf("receipt mutation without CSRF: %d", w.Code)

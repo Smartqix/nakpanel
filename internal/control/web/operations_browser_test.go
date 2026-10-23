@@ -26,7 +26,7 @@ func TestOperationsBrowserPreview(t *testing.T) {
 	emailMode := "off"
 	emailEnabled := false
 	issue := func() operations.Issue {
-		return operations.Issue{ID: 9, OperationID: 41, Kind: "backup", Condition: "protection", Title: "Scheduled backup failed", Target: "studio.example", Summary: "The scheduled backup could not finish. Existing archives are preserved.", Severity: "critical", State: state, Occurrences: 2, ObservedAt: now}
+		return operations.Issue{ID: 9, OperationID: 41, Resource: operations.Resource{Kind: operations.ResourceSite, ID: 51}, ResourceAvailable: true, Kind: "backup", Condition: "protection", Title: "Scheduled backup failed", Target: "studio.example", Summary: "The scheduled backup could not finish. Existing archives are preserved.", Severity: "critical", State: state, Occurrences: 2, ObservedAt: now}
 	}
 	task := operations.Operation{ID: 41, Title: "Create backup", Target: "studio.example", State: operations.StateFailed, CreatedAt: now, UpdatedAt: now}
 	page := func() operations.Page {
@@ -89,7 +89,7 @@ func TestOperationsBrowserPreview(t *testing.T) {
 			}
 			result = map[string]any{"enabled": emailEnabled, "smtp_configured": false}
 		case strings.Contains(path, "/issues/"):
-			result = issue()
+			result = DescribeOperationIssue(auth.SessionUser{ID: 1, Role: auth.RoleAdmin}, issue())
 		case strings.Contains(path, "/tasks/"):
 			result = operations.OperationDetail{Operation: task, Attempts: []operations.Attempt{{ID: 1, Number: 1, State: operations.StateFailed, StartedAt: now, FinishedAt: &now}}}
 		case r.Method == "POST":
@@ -106,6 +106,10 @@ func TestOperationsBrowserPreview(t *testing.T) {
 			tab = "issues"
 		}
 		p := page()
+		if r.URL.Query().Get("notification_task") == "1" {
+			p.Notifications[0].IssueID = 0
+			p.Notifications[0].OperationID = 41
+		}
 		view := WorkspaceView{Route: "activity", Tab: tab, OperationsTab: tab, Operations: p, OperationsQuick: p, CSRFToken: "fixture", InstantNavDisabled: true}
 		w.Header().Set("Content-Type", "text/html")
 		if err := RoutedDashboardPage("Activity · Nakpanel", auth.SessionUser{ID: 1, Role: auth.RoleAdmin, Email: "admin@panel.example"}, dashboard.Data{}, DashboardActions{}, view).Render(r.Context(), w); err != nil {

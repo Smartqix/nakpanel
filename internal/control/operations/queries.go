@@ -105,6 +105,12 @@ func rowFilter(alias string, f Filter, args *[]any) string {
 func targetSQL(a string) string {
 	return `COALESCE(CASE ` + a + `.resource_kind WHEN 'server' THEN 'Server' WHEN 'site' THEN (SELECT domain FROM sites WHERE id=` + a + `.resource_id) WHEN 'subscription' THEN (SELECT name FROM subscriptions WHERE id=` + a + `.resource_id) WHEN 'customer' THEN (SELECT display_name FROM customers WHERE id=` + a + `.resource_id) WHEN 'user' THEN 'Your account' END,'Removed resource')`
 }
+
+// Detail destinations require a current resource, even when an administrator
+// can still inspect its retained incident after removal.
+func resourceAvailableSQL(a string) string {
+	return `CASE ` + a + `.resource_kind WHEN 'server' THEN true WHEN 'site' THEN EXISTS(SELECT 1 FROM sites WHERE id=` + a + `.resource_id) WHEN 'subscription' THEN EXISTS(SELECT 1 FROM subscriptions WHERE id=` + a + `.resource_id) WHEN 'customer' THEN EXISTS(SELECT 1 FROM customers WHERE id=` + a + `.resource_id) WHEN 'user' THEN EXISTS(SELECT 1 FROM users WHERE id=` + a + `.resource_id) ELSE false END`
+}
 func (s *Store) Page(ctx context.Context, actor auth.SessionUser, view string, f Filter) (Page, error) {
 	result := Page{CheckedAt: time.Now().UTC()}
 	if err := f.validate(); err != nil {
@@ -197,18 +203,20 @@ func listIssues(ctx context.Context, q queryer, actor auth.SessionUser, f Filter
 	if f.Severity != "" {
 		where += ` AND severity=` + bind(&args, f.Severity)
 	}
-	rows, err := q.QueryContext(ctx, `SELECT `+issueColumns+`,`+targetSQL("i")+` FROM issues i WHERE `+where+` ORDER BY id DESC LIMIT `+bind(&args, f.limit()+1), args...)
+	rows, err := q.QueryContext(ctx, `SELECT `+issueColumns+`,`+targetSQL("i")+`,`+resourceAvailableSQL("i")+` FROM issues i WHERE `+where+` ORDER BY id DESC LIMIT `+bind(&args, f.limit()+1), args...)
 	if err != nil {
 		return out, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var target string
-		i, err := scanIssue(rows, &target)
+		var available bool
+		i, err := scanIssue(rows, &target, &available)
 		if err != nil {
 			return out, err
 		}
 		i.Target = target
+		i.ResourceAvailable = available
 		out = append(out, i)
 	}
 	return out, rows.Err()
@@ -276,8 +284,10 @@ func listNotifications(ctx context.Context, q queryer, actor auth.SessionUser, f
 }
 func (s *Store) Issue(ctx context.Context, actor auth.SessionUser, id int64) (Issue, error) {
 	var target string
-	i, err := scanIssue(s.db.QueryRowContext(ctx, `SELECT `+issueColumns+`,`+targetSQL("i")+` FROM issues i WHERE i.id=$3 AND `+resourcePredicate("i", 1, 2), actor.ID, string(actor.Role), id), &target)
+	var available bool
+	i, err := scanIssue(s.db.QueryRowContext(ctx, `SELECT `+issueColumns+`,`+targetSQL("i")+`,`+resourceAvailableSQL("i")+` FROM issues i WHERE i.id=$3 AND `+resourcePredicate("i", 1, 2), actor.ID, string(actor.Role), id), &target, &available)
 	i.Target = target
+	i.ResourceAvailable = available
 	if errors.Is(err, sql.ErrNoRows) {
 		err = ErrNotFound
 	}

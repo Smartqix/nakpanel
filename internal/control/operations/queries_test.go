@@ -1,12 +1,45 @@
 package operations_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/operations"
 	"testing"
 )
+
+func TestIssueDetailsDistinguishCurrentAndRemovedResource(t *testing.T) {
+	db := testDB(t)
+	s := operations.NewStore(db)
+	i, err := s.ObserveIssue(ctx, observation("settings-target", 51))
+	if err != nil {
+		t.Fatal(err)
+	}
+	available := func(want bool) {
+		t.Helper()
+		current, err := s.Issue(ctx, admin, i.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		data, _ := json.Marshal(current)
+		var result map[string]any
+		if err = json.Unmarshal(data, &result); err != nil {
+			t.Fatal(err)
+		}
+		if result["resource_available"] != want {
+			t.Fatalf("resource availability=%v want %v", result["resource_available"], want)
+		}
+	}
+	available(true)
+	if _, err = db.Exec(`DELETE FROM sites WHERE id=51`); err != nil {
+		t.Fatal(err)
+	}
+	available(false)
+	if _, err = s.Issue(ctx, client, i.ID); !errors.Is(err, operations.ErrNotFound) {
+		t.Fatalf("removed resource disclosed to former owner: %v", err)
+	}
+}
 
 func TestAcknowledgedFilterKeepsOnlyUnresolvedAcknowledgedIssues(t *testing.T) {
 	db := testDB(t)

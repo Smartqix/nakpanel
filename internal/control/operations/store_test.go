@@ -260,6 +260,46 @@ func TestNotificationReadStateIsPersonalAndDoesNotResolve(t *testing.T) {
 	}
 }
 
+func TestLinkedNotificationReadPreservesIssueAndOtherViewers(t *testing.T) {
+	db := testDB(t)
+	s := operations.NewStore(db)
+	i, err := s.ObserveIssue(ctx, observation("opened-notification", 51))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Dispatch(ctx, 100); err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	if err = db.QueryRow(`SELECT id FROM notifications WHERE issue_id=$1`, i.ID).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	for n := 0; n < 2; n++ {
+		if err = s.MarkNotificationRead(ctx, client, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	after, err := s.Issue(ctx, admin, i.ID)
+	if err != nil || after.AcknowledgedAt != nil || after.ResolvedAt != nil || after.State != "open" || after.Generation != i.Generation || after.LatestEventID != i.LatestEventID {
+		t.Fatalf("reading changed issue recovery state: %#v %v", after, err)
+	}
+	for _, tc := range []struct {
+		actor  auth.SessionUser
+		unread int
+	}{{client, 0}, {admin, 1}} {
+		p, err := s.Page(ctx, tc.actor, "inbox", operations.Filter{})
+		if err != nil || p.Counts.Unread != tc.unread {
+			t.Fatalf("read receipt affected another viewer: %#v %v", p, err)
+		}
+	}
+	if _, err = db.Exec(`UPDATE subscriptions SET customer_id=20 WHERE id=42`); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.MarkNotificationRead(ctx, client, id); !errors.Is(err, operations.ErrNotFound) {
+		t.Fatalf("former owner recorded receipt after transfer: %v", err)
+	}
+}
+
 func TestQuotaAlertsUseViewerReceiptAndFailClosed(t *testing.T) {
 	db := testDB(t)
 	s := operations.NewStore(db)

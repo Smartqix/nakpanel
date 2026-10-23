@@ -82,26 +82,27 @@ type Attempt struct {
 	FinishedAt  *time.Time `json:"finished_at,omitempty"`
 }
 type Issue struct {
-	Target          string               `json:"target"`
-	ID              int64                `json:"id"`
-	Resource        Resource             `json:"resource"`
-	Kind            string               `json:"kind"`
-	Condition       string               `json:"condition"`
-	Severity        string               `json:"severity"`
-	Title           string               `json:"title"`
-	Summary         string               `json:"summary"`
-	State           string               `json:"state"`
-	Generation      int64                `json:"generation"`
-	Occurrences     int                  `json:"occurrences"`
-	LatestEventID   int64                `json:"-"`
-	IntentRevision  int64                `json:"intent_revision"`
-	OperationID     int64                `json:"operation_id,omitempty"`
-	ObservedAt      time.Time            `json:"observed_at"`
-	AcknowledgedAt  *time.Time           `json:"acknowledged_at,omitempty"`
-	ResolvedAt      *time.Time           `json:"resolved_at,omitempty"`
-	LastCheckAt     *time.Time           `json:"last_check_at,omitempty"`
-	LastCheckStatus string               `json:"last_check_status"`
-	Verification    *VerificationReceipt `json:"verification,omitempty"`
+	ResourceAvailable bool                 `json:"resource_available"`
+	Target            string               `json:"target"`
+	ID                int64                `json:"id"`
+	Resource          Resource             `json:"resource"`
+	Kind              string               `json:"kind"`
+	Condition         string               `json:"condition"`
+	Severity          string               `json:"severity"`
+	Title             string               `json:"title"`
+	Summary           string               `json:"summary"`
+	State             string               `json:"state"`
+	Generation        int64                `json:"generation"`
+	Occurrences       int                  `json:"occurrences"`
+	LatestEventID     int64                `json:"-"`
+	IntentRevision    int64                `json:"intent_revision"`
+	OperationID       int64                `json:"operation_id,omitempty"`
+	ObservedAt        time.Time            `json:"observed_at"`
+	AcknowledgedAt    *time.Time           `json:"acknowledged_at,omitempty"`
+	ResolvedAt        *time.Time           `json:"resolved_at,omitempty"`
+	LastCheckAt       *time.Time           `json:"last_check_at,omitempty"`
+	LastCheckStatus   string               `json:"last_check_status"`
+	Verification      *VerificationReceipt `json:"verification,omitempty"`
 }
 type Observation struct {
 	EventKey                                  string

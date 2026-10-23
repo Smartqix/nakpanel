@@ -142,7 +142,11 @@ func (s *Server) handleOperationDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	var result any
 	if r.PathValue("type") == "issues" {
-		result, err = s.operations.Issue(r.Context(), actor, id)
+		var issue operations.Issue
+		issue, err = s.operations.Issue(r.Context(), actor, id)
+		if err == nil {
+			result = web.DescribeOperationIssue(actor, issue)
+		}
 	} else if r.PathValue("type") == "tasks" {
 		result, err = s.operations.Operation(r.Context(), actor, id)
 	} else {

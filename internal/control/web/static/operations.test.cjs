@@ -34,3 +34,12 @@ test('preferences remain unavailable until loaded and stale loads cannot overwri
  await loadPreferenceForm(form,async()=>{throw Error('offline')},()=>{},()=>{});
  assert.ok(controls.every(c=>c.disabled));assert.notEqual(form.dataset.npOpLoaded,'true');
 });
+
+test('settings destinations preserve support context and reject external URLs',()=>{
+ const {settingsDestination}=require('./operations.js');
+ assert.equal(settingsDestination('/sites/51?tab=ssl','/support/customers/10/activity'),'/support/customers/10/sites/51?tab=ssl');
+ assert.equal(settingsDestination('/subscriptions/42?tab=backups','/support/customers/10/activity'),'/support/customers/10/subscriptions/42?tab=backups');
+ assert.equal(settingsDestination('/tools-settings/mail','/support/customers/10/activity'),'/tools-settings/mail');
+ assert.equal(settingsDestination('/sites/51?tab=mail','/activity'),'/sites/51?tab=mail');
+ for(const value of ['https://evil.example/','//evil.example/','/\\evil.example/','javascript:alert(1)','//',''])assert.equal(settingsDestination(value,'/activity'),'');
+});
