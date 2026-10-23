@@ -27,8 +27,11 @@ func TestConditionPollingDoesNotInflateIncidentsAndAllowsRecurrence(t *testing.T
 	apply(sample)
 	apply(sample)
 	p, err := s.Page(ctx, client, "issues", operations.Filter{})
-	if err != nil || len(p.Issues) != 1 || p.Issues[0].Occurrences != 1 {
-		t.Fatalf("polling created duplicate incidents: %#v %v", p, err)
+	if err != nil {
+		t.Fatalf("load issues after polling: %v", err)
+	}
+	if len(p.Issues) != 1 || p.Issues[0].Occurrences != 1 {
+		t.Fatalf("polling created duplicate incidents: %#v", p)
 	}
 	healthy := sample
 	healthy.Unhealthy = false

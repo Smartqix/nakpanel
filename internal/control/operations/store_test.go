@@ -92,6 +92,12 @@ func testDB(t *testing.T) *sql.DB {
 			t.Fatalf("%s: %v", path, err)
 		}
 	}
+	// Fresh fixtures have no autovacuum statistics. Collect them before the
+	// scoped inbox queries run so empty tables are not costed as large tables
+	// (which can trigger expensive JIT compilation on the PostgreSQL CI host).
+	if _, err = db.Exec(`ANALYZE users, reseller_accounts, customers, subscriptions, sites, issues, operations, notifications, notification_receipts`); err != nil {
+		t.Fatal(err)
+	}
 	return db
 }
 
