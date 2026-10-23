@@ -79,6 +79,11 @@ for visual checks; it never contacts an agent or sends external mail.
 Hosted Ubuntu 26.04 acceptance, external mail, a PR, merge and deployment require
 separate authorization. Local results do not establish hosted acceptance.
 
+The owner authorized focused hosted Operations acceptance on 2026-10-23. It
+passed on Ubuntu 26.04 with PHP 8.3/8.4/8.5 at `40a3faf`; see the
+[hosted evidence report](verification/2026-10-23-operations-hosted.md). That result
+does not authorize PR creation, required PR CI, merge, external mail or deployment.
+
 ## Local browser acceptance
 
 The opt-in `TestOperationsBrowserPreview` fixture uses fictional data and does

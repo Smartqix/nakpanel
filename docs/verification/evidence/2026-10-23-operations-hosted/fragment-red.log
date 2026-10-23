@@ -1,0 +1,12 @@
+AssertionError [ERR_ASSERTION]: actual topbar fragment replacement lost already consumed terminal results
+
+0 !== 12
+
+    at /Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/operations_fragment_acceptance.cjs:26:10 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: 0,
+  expected: 12,
+  operator: 'strictEqual',
+  diff: 'simple'
+}

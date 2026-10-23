@@ -203,7 +203,7 @@ authorization changes. Reuse existing required CI workflows.
 - [x] User authorized focused hosted Ubuntu 26.04 notifications, tasks, recovery
   and both UX fixes on 2026-10-23. Use an owned disposable guest and loopback
   SMTP capture only; no external recipients, Ubuntu 24.04 or legacy matrices.
-- [ ] If authorized, capture scoped hosted evidence and preservation checks.
+- [x] Capture scoped hosted evidence and preservation checks.
   Current support remains PHP 8.3/8.4/8.5 with internal PHP 8.5.
 - [ ] Prepare/open a PR only when requested. Run required CI, including the
   hosted security gate, under that authorization; do not skip required gates.
@@ -227,3 +227,10 @@ failure/recovery without recursive mail, and website/database/archive preservati
 Manual Run now must use the durable worker so it appears in Tasks. Build and push
 this candidate branch only as needed for the manual hosted selection. PR creation,
 required PR CI/security gate, merge and deployment remain separately gated.
+
+Focused hosted acceptance passed at `40a3faf` in
+[run 39983722531](https://github.com/Smartqix/nakpanel/actions/runs/39983722531).
+The [hosted report](../../verification/2026-10-23-operations-hosted.md) records both
+earlier failures and their fixes, final scenario results, all three PHP runtimes,
+preservation and owned-guest cleanup. PR/CI/security, merge and deployment remain
+outside this authorization.
