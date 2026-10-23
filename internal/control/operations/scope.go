@@ -25,6 +25,10 @@ func resourcePredicate(alias string, user, role int) string {
 // receipts and existing quota callers. Personal security messages remain private
 // even from other administrators. $user and $role are bound SQL parameters.
 func NotificationVisibilitySQL(alias string, user, role int) string {
+	return `((` + alias + `.issue_id IS NOT NULL AND EXISTS(SELECT 1 FROM issues notification_issue WHERE notification_issue.id=` + alias + `.issue_id AND ` + resourcePredicate("notification_issue", user, role) + `)) OR (` + alias + `.issue_id IS NULL AND (` + notificationAudienceSQL(alias, user, role) + `)))`
+}
+
+func notificationAudienceSQL(alias string, user, role int) string {
 	u, r := fmt.Sprintf("$%d", user), fmt.Sprintf("$%d", role)
 	return fmt.Sprintf(`EXISTS(SELECT 1 FROM users viewer WHERE viewer.id=%s AND viewer.role=%s) AND (
  (%s.subscription_id IS NOT NULL AND EXISTS(SELECT 1 FROM subscriptions ns JOIN customers nc ON nc.id=ns.customer_id WHERE ns.id=%s.subscription_id AND (%s='admin' OR (%s='client' AND nc.login_user_id=%s) OR (%s='reseller' AND EXISTS(SELECT 1 FROM reseller_accounts nr WHERE nr.id=nc.reseller_id AND nr.login_user_id=%s))))) OR

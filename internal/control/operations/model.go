@@ -54,6 +54,7 @@ const (
 func (s State) Terminal() bool { return s == StateSucceeded || s == StateFailed || s == StateCancelled }
 
 type Operation struct {
+	Target         string    `json:"target"`
 	ID             int64     `json:"id"`
 	Kind           string    `json:"kind"`
 	Resource       Resource  `json:"resource"`
@@ -81,6 +82,7 @@ type Attempt struct {
 	FinishedAt  *time.Time `json:"finished_at,omitempty"`
 }
 type Issue struct {
+	Target         string     `json:"target"`
 	ID             int64      `json:"id"`
 	Resource       Resource   `json:"resource"`
 	Kind           string     `json:"kind"`

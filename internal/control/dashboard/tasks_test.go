@@ -2,7 +2,6 @@ package dashboard
 
 import (
 	"context"
-	"reflect"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -30,16 +29,5 @@ func TestSQLActiveCountUsesSameKindsAndAllNonterminalStates(t *testing.T) {
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
-	}
-}
-
-type countedJobs struct{ fakeJobReader }
-
-func (*countedJobs) CountActiveJobs(context.Context) (int, error) { return 101, nil }
-func TestTasksReadIsBoundedWithIndependentActiveCount(t *testing.T) {
-	reader := &countedJobs{fakeJobReader{jobs: []Job{{ID: 1, State: "running"}}}}
-	result, err := NewStore(nil, WithJobReader(reader)).GetTasks(context.Background())
-	if err != nil || result.Active != 101 || reader.limit != 8 || !reflect.DeepEqual(result.Items, reader.jobs) {
-		t.Fatalf("tasks=%#v limit=%d %v", result, reader.limit, err)
 	}
 }

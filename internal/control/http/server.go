@@ -257,6 +257,7 @@ type ServerOptions struct {
 	CertificateIssuer          CertificateIssuer
 	CustomCertificateInstaller CustomCertificateInstaller
 	DashboardReader            DashboardReader
+	Operations                 OperationsService
 	JobRetrier                 JobRetrier
 	Phase6Manager              Phase6Manager
 	QuotaManager               QuotaManager
@@ -292,6 +293,7 @@ type Server struct {
 	certificates       CertificateIssuer
 	customCertificates CustomCertificateInstaller
 	dashboard          DashboardReader
+	operations         OperationsService
 	jobs               JobRetrier
 	phase6             Phase6Manager
 	quotas             QuotaManager
@@ -330,6 +332,7 @@ func NewServer(users UserStore, sessions *auth.SessionManager, options ...Server
 		certificates:       opts.CertificateIssuer,
 		customCertificates: opts.CustomCertificateInstaller,
 		dashboard:          opts.DashboardReader,
+		operations:         opts.Operations,
 		jobs:               opts.JobRetrier,
 		phase6:             opts.Phase6Manager,
 		quotas:             opts.QuotaManager,
@@ -487,6 +490,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /db", s.handleAdminer)
 	mux.HandleFunc("GET /search", s.handleSearch)
 	mux.HandleFunc("GET /api/workspace/tasks", s.handleTasks)
+	mux.HandleFunc("GET /api/workspace/operations", s.handleOperations)
+	mux.HandleFunc("GET /api/workspace/operations/events", s.handleOperationEvents)
+	mux.HandleFunc("GET /api/workspace/operations/{type}/{id}", s.handleOperationDetail)
+	mux.HandleFunc("POST /api/workspace/operations/notifications/read-all", s.handleOperationsReadAll)
+	mux.HandleFunc("POST /api/workspace/operations/notifications/{id}/{action}", s.handleOperationReceipt)
+	mux.HandleFunc("POST /api/workspace/operations/issues/{id}/acknowledge", s.handleIssueAcknowledge)
 	mux.HandleFunc("GET /mail/status", s.handleMailStatus)
 	mux.HandleFunc("GET /email", s.handleEmailRedirect)
 	mux.HandleFunc("GET /dashboard", s.handleWorkspace("dashboard"))

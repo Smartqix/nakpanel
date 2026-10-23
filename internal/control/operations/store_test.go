@@ -62,9 +62,9 @@ func testDB(t *testing.T) *sql.DB {
 	db := isolatedDB(t)
 	_, err := db.Exec(`CREATE TABLE users(id bigint PRIMARY KEY,role text,email text);
  CREATE TABLE reseller_accounts(id bigint PRIMARY KEY,login_user_id bigint,status text DEFAULT 'active');
- CREATE TABLE customers(id bigint PRIMARY KEY,login_user_id bigint,reseller_id bigint,status text DEFAULT 'active');
- CREATE TABLE subscriptions(id bigint PRIMARY KEY,customer_id bigint,status text DEFAULT 'active');
- CREATE TABLE sites(id bigint PRIMARY KEY,subscription_id bigint,status text DEFAULT 'active');
+ CREATE TABLE customers(id bigint PRIMARY KEY,login_user_id bigint,reseller_id bigint,status text DEFAULT 'active',display_name text DEFAULT 'Example customer');
+ CREATE TABLE subscriptions(id bigint PRIMARY KEY,customer_id bigint,status text DEFAULT 'active',name text DEFAULT 'Example subscription');
+ CREATE TABLE sites(id bigint PRIMARY KEY,subscription_id bigint,status text DEFAULT 'active',domain text DEFAULT 'example.test');
  CREATE TABLE notifications(id bigserial PRIMARY KEY,recipient_user_id bigint,customer_id bigint,reseller_id bigint,subscription_id bigint,kind text,severity text,title text,body text,dedupe_key text,read_at timestamptz,resolved_at timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
  INSERT INTO users VALUES(1,'admin','admin@example.test'),(2,'admin','second@example.test'),(11,'client','one@example.test'),(22,'client','two@example.test'),(100,'reseller','provider@example.test'),(200,'reseller','other@example.test');
  INSERT INTO reseller_accounts(id,login_user_id) VALUES(7,100),(8,200);
@@ -74,12 +74,18 @@ func testDB(t *testing.T) *sql.DB {
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile("../../../migrations/20261023000057_operations_center.sql")
+	files, err := filepath.Glob("../../../migrations/202610230000*.sql")
 	if err != nil {
-		t.Fatal("current operations schema is missing:", err)
-	}
-	if _, err = db.Exec(strings.SplitN(string(data), "-- +goose Down", 2)[0]); err != nil {
 		t.Fatal(err)
+	}
+	for _, path := range files {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Exec(strings.SplitN(string(data), "-- +goose Down", 2)[0]); err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
 	}
 	return db
 }
@@ -106,12 +112,17 @@ func TestCurrentMigrationAppliesToCompleteSchemaAndRollsBack(t *testing.T) {
 	if _, err = db.Exec(`SELECT user_id,read_at FROM notification_receipts LIMIT 0`); err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile("../../../migrations/20261023000057_operations_center.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = db.Exec(strings.SplitN(string(data), "-- +goose Down", 2)[1]); err != nil {
-		t.Fatal("current migration rollback:", err)
+	for index := len(files) - 1; index >= 0; index-- {
+		if filepath.Base(files[index]) < "20261023000057" {
+			break
+		}
+		data, err := os.ReadFile(files[index])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Exec(strings.SplitN(string(data), "-- +goose Down", 2)[1]); err != nil {
+			t.Fatalf("rollback %s: %v", files[index], err)
+		}
 	}
 }
 

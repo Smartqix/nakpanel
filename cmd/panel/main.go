@@ -24,6 +24,7 @@ import (
 	panelhttp "github.com/nakroteck/nakpanel/internal/control/http"
 	controlmailimport "github.com/nakroteck/nakpanel/internal/control/mailimport"
 	controlmaintenance "github.com/nakroteck/nakpanel/internal/control/maintenance"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
 	"github.com/nakroteck/nakpanel/internal/control/provisioningapi"
@@ -95,6 +96,7 @@ func main() {
 	databaseRepo := provision.NewSQLDatabaseRepository(db, queries, riverClient, serverAdminManager.Store())
 	phase6Repo := provision.NewSQLPhase6Repository(db, riverClient)
 	quotaStore := controlquota.NewSQLStore(db, riverClient)
+	operationsStore := operations.NewStore(db)
 	quotaStore.SetServiceSecretStore(serverAdminManager.Store())
 	workspaceStore := workspace.NewStore(db)
 	fileManager := controlfiles.NewManager(controlfiles.ManagerOptions{
@@ -152,6 +154,7 @@ func main() {
 	defer closeDatabaseManager()
 	instantNav := strings.ToLower(strings.TrimSpace(os.Getenv("NAKPANEL_INSTANT_NAV")))
 	uiHandler := panelhttp.NewServer(authStore, sessionManager, panelhttp.ServerOptions{
+		Operations:                 operationsStore,
 		SiteCreator:                siteManager,
 		SiteRemoval:                siteManager,
 		DatabaseCreator:            siteManager,
@@ -237,6 +240,7 @@ func (q dashboardQuerier) ListDatabases(ctx context.Context) ([]store.Database, 
 
 func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelRuntimeConfig) (*river.Client[*sql.Tx], *serveradmin.Manager, *databaseadmin.Manager, *dnstemplate.Manager, *controlphpapp.SQLStore, *controlwordpress.SQLStore, error) {
 	workers := river.NewWorkers()
+	river.AddWorker(workers, &operations.DispatchWorker{Store: operations.NewStore(db)})
 	agent := agentclient.New(config.AgentSocket)
 	var runtimeConfig config.PanelRuntimeConfig
 	if len(configs) > 0 {
@@ -367,6 +371,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
 		WorkerMiddleware: []rivertype.WorkerMiddleware{provision.NewSiteJobFence(db)},
 		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(river.PeriodicInterval(2*time.Second), func() (river.JobArgs, *river.InsertOpts) { return operations.DispatchArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return controlmailimport.ExpirePreviewsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return provision.SweepSiteRemovalsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Hour), func() (river.JobArgs, *river.InsertOpts) { return webstatistics.SweepArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),

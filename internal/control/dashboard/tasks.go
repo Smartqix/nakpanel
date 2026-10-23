@@ -2,12 +2,6 @@ package dashboard
 
 import "context"
 
-// Tasks contains a bounded recent list and a separate count over all visible jobs.
-type Tasks struct {
-	Active int
-	Items  []Job
-}
-
 type activeJobReader interface {
 	CountActiveJobs(context.Context) (int, error)
 }
@@ -29,21 +23,4 @@ func ActiveJobs(jobs []Job) int {
 		}
 	}
 	return count
-}
-
-func (s *Store) GetTasks(ctx context.Context) (Tasks, error) {
-	result := Tasks{Items: []Job{}}
-	if s.jobs == nil {
-		return result, nil
-	}
-	jobs, err := s.jobs.ListRecentJobs(ctx, 8)
-	if err != nil {
-		return result, err
-	}
-	result.Items = jobs
-	result.Active = ActiveJobs(jobs)
-	if counter, ok := s.jobs.(activeJobReader); ok {
-		result.Active, err = counter.CountActiveJobs(ctx)
-	}
-	return result, err
 }

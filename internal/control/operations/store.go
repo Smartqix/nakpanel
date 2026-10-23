@@ -15,9 +15,13 @@ const issueColumns = `id,resource_kind,resource_id,kind,condition,severity,title
 
 type scanner interface{ Scan(...any) error }
 
-func scanIssue(row scanner) (Issue, error) {
+func scanIssue(row scanner, target ...*string) (Issue, error) {
 	var i Issue
-	err := row.Scan(&i.ID, &i.Resource.Kind, &i.Resource.ID, &i.Kind, &i.Condition, &i.Severity, &i.Title, &i.Summary, &i.State, &i.Generation, &i.Occurrences, &i.LatestEventID, &i.IntentRevision, &i.OperationID, &i.ObservedAt, &i.AcknowledgedAt, &i.ResolvedAt)
+	args := []any{&i.ID, &i.Resource.Kind, &i.Resource.ID, &i.Kind, &i.Condition, &i.Severity, &i.Title, &i.Summary, &i.State, &i.Generation, &i.Occurrences, &i.LatestEventID, &i.IntentRevision, &i.OperationID, &i.ObservedAt, &i.AcknowledgedAt, &i.ResolvedAt}
+	for _, p := range target {
+		args = append(args, p)
+	}
+	err := row.Scan(args...)
 	return i, err
 }
 func nullableID(id int64) any {
@@ -110,9 +114,13 @@ func (s *Store) AcknowledgeIssue(ctx context.Context, actor auth.SessionUser, id
 
 const operationColumns = `id,kind,resource_kind,resource_id,title,trigger,state,stage,intent_revision,created_at,updated_at`
 
-func scanOperation(row scanner) (Operation, error) {
+func scanOperation(row scanner, target ...*string) (Operation, error) {
 	var o Operation
-	err := row.Scan(&o.ID, &o.Kind, &o.Resource.Kind, &o.Resource.ID, &o.Title, &o.Trigger, &o.State, &o.Stage, &o.IntentRevision, &o.CreatedAt, &o.UpdatedAt)
+	args := []any{&o.ID, &o.Kind, &o.Resource.Kind, &o.Resource.ID, &o.Title, &o.Trigger, &o.State, &o.Stage, &o.IntentRevision, &o.CreatedAt, &o.UpdatedAt}
+	for _, p := range target {
+		args = append(args, p)
+	}
+	err := row.Scan(args...)
 	return o, err
 }
 

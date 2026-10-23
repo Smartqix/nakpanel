@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 )
 
 type TaskItem struct {
@@ -36,7 +37,7 @@ func TaskItems(jobs []dashboard.Job) []TaskItem {
 
 func taskTone(state string) string {
 	switch state {
-	case "completed":
+	case "completed", "succeeded":
 		return "ok"
 	case "discarded", "failed", "cancelled":
 		return "fail"
@@ -45,4 +46,17 @@ func taskTone(state string) string {
 	default:
 		return "pend"
 	}
+}
+
+func OperationTaskItems(ops []operations.Operation) []TaskItem {
+	items := make([]TaskItem, 0, len(ops))
+	for _, o := range ops {
+		item := TaskItem{ID: o.ID, Kind: o.Kind, Label: o.Title, Target: o.Target, State: string(o.State), Tone: taskTone(string(o.State)), CreatedAt: o.CreatedAt}
+		if o.State.Terminal() {
+			at := o.UpdatedAt
+			item.FinalizedAt = &at
+		}
+		items = append(items, item)
+	}
+	return items
 }

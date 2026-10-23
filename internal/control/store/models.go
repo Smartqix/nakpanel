@@ -680,6 +680,8 @@ type Notification struct {
 	ResolvedAt      sql.NullTime
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+	IssueID         sql.NullInt64
+	OperationID     sql.NullInt64
 }
 
 type NotificationDelivery struct {
@@ -742,6 +744,12 @@ type OperationEvent struct {
 	Summary         string
 	CreatedAt       time.Time
 	DispatchedAt    sql.NullTime
+	FeedCursor      sql.NullInt64
+}
+
+type OperationFeedClock struct {
+	Singleton bool
+	Cursor    int64
 }
 
 type Phase25EntitlementSnapshotBackup struct {

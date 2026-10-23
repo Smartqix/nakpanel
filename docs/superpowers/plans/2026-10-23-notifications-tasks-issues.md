@@ -83,22 +83,22 @@ claim is made.
 `operations_test.go`; update `dashboard/tasks.go`, `dashboard/jobs.go`,
 `http/tasks.go`, routing in `http/server.go`, and `web/tasks.go` together.
 
-- [ ] Add failing tests for roles, empty and truncated pages, cursor replay,
+- [x] Add failing tests for roles, empty and truncated pages, cursor replay,
   hidden-tab gaps, counts independent of page size, resource deletion and role
   changes. Include explicit cross-tenant detail and badge-count denial.
-- [ ] Add dispatcher crash/restart tests between source commit, enqueue and
+- [x] Add dispatcher crash/restart tests between source commit, enqueue and
   dispatch acknowledgement; duplicate consumption must be idempotent. Include
   concurrent transactions committing out of order in feed tests so a cursor
   cannot permanently skip a late-committing event.
-- [ ] Implement replayable outbox dispatch using River and PostgreSQL, with
+- [x] Implement replayable outbox dispatch using River and PostgreSQL, with
   atomic enqueue/acknowledgement where supported and unique event consumers.
-- [ ] Implement authorized Issues/Tasks/History queries, personal inbox/receipts
+- [x] Implement authorized Issues/Tasks/History queries, personal inbox/receipts
   and bounded cursor updates. Counts and lists use the same predicate.
-- [ ] Replace the old eight-item-only presentation contract at all callers.
+- [x] Replace the old eight-item-only HTTP contract and remove its unused reader.
   Keep bounded quick views while exposing full pagination and durable transitions.
-- [ ] Return human labels, resource identity, stage, timestamps, correlation and
+- [x] Return human labels, resource identity, stage, timestamps, correlation and
   capabilities. Do not expose raw argument JSON or credentials.
-- [ ] Run focused operations, dashboard and HTTP tests. Report before phase 3.
+- [x] Run focused operations, dashboard and HTTP tests. Report before phase 3.
 
 **Exit:** refreshing or reopening can recover all relevant results; direct URLs
 and counts cannot disclose another tenant's data.
@@ -156,6 +156,8 @@ navigation lifecycle. Regenerate affected templ output using the pinned tool.
 - [ ] Build Activity tabs, task quick view, inbox, task/issue details, recovery
   confirmation, receipt and history. Make personal preferences real controls
   with validation and save feedback; a static rendering does not satisfy this.
+- [ ] Wire the root-page badges and initial tray to the operations read model,
+  replacing the remaining dashboard job projections and their render helpers.
 - [ ] Reuse one lifecycle owner for live updates. Keep context during fragment
   navigation; no reload is needed to see a task result. Respect reduced motion.
 - [ ] Render loading, stale, empty, denied, removed, blocked-retry and email-failure
