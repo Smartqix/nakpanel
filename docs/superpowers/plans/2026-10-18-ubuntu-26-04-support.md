@@ -1,6 +1,14 @@
 # Ubuntu 26.04-Only Support Transition Plan
 
-> **Current authorization, 21 October 2026:** Consolidate all branches and PRs
+> **Current checkpoint, 23 October 2026:** PR #14 is merged, required main CI
+> passed on `3879f77`, and the user-authorized nakpanel.com application rollout
+> and focused live subdomain-mail checks are complete. Ubuntu 26.04 and PHP
+> 8.3/8.4/8.5 remain intact. See the
+> [deployment record](../../verification/2026-10-23-subdomain-mail-deployment.md).
+> This development deployment does not complete the separate architecture,
+> security-version advancement or endurance qualifications below.
+
+> **Consolidation checkpoint, 21 October 2026:** Consolidate all branches and PRs
 > into main, then delete merged branches so only main remains. Keep Ubuntu
 > 26.04-only and PHP 8.3/8.4/8.5. Preserve current work and branch history,
 > verify the combined result, and do not deploy or dispatch optional qualification.
@@ -35,7 +43,8 @@ Phase 3 evidence stays attributed to `63c00f6`. Broader architecture, security
 version advancement and elapsed-soak qualification remain outside this slice.
 See [the result and evidence](2026-10-21-phase4-scheduled-backups.md).
 Original implementation and review are recorded in
-[PR #13](https://github.com/Smartqix/nakpanel/pull/13); deployment is not authorized.
+[PR #13](https://github.com/Smartqix/nakpanel/pull/13); deployment was not authorized
+at that checkpoint. The later authorized rollout is recorded above.
 
 **Current status: Phase 3 PASS on hosted Ubuntu 26.04 AMD64.** Full run
 [39652821843](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)

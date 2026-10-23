@@ -6,11 +6,15 @@ Phase 3 operational/maintenance acceptance passed on `63c00f6`; the focused
 Phase 4 scheduled-backup/restore slice passed on `0654aa3`, as recorded below.
 The latest `1140165` verifier diagnostics change has focused local evidence and
 does not change the served runtime. PR #13 required CI, including hosted
-security/reliability, passed in run `39696504919`. Current authorization is
-consolidation into main and deletion of merged branches. Required main CI checks
-the combined result. This dedicated qualification workflow is manual-only;
-retired branch deletion must not launch optional qualification. No deployment
-is authorized. See the [consolidation record](verification/2026-10-21-main-consolidation.md).
+security/reliability, passed in run `39696504919`. The 21 October checkpoint
+authorized consolidation into main and deletion of merged branches, with required
+main CI and no deployment. See the
+[consolidation record](verification/2026-10-21-main-consolidation.md).
+The later PR #14/main checks passed on `3879f77`, followed by the explicitly
+authorized nakpanel.com development deployment and focused live mail checks;
+see the [23 October deployment record](verification/2026-10-23-subdomain-mail-deployment.md).
+This dedicated qualification workflow remains manual-only; branch deletion and
+documentation closeout must not launch unchanged optional qualification.
 Ubuntu 26.04 remains experimental pending remaining release qualification.
 See [platform qualification](PLATFORM_QUALIFICATION.md) and the
 [transition plan](superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
