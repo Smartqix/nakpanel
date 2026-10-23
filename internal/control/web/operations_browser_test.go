@@ -110,8 +110,14 @@ func TestOperationsBrowserPreview(t *testing.T) {
 			p.Notifications[0].IssueID = 0
 			p.Notifications[0].OperationID = 41
 		}
-		view := WorkspaceView{Route: "activity", Tab: tab, OperationsTab: tab, Operations: p, OperationsQuick: p, CSRFToken: "fixture", InstantNavDisabled: true}
+		view := WorkspaceView{Route: "activity", Tab: tab, OperationsTab: tab, Operations: p, OperationsQuick: p, CSRFToken: "fixture", InstantNavDisabled: os.Getenv("NAKPANEL_OPERATIONS_UI_NAVIGATION") != "1"}
 		w.Header().Set("Content-Type", "text/html")
+		if r.Header.Get("X-Nakpanel-Fragment") == "main" {
+			if err := RoutedFragment("Activity · Nakpanel", auth.SessionUser{ID: 1, Role: auth.RoleAdmin, Email: "admin@panel.example"}, dashboard.Data{}, DashboardActions{}, view).Render(r.Context(), w); err != nil {
+				t.Error(err)
+			}
+			return
+		}
 		if err := RoutedDashboardPage("Activity · Nakpanel", auth.SessionUser{ID: 1, Role: auth.RoleAdmin, Email: "admin@panel.example"}, dashboard.Data{}, DashboardActions{}, view).Render(r.Context(), w); err != nil {
 			t.Error(err)
 		}
