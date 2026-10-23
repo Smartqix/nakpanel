@@ -2404,7 +2404,6 @@ templ routedSubscriptionDetail(user auth.SessionUser, data dashboard.Data, actio
 					@subscriptionActivityPanel(subscription, data, view)
 				} else {
 					@subscriptionDomainsPanel(subscription, data, actions, view)
-					@subscriptionRecentPanel(subscription, data, view)
 				}
 			</div>
 			if view.Tab!="backups" {
@@ -2827,16 +2826,6 @@ templ subscriptionDomainsPanel(subscription types.SubscriptionSummary, data dash
 			}
 		}
 	</section>
-}
-
-templ subscriptionRecentPanel(subscription types.SubscriptionSummary, data dashboard.Data, view WorkspaceView) {
-	{{ events := subscriptionAuditEvents(data, subscription.ID, 4) }}
-	if len(events) > 0 {
-		<section class="np-panel">
-			<div class="np-panel-title"><h2>Recent activity on this subscription</h2><a href={ subscriptionTabPath(view,subscription.ID,"activity") }>All activity</a></div>
-			@subscriptionTimeline(events)
-		</section>
-	}
 }
 
 templ subscriptionTimeline(events []types.AuditEvent) {
