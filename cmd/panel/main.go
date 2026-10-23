@@ -115,7 +115,6 @@ func main() {
 	phpApplicationManager := controlphpapp.NewManager(phpApplicationStore, workspaceStore, agentCapabilities)
 	dashboardStore := dashboard.NewStore(
 		dashboardQuerier{queries: queries},
-		dashboard.WithJobReader(dashboard.NewSQLJobStore(db)),
 		dashboard.WithPhase6Reader(dashboard.NewSQLPhase6Store(db)),
 		dashboard.WithQuotaReader(quotaStore),
 		dashboard.WithScopedReader(workspaceStore),

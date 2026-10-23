@@ -1026,6 +1026,9 @@ func workspaceDrawerID(raw string) string {
 }
 
 func validWorkspaceTab(route, tab string) bool {
+	if route == "activity" {
+		return map[string]bool{"overview": true, "issues": true, "tasks": true, "history": true, "inbox": true, "preferences": true}[tab]
+	}
 	if route == "subscription-detail" {
 		return map[string]bool{"overview": true, "resources": true, "access": true, "cache": true, "mail": true, "tasks": true, "applications": true, "backups": true, "activity": true}[tab]
 	}
@@ -1261,7 +1264,6 @@ func filterDashboardForCustomer(data dashboard.Data, customerID int64) dashboard
 	data.Sites = sites
 	data.Databases = databases
 	data.Subscriptions = subscriptions
-	data.Jobs = nil
 	data.AuditEvents = audit
 	data.Phase6 = dashboard.Phase6Data{Backups: backups, Restores: restores, DNSZones: zones}
 	data.SubscriptionServices = dashboard.SubscriptionServicesData{

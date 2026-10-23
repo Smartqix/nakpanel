@@ -252,7 +252,7 @@ func listNotifications(ctx context.Context, q queryer, actor auth.SessionUser, f
 	if f.Search != "" {
 		where += ` AND n.title ILIKE ` + bind(&args, "%"+f.Search+"%")
 	}
-	rows, err := q.QueryContext(ctx, `SELECT n.id,n.kind,n.severity,n.title,CASE WHEN n.kind IN ('threshold','over_limit','suspended','certificate_expiring','login_new_device','login_failed_burst') THEN left(n.body,2000) ELSE 'Open the affected resource to review its current status.' END,COALESCE(n.issue_id,0),COALESCE(n.operation_id,0),receipt.read_at,n.created_at `+notificationFrom+` WHERE `+where+` ORDER BY n.id DESC LIMIT `+bind(&args, f.limit()+1), args...)
+	rows, err := q.QueryContext(ctx, `SELECT n.id,n.kind,n.severity,n.title,CASE WHEN n.kind IN ('threshold','over_limit','suspended','certificate_expiring','login_new_device','login_failed_burst','operation_failed','issue_recovered') THEN left(n.body,2000) ELSE 'Open the affected resource to review its current status.' END,COALESCE(n.issue_id,0),COALESCE(n.operation_id,0),receipt.read_at,n.created_at `+notificationFrom+` WHERE `+where+` ORDER BY n.id DESC LIMIT `+bind(&args, f.limit()+1), args...)
 	if err != nil {
 		return out, err
 	}

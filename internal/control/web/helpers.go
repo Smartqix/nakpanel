@@ -17,6 +17,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/dashboard"
+	"github.com/nakroteck/nakpanel/internal/control/operations"
 	controlphpapp "github.com/nakroteck/nakpanel/internal/control/phpapp"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
 	"github.com/nakroteck/nakpanel/internal/control/webstatistics"
@@ -53,6 +54,10 @@ type DashboardActions struct {
 }
 
 type WorkspaceView struct {
+	Operations           operations.Page
+	OperationsQuick      operations.Page
+	OperationsError      string
+	OperationsTab        string
 	InstantNavDisabled   bool
 	Fragment             bool
 	SiteRemoval          *SiteRemovalView
@@ -2328,10 +2333,6 @@ func backupPhase6(data dashboard.Phase6Data) dashboard.Phase6Data {
 	return dashboard.Phase6Data{Backups: data.Backups, Restores: data.Restores}
 }
 
-func retryActions(user auth.SessionUser) DashboardActions {
-	return DashboardActions{}
-}
-
 type usageMeterData struct {
 	Percent string
 	Class   string
@@ -2405,10 +2406,6 @@ func formatNullableTime(value dashboard.NullableTime) string {
 		return ""
 	}
 	return formatTime(value.Time)
-}
-
-func formatAttempts(job dashboard.Job) string {
-	return fmt.Sprintf("%d / %d", job.Attempt, job.MaxAttempts)
 }
 
 func formatBytes(size int64) string {

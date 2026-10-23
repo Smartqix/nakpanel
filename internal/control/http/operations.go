@@ -7,6 +7,7 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/operations"
 	"github.com/nakroteck/nakpanel/internal/control/provision"
+	"github.com/nakroteck/nakpanel/internal/control/web"
 	"net/http"
 	"strconv"
 )
@@ -272,7 +273,51 @@ func (s *Server) handleIssueRecovery(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]bool{"queued": true})
 	default:
 		operationsError(w, operations.ErrNotFound)
+	}
+}
+
+func (s *Server) loadOperationsView(r *http.Request, actor auth.SessionUser, view *web.WorkspaceView) {
+	view.OperationsTab = r.URL.Query().Get("tab")
+	switch view.OperationsTab {
+	case "issues", "tasks", "history", "inbox", "preferences":
+	default:
+		view.OperationsTab = "issues"
+	}
+	if s.operations == nil {
+		view.OperationsError = "Current status is unavailable. Check again shortly."
+		return
+	}
+	f := operations.Filter{Limit: 25}
+	if view.SelectedSubscription > 0 {
+		f.Resource = operations.Resource{Kind: operations.ResourceSubscription, ID: view.SelectedSubscription}
+	} else if view.SupportCustomerID > 0 {
+		f.Resource = operations.Resource{Kind: operations.ResourceCustomer, ID: view.SupportCustomerID}
+	}
+	tab := "issues"
+	if view.Route == "activity" && view.OperationsTab != "preferences" {
+		tab = view.OperationsTab
+		f.Search = r.URL.Query().Get("q")
+		f.Status = r.URL.Query().Get("status")
+		f.Severity = r.URL.Query().Get("severity")
+		f.Before = parseQueryInt64(r, "before")
+	}
+	p, err := s.operations.Page(r.Context(), actor, tab, f)
+	if err != nil {
+		view.OperationsError = "Current status is unavailable. Check again shortly."
+		return
+	}
+	view.Operations = p
+	f.ActiveFirst = true
+	f.Before = 0
+	f.Search = ""
+	f.Status = ""
+	f.Severity = ""
+	f.Limit = 8
+	view.OperationsQuick, err = s.operations.Page(r.Context(), actor, "tasks", f)
+	if err != nil {
+		view.OperationsError = "Task status is unavailable. Check again shortly."
 	}
 }

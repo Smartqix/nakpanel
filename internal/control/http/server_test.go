@@ -674,17 +674,6 @@ func TestAdminDashboardRendersOperationalInventoryAndForms(t *testing.T) {
 				Status:    "failed",
 				LastError: "access denied",
 			}},
-			Jobs: []dashboard.Job{{
-				ID:          41,
-				Kind:        "issue_cert",
-				State:       "discarded",
-				Queue:       "default",
-				Attempt:     2,
-				MaxAttempts: 3,
-				Target:      "example.test",
-				LastError:   "<acme failed>",
-				CreatedAt:   time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC),
-			}},
 		},
 	}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{
@@ -717,11 +706,7 @@ func TestAdminDashboardRendersOperationalInventoryAndForms(t *testing.T) {
 		"np_demo",
 		"np_demo_user",
 		"access denied",
-		"Recent jobs",
-		"issue_cert",
-		"discarded",
-		"2 / 3",
-		"&lt;acme failed&gt;",
+		"Open Activity for issues, tasks and history",
 		`action="/sites"`,
 		`action="/certificates"`,
 		`action="/databases"`,
@@ -747,15 +732,6 @@ func TestAdminDashboardRendersMobileTableLabels(t *testing.T) {
 				User:   "np_demo_user",
 				Status: "active",
 			}},
-			Jobs: []dashboard.Job{{
-				ID:          41,
-				Kind:        "create_site",
-				State:       "completed",
-				Target:      "example.test",
-				Attempt:     1,
-				MaxAttempts: 25,
-				CreatedAt:   time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC),
-			}},
 		},
 	}
 	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
@@ -778,9 +754,6 @@ func TestAdminDashboardRendersMobileTableLabels(t *testing.T) {
 		`data-label="TLS"><span class="np-table-value">none`,
 		`data-label="Name"><span class="np-table-value">np_demo`,
 		`data-label="Engine"><span class="np-table-value">mariadb`,
-		`data-label="Kind"><span class="np-table-value">create_site`,
-		`data-label="Attempts"><span class="np-table-value">1 / 25`,
-		`data-label="Created"><span class="np-table-value">2026-07-07 12:00`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("dashboard body missing responsive table label %q:\n%s", want, body)
@@ -1180,7 +1153,6 @@ func TestAdminDashboardRendersQuotaManagement(t *testing.T) {
 		`name="plan_id"`,
 		`name="site_disk_quota_mb"`,
 		"1 / 2",
-		"2 / 3",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("dashboard body missing %q:\n%s", want, body)
@@ -1199,15 +1171,6 @@ func TestAdminDashboardRendersPrototypeShellAndCreateGateData(t *testing.T) {
 				Domain:     "example.test",
 				PHPVersion: "8.3",
 				Status:     "active",
-			}},
-			Jobs: []dashboard.Job{{
-				ID:          41,
-				Kind:        "create_site",
-				State:       "running",
-				Target:      "example.test",
-				Attempt:     1,
-				MaxAttempts: 3,
-				CreatedAt:   time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC),
 			}},
 			Quotas: []controlquota.Summary{{
 				UserID:         2,
@@ -1777,33 +1740,6 @@ func TestAdminDashboardRendersAllSiteErrorsSafely(t *testing.T) {
 	}
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Fatalf("dashboard body rendered unescaped TLS error:\n%s", body)
-	}
-}
-
-func TestAdminDashboardRendersJobLoadErrorWithInventory(t *testing.T) {
-	reader := &fakeDashboardReader{
-		data: dashboard.Data{
-			Sites:        []dashboard.Site{{Domain: "example.test", Status: "active"}},
-			Databases:    []dashboard.Database{{Name: "np_demo", Status: "active"}},
-			JobLoadError: "recent jobs unavailable",
-		},
-	}
-	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: reader})
-	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
-
-	req := httptest.NewRequest(http.MethodGet, "https://panel.test/?legacy=1", nil)
-	addAuthenticatedCookie(req, cookie)
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("GET / status = %d, want 200", rec.Code)
-	}
-	body := rec.Body.String()
-	for _, want := range []string{"example.test", "np_demo", "Recent jobs", "recent jobs unavailable"} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("dashboard body missing %q:\n%s", want, body)
-		}
 	}
 }
 
@@ -2512,7 +2448,7 @@ func TestRoutedAdminWorkspacePagesAndDetailNavigation(t *testing.T) {
 	})
 	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
 	cases := map[string]string{
-		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Files &amp; access", "/sites/7?tab=hosting": "Hosting settings", "/sites/7?tab=databases": "Database allocation summary", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "Audit events", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/addons/new": "Create Add-on", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
+		"/dashboard": "Recent websites", "/sites": "Websites &amp; Domains", "/sites/7": "Files &amp; access", "/sites/7?tab=hosting": "Hosting settings", "/sites/7?tab=databases": "Database allocation summary", "/databases": "owned_db", "/backups": "Create backup", "/dns": "Configure DNS", "/certificates": "Issue certificate", "/activity": "data-np-operations", "/customers": "Add customer", "/customers/88": "Open support view", "/subscriptions": "Add subscription", "/subscriptions/20": "Subscription settings", "/subscriptions/new": "First website", "/service-plans": "Create plan", "/service-plans/new": "Create Plan", "/service-plans/10": "Save and synchronize", "/service-plans/addons/new": "Create Add-on", "/service-plans/resellers/new": "Create Plan", "/service-plans/resellers/92": "Update Plan", "/tools-settings": "Tools &amp; Settings", "/resellers": "Add reseller", "/resellers/91": "Provider account", "/reseller-plans": "Add Reseller Plan",
 	}
 	for path, marker := range cases {
 		req := httptest.NewRequest(http.MethodGet, "https://panel.test"+path, nil)

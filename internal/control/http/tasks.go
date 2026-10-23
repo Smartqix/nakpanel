@@ -2,7 +2,6 @@ package panelhttp
 
 import (
 	"encoding/json"
-	"github.com/nakroteck/nakpanel/internal/control/operations"
 	"github.com/nakroteck/nakpanel/internal/control/web"
 	"net/http"
 )
@@ -12,7 +11,14 @@ func (s *Server) handleTasks(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	p, err := s.operations.Page(r.Context(), actor, "tasks", operations.Filter{Limit: 8, ActiveFirst: true})
+	f, err := operationsFilter(r)
+	if err != nil {
+		operationsError(w, err)
+		return
+	}
+	f.Limit = 8
+	f.ActiveFirst = true
+	p, err := s.operations.Page(r.Context(), actor, "tasks", f)
 	if err != nil {
 		operationsError(w, err)
 		return

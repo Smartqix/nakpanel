@@ -146,22 +146,22 @@ chain works in local fixtures, without weakening existing mutation fences.
 `workspace.templ`, `tasks.go`, `static/tasks.js`, HTTP view routing and the existing
 navigation lifecycle. Regenerate affected templ output using the pinned tool.
 
-- [ ] Before UI implementation, review the Figma flow and settle the remaining
+- [x] Before UI implementation, review the Figma flow and settle the remaining
   design decisions. Preserve the current sidebar and visual tokens.
-- [ ] Add meaningful tests for counts/scope, read versus resolve, late responses,
+- [x] Add meaningful tests for counts/scope, read versus resolve, late responses,
   reconnect, focus return, modal behavior, polling cancellation and source errors.
-- [ ] Build Activity tabs, task quick view, inbox, task/issue details, recovery
-  confirmation, receipt and history. Make personal preferences real controls
-  with validation and save feedback; a static rendering does not satisfy this.
-- [ ] Replace the matching transient attention projections and raw dashboard
+- [x] Build Activity tabs, task quick view, inbox, task/issue details, recovery
+  confirmation, receipt and history. Add preference controls, validation and save feedback. Phase 5 supplies and
+  verifies their persisted policy; the combined flow must work before release.
+- [x] Replace the matching transient attention projections and raw dashboard
   jobs with durable scoped issues, preserving severity without duplicate counts.
-- [ ] Wire the root-page badges and initial tray to the operations read model,
+- [x] Wire the root-page badges and initial tray to the operations read model,
   replacing the remaining dashboard job projections and their render helpers.
-- [ ] Reuse one lifecycle owner for live updates. Keep context during fragment
+- [x] Reuse one lifecycle owner for live updates. Keep context during fragment
   navigation; no reload is needed to see a task result. Respect reduced motion.
-- [ ] Render loading, stale, empty, denied, removed, blocked-retry and email-failure
+- [x] Render loading, stale, empty, denied, removed, blocked-retry and email-failure
   states. Show typed recovery actions only when authorized.
-- [ ] Run focused Go/JavaScript checks, regenerate templates once, then inspect
+- [x] Run focused Go/JavaScript checks, regenerate templates once, then inspect
   desktop/mobile, keyboard, screen-reader announcements and contrast. Repeat
   only checks affected by a subsequent change. Report before phase 5.
 

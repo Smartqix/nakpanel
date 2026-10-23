@@ -254,9 +254,9 @@ templ sidebarNav(user auth.SessionUser, data dashboard.Data, actions DashboardAc
 				@navButton("Certificates", "certificates", "shield", false, true, "", "")
 				@navButton("Backups", "backups", "box", false, true, "", "")
 				if actions.CanUsePhase6 {
-					@navButton("Activity", "operations", "pulse", false, false, formatBadgeCount(len(data.Jobs)), "")
+					@navButton("Activity", "operations", "pulse", false, false, "", "")
 				} else {
-					@navButton("Activity", "activity", "pulse", false, false, formatBadgeCount(len(data.Jobs)), "")
+					@navButton("Activity", "activity", "pulse", false, false, "", "")
 				}
 				<span class="np-nav-label">Administration</span>
 				@navButton("Servers", "servers", "server", false, true, "", "")
@@ -319,7 +319,7 @@ templ dashboardSections(data dashboard.Data, actions DashboardActions) {
 		<div class="np-stat-grid">
 			@statCard("Sites", len(data.Sites), "Provisioned accounts and domains")
 			@statCard("Databases", len(data.Databases), "MariaDB intent tracked by the panel")
-			@statCard("Jobs", len(data.Jobs), "Recent provisioning activity")
+			<a href="/activity?tab=tasks">Background tasks</a>
 			@statCard("Plans", len(data.Plans), "Entitlement catalog")
 		</div>
 		@overviewStatus(data)
@@ -345,7 +345,7 @@ templ dashboardSections(data dashboard.Data, actions DashboardActions) {
 		@settingsSection(data, actions, WorkspaceView{})
 	</section>
 	<section class="np-view" data-np-panel="activity" id="view-activity" aria-labelledby="jobs-title">
-		@jobsSection(data.Jobs, data.JobLoadError, actions, "")
+		<a href="/activity">Open Activity for issues, tasks and history</a>
 	</section>
 }
 
@@ -1038,7 +1038,7 @@ templ settingsSection(data dashboard.Data, actions DashboardActions, view Worksp
 					</a>
 					<a class="np-settings-tool is-actionable" href="/tools-settings/logs" data-np-settings-tool data-np-settings-keywords="diagnostics logs activity audit jobs">
 						<span class="np-settings-tool-icon">@icon("activity")</span>
-						<span class="np-settings-tool-copy"><strong>Diagnostics &amp; Activity</strong><span>{ formatPlanLimit(len(data.Jobs)) } provisioning and maintenance jobs are visible.</span></span>
+						<span class="np-settings-tool-copy"><strong>Diagnostics &amp; Activity</strong><span>Review current issues and task outcomes in Activity.</span></span>
 						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">live</span>@icon("chevron-right")</span>
 					</a>
 					<a class="np-settings-tool is-actionable" href="/tools-settings/operations" data-np-settings-tool data-np-settings-keywords="reboot shutdown power operations reauthentication">
@@ -1120,7 +1120,7 @@ templ settingsSection(data dashboard.Data, actions DashboardActions, view Worksp
 					</a>
 					<a class="np-settings-tool is-actionable" href="/activity" data-np-settings-tool data-np-settings-keywords="background jobs river queues provisioning maintenance">
 						<span class="np-settings-tool-icon">@icon("layers")</span>
-						<span class="np-settings-tool-copy"><strong>Background Jobs</strong><span>{ formatPlanLimit(len(data.Jobs)) } jobs are available in Activity.</span></span>
+						<span class="np-settings-tool-copy"><strong>Background Jobs</strong><span>Open Activity for current task status and attempt history.</span></span>
 						<span class="np-settings-tool-meta"><span class="np-pill np-pill-ok">live</span>@icon("chevron-right")</span>
 					</a>
 					<a class="np-settings-tool is-actionable" href="/activity" data-np-settings-tool data-np-settings-keywords="audit log security events history">
@@ -1905,58 +1905,6 @@ templ quotaUsageTable(quotas []controlquota.Summary) {
 			</tbody>
 		</table>
 	</div>
-}
-
-templ jobsSection(jobs []dashboard.Job, loadError string, actions DashboardActions, csrfToken string) {
-	<section class="np-section" aria-labelledby="jobs-title">
-		<div class="np-section-heading">
-			<h2 id="jobs-title">Recent jobs</h2>
-		</div>
-		if loadError != "" {
-			<p class="np-empty">
-				for _, message := range errorMessages(loadError) {
-					<span class="np-error">{ message }</span>
-				}
-			</p>
-		} else if len(jobs) == 0 {
-			<p class="np-empty">No recent jobs.</p>
-		} else {
-			<div class="np-table-wrap">
-				<table class="np-table">
-					<thead>
-						<tr>
-							<th>ID</th>
-							<th>Kind</th>
-							<th>Target</th>
-							<th>State</th>
-							<th>Attempts</th>
-							<th>Created</th>
-							<th>Last error</th>
-						</tr>
-					</thead>
-					<tbody>
-						for _, job := range jobs {
-							<tr>
-								<td data-label="ID"><span class="np-table-value">{ job.ID }</span></td>
-								<td data-label="Kind"><span class="np-table-value">{ job.Kind }</span></td>
-								<td data-label="Target"><span class="np-table-value">{ job.Target }</span></td>
-								<td data-label="State" class="np-status"><span class="np-table-value">{ job.State }</span></td>
-								<td data-label="Attempts"><span class="np-table-value">{ formatAttempts(job) }</span></td>
-								<td data-label="Created"><span class="np-table-value">{ formatTime(job.CreatedAt) }</span></td>
-								<td data-label="Last error">
-									<span class="np-table-value">
-										for _, message := range errorMessages(job.LastError) {
-											<span class="np-error">{ message }</span>
-										}
-									</span>
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			</div>
-		}
-	</section>
 }
 
 templ csrfTokenInput(token string) {

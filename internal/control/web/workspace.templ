@@ -26,7 +26,7 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 			<link rel="stylesheet" href="/assets/git.css"/>
 			<link rel="stylesheet" href="/assets/domains.css"/>
 			<link rel="stylesheet" href="/assets/mail.css"/>
-			<link rel="stylesheet" href="/assets/backups.css"/>
+			<link rel="stylesheet" href="/assets/backups.css"/><link rel="stylesheet" href="/assets/operations.css"/>
 		</head>
 		<body class={ domainWorkspaceClass(view) } data-np-role={ string(user.Role) }
 			if workspaceRequiresDocument(view) {
@@ -60,12 +60,13 @@ templ RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Da
 				<script defer src="/assets/ace/ace.js"></script>
 			}
 			@confirmationDialog()
+ @operationsDetailDialog()
 			<dialog class="np-dialog np-site-removal-dialog" id="np-site-removal-dialog" data-np-dialog></dialog>
 			<dialog class="np-dialog np-backup-dialog" id="np-backup-removal-dialog" aria-labelledby="np-backup-removal-title" data-np-dialog></dialog>
 			<dialog class="np-dialog np-mail-dialog np-mail-connect-dialog" id="np-mail-connect-dialog" aria-labelledby="np-mail-connect-title" data-np-dialog></dialog>
 			<script defer src="/assets/interaction.js"></script>
 			<script defer src="/assets/navigation.js"></script>
- <script defer src="/assets/tasks.js"></script>
+ <script defer src="/assets/operations.js"></script>
 			if view.SettingsFocus != "dns" {
 				<script defer src="/assets/dns-template.js"></script>
 			}
@@ -117,14 +118,14 @@ templ RoutedFragment(title string, user auth.SessionUser, data dashboard.Data, a
 }
 
 templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
-	{{ attention := workspaceAttention(data) }}
+
 	<aside class="np-routed-side" data-np-sidebar>
 		<div class="np-side-brand">
 			<span class="np-brand-mark" aria-hidden="true">n</span>
 			<span class="np-side-brand-text"><strong>nakpanel</strong><small>{ panelHostname(ctx) }</small></span>
-			<span class={ "np-side-health " + attentionHealthClass(attention) } title={ attentionHealthLabel(attention) }>
+			<span class={ "np-side-health" } title={ "Open Activity for current issues" }>
 				<span class="np-side-health-dot" aria-hidden="true"></span>
-				<span class="np-sr-only">{ attentionHealthLabel(attention) }</span>
+				<span class="np-sr-only">{ "Open Activity for current issues" }</span>
 			</span>
 		</div>
 		<nav class="np-routed-nav" aria-label="Primary navigation">
@@ -133,27 +134,28 @@ templ routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVi
 				<span class="np-nav-label">Hosting services</span>
 				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), "")
 				@navRoute("/resellers", "Resellers", "users", routeActive(view.Route, "resellers", "reseller-detail"), "")
-				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress"), sitesNeedingAttention(data.Sites), SeverityWarning)
+				@navRoute("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress"), "")
 				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), "")
 				@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new", "reseller-plan-new"), "")
 				<span class="np-nav-label">Server management</span>
-				@navAlert("/activity", "Activity", "activity", routeActive(view.Route, "activity"), attention.Total(), attention.BadgeSeverity())
+				@navRoute("/activity", "Activity", "activity", routeActive(view.Route, "activity"),formatBadgeCount(view.Operations.Counts.OpenIssues))
 				@navRoute("/tools-settings", "Tools & Settings", "settings", routeActive(view.Route, "tools-settings"), "")
 			} else if user.Role == auth.RoleReseller && view.SupportCustomerID == 0 {
 				<span class="np-nav-label">Hosting services</span>
 				@navRoute("/customers", "Customers", "users", routeActive(view.Route, "customers", "customer-detail"), "")
-				@navAlert("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress"), sitesNeedingAttention(data.Sites), SeverityWarning)
+				@navRoute("/sites", "Websites", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress"), "")
 				@navRoute("/subscriptions", "Subscriptions", "card", routeActive(view.Route, "subscriptions", "subscription-detail", "subscription-new"), "")
 		@navRoute("/service-plans", "Service Plans", "layers", routeActive(view.Route, "service-plans", "plan-detail", "plan-new", "addon-detail", "addon-new"), "")
 				<span class="np-nav-label">Account</span>
-				@navRoute("/activity", "Activity", "activity", routeActive(view.Route, "activity"), "")
+				@navRoute("/activity", "Activity", "activity", routeActive(view.Route, "activity"), formatBadgeCount(view.Operations.Counts.OpenIssues))
 				@navRoute("/tools-utilities", "Tools & Utilities", "settings", routeActive(view.Route, "tools-utilities"), "")
 				@navRoute("/my-resources", "My Resources", "activity", routeActive(view.Route, "my-resources"), "")
 			} else {
 				<span class="np-nav-label">Hosting services</span>
-				@navAlert(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress"), sitesNeedingAttention(sitesForCustomer(data.Sites, view.SupportCustomerID)), SeverityWarning)
+				@navRoute(workspacePath(view, "/sites"), "Websites & Domains", "globe", routeActive(view.Route, "sites", "site-new", "site-detail", "site-files", "site-file-edit", "site-setup", "site-removal", "site-removal-progress"), "")
 				@navRoute(workspacePath(view, "/mail"), "Mail", "mail", routeActive(view.Route, "mail"), "")
 				@navRoute(workspacePath(view, "/backups"), "Backups", "archive", routeActive(view.Route, "backups"), "")
+ @navRoute(workspacePath(view,"/activity"),"Activity","activity",routeActive(view.Route,"activity"),formatBadgeCount(view.Operations.Counts.OpenIssues))
 				<span class="np-nav-label">Account</span>
 				@navRoute(workspacePath(view, "/subscriptions"), "Account & Usage", "card", routeActive(view.Route, "subscriptions", "subscription-detail"), "")
 			}
@@ -177,7 +179,11 @@ templ navRoute(path string, label string, iconName string, active string, badge 
 		@icon(iconName)
 		<span>{ label }</span>
 		if badge != "" {
-			<span class="np-nav-badge">{ badge }</span>
+			<span class="np-nav-badge"
+ if label=="Activity" {
+ data-np-op-count="open_issues"
+ }
+>{ badge }</span>
 		}
 	</a>
 }
@@ -206,9 +212,7 @@ templ routedTopbar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 			</div>
 		</div>
 		<div class="np-top-secondary">
-   if user.Role == auth.RoleAdmin {
-    @tasksTray(data)
-   }
+@operationsTop(view)
 			if user.Role == auth.RoleClient || view.SupportCustomerID > 0 {
 				<label class="np-context-select"><span class="np-sr-only">Subscription</span><select data-np-subscription-nav>
 					<option value={ templ.SafeURL(workspacePath(view, "/dashboard")) }>All subscriptions</option>
@@ -216,13 +220,6 @@ templ routedTopbar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 						<option value={ templ.SafeURL(withSubscription(workspacePath(view, "/dashboard"), subscription.ID)) } selected?={ subscription.ID == view.SelectedSubscription }>{ subscription.SubscriptionName }</option>
 					}
 				</select></label>
-			}
-			{{ attention := workspaceAttention(data) }}
-			if attention.Total() > 0 {
-				<a class={ "np-top-attention " + attentionHealthClass(attention) } href={ templ.SafeURL(workspacePath(view, "/activity")) }>
-					@icon("triangle-alert")
-					<span>{ attentionHealthLabel(attention) }</span>
-				</a>
 			}
 		</div>
 	</header>
@@ -284,7 +281,7 @@ templ routedContent(user auth.SessionUser, data dashboard.Data, actions Dashboar
 		case "mail":
 			@routedMail(user, data, view)
 		case "activity":
-			@routedActivity(data, user, view)
+			@operationsCenter(user,view)
 		case "customers":
 			@routedCustomers(data, view)
 		case "customer-detail":
@@ -366,12 +363,12 @@ templ pageHead(kicker string, title string, description string) {
 }
 
 templ routedDashboard(user auth.SessionUser, data dashboard.Data, view WorkspaceView) {
-	{{ attention := workspaceAttention(data) }}
+
 	{{ pressure := capacityPressure(subscriptionsForCustomer(data.Subscriptions, view.SupportCustomerID)) }}
 	@pageHead("Control panel", routeTitle(view.Route), "Server health, work that needs attention, and capacity at a glance.") {
 		<a class="np-primary-link" href={ templ.SafeURL(workspacePath(view, "/sites")) }>View websites</a>
 	}
-	@attentionPanel(attention, view)
+	@operationsSummary(view)
 	<div class="np-routed-grid">
 		<section class="np-panel">
 			<div class="np-panel-title"><h2>Capacity pressure</h2><a href={ templ.SafeURL(workspacePath(view, "/subscriptions")) }>All subscriptions</a></div>
@@ -392,54 +389,6 @@ templ routedDashboard(user auth.SessionUser, data dashboard.Data, view Workspace
 
 // attentionPanel is the answer to "what needs me right now". It leads the page
 // because the panel already knew about the critical failure and never said so.
-templ attentionPanel(attention Attention, view WorkspaceView) {
-	if attention.Total() == 0 {
-		<section class="np-panel np-attention np-attention-clear">
-			<div class="np-panel-title">
-				<div class="np-attention-heading">@icon("shield-check")<h2>Nothing needs attention</h2></div>
-				<a href={ templ.SafeURL(workspacePath(view, "/activity")) }>Open activity</a>
-			</div>
-			<p class="np-attention-clear-copy">No failed jobs, unresolved alerts or expiring certificates.</p>
-		</section>
-	} else {
-		<section class={ "np-panel np-attention " + attentionPanelClass(attention) }>
-			<div class="np-panel-title">
-				<div class="np-attention-heading">
-					@icon("triangle-alert")
-					<h2>Needs attention</h2>
-					if attention.Critical > 0 {
-						<span class="np-pill np-pill-fail">{ attentionCountLabel(attention.Critical, "critical") }</span>
-					}
-					if attention.Warning > 0 {
-						<span class="np-pill np-pill-pend">{ attentionCountLabel(attention.Warning, "warning") }</span>
-					}
-				</div>
-				<a href={ templ.SafeURL(workspacePath(view, "/activity")) }>Open activity</a>
-			</div>
-			<div class="np-attention-list">
-				for _, item := range attention.Items {
-					<div class="np-attention-row">
-						<span class={ "np-attention-dot " + severityDotClass(item.Severity) } aria-hidden="true"></span>
-						<div class="np-attention-copy">
-							<strong>{ item.Title }if item.Occurrences() != "" {
-								<span class="np-attention-count">· { item.Occurrences() }</span>
-							}</strong>
-							if item.Detail != "" {
-								<span>{ item.Detail }</span>
-							}
-						</div>
-						if item.Action != "" {
-							<a class="np-secondary-button" href={ templ.SafeURL(item.ActionTo) }>{ item.Action }</a>
-						}
-					</div>
-				}
-			</div>
-		</section>
-	}
-}
-
-// capacityRows shows only the subscriptions actually under pressure; the rest
-// are summarised, so a page of "0/1 sites" rows cannot hide the ones at limit.
 templ capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) {
 	if len(pressure.Items) == 0 {
 		<p class="np-empty">{ capacityAllClearCopy(pressure) }</p>
@@ -2178,62 +2127,6 @@ templ routedCertificates(sites []dashboard.Site, actions DashboardActions, view 
 	</section>
 }
 
-templ routedActivity(data dashboard.Data, user auth.SessionUser, view WorkspaceView) {
-	@pageHead("Operations", "Activity", "Provisioning jobs and administrator support actions in one timeline.") {}
-	{{ alerts := groupedAlerts(data.UsageAlerts) }}
-	if len(alerts) > 0 {
-		<section class="np-panel np-list" data-np-list data-np-list-page-size="15" data-np-list-noun="alerts" data-np-list-noun-one="alert">
-			<div class="np-panel-title">
-				<h2>Alerts</h2>
-				<span class="np-muted">most severe first</span>
-			</div>
-			<div class="np-list-toolbar">
-				<label class="np-list-search">
-					<span class="np-sr-only">Filter alerts</span>
-					@icon("search")
-					<input type="search" placeholder="Filter alerts…" autocomplete="off" data-np-list-search/>
-				</label>
-				<label class="np-list-filter">
-					<span class="np-sr-only">Severity</span>
-					<select data-np-list-filter="severity">
-						<option value="">All severities</option>
-						<option value="critical">Critical</option>
-						<option value="warning">Warning</option>
-						<option value="info">Info</option>
-					</select>
-				</label>
-				<span class="np-list-count" data-np-list-count aria-live="polite"></span>
-			</div>
-			<div class="np-attention-list" data-np-list-body>
-				for _, alert := range alerts {
-					<div class="np-attention-row" data-np-list-row data-severity={ alert.Severity.Label() }>
-						<span class={ "np-attention-dot " + severityDotClass(alert.Severity) } aria-hidden="true"></span>
-						<div class="np-attention-copy">
-							<strong>{ alert.Title }if alert.Occurrences() != "" {
-								<span class="np-attention-count">· { alert.Occurrences() }</span>
-							}</strong>
-							<span>{ alert.Detail }</span>
-						</div>
-						<span class={ "np-pill " + severityPillClass(alert.Severity) }>{ alert.Severity.Label() }</span>
-					</div>
-				}
-			</div>
-			<div class="np-list-foot" data-np-list-foot hidden>
-				<span data-np-list-status></span>
-				<button type="button" class="np-secondary-button" data-np-list-more>Show more</button>
-			</div>
-			<p class="np-empty" data-np-list-empty hidden>No alerts match these filters.</p>
-		</section>
-	}
-	<section class="np-panel">@jobsSection(data.Jobs, data.JobLoadError, retryActions(user), view.CSRFToken)</section>
-	if user.Role == auth.RoleAdmin {
-		<section class="np-panel"><div class="np-panel-title"><h2>Audit events</h2></div><div class="np-table-wrap"><table class="np-table"><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></thead><tbody>
-			for _, event := range data.AuditEvents {
-				<tr><td data-label="Time">{ formatTime(event.CreatedAt) }</td><td data-label="Actor">{ event.ActorEmail }</td><td data-label="Action">{ event.Action }</td><td data-label="Target">{ event.TargetType } { formatJobID(event.TargetID) }</td></tr>
-			}
-		</tbody></table></div></section>
-	}
-}
 
 templ routedCustomers(data dashboard.Data, view WorkspaceView) {
 	@pageHead("Account management", "Customers", "Customer profiles, login access and owned subscriptions.") {
@@ -3926,31 +3819,4 @@ templ emptyState(iconName string, title string, detail string) {
 		}
 		{ children... }
 	</div>
-}
-
-
-templ tasksTray(data dashboard.Data) {
- <div class="np-tasks" data-np-tasks>
-  <button type="button" class="np-secondary-button" data-np-tasks-toggle aria-expanded="false" aria-controls="np-tasks-panel">Tasks <span class="np-nav-badge" data-np-tasks-count hidden?={ data.ActiveJobs == 0 }>{ formatJobID(int64(data.ActiveJobs)) }</span></button>
-  <section id="np-tasks-panel" class="np-tasks-panel" aria-label="Background tasks" tabindex="-1" hidden>
-   <h2>Tasks</h2>
-   <p data-np-tasks-error role="status" hidden></p>
-   <div data-np-tasks-items>
-    for _, item := range TaskItems(data.Jobs) {
-     <article class="np-task" data-np-task-id={ formatJobID(item.ID) } data-np-task-state={ item.State } data-np-task-label={ item.Label }>
-      <strong>{ item.Label }</strong><span>{ item.Target }</span>
-      @tonePill(item.State, item.Tone)
-      <time datetime={ item.CreatedAt.Format("2006-01-02T15:04:05Z07:00") } title={ formatTime(item.CreatedAt) }>{ formatRelativeLabel(item.CreatedAt) }</time>
-      if item.Tone == "fail" && item.Error != "" {
- <p>{ item.Error }</p>
- }
-     </article>
-    }
-    if len(data.Jobs) == 0 {
- <p>No recent tasks.</p>
- }
-   </div>
-   <footer><a href="/activity">All activity</a></footer>
-  </section>
- </div>
 }

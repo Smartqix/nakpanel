@@ -1,0 +1,124 @@
+package web
+import("github.com/nakroteck/nakpanel/internal/control/auth";"github.com/nakroteck/nakpanel/internal/control/operations")
+
+templ operationsTop(view WorkspaceView) {
+ <div class="np-op-top" data-np-operations-shell data-np-operations-scope={ operationsScope(view) } data-np-operations-cursor={ formatJobID(view.Operations.Cursor) }>
+  <div class="np-op-popover-wrap"><button class="np-secondary-button" type="button" data-np-op-toggle="tasks" aria-controls="np-op-tasks" aria-expanded="false">Tasks <span data-np-op-count="active_tasks" class="np-nav-badge">{ formatJobID(int64(view.Operations.Counts.ActiveTasks)) }</span></button>
+   <section id="np-op-tasks" class="np-op-popover np-panel" hidden tabindex="-1" aria-label="Background tasks"><h2>Tasks</h2><p class="np-muted">Active work and recent failures</p><div data-np-op-quick-tasks>
+@operationsRows(view.OperationsQuick,"tasks")
+</div><a href={ templ.SafeURL(operationsPath(view,"tasks")) }>All tasks</a></section>
+  </div>
+  <div class="np-op-popover-wrap"><button class="np-secondary-button" type="button" data-np-op-toggle="inbox" aria-controls="np-op-inbox" aria-expanded="false">
+@icon("bell")<span class="np-sr-only">Notifications</span><span data-np-op-count="unread" class="np-nav-badge">{ formatJobID(int64(view.Operations.Counts.Unread)) }</span></button>
+   <section id="np-op-inbox" class="np-op-popover np-panel" hidden tabindex="-1" aria-label="Notifications"><h2>Notifications</h2><p>Reading a notification does not resolve its issue.</p><div data-np-op-quick-inbox><p>Open your inbox to read notifications.</p></div><a href={ templ.SafeURL(operationsPath(view,"inbox")) }>Open inbox</a></section>
+  </div>
+  <span class="np-sr-only" data-np-op-shell-status role="status"></span>
+ </div>
+}
+templ operationsSummary(view WorkspaceView) {
+ <section class="np-panel np-op-summary"><div class="np-panel-title"><h2>Needs attention <span data-np-op-count="open_issues">{ formatJobID(int64(view.Operations.Counts.OpenIssues)) }</span></h2><a href={ templ.SafeURL(operationsPath(view,"issues")) }>View issues</a></div>
+ if view.OperationsError!="" {
+<p role="status">Current status is unavailable. Open Activity to check again.</p>
+} else if view.Operations.Counts.OpenIssues==0 {
+<p>No open issues were found in the current scope. Last checked { formatRelativeLabel(view.Operations.CheckedAt) }.</p>
+} else {
+<p>Review the current issues in Activity. Reading or acknowledging an issue does not resolve it.</p>
+}
+ </section>
+}
+templ operationsCenter(user auth.SessionUser, view WorkspaceView) {
+ <section data-np-operations data-np-operations-view={ view.OperationsTab } data-np-op-next={ formatJobID(view.Operations.NextBefore) } aria-labelledby="np-operations-title">
+  <div class="np-op-heading"><div><span class="np-kicker">Operations</span><h1 id="np-operations-title">Activity</h1><p>Issues that need attention, background work and verified outcomes.</p></div><a href={ templ.SafeURL(operationsPath(view,"preferences")) }>Notification preferences</a></div>
+  <nav class="np-domain-tabs" aria-label="Activity views">
+   for _, tab:=range []string{"issues","tasks","history","inbox"} {
+<a href={ templ.SafeURL(operationsPath(view,tab)) } aria-current={ operationsCurrent(view.OperationsTab,tab) } class={ operationsActive(view.OperationsTab,tab) }>{ operationsTabLabel(tab) }</a>
+}
+  </nav>
+  <p class="np-op-status" data-np-op-status role="status" tabindex="-1">
+   if view.OperationsError!="" {
+ { view.OperationsError }
+ } else {
+ Last checked { formatRelativeLabel(view.Operations.CheckedAt) }.
+ }
+  </p>
+  if view.OperationsTab=="preferences" {
+@operationsPreferences()} else {
+   <form class="np-op-filters" method="get" action={ templ.SafeURL(workspacePath(view,"/activity")) } data-np-op-filters><input type="hidden" name="tab" value={ view.OperationsTab }/>
+if view.SelectedSubscription>0 {
+<input type="hidden" name="subscription_id" value={ formatJobID(view.SelectedSubscription) }/>
+}
+<label>Search<input type="search" name="q" value={ view.SearchQuery } maxlength="200" placeholder="Search this activity"/></label><label>Status<select name="status"><option value="">All current</option>
+if view.OperationsTab=="issues" {
+<option value="open" selected?={ view.StatusFilter=="open" }>Open</option><option value="acknowledged" selected?={ view.StatusFilter=="acknowledged" }>Acknowledged</option><option value="resolved" selected?={ view.StatusFilter=="resolved" }>Resolved</option>
+} else if view.OperationsTab=="tasks" {
+<option value="active" selected?={ view.StatusFilter=="active" }>Active</option><option value="finished" selected?={ view.StatusFilter=="finished" }>Finished</option>
+} else if view.OperationsTab=="inbox" {
+<option value="unread" selected?={ view.StatusFilter=="unread" }>Unread</option>
+}
+</select></label><button type="submit" class="np-secondary-button">Apply</button><button type="button" class="np-secondary-button" data-np-op-refresh>Refresh</button></form>
+   if view.OperationsTab=="issues" {
+<p class="np-muted">Acknowledging an issue does not resolve it. Recovery requires a current independent check.</p>
+}
+   if view.OperationsTab=="inbox" {
+<div class="np-op-toolbar"><p>Read status is personal. Issues keep their own status.</p><button type="button" class="np-secondary-button" data-np-op-read-all>Mark all read</button></div>
+}
+   <div class="np-panel np-op-list" data-np-op-rows>
+@operationsRows(view.Operations,view.OperationsTab)
+</div>
+   <button type="button" class="np-secondary-button" data-np-op-more hidden?={ view.Operations.NextBefore==0 }>Show more</button>
+  }
+ </section>
+
+}
+templ operationsRows(page operations.Page, tab string) {
+ switch tab {
+ case "tasks":
+  for _, task:=range page.Tasks {
+<article class="np-op-row" data-np-op-row-id={ formatJobID(task.ID) }><div><button class="np-op-title" type="button" data-np-op-detail="tasks" data-np-op-id={ formatJobID(task.ID) }>{ task.Title }</button><p>{ task.Target }</p><small>{ task.Stage }</small></div>
+@tonePill(operationsStateLabel(string(task.State)),taskTone(string(task.State)))<time>{ formatRelativeLabel(task.UpdatedAt) }</time></article>
+}
+  if len(page.Tasks)==0 {
+<p class="np-empty">No tasks match this view.</p>
+}
+ case "history":
+  for _, event:=range page.History {
+<article class="np-op-row" data-np-op-row-id={ formatJobID(event.ID) }><div><strong>{ event.Summary }</strong><p>{ operationsEventLabel(event.Kind) }</p></div><time title={ formatTime(event.CreatedAt) }>{ formatRelativeLabel(event.CreatedAt) }</time></article>
+}
+  if len(page.History)==0 {
+<p class="np-empty">No history matches this view.</p>
+}
+ case "inbox":
+  for _, n:=range page.Notifications {
+<article class="np-op-row" data-np-op-row-id={ formatJobID(n.ID) }><div><strong>{ n.Title }</strong><p>{ n.Summary }</p><small>
+if n.ReadAt==nil {
+Unread
+} else {
+Read
+}</small></div><div class="np-op-actions">
+if n.IssueID>0 {
+<button type="button" class="np-secondary-button" data-np-op-detail="issues" data-np-op-id={ formatJobID(n.IssueID) }>View issue</button>
+}
+if n.ReadAt==nil {
+<button type="button" class="np-secondary-button" data-np-op-read={ formatJobID(n.ID) }>Mark read</button>
+}<button type="button" class="np-secondary-button" data-np-op-archive={ formatJobID(n.ID) }>Archive</button></div><time>{ formatRelativeLabel(n.CreatedAt) }</time></article>
+}
+  if len(page.Notifications)==0 {
+<p class="np-empty">Your inbox is clear.</p>
+}
+ default:
+  for _, i:=range page.Issues {
+<article class="np-op-row" data-np-op-row-id={ formatJobID(i.ID) }><span class={ "np-op-severity np-op-severity-"+i.Severity } aria-hidden="true"></span><div><button type="button" class="np-op-title" data-np-op-detail="issues" data-np-op-id={ formatJobID(i.ID) }>{ i.Title }</button><p>{ i.Target }</p><small>{ i.Summary }</small></div>
+@tonePill(operationsStateLabel(i.State),operationsIssueTone(i.Severity))<time>{ formatRelativeLabel(i.ObservedAt) }</time></article>
+}
+  if len(page.Issues)==0 {
+<p class="np-empty">No issues match this view.</p>
+}
+ }
+}
+templ operationsPreferences() {
+ <form class="np-panel np-op-preferences" data-np-op-preferences><h2>Notification preferences</h2><p>Critical and security notices always remain available in your inbox.</p><label><input type="checkbox" checked disabled/>Critical and security notices in app · required</label><label>Email updates<select name="email_mode"><option value="off">Off</option><option value="immediate">Immediate</option><option value="digest">Daily digest · UTC</option></select></label><p data-np-op-delivery-health>Loading delivery settings…</p><button type="submit">Save preferences</button><p data-np-op-preference-status role="status"></p></form>
+}
+
+templ operationsDetailDialog() {
+ <dialog id="np-operation-detail" class="np-dialog np-op-dialog" aria-labelledby="np-op-detail-title"><div class="np-op-dialog-head"><h2 id="np-op-detail-title">Activity details</h2><button type="button" class="np-secondary-button" data-np-op-close aria-label="Close activity details">Close</button></div><div data-np-op-detail-body></div><p data-np-op-detail-status role="status" tabindex="-1"></p></dialog>
+}

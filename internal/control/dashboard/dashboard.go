@@ -21,10 +21,6 @@ type Querier interface {
 	ListDatabases(ctx context.Context) ([]store.Database, error)
 }
 
-type JobReader interface {
-	ListRecentJobs(ctx context.Context, limit int) ([]Job, error)
-}
-
 type Phase6Reader interface {
 	GetPhase6(ctx context.Context) (Phase6Data, error)
 }
@@ -81,7 +77,6 @@ type SubscriptionServiceReader interface {
 
 type Store struct {
 	queries      Querier
-	jobs         JobReader
 	phase6       Phase6Reader
 	quotas       QuotaReader
 	scoped       ScopedReader
@@ -104,9 +99,6 @@ const (
 type Data struct {
 	Sites                []Site
 	Databases            []Database
-	ActiveJobs           int
-	Jobs                 []Job
-	JobLoadError         string
 	Phase6               Phase6Data
 	Phase6Error          string
 	Quotas               []controlquota.Summary
@@ -293,21 +285,6 @@ type Database struct {
 	SiteID         int64
 }
 
-type Job struct {
-	ID          int64
-	Kind        string
-	State       string
-	Queue       string
-	Attempt     int
-	MaxAttempts int
-	Target      string
-	LastError   string
-	CreatedAt   time.Time
-	ScheduledAt time.Time
-	AttemptedAt NullableTime
-	FinalizedAt NullableTime
-}
-
 type Phase6Data struct {
 	Backups         []Backup
 	Restores        []RestoreRun
@@ -388,15 +365,7 @@ type NullableTime struct {
 	Valid bool
 }
 
-const DefaultRecentJobLimit = 15
-
 type StoreOption func(*Store)
-
-func WithJobReader(jobs JobReader) StoreOption {
-	return func(s *Store) {
-		s.jobs = jobs
-	}
-}
 
 func WithPhase6Reader(phase6 Phase6Reader) StoreOption {
 	return func(s *Store) {
@@ -548,22 +517,9 @@ func (s *Store) getDashboard(ctx context.Context, user auth.SessionUser, concurr
 	}
 	var sites []store.Site
 	var databases []store.Database
-	var siteErr, databaseErr, jobCountErr error
+	var siteErr, databaseErr error
 	run("sites", func() { sites, siteErr = s.queries.ListSites(ctx) })
 	run("databases", func() { databases, databaseErr = s.queries.ListDatabases(ctx) })
-	if counter, ok := s.jobs.(activeJobReader); ok {
-		run("jobcount", func() { data.ActiveJobs, jobCountErr = counter.CountActiveJobs(ctx) })
-	}
-	if s.jobs != nil {
-		run("jobs", func() {
-			var err error
-			data.Jobs, err = s.jobs.ListRecentJobs(ctx, DefaultRecentJobLimit)
-			if err != nil {
-				data.Jobs = nil
-				data.JobLoadError = "recent jobs unavailable"
-			}
-		})
-	}
 	if s.phase6 != nil {
 		run("phase6", func() {
 			var err error
@@ -632,9 +588,6 @@ func (s *Store) getDashboard(ctx context.Context, user auth.SessionUser, concurr
 		run("revisions", func() { data.PlanRevisions, _ = revisions.ListPlanRevisions(ctx, 200) })
 	}
 	_ = group.Wait()
-	if _, ok := s.jobs.(activeJobReader); !ok || jobCountErr != nil {
-		data.ActiveJobs = ActiveJobs(data.Jobs)
-	}
 	// Return the original first fatal error, regardless of completion order.
 	if siteErr != nil {
 		return Data{}, siteErr
