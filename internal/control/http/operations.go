@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/operations"
+	"github.com/nakroteck/nakpanel/internal/control/provision"
 	"net/http"
 	"strconv"
 )
@@ -207,4 +208,71 @@ func (s *Server) handleIssueAcknowledge(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type OperationsRecoveryService interface {
+	Preflight(context.Context, auth.SessionUser, int64) (provision.RecoveryPreflight, error)
+	Recover(context.Context, auth.SessionUser, int64, string) (provision.RecoveryStarted, error)
+	RequestVerification(context.Context, auth.SessionUser, int64) error
+}
+
+func (s *Server) handleIssueRecovery(w http.ResponseWriter, r *http.Request) {
+	actor, ok := s.operationsUser(w, r)
+	if !ok {
+		return
+	}
+	service, ok := s.operations.(OperationsRecoveryService)
+	if !ok {
+		operationsError(w, errors.New("unavailable"))
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		operationsError(w, operations.ErrInvalid)
+		return
+	}
+	action := r.PathValue("action")
+	if (action == "preflight" && r.Method != "GET") || (action != "preflight" && r.Method != "POST") {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if action != "verify" && actor.Role != auth.RoleAdmin {
+		operationsError(w, operations.ErrNotFound)
+		return
+	}
+	switch action {
+	case "preflight":
+		p, err := service.Preflight(r.Context(), actor, id)
+		if err != nil {
+			operationsError(w, err)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(p)
+	case "recover":
+		var body struct {
+			Confirmation string `json:"confirmation"`
+			Confirmed    bool   `json:"confirmed"`
+		}
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 2048))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&body) != nil || !body.Confirmed || body.Confirmation == "" {
+			operationsError(w, operations.ErrInvalid)
+			return
+		}
+		result, err := service.Recover(r.Context(), actor, id, body.Confirmation)
+		if err != nil {
+			operationsError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(result)
+	case "verify":
+		if err = service.RequestVerification(r.Context(), actor, id); err != nil {
+			operationsError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusAccepted)
+	default:
+		operationsError(w, operations.ErrNotFound)
+	}
 }

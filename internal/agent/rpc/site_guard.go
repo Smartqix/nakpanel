@@ -92,6 +92,10 @@ func guardAccount(req types.Request, p types.EnsureSubscriptionAccountReq, regis
 }
 func prepareSiteGuard(req types.Request, registry SiteIdentityGuard) (preparedSiteGuard, error) {
 	switch req.Op {
+	case types.OpInspectSiteReadiness:
+		return guardOne[types.InspectSiteReadinessReq](req, func(p types.InspectSiteReadinessReq) types.SiteIdentity {
+			return guardIdentity(p.SiteID, p.SubscriptionID, p.Username, p.Domain)
+		}, false)
 	case types.OpCreateSite:
 		return guardOne[types.CreateSiteReq](req, func(p types.CreateSiteReq) types.SiteIdentity {
 			return guardIdentity(p.SiteID, p.SubscriptionID, p.Username, p.Domain)

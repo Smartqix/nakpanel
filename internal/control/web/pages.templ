@@ -1932,7 +1932,6 @@ templ jobsSection(jobs []dashboard.Job, loadError string, actions DashboardActio
 							<th>Attempts</th>
 							<th>Created</th>
 							<th>Last error</th>
-							<th>Action</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -1948,19 +1947,6 @@ templ jobsSection(jobs []dashboard.Job, loadError string, actions DashboardActio
 									<span class="np-table-value">
 										for _, message := range errorMessages(job.LastError) {
 											<span class="np-error">{ message }</span>
-										}
-									</span>
-								</td>
-								<td data-label="Action">
-									<span class="np-table-value">
-									if canRetryJob(job, actions) {
-										<form class="np-inline-form" method="post" action="/jobs/retry">
-											@csrfTokenInput(csrfToken)
-												<input type="hidden" name="job_id" value={ formatJobID(job.ID) }/>
-												<button type="submit">Retry job</button>
-											</form>
-										} else {
-											<span class="np-muted">-</span>
 										}
 									</span>
 								</td>

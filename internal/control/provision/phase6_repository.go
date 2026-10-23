@@ -1199,7 +1199,7 @@ func retainCapturedReconcileIntent(args ReconcileSystemArgs, sites []types.Recon
 func (s *SQLPhase6StatusStore) MarkBackupActive(ctx context.Context, id int64, result types.CreateBackupResult, databaseNames []string) error {
 	databaseNames = normalizedDatabaseNames(databaseNames)
 	updated, err := s.db.ExecContext(ctx, `UPDATE backups SET status='active',archive_path=$2,size_bytes=$3,
-checksum_sha256=$4,database_names=$5,last_error='',updated_at=now() WHERE id=$1 AND status IN('pending','failed','active')`,
+checksum_sha256=$4,database_names=$5,last_error='',completed_at=CASE WHEN checksum_sha256=$4 AND archive_path=$2 THEN COALESCE(completed_at,now()) ELSE now() END,updated_at=now() WHERE id=$1 AND status IN('pending','failed','active')`,
 		id, result.ArchivePath, result.SizeBytes, result.SHA256, pq.Array(databaseNames))
 	if err != nil {
 		return err
@@ -1212,10 +1212,65 @@ checksum_sha256=$4,database_names=$5,last_error='',updated_at=now() WHERE id=$1 
 	return nil
 }
 
-func (s *SQLPhase6StatusStore) BackupJobAllowed(ctx context.Context, id int64) (bool, error) {
-	var allowed bool
-	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM backups WHERE id=$1 AND status IN('pending','failed'))`, id).Scan(&allowed)
-	return allowed, err
+func (s *SQLPhase6StatusStore) RefreshBackupIntent(ctx context.Context, args CreateBackupArgs) (CreateBackupArgs, error) {
+	if s == nil || s.db == nil {
+		return CreateBackupArgs{}, errors.New("backup intent database is unavailable")
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return CreateBackupArgs{}, err
+	}
+	defer tx.Rollback()
+	var siteID, subscriptionID int64
+	if err = tx.QueryRowContext(ctx, `SELECT COALESCE(site_id,0),COALESCE(subscription_id,0) FROM backups WHERE id=$1`, args.BackupID).Scan(&siteID, &subscriptionID); err != nil {
+		return CreateBackupArgs{}, err
+	}
+	if siteID <= 0 || subscriptionID <= 0 || (args.SiteID > 0 && args.SiteID != siteID) || (args.SubscriptionID > 0 && args.SubscriptionID != subscriptionID) {
+		return CreateBackupArgs{}, sql.ErrNoRows
+	}
+	if err = controlquota.LockSiteMutationTx(ctx, tx, siteID); err != nil {
+		return CreateBackupArgs{}, err
+	}
+	limits, err := lockActiveSubscriptionLimits(ctx, tx, subscriptionID)
+	if err != nil {
+		return CreateBackupArgs{}, err
+	}
+	if !limits.AllowBackups {
+		return CreateBackupArgs{}, controlquota.ErrExceeded
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT s.id,s.subscription_id,s.customer_id,s.username,s.domain,s.document_root FROM backups b JOIN sites s ON s.id=b.site_id JOIN subscriptions sub ON sub.id=s.subscription_id WHERE b.id=$1 AND b.status IN ('pending','failed') AND s.status='active' AND s.desired_status='active' AND s.removal_state='none' AND b.subscription_id=s.subscription_id AND b.customer_id=sub.customer_id AND b.owner_user_id=s.owner_user_id FOR UPDATE OF b`, args.BackupID).Scan(&args.SiteID, &args.SubscriptionID, &args.CustomerID, &args.Username, &args.Domain, &args.Docroot); err != nil {
+		return CreateBackupArgs{}, err
+	}
+	policy, err := controlquota.EffectiveSitePolicyTx(ctx, tx, siteID)
+	if err != nil {
+		return CreateBackupArgs{}, err
+	}
+	if !policy.Permissions.Backups || !policy.Backups.Enabled {
+		return CreateBackupArgs{}, controlquota.ErrExceeded
+	}
+	if limits.MaxBackups >= 0 && limits.OverusePolicy != types.PlanOveruseNormal && limits.OverusePolicy != types.PlanOveruseNotify {
+		var used int
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backups WHERE subscription_id=$1 AND id<>$2 AND status<>'failed'`, subscriptionID, args.BackupID).Scan(&used); err != nil {
+			return CreateBackupArgs{}, err
+		}
+		if used >= limits.MaxBackups {
+			return CreateBackupArgs{}, controlquota.ErrExceeded
+		}
+	}
+	if limits.BackupStorageMB >= 0 {
+		var used int64
+		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(sum(size_bytes),0) FROM backups WHERE subscription_id=$1`, subscriptionID).Scan(&used); err != nil {
+			return CreateBackupArgs{}, err
+		}
+		if used >= int64(limits.BackupStorageMB)*1024*1024 {
+			return CreateBackupArgs{}, controlquota.ErrExceeded
+		}
+	}
+	args.Databases, err = selectActiveSubscriptionDatabases(ctx, tx, subscriptionID)
+	if err != nil {
+		return CreateBackupArgs{}, err
+	}
+	return args, tx.Commit()
 }
 
 func normalizedDatabaseNames(databaseNames []string) []string {

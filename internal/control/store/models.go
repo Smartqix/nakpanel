@@ -229,6 +229,17 @@ type Backup struct {
 	CustomerID     int64
 	ScheduledFor   sql.NullTime
 	DatabaseNames  []string
+	CompletedAt    sql.NullTime
+}
+
+type BackupReadinessCheck struct {
+	BackupID        int64
+	Checksum        string
+	SizeBytes       int64
+	VerifiedAt      sql.NullTime
+	DataScopeHash   string
+	LastCheckStatus string
+	LastCheckedAt   time.Time
 }
 
 type BillingAccount struct {
@@ -540,6 +551,8 @@ type Issue struct {
 	UpdatedAt       time.Time
 	ResolvedAt      sql.NullTime
 	Verification    pqtype.NullRawMessage
+	LastCheckAt     sql.NullTime
+	LastCheckStatus string
 }
 
 type LoginAttempt struct {
@@ -729,6 +742,18 @@ type OperationAttempt struct {
 	StartedAt    time.Time
 	FinishedAt   sql.NullTime
 	Verification pqtype.NullRawMessage
+	RiverAttempt int32
+}
+
+type OperationConditionObservation struct {
+	ResourceKind string
+	ResourceID   int64
+	Kind         string
+	Condition    string
+	Signature    string
+	Unhealthy    bool
+	Generation   int64
+	ObservedAt   time.Time
 }
 
 type OperationEvent struct {

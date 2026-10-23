@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/operations"
+	"github.com/nakroteck/nakpanel/internal/control/provision"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -85,6 +86,62 @@ func TestOperationsEndpointsAuthenticateAndBindTheViewer(t *testing.T) {
 			service.err = errors.New("database password=do-not-show")
 			if w := call("GET", "/api/workspace/operations", true, false); w.Code != 503 || strings.Contains(w.Body.String(), "do-not-show") {
 				t.Fatal("internal diagnostic exposed")
+			}
+		})
+	}
+}
+
+type recoveryOperations struct {
+	fakeOperations
+	confirms  string
+	recovered bool
+}
+
+func (f *recoveryOperations) Preflight(context.Context, auth.SessionUser, int64) (provision.RecoveryPreflight, error) {
+	return provision.RecoveryPreflight{Allowed: true, Confirmation: "fresh"}, nil
+}
+func (f *recoveryOperations) Recover(_ context.Context, _ auth.SessionUser, _ int64, c string) (provision.RecoveryStarted, error) {
+	f.confirms = c
+	f.recovered = true
+	return provision.RecoveryStarted{OperationID: 42}, nil
+}
+func (f *recoveryOperations) RequestVerification(context.Context, auth.SessionUser, int64) error {
+	return nil
+}
+func TestOperationsRecoveryRequiresAdminConfirmationAndCSRF(t *testing.T) {
+	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleClient} {
+		t.Run(string(role), func(t *testing.T) {
+			svc := &recoveryOperations{}
+			h, _ := newTestHandlerWithOptions(t, role, ServerOptions{Operations: svc})
+			password := "NakpanelAdmin!2026"
+			if role == auth.RoleClient {
+				password = "NakpanelClient!2026"
+			}
+			cookie := login(t, h, string(role)+"@nakpanel.test", password)
+			for _, tc := range []struct {
+				body   string
+				csrf   bool
+				status int
+			}{{`{"confirmation":"fresh","confirmed":true}`, false, 403}, {`{"confirmation":"fresh"}`, true, 400}, {`{"confirmation":"fresh","confirmed":true}`, true, 202}} {
+				r := httptest.NewRequest("POST", "https://panel.test/api/workspace/operations/issues/7/recover", strings.NewReader(tc.body))
+				r.Header.Set("Content-Type", "application/json")
+				r.Header.Set("Accept", "application/json")
+				r.AddCookie(cookie)
+				if tc.csrf {
+					r.Header.Set("X-Nakpanel-CSRF", csrfToken(r))
+				}
+				w := httptest.NewRecorder()
+				h.ServeHTTP(w, r)
+				want := tc.status
+				if role == auth.RoleClient && tc.csrf {
+					want = 404
+				}
+				if w.Code != want {
+					t.Fatalf("status=%d want=%d %s", w.Code, want, w.Body.String())
+				}
+			}
+			if role == auth.RoleClient && svc.recovered {
+				t.Fatal("client triggered recovery")
 			}
 		})
 	}

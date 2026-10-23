@@ -82,6 +82,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("create river client: %v", err)
 	}
+	if err := operations.InstallRecorder(ctx, db); err != nil {
+		log.Fatalf("install operation recorder: %v", err)
+	}
 	serverAdminManager.SetCapabilityInvalidator(capabilityCache)
 	if err := riverClient.Start(ctx); err != nil {
 		log.Fatalf("start river client: %v", err)
@@ -96,7 +99,7 @@ func main() {
 	databaseRepo := provision.NewSQLDatabaseRepository(db, queries, riverClient, serverAdminManager.Store())
 	phase6Repo := provision.NewSQLPhase6Repository(db, riverClient)
 	quotaStore := controlquota.NewSQLStore(db, riverClient)
-	operationsStore := operations.NewStore(db)
+	operationsStore := provision.NewOperationsManager(db, riverClient, agentCapabilities)
 	quotaStore.SetServiceSecretStore(serverAdminManager.Store())
 	workspaceStore := workspace.NewStore(db)
 	fileManager := controlfiles.NewManager(controlfiles.ManagerOptions{
@@ -146,7 +149,6 @@ func main() {
 		log.Printf("sweep stale custom TLS staging files: %v", err)
 	}
 	go sweepCustomTLSStaging(ctx, db)
-	jobRetrier := provision.NewSQLJobRetrier(db)
 	databaseManager, closeDatabaseManager, err := startDatabaseManager(ctx, db, serverAdminManager.Store())
 	if err != nil {
 		log.Fatalf("start database manager bridge: %v", err)
@@ -161,7 +163,6 @@ func main() {
 		CertificateIssuer:          siteManager,
 		CustomCertificateInstaller: siteManager,
 		DashboardReader:            dashboardStore,
-		JobRetrier:                 jobRetrier,
 		Phase6Manager:              siteManager,
 		QuotaManager:               siteManager,
 		Workspace:                  workspaceStore,
@@ -242,6 +243,10 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	workers := river.NewWorkers()
 	river.AddWorker(workers, &operations.DispatchWorker{Store: operations.NewStore(db)})
 	agent := agentclient.New(config.AgentSocket)
+	operationsManager := provision.NewOperationsManager(db, nil, agent)
+	river.AddWorker(workers, &provision.SweepOperationsWorker{Manager: operationsManager})
+	river.AddWorker(workers, &provision.VerifyIssueWorker{Manager: operationsManager})
+	river.AddWorker(workers, &provision.VerifyArchiveWorker{Manager: operationsManager})
 	var runtimeConfig config.PanelRuntimeConfig
 	if len(configs) > 0 {
 		runtimeConfig = configs[0]
@@ -371,6 +376,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	client, err := river.NewClient(riverdatabasesql.New(db), &river.Config{
 		WorkerMiddleware: []rivertype.WorkerMiddleware{provision.NewSiteJobFence(db)},
 		PeriodicJobs: []*river.PeriodicJob{
+			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return provision.SweepOperationsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(2*time.Second), func() (river.JobArgs, *river.InsertOpts) { return operations.DispatchArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return controlmailimport.ExpirePreviewsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
 			river.NewPeriodicJob(river.PeriodicInterval(time.Minute), func() (river.JobArgs, *river.InsertOpts) { return provision.SweepSiteRemovalsArgs{}, nil }, &river.PeriodicJobOpts{RunOnStart: true}),
@@ -444,6 +450,7 @@ func newRiverClient(db *sql.DB, queries *store.Queries, configs ...config.PanelR
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
+	operationsManager.SetQueue(client)
 	usageWorker.SetRiverClient(client)
 	mailImportStore.SetQueue(client)
 	autoSubdomainDNS.SetRiverClient(client)

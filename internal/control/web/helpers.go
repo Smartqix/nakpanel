@@ -47,7 +47,6 @@ type DashboardActions struct {
 	CanUseWordPress     bool
 	CanCreateDatabase   bool
 	CanIssueCertificate bool
-	CanRetryJob         bool
 	CanUsePhase6        bool
 	CanManageQuotas     bool
 	CanUseFileManager   bool
@@ -2330,7 +2329,7 @@ func backupPhase6(data dashboard.Phase6Data) dashboard.Phase6Data {
 }
 
 func retryActions(user auth.SessionUser) DashboardActions {
-	return DashboardActions{CanRetryJob: user.Role == auth.RoleAdmin}
+	return DashboardActions{}
 }
 
 type usageMeterData struct {
@@ -3191,10 +3190,6 @@ func formatReconcileSites(run dashboard.ReconciliationRun) string {
 
 func formatJobID(id int64) string {
 	return fmt.Sprintf("%d", id)
-}
-
-func canRetryJob(job dashboard.Job, actions DashboardActions) bool {
-	return actions.CanRetryJob && job.State == "discarded"
 }
 
 func canRestoreBackup(backup dashboard.Backup) bool {

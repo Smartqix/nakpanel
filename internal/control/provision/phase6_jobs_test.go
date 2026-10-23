@@ -3,6 +3,7 @@ package provision
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -22,9 +23,49 @@ func (a *recordingReconcileAgent) ReconcileSystem(_ context.Context, req types.R
 }
 
 type refreshingPhase6StatusStore struct {
-	refreshed     ReconcileSystemArgs
-	activeID      int64
-	databaseNames []string
+	backupIntent    *CreateBackupArgs
+	backupIntentErr error
+	refreshed       ReconcileSystemArgs
+	activeID        int64
+	databaseNames   []string
+}
+
+func (s *refreshingPhase6StatusStore) RefreshBackupIntent(_ context.Context, args CreateBackupArgs) (CreateBackupArgs, error) {
+	if s.backupIntentErr != nil {
+		return CreateBackupArgs{}, s.backupIntentErr
+	}
+	if s.backupIntent != nil {
+		args = *s.backupIntent
+	}
+	args.Databases = append([]string(nil), args.Databases...)
+	return args, nil
+}
+
+type capturedBackupAgent struct {
+	req   types.CreateBackupReq
+	calls int
+}
+
+func (a *capturedBackupAgent) CreateBackup(ctx context.Context, req types.CreateBackupReq) (types.Response, error) {
+	a.req = req
+	a.calls++
+	return (successfulBackupAgent{}).CreateBackup(ctx, req)
+}
+func TestBackupWorkerReloadsIdentityAndDatabaseIntentBeforeDispatch(t *testing.T) {
+	agent := &capturedBackupAgent{}
+	current := CreateBackupArgs{BackupID: 41, SiteID: 7, SubscriptionID: 3, Domain: "current.example", Username: "nps3", Docroot: "/home/nps3/domains/current.example/public_html", Databases: []string{"current_database"}}
+	store := &refreshingPhase6StatusStore{backupIntent: &current}
+	w := NewCreateBackupWorker(agent, store)
+	if err := w.Work(context.Background(), &river.Job[CreateBackupArgs]{Args: CreateBackupArgs{BackupID: 41, Domain: "stale.example", Databases: []string{"removed_database"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if agent.req.Domain != "current.example" || agent.req.Username != "nps3" || len(agent.req.Databases) != 1 || agent.req.Databases[0] != "current_database" {
+		t.Fatalf("queued payload remained authoritative: %#v", agent.req)
+	}
+	store.backupIntentErr = errors.New("subscription is suspended")
+	if err := w.Work(context.Background(), &river.Job[CreateBackupArgs]{Args: current}); err == nil || agent.calls != 1 {
+		t.Fatalf("blocked intent reached agent: calls=%d err=%v", agent.calls, err)
+	}
 }
 
 type recordingSiteApplicationReconciler struct {

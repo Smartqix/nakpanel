@@ -156,12 +156,9 @@ func TestBackupManagerRejectsRevivedCreationAfterRemoval(t *testing.T) {
 	if err = m.RemoveBackupsFor(context.Background(), actor, 1, []int64{live}, p.Digest, true); err != nil {
 		t.Fatal(err)
 	}
-	if err = (&SQLJobRetryStore{db: db}).RetryDiscardedProvisioningJob(context.Background(), jobID); !errors.Is(err, ErrJobNotRetryable) {
-		t.Fatal("revived stale creation", err)
-	}
-	allowed, err := (&SQLPhase6StatusStore{db: db}).BackupJobAllowed(context.Background(), live)
-	if err != nil || allowed {
-		t.Fatal("stale creation reaches archive", allowed, err)
+	_, err = (&SQLPhase6StatusStore{db: db}).RefreshBackupIntent(context.Background(), CreateBackupArgs{BackupID: live})
+	if !errors.Is(err, sql.ErrNoRows) {
+		t.Fatal("stale creation reaches archive", err)
 	}
 }
 

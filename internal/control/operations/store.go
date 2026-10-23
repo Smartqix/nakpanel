@@ -3,7 +3,9 @@ package operations
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 )
 
@@ -11,17 +13,24 @@ type Store struct{ db *sql.DB }
 
 func NewStore(db *sql.DB) *Store { return &Store{db: db} }
 
-const issueColumns = `id,resource_kind,resource_id,kind,condition,severity,title,summary,state,generation,occurrences,latest_event_id,intent_revision,COALESCE(operation_id,0),observed_at,acknowledged_at,resolved_at`
+const issueColumns = `id,resource_kind,resource_id,kind,condition,severity,title,summary,state,generation,occurrences,latest_event_id,intent_revision,COALESCE(operation_id,0),observed_at,acknowledged_at,resolved_at,last_check_at,last_check_status,verification`
 
 type scanner interface{ Scan(...any) error }
 
 func scanIssue(row scanner, target ...*string) (Issue, error) {
 	var i Issue
-	args := []any{&i.ID, &i.Resource.Kind, &i.Resource.ID, &i.Kind, &i.Condition, &i.Severity, &i.Title, &i.Summary, &i.State, &i.Generation, &i.Occurrences, &i.LatestEventID, &i.IntentRevision, &i.OperationID, &i.ObservedAt, &i.AcknowledgedAt, &i.ResolvedAt}
+	var receipt []byte
+	args := []any{&i.ID, &i.Resource.Kind, &i.Resource.ID, &i.Kind, &i.Condition, &i.Severity, &i.Title, &i.Summary, &i.State, &i.Generation, &i.Occurrences, &i.LatestEventID, &i.IntentRevision, &i.OperationID, &i.ObservedAt, &i.AcknowledgedAt, &i.ResolvedAt, &i.LastCheckAt, &i.LastCheckStatus, &receipt}
 	for _, p := range target {
 		args = append(args, p)
 	}
 	err := row.Scan(args...)
+	if err == nil && len(receipt) > 0 {
+		var r VerificationReceipt
+		if err = json.Unmarshal(receipt, &r); err == nil {
+			i.Verification = &r
+		}
+	}
 	return i, err
 }
 func nullableID(id int64) any {
@@ -73,7 +82,7 @@ func (s *Store) ObserveIssueTx(ctx context.Context, tx *sql.Tx, o Observation) (
 	}
 	i, err := scanIssue(tx.QueryRowContext(ctx, `INSERT INTO issues(resource_kind,resource_id,kind,condition,severity,title,summary,latest_event_id,intent_revision,operation_id,observed_at,previous_issue_id)
  VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,(SELECT id FROM issues WHERE resource_kind=$1 AND resource_id=$2 AND kind=$3 AND condition=$4 AND resolved_at IS NOT NULL ORDER BY id DESC LIMIT 1))
- ON CONFLICT(resource_kind,resource_id,kind,condition) WHERE resolved_at IS NULL DO UPDATE SET severity=EXCLUDED.severity,title=EXCLUDED.title,summary=EXCLUDED.summary,generation=issues.generation+1,occurrences=issues.occurrences+1,latest_event_id=EXCLUDED.latest_event_id,intent_revision=EXCLUDED.intent_revision,operation_id=COALESCE(EXCLUDED.operation_id,issues.operation_id),observed_at=GREATEST(issues.observed_at,EXCLUDED.observed_at),updated_at=now(),state=CASE WHEN issues.acknowledged_at IS NULL THEN 'open' ELSE 'acknowledged' END
+ ON CONFLICT(resource_kind,resource_id,kind,condition) WHERE resolved_at IS NULL DO UPDATE SET severity=EXCLUDED.severity,title=EXCLUDED.title,summary=EXCLUDED.summary,generation=issues.generation+1,occurrences=issues.occurrences+1,latest_event_id=EXCLUDED.latest_event_id,intent_revision=EXCLUDED.intent_revision,operation_id=COALESCE(EXCLUDED.operation_id,issues.operation_id),observed_at=GREATEST(issues.observed_at,EXCLUDED.observed_at),last_check_status='unknown',updated_at=now(),state=CASE WHEN issues.acknowledged_at IS NULL THEN 'open' ELSE 'acknowledged' END
  RETURNING `+issueColumns, o.Resource.Kind, o.Resource.ID, o.Kind, o.Condition, o.Severity, o.Title, o.Summary, eventID, o.IntentRevision, nullableID(o.OperationID), o.ObservedAt))
 	if err != nil {
 		return Issue{}, err
@@ -101,15 +110,24 @@ func (s *Store) AcknowledgeIssue(ctx context.Context, actor auth.SessionUser, id
 	if !actor.Role.Valid() || actor.ID <= 0 {
 		return ErrNotFound
 	}
-	result, err := s.db.ExecContext(ctx, `UPDATE issues i SET acknowledged_by=COALESCE(acknowledged_by,$1),acknowledged_at=COALESCE(acknowledged_at,now()),state='acknowledged',updated_at=now() WHERE i.id=$3 AND resolved_at IS NULL AND `+resourcePredicate("i", 1, 2), actor.ID, string(actor.Role), id)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	n, err := result.RowsAffected()
-	if err == nil && n == 0 {
+	defer tx.Rollback()
+	var kind ResourceKind
+	var resourceID int64
+	err = tx.QueryRowContext(ctx, `UPDATE issues i SET acknowledged_by=COALESCE(acknowledged_by,$1),acknowledged_at=COALESCE(acknowledged_at,now()),state=CASE WHEN state='checking' THEN state ELSE 'acknowledged' END,updated_at=now() WHERE i.id=$3 AND resolved_at IS NULL AND `+resourcePredicate("i", 1, 2)+` RETURNING resource_kind,resource_id`, actor.ID, string(actor.Role), id).Scan(&kind, &resourceID)
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `INSERT INTO operation_events(event_key,resource_kind,resource_id,kind,issue_id,summary) VALUES($1,$2,$3,'issue.acknowledged',$4,'Issue acknowledged; recovery is still required.') ON CONFLICT(event_key) DO NOTHING`, fmt.Sprintf("issue:%d:acknowledged", id), kind, resourceID, id); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 const operationColumns = `id,kind,resource_kind,resource_id,title,trigger,state,stage,intent_revision,created_at,updated_at`

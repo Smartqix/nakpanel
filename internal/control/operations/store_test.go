@@ -65,7 +65,10 @@ func testDB(t *testing.T) *sql.DB {
  CREATE TABLE customers(id bigint PRIMARY KEY,login_user_id bigint,reseller_id bigint,status text DEFAULT 'active',display_name text DEFAULT 'Example customer');
  CREATE TABLE subscriptions(id bigint PRIMARY KEY,customer_id bigint,status text DEFAULT 'active',name text DEFAULT 'Example subscription');
  CREATE TABLE sites(id bigint PRIMARY KEY,subscription_id bigint,status text DEFAULT 'active',domain text DEFAULT 'example.test');
+ CREATE TABLE backups(id bigserial PRIMARY KEY);
  CREATE TABLE notifications(id bigserial PRIMARY KEY,recipient_user_id bigint,customer_id bigint,reseller_id bigint,subscription_id bigint,kind text,severity text,title text,body text,dedupe_key text,read_at timestamptz,resolved_at timestamptz,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now());
+ CREATE UNIQUE INDEX notifications_open_dedupe_idx ON notifications(dedupe_key) WHERE resolved_at IS NULL;
+ ALTER TABLE notifications ADD CONSTRAINT notifications_kind_check CHECK(kind IS NOT NULL);
  INSERT INTO users VALUES(1,'admin','admin@example.test'),(2,'admin','second@example.test'),(11,'client','one@example.test'),(22,'client','two@example.test'),(100,'reseller','provider@example.test'),(200,'reseller','other@example.test');
  INSERT INTO reseller_accounts(id,login_user_id) VALUES(7,100),(8,200);
  INSERT INTO customers(id,login_user_id,reseller_id) VALUES(10,11,7),(20,22,8);
@@ -138,7 +141,7 @@ var admin = auth.SessionUser{ID: 1, Role: auth.RoleAdmin}
 var client = auth.SessionUser{ID: 11, Role: auth.RoleClient}
 
 func observation(key string, site int64) operations.Observation {
-	return operations.Observation{EventKey: key, Resource: operations.Resource{Kind: operations.ResourceSite, ID: site}, Kind: "backup_overdue", Condition: "daily", Severity: "critical", Title: "Backup is overdue", Summary: "No verified fresh archive", IntentRevision: 3, ObservedAt: time.Now().UTC()}
+	return operations.Observation{EventKey: key, Resource: operations.Resource{Kind: operations.ResourceSite, ID: site}, Kind: "backup", Condition: "daily", Severity: "critical", Title: "Backup is overdue", Summary: "No verified fresh archive", IntentRevision: 3, ObservedAt: time.Now().UTC()}
 }
 
 func TestIncidentIdentityAndDuplicateEvents(t *testing.T) {

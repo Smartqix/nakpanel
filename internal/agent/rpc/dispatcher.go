@@ -1285,6 +1285,22 @@ func (d *Dispatcher) dispatchUnchecked(ctx context.Context, req types.Request) t
 			return errorResponse(req.ID, err.Error())
 		}
 		return okResponse(req.ID, map[string]any{"domain": payload.Domain, "provisioned": true})
+	case types.OpInspectSiteReadiness:
+		var payload types.InspectSiteReadinessReq
+		if err := decodeStrict(req.Data, &payload); err != nil {
+			return validationResponse(req.ID, err.Error())
+		}
+		reader, ok := d.siteProvisioner.(interface {
+			InspectSiteReadiness(context.Context, types.InspectSiteReadinessReq) (types.SiteReadinessResult, error)
+		})
+		if !ok {
+			return errorResponse(req.ID, "site readiness inspection is unavailable")
+		}
+		result, err := reader.InspectSiteReadiness(ctx, payload)
+		if err != nil {
+			return errorResponse(req.ID, err.Error())
+		}
+		return okResponse(req.ID, result)
 	case types.OpCreateDatabase:
 		var payload types.CreateDatabaseReq
 		if err := decodeStrict(req.Data, &payload); err != nil {

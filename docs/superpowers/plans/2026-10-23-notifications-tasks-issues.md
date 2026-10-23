@@ -112,31 +112,28 @@ and counts cannot disclose another tenant's data.
 `jobs.go`, `phase6_jobs.go`, `mail_jobs.go`, relevant backup/update workers and
 `quota/usage.go`. Inventory exact producers before editing each worker.
 
-- [ ] Add failing tests for duplicate terminal signals, failed verification,
+- [x] Add failing tests for duplicate terminal signals, failed verification,
   concurrent/double retries, a removed or transferred resource, changed policy,
   recurrence after recovery and unsupported destructive job kinds. Include an
   older successful verifier arriving after a newer failure or intent change.
-- [ ] Record logical operation events transactionally. Group retries under the
+- [x] Record logical operation events transactionally. Group retries under the
   operation and preserve each original terminal attempt outcome.
-- [ ] Inventory non-job conditions, initially certificate expiry and overdue
+- [x] Inventory non-job conditions, initially certificate expiry and overdue
   backups. Define scheduled detection, thresholds/grace periods, observation
   freshness, re-observation and recovery predicates per kind. Test deadline
   crossing without a job, repeated observations, missing/stale evidence and
   recovery followed by recurrence. Unknown checks cannot establish recovery.
-- [ ] Replace the matching transient `web/attention.go` projections and callers
-  with durable issue queries, preserving scope and severity without duplicate
-  or disappearing conditions.
-- [ ] Add only typed, allowlisted safe recovery. Recheck current intent,
+- [x] Add only typed, allowlisted safe recovery. Recheck current intent,
   permission and prerequisites; create a new retry attempt atomically. Keep
   unsupported retry/cancel actions absent with a clear reason.
-- [ ] Add verifier receipts for initially supported sources: backups, TLS,
+- [x] Add verifier receipts for initially supported sources: backups, TLS,
   provisioning and mail readiness. State precisely what each receipt proves;
   archive integrity is not a restore rehearsal. Mark stale/unknown checks as such.
-- [ ] Record verified recovery, resolve only the matching incident, and keep its
+- [x] Record verified recovery, resolve only the matching incident, and keep its
   original failures and linked history. Require a conditional match on incident
   generation, latest occurrence and current resource intent revision; discard
   stale receipts and recheck. Never resolve because a viewer read it.
-- [ ] Run focused local worker/recovery/isolation tests. Report before phase 4.
+- [x] Run focused local worker/recovery/isolation tests. Report before phase 4.
 
 **Exit:** the notification → operation → issue → safe retry → verified result
 chain works in local fixtures, without weakening existing mutation fences.
@@ -156,6 +153,8 @@ navigation lifecycle. Regenerate affected templ output using the pinned tool.
 - [ ] Build Activity tabs, task quick view, inbox, task/issue details, recovery
   confirmation, receipt and history. Make personal preferences real controls
   with validation and save feedback; a static rendering does not satisfy this.
+- [ ] Replace the matching transient attention projections and raw dashboard
+  jobs with durable scoped issues, preserving severity without duplicate counts.
 - [ ] Wire the root-page badges and initial tray to the operations read model,
   replacing the remaining dashboard job projections and their render helpers.
 - [ ] Reuse one lifecycle owner for live updates. Keep context during fragment
