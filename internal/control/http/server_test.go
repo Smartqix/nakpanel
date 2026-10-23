@@ -3083,7 +3083,7 @@ func TestSanitizeNoticeTextBoundsAndFlattensInput(t *testing.T) {
 // renders nothing, which is how creating a website used to confirm silently.
 func TestEveryEmittedNoticeCodeResolves(t *testing.T) {
 	for _, code := range []string{
-		"site-queued", "database-queued", "certificate-queued", "task-ran",
+		"site-queued", "database-queued", "certificate-queued", "task-queued",
 		"policy-saved", "provider-saved", "reseller-saved", "reseller-status-saved",
 		"reseller-plan-saved", "addon-saved", "addons-saved", "subscription-mode-saved",
 		"subscription-synced", "dns-record-restored", "dns-soa-saved",

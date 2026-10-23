@@ -78,15 +78,6 @@ func (s *fakeMailServiceStore) UpsertGitRepository(context.Context, int64, int64
 func (s *fakeMailServiceStore) UpsertValkey(context.Context, int64, int64, types.ValkeyInput, string) error {
 	return nil
 }
-func (s *fakeMailServiceStore) ScheduledTaskRunRequest(context.Context, int64, int64) (types.RunScheduledTaskReq, error) {
-	return types.RunScheduledTaskReq{}, nil
-}
-func (s *fakeMailServiceStore) CreateScheduledTaskRun(context.Context, int64) (int64, error) {
-	return 1, nil
-}
-func (s *fakeMailServiceStore) FinishScheduledTaskRun(context.Context, int64, types.RunScheduledTaskResult) error {
-	return nil
-}
 
 func TestManagerBlocksMailboxAccessForForeignSubscription(t *testing.T) {
 	store := &fakeMailServiceStore{}

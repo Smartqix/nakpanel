@@ -200,8 +200,9 @@ authorization changes. Reuse existing required CI workflows.
   both personal inboxes and original-failure preservation.
 - [x] Run complete required local checks once, including generated-file checks.
   Fix failures and rerun affected checks; do not repeat unchanged suites.
-- [ ] Request authorization before launching focused hosted Ubuntu 26.04 checks
-  or sending to an external test mailbox. No Ubuntu 24.04 or legacy matrices.
+- [x] User authorized focused hosted Ubuntu 26.04 notifications, tasks, recovery
+  and both UX fixes on 2026-10-23. Use an owned disposable guest and loopback
+  SMTP capture only; no external recipients, Ubuntu 24.04 or legacy matrices.
 - [ ] If authorized, capture scoped hosted evidence and preservation checks.
   Current support remains PHP 8.3/8.4/8.5 with internal PHP 8.5.
 - [ ] Prepare/open a PR only when requested. Run required CI, including the
@@ -214,5 +215,15 @@ separated. A visually complete Figma file is never treated as system acceptance.
 
 Local acceptance is recorded at implementation commit `d2eedb9` in
 [phase 6 evidence](../../verification/2026-10-23-operations-phase6.md). The two minor
-UX follow-ups were resolved in [focused follow-up evidence](../../verification/2026-10-23-operations-ux-followup.md). Hosted/CI/release checkboxes above remain gated;
-local checks do not satisfy those gates.
+UX follow-ups were resolved in [focused follow-up evidence](../../verification/2026-10-23-operations-ux-followup.md).
+
+The current hosted authorization covers a fresh signed candidate, all three PHP
+CLI/FPM runtimes and extensions, actual queued Run now failures/deduplication,
+foreign tenant denial, personal read-on-open without issue acknowledgement or
+resolution, support-context settings links, twelve results across a real browser
+disconnect/reconnect and fragment navigation, typed backup recovery with an
+independent checksum receipt and original failed attempts retained, bounded SMTP
+failure/recovery without recursive mail, and website/database/archive preservation.
+Manual Run now must use the durable worker so it appears in Tasks. Build and push
+this candidate branch only as needed for the manual hosted selection. PR creation,
+required PR CI/security gate, merge and deployment remain separately gated.

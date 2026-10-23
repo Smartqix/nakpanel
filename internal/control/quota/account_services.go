@@ -43,9 +43,6 @@ type AccountServiceStore interface {
 	DeleteFTPAccount(context.Context, int64, int64) error
 	UpsertGitRepository(context.Context, int64, int64, int64, types.GitRepositoryInput) (int64, error)
 	UpsertValkey(context.Context, int64, int64, types.ValkeyInput, string) error
-	ScheduledTaskRunRequest(context.Context, int64, int64) (types.RunScheduledTaskReq, error)
-	CreateScheduledTaskRun(context.Context, int64) (int64, error)
-	FinishScheduledTaskRun(context.Context, int64, types.RunScheduledTaskResult) error
 }
 
 // EffectiveSubscriptionPolicy returns the immutable entitlement snapshot plus

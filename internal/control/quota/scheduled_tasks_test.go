@@ -53,24 +53,18 @@ func TestScheduledTaskSweepGatesSuspendedSites(t *testing.T) {
 }
 
 func TestScheduledTaskExecutionQueriesGateSiteSuspension(t *testing.T) {
-	for _, manual := range []bool{false, true} {
-		db, mock, err := sqlmock.New()
-		if err != nil {
-			t.Fatal(err)
-		}
-		mock.ExpectQuery(`(?s)SELECT task.id.*site.desired_status='active'`).WillReturnError(sql.ErrNoRows)
-		if manual {
-			_, err = NewSQLStore(db).ScheduledTaskRunRequest(context.Background(), 4, 21)
-		} else {
-			_, _, _, _, err = loadScheduledTaskRun(context.Background(), db, 21)
-		}
-		if err != sql.ErrNoRows {
-			t.Errorf("manual=%v: expected ineligible site, got %v", manual, err)
-		}
-		if err := mock.ExpectationsWereMet(); err != nil {
-			t.Error(err)
-		}
-		db.Close()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectQuery(`(?s)SELECT task.id.*site.desired_status='active'`).WillReturnError(sql.ErrNoRows)
+	_, _, _, _, err = loadScheduledTaskRun(context.Background(), db, 21)
+	if err != sql.ErrNoRows {
+		t.Fatalf("ineligible site: %v", err)
+	}
+	if err = mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 

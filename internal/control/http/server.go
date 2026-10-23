@@ -3656,7 +3656,7 @@ var noticeCatalogue = map[string]noticeEntry{
 	"reconcile-queued":         {"Reconciliation queued. Generated configs will be refreshed from intent.", dashboard.NoticeSuccess},
 	"staging-queued":           {"Staging operation queued. A rollback point will be created before the target changes.", dashboard.NoticeSuccess},
 	"git-deploy-queued":        {"Git deployment queued. The previous revision remains available as a rollback point.", dashboard.NoticeSuccess},
-	"task-ran":                 {"Scheduled task started. Its run appears in the task history.", dashboard.NoticeSuccess},
+	"task-queued":              {"Scheduled task queued. Follow its result in Tasks.", dashboard.NoticeSuccess},
 
 	// Mail
 	"mail-settings-saved":     {"Mail server settings saved and convergence queued.", dashboard.NoticeSuccess},
