@@ -3,9 +3,13 @@ package provision
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/nakroteck/nakpanel/internal/control/auth"
 	"github.com/nakroteck/nakpanel/internal/control/operations"
 	controlquota "github.com/nakroteck/nakpanel/internal/control/quota"
+	"github.com/nakroteck/nakpanel/internal/types"
+	"github.com/riverqueue/river"
+	"github.com/riverqueue/river/rivertype"
 	"testing"
 )
 
@@ -14,6 +18,71 @@ type manualTaskStore struct{ fakeMailServiceStore }
 type manualTaskRepo struct {
 	fakeSiteRepository
 	queued bool
+}
+
+type failedManualTaskAgent struct{}
+
+func (failedManualTaskAgent) RunScheduledTask(context.Context, types.RunScheduledTaskReq) (types.RunScheduledTaskResult, error) {
+	return types.RunScheduledTaskResult{Status: "failed", ExitCode: 1, Output: "owned fixture failure"}, nil
+}
+
+func TestRepeatedManualFailuresPublishOneIncidentNotification(t *testing.T) {
+	for _, timing := range []string{"delayed_dispatch", "between_runs", "before_second_worker"} {
+		t.Run(timing, func(t *testing.T) {
+			db, m, _, actor, site := operationsFixture(t)
+			ctx := context.Background()
+			if err := controlquota.NewSQLStore(db).SetSubscriptionPolicy(ctx, 1, actor.ID, json.RawMessage(`{"permissions":{"scheduled_tasks":true}}`), true); err != nil {
+				t.Fatal(err)
+			}
+			var task int64
+			if err := db.QueryRow(`INSERT INTO scheduled_tasks(subscription_id,site_id,name,schedule,command,enabled) VALUES(1,$1,'failure','0 0 1 1 *','/bin/false',true) RETURNING id`, site).Scan(&task); err != nil {
+				t.Fatal(err)
+			}
+			repo := &SQLSiteRepository{db: db, river: m.queue}
+			for n := 0; n < 2; n++ {
+				run, err := repo.EnqueueManualScheduledTask(ctx, actor, 1, task)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if timing == "before_second_worker" && n == 1 {
+					if _, err = m.Dispatch(ctx, 100); err != nil {
+						t.Fatal(err)
+					}
+				}
+				var jobID int64
+				if err = db.QueryRow(`SELECT id FROM river_job WHERE kind='run_scheduled_task' AND args->>'run_id'=$1::bigint::text`, run).Scan(&jobID); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = db.Exec(`UPDATE river_job SET state='running',attempt=1,attempted_at=now() WHERE id=$1`, jobID); err != nil {
+					t.Fatal(err)
+				}
+				err = (&operations.JobContextMiddleware{}).Work(ctx, &rivertype.JobRow{ID: jobID}, func(workCtx context.Context) error {
+					return controlquota.NewRunScheduledTaskWorker(db, failedManualTaskAgent{}).Work(workCtx, &river.Job[controlquota.RunScheduledTaskArgs]{Args: controlquota.RunScheduledTaskArgs{RunID: run}})
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = db.Exec(`UPDATE river_job SET state='completed',finalized_at=now() WHERE id=$1`, jobID); err != nil {
+					t.Fatal(err)
+				}
+				if timing == "between_runs" {
+					if _, err = m.Dispatch(ctx, 100); err != nil {
+						t.Fatal(err)
+					}
+				}
+			}
+			if _, err := m.Dispatch(ctx, 100); err != nil {
+				t.Fatal(err)
+			}
+			var notices, occurrences int
+			if err := db.QueryRow(`SELECT count(*),max(i.occurrences) FROM notifications n JOIN issues i ON i.id=n.issue_id WHERE i.condition=$1`, "run_scheduled_task:task:"+fmt.Sprint(task)).Scan(&notices, &occurrences); err != nil {
+				t.Fatal(err)
+			}
+			if notices != 1 || occurrences != 2 {
+				t.Fatalf("repeated failure notices=%d occurrences=%d; want one notice with two occurrences", notices, occurrences)
+			}
+		})
+	}
 }
 
 func TestManualScheduledTaskQueueRecordsAtomicallyAndRechecksSuspension(t *testing.T) {

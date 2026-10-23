@@ -83,7 +83,10 @@ func (s *Store) DispatchTx(ctx context.Context, tx *sql.Tx, limit int) (int, err
 }
 
 func (s *Store) projectIncidentTx(ctx context.Context, tx *sql.Tx, eventID int64) error {
-	_, err := tx.ExecContext(ctx, `UPDATE notifications n SET issue_id=i.id FROM operation_events e JOIN issues i ON i.id=e.issue_id WHERE e.id=$1 AND i.resolved_at IS NULL AND n.resolved_at IS NULL AND n.operation_id=i.operation_id AND n.kind IN `+workerFailureNoticeKinds, eventID)
+	// An incident may already point at a newer queued run. Correlate the
+	// notification with this source event as well as the current run: the
+	// domain worker may already have refreshed its one open failure notice.
+	_, err := tx.ExecContext(ctx, `UPDATE notifications n SET issue_id=i.id FROM operation_events e JOIN issues i ON i.id=e.issue_id WHERE e.id=$1 AND i.resolved_at IS NULL AND n.resolved_at IS NULL AND n.operation_id IN (e.operation_id,i.operation_id) AND n.kind IN `+workerFailureNoticeKinds, eventID)
 	if err != nil {
 		return err
 	}

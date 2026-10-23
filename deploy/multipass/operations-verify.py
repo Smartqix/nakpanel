@@ -57,7 +57,7 @@ class Drill(shared.Drill):
    except (urllib.error.URLError,ConnectionError,TimeoutError,http.client.RemoteDisconnected):
     require(time.monotonic()<end,'timed out reconnecting: '+label);time.sleep(2);continue
    if predicate(value):return value
-   require(time.monotonic()<end,'timed out: '+label);time.sleep(2)
+   require(time.monotonic()<end,'timed out: '+label+' (last observation '+str(value)[:200]+')');time.sleep(2)
  def operation_for_run(self,run):return int(self.db("SELECT a.operation_id FROM operation_attempts a JOIN river_job j ON j.id=a.river_job_id WHERE j.kind='run_scheduled_task' AND j.args->>'run_id'='"+str(run)+"' ORDER BY a.id DESC LIMIT 1"))
  def create_task(self,name,command):
   self.post('/subscriptions/'+str(self.sub)+'/scheduled-tasks',site_id=self.site,name=name,schedule='0 0 1 1 *',command=command,timeout_seconds=30,enabled='true',kind='command',timezone='UTC')
@@ -153,6 +153,7 @@ class Drill(shared.Drill):
   self.guest('sudo','systemd-run','--unit=nakpanel-operations-smtp','--collect','/usr/bin/python3',root+'/deploy/multipass/operations-smtp-capture.py','--state-dir',state)
   self.guest('sudo','bash','-c','set -e; install -d /etc/systemd/system/nakpanel.service.d; test ! -e /etc/systemd/system/nakpanel.service.d/operations.conf; printf "%s\\n" "[Service]" "Environment=NAKPANEL_SMTP_HOST=127.0.0.1" "Environment=NAKPANEL_SMTP_PORT=2525" "Environment=NAKPANEL_SMTP_TLS_MODE=none" "Environment=NAKPANEL_SMTP_FROM=panel@operations.test" >/etc/systemd/system/nakpanel.service.d/operations.conf; systemctl daemon-reload; systemctl restart nakpanel')
   self.until(lambda:self.http.request('/healthz')[0],lambda code:code==200,'panel after SMTP configuration')
+  self.until(lambda:self.db('SELECT count(*) FROM operation_events WHERE dispatched_at IS NULL'),lambda n:n=='0','prior events published before SMTP opt-in')
   self.api('/api/workspace/operations/delivery-policy',{'enabled':True});self.api('/api/workspace/operations/preferences',{'email_mode':'immediate'})
   task=self.create_task('operations-smtp-failure','/bin/false');self.run_task(task)
   self.until(lambda:self.db('SELECT count(*) FROM notification_email_batches'),lambda n:int(n)>0,'email batch')
@@ -197,6 +198,11 @@ def main():
  try:drill.run();drill.state.update(status='PASS',stage='complete')
  except Exception as error:
   drill.state.update(status='FAIL',error_type=type(error).__name__,error=str(error) if isinstance(error,(ValueError,TimeoutError)) else 'private diagnostics retained',failure_frames=[dict(function=f.name,line=f.lineno) for f in traceback.extract_tb(error.__traceback__) if Path(f.filename)==Path(__file__)])
+  if hasattr(drill,'site'):
+   try:
+    diagnostic=drill.db("SELECT jsonb_build_object('notices',(SELECT COALESCE(jsonb_agg(jsonb_build_object('id',n.id,'kind',n.kind,'issue',n.issue_id,'operation',n.operation_id,'resolved',n.resolved_at IS NOT NULL)),'[]') FROM notifications n WHERE n.issue_id IN(SELECT id FROM issues WHERE resource_kind='site' AND resource_id="+str(drill.site)+")),'jobs',(SELECT COALESCE(jsonb_agg(jsonb_build_object('kind',kind,'state',state,'attempt',attempt)),'[]') FROM (SELECT kind,state,attempt FROM river_job ORDER BY id DESC LIMIT 30) j))")
+    write(drill.evidence/'state-diagnostic.json',json.loads(diagnostic))
+   except Exception:pass
  finally:signal.alarm(0);write(drill.evidence/'result.json',drill.state);print(json.dumps(drill.state),flush=True)
  if drill.state['status']!='PASS':raise SystemExit(1)
 
