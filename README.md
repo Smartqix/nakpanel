@@ -1,450 +1,188 @@
 # Nakpanel
 
-Nakpanel is a Go-based hosting control panel for managing sites, databases,
-backups, DNS, TLS, customers, service plans, subscriptions, and quotas.
+![Nakpanel — Your hosting, under control.](docs/assets/readme/banner.svg)
 
-The panel serves its own HTTPS interface directly on port `7443`. Tenant web
-traffic remains on nginx ports `80` and `443`, so the control plane stays
-reachable even when tenant vhost configuration needs repair.
+<p align="center">
+  <a href="https://github.com/Smartqix/nakpanel/actions/workflows/ci.yml"><img src="https://github.com/Smartqix/nakpanel/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status on main" /></a>
+  <img src="docs/assets/readme/status.svg" alt="Status: in development" />
+  <img src="docs/assets/readme/ubuntu.svg" alt="Server OS: Ubuntu 26.04 only" />
+  <img src="docs/assets/readme/php.svg" alt="Hosting PHP: 8.3, 8.4 and 8.5" />
+</p>
 
-Nakpanel is in active development. Ubuntu 26.04 LTS (Resolute) is the only
-supported server OS in the current development scope. Hosting PHP 8.3/8.4/8.5
-remains required; internal tools use validated PHP 8.5. Ubuntu 26.04 remains
-experimental pending the remaining release qualification.
+**A Go-based hosting control panel for websites, mail, DNS, databases and verified
+recovery on Ubuntu 26.04.** Manage the services behind your sites, the customers
+who own them and the work happening in the background from one interface.
 
-Phase 2 aligned the installer, VM defaults and CI with this contract. Phase 3
-[passed hosted Ubuntu 26.04 AMD64 qualification](https://github.com/Smartqix/nakpanel/actions/runs/39652821843)
-on `63c00f6`: all 16 current-version gates, PHP 8.3/8.4/8.5 maintenance failure
-recovery, both unassisted reboots, three fresh Roundcube send/read flows and
-owned cleanup. This is development-signed same-version evidence; remaining
-architecture, security-version advancement and elapsed-soak acceptance are
-pending. Phase 4's scoped scheduled-backup/restore checks
-[passed on hosted Ubuntu 26.04 AMD64](https://github.com/Smartqix/nakpanel/actions/runs/39676085171)
-with freshly signed runtime `0654aa3`: exact scheduled-archive restore, database
-and file canaries, PHP 8.3/8.4/8.5 before/after reboot, resumed scheduling and
-owned cleanup. A classic PHP service-state reconciliation defect was fixed.
-Full product gates and legacy tests were not repeated. Changes remain unmerged;
-nothing was deployed. Ubuntu 24.04 and cross-OS migration are outside
-the release requirements. See the
-[transition plan](docs/superpowers/plans/2026-10-18-ubuntu-26-04-support.md).
+<p align="center">
+  <a href="#server-installation">Install</a> ·
+  <a href="docs/FEATURES.md">Explore features</a> ·
+  <a href="#quick-start">Develop</a> ·
+  <a href="docs/RECOVERY.md">Recovery guide</a> ·
+  <a href="CONTRIBUTING.md">Contribute</a>
+</p>
 
-## Development Policy
+> **In active development.** Ubuntu 26.04 is the only supported server OS.
+> Release qualification is still experimental; the project does not yet claim
+> production readiness or complete Plesk/cPanel parity.
 
-Nakpanel is before production release. Breaking changes are allowed; legacy
-compatibility, backfills, and historical upgrade or restore paths are not
-required unless explicitly requested. Development databases, fixtures, and test
-backups may be recreated for the current design. Update code, callers, tests,
-and documentation together while retaining explicitly requested platform support
-and current security requirements. See [AGENTS.md](AGENTS.md) for project guidance.
+## A closer look
 
-## What Works Today
+![Website workspace showing hosting, PHP, TLS, DNS and domain tools for studio.example.](docs/assets/readme/hosting.png)
 
-- HTTPS panel runtime with self-signed bootstrap TLS certificates.
-- Login, Argon2id password verification, secure sessions, and role-aware
-  dashboards for admins and customers.
-- Customer records, service plans, subscriptions, and entitlement checks.
-- Production service-plan contracts with draft/active/retired lifecycle,
-  live server-readiness validation, immutable revision history, structured
-  synchronization previews, and non-destructive subscription compliance.
-- Site, database, TLS, backup, restore, DNS, webmail, and reconciliation jobs
-  through River.
-- First-class, subscription-scoped Mail workspace for domains, mailboxes,
-  aliases, DKIM/DMARC, webmail, and administrator Stalwart controls.
-- [Maildir/IMAP import](docs/MAIL_IMPORT.md) with reviewed folder mapping,
-  encrypted credentials, resumable receipts and verified message preservation.
-- [Provider DNS templates](docs/DNS_TEMPLATES.md) with explicit nameservers,
-  safe preview/apply, local-deletion preservation and revision-aware jobs.
-- `panelctl` operator and recovery commands that work without the web listener,
-  while retaining subscription, quota, lifecycle, audit, and River gates.
-- ACME, self-signed, and system-trusted custom site certificates with atomic
-  agent installation and custom-certificate expiry warnings.
-- Website and subdomain creation can secure hosting with free SSL in one setup
-  flow when the subscription permits it. Setup waits for DNS, certificate
-  installation and HTTPS activation; DNS delays continue in the background.
-  SSL-only retry preserves the website, and hidden files remain protected.
-- Privileged Unix-socket agent for Linux provisioning work.
-- Subscription system accounts with honest account-level disk quotas and
-  per-domain document-root usage.
-- Domain-centered hosting tools for File Manager, confined SFTP, TLS-only
-  FTPS, dedicated PHP-FPM services, structured nginx controls, logs,
-  statistics, scheduled tasks, Git, protected directories, and staging.
-- GoAccess web statistics in each domain's Statistics workspace, with inherited
-  plan settings, daily generation, manual refresh, protected detailed reports,
-  and administrator controls for retention, schedule, and IP anonymization.
-- Operational OCI containers with digest-pinned images, rootless
-  subscription identities, loopback-only nginx ingress, health-gated
-  generations, encrypted write-only secrets, rollback, and reboot
-  reconciliation.
-- One disposable, socket-only Valkey cache per entitled subscription with
-  memory/CPU/process ceilings and restricted ACL commands.
-- Detailed, readiness-gated PHP 8.3, 8.4, and 8.5 inventory, with PHP 8.4 as
-  the default for new eligible sites and explicit older selections preserved.
-- Classic PHP hosting for mutable applications, plus native Managed PHP from a
-  hosted or remote Git repository with pinned Composer installs, immutable
-  health-gated releases, rollback retention, encrypted write-only environment
-  secrets, bounded workers, suspension, and reboot reconciliation.
-- WordPress 7.1 compatibility on Classic PHP, including trusted custom TLS,
-  WP-CLI 2.12.0, backups containing files and tracked MariaDB data, clean
-  permalinks, media, cron, sessions, and OPcache.
-- A domain-scoped WordPress Toolkit for entitled Classic PHP sites, with
-  guided installation, discovery, inventory, checksum verification,
-  maintenance mode, hardening, password reset, and backup-gated core,
-  plugin, and theme updates.
-- Safe WordPress removal with distinct **Detach** and **Uninstall** workflows.
-  Detach removes Toolkit tracking without touching hosted data. Uninstall
-  removes WordPress files, defaults to a recovery backup, permits deletion only
-  for a Toolkit-managed database covered by that backup, and preserves the
-  domain, DNS, TLS, PHP, mail, and unrelated databases.
-- Adminer SSO for database access from the authenticated panel.
-- Owned Ubuntu 26.04 Multipass deployment verification.
-- Explicit experimental Ubuntu 26.04 profiles and owned, native OS/architecture
-  qualification. [Current evidence and limits](docs/verification/2026-10-18-ubuntu-platform-implementation.md).
+*Your website's hosting, PHP, mail, DNS and recovery tools share one workspace.
+This preview uses fictional demonstration data rendered by Nakpanel's templates.*
 
-The WordPress Toolkit deliberately stops short of cloning, staging, automatic
-update policies, multisite orchestration, or plugin/theme installation from
-arbitrary sources. Nakpanel does not offer Node.js or Python applications.
-Advanced OCI workloads remain separate under the domain's Containers workspace.
+<details>
+<summary><strong>See the Operations Center</strong> — issues, tasks and personal notifications</summary>
 
-## Architecture
+![Operations Center showing scoped issues and retained task results with fictional demonstration data.](docs/assets/readme/operations.png)
 
-Nakpanel is intentionally split into a control plane and a privileged agent:
+*Keep the original failure, inspect the work and verify recovery. Opening a
+notification marks it read for you; acknowledgement and resolution stay separate.*
 
-- `cmd/panel`: HTTPS web panel, authentication, dashboards, PostgreSQL access,
-  River workers, and job orchestration.
-- `cmd/agent`: root-owned Unix-socket service for OS-level provisioning.
-- `cmd/panelctl`: local operator/recovery CLI backed by PostgreSQL and the same
-  control-plane services as the web panel.
-- `internal/control`: HTTP handlers, auth, dashboard loading, quota and plan
-  logic, provisioning managers, stores, TLS bootstrap, and embedded web assets.
-- `internal/agent`: RPC server, peer credential checks, and Linux operations.
-- `migrations`: goose migrations from users/sessions through subscription
-  accounts, operator identity, custom TLS, the hosting toolkit, and
-  subscription cache services.
-- `deploy`: systemd units, install scripts, and Multipass verification scripts.
+</details>
 
-The panel communicates with the agent over `/run/nakpanel/agent.sock`. On Linux,
-the agent enforces peer credentials so only the expected panel UID can dispatch
-privileged operations.
+## Why Nakpanel
 
-## Requirements
+- **Keep the control plane reachable.** The panel serves HTTPS on `7443`,
+  independently of tenant nginx on `80` and `443`. A broken tenant vhost does
+  not take away that separate route to the panel.
+- **See what actually happened.** The Operations Center keeps Issues, Tasks,
+  History and a personal Notifications inbox together. Failed attempts remain
+  visible after retries, and an independent check must verify issue recovery.
+- **Choose the right PHP runtime.** Host PHP 8.3, 8.4 and 8.5 with required
+  extensions, isolated FPM/CLI execution and readiness checks. Classic PHP and
+  Git-backed Managed PHP support different application workflows.
+- **Work within clear ownership.** Customer records, subscriptions, plans,
+  quotas and current role checks keep hosting work tied to its owning resources.
+  Review destructive actions and preserve unrelated resources.
 
-For local development:
+## What you can manage
 
-- Go `1.26.9` (the pinned release toolchain)
-- PostgreSQL
-- [Task](https://taskfile.dev/)
-- A shell environment that can run the Go test suite
+| Workspace | Capabilities |
+| --- | --- |
+| **Websites & applications** | Domains and subdomains, Classic/Managed PHP, WordPress Toolkit, Git, files, logs, statistics, rootless OCI containers and subscription Valkey. |
+| **Mail & DNS** | Mailboxes, aliases, webmail, DKIM/DMARC, Maildir/IMAP import and provider DNS templates with preview/apply. |
+| **Customers & plans** | Customer and reseller records, subscriptions, entitlements, plan revisions, synchronization previews and compliance. |
+| **Backups & recovery** | Website recovery points, scheduled server backups, encrypted disaster-recovery archives and operator recovery tools. |
+| **Operations & notifications** | Scoped Issues, Tasks and History, personal read receipts, direct settings links and bounded opt-in notification email. |
+| **Security & access** | Role-aware sessions, TLS, a peer-credential-checked agent, confined file access and tenant isolation controls. |
 
-For full deployment verification:
+Explore the [feature guide](docs/FEATURES.md),
+[Operations Center](docs/operations-center.md), [Mail](docs/MAIL.md) and
+[Domain removal and preserved data](docs/DOMAIN_REMOVAL.md).
 
-- Multipass
-- Ubuntu `26.04` LTS VM image
-- Enough local disk and memory for PostgreSQL, nginx, PHP-FPM, MariaDB, bind9,
-  quota tooling, Podman, ProFTPD, Valkey, ClamAV signatures, PHP 8.3/8.4/8.5,
-  Composer 2, WP-CLI, and Go builds
+**Current boundaries:** no native Node.js/Python application hosting, billing
+invoices or complete advanced reseller hierarchy. WordPress Toolkit cloning,
+multisite orchestration and automatic-update policies are not implemented.
+Advanced OCI workloads have their own domain workspace.
 
-The end-to-end server target is Ubuntu 26.04 LTS. Some agent operations are
-Linux-specific and cannot be fully exercised on macOS.
+## Platform and project status
 
-| Server profile | Internal PHP | Available hosting PHP | Status |
-| --- | --- | --- | --- |
-| Ubuntu 26.04 native | 8.5 | 8.5 | Explicit diagnostic-only configuration; not the full product contract |
-| Ubuntu 26.04 Surý | 8.5 | 8.3, 8.4, 8.5 | Default; AMD64 operational evidence recorded; experimental pending remaining release qualification |
+| Area | Current contract |
+| --- | --- |
+| Server OS | **Ubuntu 26.04 LTS (Resolute) only** |
+| Default PHP provider | Signed Resolute **Surý** source and trusted runtime descriptors |
+| Hosting runtimes | **PHP 8.3 / 8.4 / 8.5**, required extensions and isolated FPM/CLI |
+| Internal tools | Validated **PHP 8.5** |
+| Release status | Active development; remaining release qualification is experimental |
 
-Ready runtime discovery determines actual availability. Full native, recovery
-and soak evidence is required before production promotion. Ubuntu 24.04 support and cross-OS migration requirements are retired. An in-place Ubuntu
-release upgrade is unsupported. See [platform qualification](docs/PLATFORM_QUALIFICATION.md).
+The explicit native PHP 8.5-only profile is diagnostic and does not meet the
+full hosting contract. Readiness discovery determines actual runtime availability.
+Ubuntu 24.04, cross-OS migration and in-place Ubuntu release upgrades are unsupported.
 
-## Server Installation
+Hosted AMD64 results, static builds and full native architecture qualification
+have different scopes. See [platform qualification](docs/PLATFORM_QUALIFICATION.md)
+and the [verification/evidence guide](docs/VERIFICATION.md) for source-bound results
+and remaining requirements. A green CI badge does not establish production readiness.
 
-One command from a checkout on the target server:
+## Server installation
 
-```bash
-sudo deploy/install/install.sh --yes
-```
+Use a fresh, dedicated Ubuntu 26.04 host and a trusted checkout. Read the
+[installation guide](docs/INSTALLATION.md) for prerequisites, source/bundle trust,
+private credential setup and the panel hostname certificate.
 
-On a fresh Ubuntu 26.04 host this defaults to the signed Resolute Surý source
-and hosting PHP 8.3/8.4/8.5. The equivalent explicit selection is:
-
-```bash
-sudo deploy/install/install.sh --yes --php-provider sury
-```
-
-An installed provider is read from trusted platform metadata on subsequent
-updates. Changing a populated host's provider requires a separately reviewed
-migration; the installer rejects a mismatching provider request. Signed bundles
-may be supplied with `--bundle DIR --release-public-key FILE`; obtain the public
-key independently. Development signing keys cannot establish production trust.
-
-For a public server, provide a real administrator during the fresh install:
+From the checkout on the target server, provide your administrator explicitly:
 
 ```bash
 sudo deploy/install/install.sh --fresh --yes \
+  --php-provider sury \
   --admin-email admin@example.com \
   --admin-password-file /root/nakpanel-admin-password
 ```
 
-The password file may remain root-owned with mode `0600`. The installer creates
-the administrator before starting the panel, disables the other known test
-logins, and removes its temporary password copy. Without an explicit
-administrator, migration-seeded logins are for isolated lab testing only.
+The password file must already contain your chosen credential and be root-owned
+with mode `0600`. Replace the example email. There is no shared installer password.
+The panel listens on `https://<server-address>:7443`; tenant websites use nginx.
 
-For the repository owner's development installations, reuse the approved
-credential in `~/.config/nakpanel/admin-bootstrap-password` on the operator
-workstation. The private installation record is
-`~/.config/nakpanel/INSTALLATION.md`. Transfer the credential through verified SSH
-to `/root/nakpanel-admin-password`, retain root ownership and mode `0600`, and
-use the explicit bootstrap options above. The password value stays in private
-operator configuration; it is not a shared installer default.
+For existing installations, follow the [application update and restore guide](docs/INSTALLATION.md#application-updates-and-restore)
+and [Recovery](docs/RECOVERY.md). Do not treat a PHP-provider change or an Ubuntu
+release upgrade as an ordinary application update.
 
-The installer detects fresh installs versus upgrades (`panelctl version` /
-`/etc/nakpanel/version`). Upgrades take a full pre-upgrade backup set and
-roll back automatically when migrations or the post-upgrade health gate fail;
-downgrades are refused without `--allow-downgrade`. To rebuild a server from
-an encrypted backup archive:
+## Quick start
 
-```bash
-sudo deploy/install/install.sh --restore /path/to/archive.nkbk --backup-key-file /path/to/key --yes
-```
-
-See `docs/RECOVERY.md` for server backups, disaster recovery, and
-administrator recovery, and `docs/SOAK.md` for the long-run soak procedure.
-
-## Quick Start
-
-Clone the repository and run the local checks:
+For local development, install Go **1.26.9**, PostgreSQL, Git and
+[Task](https://taskfile.dev/). Create an empty development database and configure
+your local role/DSN first; see [Local development](docs/DEVELOPMENT.md).
 
 ```bash
 git clone https://github.com/Smartqix/nakpanel.git
 cd nakpanel
+export NAKPANEL_DATABASE_URL='postgres://postgres@localhost:5432/nakpanel?sslmode=disable'
 
 task goose:up
 task river:up
 task build
-go test ./...
-```
-
-By default, local migration tasks use:
-
-```text
-postgres://postgres@localhost:5432/nakpanel?sslmode=disable
-```
-
-Set `NAKPANEL_DATABASE_URL` when your local database uses a different DSN.
-
-## Ubuntu 26.04 Verification
-
-Run the single-VM deployment verifier:
-
-```bash
-deploy/multipass/deployment-verify.sh
-```
-
-This creates a fresh, uniquely named owned Ubuntu 26.04 Multipass VM,
-installs the service stack, runs migrations, builds the
-panel, agent, and CLI, installs systemd units, and retains the Phase 28 and
-adversarial security gates before Phase 29 reliability/disaster recovery.
-Phase 30 then installs the current worktree and proves
-the detailed PHP runtime inventory, a real Classic WordPress 7.1 site, native
-Managed PHP release/worker behavior, cross-subscription isolation, and reboot
-recovery. Phase 31 proves plan lifecycle and assignment rules, fail-closed
-capability validation, immutable revisions, synchronization impact previews,
-and non-destructive subscription compliance. Phase 32 remains directly
-runnable as the Toolkit feature gate: it
-provisions an entitled Classic PHP site through the domain WordPress Toolkit,
-checks inventory and core integrity, requires a completed backup before
-updates, verifies maintenance recovery, enforces the per-subscription site
-limit, and checks that secrets never enter River arguments. Phase 33 is the uninstall gate:
-it proves backup-gated uninstall, managed-database provenance,
-domain preservation, tombstone reinstall, external-database preservation, and
-pre-drop failure recovery. Phase 34 is the final gate: it generates real nginx
-traffic, checks GoAccess reports through the authenticated panel, verifies URL
-privacy filtering, and proves customer report isolation.
-
-Every reuse, sync and deletion requires matching host and root-owned guest
-records for the current run, actual Ubuntu release and architecture. Existing
-lab/soak and unrelated VMs are protected; ordinary verification does not sweep
-historical phase VMs. A name prefix alone never authorizes deletion.
-
-To override the lab VM name or Ubuntu image:
-
-```bash
-NAKPANEL_MULTIPASS_IMAGE=26.04 deploy/multipass/deployment-verify.sh
-```
-
-After a successful verification, open:
-
-```text
-https://<vm-ip>:7443/login
-```
-
-The bootstrap certificate is self-signed, so the browser warning is expected.
-
-Seeded test accounts:
-
-```text
-admin@nakpanel.test  / NakpanelAdmin!2026
-client@nakpanel.test / NakpanelClient!2026
-```
-
-Do not use these seeded credentials as production defaults.
-
-## Configuration
-
-Important environment variables:
-
-| Variable | Purpose |
-| --- | --- |
-| `NAKPANEL_DATABASE_URL` | PostgreSQL DSN for panel, migrations, and River tasks. |
-| `NAKPANEL_TLS_DIR` | Directory for the panel bootstrap TLS certificate and key. Defaults to `/var/lib/nakpanel/tls`. |
-| `NAKPANEL_AGENT_ALLOWED_UID` | Optional numeric UID allowed to connect to the agent socket. |
-| `NAKPANEL_AGENT_SOCKET` | Agent socket used by `panelctl agent ping`. Defaults to `/run/nakpanel/agent.sock`. |
-| `NAKPANEL_MARIADB_DSN` | Optional MariaDB connection string used by the agent database provisioner. |
-| `NAKPANEL_ACME_DIRECTORY_URL` | ACME directory URL for certificate issuance. |
-| `NAKPANEL_ACME_ACCOUNT_KEY` | Path to the ACME account key. |
-| `NAKPANEL_ACME_EMAIL` | ACME account email. |
-| `NAKPANEL_FTPS_PUBLIC_ADDRESS` | Public address advertised for FTPS passive data connections. |
-| `NAKPANEL_FTPS_TLS_CERT` | Certificate path for the Nakpanel-managed TLS-only ProFTPD service. |
-| `NAKPANEL_FTPS_TLS_KEY` | Private-key path for the Nakpanel-managed TLS-only ProFTPD service. |
-| `NAKPANEL_VALKEY_IMAGE` | Optional official `docker.io/valkey/valkey` image pinned by SHA-256 digest. The Ubuntu installer resolves and pins `8.1-alpine` when omitted. |
-| `NAKPANEL_PUBLIC_URL` | Canonical HTTPS panel origin used for five-minute customer SSO links. |
-| `NAKPANEL_BILLING_WEBHOOK_URL` | Optional external billing webhook endpoint; HTTPS is required except for loopback tests. |
-| `NAKPANEL_BILLING_WEBHOOK_SECRET` | HMAC-SHA256 webhook secret. Configure it only with the webhook URL. |
-| `NAKPANEL_MULTIPASS_VM` | Multipass VM name for deployment verification. Defaults to `nakpanel-lab`. |
-| `NAKPANEL_MULTIPASS_IMAGE` | Multipass image for deployment verification. Defaults to `26.04`; the default PHP provider is Surý with 8.3/8.4/8.5. |
-
-The panel always listens on `:7443` using the configured TLS directory. It must
-not bind tenant ports `80` or `443`; those stay reserved for nginx.
-
-## Development Workflow
-
-Common commands:
-
-```bash
-task generate      # sqlc, templ, and embedded CSS
-task build         # build panel, agent, and panelctl
-task test          # run go test ./...
-task goose:up      # apply goose migrations
-task river:up      # apply River queue migrations
-```
-
-Generated code and assets are checked in where the current project expects
-them, including sqlc output, templ output, and `internal/control/web/static/app.css`.
-Run `task build` after touching SQL queries, templ pages, or Tailwind input.
-
-## Operator CLI
-
-Install `bin/panelctl` as `/usr/local/bin/panelctl` on an Ubuntu host. Commands
-use `NAKPANEL_DATABASE_URL`; only `agent ping` contacts the privileged socket.
-The default audit label is `SUDO_USER` or the current OS username, and can be
-overridden with `--actor`.
-
-```bash
-sudo -u nakpanel panelctl create-admin --email admin@example.test
-sudo -u nakpanel panelctl user list
-sudo -u nakpanel panelctl session list --user admin@example.test
-sudo -u nakpanel panelctl site reconcile example.test
-sudo -u nakpanel panelctl backup create example.test
-sudo -u nakpanel panelctl reconcile --system
-sudo -u nakpanel panelctl agent ping
-sudo -u nakpanel panelctl api-key create --name billing --cidrs 203.0.113.0/24
-sudo -u nakpanel panelctl api-key list
-```
-
-The API key command prints the full `npk_...` value exactly once. Nakpanel stores
-only its prefix, per-key salt, and SHA-256 digest. External billing uses the
-bearer-authenticated `/api/v1` provisioning API; cookie sessions and CSRF tokens
-are intentionally not accepted on those routes. Provider-scoped plans are
-discoverable through `/api/v1/plans?provider=admin` or a `reseller:{id}` provider.
-
-Hosting-toolkit verification is split across
-`deploy/multipass/phase21-verify.sh` through
-`deploy/multipass/phase25-verify.sh`. Each script reuses `nakpanel-lab` and
-chains its prerequisite; `deployment-verify.sh` remains the canonical clean
-deployment gate. `deploy/multipass/phase34-verify.sh` is the final direct gate
-and chains Phase 33 unless `NAKPANEL_SKIP_PRIOR_PHASES=1` is set by the
-canonical single-VM runner. Use `deploy/multipass/phase30-verify.sh` directly
-for PHP compatibility or `deploy/multipass/phase32-verify.sh` for the Toolkit
-feature gate without the uninstall acceptance cases.
-
-Destructive commands require an interactive confirmation or `--yes`. Custom
-site certificates can be queued without placing key material in River:
-
-```bash
-sudo -u nakpanel panelctl ssl set-custom example.test \
-  --cert /secure/example.crt \
-  --key /secure/example.key \
-  --chain /secure/intermediate.crt
-```
-
-The chain must verify to the host system trust store. Arbitrary private roots,
-self-signed leaves, encrypted keys, mismatched keys, and wrong-domain or
-out-of-date certificates are rejected.
-
-Useful recovery and operations notes live in:
-
-- `docs/RECOVERY.md`
-- `IMPLEMENTATION_PLAN.md`
-- `deploy/multipass/deployment-verify.sh`
-
-## Contributing
-
-Add-on websites and subdomains have a scoped, checkpointed removal workflow.
-Databases and backups are retained by default. See
-[Domain removal and recovery](docs/DOMAIN_REMOVAL.md) for protection rules,
-retry behaviour, retained-data recovery and the single-VM acceptance test.
-
-Contributions are welcome through the normal GitHub fork, branch, and pull
-request flow.
-
-Before opening a pull request:
-
-```bash
 go test ./... -count=1
-go vet ./...
-task build
-git diff --check
 ```
 
-If you change shell scripts, also run:
+The example assumes the local `postgres` role and `nakpanel` database already
+exist. Use your own local connection settings. These commands build the project;
+they do not install a server stack. Some database tests require separate disposable
+fixture DSNs. macOS can run local checks; Linux provisioning requires Ubuntu 26.04.
 
-```bash
-bash -n deploy/multipass/*.sh
+## Architecture
+
+```mermaid
+flowchart TB
+    Browser[Browser] -->|HTTPS 7443| Panel[Go panel and workers]
+    Panel <--> DB["PostgreSQL<br/>River queue"]
+    Panel -->|Unix socket| Agent[Privileged agent]
+    Agent --> Services["Hosted services<br/>nginx · PHP · mail · DNS"]
 ```
 
-If you change provisioning, deployment, quotas, migrations, plans,
-subscriptions, the agent, or systemd behavior, run:
+The panel orchestrates work; the root-owned agent performs Linux provisioning.
+The agent enforces Linux peer credentials on `/run/nakpanel/agent.sock`.
+`panelctl` uses PostgreSQL and the same control-plane services for operator work
+without the HTTPS listener; `agent ping` uses the protected agent socket.
+See the [repository map](docs/DEVELOPMENT.md#repository-map).
 
-```bash
-deploy/multipass/deployment-verify.sh
-```
+## Documentation
 
-Please keep changes focused and include tests for behavior changes. Security and
-operationally sensitive areas need extra care:
+| Start here | Go deeper |
+| --- | --- |
+| [Installation](docs/INSTALLATION.md) | [Configuration and operator CLI](docs/CONFIGURATION.md) |
+| [Local development](docs/DEVELOPMENT.md) | [Feature guide](docs/FEATURES.md) |
+| [Backup and administrator recovery](docs/RECOVERY.md) | [Platform qualification](docs/PLATFORM_QUALIFICATION.md) |
+| [Mail](docs/MAIL.md) | [Mail import](docs/MAIL_IMPORT.md) |
+| [DNS templates](docs/DNS_TEMPLATES.md) | [Git hosting](docs/GIT.md) |
+| [Operations Center](docs/operations-center.md) | [Verification and evidence](docs/VERIFICATION.md) |
+| [Signed application bundles](deploy/release/README.md) | [PHP security maintenance](docs/PHP_SECURITY_MAINTENANCE.md) |
 
-- Authentication, session, and RBAC logic.
-- Privileged agent RPC and Unix socket permissions.
-- Linux user creation, SFTP/FTPS confinement, ownership, disk quotas, and
-  PHP-FPM/nginx rendering.
-- Path-derived File Manager, Git, staging, scheduled-task, and log operations.
-- Rootless Podman container generations and Valkey isolation, Unix-socket
-  ownership, subordinate-ID allocation, and ACLs.
-- Database migrations and data backfills.
-- Plan, subscription, entitlement, and oversell behavior.
-- Backup, restore, DNS, TLS, and reconciliation jobs.
+## Contributing and support
 
-Do not commit local secrets, production credentials, VM artifacts, database
-dumps, or generated junk outside the project’s expected generated files.
+Nakpanel is maintained by the project maintainers through GitHub.
+[Report a reproducible bug](https://github.com/Smartqix/nakpanel/issues),
+[propose a focused change](CONTRIBUTING.md), or read the
+[development policy](AGENTS.md). Keep credentials, private keys, mailbox content
+and production data out of public reports.
 
-## Project Status
-
-Nakpanel currently covers the core control-plane, hosting provisioning, mail
-workspace, external billing provisioning API, Classic PHP, and Managed PHP,
-but it does not yet claim full cPanel/Plesk parity. Advanced WordPress staging
-and cloning, Node.js/Python application runtimes, billing invoices, advanced
-reseller hierarchy, and full production hardening remain future work.
+Changes should include the local checks appropriate to their scope. Hosted
+Ubuntu validation, release promotion and deployment need explicit authorization.
+Detailed qualification history lives in linked reports rather than the README.
 
 ## License
 
-No license file is currently declared in this repository. Treat usage and
-redistribution rights as unspecified until a license is added.
+No project license is currently declared. Usage and redistribution rights remain
+unspecified until the maintainers add one; third-party component licenses do not
+license Nakpanel itself.

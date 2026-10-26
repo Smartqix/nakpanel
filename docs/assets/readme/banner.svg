@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="320" viewBox="0 0 1200 320" role="img" aria-labelledby="title desc">
+<title id="title">Nakpanel — Your hosting, under control.</title>
+<desc id="desc">Navy and amber Nakpanel identity with an abstract connected hosting stack.</desc>
+<defs>
+ <linearGradient id="background" x2="1" y2="1"><stop stop-color="#111a2d"/><stop offset="1" stop-color="#243450"/></linearGradient>
+ <linearGradient id="glow"><stop stop-color="#e7a325" stop-opacity=".16"/><stop offset="1" stop-color="#e7a325" stop-opacity="0"/></linearGradient>
+ <pattern id="grid" width="28" height="28" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#7087ae" opacity=".14"/></pattern>
+</defs>
+<rect width="1200" height="320" rx="20" fill="url(#background)"/>
+<rect width="1200" height="320" rx="20" fill="url(#grid)"/>
+<path d="M660 0H1200V320H500Z" fill="url(#glow)"/>
+<rect x="52" y="44" width="65" height="65" rx="13" fill="#e5a023"/>
+<text x="84" y="89" text-anchor="middle" fill="#152035" font-family="Arial,Helvetica,sans-serif" font-size="45" font-weight="700">n</text>
+<text x="137" y="94" fill="#f7f9ff" font-family="Arial,Helvetica,sans-serif" font-size="61" font-weight="700" letter-spacing="-2">nakpanel</text>
+<text x="52" y="193" fill="#f7f9ff" font-family="Arial,Helvetica,sans-serif" font-size="48" font-weight="700" letter-spacing="-1">Your hosting,</text>
+<text x="52" y="252" fill="#f6be54" font-family="Arial,Helvetica,sans-serif" font-size="48" font-weight="700" letter-spacing="-1">under control.</text>
+<g fill="none" stroke="#607596" stroke-width="2"><path d="M650 90H707V160H755"/><path d="M650 230H707V160"/><path d="M915 160H1090"/></g>
+<circle cx="650" cy="90" r="7" fill="#e5a023"/><circle cx="650" cy="230" r="7" fill="#88a5d0"/>
+<g stroke="#4b6081" stroke-width="1.5">
+ <rect x="757" y="49" width="310" height="68" rx="13" fill="#1c2a42"/>
+ <rect x="781" y="127" width="310" height="68" rx="13" fill="#21314b"/>
+ <rect x="757" y="205" width="310" height="68" rx="13" fill="#1c2a42"/>
+</g>
+<g fill="#7188ad"><rect x="784" y="72" width="74" height="7" rx="3.5"/><rect x="784" y="87" width="111" height="6" rx="3"/><rect x="808" y="150" width="91" height="7" rx="3.5"/><rect x="808" y="165" width="130" height="6" rx="3"/><rect x="784" y="228" width="116" height="7" rx="3.5"/><rect x="784" y="243" width="79" height="6" rx="3"/></g>
+<g fill="#59c497"><circle cx="1035" cy="83" r="6"/><circle cx="1059" cy="161" r="6"/><circle cx="1035" cy="239" r="6"/></g>
+<path d="M1092 160h30" stroke="#e5a023" stroke-width="2"/><circle cx="1128" cy="160" r="6" fill="#e5a023"/>
+</svg>
