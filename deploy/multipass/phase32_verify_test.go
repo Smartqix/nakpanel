@@ -84,8 +84,14 @@ func TestPhase32VerifierIsBoundedAndFailClosed(t *testing.T) {
 func TestPhase32DocumentationMatchesToolkitBoundary(t *testing.T) {
 	checks := map[string][]string{
 		"../../README.md": {
-			"domain-scoped WordPress Toolkit", "guided installation", "backup-gated", "Phase 32 remains directly",
+			"docs/FEATURES.md", "docs/VERIFICATION.md",
+		},
+		"../../docs/FEATURES.md": {
+			"domain-scoped WordPress Toolkit", "guided installation", "backup-gated",
 			"stops short of cloning, staging", "update policies, multisite orchestration",
+		},
+		"../../docs/VERIFICATION.md": {
+			"Phase 32 remains directly", "requires a completed backup", "per-subscription site",
 		},
 		"../../docs/RECOVERY.md": {
 			"WordPress Toolkit Recovery (Phase 32)", "failed discovery placeholder", "phase32-verify.sh",
