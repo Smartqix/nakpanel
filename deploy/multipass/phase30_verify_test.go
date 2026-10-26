@@ -482,8 +482,15 @@ func TestPhase30VerifierKeepsSecretNeedlesOnlyInHostMemory(t *testing.T) {
 func TestPhase30DocumentationMatchesProvenProductBoundary(t *testing.T) {
 	checks := map[string][]string{
 		"../../README.md": {
+			"docs/FEATURES.md", "docs/VERIFICATION.md",
+			"Ubuntu 26.04 LTS (Resolute) only", "PHP 8.3 / 8.4 / 8.5",
+		},
+		"../../docs/FEATURES.md": {
 			"PHP 8.3, 8.4, and 8.5", "Classic PHP", "Managed PHP", "WordPress 7.1 compatibility",
-			"domain-scoped WordPress Toolkit", "does not offer Node.js or Python applications", "phase30-verify.sh",
+			"domain-scoped WordPress Toolkit", "does not offer Node.js or Python applications",
+		},
+		"../../docs/VERIFICATION.md": {
+			"Phase 30", "detailed PHP runtime inventory", "Classic WordPress 7.1", "Managed PHP release/worker behavior",
 		},
 		"../../docs/RECOVERY.md": {
 			"Phase 30", "PHP application", "active release", "desired-active worker", "phase30-verify.sh",

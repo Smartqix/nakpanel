@@ -53,7 +53,13 @@ func TestPhase33VerifierCoversSafeWordPressUninstall(t *testing.T) {
 func TestPhase33DocumentationExplainsSafeRemoval(t *testing.T) {
 	checks := map[string][]string{
 		"../../README.md": {
-			"Detach", "Uninstall", "Toolkit-managed database", "Phase 33 is the uninstall gate",
+			"docs/FEATURES.md", "docs/VERIFICATION.md",
+		},
+		"../../docs/FEATURES.md": {
+			"Detach", "Uninstall", "Toolkit-managed database",
+		},
+		"../../docs/VERIFICATION.md": {
+			"Phase 33 is the uninstall gate", "external-database preservation", "pre-drop failure recovery",
 		},
 		"../../docs/RECOVERY.md": {
 			"Safe WordPress Uninstall Recovery (Phase 33)", "waiting_backup", "removing", "removed", "failed",
