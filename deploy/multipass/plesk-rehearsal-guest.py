@@ -89,7 +89,7 @@ $m=new mysqli('localhost',$c['user'],$c['password'],$c['database']);$row=$m->que
 echo json_encode(['case'=>$c['case'],'rows'=>(int)$row['n'],'version'=>trim(file_get_contents(__DIR__.'/version.txt')),'composer'=>class_exists('Synthetic\\Greeting')?Synthetic\Greeting::value():null]);
 '''
 RUNTIME = "<?php header('Content-Type: application/json');echo json_encode(['php'=>PHP_VERSION,'uid'=>posix_geteuid(),'extensions'=>get_loaded_extensions()]);\n"
-CRON = "<?php file_put_contents(__DIR__.'/cron-result.json',json_encode(['uid'=>posix_geteuid(),'php'=>PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION,'marker'=>'R1-CRON']));\n"
+CRON = "<?php $p=__DIR__.'/cron-result.json';$n=1;if(is_file($p)){$old=json_decode(file_get_contents($p),true,512,JSON_THROW_ON_ERROR);if(!is_int($old['runs']??null))throw new RuntimeException('Invalid canary counter');$n=$old['runs']+1;}file_put_contents($p,json_encode(['uid'=>posix_geteuid(),'php'=>PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION,'marker'=>'R1-CRON','runs'=>$n],JSON_THROW_ON_ERROR));\n"
 
 
 class Fixture:

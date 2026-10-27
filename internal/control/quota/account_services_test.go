@@ -293,3 +293,22 @@ func TestRequireGitPermissionRejectsRevokedEntitlement(t *testing.T) {
 		t.Fatalf("enabled Git entitlement was rejected: %v", err)
 	}
 }
+
+func TestScheduledTaskRejectsUnsafeWorkingDirectoryBeforeMutation(t *testing.T) {
+	for _, working := range []string{"/home/nps4/domains/atlas-studio.test/public_html", "..", "../other", "inside/../../other"} {
+		t.Run(working, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			_, err = NewSQLStore(db).UpsertScheduledTask(context.Background(), 4, 1, types.ScheduledTaskInput{SiteID: 2, Name: "R1 cron", Schedule: "0 0 1 1 *", Kind: "php", Script: "cron.php", WorkingDirectory: working, TimeoutSeconds: 30, Enabled: true})
+			if err == nil || !strings.Contains(err.Error(), "site-relative working directory") {
+				t.Fatalf("unsafe working directory was not rejected before SQL: %v", err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

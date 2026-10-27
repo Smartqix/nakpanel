@@ -292,8 +292,9 @@ class Drill(shared.Drill):
                 require(json.loads(self.curl(record,'/fixture-route'))['version']=='updated','controlled application update failed')
             self.curl(record,'/.secret-note',ok=(403,404))
             self.sftp(record,'get /etc/shadow /dev/null\n',success=False)
+            next(case for case in self.state['cases'] if case['id']==record['id']).update(application_workflow_verified=True,actual_fpm_version=runtime['php'])
         s02=self.records[1]
-        self.api('/subscriptions/'+str(s02['sub'])+'/scheduled-tasks',dict(site_id=s02['site'],name='R1 cron',schedule='0 0 1 1 *',command='/usr/bin/php8.4 '+s02['root']+'/cron.php',working_directory=s02['root'],timeout_seconds=30,enabled='true',kind='command',timezone='UTC'))
+        self.create_cron(s02)
         self.task=int(self.db("SELECT id FROM scheduled_tasks WHERE subscription_id="+str(s02['sub'])+" AND name='R1 cron'"))
         self.run_cron()
         mail=self.records[2];mail['mail_password']=self.password()
@@ -307,10 +308,15 @@ class Drill(shared.Drill):
         self.wait('SELECT convergence_status||\':\'||effective_enabled FROM mail_domains WHERE id='+str(mid),'in_sync:true')
         self.helper('mail-canary',self.serializable(mail))
         self.passed('R1: real FPM identity, application/WordPress login and sessions, clean URLs, uploads, locked Composer dependency, controlled updates, Run Now cron and a local mail canary')
+    def create_cron(self,record):
+        self.api('/subscriptions/'+str(record['sub'])+'/scheduled-tasks',dict(site_id=record['site'],name='R1 cron',schedule='0 0 1 1 *',script='cron.php',working_directory='.',timeout_seconds=30,enabled='true',kind='php',timezone='UTC'))
     def run_cron(self):
         record=self.records[1];self.api('/subscriptions/'+str(record['sub'])+'/scheduled-tasks/'+str(self.task)+'/run',{})
-        self.until(lambda:self.db('SELECT status FROM scheduled_task_runs WHERE task_id='+str(self.task)+' ORDER BY id DESC LIMIT 1'),lambda value:value=='succeeded','actual scheduled task run')
-        result=self.helper('cron-result',self.serializable(record));require(result['uid']==record['uid'],'scheduled task ran as the wrong account')
+        self.until(lambda:self.db('SELECT status FROM scheduled_task_runs WHERE task_id='+str(self.task)+' ORDER BY id DESC LIMIT 1'),lambda value:value in ('succeeded','failed','timed_out'),'scheduled task terminal result')
+        run=json.loads(self.db("SELECT json_build_object('id',id,'status',status,'exit_code',exit_code,'output',left(output,2000)) FROM scheduled_task_runs WHERE task_id="+str(self.task)+' ORDER BY id DESC LIMIT 1'))
+        run['output']=redact(run.get('output') or '',self.secret_values);self.state.setdefault('cron_runs',[]).append(run)
+        require(run['status']=='succeeded','scheduled task failed: '+json.dumps(run))
+        result=self.helper('cron-result',self.serializable(record));require(result['uid']==record['uid'] and result['php']==record['source_php'] and result['marker']=='R1-CRON' and result['runs']==len(self.state['cron_runs']),'scheduled task ran with the wrong account/runtime, marker or execution count')
     def preserve(self):
         self.stage('R1-tenant-boundaries-backups-and-reboot')
         for record in self.records:

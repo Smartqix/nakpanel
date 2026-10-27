@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import struct
+import shutil
 import zlib
 import tempfile
 from pathlib import Path
@@ -130,9 +131,23 @@ class RehearsalTests(unittest.TestCase):
             guest.verify_sql_export("INSERT INTO records VALUES(1,'expected');", "INSERT INTO records VALUES(1,'changed');")
         guest.verify_sql_export("INSERT INTO records VALUES(1,'expected');", "INSERT INTO records VALUES(1,'expected');")
 
+    def test_imported_cron_uses_site_relative_php_task(self):
+        drill = self.m.Drill.__new__(self.m.Drill)
+        calls = []
+        drill.api = lambda path, fields: calls.append((path, fields))
+        drill.create_cron({"sub": 4, "site": 2, "root": "/home/nps4/domains/atlas-studio.test/public_html"})
+        path, fields = calls[0]
+        self.assertEqual(path, "/subscriptions/4/scheduled-tasks")
+        self.assertEqual(fields["working_directory"], ".")
+        self.assertEqual((fields["kind"], fields["script"]), ("php", "cron.php"))
+        self.assertNotIn("/home/", json.dumps(fields))
+
     def test_run_now_sends_a_csrf_authenticated_post(self):
         drill = self.m.Drill.__new__(self.m.Drill)
-        drill.records = [{}, {"sub": 4, "uid": 1004}]
+        drill.records = [{}, {"sub": 4, "uid": 1004, "source_php": "8.4"}]
+        drill.state = {}
+        drill.secret_values = []
+        drill.db = lambda *args: json.dumps({"id": 7, "status": "succeeded", "exit_code": 0, "output": ""})
         drill.task = 9
         response = Mock()
         response.code = 202
@@ -147,7 +162,7 @@ class RehearsalTests(unittest.TestCase):
         http.opener = opener
         drill.http = http
         drill.until = lambda *args: None
-        drill.helper = lambda *args: {"uid": 1004}
+        drill.helper = lambda *args: {"uid": 1004, "php": "8.4", "marker": "R1-CRON", "runs": 1}
         drill.run_cron()
         request = opener.open.call_args.args[0]
         self.assertEqual(request.get_method(), "POST")
@@ -162,6 +177,22 @@ class RehearsalTests(unittest.TestCase):
         for invalid in ('x"; include "/tmp/evil', "../outside", "", "*"):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 guest.sandbox_negative_zones([invalid])
+
+    def test_cron_canary_proves_each_fresh_execution(self):
+        php = shutil.which("php")
+        if php is None:
+            self.skipTest("local PHP unavailable; native rehearsal is authoritative")
+        spec = importlib.util.spec_from_file_location("guest_cron_tests", HERE / "plesk-rehearsal-guest.py")
+        guest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guest)
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "cron.php"
+            script.write_text(guest.CRON)
+            for expected in (1, 2):
+                subprocess.run([php, str(script)], check=True, capture_output=True)
+                result = json.loads((Path(directory) / "cron-result.json").read_text())
+                self.assertEqual(result["runs"], expected)
+                self.assertEqual(result["uid"], os.getuid())
 
     def test_wordpress_media_canary_is_a_valid_nonempty_png(self):
         spec = importlib.util.spec_from_file_location("guest_media_tests", HERE / "plesk-rehearsal-guest.py")

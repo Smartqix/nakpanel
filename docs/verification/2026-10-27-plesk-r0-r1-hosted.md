@@ -92,7 +92,7 @@ it cannot distinguish slow startup from a failed service. Cleanup passed.
 
 The dedicated classic-FPM socket wait used an unconditional three-second
 budget after systemd started the simple service. A local real Unix-socket test
-reproduced rejection of valid delayed initialization. That budget is now 15
+reproduced rejection of valid delayed initialization. That candidate increased the budget to 15
 seconds, bounded by caller cancellation; regular files and missing sockets still
 fail. Focused readiness/provisioning/file-operation tests passed. This corrects
 the short readiness budget without proving the original service's precise cause.
@@ -118,8 +118,9 @@ That can force libraries to exhaust network retry deadlines. The owned firewall
 now rejects denied traffic immediately with an administrative prohibition,
 while preserving only replies to runner-initiated TCP management and DHCP.
 It still denies guest-originated external connections and host DNS, including
-previously established UDP DNS. R0 now requires a direct UDP DNS probe to fail
+previously established UDP DNS. That candidate required a direct UDP DNS probe to fail
 immediately and increment the owned rule's counter, in addition to TCP probes.
+The seventh-run correction below replaces immediate ICMP receipt as a predicate.
 Network waits are the working explanation, not yet a proved PHP root cause.
 
 A firewall regression was RED then GREEN; 13 Python harness tests pass. The
@@ -184,6 +185,27 @@ regressions were observed RED then GREEN. Sixteen local harness tests pass.
 [Seventh failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40462548080/result.json)
 is retained unchanged. Guest/firewall cleanup passed. Corrected native R0/R1
 validation is pending; no application case has yet completed acceptance.
+
+Run 40464500054 passed R0 with PHP 8.3.36, 8.4.27 and 8.5.12. All three
+file/SQL imports passed exact contents, modes, links and mapped-owner checks.
+The three application loops also completed, including actual WordPress login,
+media bytes, permalink, post update and cron hook, plus the Composer dependency.
+The run then timed out waiting for the S02 scheduled task. Mail, backups and
+reboot were not reached.
+
+The fixture supplied an absolute working directory, which the agent correctly
+rejects. Its original terminal run row was not captured, so the precise original
+status/output remains unrecorded. The fixture now submits the normal PHP task
+with a site-relative script and working directory. The API rejects absolute or
+escaping working directories before mutation, and Run Now records terminal
+status/output rather than waiting only for success. A canary counter proves a
+fresh execution before and after reboot. New regressions were observed RED then
+GREEN; all 18 Python tests, the full local quota package and focused scheduled
+provisioning tests passed. These local results do not complete hosted R1.
+
+[Eighth failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40464500054/result.json)
+is retained unchanged. Owned guest/firewall cleanup passed. Corrected R0/R1-only
+native validation is pending.
 
 ## Cleanup and boundary
 
