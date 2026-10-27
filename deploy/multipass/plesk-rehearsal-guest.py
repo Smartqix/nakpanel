@@ -33,6 +33,15 @@ def logical_dump(database):
     return run(['mariadb-dump','--skip-comments','--skip-lock-tables','--skip-add-locks','--skip-extended-insert','--hex-blob','--order-by-primary',database])
 
 
+def mail_connection(connect, label, seconds=60):
+    end=time.monotonic()+seconds
+    while True:
+        try:return connect()
+        except (ConnectionRefusedError,ConnectionResetError,TimeoutError,smtplib.SMTPServerDisconnected,imaplib.IMAP4.abort):
+            require(time.monotonic()<end,'timed out waiting for '+label)
+            time.sleep(1)
+
+
 def run(args, data=None, env=None):
     try:result=subprocess.run(args,input=data,text=True,capture_output=True,timeout=180,env=env)
     except subprocess.TimeoutExpired as error:
@@ -299,14 +308,14 @@ class Fixture:
     def cron_result(self):return json.loads((self.check_record()/'cron-result.json').read_text())
     def mail_canary(self):
         self.check_record();record=self.record;address='preserve@news.'+record['domain'];alias='alias@news.'+record['domain'];body=('From: '+address+'\r\nTo: '+alias+'\r\nSubject: R1 local canary\r\nMessage-ID: <'+self.token+'@rehearsal.test>\r\n\r\nR1 LOCAL CANARY '+self.token+'\r\n').encode()
-        with smtplib.SMTP_SSL('127.0.0.1',465,context=ssl.create_default_context(),timeout=20) as smtp:smtp.login(address,record['mail_password']);smtp.sendmail(address,[alias],body)
+        with mail_connection(lambda:smtplib.SMTP_SSL('127.0.0.1',465,context=ssl.create_default_context(),timeout=10),'SMTP TLS listener') as smtp:smtp.login(address,record['mail_password']);smtp.sendmail(address,[alias],body)
         state=self.private/'mail-canary.json';state.write_text(json.dumps(dict(address=address,password=record['mail_password'],message_id=self.token,body_sha256=None)));state.chmod(0o600)
         return self.mail_snapshot()
     def mail_snapshot(self):
         path=self.private/'mail-canary.json'
         if not path.exists():return None
         record=json.loads(path.read_text())
-        with imaplib.IMAP4_SSL('127.0.0.1',993,ssl_context=ssl.create_default_context(),timeout=20) as imap:
+        with mail_connection(lambda:imaplib.IMAP4_SSL('127.0.0.1',993,ssl_context=ssl.create_default_context(),timeout=10),'IMAP TLS listener') as imap:
             imap.login(record['address'],record['password']);end=time.monotonic()+30
             while True:
                 imap.select('INBOX');status,ids=imap.uid('search',None,'ALL')

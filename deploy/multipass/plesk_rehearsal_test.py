@@ -11,7 +11,7 @@ import tempfile
 from pathlib import Path
 import unittest
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 HERE = Path(__file__).resolve().parent
 
@@ -211,6 +211,40 @@ class RehearsalTests(unittest.TestCase):
                 result = json.loads((Path(directory) / "cron-result.json").read_text())
                 self.assertEqual(result["runs"], expected)
                 self.assertEqual(result["uid"], os.getuid())
+
+    def test_mail_listener_readiness_does_not_retry_message_submission(self):
+        spec = importlib.util.spec_from_file_location("guest_mail_tests", HERE / "plesk-rehearsal-guest.py")
+        guest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guest)
+        fixture = guest.Fixture.__new__(guest.Fixture)
+        fixture.token = "p2-123-1"
+        fixture.record = {"domain": "meadow-blog.test", "mail_password": "private-test-value"}
+        fixture.check_record = lambda: None
+        fixture.mail_snapshot = lambda: {"uid": "1"}
+        smtp = Mock()
+        connection = Mock()
+        connection.__enter__ = Mock(return_value=smtp)
+        connection.__exit__ = Mock(return_value=False)
+        with tempfile.TemporaryDirectory() as directory:
+            fixture.private = Path(directory)
+            with patch.object(guest.smtplib, "SMTP_SSL", side_effect=[ConnectionRefusedError(), connection]) as connect, patch.object(guest.time, "sleep"):
+                fixture.mail_canary()
+                self.assertEqual(connect.call_count, 2)
+                smtp.login.assert_called_once()
+                smtp.sendmail.assert_called_once()
+
+    def test_mail_readiness_is_bounded_and_keeps_certificate_errors_fatal(self):
+        spec = importlib.util.spec_from_file_location("guest_mail_deadline_tests", HERE / "plesk-rehearsal-guest.py")
+        guest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guest)
+        connect = Mock(side_effect=ConnectionRefusedError())
+        with patch.object(guest.time, "monotonic", side_effect=[0, 61]):
+            with self.assertRaisesRegex(ValueError, "mail listener"):
+                guest.mail_connection(connect, "mail listener")
+        connect = Mock(side_effect=guest.ssl.SSLCertVerificationError("untrusted fixture"))
+        with self.assertRaises(guest.ssl.SSLCertVerificationError):
+            guest.mail_connection(connect, "mail listener")
+        connect.assert_called_once()
 
     def test_wordpress_media_canary_is_a_valid_nonempty_png(self):
         spec = importlib.util.spec_from_file_location("guest_media_tests", HERE / "plesk-rehearsal-guest.py")
