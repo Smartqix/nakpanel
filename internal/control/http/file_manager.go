@@ -291,6 +291,10 @@ func (s *Server) handleFileDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if err := r.ParseForm(); err != nil {
+		writeFileManagerError(w, r, fmt.Errorf("%w: invalid form", controlfiles.ErrValidation))
+		return
+	}
 	_, err := s.files.Delete(r.Context(), request.user, request.siteID, types.FileBatchReq{Paths: r.Form["paths"]})
 	s.finishFileMutation(w, r, request, r.FormValue("path"), "file-deleted", err)
 }

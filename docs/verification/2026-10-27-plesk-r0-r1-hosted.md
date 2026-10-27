@@ -48,7 +48,22 @@ the fix and passing afterward (11 Python tests total).
 
 [Original failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40449279762/result.json)
 is retained unchanged. Owned guest deletion and firewall removal passed. A
-corrected focused run is pending; the failed run remains failed.
+corrected focused run followed; the failed run remains failed.
+
+Run 40450784211 confirmed trusted site TLS and all three separate customer,
+subscription, database and SFTP identities, then failed deleting the uploaded
+S01 archive after successful extraction. The HTTP delete handler read
+`r.Form["paths"]` before parsing a header-authenticated form, so the agent
+received an empty selection. A local HTTP regression reproduced the missing
+paths; the handler now explicitly parses the form and rejects malformed input
+before calling the agent. Copy/move path regression cases also passed.
+
+[Second failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40450784211/result.json)
+is retained unchanged. Guest/firewall cleanup passed. Focused HTTP, file-manager,
+agent file operations and workflow-selection checks passed after the fix.
+The harness also waits for mail-domain convergence after mailbox/alias changes
+and captures bounded, redacted diagnostics from only the verified owned guest
+on any later failure. A further corrected R0/R1-only run is pending.
 
 ## Cleanup and boundary
 

@@ -113,6 +113,18 @@ class Drill(shared.Drill):
             write(self.evidence/'failure-diagnostic.json', dict(program=Path(args[0]).name,exit_code=result.returncode,diagnostic=redact(result.stdout+result.stderr,self.secret_values)))
         require(result.returncode==0, 'command failed: '+Path(args[0]).name+' exit='+str(result.returncode)+' private-log='+log.name)
         return result.stdout
+    def capture_failure(self):
+        # Read diagnostics only after validating the exact owned guest identity.
+        # Keep raw streams private; public excerpts use the same secret scrubber.
+        try:
+            self.shell('assert_current_vm_identity')
+            records=[]
+            for args in (['sudo','journalctl','-u','nakpanel','-u','nakpanel-agent','--no-pager','-n','80','--since','15 minutes ago'], ['systemctl','--failed','--no-legend','--no-pager']):
+                result=subprocess.run(['multipass','exec',self.vm,'--',*args],text=True,capture_output=True,timeout=15,env=self.env)
+                records.append(dict(program=args[0],exit_code=result.returncode,diagnostic=redact(result.stdout+result.stderr,self.secret_values)))
+            write(self.evidence/'guest-failure-diagnostic.json',records)
+        except Exception as error:
+            write(self.evidence/'guest-failure-diagnostic.json',dict(capture_error=redact(str(error),self.secret_values)))
     def stage(self,name):
         remaining=int(self.deadline-time.monotonic()); require(remaining>0,'rehearsal deadline exceeded')
         signal.alarm(min(2400 if name=='fresh-signed-install' else 900,remaining))
@@ -276,6 +288,7 @@ class Drill(shared.Drill):
         self.wait('SELECT convergence_status||\':\'||effective_enabled FROM mail_domains WHERE id='+str(mid),'in_sync:true')
         self.api('/subscriptions/'+str(mail['sub'])+'/mailboxes',dict(mail_domain_id=mid,local_part='preserve',password=mail['mail_password'],quota_mb=32,enabled='true'),mail['client'])
         self.api('/subscriptions/'+str(mail['sub'])+'/mail-aliases',dict(mail_domain_id=mid,local_part='alias',destinations='preserve@news.'+mail['domain']),mail['client'])
+        self.wait('SELECT convergence_status||\':\'||effective_enabled FROM mail_domains WHERE id='+str(mid),'in_sync:true')
         self.helper('mail-canary',self.serializable(mail))
         self.passed('R1: real FPM identity, application/WordPress login and sessions, clean URLs, uploads, locked Composer dependency, controlled updates, Run Now cron and a local mail canary')
     def run_cron(self):
@@ -342,6 +355,7 @@ if __name__=='__main__':
         else:raise ValueError('select prepare, run or cleanup')
     except Exception as error:
         if drill:
+            signal.alarm(0);drill.capture_failure()
             drill.state.update(status='FAIL',error=redact(str(error),drill.secret_values));write(drill.evidence/'result.json',drill.state)
         print(redact(traceback.format_exc(),drill.secret_values if drill else []),file=sys.stderr);raise SystemExit(1)
     finally:signal.alarm(0)
