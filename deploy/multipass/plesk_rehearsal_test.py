@@ -3,6 +3,7 @@ import copy
 import importlib.util
 import json
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 import unittest
@@ -109,6 +110,20 @@ class RehearsalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             guest.verify_sql_export("INSERT INTO records VALUES(1,'expected');", "INSERT INTO records VALUES(1,'changed');")
         guest.verify_sql_export("INSERT INTO records VALUES(1,'expected');", "INSERT INTO records VALUES(1,'expected');")
+
+    def test_site_leaf_is_single_certificate_and_validates_against_fixture_ca(self):
+        spec = importlib.util.spec_from_file_location("guest_certificate_tests", HERE / "plesk-rehearsal-guest.py")
+        guest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guest)
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = guest.Fixture.__new__(guest.Fixture)
+            fixture.base = Path(directory)
+            ca = fixture.base / "fixture-ca"
+            ca.mkdir()
+            subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", str(ca / "root.key"), "-out", str(ca / "root.crt"), "-days", "1", "-subj", "/CN=Synthetic test CA"], check=True, capture_output=True)
+            leaf, _ = fixture.cert("harbor-cafe.test", "DNS:harbor-cafe.test", fixture.base / "S01", full_chain=False)
+            self.assertEqual(leaf.read_text().count("-----BEGIN CERTIFICATE-----"), 1)
+            subprocess.run(["openssl", "verify", "-CAfile", str(ca / "root.crt"), "-verify_hostname", "harbor-cafe.test", str(leaf)], check=True, capture_output=True)
 
     def test_directory_permissions_and_owner_are_in_manifest(self):
         path = HERE / "plesk-rehearsal-guest.py"

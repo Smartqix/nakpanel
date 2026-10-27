@@ -94,14 +94,15 @@ class Fixture:
         require(pwd.getpwnam(record['username']).pw_uid==record['uid'],'target UID differs')
         require(re.fullmatch(r'p2_s0[123]',record['db_name']) and record['db_user']==record['db_name'],'unsafe target database')
         return root
-    def cert(self,name,sans,output):
+    def cert(self,name,sans,output,full_chain=True):
         ca=self.base/'fixture-ca';output.parent.mkdir(mode=0o750,parents=True,exist_ok=True)
         key=output.with_suffix('.key');csr=output.with_suffix('.csr');crt=output.with_suffix('.crt');ext=output.with_suffix('.ext')
         run(['openssl','ecparam','-genkey','-name','prime256v1','-out',str(key)])
         run(['openssl','req','-new','-key',str(key),'-subj','/CN='+name,'-out',str(csr)])
         ext.write_text('basicConstraints=critical,CA:FALSE\nkeyUsage=critical,digitalSignature\nextendedKeyUsage=serverAuth\nsubjectAltName='+sans+'\n')
         run(['openssl','x509','-req','-in',str(csr),'-CA',str(ca/'root.crt'),'-CAkey',str(ca/'root.key'),'-CAcreateserial','-days','3','-sha256','-extfile',str(ext),'-out',str(crt)])
-        crt.write_text(crt.read_text()+(ca/'root.crt').read_text());key.chmod(0o600)
+        if full_chain:crt.write_text(crt.read_text()+(ca/'root.crt').read_text())
+        key.chmod(0o600)
         return crt,key
     def trust(self):
         import ipaddress,tomllib
@@ -129,7 +130,7 @@ class Fixture:
         return result
     def certificate(self):
         self.check_record();record=self.record
-        output=Path('/run/plesk-rehearsal-certificates')/record['id'];crt,key=self.cert(record['domain'],'DNS:'+record['domain'],output)
+        output=Path('/run/plesk-rehearsal-certificates')/record['id'];crt,key=self.cert(record['domain'],'DNS:'+record['domain'],output,full_chain=False)
         account=pwd.getpwnam('nakpanel');os.chown(output.parent,0,account.pw_gid);output.parent.chmod(0o750);os.chown(key,account.pw_uid,account.pw_gid)
         return {'created':True}
     def wp(self,root,args,record=None,stdin=None,source=False):

@@ -1,0 +1,1 @@
+{"diagnostic": "panelctl: leaf certificate input must contain exactly one certificate\n", "exit_code": 1, "program": "multipass"}
