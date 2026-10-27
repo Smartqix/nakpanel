@@ -25,6 +25,16 @@ case "${NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS:-0}" in
 esac
 VM_NAME="${NAKPANEL_MULTIPASS_VM}"
 IMAGE="${NAKPANEL_MULTIPASS_IMAGE}"
+if [[ -n "${NAKPANEL_QUALIFICATION_ADMIN_PASSWORD_FILE:-}" ]]; then
+  [[ "${NAKPANEL_INSTALL_ONLY:-0}" == 1 && "${GITHUB_ACTIONS:-}" == true && "${RUNNER_ENVIRONMENT:-}" == github-hosted && "${NAKPANEL_RUN_TOKEN:-}" =~ ^p2-[0-9]+-[0-9]+$ ]] || {
+    echo 'private owner credential requires the isolated hosted install-only rehearsal' >&2; exit 1;
+  }
+  python3 - "${NAKPANEL_QUALIFICATION_ADMIN_PASSWORD_FILE}" <<'PRIVATE_CHECK'
+import os,pathlib,stat,sys
+p=pathlib.Path(sys.argv[1]);info=p.lstat()
+assert stat.S_ISREG(info.st_mode) and stat.S_IMODE(info.st_mode)==0o600 and info.st_uid==os.getuid(), 'private administrator credential file required'
+PRIVATE_CHECK
+fi
 require_nakpanel_vm_name "${VM_NAME}"
 ensure_vm 4 6G 48G
 sync_repo "${ROOT_DIR}"
@@ -33,7 +43,11 @@ if [[ -n "${NAKPANEL_RELEASE_BUNDLE:-}" ]]; then
   stage_qualification_release
   assert_qualification_bundle_staged
 fi
-multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_REMOTE_SRC}" "${IMAGE}" "${NAKPANEL_RELEASE_BUNDLE:+1}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" "${NAKPANEL_RELEASE_LEGACY_INSTALLER:-0}" "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" "${NAKPANEL_GUEST_RELEASE_DIR:-}" "${NAKPANEL_GUEST_RELEASE_PUBLIC_KEY:-}" "${NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS:-0}" <<'REMOTE'
+if [[ -n "${NAKPANEL_QUALIFICATION_ADMIN_PASSWORD_FILE:-}" ]]; then
+  assert_current_vm_identity
+  multipass_exec_short "${VM_NAME}" -- sudo python3 -c 'import os,sys; data=sys.stdin.buffer.read(1024); fd=os.open("/root/nakpanel-admin-password",os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600); os.fchmod(fd,0o600); f=os.fdopen(fd,"wb"); f.write(data); f.close()' <"${NAKPANEL_QUALIFICATION_ADMIN_PASSWORD_FILE}"
+fi
+multipass exec "${VM_NAME}" --working-directory / -- sudo bash -se -- "${NAKPANEL_REMOTE_SRC}" "${IMAGE}" "${NAKPANEL_RELEASE_BUNDLE:+1}" "${NAKPANEL_RELEASE_ALLOW_DEVELOPMENT:-0}" "${NAKPANEL_RELEASE_LEGACY_INSTALLER:-0}" "${NAKPANEL_QUALIFICATION_PHP_PROVIDER}" "${NAKPANEL_GUEST_RELEASE_DIR:-}" "${NAKPANEL_GUEST_RELEASE_PUBLIC_KEY:-}" "${NAKPANEL_QUALIFICATION_APT_NO_TRANSLATIONS:-0}" "${NAKPANEL_QUALIFICATION_ADMIN_PASSWORD_FILE:+1}" <<'REMOTE'
 set -euo pipefail
 cd "$1"
 if ! id nakpanel >/dev/null 2>&1; then
@@ -54,9 +68,14 @@ if [[ "$5" == 1 ]]; then
   timeout 45m "$7/deploy/install/install.sh" --yes --bin-dir "$7/bin"
 else
   umask 077
-  admin_password_file="$(mktemp /root/nakpanel-qualification-admin.XXXXXXXX)"
-  trap 'rm -f "${admin_password_file}"' EXIT
-  printf '%s' 'NakpanelAdmin!2026' >"${admin_password_file}"
+  if [[ "${10:-}" == 1 ]]; then
+    admin_password_file=/root/nakpanel-admin-password
+    [[ "$(stat -c '%u:%a' "${admin_password_file}")" == 0:600 ]]
+  else
+    admin_password_file="$(mktemp /root/nakpanel-qualification-admin.XXXXXXXX)"
+    trap 'rm -f "${admin_password_file}"' EXIT
+    printf '%s' 'NakpanelAdmin!2026' >"${admin_password_file}"
+  fi
   install_args+=(--admin-email admin@nakpanel.test --admin-password-file "${admin_password_file}")
   if [[ "$9" == 1 ]]; then
     bash deploy/multipass/qualification-install-apt.sh timeout 45m deploy/install/install.sh "${install_args[@]}"

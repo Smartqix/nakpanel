@@ -1,0 +1,197 @@
+{
+  "scope": "local synthetic requirements checks; not Plesk migration or hosted acceptance",
+  "date": "2026-10-26",
+  "baseline_commit": "24ea971e2169cd692b88ea09cbb9903020417571",
+  "go_toolchain": "go1.26.9 darwin/arm64",
+  "dataset": "docs/migration/fixtures/plesk-customers.synthetic.json",
+  "dataset_sha256": "5e96b03e69a89d889b9b76fe7f57b0997e269c982ce99a2bc65c570d96f31653",
+  "synthetic_subscription_count": 8,
+  "real_customers_assessed": 0,
+  "source_servers_contacted": 0,
+  "hosted_rehearsals_run": 0,
+  "accepted_top_level_pass_count": 51,
+  "go_test_failures": 0,
+  "initial_harness_result": "Stopped on missing local database configuration. Those skips are retained below, not counted as passes. Six current production-schema tests were then executed against an owned local fixture.",
+  "not_executed": [
+    "TestMailTenantIsolationTwoTenants (older optional integration test; no NAKPANEL_TEST_DATABASE_URL supplied)",
+    "Real Stalwart compatibility, external mail delivery, native PHP FPM execution, full application migration and hosted R0-R5 rehearsals"
+  ],
+  "fixture_cleanup": {
+    "postgres_stopped": true,
+    "owned_cluster_data_removed": true,
+    "unrelated_services_touched": false
+  },
+  "runs": [
+    {
+      "package": "github.com/nakroteck/nakpanel/internal/mailimport",
+      "accepted_top_level_passes": [
+        "TestIMAPTLSRequired",
+        "TestWrongCertificateRejected",
+        "TestPreservesDatesFlagsAndBytes",
+        "TestDistinctIdenticalMessages",
+        "TestUIDValidityChange",
+        "TestAppendReplyLost",
+        "TestMaildirHierarchy",
+        "TestMaildirFlags",
+        "TestMaildirIgnoresTmp",
+        "TestMaildirUnsupportedLayout",
+        "TestMaildirArchiveTraversalAndLinks",
+        "TestMaildirExpansionLimit",
+        "TestMaildirChangedSourceManifest"
+      ],
+      "initial_skipped_tests": [],
+      "failed_tests": [],
+      "argv": [
+        "go",
+        "test",
+        "./internal/mailimport",
+        "-run",
+        "^Test(IMAPTLSRequired|WrongCertificateRejected|PreservesDatesFlagsAndBytes|DistinctIdenticalMessages|UIDValidityChange|AppendReplyLost|Maildir(Hierarchy|Flags|IgnoresTmp|UnsupportedLayout|ArchiveTraversalAndLinks|ExpansionLimit|ChangedSourceManifest))$",
+        "-count=1",
+        "-json"
+      ]
+    },
+    {
+      "package": "github.com/nakroteck/nakpanel/internal/control/mailimport",
+      "accepted_top_level_passes": [
+        "TestMailImportRejectsForeignMailbox",
+        "TestMailImportInactiveMailboxCreatesNoIntent",
+        "TestMailImportCredentialsNeverSerialize",
+        "TestMailImportClientCannotStart",
+        "TestCrashBeforeReceipt",
+        "TestCrashAfterAppend",
+        "TestPauseResume",
+        "TestSourceCatchup",
+        "TestQuotaFailure",
+        "TestUnsupportedFlagWarning",
+        "TestUnknownReceiptCannotComplete",
+        "TestImportVerifiesThroughFreshDestinationConnection",
+        "TestImportRejectsEmptyDiscovery",
+        "TestImportRejectsUnexpectedDestinationFlags",
+        "TestImportMetadataIgnoresOnlyOwnReceiptAndRecent",
+        "TestImportStateLookupFailuresRemainRetryable",
+        "TestImportPersistenceFailuresRemainRetryable"
+      ],
+      "initial_skipped_tests": [],
+      "failed_tests": [],
+      "argv": [
+        "go",
+        "test",
+        "./internal/control/mailimport",
+        "-run",
+        "^Test(CrashBeforeReceipt|CrashAfterAppend|PauseResume|SourceCatchup|QuotaFailure|UnsupportedFlagWarning|UnknownReceiptCannotComplete|Import|MailImport(RejectsForeignMailbox|InactiveMailboxCreatesNoIntent|CredentialsNeverSerialize|ClientCannotStart))",
+        "-count=1",
+        "-json"
+      ]
+    },
+    {
+      "package": "github.com/nakroteck/nakpanel/internal/control/quota",
+      "accepted_top_level_passes": [
+        "TestUpsertMailboxRejectsInvalidInputBeforeSQL",
+        "TestEnsureMailDomainBelongsTxRejectsForeignDomain",
+        "TestEnforceMailCountTxScopesCountToSubscription",
+        "TestEnsureAliasDestinationTxRejectsForeignMailbox",
+        "TestDeleteMailboxAndAliasScopeToSubscription"
+      ],
+      "initial_skipped_tests": [
+        "TestMailTenantIsolationTwoTenants",
+        "TestSubdomainMailSharedQuotaLastSlot/mailbox",
+        "TestSubdomainMailSharedQuotaLastSlot/alias",
+        "TestSubdomainMailRejectsMissingUpdateIDs/mailbox",
+        "TestSubdomainMailRejectsMissingUpdateIDs/alias",
+        "TestSubdomainMailMailboxStorageCap"
+      ],
+      "failed_tests": [],
+      "argv": [
+        "go",
+        "test",
+        "./internal/control/quota",
+        "-run",
+        "^Test(UpsertMailboxRejectsInvalidInputBeforeSQL|EnforceMailCountTxScopesCountToSubscription|EnsureMailDomainBelongsTxRejectsForeignDomain|EnsureAliasDestinationTxRejectsForeignMailbox|DeleteMailboxAndAliasScopeToSubscription|MailTenantIsolationTwoTenants|SubdomainMail(SharedQuotaLastSlot|RejectsMissingUpdateIDs|MailboxStorageCap))$",
+        "-count=1",
+        "-json"
+      ]
+    },
+    {
+      "package": "github.com/nakroteck/nakpanel/internal/agent/ops",
+      "accepted_top_level_passes": [
+        "TestValidateCreateDatabaseRequestRejectsUnsafeInputs",
+        "TestDatabaseProvisionerRejectsUnconfiguredFutureEngines",
+        "TestMaildirStagingRoundTripAndSubscriptionIsolation",
+        "TestMaildirRPCRejectsPathsAndInvalidBounds",
+        "TestMaildirStageRejectsSymlinkUpload",
+        "TestInstalledSuryPHPProfileResolvesFixedRuntimeMapping",
+        "TestInstalledSuryPHPProfileRejectsWrongIdentityAndVersionList"
+      ],
+      "initial_skipped_tests": [],
+      "failed_tests": [],
+      "argv": [
+        "go",
+        "test",
+        "./internal/agent/ops",
+        "-run",
+        "^Test(InstalledSuryPHPProfileResolvesFixedRuntimeMapping|InstalledSuryPHPProfileRejectsWrongIdentityAndVersionList|ValidateCreateDatabaseRequestRejectsUnsafeInputs|DatabaseProvisionerRejectsUnconfiguredFutureEngines|MaildirStagingRoundTripAndSubscriptionIsolation|MaildirRPCRejectsPathsAndInvalidBounds|MaildirStageRejectsSymlinkUpload)$",
+        "-count=1",
+        "-json"
+      ]
+    },
+    {
+      "package": "github.com/nakroteck/nakpanel/deploy/install",
+      "accepted_top_level_passes": [
+        "TestPlatformProfilesResolveOnlyExplicitUbuntuContracts",
+        "TestRetiredUbuntuRejectedBeforeMutation"
+      ],
+      "initial_skipped_tests": [],
+      "failed_tests": [],
+      "argv": [
+        "go",
+        "test",
+        "./deploy/install",
+        "-run",
+        "^Test(PlatformProfilesResolveOnlyExplicitUbuntuContracts|RetiredUbuntuRejectedBeforeMutation)$",
+        "-count=1",
+        "-json"
+      ]
+    },
+    {
+      "package": "github.com/nakroteck/nakpanel/deploy/multipass",
+      "accepted_top_level_passes": [
+        "TestUbuntu26QualificationDefaultsKeepAllPHPVersions"
+      ],
+      "initial_skipped_tests": [],
+      "failed_tests": [],
+      "argv": [
+        "go",
+        "test",
+        "./deploy/multipass",
+        "-run",
+        "^TestUbuntu26QualificationDefaultsKeepAllPHPVersions$",
+        "-count=1",
+        "-json"
+      ]
+    },
+    {
+      "package": "github.com/nakroteck/nakpanel/internal/control/quota",
+      "accepted_top_level_passes": [
+        "TestSubdomainMailSharedQuotaLastSlot",
+        "TestSubdomainMailRejectsMissingUpdateIDs",
+        "TestSubdomainMailMailboxStorageCap",
+        "TestSubdomainMailEnableMailboxAndAlias",
+        "TestSubdomainMailRepeatedEnableKeepsAccounts",
+        "TestSubdomainMailRejectsRetargetedDomainID"
+      ],
+      "failed_tests": [],
+      "initial_skipped_tests": [],
+      "argv": [
+        "go",
+        "test",
+        "./internal/control/quota",
+        "-run",
+        "^TestSubdomainMail(SharedQuotaLastSlot|RejectsMissingUpdateIDs|MailboxStorageCap|EnableMailboxAndAlias|RepeatedEnableKeepsAccounts|RejectsRetargetedDomainID)$",
+        "-count=1",
+        "-json"
+      ],
+      "fixture": "new owned PostgreSQL 17 cluster; Unix socket only; nakpanel_removal_test; current migrations in disposable schemas"
+    }
+  ]
+}
