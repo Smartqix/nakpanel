@@ -44,13 +44,13 @@ def firewall_rules(token, mac, bridge):
  comment "nakpanel-plesk-r0:{token}"
  chain guest_forward {{
   type filter hook forward priority -310; policy accept;
-  iifname "{bridge}" ether saddr {mac} counter drop
+  iifname "{bridge}" ether saddr {mac} counter reject with icmpx type admin-prohibited
  }}
  chain guest_host {{
   type filter hook input priority -310; policy accept;
-  iifname "{bridge}" ether saddr {mac} ct state established,related accept
+  iifname "{bridge}" ether saddr {mac} meta l4proto tcp ct direction reply ct state established,related accept
   iifname "{bridge}" ether saddr {mac} udp sport 68 udp dport 67 accept
-  iifname "{bridge}" ether saddr {mac} counter drop
+  iifname "{bridge}" ether saddr {mac} counter reject with icmpx type admin-prohibited
  }}
 }}
 '''
@@ -119,9 +119,13 @@ class Drill(shared.Drill):
         try:
             self.shell('assert_current_vm_identity')
             records=[]
-            for args in (['sudo','cat','/var/lib/nakpanel-qualification/'+self.token+'/fixtures/progress.json'], ['ps','-eo','user,pid,ppid,etime,comm,wchan:25'], ['sudo','journalctl','-u','nakpanel','-u','nakpanel-agent','--no-pager','-n','80','--since','15 minutes ago'], ['sudo','journalctl','-u','nakpanel-php-fpm@*.service','--no-pager','-n','100','--since','15 minutes ago'], ['sudo','journalctl','-k','--no-pager','-n','40'], ['free','-b'], ['sudo','systemctl','show','nakpanel-php-fpm@1.service','nakpanel-php-fpm@2.service','nakpanel-php-fpm@3.service','--property=ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,MainPID,NRestarts,MemoryCurrent,MemoryPeak,MemoryMax'], ['sudo','python3','-c',"from pathlib import Path;import json;print(json.dumps({p.name:p.read_text(errors='replace')[-4000:] for p in sorted(Path('/var/log/php-fpm').glob('*.error.log'))[:10] if p.is_file() and not p.is_symlink()}))"], ['systemctl','--failed','--no-legend','--no-pager']):
-                result=subprocess.run(['multipass','exec',self.vm,'--',*args],text=True,capture_output=True,timeout=15,env=self.env)
-                records.append(dict(program=args[0],exit_code=result.returncode,diagnostic=redact(result.stdout+result.stderr,self.secret_values)))
+            for args in (['sudo','cat','/var/lib/nakpanel-qualification/'+self.token+'/fixtures/progress.json'], ['ps','-eo','user,pid,ppid,etime,comm,wchan:25'], ['sudo','journalctl','-u','nakpanel','-u','nakpanel-agent','--no-pager','-n','80','--since','15 minutes ago'], ['sudo','journalctl','-u','nakpanel-php-fpm@*.service','--no-pager','-n','100','--since','15 minutes ago'], ['sudo','journalctl','-k','--no-pager','-n','40'], ['free','-b'], ['sudo','systemctl','show','nakpanel-php-fpm@1.service','nakpanel-php-fpm@2.service','nakpanel-php-fpm@3.service','--property=ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,MainPID,NRestarts,MemoryCurrent,MemoryPeak,MemoryMax'], ['sudo','python3','-c',"from pathlib import Path;import json;print(json.dumps({p.name:p.read_text(errors='replace')[-4000:] for p in sorted(Path('/var/log/php-fpm').glob('*.error.log'))[:10] if p.is_file() and not p.is_symlink()}))"], ['sudo','timeout','35s','strace','-f','-T','-s','96','-e','trace=network,poll,ppoll,clock_nanosleep','/usr/sbin/php-fpm8.5','-tt','-y','/etc/nakpanel/php-fpm/sites/3.conf'], ['systemctl','--failed','--no-legend','--no-pager']):
+                try:
+                    result=subprocess.run(['multipass','exec',self.vm,'--',*args],text=True,capture_output=True,timeout=40 if 'strace' in args else 15,env=self.env)
+                    records.append(dict(program=args[0],exit_code=result.returncode,diagnostic=redact(result.stdout+result.stderr,self.secret_values)))
+                except subprocess.TimeoutExpired as error:
+                    def stream(value):return value.decode(errors='replace') if isinstance(value,bytes) else value or ''
+                    records.append(dict(program=args[0],exit_code='timeout',diagnostic=redact(stream(error.stdout)+stream(error.stderr),self.secret_values)))
             write(self.evidence/'guest-failure-diagnostic.json',records)
         except Exception as error:
             write(self.evidence/'guest-failure-diagnostic.json',dict(capture_error=redact(str(error),self.secret_values)))
@@ -158,13 +162,13 @@ class Drill(shared.Drill):
         raw=self.cmd(args+['https://'+record['domain']+path],data=urllib.parse.urlencode(fields).encode().decode() if fields is not None else None,timeout=60)
         body,code=raw.rsplit('\n',1); require(int(code) in ok,'site '+record['id']+' HTTP '+code+' for '+path); return body
     def containment(self,users):
-        before=self.drop_count()
+        before=self.denial_count()
         for user in users:
             raw=self.guest('sudo','-u',user,'python3','-c',"import subprocess,json; p=subprocess.run(['curl','--silent','--connect-timeout','2','--max-time','3','https://1.1.1.1/'],capture_output=True); print(json.dumps({'blocked':p.returncode!=0}))")
             require(json.loads(raw)['blocked'],'guest external TCP connection was permitted')
-        require(self.drop_count()>before,'containment probes did not hit actual firewall drop counters')
-        self.state.setdefault('containment_probes',[]).append(dict(users=users,drop_counter=self.drop_count()))
-    def drop_count(self):
+        require(self.denial_count()>before,'containment probes did not hit actual firewall denial counters')
+        self.state.setdefault('containment_probes',[]).append(dict(users=users,denial_counter=self.denial_count()))
+    def denial_count(self):
         rules=json.loads(self.cmd(['sudo','nft','-j','list','table','inet',self.table]))
         return sum(expr['counter']['packets'] for item in rules['nftables'] for expr in item.get('rule',{}).get('expr',[]) if 'counter' in expr)
     def bootstrap(self):
@@ -173,6 +177,7 @@ class Drill(shared.Drill):
         self.shell('assert_current_vm_identity'); self.shell('assert_qualification_installed_release')
         self.ip=self.shell('vm_ip').strip()
         require(self.guest('bash','-c','. /etc/os-release; printf "%s:%s:%s" "$ID" "$VERSION_ID" "$VERSION_CODENAME"').strip()=='ubuntu:26.04:resolute','unsupported actual guest OS')
+        self.guest('sudo','apt-get','-o','DPkg::Lock::Timeout=120','install','-y','--no-install-recommends','strace')
         self.stage('R0-trusted-endpoints-and-source-identity')
         self.helper('trust',{'ip':self.ip})
         self.ca=self.private/'fixture-ca.crt'; self.ca.write_text(self.guest('sudo','cat','/var/lib/nakpanel-qualification/'+self.token+'/fixture-ca/root.crt'))
@@ -191,8 +196,10 @@ class Drill(shared.Drill):
         self.cmd(['sudo','nft','--check','--file',str(rulefile)]); self.cmd(['sudo','nft','--file',str(rulefile)])
         write(self.private/'firewall.json',dict(token=self.token,table=self.table,mac=self.mac,bridge=bridge))
         self.containment(['root'])
+        before=self.denial_count();dns=self.helper('containment-dns')
+        require(dns['blocked_immediately'] and self.denial_count()>before,'contained UDP DNS did not hit the owned rejection rule immediately');self.state['dns_containment']=dns
         self.state['source_fixture_identity']=dict(kind='private synthetic exports in the owned guest',token=self.token,plesk_server=False)
-        self.passed('R0: signed current Resolute installation, all PHP CLI/FPM extensions, trusted HTTPS and actual host-enforced egress drops')
+        self.passed('R0: signed current Resolute installation, all PHP CLI/FPM extensions, trusted HTTPS and actual host-enforced egress denials')
     def provision(self):
         self.stage('R1-three-independent-subscriptions')
         plan='Plesk R1 '+self.token

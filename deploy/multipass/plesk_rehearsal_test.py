@@ -54,6 +54,13 @@ class RehearsalTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(ValueError):
                 self.m.validate_inventory(data)
 
+    def test_containment_denies_new_traffic_without_silent_network_waits(self):
+        _, rules = self.m.firewall_rules("p2-123-1", "52:54:00:aa:bb:cc", "mpqemubr0")
+        self.assertEqual(rules.count("counter reject with icmpx type admin-prohibited"), 2)
+        self.assertIn("meta l4proto tcp ct direction reply ct state established,related accept", rules)
+        self.assertIn("udp sport 68 udp dport 67 accept", rules)
+        self.assertNotIn("counter drop", rules)
+
     def test_firewall_rejects_unowned_or_injected_identifiers(self):
         for token, mac, bridge in (("other-run", "52:54:00:aa:bb:cc", "mpqemubr0"), ("p2-123-1", "bad; flush ruleset", "mpqemubr0"), ("p2-123-1", "52:54:00:aa:bb:cc", "eth0\nflush ruleset")):
             with self.subTest(token=token, mac=mac, bridge=bridge), self.assertRaises(ValueError):

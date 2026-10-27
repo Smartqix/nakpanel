@@ -105,7 +105,31 @@ an actual CSRF-header POST. Twelve Python harness tests pass. The fourth run
 never reached that request, so this is an additional preemptive harness fix.
 
 [Fourth failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40454639549/result.json)
-is retained unchanged. A corrected R0/R1-only run is pending.
+is retained unchanged. A corrected R0/R1-only run followed.
+
+Run 40456958081 failed during S03 account convergence despite the longer
+socket wait. FPM configuration checks repeatedly took about 20 seconds;
+services were then stopped/restarted by convergence. Memory was not exhausted:
+about 4 GB was available. The 15-second budget change did not fix this failure
+and has been reverted to the original three-second runtime behavior.
+
+The test isolation silently dropped guest DNS and other denied connections.
+That can force libraries to exhaust network retry deadlines. The owned firewall
+now rejects denied traffic immediately with an administrative prohibition,
+while preserving only replies to runner-initiated TCP management and DHCP.
+It still denies guest-originated external connections and host DNS, including
+previously established UDP DNS. R0 now requires a direct UDP DNS probe to fail
+immediately and increment the owned rule's counter, in addition to TCP probes.
+Network waits are the working explanation, not yet a proved PHP root cause.
+
+A firewall regression was RED then GREEN; 13 Python harness tests pass. The
+socket cancellation/non-socket guards pass with the original runtime budget.
+Any recurring failure will also collect a bounded network syscall trace of a
+read-only FPM configuration check. No service repair is used for acceptance.
+
+[Fifth failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40456958081/result.json)
+is retained unchanged. Guest/firewall cleanup passed. Corrected hosted R0/R1
+validation is pending.
 
 ## Cleanup and boundary
 

@@ -133,6 +133,18 @@ class Fixture:
             fpm=run(['/usr/sbin/php-fpm'+minor,'-i']);require(all(re.search(r'^'+re.escape(name)+r'\s*$',fpm,re.I|re.M) for name in required),'FPM extension unavailable')
             result[minor]=dict(version=data[0],extensions=sorted(data[1]),fpm_extensions_verified=True)
         return result
+    def containment_dns(self):
+        import socket,ipaddress
+        route=json.loads(run(['ip','-j','route','get','1.1.1.1']))[0]
+        gateway=str(ipaddress.ip_address(route['gateway']))
+        name=self.token+'.test';question=b''.join(bytes([len(label)])+label.encode() for label in name.split('.'))+b'\x00'
+        packet=b'\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00'+question+b'\x00\x01\x00\x01'
+        started=time.monotonic();blocked=False;code=None
+        with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as client:
+            client.settimeout(2)
+            try:client.connect((gateway,53));client.send(packet);client.recv(512)
+            except OSError as error:code=error.errno;blocked=code in (1,13,101,111,113)
+        return dict(blocked_immediately=blocked,errno=code,elapsed_seconds=round(time.monotonic()-started,3))
     def certificate(self):
         self.check_record();record=self.record
         output=Path('/run/plesk-rehearsal-certificates')/record['id'];crt,key=self.cert(record['domain'],'DNS:'+record['domain'],output,full_chain=False)
@@ -268,5 +280,5 @@ class Fixture:
 
 if __name__=='__main__':
     payload=json.loads(sys.stdin.read(2<<20));fixture=Fixture(payload)
-    action=sys.argv[1].replace('-','_');require(action in ('trust','runtimes','certificate','source','import_sql','manifest','application_workflow','wordpress_workflow','cron_result','mail_canary','snapshot','boundaries'),'unapproved fixture action')
+    action=sys.argv[1].replace('-','_');require(action in ('trust','runtimes','containment_dns','certificate','source','import_sql','manifest','application_workflow','wordpress_workflow','cron_result','mail_canary','snapshot','boundaries'),'unapproved fixture action')
     print(json.dumps(getattr(fixture,action)(),sort_keys=True))

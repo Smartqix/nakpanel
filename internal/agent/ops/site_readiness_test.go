@@ -72,35 +72,6 @@ func TestSiteReadinessRequiresItsOwnEnabledVhostAndIsolatedSocket(t *testing.T) 
 	}
 }
 
-func TestDedicatedFPMSocketWaitAllowsBoundedServiceInitialization(t *testing.T) {
-	root, err := os.MkdirTemp("/tmp", "np-fpm-ready-")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { os.RemoveAll(root) })
-	socket := filepath.Join(root, "site.sock")
-	type outcome struct {
-		listener net.Listener
-		err      error
-	}
-	ready := make(chan outcome, 1)
-	timer := time.AfterFunc(3500*time.Millisecond, func() {
-		listener, err := net.Listen("unix", socket)
-		ready <- outcome{listener, err}
-	})
-	defer func() {
-		if !timer.Stop() {
-			result := <-ready
-			if result.listener != nil {
-				result.listener.Close()
-			}
-		}
-	}()
-	if err := waitForUnixSocket(context.Background(), socket, dedicatedFPMSocketReadyTimeout); err != nil {
-		t.Fatalf("service was rejected before its socket could initialize: %v", err)
-	}
-}
-
 func TestDedicatedFPMSocketWaitHonorsCancellationAndRejectsRegularFiles(t *testing.T) {
 	root := t.TempDir()
 	file := filepath.Join(root, "not-a-socket")
@@ -109,7 +80,7 @@ func TestDedicatedFPMSocketWaitHonorsCancellationAndRejectsRegularFiles(t *testi
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := waitForUnixSocket(ctx, file, dedicatedFPMSocketReadyTimeout); !errors.Is(err, context.Canceled) {
+	if err := waitForUnixSocket(ctx, file, 3*time.Second); !errors.Is(err, context.Canceled) {
 		t.Fatalf("wait ignored cancellation or accepted a regular file: %v", err)
 	}
 	if err := waitForUnixSocket(context.Background(), filepath.Join(root, "missing"), 20*time.Millisecond); err == nil {
