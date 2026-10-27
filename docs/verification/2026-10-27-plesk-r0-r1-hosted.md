@@ -1,34 +1,48 @@
 # Synthetic Plesk migration rehearsals R0 and R1
 
-Status: R0 has passed; corrected hosted R1 validation is pending. No full R1
-acceptance yet. The latest completed [run 40469902668](https://github.com/Smartqix/nakpanel/actions/runs/40469902668)
-failed at mail connection readiness. A corrected candidate is being prepared.
+Status: **R0 PASS; R1 PASS** on 27 October 2026.
+[Accepted hosted run 40471999170](https://github.com/Smartqix/nakpanel/actions/runs/40471999170)
+tested commit `75b9bd0250450b8e5c174df4fd83b542be0102a9`. Both signed-build and
+R0/R1 jobs passed; every other hosted qualification job was skipped.
 
 Only R0/R1 with S01/S02/S03 are authorized. The target is Ubuntu 26.04 AMD64,
 using the existing signed Resolute Surý provider and PHP 8.3/8.4/8.5.
 
 ## Workloads and results
 
-The last completed run, 40469902668, verified the following before failing at
-mail listener readiness. These partial results do not establish R1 acceptance.
+The accepted run completed all three dummy workloads and their reboot checks.
 
 | Case | Workload | Actual PHP | File/SQL import and application workflow | Reboot preservation |
 | --- | --- | --- | --- | --- |
-| S01 `harbor-cafe.test` | WordPress 7.1/MariaDB | 8.3.36 | PASS | Pending |
-| S02 `atlas-studio.test` | Composer/application/MariaDB/cron | 8.4.27 | PASS, including Run Now exit 0 | Pending |
-| S03 `meadow-blog.test` | Application/MariaDB; child mail canary | 8.5.12 | Application PASS; mail pending | Pending |
+| S01 `harbor-cafe.test` | WordPress 7.1/MariaDB | 8.3.36 | PASS | PASS |
+| S02 `atlas-studio.test` | Composer/application/MariaDB/cron | 8.4.27 | PASS, including two fresh Run Now executions, both exit 0 | PASS |
+| S03 `meadow-blog.test` | Application/MariaDB; child mail canary | 8.5.12 | PASS, including one child-domain SMTP/IMAP canary | PASS |
 
-R1 requires exact logical SQL contents, file/directory hashes and modes,
+R1 passed exact logical SQL contents, file/directory hashes and modes,
 symlinks, mapped ownership, actual FPM identities, authenticated sessions,
 uploads, clean URLs, a controlled update, locked Composer code and fresh cron
-execution. It also requires one local SMTP/IMAP canary, cross-tenant denials,
+execution. It also passed one local SMTP/IMAP canary, cross-tenant denials,
 three checked backup archives and an unassisted reboot with preservation.
+
+The frozen harness compared pre/post-reboot file/SQL/source/mail/backup
+snapshots and recomputed each archive checksum. Public result JSON retains the
+verdicts and source manifest hashes; private snapshot payloads and credentials
+were not uploaded. CLI/FPM inventories remained valid after reboot, and actual
+cron execution counters advanced from 1 to 2 under the expected tenant/PHP 8.4.
 
 R0 passed signed artifact/image verification, all CLI/FPM extensions, trusted
 HTTPS, root/tenant egress denial and the dedicated guest-to-host DNS deny
 counter. The signed Ubuntu image serial is `20260927`, SHA256
 `8800651811af9a85465ad1d552add729947bb16488dddb4a9b5305a3d97332b2`.
 Artifact hashes, trust-key identity and source commit are retained per run.
+The accepted bundle archive SHA256 is
+`9212f690c8ec2c09f7df85df3eba77ace4e87597ca8208bfb96508fbfb58d0e8`.
+Its manifest/public-key hashes were matched locally to the hosted evidence and
+its detached signature verified again. The public manifest, signature, test
+public key and Ubuntu image checksum signature are retained with the
+[accepted evidence](evidence/2026-10-27-plesk-r0-r1/40471999170/result.json).
+The signing key is an ephemeral development trust anchor, not a production
+release key. No private signing key was retained.
 
 ## Product fixes
 
@@ -120,8 +134,10 @@ Public evidence: [run directories](evidence/2026-10-27-plesk-r0-r1/).
   transition, R5 fresh-host restore/write-aware rollback, R2 exception workloads,
   ARM64 and external mail deliverability remain unexecuted.
 - A temporary encrypted CI secret carries the approved operator credential only
-  to the verified owned guest. Its deletion is required after the final result;
-  private operator configuration is preserved. No credential value is committed.
+  to the verified owned guest. It was deleted after the accepted run and its
+  absence verified. Private operator configuration is preserved; no credential
+  value is committed. The accepted guest and owned firewall were removed
+  successfully (`cleanup.json`: exit 0, one owned VM, firewall removed).
 
 No real customers/source servers were contacted. No PR, merge, live migration
 or production deployment was performed. The tested development candidate is

@@ -37,19 +37,19 @@
 Files: the linked requirements document, the
 [synthetic JSON](../../migration/fixtures/plesk-customers.synthetic.json), this plan
 and the [local result evidence](../../verification/evidence/2026-10-26-plesk-synthetic-local.json).
-The hosted slice adds a dedicated verifier and workflow selection, plus a private bootstrap-file path in the test installer harness. Application code, OS/PHP defaults and schemas retain their current contract.
+The hosted slice adds a dedicated verifier and workflow selection, plus a private bootstrap-file path in the test installer harness. Hosted failures also produced fixes for file-delete form parsing and early scheduled-task working-directory validation. OS/PHP defaults, schemas and backup formats retain their current contract.
 
 ## R0: Freeze evidence and contain a disposable rehearsal
 
 **Consumes:** Selected synthetic cases or a separately authorized, complete private inventory.
 **Produces:** A reviewed case manifest, isolation proof and owned source/target identities.
 
-- [ ] Record exact target bundle/hash/trust key, OS/architecture/provider and all PHP runtime/extension readiness. Initial AMD64 rehearsal is proposed because existing hosted evidence covers AMD64; ARM64 needs its own acceptance.
-- [ ] Use synthetic data first. For later customer-derived copies, obtain explicit scope and sanitize privately; compare target preservation against the sanitized source baseline.
-- [ ] Require nonempty file/database/mail canaries where applicable and a baseline checksum/count manifest. Empty fixtures cannot prove preservation.
-- [ ] Block production egress, disable cron/workers/outbound notifications until reviewed, and use sandbox payment/mail/API credentials. Prove production endpoints are unreachable.
-- [ ] Use isolated .test names, private DNS/hosts overrides and trusted test certificates. Never change public delegation, ACME production challenges or the live source.
-- [ ] Bound time, storage and cleanup to exact owned identities. Retain evidence before deleting only owned fixtures.
+- [x] Record exact target bundle/hash/trust key, OS/architecture/provider and all PHP runtime/extension readiness. Initial AMD64 rehearsal is proposed because existing hosted evidence covers AMD64; ARM64 needs its own acceptance.
+- [x] Use synthetic data first. For later customer-derived copies, obtain explicit scope and sanitize privately; compare target preservation against the sanitized source baseline.
+- [x] Require nonempty file/database/mail canaries where applicable and a baseline checksum/count manifest. Empty fixtures cannot prove preservation.
+- [x] Block production egress, disable cron/workers/outbound notifications until reviewed, and use sandbox payment/mail/API credentials. Prove production endpoints are unreachable.
+- [x] Use isolated .test names, private DNS/hosts overrides and trusted test certificates. Never change public delegation, ACME production challenges or the live source.
+- [x] Bound time, storage and cleanup to exact owned identities. Retain evidence before deleting only owned fixtures.
 
 Abort before import on missing ownership, untrusted TLS, insufficient capacity,
 reachable production integrations or unresolved required inventory fields.
@@ -59,11 +59,11 @@ reachable production integrations or unresolved required inventory fields.
 **Consumes:** R0 manifest and S01/S02/S03.
 **Produces:** Per-runtime website/data/permission evidence for PHP 8.3, 8.4 and 8.5.
 
-- [ ] Recreate separate customers/subscriptions and the reviewed plan/overrides through normal scoped operations. Preserve relationships; never copy Plesk numeric IDs as Nakpanel ownership.
-- [ ] Use Classic PHP for mutable Plesk applications unless a Managed PHP conversion is explicitly selected. Keep each chosen PHP minor and validate required extensions plus FPM/CLI identity.
-- [ ] Import scoped files and logical database data into disposable destinations. Validate application URLs, login, sessions, upload, permalinks, cron and a controlled update.
-- [ ] Compare file hashes, symlinks, modes, mapped ownership, row/routine inventories and negative cross-tenant access. Test the final declared dataset, not just a welcome page.
-- [ ] Back up, reboot and recheck the workload without repair actions masking failed boot persistence.
+- [x] Recreate separate customers/subscriptions and the reviewed plan/overrides through normal scoped operations. Preserve relationships; never copy Plesk numeric IDs as Nakpanel ownership.
+- [x] Use Classic PHP for mutable Plesk applications unless a Managed PHP conversion is explicitly selected. Keep each chosen PHP minor and validate required extensions plus FPM/CLI identity.
+- [x] Import scoped files and logical database data into disposable destinations. Validate application URLs, login, sessions, upload, permalinks, cron and a controlled update.
+- [x] Compare file hashes, symlinks, modes, mapped ownership, row/routine inventories and negative cross-tenant access. Test the final declared dataset, not just a welcome page.
+- [x] Back up, reboot and recheck the workload without repair actions masking failed boot persistence.
 
 Pass only with all three runtimes independently evidenced and no unexplained
 data/permission differences. This does not prove every WordPress/plugin version.
@@ -156,3 +156,24 @@ fixtures; the eight inventory records were not imported into a running panel.
 
 Document link and case/gap/rehearsal cross-reference checks passed before
 handoff. At that local checkpoint R0–R5 were unexecuted. The later R0/R1 authorization is recorded above; results will be source-bound in a separate hosted report.
+
+
+## Hosted R0/R1 result — 27 October 2026
+
+R0 and R1 passed for S01/S02/S03 on Ubuntu 26.04 AMD64 with PHP 8.3.36,
+8.4.27 and 8.5.12. The accepted candidate is
+`75b9bd0250450b8e5c174df4fd83b542be0102a9` in
+[run 40471999170](https://github.com/Smartqix/nakpanel/actions/runs/40471999170).
+The [report](../../verification/2026-10-27-plesk-r0-r1-hosted.md) records ten
+original failed runs, fixes, acceptance evidence, scope decisions and limits.
+
+The source was private synthetic exports inside the owned guest, not installed
+Plesk. S03 used one local mail canary; its full import/catch-up remains R3.
+Three local backups, tenant denials and unassisted reboot preservation passed;
+cron executed freshly before and after reboot. Guest/firewall cleanup passed,
+and the task-created CI credential was deleted with absence verified.
+
+R2–R5 remain unexecuted and unauthorized. No live customer migration, PR,
+merge or production deployment was performed. The earlier local-only result
+record above retains its original date and scope. No additional hosted run is
+needed for these report-only changes.

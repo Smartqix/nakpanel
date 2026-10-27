@@ -1,0 +1,43 @@
+{
+  "qualification_passed": false,
+  "promotion_eligible": false,
+  "status": "PASS",
+  "architecture": "x86_64",
+  "cpu_count": 4,
+  "total_memory": 16766414848,
+  "available_memory": 15411068928,
+  "free_disk": 120560762880,
+  "kvm_api": 12,
+  "runner_image": "20261023.334.3",
+  "runner_os_image": "ubuntu24",
+  "guest_budget": {
+    "max_simultaneous_guests": 2,
+    "source_cpus": 2,
+    "source_memory_gib": 5,
+    "source_disk_gib": 32,
+    "dr_cpus": 2,
+    "dr_memory_gib": 3,
+    "dr_disk_gib": 16
+  },
+  "kvm_device": {
+    "uid": 0,
+    "gid": 993,
+    "mode": "0660",
+    "major": 10,
+    "minor": 232,
+    "character_device": true,
+    "runner_uid": 1001,
+    "runner_groups": [
+      4,
+      100,
+      118,
+      999,
+      1001
+    ]
+  },
+  "kvm_acl": {
+    "exit_code": 0,
+    "output": "# file: /dev/kvm\n# owner: 0\n# group: 993\nuser::rw-\nuser:1001:rw-\ngroup::rw-\nmask::rw-\nother::---\n\n"
+  },
+  "errors": []
+}
