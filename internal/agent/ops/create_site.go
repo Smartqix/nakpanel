@@ -1262,7 +1262,7 @@ func (p *SiteProvisioner) createSiteRuntime(ctx context.Context, req types.Creat
 		return err
 	}
 	if plan.SiteID > 0 && strings.HasPrefix(plan.PHPFPMSocket, "/run/") {
-		if err := waitForUnixSocket(ctx, plan.PHPFPMSocket, 3*time.Second); err != nil {
+		if err := waitForUnixSocket(ctx, plan.PHPFPMSocket, dedicatedFPMSocketReadyTimeout); err != nil {
 			return fmt.Errorf("wait for dedicated PHP-FPM socket: %w", err)
 		}
 	}
@@ -1408,6 +1408,10 @@ func ensurePrivateSiteRuntimeArtifacts(plan SitePlan) error {
 	}
 	return nil
 }
+
+// A simple systemd unit can be started before FPM has bound its socket.
+// Keep readiness bounded by this budget and the caller context.
+const dedicatedFPMSocketReadyTimeout = 15 * time.Second
 
 func waitForUnixSocket(ctx context.Context, path string, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)

@@ -119,7 +119,7 @@ class Drill(shared.Drill):
         try:
             self.shell('assert_current_vm_identity')
             records=[]
-            for args in (['sudo','cat','/var/lib/nakpanel-qualification/'+self.token+'/fixtures/progress.json'], ['ps','-eo','user,pid,ppid,etime,comm,wchan:25'], ['sudo','journalctl','-u','nakpanel','-u','nakpanel-agent','--no-pager','-n','80','--since','15 minutes ago'], ['systemctl','--failed','--no-legend','--no-pager']):
+            for args in (['sudo','cat','/var/lib/nakpanel-qualification/'+self.token+'/fixtures/progress.json'], ['ps','-eo','user,pid,ppid,etime,comm,wchan:25'], ['sudo','journalctl','-u','nakpanel','-u','nakpanel-agent','--no-pager','-n','80','--since','15 minutes ago'], ['sudo','journalctl','-u','nakpanel-php-fpm@*.service','--no-pager','-n','100','--since','15 minutes ago'], ['sudo','journalctl','-k','--no-pager','-n','40'], ['free','-b'], ['sudo','systemctl','show','nakpanel-php-fpm@1.service','nakpanel-php-fpm@2.service','nakpanel-php-fpm@3.service','--property=ActiveState,SubState,Result,ExecMainCode,ExecMainStatus,MainPID,NRestarts,MemoryCurrent,MemoryPeak,MemoryMax'], ['sudo','python3','-c',"from pathlib import Path;import json;print(json.dumps({p.name:p.read_text(errors='replace')[-4000:] for p in sorted(Path('/var/log/php-fpm').glob('*.error.log'))[:10] if p.is_file() and not p.is_symlink()}))"], ['systemctl','--failed','--no-legend','--no-pager']):
                 result=subprocess.run(['multipass','exec',self.vm,'--',*args],text=True,capture_output=True,timeout=15,env=self.env)
                 records.append(dict(program=args[0],exit_code=result.returncode,diagnostic=redact(result.stdout+result.stderr,self.secret_values)))
             write(self.evidence/'guest-failure-diagnostic.json',records)
@@ -292,7 +292,7 @@ class Drill(shared.Drill):
         self.helper('mail-canary',self.serializable(mail))
         self.passed('R1: real FPM identity, application/WordPress login and sessions, clean URLs, uploads, locked Composer dependency, controlled updates, Run Now cron and a local mail canary')
     def run_cron(self):
-        record=self.records[1];self.api('/subscriptions/'+str(record['sub'])+'/scheduled-tasks/'+str(self.task)+'/run')
+        record=self.records[1];self.api('/subscriptions/'+str(record['sub'])+'/scheduled-tasks/'+str(self.task)+'/run',{})
         self.until(lambda:self.db('SELECT status FROM scheduled_task_runs WHERE task_id='+str(self.task)+' ORDER BY id DESC LIMIT 1'),lambda value:value=='succeeded','actual scheduled task run')
         result=self.helper('cron-result',self.serializable(record));require(result['uid']==record['uid'],'scheduled task ran as the wrong account')
     def preserve(self):

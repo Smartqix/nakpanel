@@ -7,6 +7,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 HERE = Path(__file__).resolve().parent
 
@@ -110,6 +112,30 @@ class RehearsalTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             guest.verify_sql_export("INSERT INTO records VALUES(1,'expected');", "INSERT INTO records VALUES(1,'changed');")
         guest.verify_sql_export("INSERT INTO records VALUES(1,'expected');", "INSERT INTO records VALUES(1,'expected');")
+
+    def test_run_now_sends_a_csrf_authenticated_post(self):
+        drill = self.m.Drill.__new__(self.m.Drill)
+        drill.records = [{}, {"sub": 4, "uid": 1004}]
+        drill.task = 9
+        response = Mock()
+        response.code = 202
+        response.read.return_value = b"{}"
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        opener = Mock()
+        opener.open.return_value = response
+        http = self.m.TrustedHTTP.__new__(self.m.TrustedHTTP)
+        http.base = "https://panel.rehearsal.test"
+        http.cookies = [SimpleNamespace(name="nakpanel_session", value="synthetic-session")]
+        http.opener = opener
+        drill.http = http
+        drill.until = lambda *args: None
+        drill.helper = lambda *args: {"uid": 1004}
+        drill.run_cron()
+        request = opener.open.call_args.args[0]
+        self.assertEqual(request.get_method(), "POST")
+        self.assertEqual(request.full_url, "https://panel.rehearsal.test/subscriptions/4/scheduled-tasks/9/run")
+        self.assertTrue(request.has_header("X-nakpanel-csrf"))
 
     def test_site_leaf_is_single_certificate_and_validates_against_fixture_ca(self):
         spec = importlib.util.spec_from_file_location("guest_certificate_tests", HERE / "plesk-rehearsal-guest.py")

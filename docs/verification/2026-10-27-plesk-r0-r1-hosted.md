@@ -83,7 +83,29 @@ child output and process wait channels. Composer uses the provisioned tenant
 cache subtree. Eleven local harness tests and PHP-template syntax passed.
 
 [Third failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40452528733/result.json)
-is retained unchanged. A corrected focused R0/R1 run is pending.
+is retained unchanged. A corrected focused R0/R1 run followed.
+
+Run 40454639549 failed before source creation: S03's PHP 8.5 dedicated FPM
+socket did not become ready, with create-site and account-convergence retries.
+The original capture omitted the FPM unit/error log and kernel/memory evidence;
+it cannot distinguish slow startup from a failed service. Cleanup passed.
+
+The dedicated classic-FPM socket wait used an unconditional three-second
+budget after systemd started the simple service. A local real Unix-socket test
+reproduced rejection of valid delayed initialization. That budget is now 15
+seconds, bounded by caller cancellation; regular files and missing sockets still
+fail. Focused readiness/provisioning/file-operation tests passed. This corrects
+the short readiness budget without proving the original service's precise cause.
+The harness now captures FPM unit state/journal/error logs, memory and kernel
+messages before owned cleanup if it fails again.
+
+A separate request-construction regression found Run Now issuing GET to the
+POST-only scheduled-task endpoint. It was observed RED and is now GREEN with
+an actual CSRF-header POST. Twelve Python harness tests pass. The fourth run
+never reached that request, so this is an additional preemptive harness fix.
+
+[Fourth failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40454639549/result.json)
+is retained unchanged. A corrected R0/R1-only run is pending.
 
 ## Cleanup and boundary
 
