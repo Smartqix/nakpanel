@@ -74,6 +74,8 @@ def config_php(record, db, user, password, wordpress=False):
     return result
 
 
+MEDIA_PNG = base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC')
+
 APP = r'''<?php
 session_start(['cookie_secure'=>true,'cookie_httponly'=>true]);
 $c=require __DIR__.'/.private-config.php';
@@ -187,12 +189,13 @@ class Fixture:
         gateway=str(ipaddress.ip_address(route['gateway']))
         name=self.token+'.test';question=b''.join(bytes([len(label)])+label.encode() for label in name.split('.'))+b'\x00'
         packet=b'\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00'+question+b'\x00\x01\x00\x01'
-        started=time.monotonic();blocked=False;code=None
+        started=time.monotonic();blocked=False;code=None;response=None;source=None
         with socket.socket(socket.AF_INET,socket.SOCK_DGRAM) as client:
             client.settimeout(2)
-            try:client.connect((gateway,53));client.send(packet);client.recv(512)
+            try:client.connect((gateway,53));client.send(packet);response=client.recv(512)
             except OSError as error:code=error.errno;blocked=code in (1,13,101,111,113)
-        return dict(blocked_immediately=blocked,errno=code,elapsed_seconds=round(time.monotonic()-started,3))
+            source=client.getsockname()
+        return dict(blocked_immediately=blocked,errno=code,elapsed_seconds=round(time.monotonic()-started,3),gateway=gateway,source=source,response_bytes=len(response) if response is not None else None)
     def certificate(self):
         self.check_record();record=self.record
         output=Path('/run/plesk-rehearsal-certificates')/record['id'];crt,key=self.cert(record['domain'],'DNS:'+record['domain'],output,full_chain=False)
@@ -285,8 +288,10 @@ class Fixture:
     def wordpress_workflow(self):
         root=self.check_record();record=self.record
         require(self.wp(root,['core','version']).strip()=='7.1','WordPress source version differs')
-        image=Path('/tmp')/(self.token+'-media.png');image.write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jrX8AAAAASUVORK5CYII='));image.chmod(0o644)
+        image=Path('/tmp')/(self.token+'-media.png');image.write_bytes(MEDIA_PNG);image.chmod(0o644)
         media=self.wp(root,['media','import',str(image),'--porcelain']).strip();require(media.isdecimal(),'WordPress media import failed')
+        relative=self.wp(root,['post','meta','get',media,'_wp_attached_file']).strip();stored=(root/'wp-content/uploads'/relative).resolve()
+        require(stored.is_relative_to((root/'wp-content/uploads').resolve()) and stored.is_file() and hashlib.sha256(stored.read_bytes()).digest()==hashlib.sha256(MEDIA_PNG).digest(),'WordPress imported media bytes differ')
         self.wp(root,['post','update','1','--post_title=R1 verified update'])
         self.wp(root,['cron','event','schedule','r1_canary','now']);self.wp(root,['cron','event','run','r1_canary'])
         require((root/'wp-content/r1-cron.txt').read_text()=='R1-WP-CRON','WordPress cron canary missing')

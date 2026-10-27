@@ -161,6 +161,30 @@ verification of this corrected private DNS setup is pending.
 [Sixth failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40459693972/result.json)
 is retained unchanged. Owned guest/firewall cleanup passed.
 
+Run 40462548080 confirmed local authoritative negative answers in its syscall
+trace, then failed the separate UDP-denial assertion. That harness version did
+not save the probe's errno/response/counters before asserting; its precise
+failure cannot be recovered after successful owned cleanup. It remains failed.
+
+The assertion combined an aggregate traffic counter with immediate ICMP-error
+receipt. The corrected security proof uses a dedicated DNS-only deny rule and
+counter, requires no DNS response, and retains socket errno/timing separately.
+A denied packet can legitimately have no returned ICMP error (for example,
+when the kernel rate-limits ICMP); this does not relax the required packet-denial
+counter. Prompt provider DNS resolution and all three FPM startup budgets are
+checked independently against the private authoritative negative answers.
+The DNS-specific counter/response proof also runs after reboot. All values and
+the actual owned nft table are retained on failure.
+
+A local data check also found the original 1-pixel PNG's invalid IDAT checksum.
+The media canary is now a valid PNG with checked chunk CRCs and nonempty pixel
+data; WordPress must preserve its actual stored attachment bytes. Both new
+regressions were observed RED then GREEN. Sixteen local harness tests pass.
+
+[Seventh failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40462548080/result.json)
+is retained unchanged. Guest/firewall cleanup passed. Corrected native R0/R1
+validation is pending; no application case has yet completed acceptance.
+
 ## Cleanup and boundary
 
 Pending terminal evidence. Only owned guests and their containment table may

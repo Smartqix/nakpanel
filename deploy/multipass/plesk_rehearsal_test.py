@@ -4,6 +4,8 @@ import importlib.util
 import json
 import os
 import subprocess
+import struct
+import zlib
 import tempfile
 from pathlib import Path
 import unittest
@@ -56,10 +58,18 @@ class RehearsalTests(unittest.TestCase):
 
     def test_containment_denies_new_traffic_without_silent_network_waits(self):
         _, rules = self.m.firewall_rules("p2-123-1", "52:54:00:aa:bb:cc", "mpqemubr0")
-        self.assertEqual(rules.count("counter reject with icmpx type admin-prohibited"), 2)
+        self.assertEqual(rules.count("counter reject with icmpx type admin-prohibited"), 3)
         self.assertIn("meta l4proto tcp ct direction reply ct state established,related accept", rules)
         self.assertIn("udp sport 68 udp dport 67 accept", rules)
         self.assertNotIn("counter drop", rules)
+
+    def test_dns_deny_counter_does_not_count_unrelated_packets(self):
+        drill = self.m.Drill.__new__(self.m.Drill)
+        drill.table = "p2_123_1"
+        rules = {"nftables": [{"rule": {"comment": "nakpanel-rehearsal-dns-deny", "expr": [{"counter": {"packets": 2}}]}}, {"rule": {"expr": [{"counter": {"packets": 1000}}]}}]}
+        drill.cmd = lambda *args: json.dumps(rules)
+        self.assertEqual(drill.denial_count(dns_only=True), 2)
+        self.assertEqual(drill.denial_count(), 1002)
 
     def test_firewall_rejects_unowned_or_injected_identifiers(self):
         for token, mac, bridge in (("other-run", "52:54:00:aa:bb:cc", "mpqemubr0"), ("p2-123-1", "bad; flush ruleset", "mpqemubr0"), ("p2-123-1", "52:54:00:aa:bb:cc", "eth0\nflush ruleset")):
@@ -152,6 +162,24 @@ class RehearsalTests(unittest.TestCase):
         for invalid in ('x"; include "/tmp/evil', "../outside", "", "*"):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 guest.sandbox_negative_zones([invalid])
+
+    def test_wordpress_media_canary_is_a_valid_nonempty_png(self):
+        spec = importlib.util.spec_from_file_location("guest_media_tests", HERE / "plesk-rehearsal-guest.py")
+        guest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guest)
+        data = guest.MEDIA_PNG
+        self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+        offset = 8
+        chunks = {}
+        while offset < len(data):
+            length = struct.unpack("!I", data[offset:offset+4])[0]
+            payload = data[offset+4:offset+8+length]
+            checksum = struct.unpack("!I", data[offset+8+length:offset+12+length])[0]
+            self.assertEqual(zlib.crc32(payload) & 0xffffffff, checksum, payload[:4])
+            chunks[payload[:4]] = payload[4:]
+            offset += 12 + length
+        self.assertEqual(struct.unpack("!II", chunks[b"IHDR"][:8]), (1, 1))
+        self.assertGreater(len(zlib.decompress(chunks[b"IDAT"])), 1)
 
     def test_site_leaf_is_single_certificate_and_validates_against_fixture_ca(self):
         spec = importlib.util.spec_from_file_location("guest_certificate_tests", HERE / "plesk-rehearsal-guest.py")

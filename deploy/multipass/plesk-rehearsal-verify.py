@@ -50,6 +50,7 @@ def firewall_rules(token, mac, bridge):
   type filter hook input priority -310; policy accept;
   iifname "{bridge}" ether saddr {mac} meta l4proto tcp ct direction reply ct state established,related accept
   iifname "{bridge}" ether saddr {mac} udp sport 68 udp dport 67 accept
+  iifname "{bridge}" ether saddr {mac} udp dport 53 counter reject with icmpx type admin-prohibited comment "nakpanel-rehearsal-dns-deny"
   iifname "{bridge}" ether saddr {mac} counter reject with icmpx type admin-prohibited
  }}
 }}
@@ -126,6 +127,8 @@ class Drill(shared.Drill):
                 except subprocess.TimeoutExpired as error:
                     def stream(value):return value.decode(errors='replace') if isinstance(value,bytes) else value or ''
                     records.append(dict(program=args[0],exit_code='timeout',diagnostic=redact(stream(error.stdout)+stream(error.stderr),self.secret_values)))
+            observed=subprocess.run(['sudo','nft','-j','list','table','inet',self.table],text=True,capture_output=True,timeout=15,env=self.env)
+            records.append(dict(program='host-owned-nft-table',exit_code=observed.returncode,diagnostic=redact(observed.stdout+observed.stderr,self.secret_values)))
             write(self.evidence/'guest-failure-diagnostic.json',records)
         except Exception as error:
             write(self.evidence/'guest-failure-diagnostic.json',dict(capture_error=redact(str(error),self.secret_values)))
@@ -168,9 +171,14 @@ class Drill(shared.Drill):
             require(json.loads(raw)['blocked'],'guest external TCP connection was permitted')
         require(self.denial_count()>before,'containment probes did not hit actual firewall denial counters')
         self.state.setdefault('containment_probes',[]).append(dict(users=users,denial_counter=self.denial_count()))
-    def denial_count(self):
+    def denial_count(self,dns_only=False):
         rules=json.loads(self.cmd(['sudo','nft','-j','list','table','inet',self.table]))
-        return sum(expr['counter']['packets'] for item in rules['nftables'] for expr in item.get('rule',{}).get('expr',[]) if 'counter' in expr)
+        return sum(expr['counter']['packets'] for item in rules['nftables'] if not dns_only or item.get('rule',{}).get('comment')=='nakpanel-rehearsal-dns-deny' for expr in item.get('rule',{}).get('expr',[]) if 'counter' in expr)
+    def verify_dns_denial(self):
+        before=self.denial_count(dns_only=True);dns=self.helper('containment-dns');after=self.denial_count(dns_only=True)
+        proof=dict(dns,denial_counter_before=before,denial_counter_after=after)
+        self.state.setdefault('dns_containment_probes',[]).append(proof)
+        require(dns['response_bytes'] is None and after>before,'contained UDP DNS probe failed: '+json.dumps(proof))
     def bootstrap(self):
         self.stage('fresh-signed-install'); self.shell('init_qualification_run')
         self.cmd(['bash',str(SOURCE/'deploy/multipass/current-install-verify.sh')],timeout=2400)
@@ -197,9 +205,8 @@ class Drill(shared.Drill):
         self.cmd(['sudo','nft','--check','--file',str(rulefile)]); self.cmd(['sudo','nft','--file',str(rulefile)])
         write(self.private/'firewall.json',dict(token=self.token,table=self.table,mac=self.mac,bridge=bridge))
         self.containment(['root'])
-        before=self.denial_count();dns=self.helper('containment-dns')
-        require(dns['blocked_immediately'] and self.denial_count()>before,'contained UDP DNS did not hit the owned rejection rule immediately');self.state['dns_containment']=dns
         self.state['offline_php_startup']=self.helper('offline-dns-check')
+        self.verify_dns_denial()
         self.state['source_fixture_identity']=dict(kind='private synthetic exports in the owned guest',token=self.token,plesk_server=False)
         self.passed('R0: signed current Resolute installation, all PHP CLI/FPM extensions, trusted HTTPS and actual host-enforced egress denials')
     def provision(self):
@@ -317,6 +324,7 @@ class Drill(shared.Drill):
         self.until(lambda:self.guest('bash','-c','systemctl is-active nakpanel nakpanel-agent nginx mariadb postgresql stalwart-mail || true').splitlines(),lambda values:len(values)==6 and all(value=='active' for value in values),'unassisted service boot')
         self.shell('assert_current_vm_identity');self.shell('assert_qualification_installed_release')
         self.containment(['root']+[record['username'] for record in self.records])
+        self.verify_dns_denial()
         self.state['offline_php_startup_after_reboot']=self.helper('offline-dns-check')
         require(self.helper('runtimes')==self.state['runtime_inventory'],'runtime inventory changed across reboot')
         for record in self.records:
