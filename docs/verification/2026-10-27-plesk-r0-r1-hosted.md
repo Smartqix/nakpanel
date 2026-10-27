@@ -207,6 +207,20 @@ provisioning tests passed. These local results do not complete hosted R1.
 is retained unchanged. Owned guest/firewall cleanup passed. Corrected R0/R1-only
 native validation is pending.
 
+Run 40467944220 passed R0, all three imports and application workflows, and
+the corrected PHP 8.4 scheduled task (exit 0). S03 child creation was rejected
+because the fixture plan omitted `max_subdomains`, which correctly defaults to
+zero. No mail canary, backups or reboot were reached. The fixture now explicitly
+allows its one declared child and verifies that allowance immediately after
+subscription provisioning. The remaining fixture resource/permission inputs
+were checked against the current plan parser. A workload-contract regression
+failed on the missing allowance and now passes; all 19 Python tests pass.
+No product quota behavior was weakened.
+
+[Ninth failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40467944220/result.json)
+is retained unchanged. Owned guest/firewall cleanup passed. A corrected focused
+R0/R1-only run is required.
+
 ## Cleanup and boundary
 
 Pending terminal evidence. Only owned guests and their containment table may

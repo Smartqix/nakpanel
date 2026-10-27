@@ -35,6 +35,24 @@ class RehearsalTests(unittest.TestCase):
         cases = self.m.validate_inventory(self.inventory)
         self.assertEqual([(case["id"], case["source_php"]) for case in cases], [("S01", "8.3"), ("S02", "8.4"), ("S03", "8.5")])
 
+    def test_rehearsal_plan_allows_the_declared_child_mail_workload(self):
+        drill = self.m.Drill.__new__(self.m.Drill)
+        drill.token = "p2-123-1"
+        drill.cases = []
+        drill.records = []
+        calls = []
+        drill.api = lambda path, fields: calls.append((path, fields))
+        drill.stage = drill.containment = drill.passed = lambda *args: None
+        drill.db = lambda *args: "1"
+        drill.provision()
+        path, fields = calls[0]
+        self.assertEqual(path, "/plans")
+        for resource in ("max_sites", "max_subdomains", "max_databases", "max_mailboxes", "max_backups"):
+            self.assertGreaterEqual(fields.get(resource, 0), 1, resource)
+        for permission in ("hosting_enabled", "allow_mail", "allow_dns", "allow_backups", "allow_scheduled_tasks"):
+            self.assertEqual(fields[permission], "true", permission)
+        self.assertEqual(fields["php_allowlist"], "8.3,8.4,8.5")
+
     def test_unsupported_platform_runtime_and_real_data_rejected(self):
         for field, value in (("os", "Ubuntu 24.04 LTS"), ("hosting_php", ["8.5"]), ("php_provider", "native")):
             data = copy.deepcopy(self.inventory)
