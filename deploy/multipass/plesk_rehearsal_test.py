@@ -144,6 +144,15 @@ class RehearsalTests(unittest.TestCase):
         self.assertEqual(request.full_url, "https://panel.rehearsal.test/subscriptions/4/scheduled-tasks/9/run")
         self.assertTrue(request.has_header("X-nakpanel-csrf"))
 
+    def test_negative_dns_covers_provider_name_and_search_suffixes_only(self):
+        spec = importlib.util.spec_from_file_location("guest_dns_tests", HERE / "plesk-rehearsal-guest.py")
+        guest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guest)
+        self.assertEqual(guest.sandbox_negative_zones(["multipass", "ci.example"]), ["telemetry.sury.org", "telemetry.sury.org.multipass", "telemetry.sury.org.ci.example"])
+        for invalid in ('x"; include "/tmp/evil', "../outside", "", "*"):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                guest.sandbox_negative_zones([invalid])
+
     def test_site_leaf_is_single_certificate_and_validates_against_fixture_ca(self):
         spec = importlib.util.spec_from_file_location("guest_certificate_tests", HERE / "plesk-rehearsal-guest.py")
         guest = importlib.util.module_from_spec(spec)

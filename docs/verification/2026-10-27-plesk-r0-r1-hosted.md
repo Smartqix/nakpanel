@@ -129,7 +129,37 @@ read-only FPM configuration check. No service repair is used for acceptance.
 
 [Fifth failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40456958081/result.json)
 is retained unchanged. Guest/firewall cleanup passed. Corrected hosted R0/R1
-validation is pending.
+validation followed.
+
+Run 40459693972 proved immediate network rejection: a guest-to-host UDP DNS
+probe hit the owned rule and returned errno 113 in under one millisecond.
+R1 then correctly rejected PHP 8.5 as not ready. The captured FPM syscall trace
+identified the delay: repeated resolver queries for `telemetry.sury.org` and its
+`multipass` search variant, with five-second waits after DNS SERVFAIL responses.
+This is concrete provider-startup evidence; the later missing site-3 config in
+the diagnostic occurred because site creation was rejected before it existed.
+
+The provider's [primary source change](https://salsa.debian.org/php-team/php/-/commit/aa12fa4540c8733ab6d68763b2107f39ec48fb37)
+invokes telemetry during FPM module initialization and resolves its server
+before any request. It returns from that check if address resolution fails.
+The isolated fixture now uses its existing BIND service to provide authoritative
+negative answers for that exact hostname and its actual DNS search variants.
+Root-owned resolved configuration routes local lookup to BIND; specific
+negative trust anchors identify these intentionally unsigned fixture zones
+([resolver configuration](https://www.freedesktop.org/software/systemd/man/latest/resolved.conf.html),
+[private-zone anchors](https://www.freedesktop.org/software/systemd/man/latest/dnssec-trust-anchors.d.html)).
+The provider binaries, signatures, required extensions and three-second site
+socket budget are unchanged. No external telemetry or customer integration is
+allowed by the sandbox. Production DNS/configuration is untouched.
+
+R0 now requires prompt negative resolution and actual FPM configuration checks
+for all three minors within their normal startup budget, and repeats those
+read-only checks after reboot. Private .test hosts entries are explicit. Fourteen
+local Python harness tests pass, including unsafe suffix rejection; native
+verification of this corrected private DNS setup is pending.
+
+[Sixth failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40459693972/result.json)
+is retained unchanged. Owned guest/firewall cleanup passed.
 
 ## Cleanup and boundary
 

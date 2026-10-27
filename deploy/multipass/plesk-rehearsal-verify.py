@@ -186,6 +186,7 @@ class Drill(shared.Drill):
         actual=self.helper('runtimes'); self.state['runtime_inventory']=actual
         self.inventory=json.loads((SOURCE/'docs/migration/fixtures/plesk-customers.synthetic.json').read_text()); self.cases=validate_inventory(self.inventory)
         self.state['inventory_sha256']=shared.sha(SOURCE/'docs/migration/fixtures/plesk-customers.synthetic.json')
+        self.state['private_dns']=self.helper('offline-dns')
         self.stage('R0-host-enforced-egress-containment')
         route=json.loads(self.cmd(['ip','-j','route','get',self.ip]))[0]; bridge=route['dev']
         self.mac=self.guest('bash','-c','cat /sys/class/net/$(ip -j route get 1.1.1.1 | python3 -c \'import json,sys;print(json.load(sys.stdin)[0]["dev"])\')/address').strip()
@@ -198,6 +199,7 @@ class Drill(shared.Drill):
         self.containment(['root'])
         before=self.denial_count();dns=self.helper('containment-dns')
         require(dns['blocked_immediately'] and self.denial_count()>before,'contained UDP DNS did not hit the owned rejection rule immediately');self.state['dns_containment']=dns
+        self.state['offline_php_startup']=self.helper('offline-dns-check')
         self.state['source_fixture_identity']=dict(kind='private synthetic exports in the owned guest',token=self.token,plesk_server=False)
         self.passed('R0: signed current Resolute installation, all PHP CLI/FPM extensions, trusted HTTPS and actual host-enforced egress denials')
     def provision(self):
@@ -315,6 +317,7 @@ class Drill(shared.Drill):
         self.until(lambda:self.guest('bash','-c','systemctl is-active nakpanel nakpanel-agent nginx mariadb postgresql stalwart-mail || true').splitlines(),lambda values:len(values)==6 and all(value=='active' for value in values),'unassisted service boot')
         self.shell('assert_current_vm_identity');self.shell('assert_qualification_installed_release')
         self.containment(['root']+[record['username'] for record in self.records])
+        self.state['offline_php_startup_after_reboot']=self.helper('offline-dns-check')
         require(self.helper('runtimes')==self.state['runtime_inventory'],'runtime inventory changed across reboot')
         for record in self.records:
             current=self.helper('snapshot',self.serializable(record));require(current==record['baseline'],'file/database/mail/backup baseline changed after reboot for '+record['id'])

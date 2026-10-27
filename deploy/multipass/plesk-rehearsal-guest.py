@@ -17,6 +17,13 @@ def service_certificate_path(value):
     return target
 
 
+def sandbox_negative_zones(search):
+    require(len(search)<=6,'too many private DNS search suffixes')
+    for name in search:
+        require(len(name)<=220 and re.fullmatch(r'[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*',name),'unsafe private DNS search suffix')
+    return ['telemetry.sury.org']+['telemetry.sury.org.'+name for name in dict.fromkeys(search)]
+
+
 def verify_sql_export(expected, observed):
     require(bool(expected) and expected==observed,'logical SQL row contents differ from source')
     return hashlib.sha256(observed.encode()).hexdigest()
@@ -133,6 +140,47 @@ class Fixture:
             fpm=run(['/usr/sbin/php-fpm'+minor,'-i']);require(all(re.search(r'^'+re.escape(name)+r'\s*$',fpm,re.I|re.M) for name in required),'FPM extension unavailable')
             result[minor]=dict(version=data[0],extensions=sorted(data[1]),fpm_extensions_verified=True)
         return result
+    def offline_dns(self):
+        search=[]
+        for line in Path('/etc/resolv.conf').read_text().splitlines():
+            fields=line.split()
+            if fields and fields[0] in ('search','domain'):search.extend(name.lower().rstrip('.') for name in fields[1:] if name!='.')
+        zones=sandbox_negative_zones(search)
+        config=Path('/etc/bind')/('nakpanel-rehearsal-'+self.token+'.conf')
+        require(not config.exists(),'private DNS configuration already exists')
+        entries=[]
+        for index,zone in enumerate(zones):
+            file=Path('/etc/bind')/('db.rehearsal-'+self.token+'-'+str(index))
+            file.write_text('$TTL 60\n@ IN SOA ns.'+zone+'. hostmaster.invalid. (1 60 60 60 60)\n@ IN NS ns.'+zone+'.\nns IN A 127.0.0.1\n');file.chmod(0o644)
+            run(['named-checkzone',zone,str(file)])
+            entries.append('zone "'+zone+'" { type master; file "'+str(file)+'"; };')
+        config.write_text('\n'.join(entries)+'\n');config.chmod(0o644)
+        main=Path('/etc/bind/named.conf');original=main.read_text();(self.private/'named.conf.original').write_text(original)
+        main.write_text(original+'\n// Owned synthetic rehearsal '+self.token+'\ninclude "'+str(config)+'";\n')
+        run(['named-checkconf']);run(['systemctl','reload','named'])
+        directory=Path('/etc/systemd/resolved.conf.d');directory.mkdir(mode=0o755,exist_ok=True)
+        file=directory/('99-nakpanel-rehearsal-'+self.token+'.conf')
+        file.write_text('[Resolve]\nDNS=\nDNS=127.0.0.1\nFallbackDNS=\nDomains=\nDomains=~. '+ ' '.join('~'+name for name in search)+'\n');file.chmod(0o644)
+        anchors=Path('/etc/dnssec-trust-anchors.d');anchors.mkdir(mode=0o755,exist_ok=True)
+        anchor=anchors/('99-nakpanel-rehearsal-'+self.token+'.negative');anchor.write_text('\n'.join(zones+['test'])+'\n');anchor.chmod(0o644)
+        run(['systemctl','restart','systemd-resolved'])
+        data=json.loads((self.base/'source/docs/migration/fixtures/plesk-customers.synthetic.json').read_text())
+        domains=[case['domain'] for case in data['cases'] if case['id'] in ('S01','S02','S03')]+['news.meadow-blog.test','mail.rehearsal.test']
+        require(all(re.fullmatch(r'[a-z0-9.-]+\.test',name) for name in domains),'unsafe private hosts name')
+        with Path('/etc/hosts').open('a') as stream:stream.write('\n# Owned synthetic rehearsal '+self.token+'\n127.0.0.1 '+' '.join(domains)+'\n')
+        return dict(negative_zones=zones,private_hosts=domains)
+    def offline_dns_check(self):
+        import socket
+        started=time.monotonic();denied=False
+        try:socket.getaddrinfo('telemetry.sury.org',53,type=socket.SOCK_DGRAM)
+        except socket.gaierror:denied=True
+        elapsed=time.monotonic()-started
+        require(denied and elapsed<2,'provider telemetry DNS did not fail locally and promptly')
+        fpm={}
+        for minor in ('8.3','8.4','8.5'):
+            start=time.monotonic();run(['/usr/sbin/php-fpm'+minor,'-t']);fpm[minor]=round(time.monotonic()-start,3)
+            require(fpm[minor]<2.5,'offline PHP-FPM initialization exceeded its normal readiness budget')
+        return dict(telemetry_resolution_denied=True,dns_seconds=round(elapsed,3),fpm_config_seconds=fpm)
     def containment_dns(self):
         import socket,ipaddress
         route=json.loads(run(['ip','-j','route','get','1.1.1.1']))[0]
@@ -280,5 +328,5 @@ class Fixture:
 
 if __name__=='__main__':
     payload=json.loads(sys.stdin.read(2<<20));fixture=Fixture(payload)
-    action=sys.argv[1].replace('-','_');require(action in ('trust','runtimes','containment_dns','certificate','source','import_sql','manifest','application_workflow','wordpress_workflow','cron_result','mail_canary','snapshot','boundaries'),'unapproved fixture action')
+    action=sys.argv[1].replace('-','_');require(action in ('trust','runtimes','offline_dns','offline_dns_check','containment_dns','certificate','source','import_sql','manifest','application_workflow','wordpress_workflow','cron_result','mail_canary','snapshot','boundaries'),'unapproved fixture action')
     print(json.dumps(getattr(fixture,action)(),sort_keys=True))
