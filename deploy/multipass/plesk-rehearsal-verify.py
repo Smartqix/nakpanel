@@ -119,7 +119,7 @@ class Drill(shared.Drill):
         try:
             self.shell('assert_current_vm_identity')
             records=[]
-            for args in (['sudo','journalctl','-u','nakpanel','-u','nakpanel-agent','--no-pager','-n','80','--since','15 minutes ago'], ['systemctl','--failed','--no-legend','--no-pager']):
+            for args in (['sudo','cat','/var/lib/nakpanel-qualification/'+self.token+'/fixtures/progress.json'], ['ps','-eo','user,pid,ppid,etime,comm,wchan:25'], ['sudo','journalctl','-u','nakpanel','-u','nakpanel-agent','--no-pager','-n','80','--since','15 minutes ago'], ['systemctl','--failed','--no-legend','--no-pager']):
                 result=subprocess.run(['multipass','exec',self.vm,'--',*args],text=True,capture_output=True,timeout=15,env=self.env)
                 records.append(dict(program=args[0],exit_code=result.returncode,diagnostic=redact(result.stdout+result.stderr,self.secret_values)))
             write(self.evidence/'guest-failure-diagnostic.json',records)
@@ -130,7 +130,7 @@ class Drill(shared.Drill):
         signal.alarm(min(2400 if name=='fresh-signed-install' else 900,remaining))
         self.state.update(stage=name,updated_at=time.time()); write(self.evidence/'result.json',self.state); print('plesk-r0-r1: '+name,flush=True)
     def helper(self, action, record=None):
-        return json.loads(self.guest('sudo','python3',self.env['NAKPANEL_REMOTE_SRC']+'/deploy/multipass/plesk-rehearsal-guest.py',action,data=json.dumps(dict(token=self.token,record=record or {}))))
+        return json.loads(self.cmd(['multipass','exec',self.vm,'--','sudo','python3',self.env['NAKPANEL_REMOTE_SRC']+'/deploy/multipass/plesk-rehearsal-guest.py',action],data=json.dumps(dict(token=self.token,record=record or {})),timeout=600 if action=='source' else 240))
     def password(self):
         value='P2_'+secrets.token_urlsafe(24); self.secret_values.append(value); return value
     def until(self,fn,predicate,label,seconds=180):

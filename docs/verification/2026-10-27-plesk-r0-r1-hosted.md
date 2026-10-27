@@ -63,7 +63,27 @@ is retained unchanged. Guest/firewall cleanup passed. Focused HTTP, file-manager
 agent file operations and workflow-selection checks passed after the fix.
 The harness also waits for mail-domain convergence after mailbox/alias changes
 and captures bounded, redacted diagnostics from only the verified owned guest
-on any later failure. A further corrected R0/R1-only run is pending.
+on any later failure. A further corrected R0/R1-only run followed.
+
+Run 40452528733 failed before archive deletion because the outer source-helper
+process hit its 180-second timeout. It did not identify the active child command;
+the precise cause of that timeout is unresolved in the original evidence.
+Owned guest/firewall cleanup passed, with no failed systemd unit at capture time.
+
+The fixture now blocks every WordPress HTTP request at the application hook,
+including local loopback checks, retains the host firewall, and uses the existing
+WP-CLI no-update/config-isolation settings. WordPress explicitly permits local
+requests despite `WP_HTTP_BLOCK_EXTERNAL`; its installer performs loopback
+permalink checks ([HTTP implementation](https://raw.githubusercontent.com/WordPress/WordPress/7.1/wp-includes/class-wp-http.php),
+[installer](https://raw.githubusercontent.com/WordPress/WordPress/7.1/wp-admin/includes/upgrade.php)).
+That is a supported explanation for network waits, not proof of the specific
+unrecorded child. The source-helper deadline now encloses its separately bounded
+180-second child commands, and failure evidence records the last fixture step,
+child output and process wait channels. Composer uses the provisioned tenant
+cache subtree. Eleven local harness tests and PHP-template syntax passed.
+
+[Third failed-run evidence](evidence/2026-10-27-plesk-r0-r1/40452528733/result.json)
+is retained unchanged. A corrected focused R0/R1 run is pending.
 
 ## Cleanup and boundary
 

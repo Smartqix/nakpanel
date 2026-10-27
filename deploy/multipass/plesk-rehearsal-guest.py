@@ -27,7 +27,10 @@ def logical_dump(database):
 
 
 def run(args, data=None, env=None):
-    result=subprocess.run(args,input=data,text=True,capture_output=True,timeout=180,env=env)
+    try:result=subprocess.run(args,input=data,text=True,capture_output=True,timeout=180,env=env)
+    except subprocess.TimeoutExpired as error:
+        def stream(value):return value.decode(errors='replace') if isinstance(value,bytes) else value or ''
+        raise ValueError('fixture child timed out: '+Path(args[0]).name+': '+stream(error.stdout)[-1000:]+stream(error.stderr)[-1500:]) from error
     if result.returncode: raise ValueError('fixture command failed: '+Path(args[0]).name+': '+result.stderr[-1500:])
     return result.stdout
 
@@ -86,6 +89,8 @@ class Fixture:
         self.base=Path('/var/lib/nakpanel-qualification')/self.token;require(self.base.is_dir(),'owned qualification root missing')
         self.private=self.base/'fixtures';self.private.mkdir(mode=0o700,exist_ok=True)
         self.record=payload.get('record',{})
+    def progress(self,operation):
+        (self.private/'progress.json').write_text(json.dumps(dict(case=self.record.get('id'),operation=operation,time=time.time())))
     def check_record(self, record=None):
         record=record or self.record
         require(record.get('id') in ('S01','S02','S03') and re.fullmatch(r'[a-z0-9-]+\.test',record['domain']),'unapproved case')
@@ -135,11 +140,13 @@ class Fixture:
         return {'created':True}
     def wp(self,root,args,record=None,stdin=None,source=False):
         record=record or self.record
-        command=['/usr/bin/php'+record['source_php'],'/usr/local/lib/nakpanel/wp-cli.phar','--path='+str(root)]
+        self.progress('WordPress '+ ' '.join(args[:2]))
+        command=['env','WP_CLI_DISABLE_AUTO_CHECK_UPDATE=1','WP_CLI_CONFIG_PATH=/dev/null','/usr/bin/php'+record['source_php'],'/usr/local/lib/nakpanel/wp-cli.phar','--path='+str(root)]
         if source:command+=['--allow-root']
         else:command=['sudo','-u',record['username'],*command]
         return run(command+args,data=stdin)
     def source(self):
+        self.progress('source database and files')
         target=self.check_record();record=self.record;work=self.private/record['id'];work.mkdir(mode=0o700);source=work/'source';source.mkdir(mode=0o700)
         db='p2_src_'+record['id'].lower();password=record['db_password']
         require(mysql("SELECT count(*) FROM information_schema.schemata WHERE schema_name='"+db+"'").strip()=='0','source schema already exists')
@@ -154,7 +161,7 @@ class Fixture:
                     else:destination.parent.mkdir(parents=True,exist_ok=True);destination.write_bytes(archive.read(item))
             (source/'wp-config.php').write_text(config_php(record,db,db,password,True))
             plugins=source/'wp-content/mu-plugins';plugins.mkdir(exist_ok=True)
-            (plugins/'r1-contained.php').write_text("<?php add_filter('pre_wp_mail','__return_false');add_action('r1_canary',function(){file_put_contents(ABSPATH.'wp-content/r1-cron.txt','R1-WP-CRON');});\n")
+            (plugins/'r1-contained.php').write_text("<?php add_filter('pre_wp_mail','__return_false');add_filter('pre_http_request',function(){return new WP_Error('r1_contained','HTTP disabled in synthetic rehearsal');});add_action('r1_canary',function(){file_put_contents(ABSPATH.'wp-content/r1-cron.txt','R1-WP-CRON');});\n")
             self.wp(source,['core','install','--url=https://'+record['domain'],'--title=R1 Synthetic WordPress','--admin_user=rehearsal','--admin_email=owner@'+record['domain'],'--skip-email','--prompt=admin_password'],stdin=record['wp_password']+'\n',source=True)
             self.wp(source,['rewrite','structure','/%postname%/'],source=True)
         else:
@@ -169,6 +176,7 @@ class Fixture:
                 run(['/usr/bin/php8.4','/usr/local/lib/nakpanel/composer.phar','--working-dir='+str(source),'update','--no-scripts','--no-plugins','--no-interaction','--no-progress'],env=env)
         (source/'files').mkdir(exist_ok=True);(source/'files/content.txt').write_text('R1 nonempty file canary '+record['id']+'\n');(source/'.secret-note').write_text('R1 private fixture '+record['id']+'\n');(source/'rehearsal-runtime.php').write_text(RUNTIME)
         (source/'content-link.txt').symlink_to('files/content.txt')
+        self.progress('source SQL export and archive')
         sql=work/'export.sql';sql.write_text(logical_dump(db));require(sql.stat().st_size>100,'source database export is empty')
         export=work/'export';shutil.copytree(source,export,symlinks=True)
         config=export/('wp-config.php' if wordpress else '.private-config.php');config.write_text(config_php(record,record['db_name'],record['db_user'],record['db_password'],wordpress))
@@ -205,7 +213,7 @@ class Fixture:
     def application_workflow(self):
         root=self.check_record();record=self.record;work=self.private/record['id']
         if record['id']=='S02':
-            env=dict(os.environ,COMPOSER_DISABLE_NETWORK='1',COMPOSER_HOME='/home/'+record['username']+'/.cache/r1-composer')
+            env=dict(os.environ,COMPOSER_DISABLE_NETWORK='1',COMPOSER_HOME='/home/'+record['username']+'/.cache/composer/r1')
             run(['sudo','-u',record['username'],'env','COMPOSER_DISABLE_NETWORK=1','COMPOSER_HOME='+env['COMPOSER_HOME'],'/usr/bin/php8.4','/usr/local/lib/nakpanel/composer.phar','--working-dir='+str(root),'install','--no-scripts','--no-plugins','--no-interaction','--no-progress'])
         upload=Path('/tmp')/(self.token+'-'+record['id']+'-upload.txt');body='R1 upload '+record['id']+'\n';upload.write_text(body);upload.chmod(0o644)
         cookie=work/'app-cookies'
