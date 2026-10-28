@@ -55,7 +55,7 @@ func TestOperationsBrowserPreview(t *testing.T) {
 			items[0].Summary = strings.Repeat("Long safe message for very-long-subscription.studio.example and owner@studio.example via 2001:db8:85a3::8a2e:370:7334. ", 16)
 			items[0].Target = strings.Repeat("a", 240) + ".example"
 		}
-		if fixtureMode == "many" {
+		if fixtureMode == "many" || fixtureMode == "pagination-slow" {
 			for i := int64(19); i <= 62; i++ {
 				items = append([]operations.Notification{{ID: i, Kind: "threshold", Title: fmt.Sprintf("Usage update %d", i), Target: "studio.example", Summary: "Safe resource update", CreatedAt: now.Add(-time.Duration(i) * time.Minute)}}, items...)
 			}
@@ -142,6 +142,22 @@ func TestOperationsBrowserPreview(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"mode": fixtureMode, "requests": requests, "unread": page().Counts.Unread, "issue_state": state})
 	})
 	mux.HandleFunc("/api/workspace/", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		delayedPage := fixtureMode == "pagination-slow" && r.URL.Query().Get("before") != ""
+		if delayedPage {
+			p := filteredNotifications(page(), r)
+			for i := range p.Notifications {
+				p.Notifications[i].Target = "Old scope A"
+			}
+			requests = append(requests, r.Method+" "+r.URL.RequestURI())
+			mu.Unlock()
+			// Ignore cancellation deliberately to exercise stale-result fencing.
+			time.Sleep(2500 * time.Millisecond)
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(p)
+			return
+		}
+		mu.Unlock()
 		mu.Lock()
 		defer mu.Unlock()
 		w.Header().Set("Content-Type", "application/json")

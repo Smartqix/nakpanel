@@ -17,6 +17,26 @@ if(!['localhost','127.0.0.1','[::1]'].includes(base.hostname))throw Error('Loopb
   return posts;
  }
  try {
+  for(const status of ['', 'unread'])await run('paginated '+(status||'all')+' inbox refreshes after mark all read',async page=>{
+   await fetch(new URL('/__reset?mode=many',base),{method:'POST'});
+   await page.goto(new URL('/activity?tab=inbox'+(status?'&status='+status:''),base).href);
+   await page.getByRole('button',{name:'Show more',exact:true}).click();
+   const rows=page.locator('[data-np-notification-density="full"] [data-np-notification-id]');
+   assert.equal(await rows.count(),status?47:50);
+   await page.getByRole('button',{name:'Mark all read',exact:true}).click();
+   await page.locator('[data-np-notification-density="full"] .np-notification-unread').first().waitFor({state:'detached'});
+   assert.equal(await rows.count(),status?0:50);
+  });
+  await run('late pagination cannot append into a new scope',async page=>{
+   await fetch(new URL('/__reset?mode=pagination-slow',base),{method:'POST'});
+   await page.goto(new URL('/activity?tab=inbox&subscription_id=41',base).href);
+   await page.getByRole('button',{name:'Show more',exact:true}).click();
+   await page.getByRole('link',{name:'Activity 2',exact:true}).click();
+   await page.getByRole('link',{name:'Notifications',exact:true}).click();
+   await page.waitForTimeout(2750);
+   assert.equal(await page.locator('main').innerText().then(text=>text.includes('Old scope A')),false);
+   assert.equal(await page.locator('[data-np-notification-density="full"] [data-np-notification-id]').count(),25);
+  });
   await run('preview detail Escape restores the bell instead of a hidden row',async page=>{
    await fetch(new URL('/__reset?mode=default',base),{method:'POST'});
    await page.goto(new URL('/activity?tab=inbox',base).href);

@@ -16,6 +16,9 @@ notifications opens Activity's full inbox, which supports search over the safe
 published title, message and resource, date groups and Show more pagination.
 The unread badge caps its visual count at 99+ while retaining the exact count
 for assistive technology.
+After Show more, the loaded inbox window continues refreshing through the same
+poller. Pagination is cancelled and fenced by mount, identity and owning view so
+late results cannot populate a different scope.
 
 Opening a notification marks its personal receipt read only after authorized
 details load successfully. Linked issues/tasks retain their existing detail

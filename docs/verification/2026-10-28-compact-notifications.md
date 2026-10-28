@@ -21,7 +21,8 @@ hosted run requires explicit authorization and supported-OS preflight.
   dedicated loopback database, `nakpanel_operations_notifications_20261028`.
 - `go vet ./...`.
 - `task build`, including templ, embedded CSS and all three Go binaries.
-- `node --test internal/control/web/static/*.test.cjs`: 96 tests passed.
+- `node --test internal/control/web/static/*.test.cjs`: 98 tests passed after
+  the final review fixes.
 - `git diff --check` and syntax checking of the updated acceptance script.
 
 The first full Go run hit the unchanged fake Multipass readiness test's 150ms
@@ -123,6 +124,38 @@ space of the desktop viewport at 200% zoom.
 The pre-fix screenshots are retained as regression evidence and are explicitly
 named `before`. The updated acceptance script includes the corresponding
 navigation/detail-focus cases; it was syntax-checked, not externally executed.
+
+## Final review and fix pass
+
+A fresh-context read-only review found no critical issue, two important
+pagination defects and one minor accessible-label refinement. Both important
+findings were addressed in one test-first fix pass:
+
+- Mark all read after Show more previously updated the badge but left loaded
+  rows stale. The existing poller now refreshes the loaded notification window,
+  using bounded keyset pages of at most 200 entries per request. It uses current
+  server read states and counts rather than marking every client row read.
+- Pagination now captures the mount, authenticated scope, view and owning DOM
+  nodes. Navigation, unmount and pagehide abort it. Success and error callbacks
+  also reject stale contexts, including when a transport ignores cancellation.
+
+New Node tests first failed, then passed. They integrate the receipt coordinator,
+poller and paged window for All and Unread with 250 entries and a concurrent
+arrival. The stale-request test covers duplicate clicks, cancellation, a late
+success, a late error and a new current request.
+
+The real local UI reproduced 47 unread rows remaining after the badge changed to
+All read. After the fix, All retained 50 loaded rows with zero unread; Unread
+loaded 47 then cleared to All caught up. A delayed Show more followed by routed
+scope navigation retained 25 current rows without old-scope content. The browser
+cases were added to the acceptance script and manually exercised through the
+approved browser.
+
+![Paginated inbox fixed](evidence/2026-10-28-compact-notifications/review-paged-read-all-fixed.jpg)
+
+Deferred minor: the mark-all accessible names do not yet name the specific
+subscription/customer/workspace; the visible scope context is present. This is
+not an authorization or receipt-scope change.
 
 ## Decisions and remaining gates
 
