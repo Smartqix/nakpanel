@@ -73,7 +73,7 @@ func operationsTop(view WorkspaceView) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</span></button><section id=\"np-op-tasks\" class=\"np-op-popover np-panel\" hidden tabindex=\"-1\" aria-label=\"Background tasks\"><h2>Tasks</h2><p class=\"np-muted\">Active work and recent failures</p><div data-np-op-quick-tasks>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</span></button><section id=\"np-op-tasks\" class=\"np-op-popover np-panel\" hidden tabindex=\"-1\" aria-label=\"Background tasks\"><h2>Tasks</h2><p class=\"np-muted\">Active work, recent service results and failures</p><div data-np-op-quick-tasks>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

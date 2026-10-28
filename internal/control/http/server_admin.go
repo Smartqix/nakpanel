@@ -1,6 +1,7 @@
 package panelhttp
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -91,8 +92,6 @@ var managedServiceActions = map[string]map[string]struct{}{
 	"web":     actionRegistry("reload", "restart", "start", "stop"),
 	"dns":     actionRegistry("reload", "restart", "start", "stop"),
 	"mail":    actionRegistry("reload", "restart", "start", "stop"),
-	"php-8.1": actionRegistry("reload", "restart", "start", "stop"),
-	"php-8.2": actionRegistry("reload", "restart", "start", "stop"),
 	"php-8.3": actionRegistry("reload", "restart", "start", "stop"),
 	"php-8.4": actionRegistry("reload", "restart", "start", "stop"),
 	"php-8.5": actionRegistry("reload", "restart", "start", "stop"),
@@ -188,6 +187,26 @@ func (s *Server) handleManagedServiceAction(w http.ResponseWriter, r *http.Reque
 	writeSPAJSON(w, http.StatusAccepted, map[string]any{"ok": true, "result": result})
 }
 
+func (s *Server) handleServiceOperations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if _, ok := s.requireAdmin(w, r); !ok {
+		return
+	}
+	reader, ok := s.serverAdmin.(interface {
+		ServiceOperations(context.Context) ([]serveradmin.ServiceOperation, error)
+	})
+	if !ok {
+		writeSPAError(w, http.StatusServiceUnavailable, "Service progress is unavailable")
+		return
+	}
+	items, err := reader.ServiceOperations(r.Context())
+	if err != nil {
+		writeSPAError(w, http.StatusServiceUnavailable, "Service progress could not be checked")
+		return
+	}
+	writeSPAJSON(w, http.StatusOK, map[string]any{"ok": true, "operations": items})
+}
+
 func (s *Server) handleServerReauthenticate(w http.ResponseWriter, r *http.Request) {
 	user, ok := s.currentUser(w, r, func() {
 		writeSPAError(w, http.StatusUnauthorized, "Session could not be reauthenticated")
@@ -206,7 +225,7 @@ func (s *Server) handleServerReauthenticate(w http.ResponseWriter, r *http.Reque
 		writeSPAError(w, http.StatusTooManyRequests, "Too many failed attempts; try again later")
 		return
 	}
-	if err := r.ParseForm(); err != nil {
+	if err := parseServerAdminForm(r); err != nil {
 		writeSPAError(w, http.StatusBadRequest, "Invalid reauthentication request")
 		return
 	}
@@ -263,7 +282,7 @@ func decodeManagedServiceAction(r *http.Request) (managedServiceActionInput, err
 		return canonicalManagedServiceAction(input), nil
 	}
 
-	if err := r.ParseForm(); err != nil {
+	if err := parseServerAdminForm(r); err != nil {
 		return managedServiceActionInput{}, err
 	}
 	for key := range r.Form {
@@ -277,6 +296,40 @@ func decodeManagedServiceAction(r *http.Request) (managedServiceActionInput, err
 		ServiceID: r.Form.Get("service_id"),
 		Action:    r.Form.Get("action"),
 	}), nil
+}
+
+// Service controls and password confirmation never accept uploads. Bound and
+// parse the browser's native form encodings before ParseForm-based callers use
+// their values; fragment navigation is not involved in these JSON responses.
+func parseServerAdminForm(r *http.Request) error {
+	r.Body = http.MaxBytesReader(nil, r.Body, maxServerAdminJSONBytes)
+	mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil {
+		return errors.New("invalid form content type")
+	}
+	switch mediaType {
+	case "application/x-www-form-urlencoded":
+		err = r.ParseForm()
+	case "multipart/form-data":
+		err = r.ParseMultipartForm(maxServerAdminJSONBytes)
+		if r.MultipartForm != nil {
+			defer r.MultipartForm.RemoveAll()
+			if len(r.MultipartForm.File) != 0 {
+				return errors.New("uploads are not allowed")
+			}
+		}
+	default:
+		return errors.New("unsupported form content type")
+	}
+	if err != nil {
+		return err
+	}
+	for _, values := range r.Form {
+		if len(values) != 1 {
+			return errors.New("duplicate form field")
+		}
+	}
+	return nil
 }
 
 func canonicalManagedServiceAction(input managedServiceActionInput) managedServiceActionInput {

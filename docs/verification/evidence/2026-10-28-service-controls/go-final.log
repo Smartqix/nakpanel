@@ -1,0 +1,48 @@
+ok  	github.com/nakroteck/nakpanel/cmd/agent	0.139s
+ok  	github.com/nakroteck/nakpanel/cmd/panel	0.162s
+ok  	github.com/nakroteck/nakpanel/cmd/panelctl	0.170s
+ok  	github.com/nakroteck/nakpanel/deploy/install	21.196s
+ok  	github.com/nakroteck/nakpanel/deploy/multipass	153.971s
+?   	github.com/nakroteck/nakpanel/deploy/multipass/agentprobe	[no test files]
+ok  	github.com/nakroteck/nakpanel/deploy/multipass/mailimportprobe	0.108s
+?   	github.com/nakroteck/nakpanel/deploy/multipass/smtpsink	[no test files]
+ok  	github.com/nakroteck/nakpanel/internal/agent/ops	22.655s
+ok  	github.com/nakroteck/nakpanel/internal/agent/rpc	0.317s
+ok  	github.com/nakroteck/nakpanel/internal/backup	1.774s
+ok  	github.com/nakroteck/nakpanel/internal/certificates	0.143s
+ok  	github.com/nakroteck/nakpanel/internal/config	0.129s
+ok  	github.com/nakroteck/nakpanel/internal/control/agentclient	0.206s
+ok  	github.com/nakroteck/nakpanel/internal/control/auth	0.131s
+ok  	github.com/nakroteck/nakpanel/internal/control/capabilities	0.148s
+ok  	github.com/nakroteck/nakpanel/internal/control/dashboard	1.009s
+ok  	github.com/nakroteck/nakpanel/internal/control/databaseadmin	0.148s
+ok  	github.com/nakroteck/nakpanel/internal/control/dnstemplate	0.179s
+ok  	github.com/nakroteck/nakpanel/internal/control/filemanager	0.194s
+ok  	github.com/nakroteck/nakpanel/internal/control/http	0.967s
+ok  	github.com/nakroteck/nakpanel/internal/control/mailimport	0.191s
+ok  	github.com/nakroteck/nakpanel/internal/control/maintenance	0.200s
+ok  	github.com/nakroteck/nakpanel/internal/control/operations	8.550s
+ok  	github.com/nakroteck/nakpanel/internal/control/operator	0.208s
+ok  	github.com/nakroteck/nakpanel/internal/control/phpapp	1.175s
+ok  	github.com/nakroteck/nakpanel/internal/control/platformadmin	0.100s
+ok  	github.com/nakroteck/nakpanel/internal/control/policy	0.101s
+ok  	github.com/nakroteck/nakpanel/internal/control/provision	16.789s
+ok  	github.com/nakroteck/nakpanel/internal/control/provisioningapi	0.139s
+ok  	github.com/nakroteck/nakpanel/internal/control/quota	3.147s
+ok  	github.com/nakroteck/nakpanel/internal/control/serveradmin	0.154s
+ok  	github.com/nakroteck/nakpanel/internal/control/servertiming	0.104s
+ok  	github.com/nakroteck/nakpanel/internal/control/store	0.105s
+ok  	github.com/nakroteck/nakpanel/internal/control/tls	0.127s
+ok  	github.com/nakroteck/nakpanel/internal/control/web	0.228s
+ok  	github.com/nakroteck/nakpanel/internal/control/webstatistics	0.109s
+ok  	github.com/nakroteck/nakpanel/internal/control/wordpress	0.135s
+ok  	github.com/nakroteck/nakpanel/internal/control/workspace	0.343s
+?   	github.com/nakroteck/nakpanel/internal/database	[no test files]
+ok  	github.com/nakroteck/nakpanel/internal/gitremote	0.081s
+ok  	github.com/nakroteck/nakpanel/internal/mailimport	0.229s
+ok  	github.com/nakroteck/nakpanel/internal/site	0.087s
+ok  	github.com/nakroteck/nakpanel/internal/testutil/operationsdb	0.133s
+ok  	github.com/nakroteck/nakpanel/internal/testutil/removaldb	0.100s
+ok  	github.com/nakroteck/nakpanel/internal/types	0.088s
+?   	github.com/nakroteck/nakpanel/internal/version	[no test files]
+ok  	github.com/nakroteck/nakpanel/migrations	1.199s

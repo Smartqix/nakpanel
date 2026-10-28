@@ -30,6 +30,7 @@
 .np-dialog select:focus-visible, .np-dialog textarea:focus-visible { outline: 2px solid var(--np-primary); outline-offset: 2px; }
 @media (max-width: 760px) {
   .np-routed .np-routed-nav-item { min-height: 44px; }
+  .np-routed .np-settings-service-actions button { min-height: 44px; }
   .np-routed .np-menu-icon { height: 44px; min-height: 44px; width: 44px; }
   .np-dialog { max-height: calc(100dvh - 16px); }
   .np-dialog .np-dialog-form input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),
@@ -2886,6 +2887,14 @@
   .np-service-state { align-items: start; display: grid; gap: 4px; justify-items: start; min-width: 0; }
   .np-service-state small { color: var(--np-faint); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
   .np-settings-service-menu { justify-self: end; position: relative; }
+  .np-settings-focus .np-notice[hidden] { display: none; }
+  .np-settings-focus .np-notice[role="alert"] { background: #fef6f5; border-color: #f4b5ad; color: var(--np-danger); }
+  .np-settings-focus [data-np-service-operation][role="status"] { background: var(--np-primary-soft); border-color: #bfd7fb; color: var(--np-primary-dark); }
+  .np-settings-service-menu > summary[aria-disabled="true"] { cursor: wait; opacity: .65; }
+  .np-service-progress { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px; grid-column: 1 / -1; margin: 0; color: var(--np-muted); font-size: 13px; }
+  .np-service-progress[hidden] { display: none; }
+  .np-service-progress[data-tone="fail"] { color: var(--np-fail); }
+  .np-service-progress a { color: var(--np-primary); text-decoration: underline; }
   .np-settings-service-menu > summary { min-height: 32px; }
   .np-settings-service-menu > summary .np-icon { height: 16px; width: 16px; }
   .np-settings-service-actions {
@@ -3092,9 +3101,9 @@
   .np-service-metadata { grid-column: 1 / -1; }
   .np-settings-service-menu,
   .np-service-readonly { grid-column: 1 / -1; justify-self: start; }
-  .np-settings-service-menu > summary { min-height: 32px; }
+  .np-settings-service-menu > summary { min-height: 44px; }
   .np-settings-service-actions { left: 0; right: auto; }
-  .np-settings-service-actions button { min-height: 32px; }
+  .np-settings-service-actions button { min-height: 44px; }
   .np-settings-reauth { grid-template-columns: 1fr; }
   .np-settings-reauth button { width: 100%; }
   .np-settings-log-toolbar { align-items: stretch; flex-direction: column; }

@@ -1150,6 +1150,7 @@ type ServerOperation struct {
 	CompletedAt          sql.NullTime
 	CreatedAt            time.Time
 	UpdatedAt            time.Time
+	TaskID               sql.NullInt64
 }
 
 type ServerSetting struct {

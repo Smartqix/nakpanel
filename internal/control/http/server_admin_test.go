@@ -1,9 +1,11 @@
 package panelhttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,6 +17,116 @@ import (
 	"github.com/nakroteck/nakpanel/internal/control/serveradmin"
 	"github.com/nakroteck/nakpanel/internal/types"
 )
+
+func TestServiceBrowserFormsReachTheirHandlers(t *testing.T) {
+	admin := &phase26ServerAdminFake{}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{ServerAdmin: admin})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	for _, tc := range []struct {
+		path   string
+		fields map[string]string
+		status int
+	}{
+		{"/tools-settings/reauthenticate", map[string]string{"password": "NakpanelAdmin!2026"}, http.StatusOK},
+		{"/tools-settings/services/action", map[string]string{"service_id": "web", "action": "reload"}, http.StatusAccepted},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			var body bytes.Buffer
+			writer := multipart.NewWriter(&body)
+			for key, value := range tc.fields {
+				if err := writer.WriteField(key, value); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			req := httptest.NewRequest(http.MethodPost, "https://panel.test"+tc.path, &body)
+			req.Header.Set("Content-Type", writer.FormDataContentType())
+			addAuthenticatedCookie(req, cookie)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != tc.status {
+				t.Fatalf("browser form status=%d, want %d: %s", rec.Code, tc.status, rec.Body.String())
+			}
+		})
+	}
+	if admin.controlCalls != 1 {
+		t.Fatalf("valid service form queued %d operations", admin.controlCalls)
+	}
+}
+
+type serviceProgressFake struct {
+	phase26ServerAdminFake
+	calls int
+	err   error
+}
+
+func (f *serviceProgressFake) ServiceOperations(context.Context) ([]serveradmin.ServiceOperation, error) {
+	f.calls++
+	return []serveradmin.ServiceOperation{{OperationID: "op_fixture_123456789012345", TaskID: 42, ServiceID: "web", Action: "restart", Status: serveradmin.OperationRunning}}, f.err
+}
+
+func TestServiceProgressIsAdministratorOnlyAndNeverCached(t *testing.T) {
+	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleClient, auth.RoleReseller} {
+		t.Run(string(role), func(t *testing.T) {
+			svc := &serviceProgressFake{}
+			h, _ := newTestHandlerWithOptions(t, role, ServerOptions{ServerAdmin: svc})
+			password := "Nakpanel" + strings.ToUpper(string(role[:1])) + string(role[1:]) + "!2026"
+			cookie := login(t, h, string(role)+"@nakpanel.test", password)
+			req := httptest.NewRequest("GET", "https://panel.test/tools-settings/services/operations", nil)
+			req.Header.Set("Accept", "application/json")
+			addAuthenticatedCookie(req, cookie)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			if role != auth.RoleAdmin {
+				if w.Code != 403 || svc.calls != 0 {
+					t.Fatalf("service state disclosed to %s: %d", role, w.Code)
+				}
+				return
+			}
+			if w.Code != 200 || !strings.Contains(w.Header().Get("Cache-Control"), "no-store") || !strings.Contains(w.Body.String(), `"task_id":42`) {
+				t.Fatalf("progress response: %d %s", w.Code, w.Body.String())
+			}
+			svc.err = errors.New("password=private-progress-sentinel")
+			w = httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			if w.Code != 503 || strings.Contains(w.Body.String(), "private-progress-sentinel") {
+				t.Fatalf("progress error: %d %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestServiceFormsRejectDuplicateFieldsAndUploads(t *testing.T) {
+	admin := &phase26ServerAdminFake{}
+	h, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{ServerAdmin: admin})
+	cookie := login(t, h, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	for _, upload := range []bool{false, true} {
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		_ = writer.WriteField("service_id", "web")
+		_ = writer.WriteField("action", "reload")
+		if upload {
+			part, err := writer.CreateFormFile("config", "nginx.conf")
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _ = part.Write([]byte("fixture"))
+		} else {
+			_ = writer.WriteField("action", "stop")
+		}
+		_ = writer.Close()
+		req := httptest.NewRequest("POST", "https://panel.test/tools-settings/services/action", &body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		addAuthenticatedCookie(req, cookie)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != 400 || admin.controlCalls != 0 {
+			t.Fatalf("ambiguous/uploaded action accepted: %d", w.Code)
+		}
+	}
+}
 
 type phase26ServerAdminFake struct {
 	inventory     types.ServerInventory

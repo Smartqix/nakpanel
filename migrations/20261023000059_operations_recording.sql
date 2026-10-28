@@ -38,7 +38,7 @@ BEGIN
   IF rid>0 THEN rk:='subscription'; ELSE rk:='server'; END IF;
  END IF;
  revision:=nakpanel_operation_arg_id(NEW.args,'desired_revision');
- label:=CASE NEW.kind WHEN 'create_site' THEN 'Set up website' WHEN 'create_database' THEN 'Create database' WHEN 'issue_cert' THEN 'Issue certificate' WHEN 'install_custom_cert' THEN 'Install certificate' WHEN 'create_backup' THEN 'Create backup' WHEN 'restore_backup' THEN 'Restore backup' WHEN 'configure_webmail' THEN 'Configure webmail' WHEN 'configure_mail' THEN 'Apply mail settings' WHEN 'configure_dns_zone' THEN 'Apply DNS changes' WHEN 'reconcile_system' THEN 'Reconcile configuration' WHEN 'set_hosting_state' THEN 'Apply hosting state' WHEN 'deploy_php_release' THEN 'Deploy application' WHEN 'rollback_php_release' THEN 'Roll back application' WHEN 'wordpress_operation' THEN 'WordPress operation' WHEN 'run_scheduled_task' THEN 'Run scheduled task' WHEN 'mail_import' THEN 'Import mail' WHEN 'system_apply_updates' THEN 'Install system updates' WHEN 'server_backup' THEN 'Create server backup' ELSE 'Background operation' END;
+ label:=CASE NEW.kind WHEN 'create_site' THEN 'Set up website' WHEN 'create_database' THEN 'Create database' WHEN 'issue_cert' THEN 'Issue certificate' WHEN 'install_custom_cert' THEN 'Install certificate' WHEN 'create_backup' THEN 'Create backup' WHEN 'restore_backup' THEN 'Restore backup' WHEN 'configure_webmail' THEN 'Configure webmail' WHEN 'configure_mail' THEN 'Apply mail settings' WHEN 'configure_dns_zone' THEN 'Apply DNS changes' WHEN 'reconcile_system' THEN 'Reconcile configuration' WHEN 'set_hosting_state' THEN 'Apply hosting state' WHEN 'deploy_php_release' THEN 'Deploy application' WHEN 'rollback_php_release' THEN 'Roll back application' WHEN 'wordpress_operation' THEN 'WordPress operation' WHEN 'run_scheduled_task' THEN 'Run scheduled task' WHEN 'mail_import' THEN 'Import mail' WHEN 'system_apply_updates' THEN 'Install system updates' WHEN 'server_backup' THEN 'Create server backup' WHEN 'system_control_service' THEN concat(CASE NEW.args->>'action' WHEN 'restart' THEN 'Restart' WHEN 'reload' THEN 'Reload' WHEN 'start' THEN 'Start' WHEN 'stop' THEN 'Stop' ELSE 'Manage' END,' ',CASE NEW.args->>'service_id' WHEN 'web' THEN 'nginx' WHEN 'dns' THEN 'BIND' WHEN 'mail' THEN 'Stalwart Mail' WHEN 'php-8.3' THEN 'PHP 8.3 FPM' WHEN 'php-8.4' THEN 'PHP 8.4 FPM' WHEN 'php-8.5' THEN 'PHP 8.5 FPM' ELSE 'service' END) ELSE 'Background operation' END;
  op_state:=CASE NEW.state::text WHEN 'running' THEN 'running' WHEN 'completed' THEN 'succeeded' WHEN 'discarded' THEN 'failed' WHEN 'cancelled' THEN 'cancelled' WHEN 'retryable' THEN 'waiting_retry' ELSE 'queued' END;
  -- River completion describes queue execution. Domain workers may finish
  -- without retrying a failed command, or cancel after persisting a terminal failure.
@@ -56,6 +56,9 @@ BEGIN
     IF EXISTS(SELECT 1 FROM staging_operations WHERE id=nakpanel_operation_arg_id(NEW.args,'operation_id') AND status='failed') THEN op_state:='failed'; END IF;
    WHEN 'mail_import' THEN
     IF EXISTS(SELECT 1 FROM mail_imports WHERE id=NEW.args->>'import_id' AND state='failed') THEN op_state:='failed'; END IF;
+   WHEN 'system_control_service' THEN
+    SELECT CASE status WHEN 'succeeded' THEN 'succeeded' WHEN 'failed' THEN 'failed' WHEN 'cancelled' THEN 'cancelled' ELSE 'failed' END INTO op_state FROM server_operations WHERE operation_id=NEW.args->>'operation_id';
+    op_state:=COALESCE(op_state,'failed');
    ELSE NULL;
   END CASE;
  END IF;
@@ -95,7 +98,7 @@ BEGIN
    ELSIF NEW.kind='wordpress_operation' THEN incident_condition:=NEW.kind||':'||nakpanel_operation_arg_id(NEW.args,'instance_id');
    ELSIF NEW.kind='restore_backup' THEN incident_condition:=NEW.kind||':'||nakpanel_operation_arg_id(NEW.args,'backup_id');
    ELSIF NEW.kind='mail_import' THEN incident_condition:=NEW.kind||':'||COALESCE(NEW.args->>'import_id','');
-   ELSIF NEW.kind='system_control_service' THEN incident_condition:=NEW.kind||':'||md5(COALESCE(NEW.args->>'service',''));
+   ELSIF NEW.kind='system_control_service' THEN incident_condition:=NEW.kind||':'||COALESCE(NEW.args->>'service_id','unknown');
    END IF;
   END IF;
  IF op_state<>'failed' AND event_id IS NOT NULL THEN

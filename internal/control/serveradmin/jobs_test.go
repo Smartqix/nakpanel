@@ -39,14 +39,18 @@ type testRiverInserter struct {
 	err         error
 	sawTx       bool
 	operationID string
+	serviceID   string
+	action      string
 }
 
 func (f *testRiverInserter) InsertTx(_ context.Context, tx *sql.Tx, args river.JobArgs, _ *river.InsertOpts) (*rivertype.JobInsertResult, error) {
 	f.sawTx = tx != nil
 	if typed, ok := args.(ControlServiceArgs); ok {
 		f.operationID = typed.OperationID
+		f.serviceID = typed.ServiceID
+		f.action = typed.Action
 	}
-	return &rivertype.JobInsertResult{}, f.err
+	return &rivertype.JobInsertResult{Job: &rivertype.JobRow{ID: 55}}, f.err
 }
 
 type testServerAdminAgent struct {
@@ -84,17 +88,18 @@ func TestControlManagedServicePersistsIntentAndJobAtomically(t *testing.T) {
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO audit_events")).
 		WithArgs(int64(7), "server.service_restart_requested", "server_service", sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
+	mock.ExpectQuery("UPDATE server_operations SET task_id=").WithArgs(operationID, "river:55").WillReturnRows(sqlmock.NewRows([]string{"task_id"}).AddRow(45))
 	mock.ExpectCommit()
 	inserter := &testRiverInserter{}
 	manager := &Manager{store: NewStore(db, nil), river: inserter, now: time.Now}
 
-	_, err = manager.ControlManagedService(context.Background(), types.ControlManagedServiceReq{
+	result, err := manager.ControlManagedService(context.Background(), types.ControlManagedServiceReq{
 		ServiceID: "web", Action: "restart", OperationID: operationID, ActorUserID: 7,
 	})
 	if err != nil {
 		t.Fatalf("ControlManagedService error = %v", err)
 	}
-	if !inserter.sawTx || inserter.operationID != operationID {
+	if !inserter.sawTx || inserter.operationID != operationID || inserter.serviceID != "web" || inserter.action != "restart" || result.TaskID != 45 {
 		t.Fatalf("River insert = tx:%t operation:%q", inserter.sawTx, inserter.operationID)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {

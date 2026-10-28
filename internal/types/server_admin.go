@@ -116,6 +116,7 @@ type ControlManagedServiceReq struct {
 
 type ControlManagedServiceResult struct {
 	OperationID string         `json:"operation_id,omitempty"`
+	TaskID      int64          `json:"task_id,omitempty"`
 	ServiceID   string         `json:"service_id"`
 	Action      string         `json:"action"`
 	Before      ManagedService `json:"before"`

@@ -113,8 +113,6 @@ var managedServiceDescriptors = []managedServiceDescriptor{
 	{id: "mail", displayName: "Stalwart Mail", unit: "stalwart-mail.service", componentID: "stalwart", allowedActions: []string{"restart", "start", "stop"}},
 	{id: "podman", displayName: "Podman", unit: "podman.service", componentID: "podman", allowedActions: []string{"restart", "start", "stop"}},
 	{id: "time_sync", displayName: "systemd-timesyncd", unit: "systemd-timesyncd.service", componentID: "time", allowedActions: []string{"restart", "start", "stop"}},
-	{id: "php-8.1", displayName: "PHP 8.1 FPM", unit: "php8.1-fpm.service", componentID: "php_81", allowedActions: []string{"reload", "restart", "start", "stop"}},
-	{id: "php-8.2", displayName: "PHP 8.2 FPM", unit: "php8.2-fpm.service", componentID: "php_82", allowedActions: []string{"reload", "restart", "start", "stop"}},
 	{id: "php-8.3", displayName: "PHP 8.3 FPM", unit: "php8.3-fpm.service", componentID: "php_83", allowedActions: []string{"reload", "restart", "start", "stop"}},
 	{id: "php-8.4", displayName: "PHP 8.4 FPM", unit: "php8.4-fpm.service", componentID: "php_84", allowedActions: []string{"reload", "restart", "start", "stop"}},
 	{id: "php-8.5", displayName: "PHP 8.5 FPM", unit: "php8.5-fpm.service", componentID: "php_85", allowedActions: []string{"reload", "restart", "start", "stop"}},

@@ -1,0 +1,101 @@
+TAP version 13
+# Subtest: server forms serialize browser fields and preserve the selected action
+ok 1 - server forms serialize browser fields and preserve the selected action
+  ---
+  duration_ms: 2.849625
+  type: 'test'
+  ...
+# Subtest: service progress uses its visible notice rather than the collapsed authorization form
+ok 2 - service progress uses its visible notice rather than the collapsed authorization form
+  ---
+  duration_ms: 0.329792
+  type: 'test'
+  ...
+# Subtest: closing service menus keeps only the selected menu and restores its opener on Escape
+ok 3 - closing service menus keeps only the selected menu and restores its opener on Escape
+  ---
+  duration_ms: 0.285167
+  type: 'test'
+  ...
+# Subtest: server administration ignores a second pending submission
+ok 4 - server administration ignores a second pending submission
+  ---
+  duration_ms: 0.544791
+  type: 'test'
+  ...
+# Subtest: operation polling stops when its view is removed
+ok 5 - operation polling stops when its view is removed
+  ---
+  duration_ms: 0.497041
+  type: 'test'
+  ...
+# Subtest: a long-running operation explains when automatic checking pauses
+ok 6 - a long-running operation explains when automatic checking pauses
+  ---
+  duration_ms: 2.669708
+  type: 'test'
+  ...
+# Subtest: successful reauthentication clears the stale service warning without replaying an action
+ok 7 - successful reauthentication clears the stale service warning without replaying an action
+  ---
+  duration_ms: 1.0495
+  type: 'test'
+  ...
+# Subtest: a server failure retains uncertainty until a successful status check
+not ok 8 - a server failure retains uncertainty until a successful status check
+  ---
+  duration_ms: 1.376958
+  type: 'test'
+  location: '/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/server_interaction_test.cjs:84:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + undefined
+    - 'unknown'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'unknown'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/server_interaction_test.cjs:95:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: inventory refresh preserves the form behind an open confirmation, including late responses
+not ok 9 - inventory refresh preserves the form behind an open confirmation, including late responses
+  ---
+  duration_ms: 0.833917
+  type: 'test'
+  location: '/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/server_interaction_test.cjs:98:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    an open confirmation must defer inventory requests
+
+    1 !== 0
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 1
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/server_interaction_test.cjs:104:9)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 7
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 41.411958

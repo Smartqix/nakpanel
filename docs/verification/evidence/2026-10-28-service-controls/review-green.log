@@ -1,0 +1,64 @@
+TAP version 13
+# Subtest: server forms serialize browser fields and preserve the selected action
+ok 1 - server forms serialize browser fields and preserve the selected action
+  ---
+  duration_ms: 2.716125
+  type: 'test'
+  ...
+# Subtest: service progress uses its visible notice rather than the collapsed authorization form
+ok 2 - service progress uses its visible notice rather than the collapsed authorization form
+  ---
+  duration_ms: 0.376833
+  type: 'test'
+  ...
+# Subtest: closing service menus keeps only the selected menu and restores its opener on Escape
+ok 3 - closing service menus keeps only the selected menu and restores its opener on Escape
+  ---
+  duration_ms: 0.29425
+  type: 'test'
+  ...
+# Subtest: server administration ignores a second pending submission
+ok 4 - server administration ignores a second pending submission
+  ---
+  duration_ms: 0.5125
+  type: 'test'
+  ...
+# Subtest: operation polling stops when its view is removed
+ok 5 - operation polling stops when its view is removed
+  ---
+  duration_ms: 0.509625
+  type: 'test'
+  ...
+# Subtest: a long-running operation explains when automatic checking pauses
+ok 6 - a long-running operation explains when automatic checking pauses
+  ---
+  duration_ms: 2.955666
+  type: 'test'
+  ...
+# Subtest: successful reauthentication clears the stale service warning without replaying an action
+ok 7 - successful reauthentication clears the stale service warning without replaying an action
+  ---
+  duration_ms: 0.844291
+  type: 'test'
+  ...
+# Subtest: a server failure retains uncertainty until a successful status check
+ok 8 - a server failure retains uncertainty until a successful status check
+  ---
+  duration_ms: 1.582417
+  type: 'test'
+  ...
+# Subtest: inventory refresh preserves the form behind an open confirmation, including late responses
+ok 9 - inventory refresh preserves the form behind an open confirmation, including late responses
+  ---
+  duration_ms: 0.65175
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 44.61225

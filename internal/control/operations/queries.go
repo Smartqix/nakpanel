@@ -233,7 +233,7 @@ func listOperations(ctx context.Context, q queryer, actor auth.SessionUser, f Fi
 	}
 	order := `id DESC`
 	if f.ActiveFirst {
-		where += ` AND state IN ('queued','running','waiting_retry','failed')`
+		where += ` AND (state IN ('queued','running','waiting_retry','failed') OR (kind='system_control_service' AND trigger='manual' AND state='succeeded' AND updated_at>=now()-interval '10 minutes'))`
 		order = `CASE WHEN state IN ('queued','running','waiting_retry') THEN 0 ELSE 1 END,id DESC`
 	}
 	rows, err := q.QueryContext(ctx, `SELECT `+operationColumns+`,`+targetSQL("o")+` FROM operations o WHERE `+where+` ORDER BY `+order+` LIMIT `+bind(&args, f.limit()+1), args...)

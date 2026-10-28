@@ -70,6 +70,9 @@ func TestWorkersInvalidateCapabilitiesAfterAgentMutation(t *testing.T) {
 			}
 			mock.ExpectQuery("SELECT .* FROM server_operations").WillReturnRows(rows("pending"))
 			mock.ExpectQuery("UPDATE server_operations").WillReturnRows(rows("running"))
+			if test.service != "" && !test.fail {
+				mock.ExpectQuery("UPDATE server_operations").WillReturnRows(rows("running"))
+			}
 			// Invalidation must happen even if persisting the outcome fails.
 			persistErr := errors.New("completion unavailable")
 			mock.ExpectBegin().WillReturnError(persistErr)

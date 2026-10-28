@@ -391,6 +391,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /settings/mail/restart", s.handleRestartMail)
 	mux.HandleFunc("POST /tools-settings/inventory/refresh", s.handleRefreshServerInventory)
 	mux.HandleFunc("POST /tools-settings/services/action", s.handleManagedServiceAction)
+	mux.HandleFunc("GET /tools-settings/services/operations", s.handleServiceOperations)
 	s.registerPhase26CoreRoutes(mux)
 	s.registerPhase26OperationsRoutes(mux)
 	s.registerServerSecurityRoutes(mux)

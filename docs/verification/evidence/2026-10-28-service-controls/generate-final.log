@@ -1,0 +1,8 @@
+go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate
+go run github.com/a-h/templ/cmd/templ@v0.3.960 generate
+(✓) Post-generation event received, processing... [ needsRestart=true needsBrowserReload=true ]
+(✓) Complete [ updates=841 duration=4.694297625s ]
+
+Rebuilding...
+
+Done in 6678ms.

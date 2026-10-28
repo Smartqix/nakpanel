@@ -53,14 +53,6 @@ var managedServiceRegistry = map[string]managedServiceSpec{
 		unit:    "stalwart-mail.service",
 		actions: actionSet("reload", "restart", "start", "stop"),
 	},
-	"php-8.1": {
-		unit:    "php8.1-fpm",
-		actions: actionSet("reload", "restart", "start", "stop"),
-	},
-	"php-8.2": {
-		unit:    "php8.2-fpm",
-		actions: actionSet("reload", "restart", "start", "stop"),
-	},
 	"php-8.3": {
 		unit:    "php8.3-fpm",
 		actions: actionSet("reload", "restart", "start", "stop"),
@@ -79,7 +71,7 @@ var journalSourceRegistry = map[string][]string{
 	"panel": {"nakpanel.service"},
 	"agent": {"nakpanel-agent.service"},
 	"web": {
-		"nginx.service", "php8.1-fpm.service", "php8.2-fpm.service",
+		"nginx.service",
 		"php8.3-fpm.service", "php8.4-fpm.service", "php8.5-fpm.service",
 	},
 	"dns":      {"bind9.service", "named.service"},
@@ -170,7 +162,13 @@ func (m *ManagedOperations) ControlManagedService(ctx context.Context, req types
 		if len(states) == 1 {
 			after = states[0]
 		}
-		if req.Action != "stop" && after.Available && after.ActiveState != "active" {
+		if len(states) != 1 || after.ID != req.ServiceID || !after.Available {
+			return types.ControlManagedServiceResult{}, errors.New("managed service state could not be verified")
+		}
+		if req.Action == "stop" && after.ActiveState != "inactive" {
+			return types.ControlManagedServiceResult{}, fmt.Errorf("managed service %s did not stop", req.ServiceID)
+		}
+		if req.Action != "stop" && after.ActiveState != "active" {
 			return types.ControlManagedServiceResult{}, fmt.Errorf("managed service %s did not become active", req.ServiceID)
 		}
 	}

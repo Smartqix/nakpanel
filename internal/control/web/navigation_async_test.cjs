@@ -73,7 +73,7 @@ for (const [name,payload] of [
     replaceChildren(){if(left)lateWrites++;},appendChild(){if(left)lateWrites++;}},
     {set(target,key,value){if(left)lateWrites++;target[key]=value;return true;}});
   const root={contains:element=>element===node};
-  const document={querySelector:()=>{if(left)lateWrites++;return node;},querySelectorAll:()=>[],createElement:()=>node};
+  const document={querySelector:selector=>{if(left)lateWrites++;return selector==='#np-confirmation-dialog[open]'?null:node;},querySelectorAll:()=>[],createElement:()=>node};
   class Fields extends FormData {constructor(){super();}}
   const context=vm.createContext({document,AbortController,FormData:Fields,URLSearchParams,JSON,
     window:{fetch(){},setTimeout,clearTimeout},csrfToken:()=> 'csrf',fetch:async(_url,config)=>{options=config;return pending;}});

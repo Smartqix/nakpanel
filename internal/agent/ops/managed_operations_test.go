@@ -60,6 +60,17 @@ func TestManagedOperationsControlsOnlyRegisteredServicesWithoutShell(t *testing.
 	}
 }
 
+func TestServiceStopRequiresVerifiedInactiveState(t *testing.T) {
+	manager := NewManagedOperations(ManagedOperationsOptions{Runner: &managedOpsRunner{}, Services: managedOpsServices{active: "active"}})
+	if _, err := manager.ControlManagedService(context.Background(), types.ControlManagedServiceReq{ServiceID: "web", Action: "stop", OperationID: "op-stop-web"}); err == nil {
+		t.Fatal("stop succeeded while the service was still active")
+	}
+	manager = NewManagedOperations(ManagedOperationsOptions{Runner: &managedOpsRunner{}, Services: managedOpsServices{active: "inactive"}})
+	if _, err := manager.ControlManagedService(context.Background(), types.ControlManagedServiceReq{ServiceID: "web", Action: "stop", OperationID: "op-stop-web"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestManagedOperationsRejectsServiceAndPackageInjection(t *testing.T) {
 	manager := NewManagedOperations(ManagedOperationsOptions{Runner: &managedOpsRunner{}})
 	if _, err := manager.ControlManagedService(context.Background(), types.ControlManagedServiceReq{

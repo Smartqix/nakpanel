@@ -4,7 +4,7 @@ import("github.com/nakroteck/nakpanel/internal/control/auth";"github.com/nakrote
 templ operationsTop(view WorkspaceView) {
  <div class="np-op-top" data-np-operations-shell data-np-operations-scope={ operationsScope(view) } data-np-operations-cursor={ formatJobID(view.Operations.Cursor) }>
   <div class="np-op-popover-wrap"><button class="np-secondary-button" type="button" data-np-op-toggle="tasks" aria-controls="np-op-tasks" aria-expanded="false">Tasks <span data-np-op-count="active_tasks" class="np-nav-badge">{ formatJobID(int64(view.Operations.Counts.ActiveTasks)) }</span></button>
-   <section id="np-op-tasks" class="np-op-popover np-panel" hidden tabindex="-1" aria-label="Background tasks"><h2>Tasks</h2><p class="np-muted">Active work and recent failures</p><div data-np-op-quick-tasks>
+   <section id="np-op-tasks" class="np-op-popover np-panel" hidden tabindex="-1" aria-label="Background tasks"><h2>Tasks</h2><p class="np-muted">Active work, recent service results and failures</p><div data-np-op-quick-tasks>
 @operationsRows(view.OperationsQuick,"tasks")
 </div><a href={ templ.SafeURL(operationsPath(view,"tasks")) }>All tasks</a></section>
   </div>

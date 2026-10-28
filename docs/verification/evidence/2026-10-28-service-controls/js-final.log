@@ -1,0 +1,1702 @@
+TAP version 13
+# Subtest: database refresh uses scoped page and stops after terminal state
+ok 1 - database refresh uses scoped page and stops after terminal state
+  ---
+  duration_ms: 4.885
+  type: 'test'
+  ...
+# Subtest: database status retries a temporary HTTP failure
+ok 2 - database status retries a temporary HTTP failure
+  ---
+  duration_ms: 4.148834
+  type: 'test'
+  ...
+# Subtest: obsolete database panel timers stop without fetching
+ok 3 - obsolete database panel timers stop without fetching
+  ---
+  duration_ms: 4.949875
+  type: 'test'
+  ...
+# Subtest: successful submission reports refresh failure outside closed dialog
+ok 4 - successful submission reports refresh failure outside closed dialog
+  ---
+  duration_ms: 4.945917
+  type: 'test'
+  ...
+# Subtest: unmount cancels database polling before its next request
+ok 5 - unmount cancels database polling before its next request
+  ---
+  duration_ms: 2.769334
+  type: 'test'
+  ...
+# Subtest: ordinary dialog mutations preserve URL-encoded ParseForm compatibility
+ok 6 - ordinary dialog mutations preserve URL-encoded ParseForm compatibility
+  ---
+  duration_ms: 22.348041
+  type: 'test'
+  ...
+# Subtest: certificate upload keeps multipart fields and files
+ok 7 - certificate upload keeps multipart fields and files
+  ---
+  duration_ms: 2.803167
+  type: 'test'
+  ...
+# Subtest: validation uses JSON instead of consuming a one-shot error cookie
+ok 8 - validation uses JSON instead of consuming a one-shot error cookie
+  ---
+  duration_ms: 2.35
+  type: 'test'
+  ...
+# Subtest: an already pending dialog cannot submit twice
+ok 9 - an already pending dialog cannot submit twice
+  ---
+  duration_ms: 1.243708
+  type: 'test'
+  ...
+# Subtest: creation dialogs focus the first visible enabled field, not the close button
+ok 10 - creation dialogs focus the first visible enabled field, not the close button
+  ---
+  duration_ms: 1.55325
+  type: 'test'
+  ...
+# Subtest: unmount closes nested dialogs, unlocks the page and allows preparation again
+ok 11 - unmount closes nested dialogs, unlocks the page and allows preparation again
+  ---
+  duration_ms: 0.392625
+  type: 'test'
+  ...
+# Subtest: unmount also dismisses a shell confirmation opened from the removed drawer
+ok 12 - unmount also dismisses a shell confirmation opened from the removed drawer
+  ---
+  duration_ms: 2.222042
+  type: 'test'
+  ...
+# Subtest: prefill sets named fields and signals dependent controls, ignoring malformed data
+ok 13 - prefill sets named fields and signals dependent controls, ignoring malformed data
+  ---
+  duration_ms: 0.704125
+  type: 'test'
+  ...
+# Subtest: np-drawer error recovery restores safe fields with fresh CSRF
+ok 14 - np-drawer error recovery restores safe fields with fresh CSRF
+  ---
+  duration_ms: 0.67275
+  type: 'test'
+  ...
+# Subtest: np-mail-dialog error recovery restores safe fields with fresh CSRF
+ok 15 - np-mail-dialog error recovery restores safe fields with fresh CSRF
+  ---
+  duration_ms: 0.162042
+  type: 'test'
+  ...
+# Subtest: collapsed impact details never receive invisible initial focus
+ok 16 - collapsed impact details never receive invisible initial focus
+  ---
+  duration_ms: 0.175334
+  type: 'test'
+  ...
+# Subtest: review dialogs without fields prefer their Cancel action over committing a change
+ok 17 - review dialogs without fields prefer their Cancel action over committing a change
+  ---
+  duration_ms: 0.843166
+  type: 'test'
+  ...
+# Subtest: dialogs derive an accessible title and description without replacing explicit names
+ok 18 - dialogs derive an accessible title and description without replacing explicit names
+  ---
+  duration_ms: 0.979875
+  type: 'test'
+  ...
+# Subtest: nested confirmations prefer Cancel and restore the parent field without unlocking the page
+ok 19 - nested confirmations prefer Cancel and restore the parent field without unlocking the page
+  ---
+  duration_ms: 0.807667
+  type: 'test'
+  ...
+# Subtest: native Escape cancellation follows the same focus restoration path
+ok 20 - native Escape cancellation follows the same focus restoration path
+  ---
+  duration_ms: 1.667042
+  type: 'test'
+  ...
+# Subtest: a delayed close event cannot remove a reopened dialog
+ok 21 - a delayed close event cannot remove a reopened dialog
+  ---
+  duration_ms: 0.17575
+  type: 'test'
+  ...
+# Subtest: closing a lower dialog never steals focus from a nested confirmation
+ok 22 - closing a lower dialog never steals focus from a nested confirmation
+  ---
+  duration_ms: 0.0895
+  type: 'test'
+  ...
+# Subtest: opening without an explicit trigger restores the previously focused control
+ok 23 - opening without an explicit trigger restores the previously focused control
+  ---
+  duration_ms: 0.045875
+  type: 'test'
+  ...
+# Subtest: long menus use the larger available viewport side and scroll within it
+ok 24 - long menus use the larger available viewport side and scroll within it
+  ---
+  duration_ms: 1.094416
+  type: 'test'
+  ...
+# Subtest: HTML validation patterns compile under modern Unicode sets semantics
+ok 25 - HTML validation patterns compile under modern Unicode sets semantics
+  ---
+  duration_ms: 9.798583
+  type: 'test'
+  ...
+# Subtest: removal needs all three independent confirmations
+ok 26 - removal needs all three independent confirmations
+  ---
+  duration_ms: 0.291667
+  type: 'test'
+  ...
+# Subtest: confirmation uses the same exact, trimmed domain as the server
+ok 27 - confirmation uses the same exact, trimmed domain as the server
+  ---
+  duration_ms: 0.104542
+  type: 'test'
+  ...
+# Subtest: busy, uncertain and stale removals cannot become enabled by typing
+ok 28 - busy, uncertain and stale removals cannot become enabled by typing
+  ---
+  duration_ms: 0.069167
+  type: 'test'
+  ...
+# Subtest: optional database deletion is not selected by gate evaluation
+ok 29 - optional database deletion is not selected by gate evaluation
+  ---
+  duration_ms: 0.054792
+  type: 'test'
+  ...
+# Subtest: matching full subdomain input is shortened without accepting nested labels
+ok 30 - matching full subdomain input is shortened without accepting nested labels
+  ---
+  duration_ms: 0.174875
+  type: 'test'
+  ...
+# Subtest: drawer fallback mount promotes the selected dialog and its link opens without navigation
+ok 31 - drawer fallback mount promotes the selected dialog and its link opens without navigation
+  ---
+  duration_ms: 5.031083
+  type: 'test'
+  ...
+# Subtest: empty operation logs show a status-appropriate message
+ok 32 - empty operation logs show a status-appropriate message
+  ---
+  duration_ms: 0.560792
+  type: 'test'
+  ...
+# Subtest: repository labels and connection failures use customer language
+ok 33 - repository labels and connection failures use customer language
+  ---
+  duration_ms: 5.838917
+  type: 'test'
+  ...
+# Subtest: key preparation is separate from saving and keeps the dialog in place
+ok 34 - key preparation is separate from saving and keeps the dialog in place
+  ---
+  duration_ms: 0.22375
+  type: 'test'
+  ...
+# Subtest: partial replacement removes scripting-disabled fallback form controls
+ok 35 - partial replacement removes scripting-disabled fallback form controls
+  ---
+  duration_ms: 0.187292
+  type: 'test'
+  ...
+# Subtest: completed removal returns to empty state but pending removal remains visible
+ok 36 - completed removal returns to empty state but pending removal remains visible
+  ---
+  duration_ms: 0.237417
+  type: 'test'
+  ...
+# Subtest: SSH onboarding prepares once without publication or trusting an unverified host
+ok 37 - SSH onboarding prepares once without publication or trusting an unverified host
+  ---
+  duration_ms: 0.536541
+  type: 'test'
+  ...
+# Subtest: preview uses the fetched revision and stale-operation token
+ok 38 - preview uses the fetched revision and stale-operation token
+  ---
+  duration_ms: 0.121417
+  type: 'test'
+  ...
+# Subtest: rollback uses previous revision and explicit confirmation
+ok 39 - rollback uses previous revision and explicit confirmation
+  ---
+  duration_ms: 0.056167
+  type: 'test'
+  ...
+# Subtest: missing and disabled repositories cannot deploy or preview prematurely
+ok 40 - missing and disabled repositories cannot deploy or preview prematurely
+  ---
+  duration_ms: 0.30025
+  type: 'test'
+  ...
+# Subtest: uncertain retry reuses a key but different revisions do not
+ok 41 - uncertain retry reuses a key but different revisions do not
+  ---
+  duration_ms: 0.342125
+  type: 'test'
+  ...
+# Subtest: errors redact credential-bearing URLs
+ok 42 - errors redact credential-bearing URLs
+  ---
+  duration_ms: 0.172459
+  type: 'test'
+  ...
+# Subtest: Git refresh is bounded, scoped and does not reload the document
+ok 43 - Git refresh is bounded, scoped and does not reload the document
+  ---
+  duration_ms: 0.19825
+  type: 'test'
+  ...
+# Subtest: connection testing never dispatches the auto-publishing fetch action
+ok 44 - connection testing never dispatches the auto-publishing fetch action
+  ---
+  duration_ms: 0.089958
+  type: 'test'
+  ...
+# Subtest: disconnected repositories cannot run fetch, rollback or disconnect
+ok 45 - disconnected repositories cannot run fetch, rollback or disconnect
+  ---
+  duration_ms: 0.088917
+  type: 'test'
+  ...
+# Subtest: expired sessions and non-JSON failures have actionable errors
+ok 46 - expired sessions and non-JSON failures have actionable errors
+  ---
+  duration_ms: 15.797958
+  type: 'test'
+  ...
+# Subtest: mutation requests use the server AJAX and CSRF contract
+ok 47 - mutation requests use the server AJAX and CSRF contract
+  ---
+  duration_ms: 23.994958
+  type: 'test'
+  ...
+# Subtest: session and HTML errors are useful without exposing raw bodies
+ok 48 - session and HTML errors are useful without exposing raw bodies
+  ---
+  duration_ms: 1.124458
+  type: 'test'
+  ...
+# Subtest: HTML partial refresh is explicitly supported
+ok 49 - HTML partial refresh is explicitly supported
+  ---
+  duration_ms: 0.360458
+  type: 'test'
+  ...
+# Subtest: network uncertainty never automatically replays a mutation
+ok 50 - network uncertainty never automatically replays a mutation
+  ---
+  duration_ms: 0.172375
+  type: 'test'
+  ...
+# Subtest: busy forms preserve controls that were already disabled by policy
+ok 51 - busy forms preserve controls that were already disabled by policy
+  ---
+  duration_ms: 0.3915
+  type: 'test'
+  ...
+# Subtest: structured validation errors retain field information for inline recovery
+ok 52 - structured validation errors retain field information for inline recovery
+  ---
+  duration_ms: 0.494916
+  type: 'test'
+  ...
+# Subtest: progressive dialog forms can follow same-origin fallback redirects without replay
+ok 53 - progressive dialog forms can follow same-origin fallback redirects without replay
+  ---
+  duration_ms: 0.3015
+  type: 'test'
+  ...
+# Subtest: progressive responses reject cross-origin navigation and login redirects
+ok 54 - progressive responses reject cross-origin navigation and login redirects
+  ---
+  duration_ms: 0.453334
+  type: 'test'
+  ...
+# Subtest: expired sessions carry a confirmed 401 instead of mutation uncertainty
+ok 55 - expired sessions carry a confirmed 401 instead of mutation uncertainty
+  ---
+  duration_ms: 0.3635
+  type: 'test'
+  ...
+# Subtest: an outside login redirect cannot be classified as a confirmed rejection
+ok 56 - an outside login redirect cannot be classified as a confirmed rejection
+  ---
+  duration_ms: 0.365666
+  type: 'test'
+  ...
+# Subtest: busy state follows form ownership for external submit buttons
+ok 57 - busy state follows form ownership for external submit buttons
+  ---
+  duration_ms: 0.11425
+  type: 'test'
+  ...
+# Subtest: mail import polls only active states
+ok 58 - mail import polls only active states
+  ---
+  duration_ms: 0.576459
+  type: 'test'
+  ...
+# Subtest: mail counters never display untrusted strings as progress
+ok 59 - mail counters never display untrusted strings as progress
+  ---
+  duration_ms: 0.08275
+  type: 'test'
+  ...
+# Subtest: mail search matches complete addresses case-insensitively
+ok 60 - mail search matches complete addresses case-insensitively
+  ---
+  duration_ms: 0.436542
+  type: 'test'
+  ...
+# Subtest: late connection responses cannot overwrite another mailbox or a closed dialog
+ok 61 - late connection responses cannot overwrite another mailbox or a closed dialog
+  ---
+  duration_ms: 0.49275
+  type: 'test'
+  ...
+# Subtest: mail connection views are enhanced on each fragment mount
+ok 62 - mail connection views are enhanced on each fragment mount
+  ---
+  duration_ms: 1.219208
+  type: 'test'
+  ...
+# Subtest: leaving a Mail connection loader aborts its active request
+ok 63 - leaving a Mail connection loader aborts its active request
+  ---
+  duration_ms: 0.150125
+  type: 'test'
+  ...
+# Subtest: backup key is shown once on its originating page
+ok 64 - backup key is shown once on its originating page
+  ---
+  duration_ms: 7.8635
+  type: 'test'
+  ...
+# Subtest: a delayed backup key cannot enter a later page after navigation
+ok 65 - a delayed backup key cannot enter a later page after navigation
+  ---
+  duration_ms: 3.855083
+  type: 'test'
+  ...
+# Subtest: old Mail server status cannot replace fresh status after navigation: false
+ok 66 - old Mail server status cannot replace fresh status after navigation: false
+  ---
+  duration_ms: 1.412166
+  type: 'test'
+  ...
+# Subtest: old Mail server status cannot replace fresh status after navigation: true
+ok 67 - old Mail server status cannot replace fresh status after navigation: true
+  ---
+  duration_ms: 1.989833
+  type: 'test'
+  ...
+# Subtest: loadServerInventory cancels and ignores its old page response
+ok 68 - loadServerInventory cancels and ignores its old page response
+  ---
+  duration_ms: 13.216875
+  type: 'test'
+  ...
+# Subtest: loadServerJournal cancels and ignores its old page response
+ok 69 - loadServerJournal cancels and ignores its old page response
+  ---
+  duration_ms: 1.502708
+  type: 'test'
+  ...
+# Subtest: loadServerUpdates cancels and ignores its old page response
+ok 70 - loadServerUpdates cancels and ignores its old page response
+  ---
+  duration_ms: 1.276209
+  type: 'test'
+  ...
+# Subtest: loadServerSecurity cancels and ignores its old page response
+ok 71 - loadServerSecurity cancels and ignores its old page response
+  ---
+  duration_ms: 1.316833
+  type: 'test'
+  ...
+# Subtest: loadSecurityBans cancels and ignores its old page response
+ok 72 - loadSecurityBans cancels and ignores its old page response
+  ---
+  duration_ms: 2.526292
+  type: 'test'
+  ...
+# Subtest: loadServerBackups cancels and ignores its old page response
+ok 73 - loadServerBackups cancels and ignores its old page response
+  ---
+  duration_ms: 1.293875
+  type: 'test'
+  ...
+# Subtest: loadMailQueue cancels and ignores its old page response
+ok 74 - loadMailQueue cancels and ignores its old page response
+  ---
+  duration_ms: 2.252291
+  type: 'test'
+  ...
+# Subtest: loadMailLogs cancels and ignores its old page response
+ok 75 - loadMailLogs cancels and ignores its old page response
+  ---
+  duration_ms: 1.435084
+  type: 'test'
+  ...
+# Subtest: loadDatabaseAdmin cancels and ignores its old page response
+ok 76 - loadDatabaseAdmin cancels and ignores its old page response
+  ---
+  duration_ms: 1.531041
+  type: 'test'
+  ...
+# Subtest: loadApplicationCatalog cancels and ignores its old page response
+ok 77 - loadApplicationCatalog cancels and ignores its old page response
+  ---
+  duration_ms: 1.505708
+  type: 'test'
+  ...
+# Subtest: security actions cannot start polling a later page after navigation
+ok 78 - security actions cannot start polling a later page after navigation
+  ---
+  duration_ms: 1.642916
+  type: 'test'
+  ...
+# Subtest: a completed database action cannot refresh or notify a different domain
+ok 79 - a completed database action cannot refresh or notify a different domain
+  ---
+  duration_ms: 1.07
+  type: 'test'
+  ...
+# Subtest: D1 fragment discards noscript required controls in main and every shell template
+ok 80 - D1 fragment discards noscript required controls in main and every shell template
+  ---
+  duration_ms: 19.357084
+  type: 'test'
+  ...
+# Subtest: tab-owned hash changes retain the tab and scroll position after Back
+ok 81 - tab-owned hash changes retain the tab and scroll position after Back
+  ---
+  duration_ms: 3.270041
+  type: 'test'
+  ...
+# Subtest: D2 two pending Backs render final target and preserve all Forward entries
+ok 82 - D2 two pending Backs render final target and preserve all Forward entries
+  ---
+  duration_ms: 4.1885
+  type: 'test'
+  ...
+# Subtest: D2 declined dirty Back returns to rendered entry with Forward intact
+ok 83 - D2 declined dirty Back returns to rendered entry with Forward intact
+  ---
+  duration_ms: 2.794667
+  type: 'test'
+  ...
+# Subtest: D2 failed click during pending Back returns to rendered entry without adding history
+ok 84 - D2 failed click during pending Back returns to rendered entry without adding history
+  ---
+  duration_ms: 2.495625
+  type: 'test'
+  ...
+# Subtest: D4 commit replaces filled customer dialog and mounts fresh controls
+ok 85 - D4 commit replaces filled customer dialog and mounts fresh controls
+  ---
+  duration_ms: 1.1575
+  type: 'test'
+  ...
+# Subtest: D4 successful fragment dialog submit resets fields and clears passwords before swap
+ok 86 - D4 successful fragment dialog submit resets fields and clears passwords before swap
+  ---
+  duration_ms: 1.414708
+  type: 'test'
+  ...
+# Subtest: D4 successful legacy dialog submit resets fields and clears passwords before swap
+ok 87 - D4 successful legacy dialog submit resets fields and clears passwords before swap
+  ---
+  duration_ms: 1.210667
+  type: 'test'
+  ...
+# Subtest: D2 failed submit during pending Back recovers the rendered entry
+ok 88 - D2 failed submit during pending Back recovers the rendered entry
+  ---
+  duration_ms: 4.179917
+  type: 'test'
+  ...
+# Subtest: D2 successful click from a traversed entry keeps positional indexes usable for recovery
+ok 89 - D2 successful click from a traversed entry keeps positional indexes usable for recovery
+  ---
+  duration_ms: 2.159292
+  type: 'test'
+  ...
+# Subtest: D2 same-URL entries retain their identity when a click fails during pending Back
+ok 90 - D2 same-URL entries retain their identity when a click fails during pending Back
+  ---
+  duration_ms: 8.232833
+  type: 'test'
+  ...
+# Subtest: plan preview requests share the form lifetime and cannot open after unmount
+ok 91 - plan preview requests share the form lifetime and cannot open after unmount
+  ---
+  duration_ms: 7.6645
+  type: 'test'
+  ...
+# Subtest: an unmounted preview failure cannot reopen the shell dialog or replace its warning
+ok 92 - an unmounted preview failure cannot reopen the shell dialog or replace its warning
+  ---
+  duration_ms: 3.01075
+  type: 'test'
+  ...
+# Subtest: a superseded preview cannot display results or unlock the newer request
+ok 93 - a superseded preview cannot display results or unlock the newer request
+  ---
+  duration_ms: 4.393791
+  type: 'test'
+  ...
+# Subtest: an older preview failure cannot overwrite a newer successful review
+ok 94 - an older preview failure cannot overwrite a newer successful review
+  ---
+  duration_ms: 2.28475
+  type: 'test'
+  ...
+# Subtest: an aborted preview does not show an error dialog
+ok 95 - an aborted preview does not show an error dialog
+  ---
+  duration_ms: 2.136334
+  type: 'test'
+  ...
+# Subtest: unmount clears plan confirmation and its bypass before another page submits
+ok 96 - unmount clears plan confirmation and its bypass before another page submits
+  ---
+  duration_ms: 3.636208
+  type: 'test'
+  ...
+# Subtest: sync rows use a two-column layout rather than icon-slot object rows
+ok 97 - sync rows use a two-column layout rather than icon-slot object rows
+  ---
+  duration_ms: 0.6715
+  type: 'test'
+  ...
+# Subtest: WordPress validation rejects enabled zero capacity without changing input
+ok 98 - WordPress validation rejects enabled zero capacity without changing input
+  ---
+  duration_ms: 0.100208
+  type: 'test'
+  ...
+# Subtest: sync summary distinguishes excluded subscriptions from failures
+ok 99 - sync summary distinguishes excluded subscriptions from failures
+  ---
+  duration_ms: 0.146541
+  type: 'test'
+  ...
+# Subtest: sync row labels never claim a pending service is fully applied
+ok 100 - sync row labels never claim a pending service is fully applied
+  ---
+  duration_ms: 0.060041
+  type: 'test'
+  ...
+# Subtest: site policy keeps checked settings when hidden false fallbacks share the name
+ok 101 - site policy keeps checked settings when hidden false fallbacks share the name
+  ---
+  duration_ms: 2.486875
+  type: 'test'
+  ...
+# Subtest: mail-import.js releases each pagehide handler when its page unmounts
+ok 102 - mail-import.js releases each pagehide handler when its page unmounts
+  ---
+  duration_ms: 3.763125
+  type: 'test'
+  ...
+# Subtest: plan-sync.js releases each pagehide handler when its page unmounts
+ok 103 - plan-sync.js releases each pagehide handler when its page unmounts
+  ---
+  duration_ms: 2.118375
+  type: 'test'
+  ...
+# Subtest: dns-template.js releases each pagehide handler when its page unmounts
+ok 104 - dns-template.js releases each pagehide handler when its page unmounts
+  ---
+  duration_ms: 1.035417
+  type: 'test'
+  ...
+# Subtest: global search uses readable object names rather than storage enums
+ok 105 - global search uses readable object names rather than storage enums
+  ---
+  duration_ms: 1.352917
+  type: 'test'
+  ...
+# Subtest: server forms serialize browser fields and preserve the selected action
+ok 106 - server forms serialize browser fields and preserve the selected action
+  ---
+  duration_ms: 4.58725
+  type: 'test'
+  ...
+# Subtest: service progress uses its visible notice rather than the collapsed authorization form
+ok 107 - service progress uses its visible notice rather than the collapsed authorization form
+  ---
+  duration_ms: 0.370833
+  type: 'test'
+  ...
+# Subtest: closing service menus keeps only the selected menu and restores its opener on Escape
+ok 108 - closing service menus keeps only the selected menu and restores its opener on Escape
+  ---
+  duration_ms: 0.345667
+  type: 'test'
+  ...
+# Subtest: server administration ignores a second pending submission
+ok 109 - server administration ignores a second pending submission
+  ---
+  duration_ms: 1.037041
+  type: 'test'
+  ...
+# Subtest: operation polling stops when its view is removed
+ok 110 - operation polling stops when its view is removed
+  ---
+  duration_ms: 0.693583
+  type: 'test'
+  ...
+# Subtest: a long-running operation explains when automatic checking pauses
+ok 111 - a long-running operation explains when automatic checking pauses
+  ---
+  duration_ms: 5.348333
+  type: 'test'
+  ...
+# Subtest: successful reauthentication clears the stale service warning without replaying an action
+ok 112 - successful reauthentication clears the stale service warning without replaying an action
+  ---
+  duration_ms: 1.138
+  type: 'test'
+  ...
+# Subtest: a server failure retains uncertainty until a successful status check
+ok 113 - a server failure retains uncertainty until a successful status check
+  ---
+  duration_ms: 2.366
+  type: 'test'
+  ...
+# Subtest: inventory refresh preserves the form behind an open confirmation, including late responses
+ok 114 - inventory refresh preserves the form behind an open confirmation, including late responses
+  ---
+  duration_ms: 1.072834
+  type: 'test'
+  ...
+# Subtest: PHP/policy reset accepts its safe native redirect and clears the dirty guard before navigation
+ok 115 - PHP/policy reset accepts its safe native redirect and clears the dirty guard before navigation
+  ---
+  duration_ms: 18.15825
+  type: 'test'
+  ...
+# Subtest: policy forms reject a second pending mutation
+ok 116 - policy forms reject a second pending mutation
+  ---
+  duration_ms: 0.571208
+  type: 'test'
+  ...
+# Subtest: policy errors retain field information and never navigate or replay
+ok 117 - policy errors retain field information and never navigate or replay
+  ---
+  duration_ms: 1.514166
+  type: 'test'
+  ...
+# Subtest: TestSiteRemovalLostResponseDoesNotReplay
+ok 118 - TestSiteRemovalLostResponseDoesNotReplay
+  ---
+  duration_ms: 0.989166
+  type: 'test'
+  ...
+# Subtest: TestSiteRemovalSessionExpiryPreservesProgress
+ok 119 - TestSiteRemovalSessionExpiryPreservesProgress
+  ---
+  duration_ms: 0.811
+  type: 'test'
+  ...
+# Subtest: removal waits for completion, stops on failure and respects foreground deadline
+ok 120 - removal waits for completion, stops on failure and respects foreground deadline
+  ---
+  duration_ms: 0.407458
+  type: 'test'
+  ...
+# Subtest: removal refuses off-panel or deleted-object destinations
+ok 121 - removal refuses off-panel or deleted-object destinations
+  ---
+  duration_ms: 0.196625
+  type: 'test'
+  ...
+# Subtest: closing during acceptance never restarts foreground polling or steals navigation
+ok 122 - closing during acceptance never restarts foreground polling or steals navigation
+  ---
+  duration_ms: 0.162083
+  type: 'test'
+  ...
+# Subtest: mounted failed progress enables Retry instead of leaving the form busy
+ok 123 - mounted failed progress enables Retry instead of leaving the form busy
+  ---
+  duration_ms: 4.618291
+  type: 'test'
+  ...
+# Subtest: removal preview ignores a superseded success after navigation
+ok 124 - removal preview ignores a superseded success after navigation
+  ---
+  duration_ms: 1.329166
+  type: 'test'
+  ...
+# Subtest: removal preview ignores a superseded error after navigation
+ok 125 - removal preview ignores a superseded error after navigation
+  ---
+  duration_ms: 0.805042
+  type: 'test'
+  ...
+# Subtest: removal preview generations protect reopening on the same page
+ok 126 - removal preview generations protect reopening on the same page
+  ---
+  duration_ms: 0.69675
+  type: 'test'
+  ...
+# Subtest: unmount aborts a pending removal preview before any replacement opens
+ok 127 - unmount aborts a pending removal preview before any replacement opens
+  ---
+  duration_ms: 0.608709
+  type: 'test'
+  ...
+# Subtest: queued setup waits and redirects only to the ready child
+ok 128 - queued setup waits and redirects only to the ready child
+  ---
+  duration_ms: 6.031042
+  type: 'test'
+  ...
+# Subtest: starting recovery immediately hides the previous retry action
+ok 129 - starting recovery immediately hides the previous retry action
+  ---
+  duration_ms: 0.964875
+  type: 'test'
+  ...
+# Subtest: failed setup stops without redirect or resubmission
+ok 130 - failed setup stops without redirect or resubmission
+  ---
+  duration_ms: 1.493208
+  type: 'test'
+  ...
+# Subtest: attention setup stops without redirect or resubmission
+ok 131 - attention setup stops without redirect or resubmission
+  ---
+  duration_ms: 1.103791
+  type: 'test'
+  ...
+# Subtest: temporary status failure retries GET without replaying creation
+ok 132 - temporary status failure retries GET without replaying creation
+  ---
+  duration_ms: 1.691541
+  type: 'test'
+  ...
+# Subtest: five minute timeout stops polling and keeps background completion available
+ok 133 - five minute timeout stops polling and keeps background completion available
+  ---
+  duration_ms: 1.079917
+  type: 'test'
+  ...
+# Subtest: closing the dialog cancels automatic navigation
+ok 134 - closing the dialog cancels automatic navigation
+  ---
+  duration_ms: 0.858625
+  type: 'test'
+  ...
+# Subtest: superseded setup timers cannot fetch or navigate
+ok 135 - superseded setup timers cannot fetch or navigate
+  ---
+  duration_ms: 0.642958
+  type: 'test'
+  ...
+# Subtest: ready setup does not discard unsaved settings
+ok 136 - ready setup does not discard unsaved settings
+  ---
+  duration_ms: 0.745333
+  type: 'test'
+  ...
+# Subtest: website SSL tracker waits through HTTPS activation
+ok 137 - website SSL tracker waits through HTTPS activation
+  ---
+  duration_ms: 2.043542
+  type: 'test'
+  ...
+# Subtest: generated WordPress credentials prevent automatic navigation until acknowledged
+ok 138 - generated WordPress credentials prevent automatic navigation until acknowledged
+  ---
+  duration_ms: 0.661583
+  type: 'test'
+  ...
+# Subtest: access change 401 stops polling
+ok 139 - access change 401 stops polling
+  ---
+  duration_ms: 0.571292
+  type: 'test'
+  ...
+# Subtest: access change 403 stops polling
+ok 140 - access change 403 stops polling
+  ---
+  duration_ms: 0.535
+  type: 'test'
+  ...
+# Subtest: access change 404 stops polling
+ok 141 - access change 404 stops polling
+  ---
+  duration_ms: 0.520458
+  type: 'test'
+  ...
+# Subtest: cross-origin status URL is rejected
+ok 142 - cross-origin status URL is rejected
+  ---
+  duration_ms: 1.421
+  type: 'test'
+  ...
+# Subtest: wrong site result cannot redirect
+ok 143 - wrong site result cannot redirect
+  ---
+  duration_ms: 0.603042
+  type: 'test'
+  ...
+# Subtest: accepted creation stays in its dialog and cannot POST twice
+ok 144 - accepted creation stays in its dialog and cannot POST twice
+  ---
+  duration_ms: 0.805125
+  type: 'test'
+  ...
+# Subtest: accepted creation without a status URL cannot silently redirect or submit again
+ok 145 - accepted creation without a status URL cannot silently redirect or submit again
+  ---
+  duration_ms: 0.564667
+  type: 'test'
+  ...
+# Subtest: uncertain creation result cannot replay POST
+ok 146 - uncertain creation result cannot replay POST
+  ---
+  duration_ms: 1.116708
+  type: 'test'
+  ...
+# Subtest: uncertain creation result cannot replay POST
+ok 147 - uncertain creation result cannot replay POST
+  ---
+  duration_ms: 1.545958
+  type: 'test'
+  ...
+# Subtest: confirmed validation rejection preserves the ability to correct and submit
+ok 148 - confirmed validation rejection preserves the ability to correct and submit
+  ---
+  duration_ms: 1.094167
+  type: 'test'
+  ...
+# Subtest: shared fetch HTTP validation errors allow correction while keeping network uncertainty locked
+ok 149 - shared fetch HTTP validation errors allow correction while keeping network uncertainty locked
+  ---
+  duration_ms: 0.819583
+  type: 'test'
+  ...
+# Subtest: editing an uncertain request cannot erase its warning or re-enable Create
+ok 150 - editing an uncertain request cannot erase its warning or re-enable Create
+  ---
+  duration_ms: 0.744
+  type: 'test'
+  ...
+# Subtest: website login redirects preserve input and offer sign-in recovery
+ok 151 - website login redirects preserve input and offer sign-in recovery
+  ---
+  duration_ms: 0.8425
+  type: 'test'
+  ...
+# Subtest: website 401 HTML responses have sign-in recovery instead of a parse error
+ok 152 - website 401 HTML responses have sign-in recovery instead of a parse error
+  ---
+  duration_ms: 1.150417
+  type: 'test'
+  ...
+# Subtest: website network uncertainty keeps creation locked without replay
+ok 153 - website network uncertainty keeps creation locked without replay
+  ---
+  duration_ms: 0.756083
+  type: 'test'
+  ...
+# Subtest: website outside login redirect remains uncertain and cannot replay
+ok 154 - website outside login redirect remains uncertain and cannot replay
+  ---
+  duration_ms: 0.606584
+  type: 'test'
+  ...
+# Subtest: website shared-client session rejection offers sign-in and preserves input
+ok 155 - website shared-client session rejection offers sign-in and preserves input
+  ---
+  duration_ms: 16.880667
+  type: 'test'
+  ...
+# Subtest: website shared-client validation errors remain correctable
+ok 156 - website shared-client validation errors remain correctable
+  ---
+  duration_ms: 2.04575
+  type: 'test'
+  ...
+# Subtest: website shared-client server failures cannot replay creation
+ok 157 - website shared-client server failures cannot replay creation
+  ---
+  duration_ms: 2.286958
+  type: 'test'
+  ...
+# Subtest: page setup polling cancels its timer on unmount
+ok 158 - page setup polling cancels its timer on unmount
+  ---
+  duration_ms: 0.739
+  type: 'test'
+  ...
+# Subtest: pending setup resumes on reopen with instant navigation on
+ok 159 - pending setup resumes on reopen with instant navigation on
+  ---
+  duration_ms: 0.779584
+  type: 'test'
+  ...
+# Subtest: pending setup resumes on reopen with instant navigation off
+ok 160 - pending setup resumes on reopen with instant navigation off
+  ---
+  duration_ms: 0.663
+  type: 'test'
+  ...
+# Subtest: mobile navigation reveals the active backup tab without scrolling the document
+ok 161 - mobile navigation reveals the active backup tab without scrolling the document
+  ---
+  duration_ms: 0.419875
+  type: 'test'
+  ...
+# Subtest: backup filtering is case insensitive and domain exact
+ok 162 - backup filtering is case insensitive and domain exact
+  ---
+  duration_ms: 0.078875
+  type: 'test'
+  ...
+# Subtest: fast completion never leaves a permanent removing or creating notice
+ok 163 - fast completion never leaves a permanent removing or creating notice
+  ---
+  duration_ms: 0.118291
+  type: 'test'
+  ...
+# Subtest: polling detects removal and ignores key ordering
+ok 164 - polling detects removal and ignores key ordering
+  ---
+  duration_ms: 0.099917
+  type: 'test'
+  ...
+# Subtest: DNS saves retain their tab and previews open the apply section
+ok 165 - DNS saves retain their tab and previews open the apply section
+  ---
+  duration_ms: 0.488333
+  type: 'test'
+  ...
+# Subtest: DNS form enhancement sends fields in the format accepted by Go ParseForm
+ok 166 - DNS form enhancement sends fields in the format accepted by Go ParseForm
+  ---
+  duration_ms: 17.905333
+  type: 'test'
+  ...
+# Subtest: DNS progress stops only at authoritative outcomes
+ok 167 - DNS progress stops only at authoritative outcomes
+  ---
+  duration_ms: 0.114166
+  type: 'test'
+  ...
+# Subtest: DNS enhanced forms accept the existing HTML redirect contract
+ok 168 - DNS enhanced forms accept the existing HTML redirect contract
+  ---
+  duration_ms: 2.071917
+  type: 'test'
+  ...
+# Subtest: domain preview fetches read-only data and ignores responses after leaving
+ok 169 - domain preview fetches read-only data and ignores responses after leaving
+  ---
+  duration_ms: 0.32225
+  type: 'test'
+  ...
+# Subtest: navigation swaps content while retaining region roots and sidebar scroll
+ok 170 - navigation swaps content while retaining region roots and sidebar scroll
+  ---
+  duration_ms: 14.544833
+  type: 'test'
+  ...
+# Subtest: actual superseded fetch and body completions cannot overwrite the current page
+ok 171 - actual superseded fetch and body completions cannot overwrite the current page
+  ---
+  duration_ms: 4.160917
+  type: 'test'
+  ...
+# Subtest: dirty cancellation keeps the mounted page and restores a cancelled popstate URL
+ok 172 - dirty cancellation keeps the mounted page and restores a cancelled popstate URL
+  ---
+  duration_ms: 1.335
+  type: 'test'
+  ...
+# Subtest: successful popstate restores saved scroll without adding a history entry
+ok 173 - successful popstate restores saved scroll without adding a history entry
+  ---
+  duration_ms: 2.493416
+  type: 'test'
+  ...
+# Subtest: superseding pending Back with a failed navigation restores the rendered URL and state
+ok 174 - superseding pending Back with a failed navigation restores the rendered URL and state
+  ---
+  duration_ms: 1.350583
+  type: 'test'
+  ...
+# Subtest: refresh replaces history and retains scroll
+ok 175 - refresh replaces history and retains scroll
+  ---
+  duration_ms: 0.853625
+  type: 'test'
+  ...
+# Subtest: failures retain existing content and offer recovery
+ok 176 - failures retain existing content and offer recovery
+  ---
+  duration_ms: 0.592041
+  type: 'test'
+  ...
+# Subtest: authentication, non-HTML and full-document responses navigate normally
+ok 177 - authentication, non-HTML and full-document responses navigate normally
+  ---
+  duration_ms: 1.500791
+  type: 'test'
+  ...
+# Subtest: disabled navigation leaves links, history and requests alone
+ok 178 - disabled navigation leaves links, history and requests alone
+  ---
+  duration_ms: 0.348083
+  type: 'test'
+  ...
+# Subtest: programmatic navigation respects standalone routes and restores the shell after Add Website
+ok 179 - programmatic navigation respects standalone routes and restores the shell after Add Website
+  ---
+  duration_ms: 1.337125
+  type: 'test'
+  ...
+# Subtest: document navigation supersedes a pending fragment before it can commit
+ok 180 - document navigation supersedes a pending fragment before it can commit
+  ---
+  duration_ms: 0.72075
+  type: 'test'
+  ...
+# Subtest: full-document and non-HTML fallbacks honour dirty cancellation during popstate
+ok 181 - full-document and non-HTML fallbacks honour dirty cancellation during popstate
+  ---
+  duration_ms: 2.893334
+  type: 'test'
+  ...
+# Subtest: a successful document handoff during Back keeps its destination in the address bar
+ok 182 - a successful document handoff during Back keeps its destination in the address bar
+  ---
+  duration_ms: 1.259917
+  type: 'test'
+  ...
+# Subtest: requested fragment identifiers survive fragment fetches that omit the hash
+ok 183 - requested fragment identifiers survive fragment fetches that omit the hash
+  ---
+  duration_ms: 0.680792
+  type: 'test'
+  ...
+# Subtest: successful navigation dismisses the persistent mobile scrim and shell dialogs
+ok 184 - successful navigation dismisses the persistent mobile scrim and shell dialogs
+  ---
+  duration_ms: 0.506583
+  type: 'test'
+  ...
+# Subtest: fragment commit replaces a stale Add Domain dialog and mounts a fresh form
+ok 185 - fragment commit replaces a stale Add Domain dialog and mounts a fresh form
+  ---
+  duration_ms: 0.773709
+  type: 'test'
+  ...
+# Subtest: site-dialog shell template inserts, removes and preserves keep-shell dialogs
+ok 186 - site-dialog shell template inserts, removes and preserves keep-shell dialogs
+  ---
+  duration_ms: 0.84975
+  type: 'test'
+  ...
+# Subtest: delayed feedback starts at 120 and 300 ms and is cleaned on failure
+ok 187 - delayed feedback starts at 120 and 300 ms and is cleaned on failure
+  ---
+  duration_ms: 0.743083
+  type: 'test'
+  ...
+# Subtest: fast navigation never shows skeleton and view transitions wrap only the swap
+ok 188 - fast navigation never shows skeleton and view transitions wrap only the swap
+  ---
+  duration_ms: 0.608292
+  type: 'test'
+  ...
+# Subtest: POST keep-shell swaps main with no history entry and restores busy state
+ok 189 - POST keep-shell swaps main with no history entry and restores busy state
+  ---
+  duration_ms: 1.003208
+  type: 'test'
+  ...
+# Subtest: drawer is closed before a fragment POST swap
+ok 190 - drawer is closed before a fragment POST swap
+  ---
+  duration_ms: 0.572417
+  type: 'test'
+  ...
+# Subtest: drawer is closed before a standalone POST swap
+ok 191 - drawer is closed before a standalone POST swap
+  ---
+  duration_ms: 0.52575
+  type: 'test'
+  ...
+# Subtest: a drawer submission captures values before disabling and recovers only after mounting the response
+ok 192 - a drawer submission captures values before disabling and recovers only after mounting the response
+  ---
+  duration_ms: 2.246459
+  type: 'test'
+  ...
+# Subtest: POST failures preserve values and never offer an automatic POST retry
+ok 193 - POST failures preserve values and never offer an automatic POST retry
+  ---
+  duration_ms: 0.631167
+  type: 'test'
+  ...
+# Subtest: a successful enhanced save clears dirty state before a document-only redirect
+ok 194 - a successful enhanced save clears dirty state before a document-only redirect
+  ---
+  duration_ms: 0.89475
+  type: 'test'
+  ...
+# Subtest: failed HTML POST preserves the mounted form, values, dirty guard and history
+ok 195 - failed HTML POST preserves the mounted form, values, dirty guard and history
+  ---
+  duration_ms: 1.450834
+  type: 'test'
+  ...
+# Subtest: failed POST messages are readable, bounded and have an HTTP fallback
+ok 196 - failed POST messages are readable, bounded and have an HTTP fallback
+  ---
+  duration_ms: 1.624458
+  type: 'test'
+  ...
+# Subtest: plain-text POST failure keeps its HTTP fallback through the shared client
+ok 197 - plain-text POST failure keeps its HTTP fallback through the shared client
+  ---
+  duration_ms: 2.68175
+  type: 'test'
+  ...
+# Subtest: document-only pages submit forms natively
+ok 198 - document-only pages submit forms natively
+  ---
+  duration_ms: 0.399792
+  type: 'test'
+  ...
+# Subtest: leaving a document-only page restores instant form submission on the destination
+ok 199 - leaving a document-only page restores instant form submission on the destination
+  ---
+  duration_ms: 0.646
+  type: 'test'
+  ...
+# Subtest: prefetch intent uses cached responses and submit, errors and refresh invalidate them
+ok 200 - prefetch intent uses cached responses and submit, errors and refresh invalidate them
+  ---
+  duration_ms: 5.155584
+  type: 'test'
+  ...
+# Subtest: leaving intent before 65 ms cancels the prefetch
+ok 201 - leaving intent before 65 ms cancels the prefetch
+  ---
+  duration_ms: 0.633208
+  type: 'test'
+  ...
+# Subtest: a late aborted navigation cannot roll back a newer optimistic tab
+ok 202 - a late aborted navigation cannot roll back a newer optimistic tab
+  ---
+  duration_ms: 0.953083
+  type: 'test'
+  ...
+# Subtest: POST non-HTML, fallback HTML, and auth never replay the mutation
+ok 203 - POST non-HTML, fallback HTML, and auth never replay the mutation
+  ---
+  duration_ms: 1.738666
+  type: 'test'
+  ...
+# Subtest: same-path tab skeleton leaves tabs visible and abort immediately restores its body
+ok 204 - same-path tab skeleton leaves tabs visible and abort immediately restores its body
+  ---
+  duration_ms: 0.834584
+  type: 'test'
+  ...
+# Subtest: GET and confirmed POST submissions include submitter and POST blocks double submission
+ok 205 - GET and confirmed POST submissions include submitter and POST blocks double submission
+  ---
+  duration_ms: 1.514833
+  type: 'test'
+  ...
+# Subtest: capture invalidates prefetch even if a feature stops propagation at its form
+ok 206 - capture invalidates prefetch even if a feature stops propagation at its form
+  ---
+  duration_ms: 2.266375
+  type: 'test'
+  ...
+# Subtest: refresh invalidates cached intent immediately while its request is pending
+ok 207 - refresh invalidates cached intent immediately while its request is pending
+  ---
+  duration_ms: 1.178875
+  type: 'test'
+  ...
+# Subtest: optimistic tab selection also clears and restores an active More summary
+ok 208 - optimistic tab selection also clears and restores an active More summary
+  ---
+  duration_ms: 0.952209
+  type: 'test'
+  ...
+# Subtest: the deferred DNS script waits for interaction/navigation on an interactive document
+ok 209 - the deferred DNS script waits for interaction/navigation on an interactive document
+  ---
+  duration_ms: 1.282
+  type: 'test'
+  ...
+# Subtest: dns-template ignores a late form response after leaving its page
+ok 210 - dns-template ignores a late form response after leaving its page
+  ---
+  duration_ms: 17.557334
+  type: 'test'
+  ...
+# Subtest: mail-import ignores a late form response after leaving its page
+ok 211 - mail-import ignores a late form response after leaving its page
+  ---
+  duration_ms: 3.424291
+  type: 'test'
+  ...
+# Subtest: shared removal-dialog work belongs to the main content lifetime
+ok 212 - shared removal-dialog work belongs to the main content lifetime
+  ---
+  duration_ms: 6.662083
+  type: 'test'
+  ...
+# Subtest: eligible links include relative, query, and same-origin routed links
+ok 213 - eligible links include relative, query, and same-origin routed links
+  ---
+  duration_ms: 4.866625
+  type: 'test'
+  ...
+# Subtest: all browser-owned gestures, destinations and explicit opt-outs stay native
+ok 214 - all browser-owned gestures, destinations and explicit opt-outs stay native
+  ---
+  duration_ms: 0.458333
+  type: 'test'
+  ...
+# Subtest: late responses from aborted or superseded navigations are ignored
+ok 215 - late responses from aborted or superseded navigations are ignored
+  ---
+  duration_ms: 0.085833
+  type: 'test'
+  ...
+# Subtest: fragment metadata and full-document requirements are parsed without a DOM
+ok 216 - fragment metadata and full-document requirements are parsed without a DOM
+  ---
+  duration_ms: 0.906917
+  type: 'test'
+  ...
+# Subtest: lifecycle aborts element and nested region work, and permits a fresh mount
+ok 217 - lifecycle aborts element and nested region work, and permits a fresh mount
+  ---
+  duration_ms: 0.212708
+  type: 'test'
+  ...
+# Subtest: relative requests resolve against the current page after pushState
+ok 218 - relative requests resolve against the current page after pushState
+  ---
+  duration_ms: 12.540291
+  type: 'test'
+  ...
+# Subtest: app mounts are idempotent and retain dirty state on repeated mounts
+ok 219 - app mounts are idempotent and retain dirty state on repeated mounts
+  ---
+  duration_ms: 3.062875
+  type: 'test'
+  ...
+# Subtest: generic dialog submits leave Backup Manager forms to their dedicated handler
+ok 220 - generic dialog submits leave Backup Manager forms to their dedicated handler
+  ---
+  duration_ms: 0.883292
+  type: 'test'
+  ...
+# Subtest: legacy documents without navigation still initialise once
+ok 221 - legacy documents without navigation still initialise once
+  ---
+  duration_ms: 0.814375
+  type: 'test'
+  ...
+# Subtest: preview and enhanced submissions retain unsaved state until a real save succeeds
+ok 222 - preview and enhanced submissions retain unsaved state until a real save succeeds
+  ---
+  duration_ms: 2.640291
+  type: 'test'
+  ...
+# Subtest: dialog triggers prefill and open without instant navigation, preserving missing-dialog fallback and modified clicks
+ok 223 - dialog triggers prefill and open without instant navigation, preserving missing-dialog fallback and modified clicks
+  ---
+  duration_ms: 1.185167
+  type: 'test'
+  ...
+# Subtest: shell dialog timers share the lifetime of the current main content
+ok 224 - shell dialog timers share the lifetime of the current main content
+  ---
+  duration_ms: 1.73525
+  type: 'test'
+  ...
+# Subtest: HTML POST requests keep redirect semantics, CSRF and standalone error text
+ok 225 - HTML POST requests keep redirect semantics, CSRF and standalone error text
+  ---
+  duration_ms: 0.729875
+  type: 'test'
+  ...
+# Subtest: prefetch cache expires at 30 seconds and evicts the oldest of eight entries
+ok 226 - prefetch cache expires at 30 seconds and evicts the oldest of eight entries
+  ---
+  duration_ms: 0.405167
+  type: 'test'
+  ...
+# Subtest: prefetch queues with at most two active requests and clear discards queued and late results
+ok 227 - prefetch queues with at most two active requests and clear discards queued and late results
+  ---
+  duration_ms: 6.443792
+  type: 'test'
+  ...
+# Subtest: prefetch skips saveData and notice query parameters
+ok 228 - prefetch skips saveData and notice query parameters
+  ---
+  duration_ms: 0.139666
+  type: 'test'
+  ...
+# Subtest: optimistic active state restores exact prior states on failure or abort
+ok 229 - optimistic active state restores exact prior states on failure or abort
+  ---
+  duration_ms: 0.193208
+  type: 'test'
+  ...
+# Subtest: GET form URL includes repeated values and the successful submitter
+ok 230 - GET form URL includes repeated values and the successful submitter
+  ---
+  duration_ms: 0.237584
+  type: 'test'
+  ...
+# Subtest: submit eligibility honours claimed events, region, method, targets, overrides and uploads
+ok 231 - submit eligibility honours claimed events, region, method, targets, overrides and uploads
+  ---
+  duration_ms: 0.347083
+  type: 'test'
+  ...
+# Subtest: one-time fragments accept keep-shell without shell templates
+ok 232 - one-time fragments accept keep-shell without shell templates
+  ---
+  duration_ms: 0.078458
+  type: 'test'
+  ...
+# Subtest: form bodies are encoded like a native submission
+ok 233 - form bodies are encoded like a native submission
+  ---
+  duration_ms: 0.215958
+  type: 'test'
+  ...
+# Subtest: bulk selection does not disable a row action belonging to another form
+ok 234 - bulk selection does not disable a row action belonging to another form
+  ---
+  duration_ms: 0.923792
+  type: 'test'
+  ...
+# Subtest: closing details restores a visible opener or the bell when preview is hidden
+ok 235 - closing details restores a visible opener or the bell when preview is hidden
+  ---
+  duration_ms: 0.558416
+  type: 'test'
+  ...
+# Subtest: notification timestamps stay compact and exact time includes a zone
+ok 236 - notification timestamps stay compact and exact time includes a zone
+  ---
+  duration_ms: 11.849333
+  type: 'test'
+  ...
+# Subtest: preview anchors to a wrapped topbar and stays inside narrow or short viewports
+ok 237 - preview anchors to a wrapped topbar and stays inside narrow or short viewports
+  ---
+  duration_ms: 0.147375
+  type: 'test'
+  ...
+# Subtest: badge caps visuals but exposes the exact unread count
+ok 238 - badge caps visuals but exposes the exact unread count
+  ---
+  duration_ms: 0.926042
+  type: 'test'
+  ...
+# Subtest: preview never inherits inbox search, cursor or filters
+ok 239 - preview never inherits inbox search, cursor or filters
+  ---
+  duration_ms: 0.152458
+  type: 'test'
+  ...
+# Subtest: keyed rendering preserves focused nodes, scroll and pending state; rejects old identity
+ok 240 - keyed rendering preserves focused nodes, scroll and pending state; rejects old identity
+  ---
+  duration_ms: 3.053875
+  type: 'test'
+  ...
+# Subtest: clearing a retried error returns focus to the notification view
+ok 241 - clearing a retried error returns focus to the notification view
+  ---
+  duration_ms: 0.310958
+  type: 'test'
+  ...
+# Subtest: read updates remove the stale server-rendered unread announcement
+ok 242 - read updates remove the stale server-rendered unread announcement
+  ---
+  duration_ms: 0.44
+  type: 'test'
+  ...
+# Subtest: bodyless acknowledgements and accepted checks still use CSRF
+ok 243 - bodyless acknowledgements and accepted checks still use CSRF
+  ---
+  duration_ms: 18.31125
+  type: 'test'
+  ...
+# Subtest: repeated fragment mounts keep one timer and abort previous requests
+ok 244 - repeated fragment mounts keep one timer and abort previous requests
+  ---
+  duration_ms: 4.5925
+  type: 'test'
+  ...
+# Subtest: receipt orchestration deduplicates clicks and never invents an unread count
+ok 245 - receipt orchestration deduplicates clicks and never invents an unread count
+  ---
+  duration_ms: 1.143167
+  type: 'test'
+  ...
+# Subtest: failed receipts retain state and retry locally; old scope results are ignored
+ok 246 - failed receipts retain state and retry locally; old scope results are ignored
+  ---
+  duration_ms: 0.242333
+  type: 'test'
+  ...
+# Subtest: notification detail marks read only after a current successful load
+ok 247 - notification detail marks read only after a current successful load
+  ---
+  duration_ms: 0.162834
+  type: 'test'
+  ...
+# Subtest: paginated All and Unread inboxes reconcile authoritative rows after mark-all
+ok 248 - paginated All and Unread inboxes reconcile authoritative rows after mark-all
+  ---
+  duration_ms: 2.269667
+  type: 'test'
+  ...
+# Subtest: pagination aborts on unmount and ignores stale success and failure even if transport ignores abort
+ok 249 - pagination aborts on unmount and ignores stale success and failure even if transport ignores abort
+  ---
+  duration_ms: 0.330208
+  type: 'test'
+  ...
+# Subtest: old response cannot replace a new navigation scope
+ok 250 - old response cannot replace a new navigation scope
+  ---
+  duration_ms: 8.915958
+  type: 'test'
+  ...
+# Subtest: reconnect replays durable events and preserves data on failure
+ok 251 - reconnect replays durable events and preserves data on failure
+  ---
+  duration_ms: 2.194125
+  type: 'test'
+  ...
+# Subtest: stopping aborts in-flight fetch and ignores its result
+ok 252 - stopping aborts in-flight fetch and ignores its result
+  ---
+  duration_ms: 0.343584
+  type: 'test'
+  ...
+# Subtest: late response from prior scope is discarded even if abort is ignored
+ok 253 - late response from prior scope is discarded even if abort is ignored
+  ---
+  duration_ms: 1.175792
+  type: 'test'
+  ...
+# Subtest: hidden tabs cancel polling; reconnect retains the committed feed cursor
+ok 254 - hidden tabs cancel polling; reconnect retains the committed feed cursor
+  ---
+  duration_ms: 0.77025
+  type: 'test'
+  ...
+# Subtest: navigation preserves consumed cursor within authenticated scope, including cached fragments
+ok 255 - navigation preserves consumed cursor within authenticated scope, including cached fragments
+  ---
+  duration_ms: 0.828958
+  type: 'test'
+  ...
+# Subtest: all relevant terminal results beyond eight rows are presented once
+ok 256 - all relevant terminal results beyond eight rows are presented once
+  ---
+  duration_ms: 0.642333
+  type: 'test'
+  ...
+# Subtest: preferences remain unavailable until loaded and stale loads cannot overwrite newer settings
+ok 257 - preferences remain unavailable until loaded and stale loads cannot overwrite newer settings
+  ---
+  duration_ms: 0.233958
+  type: 'test'
+  ...
+# Subtest: settings destinations preserve support context and reject external URLs
+ok 258 - settings destinations preserve support context and reject external URLs
+  ---
+  duration_ms: 0.395708
+  type: 'test'
+  ...
+# Subtest: poller preserves authentication failure identity for visible sign-in guidance
+ok 259 - poller preserves authentication failure identity for visible sign-in guidance
+  ---
+  duration_ms: 1.242667
+  type: 'test'
+  ...
+# Subtest: service controls follow state and use only supported commands
+ok 260 - service controls follow state and use only supported commands
+  ---
+  duration_ms: 0.648625
+  type: 'test'
+  ...
+# Subtest: progress names real stages and keeps failed commands distinct from service health
+ok 261 - progress names real stages and keeps failed commands distinct from service health
+  ---
+  duration_ms: 0.1235
+  type: 'test'
+  ...
+# Subtest: an accepted action reconciles by operation identity and survives fast completion
+ok 262 - an accepted action reconciles by operation identity and survives fast completion
+  ---
+  duration_ms: 0.247542
+  type: 'test'
+  ...
+# Subtest: late responses cannot repaint a newer mount or overwrite a just-accepted action
+ok 263 - late responses cannot repaint a newer mount or overwrite a just-accepted action
+  ---
+  duration_ms: 0.221791
+  type: 'test'
+  ...
+# Subtest: network uncertainty is retained without replay; confirmed rejection releases only that pending action
+ok 264 - network uncertainty is retained without replay; confirmed rejection releases only that pending action
+  ---
+  duration_ms: 0.156166
+  type: 'test'
+  ...
+# Subtest: an offscreen active tab is revealed without scrolling the document
+ok 265 - an offscreen active tab is revealed without scrolling the document
+  ---
+  duration_ms: 2.081375
+  type: 'test'
+  ...
+# Subtest: a tab hidden on the left is also brought into view
+ok 266 - a tab hidden on the left is also brought into view
+  ---
+  duration_ms: 1.637958
+  type: 'test'
+  ...
+# Subtest: already visible and non-overflowing navigation is left unchanged
+ok 267 - already visible and non-overflowing navigation is left unchanged
+  ---
+  duration_ms: 2.470209
+  type: 'test'
+  ...
+# Subtest: a missing active tab does not break other workspace interactions
+ok 268 - a missing active tab does not break other workspace interactions
+  ---
+  duration_ms: 0.779917
+  type: 'test'
+  ...
+# Subtest: pending TLS refresh picks up active via a scoped GET
+ok 269 - pending TLS refresh picks up active via a scoped GET
+  ---
+  duration_ms: 3.608667
+  type: 'test'
+  ...
+# Subtest: pending TLS refresh picks up failed via a scoped GET
+ok 270 - pending TLS refresh picks up failed via a scoped GET
+  ---
+  duration_ms: 0.952083
+  type: 'test'
+  ...
+# Subtest: terminal TLS workspaces do not start polling
+ok 271 - terminal TLS workspaces do not start polling
+  ---
+  duration_ms: 1.195583
+  type: 'test'
+  ...
+# Subtest: TLS status checks are bounded while issuance remains pending
+ok 272 - TLS status checks are bounded while issuance remains pending
+  ---
+  duration_ms: 2.65975
+  type: 'test'
+  ...
+# Subtest: TLS status checks retry a transient HTTP failure
+ok 273 - TLS status checks retry a transient HTTP failure
+  ---
+  duration_ms: 1.239209
+  type: 'test'
+  ...
+# Subtest: TLS status checks stop when access changes: {"redirected":true}
+ok 274 - TLS status checks stop when access changes: {"redirected":true}
+  ---
+  duration_ms: 1.452667
+  type: 'test'
+  ...
+# Subtest: TLS status checks stop when access changes: {"ok":false,"status":401}
+ok 275 - TLS status checks stop when access changes: {"ok":false,"status":401}
+  ---
+  duration_ms: 0.923917
+  type: 'test'
+  ...
+# Subtest: TLS status checks stop when access changes: {"ok":false,"status":403}
+ok 276 - TLS status checks stop when access changes: {"ok":false,"status":403}
+  ---
+  duration_ms: 1.131125
+  type: 'test'
+  ...
+# Subtest: TLS status checks stop when access changes: {"ok":false,"status":404}
+ok 277 - TLS status checks stop when access changes: {"ok":false,"status":404}
+  ---
+  duration_ms: 1.5385
+  type: 'test'
+  ...
+# Subtest: obsolete TLS workspace timers cannot fetch or navigate
+ok 278 - obsolete TLS workspace timers cannot fetch or navigate
+  ---
+  duration_ms: 1.233916
+  type: 'test'
+  ...
+# Subtest: TLS checks defer while a dialog or dirty form is open
+ok 279 - TLS checks defer while a dialog or dirty form is open
+  ---
+  duration_ms: 1.058834
+  type: 'test'
+  ...
+# Subtest: TLS result does not navigate if the page becomes hidden during a check
+ok 280 - TLS result does not navigate if the page becomes hidden during a check
+  ---
+  duration_ms: 0.782125
+  type: 'test'
+  ...
+# Subtest: TLS refresh cannot interrupt a native certificate form submission
+ok 281 - TLS refresh cannot interrupt a native certificate form submission
+  ---
+  duration_ms: 1.179125
+  type: 'test'
+  ...
+# Subtest: a progressive dialog form does not permanently stop TLS status checks
+ok 282 - a progressive dialog form does not permanently stop TLS status checks
+  ---
+  duration_ms: 1.390292
+  type: 'test'
+  ...
+1..282
+# tests 282
+# suites 0
+# pass 282
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 205.352583

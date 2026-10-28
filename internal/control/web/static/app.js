@@ -9,6 +9,7 @@
   var planPreviewGenerations = new WeakMap();
   var confirmationResolver = null;
   var serverInventoryHostname = "";
+  var serviceTracker = null, serviceTrackerRoot = null, serviceInventoryResult = "";
   var dialogs = window.NakpanelUI.createDialogController({document: document, onClose: function (dialog) {
     if (dialog.id === "np-confirmation-dialog" && confirmationResolver) {
       var resolve = confirmationResolver;
@@ -522,7 +523,7 @@
     dialogs.close(dialog);
   }
 
-  function askConfirmation(message, trigger) {
+  function askConfirmation(message, trigger, returnFocus) {
     var dialog = document.getElementById("np-confirmation-dialog");
     if (!dialog || !dialog.showModal) return Promise.resolve(false);
     var copy = dialog.querySelector("[data-np-confirmation-copy]");
@@ -539,7 +540,7 @@
     if (confirmationResolver) confirmationResolver(false);
     return new Promise(function (resolve) {
       confirmationResolver = resolve;
-      openDialog(dialog.id, trigger);
+      openDialog(dialog.id, returnFocus || trigger);
     });
   }
 
@@ -724,7 +725,7 @@
 
   function loadServerInventory() {
     var target = document.querySelector("[data-np-settings-inventory]");
-    if (!target || !window.fetch) return Promise.resolve();
+    if (!target || !window.fetch || document.querySelector('#np-confirmation-dialog[open]')) return Promise.resolve(false);
     var pageSignal = lifetime(target);
     var setText = function (selector, value) {
       each(selector, document, function (element) { element.textContent = value; });
@@ -740,6 +741,8 @@
       })
       .then(function (payload) {
         if (pageSignal.aborted) return;
+        // Keep the selected form and its focus target mounted until confirmation closes.
+        if (document.querySelector('#np-confirmation-dialog[open]')) return false;
         var inventory = payload.inventory;
         var cached = payload.cached === true;
         serverInventoryHostname = cached ? "" : (inventory.hostname || "");
@@ -813,7 +816,7 @@
         if (serviceList) {
           var controllable = {
             "web": true, "dns": true, "mail": true,
-            "php-8.1": true, "php-8.2": true, "php-8.3": true,
+            "php-8.3": true,
             "php-8.4": true, "php-8.5": true
           };
           var groupDefinitions = [
@@ -906,7 +909,7 @@
               var metadata = document.createElement("dl");
               metadata.className = "np-service-metadata";
               [
-                ["Unit", service.unit_file_state || "not installed"],
+                ["Startup", service.unit_file_state || "not installed"],
                 ["PID", service.main_pid ? String(service.main_pid) : "—"],
                 ["Memory", service.memory_bytes ? formatBytes(service.memory_bytes) : "—"]
               ].forEach(function (item) {
@@ -928,15 +931,20 @@
               stateDetail.textContent = service.available ? ((service.sub_state || service.active_state || "unknown") + (service.restart_count ? " · " + service.restart_count + " restarts" : "")) : "Unit not found";
               stateBlock.append(statePill, stateDetail);
 
-              var allowed = (service.allowed_actions || []).filter(function (action) {
-                return ["reload", "restart", "start", "stop"].indexOf(action) !== -1;
-              });
+              row.dataset.npServiceId = service.id;
+              statePill.dataset.npServiceBaseClass = statePill.className;
+              statePill.dataset.npServiceBaseText = statePill.textContent;
+              statePill.setAttribute("data-np-service-state", "");
+              var allowed = cached ? [] : window.NakpanelServices.serviceActions(service);
               var actionControl;
               if (controllable[service.id] && service.available && allowed.length) {
                 actionControl = document.createElement("details");
                 actionControl.className = "np-settings-service-menu";
                 var summary = document.createElement("summary");
                 summary.setAttribute("aria-label", "Actions for " + (service.display_name || service.id));
+                summary.setAttribute("role", "button");
+                summary.setAttribute("aria-expanded", "false");
+                actionControl.addEventListener("toggle", function () { summary.setAttribute("aria-expanded", String(actionControl.open)); });
                 summary.append(serviceIcon("ellipsis"), document.createTextNode("Actions"));
                 var actions = document.createElement("form");
                 actions.className = "np-settings-service-actions";
@@ -965,7 +973,8 @@
               } else {
                 actionControl = document.createElement("span");
                 actionControl.className = "np-service-readonly";
-                actionControl.textContent = service.available ? "Observed" : "Not installed";
+                actionControl.textContent = cached ? "Refresh to verify" : service.available ? "Status only" : "Not installed";
+                actionControl.title = service.available ? "Service controls are limited to the supported hosting services. Other maintenance uses its dedicated workflow." : "This service is not installed on this host.";
               }
               row.append(identity, metadata, stateBlock, actionControl);
               rows.appendChild(row);
@@ -979,7 +988,9 @@
             serviceEmpty.textContent = "No managed services were discovered.";
             serviceList.appendChild(serviceEmpty);
           }
+          loadServiceOperations();
         }
+        return !cached;
       })
       .catch(function () {
         if (pageSignal.aborted) return;
@@ -992,13 +1003,78 @@
         setText("[data-np-server-time]", "Time state unavailable");
         setText("[data-np-server-php-count]", "Host handlers unavailable");
         setText("[data-np-server-service-count]", "Managed service inventory unavailable.");
+        return false;
       });
+  }
+
+  function getServiceTracker() {
+    var root = document.querySelector("[data-np-focus-services]");
+    if (!root || !window.NakpanelServices) return null;
+    if (serviceTrackerRoot === root) return serviceTracker;
+    if (serviceTracker) serviceTracker.destroy();
+    serviceTrackerRoot = root;
+    serviceInventoryResult = "";
+    serviceTracker = window.NakpanelServices.createServiceTracker({
+      isCurrent: function () { return root.isConnected && document.querySelector("[data-np-focus-services]") === root; },
+      load: function (signal) { return fetch("/tools-settings/services/operations", {signal:signal, headers:{Accept:"application/json"}}).then(function(response){return response.json().then(function(payload){if(!response.ok || !payload.ok || !Array.isArray(payload.operations))throw new Error(payload.error || "Service progress is unavailable");return payload.operations;});}); },
+      render: renderServiceOperations,
+      error: function () { var notice=document.querySelector("[data-np-service-operation]");if(notice){notice.hidden=false;notice.setAttribute("role","alert");notice.textContent="Service progress is unavailable. Check Tasks and refresh before trying the action again.";} }
+    });
+    var tracker=serviceTracker;
+    lifetime(root).addEventListener("abort",function(){tracker.destroy();},{once:true});
+    return tracker;
+  }
+
+  function loadServiceOperations() {
+    var tracker=getServiceTracker();
+    return tracker ? tracker.refresh() : Promise.resolve(false);
+  }
+
+  function renderServiceOperations(items) {
+    var finished=[];
+    each("[data-np-service-id]",serviceTrackerRoot,function(row){
+      var operation=items.get(row.dataset.npServiceId),summary=row.querySelector(".np-settings-service-menu > summary"),pill=row.querySelector("[data-np-service-state]");
+      var progress=row.querySelector("[data-np-service-progress]");
+      if(!progress){progress=document.createElement("p");progress.className="np-service-progress";progress.setAttribute("data-np-service-progress","");progress.setAttribute("aria-live","polite");row.appendChild(progress);}
+      var presentation=operation ? window.NakpanelServices.serviceProgress(operation) : null,busy=!!(presentation&&presentation.busy);
+      row.dataset.npServiceBusy=String(busy);
+      if(summary)summary.setAttribute("aria-disabled",String(busy));
+      each(".np-settings-service-actions button",row,function(button){button.disabled=busy || button.form.getAttribute("aria-busy")==="true";});
+      if(pill){pill.className=busy?"np-pill np-pill-"+presentation.tone:pill.dataset.npServiceBaseClass;pill.textContent=busy?presentation.label:pill.dataset.npServiceBaseText;}
+      progress.hidden=!operation;
+      if(!operation){delete progress.dataset.renderKey;return;}
+      if(operation.status==="succeeded"||operation.status==="failed")finished.push(operation.operation_id+":"+operation.status);
+      var renderKey=[operation.operation_id,operation.status,operation.stage,operation.task_id,operation.error].join("|");
+      if(progress.dataset.renderKey===renderKey)return;
+      progress.dataset.renderKey=renderKey;
+      progress.replaceChildren();progress.dataset.tone=presentation.tone;
+      var copy=document.createElement("span");copy.textContent=presentation.label+(operation.status==="unknown"?". The request may have been accepted. Check current state before trying again.":operation.error?". "+operation.error:"");progress.appendChild(copy);
+      if(Number.isSafeInteger(operation.task_id)&&operation.task_id>0){var link=document.createElement("a");link.href="/activity?tab=tasks&task="+operation.task_id;link.textContent="View task";progress.appendChild(link);}
+    });
+    var resultKey=finished.sort().join("|");
+    if(resultKey && resultKey!==serviceInventoryResult){
+      var resultRoot=serviceTrackerRoot;
+      serviceInventoryResult=resultKey;
+      loadServerInventory().then(function(fresh){if(!fresh && serviceTrackerRoot===resultRoot && serviceInventoryResult===resultKey)serviceInventoryResult="";});
+    }
   }
 
   function formStatus(form, fallbackSelector) {
     var scope = form.closest(".np-settings-focus, dialog");
-    return (scope && scope.querySelector("[data-np-reauth-status]")) ||
-      (fallbackSelector && document.querySelector(fallbackSelector));
+    if (form.matches("[data-np-reauth-form]")) return form.querySelector("[data-np-reauth-status]");
+    return (fallbackSelector && (scope && scope.querySelector(fallbackSelector) || document.querySelector(fallbackSelector)));
+  }
+
+  function closeServiceMenus(except, restoreFocus) {
+    each(".np-settings-service-menu[open]", document, function (menu) {
+      if (menu === except) return;
+      menu.open = false;
+      var summary = menu.querySelector("summary");
+      if (summary) {
+        summary.setAttribute("aria-expanded", "false");
+        if (restoreFocus) summary.focus();
+      }
+    });
   }
 
   function setFormBusy(form, busy) {
@@ -1048,16 +1124,20 @@
   function submitServerAdminForm(form, submitter) {
     if (form.getAttribute('aria-busy') === 'true') return;
     var isReauthentication = form.matches("[data-np-reauth-form]");
+    var isService = form.matches("[data-np-service-form]");
     var status = formStatus(form, "[data-np-service-operation]");
-    var data = new FormData(form);
+    var data = new URLSearchParams(new FormData(form));
     if (submitter && submitter.name) data.set(submitter.name, submitter.value);
+    var serviceID = isService ? data.get("service_id") : null;
+    var tracker = isService ? getServiceTracker() : null;
+    if(tracker)tracker.pending(serviceID,data.get("action"));
     setFormBusy(form, true);
     if (status) {
       status.hidden = false;
       status.setAttribute("role", "status");
       status.textContent = "Submitting operation...";
     }
-    fetch(form.action, {
+    fetch(form.getAttribute("action"), {
       method: "POST",
       body: data,
       credentials: "same-origin",
@@ -1069,11 +1149,18 @@
       });
     }).then(function (payload) {
       var operationID = payload.operation_id || (payload.result && payload.result.operation_id);
-      if (status) status.textContent = operationID ? ("Queued as " + operationID + ".") : "Authentication refreshed for 10 minutes.";
-      if (form.matches("[data-np-service-form]")) {
-        pollServerOperation(operationID, status, loadServerInventory);
+      if (status) status.textContent = operationID ? "Service action queued. Follow progress in Tasks or the service row." : "Authentication refreshed for 10 minutes. Choose the service action to continue.";
+      if (isReauthentication) {
+        var serviceNotice = document.querySelector("[data-np-service-operation]");
+        if (serviceNotice) {serviceNotice.textContent = status.textContent; serviceNotice.setAttribute("role", "status");}
+      }
+      if (isService) {
+        if(tracker){tracker.accept(serviceID,payload.result);tracker.refresh();}
+        document.dispatchEvent(new CustomEvent("np:operations-refresh"));
       }
     }).catch(function (error) {
+      if(tracker){tracker.reject(serviceID,[400,401,403,404,405,409,413,415,422,428,429].indexOf(error.status)!==-1);tracker.refresh();}
+      if(isService && error.status===428){var authorization=document.querySelector(".np-service-auth-details");if(authorization){authorization.open=true;var password=authorization.querySelector('input[type="password"]');if(password)password.focus();}}
       if (status) {
         status.hidden = false;
         status.setAttribute("role", "alert");
@@ -1082,6 +1169,7 @@
     }).then(function () {
       clearSensitiveInputs(form);
       setFormBusy(form, false);
+      if(tracker)tracker.render();
       if (isReauthentication && status && status.getAttribute("role") !== "alert") status.setAttribute("role", "status");
     });
   }
@@ -3105,6 +3193,11 @@
   }
 
   document.addEventListener("click", function (event) {
+    var serviceMenu = event.target.closest(".np-settings-service-menu");
+    var serviceSummary = event.target.closest(".np-settings-service-menu > summary");
+    var serviceReturnFocus = serviceMenu && serviceMenu.querySelector("summary");
+    if(serviceSummary && serviceSummary.getAttribute("aria-disabled")==="true"){event.preventDefault();return;}
+    closeServiceMenus(serviceSummary ? serviceMenu : null, false);
     var planSubmit = event.target.closest("[data-np-plan-submit]");
     if (planSubmit) {
       var planEditor = planSubmit.closest("[data-np-plan-editor]");
@@ -3162,7 +3255,7 @@
     var confirmButton = event.target.closest("[data-np-confirm]");
     if (confirmButton && confirmButton.dataset.npConfirmBypass !== "true") {
       event.preventDefault();
-      askConfirmation(confirmButton.getAttribute("data-np-confirm"), confirmButton).then(function (confirmed) {
+      askConfirmation(confirmButton.getAttribute("data-np-confirm"), confirmButton, serviceReturnFocus).then(function (confirmed) {
         if (!confirmed) return;
         confirmButton.dataset.npConfirmBypass = "true";
         confirmButton.click();
@@ -3606,6 +3699,17 @@
 
   document.addEventListener("keydown", function (event) {
     var openDialog = dialogs.top();
+    var serviceMenu = event.target.closest && event.target.closest(".np-settings-service-menu");
+    if (!openDialog && serviceMenu && ["ArrowDown", "ArrowUp", "Home", "End"].indexOf(event.key) !== -1) {
+      event.preventDefault();
+      closeServiceMenus(serviceMenu, false);
+      serviceMenu.open = true;
+      var commands = Array.prototype.slice.call(serviceMenu.querySelectorAll("button:not(:disabled)"));
+      var at = commands.indexOf(event.target);
+      var next = event.key === "End" || at < 0 && event.key === "ArrowUp" ? commands.length - 1 : event.key === "Home" || at < 0 ? 0 : (at + (event.key === "ArrowUp" ? -1 : 1) + commands.length) % commands.length;
+      if (commands[next]) commands[next].focus();
+      return;
+    }
     if (event.key === "Tab" && openDialog) {
       var focusable = dialogs.focusable(openDialog);
       if (focusable.length) {
@@ -3623,11 +3727,14 @@
     }
     if (event.key !== "Escape") return;
     if (openDialog) { event.preventDefault(); closeDialog(openDialog); return; }
+    closeServiceMenus(null, true);
     each(".np-dns-action-menu[open]", document, function (menu) { menu.open = false; });
     setMenu(false);
     var results = document.querySelector("[data-np-search-results]");
     if (results) results.hidden = true;
   });
+
+  document.addEventListener("np:operations-updated",loadServiceOperations);
 
   function mount(root) {
     prepareForms(root);
@@ -3693,11 +3800,18 @@
         var label = button.querySelector("[data-np-service-refresh-label]");
         button.disabled = true;
         if (label) label.textContent = "Refreshing…";
-        loadServerInventory().then(function () {
+        loadServerInventory().then(function (fresh) {
+          if(!fresh){if(label)label.textContent="Try again";return;}
+          return loadServiceOperations().then(function(checked){
+            if(checked && serviceTracker && serviceTracker.clearUncertain()){
+              var notice=document.querySelector("[data-np-service-operation]");
+              if(notice){notice.hidden=false;notice.textContent="Current service state checked. The earlier request may have completed; review Tasks before choosing another action.";}
+            }
           if (label) label.textContent = "Refreshed";
           later(button, function () {
             if (label) label.textContent = "Refresh";
           }, 1200);
+          });
         }, function () {
           if (label) label.textContent = "Try again";
         }).then(function () {

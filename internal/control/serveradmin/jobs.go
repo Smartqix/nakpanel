@@ -57,6 +57,8 @@ func (RefreshInventoryArgs) InsertOpts() river.InsertOpts {
 
 type ControlServiceArgs struct {
 	OperationID string `json:"operation_id" river:"unique"`
+	ServiceID   string `json:"service_id"`
+	Action      string `json:"action"`
 }
 
 func (ControlServiceArgs) Kind() string { return "system_control_service" }
@@ -159,14 +161,23 @@ func (m *Manager) ControlManagedService(ctx context.Context, req types.ControlMa
 		mustJSONObject(map[string]any{"operation_id": req.OperationID, "service_id": req.ServiceID})); err != nil {
 		return types.ControlManagedServiceResult{}, fmt.Errorf("record managed service request: %w", err)
 	}
-	if _, err := m.river.InsertTx(ctx, tx, ControlServiceArgs{OperationID: req.OperationID}, nil); err != nil {
+	job, err := m.river.InsertTx(ctx, tx, ControlServiceArgs{OperationID: req.OperationID, ServiceID: req.ServiceID, Action: req.Action}, nil)
+	if err != nil {
 		return types.ControlManagedServiceResult{}, fmt.Errorf("queue managed service operation: %w", err)
+	}
+	var taskID int64
+	if job == nil || job.Job == nil {
+		return types.ControlManagedServiceResult{}, errors.New("service queue did not return a job")
+	}
+	if err := tx.QueryRowContext(ctx, `UPDATE server_operations SET task_id=(SELECT id FROM operations WHERE operation_key=$2) WHERE operation_id=$1 RETURNING task_id`, req.OperationID, fmt.Sprintf("river:%d", job.Job.ID)).Scan(&taskID); err != nil {
+		return types.ControlManagedServiceResult{}, fmt.Errorf("link managed service task: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return types.ControlManagedServiceResult{}, fmt.Errorf("commit managed service operation: %w", err)
 	}
 	return types.ControlManagedServiceResult{
 		OperationID: req.OperationID,
+		TaskID:      taskID,
 		ServiceID:   req.ServiceID,
 		Action:      req.Action,
 		Validation:  "queued",
@@ -287,6 +298,32 @@ func (w *ControlServiceWorker) Work(ctx context.Context, job *river.Job[ControlS
 	if w.manager.capabilities != nil {
 		// Service actions include PHP-FPM changes and agent restarts.
 		w.manager.capabilities.Invalidate()
+	}
+	if err == nil {
+		_, err = w.manager.store.UpdateOperation(ctx, UpdateOperationParams{OperationID: operation.OperationID, Status: OperationRunning, Result: json.RawMessage(`{"stage":"verifying"}`), StartedAt: sql.NullTime{Time: startedAt, Valid: true}})
+		if err != nil {
+			return fmt.Errorf("record service verification: %w", err)
+		}
+		verifier, ok := w.manager.agent.(interface {
+			InspectManagedServices(context.Context, []string) ([]types.ManagedService, error)
+		})
+		if !ok {
+			err = errors.New("managed service verification is unavailable")
+		} else {
+			var states []types.ManagedService
+			states, err = verifier.InspectManagedServices(ctx, []string{request.ServiceID})
+			if err == nil {
+				expected := "active"
+				if request.Action == "stop" {
+					expected = "inactive"
+				}
+				if len(states) != 1 || states[0].ID != request.ServiceID || !states[0].Available || states[0].ActiveState != expected {
+					err = errors.New("managed service did not reach the requested state")
+				} else {
+					result.After = states[0]
+				}
+			}
+		}
 	}
 	if err != nil {
 		_, finishErr := w.manager.store.FinishOperation(ctx, FinishOperationParams{
