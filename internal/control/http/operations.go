@@ -348,6 +348,12 @@ func (s *Server) loadOperationsView(r *http.Request, actor auth.SessionUser, vie
 	if err != nil {
 		view.OperationsError = "Task status is unavailable. Check again shortly."
 	}
+	f.ActiveFirst = false
+	f.Limit = 5
+	view.OperationsInbox, err = s.operations.Page(r.Context(), actor, "inbox", f)
+	if err != nil {
+		view.OperationsError = "Notification status is unavailable. Check again shortly."
+	}
 }
 
 type OperationsPreferencesService interface {

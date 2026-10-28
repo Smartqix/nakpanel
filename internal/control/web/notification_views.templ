@@ -1,0 +1,103 @@
+package web
+
+import (
+ "time"
+ "github.com/nakroteck/nakpanel/internal/control/operations"
+)
+
+templ notificationPreview(view WorkspaceView, page operations.Page) {
+ <section id="np-op-inbox" class="np-notification-preview" data-np-notification-preview hidden tabindex="-1" aria-labelledby="np-notification-preview-title">
+  <header class="np-notification-header"><div class="np-notification-heading"><h2 id="np-notification-preview-title">Notifications</h2><span class="np-notification-count" data-np-notification-count>{ notificationCountLabel(page.Counts.Unread) }</span></div><div class="np-notification-header-actions"><button type="button" class="np-notification-icon-button" data-np-op-read-all title="Mark all notifications read in this scope" aria-label="Mark all notifications read in this scope">@icon("mail")</button><button type="button" class="np-notification-icon-button" data-np-notification-close title="Close notifications" aria-label="Close notifications">@icon("x")</button></div></header>
+  <div class="np-notification-filters" aria-label="Preview filter"><button type="button" data-np-notification-filter="all" aria-pressed="true">All</button><button type="button" data-np-notification-filter="unread" aria-pressed="false">Unread</button></div>
+  <p class="np-notification-status" data-np-notification-status role="status" hidden></p>
+  <div class="np-notification-list" data-np-op-quick-inbox data-np-notification-list data-np-notification-density="compact">
+   for index,n:=range page.Notifications {
+    if index<5 {
+     @notificationRow(n,true,notificationNow(page))
+    }
+   }
+   if len(page.Notifications)==0 {
+    if view.OperationsError!="" {
+     <div class="np-notification-empty"><h3>Notifications unavailable</h3><p>Try refreshing to check again.</p></div>
+    } else {
+     @notificationEmpty("all",false)
+    }
+   }
+  </div>
+  <div class="np-notification-error" data-np-notification-error role="alert" hidden></div>
+  <footer class="np-notification-footer"><a href={ templ.SafeURL(operationsPath(view,"inbox")) }>View all notifications @icon("chevron-right")</a></footer>
+ </section>
+}
+
+templ notificationInbox(view WorkspaceView, page operations.Page) {
+ <div class="np-notification-inbox" data-np-notification-inbox>
+  <form method="get" action={ templ.SafeURL(workspacePath(view,"/activity")) } class="np-notification-toolbar" data-np-op-filters>
+   <input type="hidden" name="tab" value="inbox"/><input type="hidden" name="status" value={ view.StatusFilter }/>
+   if view.SelectedSubscription>0 {
+    <input type="hidden" name="subscription_id" value={ formatJobID(view.SelectedSubscription) }/>
+   }
+   <div class="np-notification-filters" aria-label="Inbox filter"><button type="button" data-np-notification-filter="all" aria-pressed={ operationsCurrent(view.StatusFilter,"")=="page" }>All</button><button type="button" data-np-notification-filter="unread" aria-pressed={ operationsCurrent(view.StatusFilter,"unread")=="page" }>Unread</button></div>
+   <label class="np-notification-search">@icon("search")<span class="np-sr-only">Search notifications</span><input type="search" name="q" value={ view.SearchQuery } maxlength="200" placeholder="Search notifications"/></label>
+   <button type="submit" class="np-secondary-button" data-np-notification-search-submit>Search</button>
+   <div class="np-notification-toolbar-actions"><span class="np-notification-count" data-np-notification-count>{ notificationCountLabel(page.Counts.Unread) }</span><button type="button" class="np-secondary-button" data-np-op-read-all>
+    @icon("mail")
+    Mark all read
+   </button></div>
+  </form>
+  <p class="np-notification-scope">{ notificationScopeLabel(view) }</p>
+  <div class="np-notification-error" data-np-notification-error role="alert" hidden></div>
+  <div data-np-op-rows data-np-notification-list data-np-notification-density="full">
+   for index,n:=range page.Notifications {
+    if index==0 || n.CreatedAt.UTC().Format("2006-01-02")!=page.Notifications[index-1].CreatedAt.UTC().Format("2006-01-02") {
+     <h2 class="np-notification-date" data-np-notification-date={ n.CreatedAt.UTC().Format("2006-01-02") }>{ n.CreatedAt.UTC().Format("2 Jan 2006 UTC") }</h2>
+    }
+    @notificationRow(n,false,notificationNow(page))
+   }
+   if len(page.Notifications)==0 {
+    @notificationEmpty(view.StatusFilter,view.SearchQuery!="")
+   }
+  </div>
+ </div>
+}
+
+templ notificationRow(n operations.Notification, compact bool, now time.Time) {
+ <article class={ notificationRowClass(n) } data-np-notification-id={ formatJobID(n.ID) }>
+  <span class={ "np-notification-icon np-notification-icon-"+n.Severity } aria-hidden="true">@icon(notificationIcon(n))</span>
+  <button type="button" class="np-notification-message" data-np-notification-open={ formatJobID(n.ID) } data-np-notification-issue={ formatJobID(n.IssueID) } data-np-notification-operation={ formatJobID(n.OperationID) }>
+   if n.ReadAt==nil {
+    <span class="np-sr-only">Unread: </span>
+   }
+   <span class="np-notification-title">{ n.Title }</span><span class="np-notification-summary">{ n.Summary }</span><span class="np-notification-meta"><span>{ notificationContext(n) }</span><span aria-hidden="true">·</span><time datetime={ n.CreatedAt.UTC().Format(time.RFC3339) } title={ n.CreatedAt.UTC().Format("2 Jan 2006 15:04 MST") }>{ notificationTimeLabel(n.CreatedAt,now) }</time></span>
+  </button>
+  <div class="np-notification-row-actions">
+   if n.ReadAt==nil {
+    <span class="np-notification-dot" aria-hidden="true"></span>
+   }
+   <button type="button" class="np-notification-icon-button" data-np-notification-menu={ formatJobID(n.ID) } aria-expanded="false" aria-label={ "Actions for "+n.Title } title={ "Actions for "+n.Title }>@icon("ellipsis")</button>
+   <div class="np-notification-menu" role="group" aria-label="Notification actions" hidden>
+    if n.ReadAt==nil {
+     <button type="button" data-np-op-read={ formatJobID(n.ID) }>
+      @icon("mail")
+      Mark as read
+     </button>
+    }
+    <button type="button" data-np-op-archive={ formatJobID(n.ID) }>
+     @icon("archive")
+     Archive
+    </button>
+   </div>
+  </div>
+ </article>
+}
+
+templ notificationEmpty(status string, search bool) {
+ <div class="np-notification-empty">@icon("bell")
+  if search {
+   <h3>No matching notifications</h3><p>Try another title, resource or message.</p>
+  } else if status=="unread" {
+   <h3>All caught up</h3><p>You have no unread notifications.</p>
+  } else {
+   <h3>No notifications yet</h3><p>Account and hosting updates will appear here.</p>
+  }
+ </div>
+}
