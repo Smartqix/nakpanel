@@ -1,8 +1,8 @@
 # Compact Notification Preview and Full Inbox
 
-Status: the owner approved this direction and authorized desktop/mobile mockups
-and an implementation plan on 28 October 2026. Application implementation,
-hosted tests, deployment, merge and push are not authorized by that approval.
+Status: the owner approved the detailed design and native implementation on
+28 October 2026. Local implementation and acceptance are authorized. Hosted
+tests, deployment, merge and push require separate authorization.
 
 ## Intent and Evidence
 
@@ -206,7 +206,7 @@ intersecting controls, truncated title, silent failure or lost form edits.
 
 The mockup demonstrates local, in-memory interactions and is not evidence of
 implemented authorization, production notification sources or hosted readiness.
-Production implementation and its two-pass evidence remain pending approval.
+Application implementation and its two-pass evidence are tracked by the plan.
 
 ## Design Review Record
 

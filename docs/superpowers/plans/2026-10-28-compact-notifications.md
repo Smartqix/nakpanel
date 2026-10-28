@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go, PostgreSQL, templ, embedded CSS/vanilla JavaScript, current Node test runner and existing loopback Operations fixture.
 
-**Spec:** [Approved direction and proposed detailed design](../specs/2026-10-28-compact-notifications-design.md). Read it before execution. Mockups and plan await owner review; implementation is not authorized yet.
+**Spec:** [Approved detailed design](../specs/2026-10-28-compact-notifications-design.md). The owner approved native implementation on 28 October 2026. Hosted work remains unauthorized.
 
 ## Global Constraints
 
@@ -139,11 +139,8 @@ production code to copy wholesale.
 - New detail reads accept current resource scope; existing personal receipt authorization remains unchanged.
 - The prototype's in-memory interactions are illustrative and do not replace testing the integrated views.
 
-## Execution Choice Pending
+## Execution Choice
 
-Review the detailed design, four primary frames, state examples and this plan
-before implementation. Native execution is recommended: five tightly coupled
-tasks share one poller and rendering lifecycle, and the existing test fixtures
-cover the boundaries. Subagent-driven execution is also available if the owner
-prefers independent per-task reviews. No application implementation or hosted
-work should begin from this plan without that next authorization.
+The owner approved native execution after reviewing the design and plan.
+Implement all five tasks in the isolated branch. Hosted acceptance, deployment,
+merge and push still require separate authorization.

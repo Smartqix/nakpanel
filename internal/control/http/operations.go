@@ -17,6 +17,7 @@ type OperationsService interface {
 	Feed(context.Context, auth.SessionUser, int64, operations.Filter) (operations.Feed, error)
 	Issue(context.Context, auth.SessionUser, int64) (operations.Issue, error)
 	Operation(context.Context, auth.SessionUser, int64) (operations.OperationDetail, error)
+	Notification(context.Context, auth.SessionUser, int64, operations.Resource) (operations.Notification, error)
 	MarkNotificationRead(context.Context, auth.SessionUser, int64) error
 	MarkAllNotificationsRead(context.Context, auth.SessionUser, operations.Filter) error
 	ArchiveNotification(context.Context, auth.SessionUser, int64) error
@@ -182,6 +183,29 @@ func (s *Server) handleOperationReceipt(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleOperationNotification(w http.ResponseWriter, r *http.Request) {
+	actor, ok := s.operationsUser(w, r)
+	if !ok {
+		return
+	}
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		operationsError(w, operations.ErrInvalid)
+		return
+	}
+	f, err := operationsFilter(r)
+	if err != nil {
+		operationsError(w, err)
+		return
+	}
+	n, err := s.operations.Notification(r.Context(), actor, id, f.Resource)
+	if err != nil {
+		operationsError(w, err)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(n)
 }
 func (s *Server) handleOperationsReadAll(w http.ResponseWriter, r *http.Request) {
 	actor, ok := s.operationsUser(w, r)

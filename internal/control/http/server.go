@@ -491,6 +491,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/workspace/operations", s.handleOperations)
 	mux.HandleFunc("GET /api/workspace/operations/events", s.handleOperationEvents)
 	mux.HandleFunc("GET /api/workspace/operations/{type}/{id}", s.handleOperationDetail)
+	mux.HandleFunc("GET /api/workspace/operations/notifications/{id}", s.handleOperationNotification)
 	mux.HandleFunc("POST /api/workspace/operations/notifications/read-all", s.handleOperationsReadAll)
 	mux.HandleFunc("POST /api/workspace/operations/notifications/{id}/{action}", s.handleOperationReceipt)
 	mux.HandleFunc("POST /api/workspace/operations/issues/{id}/acknowledge", s.handleIssueAcknowledge)
