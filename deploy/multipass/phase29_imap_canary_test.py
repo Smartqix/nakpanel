@@ -221,6 +221,25 @@ class IMAPCanaryTests(unittest.TestCase):
         self.assertNotIn('fixture-password', stderr.getvalue())
         self.assertNotIn('phase29@example.test', stderr.getvalue())
 
+class RemoteFailureDiagnosticsTests(unittest.TestCase):
+    def test_remote_failure_retains_only_allowlisted_guest_reason(self):
+        error = subprocess.CalledProcessError(1, 'multipass', output=b'',
+            stderr=b'restored mailbox canary could not be read\n')
+        with patch.object(canary.subprocess, 'run', side_effect=error):
+            with self.assertRaisesRegex(canary.CanaryError, 'restored mailbox canary could not be read'):
+                canary.run_remote('nakpanel-owned-run123', 'assert', 'phase29@example.test', 'fixture-password')
+
+    def test_remote_unknown_stderr_is_not_published(self):
+        error = subprocess.CalledProcessError(255, 'multipass', output=b'fixture-password',
+            stderr=b'fixture-password\nphase29@example.test\nrestored mailbox canary could not be read: private server response\n')
+        with patch.object(canary.subprocess, 'run', side_effect=error):
+            with self.assertRaises(canary.CanaryError) as raised:
+                canary.run_remote('nakpanel-owned-run123', 'assert', 'phase29@example.test', 'fixture-password')
+        self.assertIn('255', str(raised.exception))
+        self.assertNotIn('fixture-password', str(raised.exception))
+        self.assertNotIn('phase29@example.test', str(raised.exception))
+        self.assertNotIn('private server response', str(raised.exception))
+
 
 if __name__ == '__main__':
     unittest.main()

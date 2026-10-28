@@ -28,6 +28,7 @@ type Notification struct {
 	Severity    string     `json:"severity"`
 	Title       string     `json:"title"`
 	Summary     string     `json:"summary"`
+	Target      string     `json:"target"`
 	IssueID     int64      `json:"issue_id,omitempty"`
 	OperationID int64      `json:"operation_id,omitempty"`
 	ReadAt      *time.Time `json:"read_at,omitempty"`
@@ -255,6 +256,36 @@ func listOperations(ctx context.Context, q queryer, actor auth.SessionUser, f Fi
 const notificationFrom = `FROM notifications n LEFT JOIN issues ni ON ni.id=n.issue_id LEFT JOIN notification_receipts receipt ON receipt.notification_id=n.id AND receipt.user_id=$1
  CROSS JOIN LATERAL (SELECT COALESCE(ni.resource_kind,CASE WHEN n.subscription_id IS NOT NULL THEN 'subscription' WHEN n.customer_id IS NOT NULL THEN 'customer' WHEN n.recipient_user_id IS NOT NULL THEN 'user' ELSE 'server' END) AS resource_kind,COALESCE(ni.resource_id,n.subscription_id,n.customer_id,n.recipient_user_id,0) AS resource_id) scope`
 
+const notificationSummarySQL = `CASE WHEN n.kind IN ('threshold','over_limit','suspended','certificate_expiring','login_new_device','login_failed_burst','operation_failed','issue_recovered') THEN left(n.body,2000) ELSE 'Open the affected resource to review its current status.' END`
+
+func notificationColumns() string {
+	return `n.id,n.kind,n.severity,n.title,` + notificationSummarySQL + `,` + targetSQL("scope") + `,COALESCE(n.issue_id,0),COALESCE(n.operation_id,0),receipt.read_at,n.created_at`
+}
+
+func scanNotification(row scanner) (Notification, error) {
+	var n Notification
+	err := row.Scan(&n.ID, &n.Kind, &n.Severity, &n.Title, &n.Summary, &n.Target, &n.IssueID, &n.OperationID, &n.ReadAt, &n.CreatedAt)
+	return n, err
+}
+
+// Notification is a safe, fresh authorized read. Receipt state changes only via
+// the explicit personal receipt operations, never by loading a detail.
+func (s *Store) Notification(ctx context.Context, actor auth.SessionUser, id int64, scope Resource) (Notification, error) {
+	if id <= 0 || scope.Kind == "" && scope.ID != 0 || scope.Kind != "" && !scope.Valid() {
+		return Notification{}, ErrInvalid
+	}
+	if actor.ID <= 0 || !actor.Role.Valid() {
+		return Notification{}, ErrNotFound
+	}
+	args := []any{actor.ID, string(actor.Role), id}
+	where := `n.id=$3 AND ` + NotificationVisibilitySQL("n", 1, 2) + resourceFilter("scope", Filter{Resource: scope}, &args)
+	n, err := scanNotification(s.db.QueryRowContext(ctx, `SELECT `+notificationColumns()+` `+notificationFrom+` WHERE `+where, args...))
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return n, err
+}
+
 func listNotifications(ctx context.Context, q queryer, actor auth.SessionUser, f Filter) ([]Notification, error) {
 	out := []Notification{}
 	args := []any{actor.ID, string(actor.Role)}
@@ -266,17 +297,18 @@ func listNotifications(ctx context.Context, q queryer, actor auth.SessionUser, f
 		where += ` AND receipt.read_at IS NULL`
 	}
 	if f.Search != "" {
-		where += ` AND n.title ILIKE ` + bind(&args, "%"+f.Search+"%")
+		pattern := bind(&args, "%"+f.Search+"%")
+		where += ` AND (n.title ILIKE ` + pattern + ` OR (` + notificationSummarySQL + `) ILIKE ` + pattern + ` OR ` + targetSQL("scope") + ` ILIKE ` + pattern + `)`
 	}
-	rows, err := q.QueryContext(ctx, `SELECT n.id,n.kind,n.severity,n.title,CASE WHEN n.kind IN ('threshold','over_limit','suspended','certificate_expiring','login_new_device','login_failed_burst','operation_failed','issue_recovered') THEN left(n.body,2000) ELSE 'Open the affected resource to review its current status.' END,COALESCE(n.issue_id,0),COALESCE(n.operation_id,0),receipt.read_at,n.created_at `+notificationFrom+` WHERE `+where+` ORDER BY n.id DESC LIMIT `+bind(&args, f.limit()+1), args...)
+	rows, err := q.QueryContext(ctx, `SELECT `+notificationColumns()+` `+notificationFrom+` WHERE `+where+` ORDER BY n.id DESC LIMIT `+bind(&args, f.limit()+1), args...)
 	if err != nil {
 		return out, err
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var n Notification
-		if err = rows.Scan(&n.ID, &n.Kind, &n.Severity, &n.Title, &n.Summary, &n.IssueID, &n.OperationID, &n.ReadAt, &n.CreatedAt); err != nil {
-			return out, err
+		n, scanErr := scanNotification(rows)
+		if scanErr != nil {
+			return out, scanErr
 		}
 		out = append(out, n)
 	}

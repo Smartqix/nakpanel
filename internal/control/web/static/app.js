@@ -609,7 +609,9 @@
       all.indeterminate = selected > 0 && selected < checks.length;
     }
     if (count) count.textContent = selected + " selected";
-    each('button[type="submit"]', form, function (button) { button.disabled = selected === 0; });
+    each('button[type="submit"]', form, function (button) {
+      if (button.form === form) button.disabled = selected === 0;
+    });
 	if (form.matches("[data-np-subscription-bulk]")) {
 	  var providers = {};
 	  each("[data-np-bulk-check]:checked", form, function (input) {

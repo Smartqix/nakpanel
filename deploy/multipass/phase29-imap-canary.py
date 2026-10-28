@@ -11,6 +11,21 @@ import time
 
 MESSAGE = b'Subject: Nakpanel phase29 durable mail canary\r\n\r\nphase29-restored-message-content\r\n'
 
+# Only controller-owned messages may cross the guest boundary. Stderr can also
+# contain transport diagnostics or server responses with private values.
+SAFE_FAILURES = frozenset({
+    'invalid IMAP canary request',
+    'IMAP authenticated readiness deadline expired',
+    'IMAP canary append rejected',
+    'IMAP canary append failed; result uncertain, not retried',
+    'restored mailbox could not be selected',
+    'restored mailbox canary missing',
+    'restored mailbox canary content missing',
+    'restored mailbox canary could not be read',
+    'IMAP canary session close failed',
+    'IMAP canary failed',
+})
+
 
 class CanaryError(RuntimeError):
     pass
@@ -103,8 +118,13 @@ def run_remote(vm, mode, mailbox, password):
                                 capture_output=True)
     except subprocess.TimeoutExpired:
         raise CanaryError('IMAP transport deadline expired; not retried') from None
-    except subprocess.CalledProcessError:
-        raise CanaryError('IMAP remote canary failed; not retried') from None
+    except subprocess.CalledProcessError as error:
+        stderr = error.stderr if isinstance(error.stderr, bytes) else b''
+        # Bound parsing and require the entire message to match. Never forward
+        # arbitrary stderr or a trusted-looking substring of an untrusted line.
+        reason = stderr.decode('utf-8', errors='replace').strip() if len(stderr) <= 4096 else ''
+        detail = f': {reason}' if reason in SAFE_FAILURES else ''
+        raise CanaryError(f'IMAP remote canary failed (exit {error.returncode}){detail}; not retried') from None
     if result.stdout != success_receipt(mode):
         raise CanaryError('IMAP remote completion receipt missing or invalid; not retried')
 

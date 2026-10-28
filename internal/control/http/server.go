@@ -117,6 +117,7 @@ type QuotaManager interface {
 	UpsertAccountQuota(ctx context.Context, owner auth.SessionUser, limits controlquota.Limits) error
 	UpsertPlan(ctx context.Context, owner auth.SessionUser, plan controlquota.Plan) (controlquota.Plan, error)
 	SetPlanActive(ctx context.Context, owner auth.SessionUser, planID int64, active bool) error
+	DeletePlan(ctx context.Context, owner auth.SessionUser, planID int64) error
 	SetPlanStatuses(ctx context.Context, owner auth.SessionUser, planIDs []int64, active bool) error
 	AssignSubscription(ctx context.Context, owner auth.SessionUser, customerUserID int64, planID int64) (controlquota.SubscriptionAssignment, error)
 	CreateCustomer(ctx context.Context, owner auth.SessionUser, req types.CreateCustomerReq) (types.Customer, error)
@@ -410,6 +411,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /plans/{id}/php-versions", s.handleUpdatePlanPHPVersions)
 	mux.HandleFunc("GET /plans/{id}/sync-status", s.handlePlanSynchronization)
 	mux.HandleFunc("POST /plans/status", s.handleSetPlanStatus)
+	mux.HandleFunc("POST /plans/{id}/delete", s.handleDeletePlan)
 	mux.HandleFunc("POST /plans/bulk-status", s.handleBulkPlanStatus)
 	mux.HandleFunc("POST /addons/bulk-status", s.handleBulkAddonPlanStatus)
 	mux.HandleFunc("POST /reseller-plans/bulk-status", s.handleBulkResellerPlanStatus)
@@ -491,6 +493,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/workspace/operations", s.handleOperations)
 	mux.HandleFunc("GET /api/workspace/operations/events", s.handleOperationEvents)
 	mux.HandleFunc("GET /api/workspace/operations/{type}/{id}", s.handleOperationDetail)
+	mux.HandleFunc("GET /api/workspace/operations/notifications/{id}", s.handleOperationNotification)
 	mux.HandleFunc("POST /api/workspace/operations/notifications/read-all", s.handleOperationsReadAll)
 	mux.HandleFunc("POST /api/workspace/operations/notifications/{id}/{action}", s.handleOperationReceipt)
 	mux.HandleFunc("POST /api/workspace/operations/issues/{id}/acknowledge", s.handleIssueAcknowledge)
@@ -3667,6 +3670,7 @@ var noticeCatalogue = map[string]noticeEntry{
 	"service-saved":                 {"Hosting service settings saved and reconciliation queued.", dashboard.NoticeSuccess},
 	"quota-saved":                   {"Account quota saved.", dashboard.NoticeSuccess},
 	"plan-saved":                    {"Plan saved.", dashboard.NoticeSuccess},
+	"plan-deleted":                  {"Plan deleted.", dashboard.NoticeSuccess},
 	"plan-status-saved":             {"Plan status updated.", dashboard.NoticeSuccess},
 	"addon-saved":                   {"Add-on plan saved.", dashboard.NoticeSuccess},
 	"addons-saved":                  {"Add-on plans updated.", dashboard.NoticeSuccess},

@@ -56,6 +56,7 @@ type DashboardActions struct {
 type WorkspaceView struct {
 	Operations           operations.Page
 	OperationsQuick      operations.Page
+	OperationsInbox      operations.Page
 	OperationsError      string
 	OperationsTab        string
 	InstantNavDisabled   bool

@@ -50,13 +50,14 @@ test('relative requests resolve against the current page after pushState', async
 });
 const vm = require('node:vm');
 const fs = require('node:fs');
-function appHarness(withLifecycle = true) {
+function appHarness(withLifecycle = true, bulkForm = null) {
  const lifecycle = withLifecycle ? nav.createLifecycle() : undefined;
  const bindings = new Map(), intervals = new Map(), documentEvents={}, windowEvents={}, dialogs=new Map(), opened=[];let nextTimer=0;
  const form = {dataset:{}, hasAttribute:()=>false, querySelector:()=>null, closest:()=>form,
   addEventListener(type, listener) {if(!bindings.has(type))bindings.set(type,[]);bindings.get(type).push(listener);}};
  const progress = {};
  function scope() {return {querySelector:()=>null,querySelectorAll(selector) {
+  if(selector==='[data-np-bulk-form]' && bulkForm)return [bulkForm];
   if(selector==='[data-np-dirty-guard]')return [form];
   if(selector==='[data-np-wordpress-progress]')return [progress];
   return [];
@@ -205,4 +206,23 @@ test('form bodies are encoded like a native submission', () => {
   assert.equal(nav.formEnctype(form('multipart/form-data'), null), 'multipart/form-data');
   assert.equal(nav.formEnctype(form('multipart/form-data'), button('application/x-www-form-urlencoded')), 'application/x-www-form-urlencoded');
   assert.equal(nav.formEnctype(form('TEXT/PLAIN'), null), 'text/plain');
+});
+
+test('bulk selection does not disable a row action belonging to another form', () => {
+ let selected=0;
+ const ownButton={disabled:false},deleteButton={disabled:false,form:{}},selection={};
+ const bulkForm={matches:()=>false,querySelector:()=>null,querySelectorAll(selector){
+  if(selector==='[data-np-bulk-check]')return [selection];
+  if(selector==='[data-np-bulk-check]:checked')return selected?[selection]:[];
+  if(selector==='button[type="submit"]')return [ownButton,deleteButton];
+  return [];
+ }};
+ ownButton.form=bulkForm;
+ const harness=appHarness(true,bulkForm);
+ assert.equal(ownButton.disabled,true);
+ assert.equal(deleteButton.disabled,false,'unused plan deletion must work without bulk selection');
+ selected=1;deleteButton.disabled=true;
+ for(const listener of harness.documentEvents.change||[]) listener({target:{matches:s=>s==='[data-np-bulk-check]',closest:s=>s==='[data-np-bulk-form]'?bulkForm:null}});
+ assert.equal(ownButton.disabled,false);
+ assert.equal(deleteButton.disabled,true,'bulk selection must not enable an independently disabled row action');
 });

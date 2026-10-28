@@ -195,7 +195,11 @@
     var states = new WeakMap();
     function setBusy(form,busy) {
       if (busy && !states.has(form)) {
-        var controls = Array.from(form.querySelectorAll('button[type="submit"], input[type="submit"]'));
+        // form.elements includes controls linked with a form attribute and
+        // excludes nested controls owned by a different form.
+        var controls = Array.from(form.elements).filter(function (control) {
+          return control.matches('button[type="submit"], input[type="submit"]');
+        });
         states.set(form,controls.map(function (control) { return [control,control.disabled]; }));
         controls.forEach(function (control) { control.disabled = true; });
       } else if (!busy && states.has(form)) {

@@ -14,10 +14,59 @@ import (
 
 type fakeOperations struct {
 	OperationsService
-	actor auth.SessionUser
-	calls int
-	err   error
-	issue *operations.Issue
+	actor             auth.SessionUser
+	calls             int
+	err               error
+	issue             *operations.Issue
+	notificationID    int64
+	notificationScope operations.Resource
+}
+
+func (f *fakeOperations) Notification(_ context.Context, actor auth.SessionUser, id int64, scope operations.Resource) (operations.Notification, error) {
+	f.actor, f.notificationID, f.notificationScope = actor, id, scope
+	f.calls++
+	return operations.Notification{ID: id, Title: "New sign-in address", Summary: "Safe message"}, f.err
+}
+
+func TestNotificationDetailHTTPBindsViewer(t *testing.T) {
+	for _, role := range []auth.Role{auth.RoleAdmin, auth.RoleReseller, auth.RoleClient} {
+		t.Run(string(role), func(t *testing.T) {
+			svc := &fakeOperations{}
+			h, _ := newTestHandlerWithOptions(t, role, ServerOptions{Operations: svc})
+			cookie := login(t, h, string(role)+"@nakpanel.test", "Nakpanel"+strings.ToUpper(string(role[:1]))+string(role[1:])+"!2026")
+			call := func(path string, authenticated bool) *httptest.ResponseRecorder {
+				r := httptest.NewRequest("GET", "https://panel.test"+path, nil)
+				r.Header.Set("Accept", "application/json")
+				if authenticated {
+					r.AddCookie(cookie)
+				}
+				w := httptest.NewRecorder()
+				h.ServeHTTP(w, r)
+				return w
+			}
+			path := "/api/workspace/operations/notifications/12"
+			if w := call(path, false); w.Code != 401 || svc.calls != 0 {
+				t.Fatal("anonymous detail", w.Code, w.Body.String())
+			}
+			for _, suffix := range []string{"/0", "/-1", "/bad", "/12?resource_kind=site", "/12?resource_id=42", "/12?resource_kind=unknown&resource_id=1"} {
+				if w := call("/api/workspace/operations/notifications"+suffix, true); w.Code != 400 {
+					t.Fatal("invalid detail", suffix, w.Code, w.Body.String())
+				}
+			}
+			w := call(path+"?resource_kind=subscription&resource_id=42", true)
+			if w.Code != 200 || !json.Valid(w.Body.Bytes()) || w.Header().Get("Cache-Control") != "no-store" || svc.actor.Role != role || svc.notificationID != 12 || svc.notificationScope.ID != 42 {
+				t.Fatal("viewer/scope binding", w.Code, w.Body.String(), svc)
+			}
+			svc.err = operations.ErrNotFound
+			if w := call(path, true); w.Code != 404 {
+				t.Fatal("cross-scope detail", w.Code)
+			}
+			svc.err = errors.New("password=hidden")
+			if w := call(path, true); w.Code != 503 || strings.Contains(w.Body.String(), "hidden") {
+				t.Fatal("unsafe error", w.Code, w.Body.String())
+			}
+		})
+	}
 }
 
 func (f *fakeOperations) Page(_ context.Context, a auth.SessionUser, _ string, _ operations.Filter) (operations.Page, error) {

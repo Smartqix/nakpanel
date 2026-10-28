@@ -42,7 +42,19 @@ assert_no_failed_units() {
 imap_canary() {
   local target_vm="$1" mode="$2"
   assert_vm_identity "${target_vm}" "${IMAGE}" "${NAKPANEL_MULTIPASS_ARCH}" "${NAKPANEL_RUN_TOKEN}" || return "$?"
-  python3 "${SCRIPT_DIR}/phase29-imap-canary.py" remote "${target_vm}" "${mode}" "${mailbox_address}" 'Phase29Mail!2026'
+  if python3 "${SCRIPT_DIR}/phase29-imap-canary.py" remote "${target_vm}" "${mode}" "${mailbox_address}" 'Phase29Mail!2026'; then
+    return 0
+  fi
+  # Preserve the first failure and inspect only non-secret state before CI
+  # destroys this owned guest. Never replay the canary or its APPEND.
+  echo "phase29: ${target_vm}: IMAP ${mode} failure state (read-only)" >&2
+  multipass_exec_short "${target_vm}" -- sudo systemctl show --no-pager \
+    --property=ActiveState,SubState,Result,ExecMainStatus,NRestarts,ActiveEnterTimestamp \
+    stalwart-mail.service nakpanel.service nakpanel-agent.service >&2 || true
+  multipass_exec_short "${target_vm}" -- sudo ss -ltn '( sport = :993 )' >&2 || true
+  multipass_exec_short "${target_vm}" -- sudo -u postgres psql -X -Atqd nakpanel -v ON_ERROR_STOP=1 -c \
+    "SELECT coalesce(json_agg(row_to_json(j)),'[]'::json) FROM (SELECT id,kind,state,attempt,attempted_at,finalized_at FROM river_job WHERE kind LIKE '%mail%' OR kind LIKE '%reconcil%' ORDER BY id DESC LIMIT 20) j" >&2 || true
+  return 1
 }
 wait_for() {
   local query="$1" expected="$2" value=""
