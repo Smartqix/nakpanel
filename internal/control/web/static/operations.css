@@ -66,6 +66,14 @@
 .np-notification-detail-message{font-size:14px;line-height:22px;overflow-wrap:anywhere}
 .np-notification-detail-meta{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px;padding:14px 16px;margin:20px 0 0;background:#f5f7fa;border-radius:6px;font-size:13px}
 .np-notification-detail-meta dt{color:#526176}.np-notification-detail-meta dd{margin:0;overflow-wrap:anywhere}
+.np-dialog.np-op-dialog .np-op-dialog-head h2{font-size:18px;line-height:25px;font-weight:650}
+.np-dialog.np-op-dialog.np-notification-detail{width:min(580px,calc(100% - 24px));margin:auto;padding:0;border-radius:8px;max-height:calc(100dvh - 24px)}
+.np-notification-detail .np-op-dialog-head{top:0;margin:0;padding:16px 20px;border-bottom:1px solid #e0e5ed}
+.np-notification-detail [data-np-op-detail-body]{padding:20px}
+.np-notification-detail [data-np-op-detail-status]{padding:12px 20px;margin:0;font-size:14px;line-height:20px}
+.np-notification-detail-footer{position:sticky;bottom:-20px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;margin:20px -20px -20px;background:#fff;border-top:1px solid #e0e5ed}
+.np-notification-detail-footer small{font-size:12px;line-height:18px;color:#526176}
+.np-notification-detail [hidden]{display:none!important}
 @media(max-width:760px){
  .np-notification-preview{max-height:620px}
  .np-notification-header{padding:10px 12px 6px}.np-notification-heading{gap:8px}

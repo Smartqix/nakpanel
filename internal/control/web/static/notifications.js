@@ -27,6 +27,27 @@
     return q;
   }
 
+  function createNotificationActions(env) {
+    const active=new Map();let destroyed=false;
+    function run(id,action,options={}) {
+      const identity=env.identity(),key=identity+'|'+id;
+      if(destroyed||options.isCurrent&&!options.isCurrent())return Promise.resolve(false);
+      if(active.has(key))return active.get(key).promise;
+      let finish;const promise=new Promise(resolve=>finish=resolve),controller=new AbortController();
+      const current=()=>!destroyed&&identity===env.identity()&&!controller.signal.aborted&&(!options.isCurrent||options.isCurrent());
+      const abort=()=>controller.abort();if(options.signal){if(options.signal.aborted)abort();else options.signal.addEventListener('abort',abort,{once:true});}
+      active.set(key,{promise,controller});env.pending(id,true);
+      (async()=>{let saved=false,result=false;try{await env.mutate(id,action,controller.signal);saved=true;if(current()){env.clearError?.();await env.success(id,action);await env.refresh();result=true;}}catch(error){if(current()){if(saved)env.error(Error('Notification status was saved, but the view could not refresh. Check again.'),()=>env.refresh());else env.error(error,()=>run(id,action,options));}}finally{active.delete(key);options.signal?.removeEventListener('abort',abort);if(identity===env.identity()&&!destroyed)env.pending(id,false);finish(result);}})();
+      return promise;
+    }
+    return {run,destroy(){destroyed=true;active.forEach(entry=>entry.controller.abort());active.clear();}};
+  }
+
+  async function loadNotificationDetail(env) {
+    try {const data=await env.load();if(!env.isCurrent())return false;env.render(data);if(!env.isCurrent())return false;await env.read(data);return env.isCurrent();}
+    catch(error){if(env.isCurrent()&&error.name!=='AbortError')env.error(error);return false;}
+  }
+
   function dateGroup(value, now, locale) {
     const date=new Date(value), today=new Date(now);
     if(!Number.isFinite(date.getTime()))return {key:'unknown',label:'Unknown date'};
@@ -39,7 +60,7 @@
     const doc=root.ownerDocument, rows=new Map(), pending=new Set(), dates=new Map();
     let destroyed=false, deferred, menuID=null, latest=[], context={identity:options.identity};
     const make=(tag,text,cls)=>{const n=doc.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n;};
-    const icon=name=>{const svg=doc.createElementNS('http://www.w3.org/2000/svg','svg'),use=doc.createElementNS('http://www.w3.org/2000/svg','use');svg.setAttribute('class','np-icon');svg.setAttribute('aria-hidden','true');use.setAttribute('href','/assets/icons.svg#'+name);svg.append(use);return svg;};
+    const icon=name=>{const svg=doc.createElementNS('http://www.w3.org/2000/svg','svg'),use=doc.createElementNS('http://www.w3.org/2000/svg','use');for(const [key,value]of Object.entries({class:'np-icon',viewBox:'0 0 24 24',fill:'none',stroke:'currentColor','stroke-width':'1.5','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true'}))svg.setAttribute(key,value);use.setAttribute('href','/assets/icons.svg#'+name);svg.append(use);return svg;};
     const action=(text,name)=>{const b=make('button');b.type='button';b.append(icon(name),make('span',text));return b;};
     const busy=id=>pending.has('all')||pending.has(String(id));
     const container=root.closest?.('.np-notification-preview, .np-notification-inbox');
@@ -110,10 +131,22 @@
     function outside(event){if(!root.contains(event.target))closeMenu();}
     function key(event){if(menuID===null)return;if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();closeMenu(true);}else if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){const entry=rows.get(menuID),controls=[entry.read,entry.archive].filter(n=>!n.hidden&&!n.disabled),at=controls.indexOf(doc.activeElement);if(controls.length){event.preventDefault();controls[event.key==='Home'?0:event.key==='End'?controls.length-1:(at+(event.key==='ArrowUp'?-1:1)+controls.length)%controls.length].focus();}}}
     root.addEventListener('click',click);doc.addEventListener('click',outside);doc.addEventListener('keydown',key,true);
-    return {render,flush,closeMenu,items:()=>latest,setPending(id,value){if(value)pending.add(String(id));else pending.delete(String(id));for(const entry of rows.values())if(entry.item)update(entry,entry.item);},setError(message,retry){if(!errorRoot)return;errorRoot.replaceChildren(make('span',message||''));errorRoot.hidden=!message;if(message&&retry){const b=make('button','Retry');b.type='button';b.addEventListener('click',retry);errorRoot.append(b);}},focusAfter(id,removed=false){const ids=[...rows.keys()],index=ids.indexOf(String(id)),next=removed?ids[index+1]||ids[index-1]:String(id);return ()=>{const e=rows.get(next);if(e)(removed?e.message:e.more).focus();else{root.tabIndex=-1;root.focus();}};},destroy(){destroyed=true;closeMenu();root.removeEventListener('click',click);doc.removeEventListener('click',outside);doc.removeEventListener('keydown',key,true);}};
+    return {
+      render,flush,closeMenu,items:()=>latest,
+      setPending(id,value){if(value)pending.add(String(id));else pending.delete(String(id));for(const entry of rows.values())if(entry.item)update(entry,entry.item);},
+      setError(message,retry){
+        if(!errorRoot)return;
+        const restore=errorRoot.contains(doc.activeElement);
+        errorRoot.replaceChildren(make('span',message||''));errorRoot.hidden=!message;
+        if(message&&retry){const b=make('button','Retry');b.type='button';b.addEventListener('click',retry);errorRoot.append(b);}
+        if(!message&&restore){const target=container?.querySelector('h2')||root.querySelector('.np-notification-message')||root;if(target.tagName.toLowerCase()!=='button')target.tabIndex=-1;target.focus();}
+      },
+      focusAfter(id,removed=false){const ids=[...root.querySelectorAll('[data-np-notification-id]')].map(n=>n.dataset.npNotificationId),index=ids.indexOf(String(id)),next=removed?ids[index+1]||ids[index-1]:String(id);return ()=>{const e=rows.get(next);if(e)(removed?e.message:e.more).focus();else{const heading=container?.querySelector('h2')||root;heading.tabIndex=-1;heading.focus();}};},
+      destroy(){destroyed=true;closeMenu();root.removeEventListener('click',click);doc.removeEventListener('click',outside);doc.removeEventListener('keydown',key,true);}
+    };
   }
 
-  const api={notificationTime,notificationPopoverPosition,notificationBadge,notificationPreviewQuery,createNotificationView};
+  const api={notificationTime,notificationPopoverPosition,notificationBadge,notificationPreviewQuery,createNotificationView,createNotificationActions,loadNotificationDetail};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   if(typeof window!=='undefined')window.NakpanelNotifications=api;
 })();

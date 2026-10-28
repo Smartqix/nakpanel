@@ -43,9 +43,16 @@ test('keyed rendering preserves focused nodes, scroll and pending state; rejects
  const root=tree(),view=createNotificationView(root,{identity:'client:11|sub:42',density:'compact'});
  view.render([notice(1),notice(2)],{identity:'client:11|sub:42'});
  const row=root.querySelectorAll('[data-np-notification-id]')[0],message=row.querySelector('.np-notification-message');root.scrollTop=30;message.focus();
+ assert.equal(row.querySelector('svg').getAttribute('fill'),'none');assert.equal(row.querySelector('svg').getAttribute('stroke'),'currentColor');
  view.setPending(1,true);view.render([notice(3),notice(1,'Updated'),notice(2)],{identity:'client:11|sub:42'});
  assert.equal(root.querySelectorAll('[data-np-notification-id]')[0],row);assert.equal(root.scrollTop,30);assert.equal(root.ownerDocument.activeElement,message);
  assert.equal(view.render([notice(99)],{identity:'other'}),false);assert.equal(root.querySelectorAll('[data-np-notification-id]').length,2);
  root.ownerDocument.activeElement=null;view.flush();assert.equal(root.querySelectorAll('[data-np-notification-id]')[1],row);assert.equal(row.querySelector('.np-notification-icon-button').disabled,true);
  view.destroy();view.render([notice(100)],{identity:'client:11|sub:42'});assert.equal(root.querySelectorAll('[data-np-notification-id]').length,3);
+});
+
+test('clearing a retried error returns focus to the notification view',()=>{
+ const root=tree(),error=new Element('div',root.ownerDocument),view=createNotificationView(root,{identity:'one',density:'compact',errorRoot:error});
+ view.render([notice(1)],{identity:'one'});view.setError('Offline',()=>{});error.querySelector('button').focus();view.setError('');
+ assert.equal(error.hidden,true);assert.equal(root.ownerDocument.activeElement,root.querySelector('.np-notification-message'));
 });
