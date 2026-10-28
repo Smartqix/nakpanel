@@ -1,0 +1,78 @@
+TAP version 13
+# Subtest: bodyless acknowledgements and accepted checks still use CSRF
+ok 1 - bodyless acknowledgements and accepted checks still use CSRF
+  ---
+  duration_ms: 9.087792
+  type: 'test'
+  ...
+# Subtest: repeated fragment mounts keep one timer and abort previous requests
+ok 2 - repeated fragment mounts keep one timer and abort previous requests
+  ---
+  duration_ms: 2.901917
+  type: 'test'
+  ...
+# Subtest: receipt orchestration deduplicates clicks and never invents an unread count
+ok 3 - receipt orchestration deduplicates clicks and never invents an unread count
+  ---
+  duration_ms: 0.9855
+  type: 'test'
+  ...
+# Subtest: failed receipts retain state and retry locally; old scope results are ignored
+ok 4 - failed receipts retain state and retry locally; old scope results are ignored
+  ---
+  duration_ms: 0.147916
+  type: 'test'
+  ...
+# Subtest: notification detail marks read only after a current successful load
+ok 5 - notification detail marks read only after a current successful load
+  ---
+  duration_ms: 0.114166
+  type: 'test'
+  ...
+# Subtest: paginated All and Unread inboxes reconcile authoritative rows after mark-all
+ok 6 - paginated All and Unread inboxes reconcile authoritative rows after mark-all
+  ---
+  duration_ms: 1.270042
+  type: 'test'
+  ...
+# Subtest: pagination aborts on unmount and ignores stale success and failure even if transport ignores abort
+ok 7 - pagination aborts on unmount and ignores stale success and failure even if transport ignores abort
+  ---
+  duration_ms: 0.203333
+  type: 'test'
+  ...
+# Subtest: closing a quick Task detail returns focus to Tasks even after its row was replaced
+not ok 8 - closing a quick Task detail returns focus to Tasks even after its row was replaced
+  ---
+  duration_ms: 1.032583
+  type: 'test'
+  location: '/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/static/operations-client.test.cjs:55:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    'inbox' !== 'tasks'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'tasks'
+  actual: 'inbox'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/static/operations-client.test.cjs:65:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+1..8
+# tests 8
+# suites 0
+# pass 7
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 56.143333

@@ -40,9 +40,19 @@ BEGIN
  revision:=nakpanel_operation_arg_id(NEW.args,'desired_revision');
  label:=CASE NEW.kind WHEN 'create_site' THEN 'Set up website' WHEN 'create_database' THEN 'Create database' WHEN 'issue_cert' THEN 'Issue certificate' WHEN 'install_custom_cert' THEN 'Install certificate' WHEN 'create_backup' THEN 'Create backup' WHEN 'restore_backup' THEN 'Restore backup' WHEN 'configure_webmail' THEN 'Configure webmail' WHEN 'configure_mail' THEN 'Apply mail settings' WHEN 'configure_dns_zone' THEN 'Apply DNS changes' WHEN 'reconcile_system' THEN 'Reconcile configuration' WHEN 'set_hosting_state' THEN 'Apply hosting state' WHEN 'deploy_php_release' THEN 'Deploy application' WHEN 'rollback_php_release' THEN 'Roll back application' WHEN 'wordpress_operation' THEN 'WordPress operation' WHEN 'run_scheduled_task' THEN 'Run scheduled task' WHEN 'mail_import' THEN 'Import mail' WHEN 'system_apply_updates' THEN 'Install system updates' WHEN 'server_backup' THEN 'Create server backup' WHEN 'system_control_service' THEN concat(CASE NEW.args->>'action' WHEN 'restart' THEN 'Restart' WHEN 'reload' THEN 'Reload' WHEN 'start' THEN 'Start' WHEN 'stop' THEN 'Stop' ELSE 'Manage' END,' ',CASE NEW.args->>'service_id' WHEN 'web' THEN 'nginx' WHEN 'dns' THEN 'BIND' WHEN 'mail' THEN 'Stalwart Mail' WHEN 'php-8.3' THEN 'PHP 8.3 FPM' WHEN 'php-8.4' THEN 'PHP 8.4 FPM' WHEN 'php-8.5' THEN 'PHP 8.5 FPM' ELSE 'service' END) ELSE 'Background operation' END;
  op_state:=CASE NEW.state::text WHEN 'running' THEN 'running' WHEN 'completed' THEN 'succeeded' WHEN 'discarded' THEN 'failed' WHEN 'cancelled' THEN 'cancelled' WHEN 'retryable' THEN 'waiting_retry' ELSE 'queued' END;
+ -- Queue rescue/cancellation can finish without re-entering the worker. Close
+ -- the service lock in the same transaction, preserving any proven outcome.
+ IF NEW.kind='system_control_service' AND NEW.state::text IN ('completed','discarded','cancelled') THEN
+  UPDATE server_operations SET
+   status=CASE WHEN NEW.state::text='cancelled' AND status IN ('pending','awaiting_confirmation') THEN 'cancelled' ELSE 'failed' END,
+   result=result-'stage',
+   last_error=CASE WHEN NEW.state::text='cancelled' AND status IN ('pending','awaiting_confirmation') THEN '' ELSE 'Service execution ended without a verified outcome. Check current service state before trying again.' END,
+   completed_at=COALESCE(completed_at,now()),updated_at=now()
+  WHERE operation_id=NEW.args->>'operation_id' AND category='services' AND target_type='server_service' AND status IN ('pending','running','awaiting_confirmation');
+ END IF;
  -- River completion describes queue execution. Domain workers may finish
  -- without retrying a failed command, or cancel after persisting a terminal failure.
- IF NEW.state::text IN ('completed','cancelled') THEN
+ IF NEW.state::text IN ('completed','cancelled') OR (NEW.kind='system_control_service' AND NEW.state::text='discarded') THEN
   CASE NEW.kind
    WHEN 'issue_cert' THEN
     IF NEW.state::text='cancelled' AND NEW.args->>'after_provisioning'='true' AND EXISTS(SELECT 1 FROM sites WHERE id=rid AND tls_status='failed' AND updated_at>=COALESCE(NEW.attempted_at,NEW.created_at)) THEN op_state:='failed'; END IF;

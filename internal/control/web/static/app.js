@@ -1122,7 +1122,10 @@
   }
 
   function submitServerAdminForm(form, submitter) {
-    if (form.getAttribute('aria-busy') === 'true') return;
+    if (form.isConnected === false || form.getAttribute('aria-busy') === 'true') return;
+    var origin = form.closest && form.closest("#main-content") || form;
+    var pageSignal = lifetime(origin);
+    function currentPage() { return !pageSignal.aborted && origin.isConnected !== false; }
     var isReauthentication = form.matches("[data-np-reauth-form]");
     var isService = form.matches("[data-np-service-form]");
     var status = formStatus(form, "[data-np-service-operation]");
@@ -1148,6 +1151,10 @@
         return payload;
       });
     }).then(function (payload) {
+      if (!currentPage()) {
+        if (isService) document.dispatchEvent(new CustomEvent("np:operations-refresh"));
+        return;
+      }
       var operationID = payload.operation_id || (payload.result && payload.result.operation_id);
       if (status) status.textContent = operationID ? "Service action queued. Follow progress in Tasks or the service row." : "Authentication refreshed for 10 minutes. Choose the service action to continue.";
       if (isReauthentication) {
@@ -1159,6 +1166,7 @@
         document.dispatchEvent(new CustomEvent("np:operations-refresh"));
       }
     }).catch(function (error) {
+      if (!currentPage()) return;
       if(tracker){tracker.reject(serviceID,[400,401,403,404,405,409,413,415,422,428,429].indexOf(error.status)!==-1);tracker.refresh();}
       if(isService && error.status===428){var authorization=document.querySelector(".np-service-auth-details");if(authorization){authorization.open=true;var password=authorization.querySelector('input[type="password"]');if(password)password.focus();}}
       if (status) {

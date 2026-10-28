@@ -51,3 +51,17 @@ test('pagination aborts on unmount and ignores stale success and failure even if
  const second=pager.run();context={identity:'C',panel:3};release.reject(Error('old scope failure'));assert.equal(await second,false);assert.deepEqual(errors,[]);
  const third=pager.run();release.resolve({notifications:[{id:3}]});assert.equal(await third,true);assert.equal(appended.length,1);assert.equal(appended[0][0],context);
 });
+
+test('closing a quick Task detail returns focus to Tasks even after its row was replaced',()=>{
+ const fs=require('node:fs'),vm=require('node:vm'),source=fs.readFileSync(__dirname+'/operations.js','utf8');
+ const {restoreNotificationFocus}=require('./notifications.js');
+ for(const origin of ['tasks','inbox']){
+  let focused;
+  const target=name=>({isConnected:true,getClientRects:()=>[{}],tabIndex:0,focus(){focused=name}});
+  const tasks=target('tasks'),inbox=target('inbox'),panel={hidden:origin!=='tasks'},dialog={open:false,classList:{toggle(){}}};
+  const context=vm.createContext({returnFocus:{isConnected:false},returnFocusToggle:'inbox',selectedDetail:{kind:origin==='tasks'?'tasks':'notifications'},notifications:{restoreNotificationFocus},ui:{dialogs:{open(){dialog.open=true}}},closeQuick(){panel.hidden=true},$:s=>s==='#np-op-tasks'?panel:s==='[data-np-op-toggle="tasks"]'?tasks:s==='[data-np-op-toggle="inbox"]'?inbox:{focus(){}},dialog});
+  for(const name of ['restoreDetailFocus','showDetail']){const start=source.indexOf(' function '+name+'('),end=source.indexOf('\n function ',start+1);vm.runInContext(source.slice(start,end),context)}
+  vm.runInContext('showDetail(dialog,returnFocus);restoreDetailFocus();',context);
+  assert.equal(focused,origin);
+ }
+});

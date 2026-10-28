@@ -106,3 +106,36 @@ test('inventory refresh preserves the form behind an open confirmation, includin
  dialogOpen=true;resolve({ok:true,json:async()=>({ok:true,inventory:{services:[]}})});
  assert.equal(await context.result,false,'a late inventory response must not rebuild action forms inside confirmation');
 });
+
+for(const outcome of ['authorized','reauth-required','accepted'])test('detached service forms cannot change the next page: '+outcome,async()=>{
+ const start=source.indexOf('  function submitServerAdminForm('),end=source.indexOf('\n  function ',start+5);
+ let resolve,reject,globalWrites=0,taskRefreshes=0;
+ const form={isConnected:true,matches:s=>s===(outcome==='authorized'?'[data-np-reauth-form]':'[data-np-service-form]'),getAttribute:()=>null};
+ const status={setAttribute(){},getAttribute:()=> 'status'};
+ class Fields extends Map{constructor(){super([['service_id','web'],['action','restart']])}}
+ const context=vm.createContext({form,FormData:Fields,URLSearchParams,CustomEvent:class{constructor(type){this.type=type}},formStatus:()=>status,getServiceTracker:()=>null,csrfToken:()=>'',setFormBusy(){},clearSensitiveInputs(){},document:{querySelector(){globalWrites++;return {querySelector(){return {focus(){globalWrites++}}},setAttribute(){globalWrites++}}},dispatchEvent(event){if(event.type==='np:operations-refresh')taskRefreshes++}},fetch:()=>new Promise((done,fail)=>{resolve=done;reject=fail})});
+ installLifecycle(context);
+ vm.runInContext(source.slice(start,end)+'\nsubmitServerAdminForm(form);',context);
+ form.isConnected=false;
+ if(outcome==='reauth-required'){const error=Error('reauth required');error.status=428;reject(error)}
+ else resolve({ok:true,json:async()=>({ok:true,...(outcome==='accepted'?{result:{operation_id:'op_accepted',task_id:41}}:{})})});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(globalWrites,0,'an old response reached the new page');
+ assert.equal(taskRefreshes,outcome==='accepted'?1:0,'accepted background work still refreshes Tasks');
+});
+
+test('an inventory row replacement on the same page retains an accepted task identity',async()=>{
+ const {createServiceTracker}=require('./static/service-controls.js');
+ let resolve,rendered;
+ const tracker=createServiceTracker({load:async()=>[],render:items=>rendered=items,isCurrent:()=>true});
+ const start=source.indexOf('  function submitServerAdminForm('),end=source.indexOf('\n  function ',start+5);
+ const page={isConnected:true},form={isConnected:true,closest:()=>page,matches:s=>s==='[data-np-service-form]',getAttribute:()=>null};
+ class Fields extends Map{constructor(){super([['service_id','web'],['action','restart']])}}
+ const context=vm.createContext({form,FormData:Fields,URLSearchParams,CustomEvent:class{},formStatus:()=>null,getServiceTracker:()=>tracker,csrfToken:()=>'',setFormBusy(){},clearSensitiveInputs(){},document:{dispatchEvent(){}},fetch:()=>new Promise(done=>resolve=done)});
+ installLifecycle(context);
+ vm.runInContext(source.slice(start,end)+'\nsubmitServerAdminForm(form);',context);
+ form.isConnected=false;
+ resolve({ok:true,json:async()=>({ok:true,result:{operation_id:'op_accepted',task_id:41}})});
+ await new Promise(r=>setImmediate(r));
+ assert.equal(rendered.get('web')?.operation_id,'op_accepted');assert.equal(rendered.get('web')?.task_id,41);
+});

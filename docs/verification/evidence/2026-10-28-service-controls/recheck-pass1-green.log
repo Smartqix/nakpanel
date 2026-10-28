@@ -1,0 +1,5 @@
+ok  	github.com/nakroteck/nakpanel/internal/control/operations	7.847s
+ok  	github.com/nakroteck/nakpanel/internal/control/serveradmin	0.127s
+ok  	github.com/nakroteck/nakpanel/internal/control/http	0.873s
+ok  	github.com/nakroteck/nakpanel/internal/agent/ops	21.774s
+ok  	github.com/nakroteck/nakpanel/migrations	0.739s

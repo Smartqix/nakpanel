@@ -1,0 +1,114 @@
+TAP version 13
+# Subtest: server forms serialize browser fields and preserve the selected action
+ok 1 - server forms serialize browser fields and preserve the selected action
+  ---
+  duration_ms: 2.894292
+  type: 'test'
+  ...
+# Subtest: service progress uses its visible notice rather than the collapsed authorization form
+ok 2 - service progress uses its visible notice rather than the collapsed authorization form
+  ---
+  duration_ms: 0.338042
+  type: 'test'
+  ...
+# Subtest: closing service menus keeps only the selected menu and restores its opener on Escape
+ok 3 - closing service menus keeps only the selected menu and restores its opener on Escape
+  ---
+  duration_ms: 0.281
+  type: 'test'
+  ...
+# Subtest: server administration ignores a second pending submission
+ok 4 - server administration ignores a second pending submission
+  ---
+  duration_ms: 0.563291
+  type: 'test'
+  ...
+# Subtest: operation polling stops when its view is removed
+ok 5 - operation polling stops when its view is removed
+  ---
+  duration_ms: 0.486541
+  type: 'test'
+  ...
+# Subtest: a long-running operation explains when automatic checking pauses
+ok 6 - a long-running operation explains when automatic checking pauses
+  ---
+  duration_ms: 3.132083
+  type: 'test'
+  ...
+# Subtest: successful reauthentication clears the stale service warning without replaying an action
+ok 7 - successful reauthentication clears the stale service warning without replaying an action
+  ---
+  duration_ms: 1.096667
+  type: 'test'
+  ...
+# Subtest: a server failure retains uncertainty until a successful status check
+ok 8 - a server failure retains uncertainty until a successful status check
+  ---
+  duration_ms: 1.133583
+  type: 'test'
+  ...
+# Subtest: inventory refresh preserves the form behind an open confirmation, including late responses
+ok 9 - inventory refresh preserves the form behind an open confirmation, including late responses
+  ---
+  duration_ms: 0.711208
+  type: 'test'
+  ...
+# Subtest: detached service forms cannot change the next page: authorized
+not ok 10 - detached service forms cannot change the next page: authorized
+  ---
+  duration_ms: 1.2225
+  type: 'test'
+  location: '/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/server_interaction_test.cjs:110:66'
+  failureType: 'testCodeFailure'
+  error: |-
+    an old response reached the new page
+
+    2 !== 0
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/server_interaction_test.cjs:123:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: detached service forms cannot change the next page: reauth-required
+not ok 11 - detached service forms cannot change the next page: reauth-required
+  ---
+  duration_ms: 0.873459
+  type: 'test'
+  location: '/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/server_interaction_test.cjs:110:66'
+  failureType: 'testCodeFailure'
+  error: |-
+    an old response reached the new page
+
+    2 !== 0
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 0
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/rickynkansah/.codex/worktrees/ubuntu-26-support/nakpanel/internal/control/web/server_interaction_test.cjs:123:9)
+    async Test.run (node:internal/test_runner/test:1054:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: detached service forms cannot change the next page: accepted
+ok 12 - detached service forms cannot change the next page: accepted
+  ---
+  duration_ms: 0.667667
+  type: 'test'
+  ...
+1..12
+# tests 12
+# suites 0
+# pass 10
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 48.197375

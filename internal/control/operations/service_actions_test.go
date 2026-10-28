@@ -15,7 +15,7 @@ func (serviceActionArgs) Kind() string { return "system_control_service" }
 
 func TestServiceTasksNameTheActionAndKeepIndependentFailures(t *testing.T) {
 	db := testDB(t)
-	if _, err := db.Exec(`CREATE TABLE server_operations(operation_id text PRIMARY KEY,status text);`); err != nil {
+	if _, err := db.Exec(`CREATE TABLE server_operations(operation_id text PRIMARY KEY,status text,category text DEFAULT 'services',target_type text DEFAULT 'server_service',result jsonb DEFAULT '{}',last_error text DEFAULT '',completed_at timestamptz,updated_at timestamptz DEFAULT now());`); err != nil {
 		t.Fatal(err)
 	}
 	q := recorderQueue(t, db)
