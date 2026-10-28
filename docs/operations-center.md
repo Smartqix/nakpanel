@@ -10,10 +10,38 @@ received after a hidden tab reconnects. Routine successful reconciliation stays
 quiet. Navigation retains the consumed cursor within the current user/resource
 scope; changing scope clears the old result surface.
 
-Opening a notification’s issue or task marks that notification read for you after
-its details load successfully. This never acknowledges or resolves the issue.
-Closing before details load leaves it unread. If saving the receipt fails, the
-details explain how to retry with Mark read; other viewers keep their own state.
+The bell opens a compact preview of at most five notifications. All/Unread in
+the preview is independent of the inbox search and pagination. View all
+notifications opens Activity's full inbox, which supports search over the safe
+published title, message and resource, date groups and Show more pagination.
+The unread badge caps its visual count at 99+ while retaining the exact count
+for assistive technology.
+After Show more, the loaded inbox window continues refreshing through the same
+poller. Pagination is cancelled and fenced by mount, identity and owning view so
+late results cannot populate a different scope.
+
+Opening a notification marks its personal receipt read only after authorized
+details load successfully. Linked issues/tasks retain their existing detail
+workflow; standalone notices open a read-only message dialog. This never
+acknowledges or resolves an issue. Closing before details load leaves it unread.
+Failed receipt changes stay visible with Retry; other viewers keep their own
+state. Archive hides your receipt from the inbox, not the issue, task or hosted
+resource. Mark all read refreshes the authoritative count so a new concurrent
+notification is not incorrectly marked read in the interface.
+
+Notification GET requests recheck current role, ownership and optional resource
+scope. They create no receipts. Archived messages remain readable only while
+currently authorized. Unknown notification kinds receive a safe fallback
+summary; neither detail nor search exposes their raw stored message. No new
+notification producers, email rules, retention or schema are added by the
+compact interface.
+
+Rows retain their DOM identity, scroll position and focused action while the
+single Operations poller refreshes. Dialogs support Escape, focus trapping and
+restoration to a visible opener or the bell. Menus close before their preview.
+Mobile notification actions have 44px minimum targets, and domain pages retain
+topbar notification access. Connection loss retains last-known rows; expired
+sessions have distinct sign-in guidance.
 
 The first automatic recovery action is backup retry. Its preflight checks current
 ownership, permissions, quota, conflicting work, agent reachability, Ubuntu 26.04
@@ -107,3 +135,9 @@ environment variables described above:
 ```sh
 node internal/control/web/operations_ux_acceptance.cjs
 ```
+
+The compact-notification implementation was exercised in two manual local
+browser passes using the approved computer-use browser, not by running the
+Playwright script externally. See the
+[28 October local evidence](verification/2026-10-28-compact-notifications.md)
+for exact coverage, screenshots and the native-zoom limitation.

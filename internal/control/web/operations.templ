@@ -10,7 +10,7 @@ templ operationsTop(view WorkspaceView) {
   </div>
   <div class="np-op-popover-wrap"><button class="np-secondary-button" type="button" data-np-op-toggle="inbox" aria-controls="np-op-inbox" aria-expanded="false">
 @icon("bell")<span class="np-sr-only">Notifications</span><span data-np-op-count="unread" class="np-nav-badge">{ formatJobID(int64(view.Operations.Counts.Unread)) }</span></button>
-   <section id="np-op-inbox" class="np-op-popover np-panel" hidden tabindex="-1" aria-label="Notifications"><h2>Notifications</h2><p>Reading a notification does not resolve its issue.</p><div data-np-op-quick-inbox><p>Open your inbox to read notifications.</p></div><a href={ templ.SafeURL(operationsPath(view,"inbox")) }>Open inbox</a></section>
+   @notificationPreview(view,view.OperationsInbox)
   </div>
   <span class="np-sr-only" data-np-op-shell-status role="status"></span>
   <section class="np-panel np-op-results" data-np-op-results hidden aria-label="Task results"><div class="np-op-dialog-head"><h2>Task results</h2><button type="button" class="np-secondary-button" data-np-op-dismiss-results>Dismiss results</button></div><div data-np-op-result-list role="log" aria-live="polite" aria-relevant="additions"></div></section>
@@ -44,6 +44,9 @@ templ operationsCenter(user auth.SessionUser, view WorkspaceView) {
   </p>
   if view.OperationsTab=="preferences" {
 @operationsPreferences(user)} else {
+   if view.OperationsTab=="inbox" {
+    @notificationInbox(view,view.Operations)
+   } else {
    <form class="np-op-filters" method="get" action={ templ.SafeURL(workspacePath(view,"/activity")) } data-np-op-filters><input type="hidden" name="tab" value={ view.OperationsTab }/>
 if view.SelectedSubscription>0 {
 <input type="hidden" name="subscription_id" value={ formatJobID(view.SelectedSubscription) }/>
@@ -60,12 +63,10 @@ if view.OperationsTab=="issues" {
    if view.OperationsTab=="issues" {
 <p class="np-muted">Acknowledging an issue does not resolve it. Recovery requires a current independent check.</p>
 }
-   if view.OperationsTab=="inbox" {
-<div class="np-op-toolbar"><p>Read status is personal. Issues keep their own status.</p><button type="button" class="np-secondary-button" data-np-op-read-all>Mark all read</button></div>
-}
    <div class="np-panel np-op-list" data-np-op-rows>
 @operationsRows(view.Operations,view.OperationsTab)
 </div>
+   }
    <button type="button" class="np-secondary-button" data-np-op-more hidden?={ view.Operations.NextBefore==0 }>Show more</button>
   }
  </section>
@@ -90,20 +91,7 @@ templ operationsRows(page operations.Page, tab string) {
 }
  case "inbox":
   for _, n:=range page.Notifications {
-<article class="np-op-row" data-np-op-row-id={ formatJobID(n.ID) }><div><strong>{ n.Title }</strong><p>{ n.Summary }</p><small>
-if n.ReadAt==nil {
-Unread
-} else {
-Read
-}</small></div><div class="np-op-actions">
-if n.IssueID>0 {
-<button type="button" class="np-secondary-button" data-np-op-detail="issues" data-np-op-id={ formatJobID(n.IssueID) } data-np-op-open-notification={ formatJobID(n.ID) }>View issue</button>
-} else if n.OperationID>0 {
-<button type="button" class="np-secondary-button" data-np-op-detail="tasks" data-np-op-id={ formatJobID(n.OperationID) } data-np-op-open-notification={ formatJobID(n.ID) }>View task</button>
-}
-if n.ReadAt==nil {
-<button type="button" class="np-secondary-button" data-np-op-read={ formatJobID(n.ID) }>Mark read</button>
-}<button type="button" class="np-secondary-button" data-np-op-archive={ formatJobID(n.ID) }>Archive</button></div><time>{ formatRelativeLabel(n.CreatedAt) }</time></article>
+@notificationRow(n,false,notificationNow(page))
 }
   if len(page.Notifications)==0 {
 <p class="np-empty">Your inbox is clear.</p>
@@ -127,5 +115,5 @@ templ operationsPreferences(user auth.SessionUser) {
 }
 
 templ operationsDetailDialog() {
- <dialog id="np-operation-detail" class="np-dialog np-op-dialog" aria-labelledby="np-op-detail-title"><div class="np-op-dialog-head"><h2 id="np-op-detail-title">Activity details</h2><button type="button" class="np-secondary-button" data-np-op-close aria-label="Close activity details">Close</button></div><div data-np-op-detail-body></div><p data-np-op-detail-status role="status" tabindex="-1"></p></dialog>
+ <dialog id="np-operation-detail" class="np-dialog np-op-dialog" data-np-dialog aria-labelledby="np-op-detail-title"><div class="np-op-dialog-head"><h2 id="np-op-detail-title">Activity details</h2><button type="button" class="np-notification-icon-button" data-np-op-close aria-label="Close activity details">@icon("x")</button></div><div data-np-op-detail-body></div><p data-np-op-detail-status role="status" tabindex="-1"></p></dialog>
 }
