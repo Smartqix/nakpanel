@@ -36,6 +36,14 @@ python3(){
  echo one-transport >>"$CALL_LOG"
  [[ "$MODE" != 'helper failure' ]]
 }
+multipass_exec_short(){
+ [[ "$1" == nakpanel-owned-dr ]] || return 95
+ case "$*" in
+   *' systemctl show '*|*' ss -ltn '*|*' psql -X '*) ;;
+   *) return 96;;
+ esac
+ echo diagnostic >>"$CALL_LOG"
+}
 ` + function + `imap_canary nakpanel-owned-dr assert`
 			cmd := exec.Command("bash", "-c", body)
 			cmd.Env = append(os.Environ(), "CALL_LOG="+log, "MODE="+mode)
@@ -47,6 +55,9 @@ python3(){
 			want := "identity\n"
 			if mode != "identity failure" {
 				want += "one-transport\n"
+			}
+			if mode == "helper failure" {
+				want += "diagnostic\ndiagnostic\ndiagnostic\n"
 			}
 			if string(calls) != want {
 				t.Fatalf("ownership/transport sequence: %q, want %q", calls, want)
