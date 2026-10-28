@@ -50,3 +50,21 @@ func TestWebmailReadinessExplainsBlockedAccessAndOffersSetup(t *testing.T) {
 		})
 	}
 }
+
+func TestWebmailReadinessPreservesMailAvailabilityWhenWebsiteIsSuspended(t *testing.T) {
+	hostedSite := dashboard.Site{ID: 1, SubscriptionID: 2, Domain: "example.test", Status: "suspended"}
+	sub := types.SubscriptionSummary{ID: 2, Status: "active", MaxMailboxes: 5}
+	sub.ServicePresets.Mail.WebmailEnabled = true
+	domain := dashboard.MailDomain{ID: 3, SiteID: 1, SubscriptionID: 2, Enabled: true, EffectiveEnabled: true, Status: "in_sync"}
+	data := dashboard.Data{SubscriptionServices: dashboard.SubscriptionServicesData{WebmailHosts: []dashboard.WebmailHost{{SiteID: 1, SubscriptionID: 2, Hostname: "webmail.example.test", Status: "active"}}}}
+	state := mailWebmailReadiness(hostedSite, sub, domain, data)
+	if state.Label != "Webmail unavailable" || !strings.Contains(state.Message, "mail app") {
+		t.Fatalf("website-only suspension must distinguish webmail access from available mail: %+v", state)
+	}
+	if mailDomainState(domain) != "active" {
+		t.Fatal("website-only suspension must preserve effective mail availability")
+	}
+	if mailWebmailURL(hostedSite, sub, domain, data) != "" {
+		t.Fatal("inactive website must retain the existing webmail access guard")
+	}
+}

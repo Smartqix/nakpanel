@@ -236,11 +236,14 @@ func mailWebmailReadiness(hostedSite dashboard.Site, subscription types.Subscrip
 	if mailWebmailURL(hostedSite, subscription, domain, data) != "" {
 		return mailWebmailState{Label: "Ready"}
 	}
-	if !domain.Enabled || !domain.EffectiveEnabled || domain.Status != "in_sync" || hostedSite.Status != "active" || subscription.Status != "active" || !subscriptionMailEnabled(subscription, data.SubscriptionServices) {
+	if !domain.Enabled || !domain.EffectiveEnabled || domain.Status != "in_sync" || subscription.Status != "active" || !subscriptionMailEnabled(subscription, data.SubscriptionServices) {
 		return mailWebmailState{"Mail unavailable", "Activate this domain's mail service and account before opening webmail."}
 	}
 	if !subscriptionWebmailEnabled(subscription, data.SubscriptionServices) {
 		return mailWebmailState{"Disabled by policy", "An administrator must enable webmail in this subscription's service plan or policy."}
+	}
+	if hostedSite.Status != "active" {
+		return mailWebmailState{"Webmail unavailable", "Webmail access is unavailable while this website is inactive. The domain's active mail service can still be used in a mail app."}
 	}
 	host, found := webmailForSite(data.SubscriptionServices.WebmailHosts, hostedSite.ID)
 	if !found || host.SubscriptionID != subscription.ID {
