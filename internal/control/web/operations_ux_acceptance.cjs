@@ -17,6 +17,34 @@ if(!['localhost','127.0.0.1','[::1]'].includes(base.hostname))throw Error('Loopb
   return posts;
  }
  try {
+  await run('preview detail Escape restores the bell instead of a hidden row',async page=>{
+   await fetch(new URL('/__reset?mode=default',base),{method:'POST'});
+   await page.goto(new URL('/activity?tab=inbox',base).href);
+   await page.getByRole('button',{name:'Notifications, 3 unread',exact:true}).click();
+   await page.locator('#np-op-inbox [data-np-notification-open="18"]').click();
+   await page.locator('#np-operation-detail').getByRole('button',{name:'Done',exact:true}).waitFor();
+   await page.keyboard.press('Escape');
+   assert.equal(await page.evaluate(()=>document.activeElement.matches('[data-np-op-toggle="inbox"]')),true);
+  });
+  await run('cancelled inbox navigation preserves draft and reachable focus',async page=>{
+   await page.goto(new URL('/service-plans/5',base).href);
+   await page.getByRole('textbox',{name:'Plan name',exact:true}).fill('Keep this draft');
+   await page.getByRole('button',{name:/Notifications/}).click();
+   await page.getByRole('link',{name:'View all notifications',exact:true}).click();
+   await page.locator('#np-confirmation-dialog').getByRole('button',{name:'Cancel',exact:true}).click();
+   assert.equal(await page.getByRole('textbox',{name:'Plan name',exact:true}).inputValue(),'Keep this draft');
+   assert.equal(await page.locator('#np-op-inbox').isVisible(),true);
+   assert.equal(await page.evaluate(()=>document.activeElement.textContent.trim()),'View all notifications');
+  });
+  await run('standalone read error recovers without stale feedback or lost dialog focus',async page=>{
+   await fetch(new URL('/__reset?mode=error',base),{method:'POST'});
+   await page.goto(new URL('/activity?tab=inbox',base).href);
+   await page.locator('[data-np-notification-density="full"] [data-np-notification-open="18"]').click();
+   const dialog=page.locator('#np-operation-detail');await dialog.getByRole('button',{name:'Retry',exact:true}).waitFor();
+   await fetch(new URL('/__reset?mode=default',base),{method:'POST'});await dialog.getByRole('button',{name:'Retry',exact:true}).click();
+   await page.waitForTimeout(150);assert.equal(await dialog.locator('[data-np-op-detail-status]').isVisible(),false);
+   assert.equal(await page.evaluate(()=>document.activeElement.hasAttribute('data-np-op-close')),true);
+  });
   await run('SSR notification opening marks only its personal receipt read',async page=>{
    const posts=await fixture(page);await page.goto(new URL('/activity?tab=inbox',base).href);
    await page.locator('[data-np-notification-open="17"]').filter({visible:true}).first().click();await page.getByRole('button',{name:'Acknowledge',exact:true}).waitFor();

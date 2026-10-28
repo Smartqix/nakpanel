@@ -25,7 +25,10 @@ templ notificationPreview(view WorkspaceView, page operations.Page) {
    }
   </div>
   <div class="np-notification-error" data-np-notification-error role="alert" hidden></div>
-  <footer class="np-notification-footer"><a href={ templ.SafeURL(operationsPath(view,"inbox")) }>View all notifications @icon("chevron-right")</a></footer>
+  <footer class="np-notification-footer"><a href={ templ.SafeURL(operationsPath(view,"inbox")) }>
+   View all notifications
+   @icon("chevron-right")
+  </a></footer>
  </section>
 }
 

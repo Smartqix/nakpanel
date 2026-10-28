@@ -1,6 +1,12 @@
 (function () {
   'use strict';
 
+  function restoreNotificationFocus(trigger, fallback) {
+    const visible=node=>node?.isConnected&&!node.disabled&&node.getClientRects().length>0;
+    const target=visible(trigger)?trigger:visible(fallback)?fallback:null;
+    if(target){if(target.tabIndex<0)target.setAttribute('tabindex','-1');target.focus();}
+  }
+
   function notificationTime(value, now = Date.now(), locale) {
     const date = new Date(value);
     if (!value || !Number.isFinite(date.getTime())) return {label:'Unknown time', datetime:'', title:'Unknown time'};
@@ -93,6 +99,7 @@
       entry.row.className='np-notification-row'+(unread?' np-notification-unread':'');
       entry.title.textContent=item.title;entry.summary.textContent=item.summary;entry.target.textContent=item.target||'Workspace';
       entry.message.setAttribute('aria-label',(unread?'Unread: ':'')+item.title+'. '+(item.target||'Workspace')+'. '+stamp.label);
+      const announcement=entry.message.querySelector('.np-sr-only');if(announcement)announcement.hidden=!unread;
       entry.time.textContent=stamp.label;entry.time.dateTime=stamp.datetime;entry.time.title=stamp.title;
       const severity=['warning','critical'].includes(item.severity)?item.severity:'info';entry.badge.className='np-notification-icon np-notification-icon-'+severity;
       entry.badge.replaceChildren(icon(['login_new_device','login_failed_burst'].includes(item.kind)?'shield':severity!=='info'?'triangle-alert':'bell'));
@@ -146,7 +153,7 @@
     };
   }
 
-  const api={notificationTime,notificationPopoverPosition,notificationBadge,notificationPreviewQuery,createNotificationView,createNotificationActions,loadNotificationDetail};
+  const api={notificationTime,notificationPopoverPosition,notificationBadge,notificationPreviewQuery,restoreNotificationFocus,createNotificationView,createNotificationActions,loadNotificationDetail};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   if(typeof window!=='undefined')window.NakpanelNotifications=api;
 })();

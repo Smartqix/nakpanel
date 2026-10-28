@@ -45,6 +45,9 @@ func TestOperationsBrowserPreview(t *testing.T) {
 		if fixtureMode == "single" {
 			items = items[:1]
 		}
+		if fixtureMode == "five" {
+			items = items[:5]
+		}
 		if fixtureMode == "empty" {
 			items = nil
 		}
@@ -116,6 +119,10 @@ func TestOperationsBrowserPreview(t *testing.T) {
 	var once sync.Once
 	mux := http.NewServeMux()
 	mux.Handle("/assets/", http.StripPrefix("/assets", StaticHandler()))
+	mux.HandleFunc("GET /plans/5/sync-status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"synchronization": types.PlanSynchronization{PlanID: 5, Revision: 1, State: "in_sync"}})
+	})
 	mux.HandleFunc("POST /__stop", func(w http.ResponseWriter, r *http.Request) { once.Do(func() { close(stop) }); w.WriteHeader(204) })
 	mux.HandleFunc("POST /__reset", func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -308,19 +315,26 @@ func TestOperationsBrowserPreview(t *testing.T) {
 			view.PlanTab = "overview"
 		}
 		if strings.HasPrefix(r.URL.Path, "/sites/51") {
-			data.Sites = []dashboard.Site{{ID: 51, Domain: "studio.example", Status: "active", PHPVersion: "8.4"}}
+			data.Sites = []dashboard.Site{{ID: 51, SubscriptionID: 42, Domain: "studio.example", Status: "active", PHPVersion: "8.4"}}
+			data.Subscriptions = []types.SubscriptionSummary{{ID: 42, PrimarySiteID: 51, CustomerID: 10, CustomerName: "Studio", SubscriptionName: "Studio", PlanName: "Business", Status: "active"}}
 			view.Route = "site-detail"
 			view.DetailID = 51
 			view.Tab = r.URL.Query().Get("tab")
 		}
+		actor := auth.SessionUser{ID: 1, Role: auth.RoleAdmin, Email: "admin@panel.example"}
+		if role := auth.Role(r.URL.Query().Get("fixture_role")); role == auth.RoleClient || role == auth.RoleReseller {
+			actor.Role = role
+			actor.ID = 11
+			actor.Email = "owner@studio.example"
+		}
 		w.Header().Set("Content-Type", "text/html")
 		if r.Header.Get("X-Nakpanel-Fragment") == "main" {
-			if err := RoutedFragment("Activity · Nakpanel", auth.SessionUser{ID: 1, Role: auth.RoleAdmin, Email: "admin@panel.example"}, data, DashboardActions{}, view).Render(r.Context(), w); err != nil {
+			if err := RoutedFragment("Activity · Nakpanel", actor, data, DashboardActions{}, view).Render(r.Context(), w); err != nil {
 				t.Error(err)
 			}
 			return
 		}
-		if err := RoutedDashboardPage("Activity · Nakpanel", auth.SessionUser{ID: 1, Role: auth.RoleAdmin, Email: "admin@panel.example"}, data, DashboardActions{}, view).Render(r.Context(), w); err != nil {
+		if err := RoutedDashboardPage("Activity · Nakpanel", actor, data, DashboardActions{}, view).Render(r.Context(), w); err != nil {
 			t.Error(err)
 		}
 	})
@@ -329,6 +343,6 @@ func TestOperationsBrowserPreview(t *testing.T) {
 	fmt.Println("OPERATIONS_PREVIEW_URL=" + server.URL)
 	select {
 	case <-stop:
-	case <-time.After(15 * time.Minute):
+	case <-time.After(time.Hour):
 	}
 }

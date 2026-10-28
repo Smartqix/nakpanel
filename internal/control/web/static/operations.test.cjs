@@ -43,3 +43,8 @@ test('settings destinations preserve support context and reject external URLs',(
  assert.equal(settingsDestination('/sites/51?tab=mail','/activity'),'/sites/51?tab=mail');
  for(const value of ['https://evil.example/','//evil.example/','/\\evil.example/','javascript:alert(1)','//',''])assert.equal(settingsDestination(value,'/activity'),'');
 });
+
+test('poller preserves authentication failure identity for visible sign-in guidance',async()=>{
+ const x=setup();let status;x.env.load=async()=>{throw Object.assign(Error('Session expired'),{status:401})};x.env.error=(failed,cause)=>{if(failed)status=cause?.status};
+ x.poller.mount('all',0);await new Promise(r=>setImmediate(r));assert.equal(status,401);assert.equal(x.rendered.length,0);x.poller.stop();
+});

@@ -2,6 +2,15 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {notificationTime,notificationPopoverPosition,notificationBadge,notificationPreviewQuery,createNotificationView}=require('./notifications.js');
 
+test('closing details restores a visible opener or the bell when preview is hidden',()=>{
+ const {restoreNotificationFocus}=require('./notifications.js');let focused='';
+ const target=(name,visible)=>({isConnected:true,disabled:false,tabIndex:0,getClientRects:()=>visible?[{}]:[],focus:()=>focused=name});
+ const bell=target('bell',true),row=target('row',false);
+ restoreNotificationFocus(row,bell);assert.equal(focused,'bell');
+ row.getClientRects=()=>[{}];restoreNotificationFocus(row,bell);assert.equal(focused,'row');
+ row.isConnected=false;restoreNotificationFocus(row,bell);assert.equal(focused,'bell');
+});
+
 test('notification timestamps stay compact and exact time includes a zone',()=>{
  const now=Date.parse('2026-10-28T14:40:00Z');
  for(const [value,label] of [['bad','Unknown time'],['2026-10-28T15:00:00Z','Just now'],['2026-10-28T14:39:30Z','Just now'],['2026-10-28T14:39:00Z','1 min ago'],['2026-10-28T13:40:00Z','1 hr ago'],['2026-10-27T15:40:00Z','23 hr ago']])assert.equal(notificationTime(value,now,'en-GB').label,label);
@@ -55,4 +64,10 @@ test('clearing a retried error returns focus to the notification view',()=>{
  const root=tree(),error=new Element('div',root.ownerDocument),view=createNotificationView(root,{identity:'one',density:'compact',errorRoot:error});
  view.render([notice(1)],{identity:'one'});view.setError('Offline',()=>{});error.querySelector('button').focus();view.setError('');
  assert.equal(error.hidden,true);assert.equal(root.ownerDocument.activeElement,root.querySelector('.np-notification-message'));
+});
+
+test('read updates remove the stale server-rendered unread announcement',()=>{
+ const root=tree(),view=createNotificationView(root,{identity:'one',density:'compact'});view.render([notice(1)],{identity:'one'});
+ const label=new Element('span',root.ownerDocument);label.className='np-sr-only';label.textContent='Unread';root.querySelector('.np-notification-message').append(label);
+ view.render([{...notice(1),read_at:'2026-10-28T14:40:00Z'}],{identity:'one',force:true});assert.equal(label.hidden,true);
 });

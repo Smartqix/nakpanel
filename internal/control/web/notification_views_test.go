@@ -59,6 +59,9 @@ func TestNotificationPreviewAndViews(t *testing.T) {
 					}
 				}
 			}
+			if strings.Contains(html, "@icon(") {
+				t.Fatal("templ call leaked as visible text")
+			}
 			if strings.Contains(html, "<script>bad") || strings.Contains(html, ">Mark read</button>") || strings.Contains(html, `class="np-op-row"`) {
 				t.Fatal("unsafe or wide legacy row", html)
 			}
