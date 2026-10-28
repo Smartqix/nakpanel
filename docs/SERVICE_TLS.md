@@ -52,6 +52,27 @@ independent. Validate renewal with `certbot renew --dry-run`.
 
 ## Hosting Access
 
+### Domain webmail setup
+
+Mail service and webmail are separate settings, as in
+[Plesk's webmail setup](https://support.plesk.com/hc/en-us/articles/12377287661719-How-to-install-and-manage-webmail-in-Plesk).
+Roundcube is installed by Nakpanel, but an administrator must allow webmail in
+the subscription's service plan or policy. Enabling a mail domain or creating a
+mailbox does not configure its webmail host.
+
+Before selecting **Enable webmail** in the domain's Mail settings, publish
+`webmail.<domain>` to this server and obtain a trusted certificate for that exact
+hostname. Configure the webmail TLS settings below and restart `nakpanel-agent`.
+Then enable webmail for the domain. Use the full mailbox address and its mailbox
+password to sign in; the panel password does not authenticate to Roundcube.
+
+For Certbot's nginx authenticator, retain an enabled renewal timer and a
+deployment hook that runs `nginx -t` before reloading nginx. Test renewal with
+`certbot renew --dry-run --cert-name <lineage>`. Verify the public HTTPS login
+page and HTTP-to-HTTPS redirect separately: a provisioning job completing is
+not proof that public DNS and HTTPS are ready. Preserve existing DNS records,
+mailboxes and mailbox passwords during setup.
+
 Configure `/etc/nakpanel/agent.env` with:
 
 ```ini
