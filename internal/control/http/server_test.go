@@ -242,6 +242,8 @@ func (m *fakeQuotaManager) PreviewPlan(_ context.Context, owner auth.SessionUser
 	return types.PlanPreview{Allowed: true}, m.err
 }
 
+func (m *fakeQuotaManager) DeletePlan(context.Context, auth.SessionUser, int64) error { return nil }
+
 func (m *fakeQuotaManager) SetPlanActive(ctx context.Context, owner auth.SessionUser, planID int64, active bool) error {
 	m.owner = owner
 	m.planID = planID

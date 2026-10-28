@@ -83,6 +83,7 @@ type AdminStore interface {
 	ListPlans(ctx context.Context) ([]Plan, error)
 	UpsertPlan(ctx context.Context, plan Plan) (Plan, error)
 	SetPlanActive(ctx context.Context, planID int64, active bool) error
+	DeletePlan(ctx context.Context, planID, resellerID int64, unrestricted bool) error
 	AssignSubscription(ctx context.Context, customerUserID int64, planID int64) (SubscriptionAssignment, error)
 	CreateCustomer(ctx context.Context, req types.CreateCustomerReq) (types.Customer, error)
 	EnableCustomerLogin(ctx context.Context, customerID int64, email string, password string) (types.Customer, error)

@@ -3378,17 +3378,37 @@ templ routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView
 		}
 }
 
+templ planDeleteButton(plan controlquota.Plan) {
+	<button type="submit" class="np-danger-button" form={ "plan-delete-" + formatPlanID(plan.ID) } aria-label={ "Delete " + plan.Name } data-np-confirm={ "Delete “" + plan.Name + "”? This permanently removes the plan and its revision history." }>@icon("trash") Delete</button>
+}
+
+templ planDeleteForm(plan controlquota.Plan, view WorkspaceView) {
+	<form id={ "plan-delete-" + formatPlanID(plan.ID) } method="post" action={ templ.SafeURL("/plans/" + formatPlanID(plan.ID) + "/delete") }>@csrfInput(view)</form>
+}
+
 templ hostingPlanTable(data dashboard.Data, view WorkspaceView) {
 	<section class="np-panel np-plan-list-panel"><form method="post" action="/plans/bulk-status" data-np-bulk-form>@csrfInput(view)
 		<div class="np-bulk-bar"><label class="np-check"><input type="checkbox" data-np-bulk-all/>Select all</label><span data-np-bulk-count>0 selected</span><div><button type="submit" name="lifecycle_status" value="active" class="np-secondary-button">Activate</button><button type="submit" name="lifecycle_status" value="retired" class="np-secondary-button">Retire</button></div></div>
-		<div class="np-table-wrap"><table class="np-table np-plan-table"><thead><tr><th><span class="np-sr-only">Select</span></th><th>Plan name</th><th>Provider</th><th>Subscriptions</th><th>Resources</th><th>Price</th><th>Sync</th><th>Status</th></tr></thead><tbody>
+		<div class="np-table-wrap"><table class="np-table np-plan-table"><thead><tr><th><span class="np-sr-only">Select</span></th><th>Plan name</th><th>Provider</th><th>Subscriptions</th><th>Resources</th><th>Price</th><th>Sync</th><th>Status</th><th>Actions</th></tr></thead><tbody>
 			for _, plan := range data.Plans {
 				if planMatchesFilter(plan, view) {
-				<tr><td data-label="Select" class="np-select-cell"><input type="checkbox" name="plan_id" value={ formatPlanID(plan.ID) } data-np-bulk-check aria-label={ "Select " + plan.Name }/></td><td data-label="Plan"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)) }><strong>{ plan.Name }</strong><small>Revision { formatPlanID(int64(plan.Revision)) } · { planReadinessLabel(plan) }</small></a></td><td data-label="Provider">{ planProvider(plan, data.Resellers) }</td><td data-label="Subscriptions">{ formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))) }</td><td data-label="Resources"><span class="np-resource-summary"><strong>{ formatPlanLimitMB(plan.DiskMB) }</strong><small>{ formatPlanLimit(plan.MaxSites) } sites · { formatPlanLimit(plan.MaxDatabases) } databases · { formatPlanLimitMB(plan.BandwidthMB) } traffic</small></span></td><td data-label="Price">{ formatPlanPrice(plan.PriceCents) }</td><td data-label="Sync">@statusPill(planSyncLabel(plan.ID, data.Subscriptions))</td><td data-label="Status">@statusPill(planLifecycleStatus(plan))</td></tr>
+				<tr><td data-label="Select" class="np-select-cell"><input type="checkbox" name="plan_id" value={ formatPlanID(plan.ID) } data-np-bulk-check aria-label={ "Select " + plan.Name }/></td><td data-label="Plan"><a class="np-plan-name" href={ templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)) }><strong>{ plan.Name }</strong><small>Revision { formatPlanID(int64(plan.Revision)) } · { planReadinessLabel(plan) }</small></a></td><td data-label="Provider">{ planProvider(plan, data.Resellers) }</td><td data-label="Subscriptions">{ formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))) }</td><td data-label="Resources"><span class="np-resource-summary"><strong>{ formatPlanLimitMB(plan.DiskMB) }</strong><small>{ formatPlanLimit(plan.MaxSites) } sites · { formatPlanLimit(plan.MaxDatabases) } databases · { formatPlanLimitMB(plan.BandwidthMB) } traffic</small></span></td><td data-label="Price">{ formatPlanPrice(plan.PriceCents) }</td><td data-label="Sync">@statusPill(planSyncLabel(plan.ID, data.Subscriptions))</td><td data-label="Status">@statusPill(planLifecycleStatus(plan))</td><td data-label="Actions">
+					if planSubscriptionCount(plan.ID, data.Subscriptions) == 0 {
+						@planDeleteButton(plan)
+					} else {
+						<span title="Move or remove all subscriptions before deleting this plan.">Has subscriptions</span>
+					}
+				</td></tr>
 				}
 			}
 		</tbody></table></div>
-	</form></section>
+	</form>
+		for _, plan := range data.Plans {
+			if planMatchesFilter(plan, view) && planSubscriptionCount(plan.ID, data.Subscriptions) == 0 {
+				@planDeleteForm(plan, view)
+			}
+		}
+	</section>
 }
 
 templ addonPlanTable(data dashboard.Data, view WorkspaceView) {
@@ -3537,8 +3557,16 @@ templ routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspa
 		<div class="np-plan-head-actions"><a class="np-secondary-button" href={ templ.SafeURL(planListBackURL(addon)) }>Back to plans</a>
 		if !addon && plan.ID > 0 {
 			<a class="np-secondary-button" href={ templ.SafeURL("/service-plans/new?clone_from=" + formatPlanID(plan.ID)) }>@icon("layers") Clone</a>
+			if planSubscriptionCount(plan.ID, data.Subscriptions) == 0 {
+				@planDeleteButton(plan)
+			} else {
+				<span title="Move or remove all subscriptions before deleting this plan.">Has subscriptions</span>
+			}
 		}
 		</div>
+	}
+	if !addon && plan.ID > 0 && planSubscriptionCount(plan.ID, data.Subscriptions) == 0 {
+		@planDeleteForm(plan, view)
 	}
 	if plan.ID > 0 {
 		<section class="np-plan-summary"><div><span>Lifecycle</span>@statusPill(planLifecycleStatus(plan))</div><div><span>Readiness</span><strong data-np-plan-readiness>{ planReadinessLabel(plan) }</strong></div><div><span>Revision</span><strong>{ formatPlanID(int64(plan.Revision)) }</strong></div><div><span>Subscriptions</span><strong>{ formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))) }</strong></div><div><span>Synchronization</span><strong>{ planSyncLabel(plan.ID, data.Subscriptions) }</strong></div><div><span>Provider</span><strong>{ planProvider(plan, data.Resellers) }</strong></div></section>

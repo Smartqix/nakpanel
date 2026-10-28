@@ -32,8 +32,8 @@ test('network uncertainty never automatically replays a mutation',async()=>{
  assert.equal(calls,1);
 });
 test('busy forms preserve controls that were already disabled by policy',()=>{
- const controls=[{disabled:false},{disabled:true}];
- const form={querySelectorAll:()=>controls,setAttribute:()=>{}};
+ const controls=[{disabled:false,matches:()=>true},{disabled:true,matches:()=>true}];
+ const form={elements:controls,setAttribute:()=>{}};
  const client=createClient({baseURL:'https://panel.test'});
  client.setBusy(form,true); client.setBusy(form,true);
  assert.deepEqual(controls.map(x=>x.disabled),[true,true]);
@@ -82,4 +82,17 @@ test('an outside login redirect cannot be classified as a confirmed rejection',a
  await assert.rejects(()=>client.fetch('/sites',{method:'POST'}),error=>{
   assert.equal(error.status,undefined);assert.match(error.message,/outside this panel/);return true;
  });
+});
+
+test('busy state follows form ownership for external submit buttons',()=>{
+ const external={disabled:false,matches:()=>true},alreadyDisabled={disabled:true,matches:()=>true},foreignChild={disabled:false,matches:()=>true},field={disabled:false,matches:()=>false};
+ const form={elements:[external,alreadyDisabled,field],querySelectorAll:()=>[foreignChild],setAttribute(){}};
+ const client=createClient({baseURL:'https://panel.test'});
+ client.setBusy(form,true);
+ assert.equal(external.disabled,true,'an external Delete button must be disabled while its form submits');
+ assert.equal(foreignChild.disabled,false,'submitting bulk actions must not change a row button owned by another form');
+ assert.equal(field.disabled,false);
+ client.setBusy(form,false);
+ assert.equal(external.disabled,false);
+ assert.equal(alreadyDisabled.disabled,true);
 });
