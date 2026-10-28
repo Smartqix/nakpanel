@@ -200,7 +200,7 @@ func RoutedDashboardPage(title string, user auth.SessionUser, data dashboard.Dat
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<dialog class=\"np-dialog np-site-removal-dialog\" id=\"np-site-removal-dialog\" data-np-dialog></dialog> <dialog class=\"np-dialog np-backup-dialog\" id=\"np-backup-removal-dialog\" aria-labelledby=\"np-backup-removal-title\" data-np-dialog></dialog> <dialog class=\"np-dialog np-mail-dialog np-mail-connect-dialog\" id=\"np-mail-connect-dialog\" aria-labelledby=\"np-mail-connect-title\" data-np-dialog></dialog><script defer src=\"/assets/interaction.js\"></script><script defer src=\"/assets/navigation.js\"></script><script defer src=\"/assets/operations.js\"></script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "<dialog class=\"np-dialog np-site-removal-dialog\" id=\"np-site-removal-dialog\" data-np-dialog></dialog> <dialog class=\"np-dialog np-backup-dialog\" id=\"np-backup-removal-dialog\" aria-labelledby=\"np-backup-removal-title\" data-np-dialog></dialog> <dialog class=\"np-dialog np-mail-dialog np-mail-connect-dialog\" id=\"np-mail-connect-dialog\" aria-labelledby=\"np-mail-connect-title\" data-np-dialog></dialog><script defer src=\"/assets/interaction.js\"></script><script defer src=\"/assets/navigation.js\"></script><script defer src=\"/assets/notifications.js\"></script><script defer src=\"/assets/operations.js\"></script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -284,7 +284,7 @@ func RoutedFragment(title string, user auth.SessionUser, data dashboard.Data, ac
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 96, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 97, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -297,7 +297,7 @@ func RoutedFragment(title string, user auth.SessionUser, data dashboard.Data, ac
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(domainWorkspaceClass(view))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 96, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 97, Col: 124}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -310,7 +310,7 @@ func RoutedFragment(title string, user auth.SessionUser, data dashboard.Data, ac
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(view.Route)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 96, Col: 150}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 97, Col: 150}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 			if templ_7745c5c3_Err != nil {
@@ -328,7 +328,7 @@ func RoutedFragment(title string, user auth.SessionUser, data dashboard.Data, ac
 			var templ_7745c5c3_Var13 string
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 98, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 99, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -341,7 +341,7 @@ func RoutedFragment(title string, user auth.SessionUser, data dashboard.Data, ac
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(domainWorkspaceClass(view))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 98, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 99, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -354,7 +354,7 @@ func RoutedFragment(title string, user auth.SessionUser, data dashboard.Data, ac
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(view.Route)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 98, Col: 124}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 99, Col: 124}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 			if templ_7745c5c3_Err != nil {
@@ -455,7 +455,7 @@ func routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 		var templ_7745c5c3_Var17 string
 		templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(panelHostname(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 125, Col: 88}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 126, Col: 88}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 		if templ_7745c5c3_Err != nil {
@@ -490,7 +490,7 @@ func routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 		var templ_7745c5c3_Var20 string
 		templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs("Open Activity for current issues")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 126, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 127, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 		if templ_7745c5c3_Err != nil {
@@ -503,7 +503,7 @@ func routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 		var templ_7745c5c3_Var21 string
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs("Open Activity for current issues")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 128, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 129, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -680,7 +680,7 @@ func routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(userInitials(user))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 164, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 165, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 		if templ_7745c5c3_Err != nil {
@@ -693,7 +693,7 @@ func routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(accountLabel(user, view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 166, Col: 38}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 167, Col: 38}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 		if templ_7745c5c3_Err != nil {
@@ -706,7 +706,7 @@ func routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(accountRoleLabel(user, view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 167, Col: 41}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 168, Col: 41}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 		if templ_7745c5c3_Err != nil {
@@ -727,7 +727,7 @@ func routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs("Sign out " + user.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 171, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 172, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
@@ -740,7 +740,7 @@ func routedSidebar(user auth.SessionUser, data dashboard.Data, view WorkspaceVie
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs("Sign out " + user.Email)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 171, Col: 122}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 172, Col: 122}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 		if templ_7745c5c3_Err != nil {
@@ -795,7 +795,7 @@ func navRoute(path string, label string, iconName string, active string, badge s
 		var templ_7745c5c3_Var29 templ.SafeURL
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(path))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 178, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 179, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
@@ -821,7 +821,7 @@ func navRoute(path string, label string, iconName string, active string, badge s
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(ariaCurrent(active))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 178, Col: 108}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 179, Col: 108}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 		if templ_7745c5c3_Err != nil {
@@ -842,7 +842,7 @@ func navRoute(path string, label string, iconName string, active string, badge s
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 180, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 181, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 		if templ_7745c5c3_Err != nil {
@@ -870,7 +870,7 @@ func navRoute(path string, label string, iconName string, active string, badge s
 			var templ_7745c5c3_Var33 string
 			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(badge)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 186, Col: 8}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 187, Col: 8}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 			if templ_7745c5c3_Err != nil {
@@ -917,7 +917,7 @@ func icon(name string) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(templ.SafeURL("/assets/icons.svg#" + name))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 192, Col: 215}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 193, Col: 215}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
@@ -977,7 +977,7 @@ func statusPill(state string) templ.Component {
 		var templ_7745c5c3_Var39 string
 		templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(state)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 195, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 196, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 		if templ_7745c5c3_Err != nil {
@@ -1037,7 +1037,7 @@ func tonePill(label string, tone string) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 197, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 198, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 		if templ_7745c5c3_Err != nil {
@@ -1097,7 +1097,7 @@ func compliancePill(subscription types.SubscriptionSummary) templ.Component {
 		var templ_7745c5c3_Var47 string
 		templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionComplianceRaw(subscription))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 200, Col: 153}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 201, Col: 153}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var47))
 		if templ_7745c5c3_Err != nil {
@@ -1110,7 +1110,7 @@ func compliancePill(subscription types.SubscriptionSummary) templ.Component {
 		var templ_7745c5c3_Var48 string
 		templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionComplianceWord(subscription))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 200, Col: 198}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 201, Col: 198}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var48))
 		if templ_7745c5c3_Err != nil {
@@ -1160,7 +1160,7 @@ func routedTopbar(user auth.SessionUser, data dashboard.Data, view WorkspaceView
 		var templ_7745c5c3_Var50 string
 		templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinStringErrs(routeTitle(view.Route))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 207, Col: 60}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 208, Col: 60}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 		if templ_7745c5c3_Err != nil {
@@ -1190,7 +1190,7 @@ func routedTopbar(user auth.SessionUser, data dashboard.Data, view WorkspaceView
 			var templ_7745c5c3_Var51 string
 			templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(templ.SafeURL(workspacePath(view, "/dashboard")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 218, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 219, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 			if templ_7745c5c3_Err != nil {
@@ -1208,7 +1208,7 @@ func routedTopbar(user auth.SessionUser, data dashboard.Data, view WorkspaceView
 				var templ_7745c5c3_Var52 string
 				templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(templ.SafeURL(withSubscription(workspacePath(view, "/dashboard"), subscription.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 220, Col: 105}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 221, Col: 105}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 				if templ_7745c5c3_Err != nil {
@@ -1231,7 +1231,7 @@ func routedTopbar(user auth.SessionUser, data dashboard.Data, view WorkspaceView
 				var templ_7745c5c3_Var53 string
 				templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 220, Col: 198}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 221, Col: 198}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 				if templ_7745c5c3_Err != nil {
@@ -1283,7 +1283,7 @@ func supportBanner(view WorkspaceView) templ.Component {
 		var templ_7745c5c3_Var55 string
 		templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(view.SupportCustomerName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 230, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 231, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 		if templ_7745c5c3_Err != nil {
@@ -1296,7 +1296,7 @@ func supportBanner(view WorkspaceView) templ.Component {
 		var templ_7745c5c3_Var56 templ.SafeURL
 		templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/support/customers/" + formatJobID(view.SupportCustomerID) + "/exit"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 231, Col: 115}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 232, Col: 115}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 		if templ_7745c5c3_Err != nil {
@@ -1351,7 +1351,7 @@ func csrfInput(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var58 string
 			templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(view.SupportCustomerID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 241, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 242, Col: 93}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 			if templ_7745c5c3_Err != nil {
@@ -1657,7 +1657,7 @@ func routedToolsUtilities(data dashboard.Data) templ.Component {
 		var templ_7745c5c3_Var61 string
 		templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(data.Plans)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 338, Col: 233}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 339, Col: 233}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 		if templ_7745c5c3_Err != nil {
@@ -1694,7 +1694,7 @@ func routedToolsUtilities(data dashboard.Data) templ.Component {
 		var templ_7745c5c3_Var62 string
 		templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(data.SubscriptionServices.Mailboxes)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 344, Col: 245}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 345, Col: 245}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var62))
 		if templ_7745c5c3_Err != nil {
@@ -1723,7 +1723,7 @@ func routedToolsUtilities(data dashboard.Data) templ.Component {
 		var templ_7745c5c3_Var63 string
 		templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(data.Phase6.Backups)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 345, Col: 237}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 346, Col: 237}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var63))
 		if templ_7745c5c3_Err != nil {
@@ -1752,7 +1752,7 @@ func routedToolsUtilities(data dashboard.Data) templ.Component {
 		var templ_7745c5c3_Var64 string
 		templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(data.SubscriptionServices.Applications)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 346, Col: 280}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 347, Col: 280}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var64))
 		if templ_7745c5c3_Err != nil {
@@ -1765,7 +1765,7 @@ func routedToolsUtilities(data dashboard.Data) templ.Component {
 		var templ_7745c5c3_Var65 string
 		templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(data.Sites)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 346, Col: 337}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 347, Col: 337}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var65))
 		if templ_7745c5c3_Err != nil {
@@ -1802,7 +1802,7 @@ func routedToolsUtilities(data dashboard.Data) templ.Component {
 		var templ_7745c5c3_Var66 string
 		templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(data.Customers)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 352, Col: 228}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 353, Col: 228}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var66))
 		if templ_7745c5c3_Err != nil {
@@ -1831,7 +1831,7 @@ func routedToolsUtilities(data dashboard.Data) templ.Component {
 		var templ_7745c5c3_Var67 string
 		templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(data.Subscriptions)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 353, Col: 239}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 354, Col: 239}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 		if templ_7745c5c3_Err != nil {
@@ -1897,7 +1897,7 @@ func pageHead(kicker string, title string, description string) templ.Component {
 		var templ_7745c5c3_Var69 string
 		templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinStringErrs(kicker)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 362, Col: 71}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 363, Col: 71}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 		if templ_7745c5c3_Err != nil {
@@ -1910,7 +1910,7 @@ func pageHead(kicker string, title string, description string) templ.Component {
 		var templ_7745c5c3_Var70 string
 		templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 362, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 363, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var70))
 		if templ_7745c5c3_Err != nil {
@@ -1923,7 +1923,7 @@ func pageHead(kicker string, title string, description string) templ.Component {
 		var templ_7745c5c3_Var71 string
 		templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinStringErrs(description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 362, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 363, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 		if templ_7745c5c3_Err != nil {
@@ -1986,7 +1986,7 @@ func routedDashboard(user auth.SessionUser, data dashboard.Data, view WorkspaceV
 			var templ_7745c5c3_Var74 templ.SafeURL
 			templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 369, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 370, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var74))
 			if templ_7745c5c3_Err != nil {
@@ -2013,7 +2013,7 @@ func routedDashboard(user auth.SessionUser, data dashboard.Data, view WorkspaceV
 		var templ_7745c5c3_Var75 templ.SafeURL
 		templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/subscriptions")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 374, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 375, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 		if templ_7745c5c3_Err != nil {
@@ -2034,7 +2034,7 @@ func routedDashboard(user auth.SessionUser, data dashboard.Data, view WorkspaceV
 		var templ_7745c5c3_Var76 templ.SafeURL
 		templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 378, Col: 109}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 379, Col: 109}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 		if templ_7745c5c3_Err != nil {
@@ -2107,7 +2107,7 @@ func capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) t
 			var templ_7745c5c3_Var78 string
 			templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.JoinStringErrs(capacityAllClearCopy(pressure))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 394, Col: 54}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 395, Col: 54}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var78))
 			if templ_7745c5c3_Err != nil {
@@ -2130,7 +2130,7 @@ func capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) t
 				var templ_7745c5c3_Var79 templ.SafeURL
 				templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(subscriptionUsagePath(item.SubscriptionID, canOpen, view)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 398, Col: 86}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 399, Col: 86}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 				if templ_7745c5c3_Err != nil {
@@ -2143,7 +2143,7 @@ func capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) t
 				var templ_7745c5c3_Var80 string
 				templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 399, Col: 30}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 400, Col: 30}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var80))
 				if templ_7745c5c3_Err != nil {
@@ -2156,7 +2156,7 @@ func capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) t
 				var templ_7745c5c3_Var81 string
 				templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.JoinStringErrs(item.PlanName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 399, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 400, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var81))
 				if templ_7745c5c3_Err != nil {
@@ -2191,7 +2191,7 @@ func capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) t
 				var templ_7745c5c3_Var84 string
 				templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs(item.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 400, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 401, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 				if templ_7745c5c3_Err != nil {
@@ -2222,7 +2222,7 @@ func capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) t
 				var templ_7745c5c3_Var85 string
 				templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.JoinStringErrs(pressure.FooterNote())
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 407, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 408, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var85))
 				if templ_7745c5c3_Err != nil {
@@ -2235,7 +2235,7 @@ func capacityRows(pressure CapacityPressure, canOpen bool, view WorkspaceView) t
 				var templ_7745c5c3_Var86 templ.SafeURL
 				templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/subscriptions")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 408, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 409, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var86))
 				if templ_7745c5c3_Err != nil {
@@ -2292,7 +2292,7 @@ func siteRows(sites []dashboard.Site, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var89 templ.SafeURL
 				templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/subscriptions")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 417, Col: 89}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 418, Col: 89}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 				if templ_7745c5c3_Err != nil {
@@ -2321,7 +2321,7 @@ func siteRows(sites []dashboard.Site, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var90 templ.SafeURL
 				templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID))))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 422, Col: 104}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 423, Col: 104}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
 				if templ_7745c5c3_Err != nil {
@@ -2342,7 +2342,7 @@ func siteRows(sites []dashboard.Site, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var91 string
 				templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 424, Col: 32}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 425, Col: 32}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var91))
 				if templ_7745c5c3_Err != nil {
@@ -2360,7 +2360,7 @@ func siteRows(sites []dashboard.Site, view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var92 string
 					templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(parent)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 426, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 427, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
 					if templ_7745c5c3_Err != nil {
@@ -2378,7 +2378,7 @@ func siteRows(sites []dashboard.Site, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var93 string
 				templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinStringErrs(item.PHPVersion)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 428, Col: 27}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 429, Col: 27}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 				if templ_7745c5c3_Err != nil {
@@ -2413,7 +2413,7 @@ func siteRows(sites []dashboard.Site, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var96 string
 				templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.JoinStringErrs(item.Status)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 430, Col: 87}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 431, Col: 87}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var96))
 				if templ_7745c5c3_Err != nil {
@@ -2474,7 +2474,7 @@ func subscriptionUsageRows(items []types.SubscriptionSummary, details bool, view
 				var templ_7745c5c3_Var99 templ.SafeURL
 				templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/subscriptions/new")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 440, Col: 93}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 441, Col: 93}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 				if templ_7745c5c3_Err != nil {
@@ -2503,7 +2503,7 @@ func subscriptionUsageRows(items []types.SubscriptionSummary, details bool, view
 				var templ_7745c5c3_Var100 templ.SafeURL
 				templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(subscriptionUsagePath(item.ID, details, view)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 445, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 446, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var100))
 				if templ_7745c5c3_Err != nil {
@@ -2516,7 +2516,7 @@ func subscriptionUsageRows(items []types.SubscriptionSummary, details bool, view
 				var templ_7745c5c3_Var101 string
 				templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.JoinStringErrs(item.SubscriptionName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 446, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 447, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var101))
 				if templ_7745c5c3_Err != nil {
@@ -2529,7 +2529,7 @@ func subscriptionUsageRows(items []types.SubscriptionSummary, details bool, view
 				var templ_7745c5c3_Var102 string
 				templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.JoinStringErrs(item.PlanName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 446, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 447, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var102))
 				if templ_7745c5c3_Err != nil {
@@ -2542,7 +2542,7 @@ func subscriptionUsageRows(items []types.SubscriptionSummary, details bool, view
 				var templ_7745c5c3_Var103 string
 				templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(item.DomainsUsed, item.MaxSites, true))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 447, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 448, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var103))
 				if templ_7745c5c3_Err != nil {
@@ -2648,7 +2648,7 @@ func tlsCell(item dashboard.Site) templ.Component {
 		var templ_7745c5c3_Var108 string
 		templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.JoinStringErrs(tls.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 463, Col: 51}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 464, Col: 51}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var108))
 		if templ_7745c5c3_Err != nil {
@@ -2666,7 +2666,7 @@ func tlsCell(item dashboard.Site) templ.Component {
 			var templ_7745c5c3_Var109 string
 			templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.JoinStringErrs(tls.Detail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 465, Col: 21}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 466, Col: 21}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var109))
 			if templ_7745c5c3_Err != nil {
@@ -2738,7 +2738,7 @@ func routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashbo
 					var templ_7745c5c3_Var111 string
 					templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.JoinStringErrs(item.RemovalState)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 478, Col: 72}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 479, Col: 72}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var111))
 					if templ_7745c5c3_Err != nil {
@@ -2751,7 +2751,7 @@ func routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashbo
 					var templ_7745c5c3_Var112 templ.SafeURL
 					templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(removalActionPath(item, view)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 478, Col: 292}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 479, Col: 292}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
 					if templ_7745c5c3_Err != nil {
@@ -2792,7 +2792,7 @@ func routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashbo
 						var templ_7745c5c3_Var113 string
 						templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(item.SettingsError)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 486, Col: 46}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 487, Col: 46}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 						if templ_7745c5c3_Err != nil {
@@ -2810,7 +2810,7 @@ func routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashbo
 					var templ_7745c5c3_Var114 templ.SafeURL
 					templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/hosting"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 488, Col: 121}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 489, Col: 121}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var114))
 					if templ_7745c5c3_Err != nil {
@@ -2831,7 +2831,7 @@ func routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashbo
 					var templ_7745c5c3_Var115 string
 					templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.JoinStringErrs(item.DesiredPHPVersion)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 488, Col: 218}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 489, Col: 218}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var115))
 					if templ_7745c5c3_Err != nil {
@@ -2880,7 +2880,7 @@ func routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashbo
 					var templ_7745c5c3_Var116 string
 					templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.JoinStringErrs(item.DocumentRoot)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 491, Col: 88}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 492, Col: 88}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var116))
 					if templ_7745c5c3_Err != nil {
@@ -2893,7 +2893,7 @@ func routedSiteDetail(user auth.SessionUser, data dashboard.Data, actions Dashbo
 					var templ_7745c5c3_Var117 templ.SafeURL
 					templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/web-server")))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 494, Col: 185}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 495, Col: 185}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var117))
 					if templ_7745c5c3_Err != nil {
@@ -3064,7 +3064,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var119 string
 		templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.JoinStringErrs(item.PHPVersion)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 551, Col: 76}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 76}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var119))
 		if templ_7745c5c3_Err != nil {
@@ -3077,7 +3077,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var120 string
 		templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.JoinStringErrs(formatTLSStatus(item))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 551, Col: 169}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 169}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var120))
 		if templ_7745c5c3_Err != nil {
@@ -3090,7 +3090,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var121 string
 		templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(item.HTTPSRedirect))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 551, Col: 225}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 225}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
 		if templ_7745c5c3_Err != nil {
@@ -3103,7 +3103,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var122 string
 		templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.JoinStringErrs(domainDNSStateForSite(data.Phase6, item))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 551, Col: 303}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 303}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var122))
 		if templ_7745c5c3_Err != nil {
@@ -3116,7 +3116,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var123 string
 		templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs(dnsZoneDescription(item))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 551, Col: 343}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 343}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
 		if templ_7745c5c3_Err != nil {
@@ -3129,7 +3129,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var124 string
 		templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(databasesForSite(data.Databases, item.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 551, Col: 450}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 450}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
 		if templ_7745c5c3_Err != nil {
@@ -3142,7 +3142,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var125 string
 		templ_7745c5c3_Var125, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.DatabasesUsed, subscription.MaxDatabases, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 551, Col: 548}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 548}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var125))
 		if templ_7745c5c3_Err != nil {
@@ -3155,7 +3155,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var126 string
 		templ_7745c5c3_Var126, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(backupsForSite(data.Phase6.Backups, item.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 551, Col: 673}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 673}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var126))
 		if templ_7745c5c3_Err != nil {
@@ -3168,7 +3168,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var127 string
 		templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.BackupsUsed, subscription.MaxBackups, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 551, Col: 767}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 552, Col: 767}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var127))
 		if templ_7745c5c3_Err != nil {
@@ -3186,7 +3186,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 			var templ_7745c5c3_Var128 string
 			templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(usage.DocumentRootBytes))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 553, Col: 110}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 554, Col: 110}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var128))
 			if templ_7745c5c3_Err != nil {
@@ -3199,7 +3199,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 			var templ_7745c5c3_Var129 string
 			templ_7745c5c3_Var129, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(usage.TrafficBytes))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 553, Col: 201}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 554, Col: 201}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var129))
 			if templ_7745c5c3_Err != nil {
@@ -3212,7 +3212,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 			var templ_7745c5c3_Var130 string
 			templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(subscription.DiskMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 553, Col: 307}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 554, Col: 307}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var130))
 			if templ_7745c5c3_Err != nil {
@@ -3230,7 +3230,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var131 string
 		templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.JoinStringErrs(item.Username)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 555, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 556, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var131))
 		if templ_7745c5c3_Err != nil {
@@ -3243,7 +3243,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 		var templ_7745c5c3_Var132 string
 		templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.JoinStringErrs(item.DocumentRoot)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 555, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 556, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var132))
 		if templ_7745c5c3_Err != nil {
@@ -3327,7 +3327,7 @@ func domainOverview(item dashboard.Site, subscription types.SubscriptionSummary,
 				var templ_7745c5c3_Var135 templ.SafeURL
 				templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, item.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 566, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 567, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var135))
 				if templ_7745c5c3_Err != nil {
@@ -3594,7 +3594,7 @@ func subdomainSetupStatus(item dashboard.Site, data dashboard.Data, view Workspa
 			var templ_7745c5c3_Var142 templ.SafeURL
 			templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ParentSiteID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 605, Col: 134}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 606, Col: 134}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 			if templ_7745c5c3_Err != nil {
@@ -3607,7 +3607,7 @@ func subdomainSetupStatus(item dashboard.Site, data dashboard.Data, view Workspa
 			var templ_7745c5c3_Var143 string
 			templ_7745c5c3_Var143, templ_7745c5c3_Err = templ.JoinStringErrs(parent)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 605, Col: 145}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 606, Col: 145}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var143))
 			if templ_7745c5c3_Err != nil {
@@ -3654,7 +3654,7 @@ func subdomainSetupStatus(item dashboard.Site, data dashboard.Data, view Workspa
 			var templ_7745c5c3_Var144 string
 			templ_7745c5c3_Var144, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 610, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 611, Col: 93}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var144))
 			if templ_7745c5c3_Err != nil {
@@ -3667,7 +3667,7 @@ func subdomainSetupStatus(item dashboard.Site, data dashboard.Data, view Workspa
 			var templ_7745c5c3_Var145 string
 			templ_7745c5c3_Var145, templ_7745c5c3_Err = templ.JoinStringErrs(parentAddress)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 610, Col: 136}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 611, Col: 136}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var145))
 			if templ_7745c5c3_Err != nil {
@@ -3701,7 +3701,7 @@ func subdomainSetupStatus(item dashboard.Site, data dashboard.Data, view Workspa
 			var templ_7745c5c3_Var146 templ.SafeURL
 			templ_7745c5c3_Var146, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"?tab=ssl")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 619, Col: 115}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 620, Col: 115}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var146))
 			if templ_7745c5c3_Err != nil {
@@ -3754,7 +3754,7 @@ func ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view Work
 				var templ_7745c5c3_Var148 templ.SafeURL
 				templ_7745c5c3_Var148, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(child.ID))))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 628, Col: 102}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 629, Col: 102}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var148))
 				if templ_7745c5c3_Err != nil {
@@ -3775,7 +3775,7 @@ func ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view Work
 				var templ_7745c5c3_Var149 string
 				templ_7745c5c3_Var149, templ_7745c5c3_Err = templ.JoinStringErrs(child.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 628, Col: 183}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 629, Col: 183}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var149))
 				if templ_7745c5c3_Err != nil {
@@ -3788,7 +3788,7 @@ func ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view Work
 				var templ_7745c5c3_Var150 string
 				templ_7745c5c3_Var150, templ_7745c5c3_Err = templ.JoinStringErrs(child.Status)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 628, Col: 223}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 629, Col: 223}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var150))
 				if templ_7745c5c3_Err != nil {
@@ -3801,7 +3801,7 @@ func ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view Work
 				var templ_7745c5c3_Var151 string
 				templ_7745c5c3_Var151, templ_7745c5c3_Err = templ.JoinStringErrs(child.DNSZoneMode)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 628, Col: 252}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 629, Col: 252}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var151))
 				if templ_7745c5c3_Err != nil {
@@ -3814,7 +3814,7 @@ func ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view Work
 				var templ_7745c5c3_Var152 string
 				templ_7745c5c3_Var152, templ_7745c5c3_Err = templ.JoinStringErrs(child.TLSStatus)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 628, Col: 279}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 629, Col: 279}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var152))
 				if templ_7745c5c3_Err != nil {
@@ -3849,7 +3849,7 @@ func ifDomainSubdomains(parent dashboard.Site, sites []dashboard.Site, view Work
 				var templ_7745c5c3_Var155 string
 				templ_7745c5c3_Var155, templ_7745c5c3_Err = templ.JoinStringErrs(child.Status)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 628, Col: 378}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 629, Col: 378}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var155))
 				if templ_7745c5c3_Err != nil {
@@ -3897,7 +3897,7 @@ func domainToolGroup(title string) templ.Component {
 		var templ_7745c5c3_Var157 string
 		templ_7745c5c3_Var157, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 636, Col: 87}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 637, Col: 87}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var157))
 		if templ_7745c5c3_Err != nil {
@@ -3962,7 +3962,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 			var templ_7745c5c3_Var159 string
 			templ_7745c5c3_Var159, templ_7745c5c3_Err = templ.JoinStringErrs("ftp-account-dialog-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 646, Col: 260}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 647, Col: 260}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var159))
 			if templ_7745c5c3_Err != nil {
@@ -3998,7 +3998,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 					var templ_7745c5c3_Var160 string
 					templ_7745c5c3_Var160, templ_7745c5c3_Err = templ.JoinStringErrs(account.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 652, Col: 55}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 653, Col: 55}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var160))
 					if templ_7745c5c3_Err != nil {
@@ -4037,7 +4037,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 			var templ_7745c5c3_Var161 string
 			templ_7745c5c3_Var161, templ_7745c5c3_Err = templ.JoinStringErrs("ftp-account-dialog-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 656, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 657, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var161))
 			if templ_7745c5c3_Err != nil {
@@ -4050,7 +4050,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 			var templ_7745c5c3_Var162 string
 			templ_7745c5c3_Var162, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 656, Col: 195}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 657, Col: 195}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var162))
 			if templ_7745c5c3_Err != nil {
@@ -4071,7 +4071,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 			var templ_7745c5c3_Var163 templ.SafeURL
 			templ_7745c5c3_Var163, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/ftp"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 656, Col: 483}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 657, Col: 483}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var163))
 			if templ_7745c5c3_Err != nil {
@@ -4092,7 +4092,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 			var templ_7745c5c3_Var164 string
 			templ_7745c5c3_Var164, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 656, Col: 566}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 657, Col: 566}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var164))
 			if templ_7745c5c3_Err != nil {
@@ -4110,7 +4110,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 		var templ_7745c5c3_Var165 templ.SafeURL
 		templ_7745c5c3_Var165, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/subscriptions/"+formatJobID(subscription.ID)+"/access")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 659, Col: 296}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 660, Col: 296}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var165))
 		if templ_7745c5c3_Err != nil {
@@ -4123,7 +4123,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 		var templ_7745c5c3_Var166 string
 		templ_7745c5c3_Var166, templ_7745c5c3_Err = templ.JoinStringErrs("protected-directory-dialog-" + formatJobID(item.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 660, Col: 278}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 661, Col: 278}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var166))
 		if templ_7745c5c3_Err != nil {
@@ -4159,7 +4159,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 				var templ_7745c5c3_Var167 string
 				templ_7745c5c3_Var167, templ_7745c5c3_Err = templ.JoinStringErrs(directory.Path)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 666, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 667, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var167))
 				if templ_7745c5c3_Err != nil {
@@ -4172,7 +4172,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 				var templ_7745c5c3_Var168 string
 				templ_7745c5c3_Var168, templ_7745c5c3_Err = templ.JoinStringErrs(directory.Realm)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 666, Col: 108}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 667, Col: 108}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var168))
 				if templ_7745c5c3_Err != nil {
@@ -4185,7 +4185,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 				var templ_7745c5c3_Var169 string
 				templ_7745c5c3_Var169, templ_7745c5c3_Err = templ.JoinStringErrs(directory.Username)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 666, Col: 157}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 667, Col: 157}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var169))
 				if templ_7745c5c3_Err != nil {
@@ -4213,7 +4213,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 				var templ_7745c5c3_Var170 templ.SafeURL
 				templ_7745c5c3_Var170, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/services/protected/" + formatJobID(directory.ID) + "/delete"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 672, Col: 183}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 673, Col: 183}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var170))
 				if templ_7745c5c3_Err != nil {
@@ -4234,7 +4234,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 				var templ_7745c5c3_Var171 string
 				templ_7745c5c3_Var171, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 672, Col: 325}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 673, Col: 325}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var171))
 				if templ_7745c5c3_Err != nil {
@@ -4265,7 +4265,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 		var templ_7745c5c3_Var172 string
 		templ_7745c5c3_Var172, templ_7745c5c3_Err = templ.JoinStringErrs("protected-directory-dialog-" + formatJobID(item.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 676, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 677, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var172))
 		if templ_7745c5c3_Err != nil {
@@ -4286,7 +4286,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 		var templ_7745c5c3_Var173 templ.SafeURL
 		templ_7745c5c3_Var173, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/protected-directories"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 676, Col: 482}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 677, Col: 482}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var173))
 		if templ_7745c5c3_Err != nil {
@@ -4307,7 +4307,7 @@ func domainAccess(item dashboard.Site, subscription types.SubscriptionSummary, d
 		var templ_7745c5c3_Var174 string
 		templ_7745c5c3_Var174, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 676, Col: 565}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 677, Col: 565}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var174))
 		if templ_7745c5c3_Err != nil {
@@ -4370,7 +4370,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 			var templ_7745c5c3_Var176 string
 			templ_7745c5c3_Var176, templ_7745c5c3_Err = templ.JoinStringErrs(policyInheritanceLabel(sitePolicyScopeCustomized(policyView, "web")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 684, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 685, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var176))
 			if templ_7745c5c3_Err != nil {
@@ -4391,7 +4391,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 			var templ_7745c5c3_Var177 string
 			templ_7745c5c3_Var177, templ_7745c5c3_Err = templ.JoinStringErrs(item.DocumentRoot)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 686, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 687, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var177))
 			if templ_7745c5c3_Err != nil {
@@ -4404,7 +4404,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 			var templ_7745c5c3_Var178 templ.SafeURL
 			templ_7745c5c3_Var178, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/policy"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 688, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 689, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var178))
 			if templ_7745c5c3_Err != nil {
@@ -4471,7 +4471,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var180 string
 				templ_7745c5c3_Var180, templ_7745c5c3_Err = templ.JoinStringErrs(policyView.EffectivePolicy.Web.IndexFiles)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 693, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 694, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var180))
 				if templ_7745c5c3_Err != nil {
@@ -4484,7 +4484,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var181 string
 				templ_7745c5c3_Var181, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.Web.RequestBodyLimitMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 694, Col: 170}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 695, Col: 170}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var181))
 				if templ_7745c5c3_Err != nil {
@@ -4535,7 +4535,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var183 string
 				templ_7745c5c3_Var183, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.Web.CacheTTLSeconds))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 699, Col: 200}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 700, Col: 200}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var183))
 				if templ_7745c5c3_Err != nil {
@@ -4570,7 +4570,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var185 string
 				templ_7745c5c3_Var185, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.Web.RequestRatePerSecond))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 703, Col: 169}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 704, Col: 169}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var185))
 				if templ_7745c5c3_Err != nil {
@@ -4583,7 +4583,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var186 string
 				templ_7745c5c3_Var186, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.Web.RequestBurst))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 704, Col: 158}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 705, Col: 158}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var186))
 				if templ_7745c5c3_Err != nil {
@@ -4596,7 +4596,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var187 string
 				templ_7745c5c3_Var187, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.Web.MaxConnections))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 705, Col: 168}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 706, Col: 168}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var187))
 				if templ_7745c5c3_Err != nil {
@@ -4609,7 +4609,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var188 string
 				templ_7745c5c3_Var188, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.Web.ConnectTimeoutSecs))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 706, Col: 177}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 707, Col: 177}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var188))
 				if templ_7745c5c3_Err != nil {
@@ -4622,7 +4622,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var189 string
 				templ_7745c5c3_Var189, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(policyView.EffectivePolicy.Web.ReadTimeoutSecs))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 707, Col: 168}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 708, Col: 168}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var189))
 				if templ_7745c5c3_Err != nil {
@@ -4687,7 +4687,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var191 string
 				templ_7745c5c3_Var191, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(policyView.EffectivePolicy.Web.AllowedCIDRs))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 713, Col: 144}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 714, Col: 144}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var191))
 				if templ_7745c5c3_Err != nil {
@@ -4722,7 +4722,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var193 string
 				templ_7745c5c3_Var193, templ_7745c5c3_Err = templ.JoinStringErrs(policyView.EffectivePolicy.Web.ErrorDocument404)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 717, Col: 148}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 718, Col: 148}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var193))
 				if templ_7745c5c3_Err != nil {
@@ -4735,7 +4735,7 @@ func domainWebServer(item dashboard.Site, data dashboard.Data, view WorkspaceVie
 				var templ_7745c5c3_Var194 string
 				templ_7745c5c3_Var194, templ_7745c5c3_Err = templ.JoinStringErrs(policyView.EffectivePolicy.Web.ErrorDocument50X)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 717, Col: 303}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 718, Col: 303}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var194))
 				if templ_7745c5c3_Err != nil {
@@ -4809,7 +4809,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 				var templ_7745c5c3_Var196 string
 				templ_7745c5c3_Var196, templ_7745c5c3_Err = templ.JoinStringErrs(policyInheritanceLabel(sitePolicyScopeCustomized(policyView, "php")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 735, Col: 112}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 736, Col: 112}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var196))
 				if templ_7745c5c3_Err != nil {
@@ -4822,7 +4822,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 				var templ_7745c5c3_Var197 string
 				templ_7745c5c3_Var197, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 736, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 737, Col: 78}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var197))
 				if templ_7745c5c3_Err != nil {
@@ -4835,7 +4835,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 				var templ_7745c5c3_Var198 string
 				templ_7745c5c3_Var198, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(policyView.InheritedPolicy.PHP.MemoryLimitMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 737, Col: 115}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 738, Col: 115}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var198))
 				if templ_7745c5c3_Err != nil {
@@ -4848,7 +4848,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 				var templ_7745c5c3_Var199 templ.SafeURL
 				templ_7745c5c3_Var199, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-settings"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 739, Col: 118}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 740, Col: 118}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var199))
 				if templ_7745c5c3_Err != nil {
@@ -4869,7 +4869,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 				var templ_7745c5c3_Var200 string
 				templ_7745c5c3_Var200, templ_7745c5c3_Err = templ.JoinStringErrs(item.DesiredStatus)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 740, Col: 89}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 741, Col: 89}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var200))
 				if templ_7745c5c3_Err != nil {
@@ -4882,7 +4882,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 				var templ_7745c5c3_Var201 string
 				templ_7745c5c3_Var201, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(item.DesiredHTTPSRedirect))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 740, Col: 189}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 741, Col: 189}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var201))
 				if templ_7745c5c3_Err != nil {
@@ -4916,7 +4916,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						var templ_7745c5c3_Var203 string
 						templ_7745c5c3_Var203, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 744, Col: 30}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 745, Col: 30}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var203))
 						if templ_7745c5c3_Err != nil {
@@ -4939,7 +4939,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 						var templ_7745c5c3_Var204 string
 						templ_7745c5c3_Var204, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 744, Col: 88}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 745, Col: 88}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var204))
 						if templ_7745c5c3_Err != nil {
@@ -5163,7 +5163,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 				var templ_7745c5c3_Var209 string
 				templ_7745c5c3_Var209, templ_7745c5c3_Err = templ.JoinStringErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/policy"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 773, Col: 184}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 774, Col: 184}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var209))
 				if templ_7745c5c3_Err != nil {
@@ -5176,7 +5176,7 @@ func domainPHPSettings(user auth.SessionUser, item dashboard.Site, subscription 
 				var templ_7745c5c3_Var210 string
 				templ_7745c5c3_Var210, templ_7745c5c3_Err = templ.JoinStringErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/policy"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 773, Col: 369}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 774, Col: 369}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var210))
 				if templ_7745c5c3_Err != nil {
@@ -5225,7 +5225,7 @@ func domainSettingsSection(title string, copy string, customized bool) templ.Com
 		var templ_7745c5c3_Var212 string
 		templ_7745c5c3_Var212, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 783, Col: 26}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 784, Col: 26}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var212))
 		if templ_7745c5c3_Err != nil {
@@ -5238,7 +5238,7 @@ func domainSettingsSection(title string, copy string, customized bool) templ.Com
 		var templ_7745c5c3_Var213 string
 		templ_7745c5c3_Var213, templ_7745c5c3_Err = templ.JoinStringErrs(copy)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 783, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 784, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var213))
 		if templ_7745c5c3_Err != nil {
@@ -5273,7 +5273,7 @@ func domainSettingsSection(title string, copy string, customized bool) templ.Com
 		var templ_7745c5c3_Var216 string
 		templ_7745c5c3_Var216, templ_7745c5c3_Err = templ.JoinStringErrs(policyInheritanceLabel(customized))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 783, Col: 140}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 784, Col: 140}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var216))
 		if templ_7745c5c3_Err != nil {
@@ -5338,7 +5338,7 @@ func domainLogs(item dashboard.Site, data dashboard.Data, view WorkspaceView) te
 			var templ_7745c5c3_Var218 string
 			templ_7745c5c3_Var218, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 795, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 796, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var218))
 			if templ_7745c5c3_Err != nil {
@@ -5421,7 +5421,7 @@ func domainLogs(item dashboard.Site, data dashboard.Data, view WorkspaceView) te
 			var templ_7745c5c3_Var219 templ.SafeURL
 			templ_7745c5c3_Var219, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/logs/data?source=nginx_access&download=1"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 797, Col: 391}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 798, Col: 391}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var219))
 			if templ_7745c5c3_Err != nil {
@@ -5484,7 +5484,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 				var templ_7745c5c3_Var221 string
 				templ_7745c5c3_Var221, templ_7745c5c3_Err = templ.JoinStringErrs(task.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 812, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 813, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var221))
 				if templ_7745c5c3_Err != nil {
@@ -5497,7 +5497,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 				var templ_7745c5c3_Var222 string
 				templ_7745c5c3_Var222, templ_7745c5c3_Err = templ.JoinStringErrs(task.Timezone)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 812, Col: 82}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 813, Col: 82}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var222))
 				if templ_7745c5c3_Err != nil {
@@ -5510,7 +5510,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 				var templ_7745c5c3_Var223 string
 				templ_7745c5c3_Var223, templ_7745c5c3_Err = templ.JoinStringErrs(task.Kind)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 812, Col: 130}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 813, Col: 130}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var223))
 				if templ_7745c5c3_Err != nil {
@@ -5523,7 +5523,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 				var templ_7745c5c3_Var224 string
 				templ_7745c5c3_Var224, templ_7745c5c3_Err = templ.JoinStringErrs(task.Schedule)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 812, Col: 184}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 813, Col: 184}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var224))
 				if templ_7745c5c3_Err != nil {
@@ -5544,7 +5544,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 				var templ_7745c5c3_Var225 templ.SafeURL
 				templ_7745c5c3_Var225, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks/" + formatJobID(task.ID) + "/run"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 812, Col: 448}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 813, Col: 448}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var225))
 				if templ_7745c5c3_Err != nil {
@@ -5565,7 +5565,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 				var templ_7745c5c3_Var226 string
 				templ_7745c5c3_Var226, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 812, Col: 531}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 813, Col: 531}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var226))
 				if templ_7745c5c3_Err != nil {
@@ -5591,7 +5591,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 					var templ_7745c5c3_Var227 string
 					templ_7745c5c3_Var227, templ_7745c5c3_Err = templ.JoinStringErrs(run.Output)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 814, Col: 78}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 815, Col: 78}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var227))
 					if templ_7745c5c3_Err != nil {
@@ -5612,7 +5612,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 					var templ_7745c5c3_Var228 string
 					templ_7745c5c3_Var228, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(run.CreatedAt))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 814, Col: 196}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 815, Col: 196}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var228))
 					if templ_7745c5c3_Err != nil {
@@ -5631,7 +5631,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 			var templ_7745c5c3_Var229 templ.SafeURL
 			templ_7745c5c3_Var229, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 818, Col: 142}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 819, Col: 142}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var229))
 			if templ_7745c5c3_Err != nil {
@@ -5652,7 +5652,7 @@ func domainScheduledTasks(item dashboard.Site, subscription types.SubscriptionSu
 			var templ_7745c5c3_Var230 string
 			templ_7745c5c3_Var230, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 818, Col: 225}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 819, Col: 225}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var230))
 			if templ_7745c5c3_Err != nil {
@@ -5720,7 +5720,7 @@ func domainStatistics(item dashboard.Site, subscription types.SubscriptionSummar
 			var templ_7745c5c3_Var232 string
 			templ_7745c5c3_Var232, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(subscription.DiskMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 827, Col: 130}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 828, Col: 130}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var232))
 			if templ_7745c5c3_Err != nil {
@@ -5733,7 +5733,7 @@ func domainStatistics(item dashboard.Site, subscription types.SubscriptionSummar
 			var templ_7745c5c3_Var233 string
 			templ_7745c5c3_Var233, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(usage.DocumentRootBytes))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 827, Col: 215}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 828, Col: 215}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var233))
 			if templ_7745c5c3_Err != nil {
@@ -5746,7 +5746,7 @@ func domainStatistics(item dashboard.Site, subscription types.SubscriptionSummar
 			var templ_7745c5c3_Var234 string
 			templ_7745c5c3_Var234, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullableTime(usage.CollectedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 827, Col: 392}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 828, Col: 392}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var234))
 			if templ_7745c5c3_Err != nil {
@@ -5764,7 +5764,7 @@ func domainStatistics(item dashboard.Site, subscription types.SubscriptionSummar
 				var templ_7745c5c3_Var235 string
 				templ_7745c5c3_Var235, templ_7745c5c3_Err = templ.JoinStringErrs(usage.LastError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 829, Col: 41}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 830, Col: 41}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var235))
 				if templ_7745c5c3_Err != nil {
@@ -5855,7 +5855,7 @@ func domainPHPApplication(item dashboard.Site, subscription types.SubscriptionSu
 			var templ_7745c5c3_Var238 string
 			templ_7745c5c3_Var238, templ_7745c5c3_Err = templ.JoinStringErrs(string(workspace.Application.HostingMode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 848, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 849, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var238))
 			if templ_7745c5c3_Err != nil {
@@ -5868,7 +5868,7 @@ func domainPHPApplication(item dashboard.Site, subscription types.SubscriptionSu
 			var templ_7745c5c3_Var239 string
 			templ_7745c5c3_Var239, templ_7745c5c3_Err = templ.JoinStringErrs(phpHostingModeLabel(workspace.Application.HostingMode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 849, Col: 165}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 850, Col: 165}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var239))
 			if templ_7745c5c3_Err != nil {
@@ -5905,7 +5905,7 @@ func domainPHPApplication(item dashboard.Site, subscription types.SubscriptionSu
 				var templ_7745c5c3_Var240 templ.SafeURL
 				templ_7745c5c3_Var240, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/reconcile"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 857, Col: 108}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 858, Col: 108}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var240))
 				if templ_7745c5c3_Err != nil {
@@ -6050,7 +6050,7 @@ func phpApplicationTabLink(siteID int64, tab string, label string, view Workspac
 		var templ_7745c5c3_Var243 templ.SafeURL
 		templ_7745c5c3_Var243, templ_7745c5c3_Err = templ.JoinURLErrs(phpApplicationTabURL(view, siteID, tab))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 890, Col: 48}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 891, Col: 48}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var243))
 		if templ_7745c5c3_Err != nil {
@@ -6076,7 +6076,7 @@ func phpApplicationTabLink(siteID int64, tab string, label string, view Workspac
 		var templ_7745c5c3_Var245 string
 		templ_7745c5c3_Var245, templ_7745c5c3_Err = templ.JoinStringErrs(phpApplicationAriaCurrent(view, tab))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 890, Col: 144}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 891, Col: 144}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var245))
 		if templ_7745c5c3_Err != nil {
@@ -6089,7 +6089,7 @@ func phpApplicationTabLink(siteID int64, tab string, label string, view Workspac
 		var templ_7745c5c3_Var246 string
 		templ_7745c5c3_Var246, templ_7745c5c3_Err = templ.JoinStringErrs(tab)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 890, Col: 172}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 891, Col: 172}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var246))
 		if templ_7745c5c3_Err != nil {
@@ -6102,7 +6102,7 @@ func phpApplicationTabLink(siteID int64, tab string, label string, view Workspac
 		var templ_7745c5c3_Var247 string
 		templ_7745c5c3_Var247, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 890, Col: 182}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 891, Col: 182}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var247))
 		if templ_7745c5c3_Err != nil {
@@ -6145,7 +6145,7 @@ func phpRuntimeOptions(workspace controlphpapp.Workspace) templ.Component {
 			var templ_7745c5c3_Var249 string
 			templ_7745c5c3_Var249, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.PHPVersion)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 895, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 896, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var249))
 			if templ_7745c5c3_Err != nil {
@@ -6158,7 +6158,7 @@ func phpRuntimeOptions(workspace controlphpapp.Workspace) templ.Component {
 			var templ_7745c5c3_Var250 string
 			templ_7745c5c3_Var250, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.PHPVersion)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 895, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 896, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var250))
 			if templ_7745c5c3_Err != nil {
@@ -6178,7 +6178,7 @@ func phpRuntimeOptions(workspace controlphpapp.Workspace) templ.Component {
 					var templ_7745c5c3_Var251 string
 					templ_7745c5c3_Var251, templ_7745c5c3_Err = templ.JoinStringErrs(runtime.Version)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 899, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 900, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var251))
 					if templ_7745c5c3_Err != nil {
@@ -6201,7 +6201,7 @@ func phpRuntimeOptions(workspace controlphpapp.Workspace) templ.Component {
 					var templ_7745c5c3_Var252 string
 					templ_7745c5c3_Var252, templ_7745c5c3_Err = templ.JoinStringErrs(runtime.Version)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 899, Col: 123}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 900, Col: 123}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var252))
 					if templ_7745c5c3_Err != nil {
@@ -6214,7 +6214,7 @@ func phpRuntimeOptions(workspace controlphpapp.Workspace) templ.Component {
 					var templ_7745c5c3_Var253 string
 					templ_7745c5c3_Var253, templ_7745c5c3_Err = templ.JoinStringErrs(phpRuntimeRecommendation(runtime))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 899, Col: 164}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 900, Col: 164}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var253))
 					if templ_7745c5c3_Err != nil {
@@ -6267,7 +6267,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 		var templ_7745c5c3_Var255 string
 		templ_7745c5c3_Var255, templ_7745c5c3_Err = templ.JoinStringErrs(phpHostingModeLabel(workspace.Application.HostingMode))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 909, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 910, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var255))
 		if templ_7745c5c3_Err != nil {
@@ -6280,7 +6280,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 		var templ_7745c5c3_Var256 string
 		templ_7745c5c3_Var256, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.FrameworkProfile)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 909, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 910, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var256))
 		if templ_7745c5c3_Err != nil {
@@ -6293,7 +6293,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 		var templ_7745c5c3_Var257 string
 		templ_7745c5c3_Var257, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.PHPVersion)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 910, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 911, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var257))
 		if templ_7745c5c3_Err != nil {
@@ -6306,7 +6306,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 		var templ_7745c5c3_Var258 string
 		templ_7745c5c3_Var258, templ_7745c5c3_Err = templ.JoinStringErrs(phpSupportLabel(workspace.Runtime.SupportStatus))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 910, Col: 134}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 911, Col: 134}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var258))
 		if templ_7745c5c3_Err != nil {
@@ -6319,7 +6319,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 		var templ_7745c5c3_Var259 string
 		templ_7745c5c3_Var259, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.ObservedState)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 911, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 912, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var259))
 		if templ_7745c5c3_Err != nil {
@@ -6332,7 +6332,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 		var templ_7745c5c3_Var260 string
 		templ_7745c5c3_Var260, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.ObservedMessage)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 911, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 912, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var260))
 		if templ_7745c5c3_Err != nil {
@@ -6345,7 +6345,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 		var templ_7745c5c3_Var261 string
 		templ_7745c5c3_Var261, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(workspace.AppliedRevision))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 912, Col: 69}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 913, Col: 69}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var261))
 		if templ_7745c5c3_Err != nil {
@@ -6358,7 +6358,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 		var templ_7745c5c3_Var262 string
 		templ_7745c5c3_Var262, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(workspace.Application.DesiredRevision))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 912, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 913, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var262))
 		if templ_7745c5c3_Err != nil {
@@ -6376,7 +6376,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var263 string
 			templ_7745c5c3_Var263, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(workspace.ActiveDeploymentID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 915, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 916, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var263))
 			if templ_7745c5c3_Err != nil {
@@ -6399,7 +6399,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 		var templ_7745c5c3_Var264 string
 		templ_7745c5c3_Var264, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(workspace.PreviousDeploymentID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 919, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 920, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var264))
 		if templ_7745c5c3_Err != nil {
@@ -6417,7 +6417,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var265 string
 			templ_7745c5c3_Var265, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.LastError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 922, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 923, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var265))
 			if templ_7745c5c3_Err != nil {
@@ -6450,7 +6450,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var266 string
 			templ_7745c5c3_Var266, templ_7745c5c3_Err = templ.JoinStringErrs(item.DocumentRoot)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 933, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 934, Col: 99}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var266))
 			if templ_7745c5c3_Err != nil {
@@ -6463,7 +6463,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var267 string
 			templ_7745c5c3_Var267, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Runtime.CLIPath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 933, Col: 173}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 934, Col: 173}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var267))
 			if templ_7745c5c3_Err != nil {
@@ -6476,7 +6476,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var268 string
 			templ_7745c5c3_Var268, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Runtime.FPMPath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 933, Col: 251}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 934, Col: 251}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var268))
 			if templ_7745c5c3_Err != nil {
@@ -6489,7 +6489,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var269 string
 			templ_7745c5c3_Var269, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(workspace.Runtime.FPMConfigValid))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 933, Col: 347}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 934, Col: 347}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var269))
 			if templ_7745c5c3_Err != nil {
@@ -6502,7 +6502,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var270 string
 			templ_7745c5c3_Var270, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(workspace.Runtime.OPcacheAvailable))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 933, Col: 428}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 934, Col: 428}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var270))
 			if templ_7745c5c3_Err != nil {
@@ -6515,7 +6515,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var271 string
 			templ_7745c5c3_Var271, templ_7745c5c3_Err = templ.JoinStringErrs(phpToolStatus(workspace.Capabilities.ComposerAvailable, workspace.Capabilities.ComposerVersion))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 933, Col: 563}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 934, Col: 563}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var271))
 			if templ_7745c5c3_Err != nil {
@@ -6528,7 +6528,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var272 string
 			templ_7745c5c3_Var272, templ_7745c5c3_Err = templ.JoinStringErrs(phpToolStatus(workspace.Capabilities.WPCLIAvailable, workspace.Capabilities.WPCLIVersion))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 933, Col: 690}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 934, Col: 690}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var272))
 			if templ_7745c5c3_Err != nil {
@@ -6541,7 +6541,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var273 string
 			templ_7745c5c3_Var273, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.PHPFPMMaxChildren))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 933, Col: 782}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 934, Col: 782}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var273))
 			if templ_7745c5c3_Err != nil {
@@ -6554,7 +6554,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var274 string
 			templ_7745c5c3_Var274, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(subscription.PHPMemoryMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 933, Col: 864}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 934, Col: 864}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var274))
 			if templ_7745c5c3_Err != nil {
@@ -6575,7 +6575,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var275 templ.SafeURL
 			templ_7745c5c3_Var275, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, item.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 935, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 936, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var275))
 			if templ_7745c5c3_Err != nil {
@@ -6588,7 +6588,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var276 templ.SafeURL
 			templ_7745c5c3_Var276, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/access")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 935, Col: 182}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 936, Col: 182}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var276))
 			if templ_7745c5c3_Err != nil {
@@ -6601,7 +6601,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var277 templ.SafeURL
 			templ_7745c5c3_Var277, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"?tab=php")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 935, Col: 281}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 936, Col: 281}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var277))
 			if templ_7745c5c3_Err != nil {
@@ -6614,7 +6614,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var278 templ.SafeURL
 			templ_7745c5c3_Var278, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/git")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 935, Col: 373}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 936, Col: 373}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var278))
 			if templ_7745c5c3_Err != nil {
@@ -6627,7 +6627,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var279 templ.SafeURL
 			templ_7745c5c3_Var279, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"?tab=databases")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 935, Col: 475}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 936, Col: 475}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var279))
 			if templ_7745c5c3_Err != nil {
@@ -6640,7 +6640,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var280 templ.SafeURL
 			templ_7745c5c3_Var280, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"?tab=backups")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 935, Col: 581}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 936, Col: 581}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var280))
 			if templ_7745c5c3_Err != nil {
@@ -6653,7 +6653,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var281 templ.SafeURL
 			templ_7745c5c3_Var281, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/logs")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 935, Col: 678}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 936, Col: 678}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var281))
 			if templ_7745c5c3_Err != nil {
@@ -6666,7 +6666,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var282 templ.SafeURL
 			templ_7745c5c3_Var282, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/scheduled-tasks")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 935, Col: 783}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 936, Col: 783}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var282))
 			if templ_7745c5c3_Err != nil {
@@ -6684,7 +6684,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 				var templ_7745c5c3_Var283 string
 				templ_7745c5c3_Var283, templ_7745c5c3_Err = templ.JoinStringErrs(mutationGate.Message)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 937, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 938, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var283))
 				if templ_7745c5c3_Err != nil {
@@ -6723,7 +6723,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var284 string
 			templ_7745c5c3_Var284, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.FrameworkProfile)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 949, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 950, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var284))
 			if templ_7745c5c3_Err != nil {
@@ -6736,7 +6736,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var285 string
 			templ_7745c5c3_Var285, templ_7745c5c3_Err = templ.JoinStringErrs(phpRepositoryLabel(data.SubscriptionServices.Git, workspace.Application.RepositoryID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 949, Col: 216}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 950, Col: 216}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var285))
 			if templ_7745c5c3_Err != nil {
@@ -6749,7 +6749,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var286 string
 			templ_7745c5c3_Var286, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.RepositoryRef)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 949, Col: 299}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 950, Col: 299}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var286))
 			if templ_7745c5c3_Err != nil {
@@ -6762,7 +6762,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var287 string
 			templ_7745c5c3_Var287, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.PublicPath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 949, Col: 393}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 950, Col: 393}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var287))
 			if templ_7745c5c3_Err != nil {
@@ -6775,7 +6775,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var288 string
 			templ_7745c5c3_Var288, templ_7745c5c3_Err = templ.JoinStringErrs(phpSharedPaths(workspace.Application.SharedPaths))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 949, Col: 494}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 950, Col: 494}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var288))
 			if templ_7745c5c3_Err != nil {
@@ -6788,7 +6788,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var289 string
 			templ_7745c5c3_Var289, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.HealthPath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 949, Col: 576}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 950, Col: 576}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var289))
 			if templ_7745c5c3_Err != nil {
@@ -6801,7 +6801,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var290 string
 			templ_7745c5c3_Var290, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(workspace.Application.ReleaseRetention))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 949, Col: 688}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 950, Col: 688}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var290))
 			if templ_7745c5c3_Err != nil {
@@ -6814,7 +6814,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var291 string
 			templ_7745c5c3_Var291, templ_7745c5c3_Err = templ.JoinStringErrs(phpReleaseLimit(workspace))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 949, Col: 731}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 950, Col: 731}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var291))
 			if templ_7745c5c3_Err != nil {
@@ -6827,7 +6827,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 			var templ_7745c5c3_Var292 string
 			templ_7745c5c3_Var292, templ_7745c5c3_Err = templ.JoinStringErrs(phpComposerLabel(workspace.Application.Composer))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 949, Col: 821}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 950, Col: 821}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var292))
 			if templ_7745c5c3_Err != nil {
@@ -6845,7 +6845,7 @@ func phpApplicationOverview(item dashboard.Site, subscription types.Subscription
 				var templ_7745c5c3_Var293 string
 				templ_7745c5c3_Var293, templ_7745c5c3_Err = templ.JoinStringErrs(mutationGate.Message)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 951, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 952, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var293))
 				if templ_7745c5c3_Err != nil {
@@ -6899,7 +6899,7 @@ func phpApplicationDeployment(item dashboard.Site, data dashboard.Data, workspac
 				var templ_7745c5c3_Var295 string
 				templ_7745c5c3_Var295, templ_7745c5c3_Err = templ.JoinStringErrs(mutationGate.Message)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 961, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 962, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var295))
 				if templ_7745c5c3_Err != nil {
@@ -6942,7 +6942,7 @@ func phpApplicationDeployment(item dashboard.Site, data dashboard.Data, workspac
 			var templ_7745c5c3_Var296 string
 			templ_7745c5c3_Var296, templ_7745c5c3_Err = templ.JoinStringErrs(phpRepositoryLabel(data.SubscriptionServices.Git, workspace.Application.RepositoryID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 974, Col: 134}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 975, Col: 134}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var296))
 			if templ_7745c5c3_Err != nil {
@@ -6955,7 +6955,7 @@ func phpApplicationDeployment(item dashboard.Site, data dashboard.Data, workspac
 			var templ_7745c5c3_Var297 string
 			templ_7745c5c3_Var297, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.RepositoryRef)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 974, Col: 219}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 975, Col: 219}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var297))
 			if templ_7745c5c3_Err != nil {
@@ -6973,7 +6973,7 @@ func phpApplicationDeployment(item dashboard.Site, data dashboard.Data, workspac
 				var templ_7745c5c3_Var298 string
 				templ_7745c5c3_Var298, templ_7745c5c3_Err = templ.JoinStringErrs(mutationGate.Message)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 976, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 977, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var298))
 				if templ_7745c5c3_Err != nil {
@@ -7047,7 +7047,7 @@ func phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Work
 			var templ_7745c5c3_Var300 string
 			templ_7745c5c3_Var300, templ_7745c5c3_Err = templ.JoinStringErrs(mutationGate.Message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 994, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 995, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var300))
 			if templ_7745c5c3_Err != nil {
@@ -7077,7 +7077,7 @@ func phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Work
 				var templ_7745c5c3_Var301 string
 				templ_7745c5c3_Var301, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1002, Col: 38}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1003, Col: 38}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var301))
 				if templ_7745c5c3_Err != nil {
@@ -7090,7 +7090,7 @@ func phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Work
 				var templ_7745c5c3_Var302 string
 				templ_7745c5c3_Var302, templ_7745c5c3_Err = templ.JoinStringErrs(phpEnvironmentKind(item))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1002, Col: 82}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1003, Col: 82}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var302))
 				if templ_7745c5c3_Err != nil {
@@ -7114,7 +7114,7 @@ func phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Work
 					var templ_7745c5c3_Var303 string
 					templ_7745c5c3_Var303, templ_7745c5c3_Err = templ.JoinStringErrs(item.Value)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1007, Col: 25}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1008, Col: 25}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var303))
 					if templ_7745c5c3_Err != nil {
@@ -7137,7 +7137,7 @@ func phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Work
 					var templ_7745c5c3_Var304 string
 					templ_7745c5c3_Var304, templ_7745c5c3_Err = templ.JoinStringErrs("php-environment-edit-" + item.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1011, Col: 134}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1012, Col: 134}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var304))
 					if templ_7745c5c3_Err != nil {
@@ -7150,7 +7150,7 @@ func phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Work
 					var templ_7745c5c3_Var305 string
 					templ_7745c5c3_Var305, templ_7745c5c3_Err = templ.JoinStringErrs("Edit " + item.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1011, Col: 162}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1012, Col: 162}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var305))
 					if templ_7745c5c3_Err != nil {
@@ -7171,7 +7171,7 @@ func phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Work
 					var templ_7745c5c3_Var306 string
 					templ_7745c5c3_Var306, templ_7745c5c3_Err = templ.JoinStringErrs("php-environment-delete-" + item.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1011, Col: 291}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1012, Col: 291}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var306))
 					if templ_7745c5c3_Err != nil {
@@ -7184,7 +7184,7 @@ func phpApplicationEnvironment(item dashboard.Site, workspace controlphpapp.Work
 					var templ_7745c5c3_Var307 string
 					templ_7745c5c3_Var307, templ_7745c5c3_Err = templ.JoinStringErrs("Delete " + item.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1011, Col: 321}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1012, Col: 321}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var307))
 					if templ_7745c5c3_Err != nil {
@@ -7259,7 +7259,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 		var templ_7745c5c3_Var309 string
 		templ_7745c5c3_Var309, templ_7745c5c3_Err = templ.JoinStringErrs(phpWorkerProcessCount(workspace.Workers))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1026, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1027, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var309))
 		if templ_7745c5c3_Err != nil {
@@ -7272,7 +7272,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 		var templ_7745c5c3_Var310 string
 		templ_7745c5c3_Var310, templ_7745c5c3_Err = templ.JoinStringErrs(phpWorkerLimit(workspace))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1026, Col: 146}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1027, Col: 146}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var310))
 		if templ_7745c5c3_Err != nil {
@@ -7291,7 +7291,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 				var templ_7745c5c3_Var311 string
 				templ_7745c5c3_Var311, templ_7745c5c3_Err = templ.JoinStringErrs(mutationGate.Message)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1029, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1030, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var311))
 				if templ_7745c5c3_Err != nil {
@@ -7309,7 +7309,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 				var templ_7745c5c3_Var312 string
 				templ_7745c5c3_Var312, templ_7745c5c3_Err = templ.JoinStringErrs(mutationGate.WorkerMessage)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1031, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1032, Col: 51}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var312))
 				if templ_7745c5c3_Err != nil {
@@ -7340,7 +7340,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 				var templ_7745c5c3_Var313 string
 				templ_7745c5c3_Var313, templ_7745c5c3_Err = templ.JoinStringErrs(worker.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1040, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1041, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var313))
 				if templ_7745c5c3_Err != nil {
@@ -7353,7 +7353,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 				var templ_7745c5c3_Var314 string
 				templ_7745c5c3_Var314, templ_7745c5c3_Err = templ.JoinStringErrs(worker.Script)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1040, Col: 108}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1041, Col: 108}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var314))
 				if templ_7745c5c3_Err != nil {
@@ -7366,7 +7366,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 				var templ_7745c5c3_Var315 string
 				templ_7745c5c3_Var315, templ_7745c5c3_Err = templ.JoinStringErrs(phpWorkerArguments(worker.Arguments))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1040, Col: 149}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1041, Col: 149}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var315))
 				if templ_7745c5c3_Err != nil {
@@ -7387,7 +7387,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 				var templ_7745c5c3_Var316 string
 				templ_7745c5c3_Var316, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(worker.Processes))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1040, Col: 273}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1041, Col: 273}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var316))
 				if templ_7745c5c3_Err != nil {
@@ -7400,7 +7400,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 				var templ_7745c5c3_Var317 string
 				templ_7745c5c3_Var317, templ_7745c5c3_Err = templ.JoinStringErrs(worker.DesiredState)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1040, Col: 332}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1041, Col: 332}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var317))
 				if templ_7745c5c3_Err != nil {
@@ -7413,7 +7413,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 				var templ_7745c5c3_Var318 string
 				templ_7745c5c3_Var318, templ_7745c5c3_Err = templ.JoinStringErrs(worker.ObservedState)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1040, Col: 393}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1041, Col: 393}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var318))
 				if templ_7745c5c3_Err != nil {
@@ -7431,7 +7431,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 					var templ_7745c5c3_Var319 string
 					templ_7745c5c3_Var319, templ_7745c5c3_Err = templ.JoinStringErrs(worker.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1042, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1043, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var319))
 					if templ_7745c5c3_Err != nil {
@@ -7450,7 +7450,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 					var templ_7745c5c3_Var320 templ.SafeURL
 					templ_7745c5c3_Var320, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/workers/" + formatJobID(worker.ID) + "/state"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1045, Col: 169}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1046, Col: 169}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var320))
 					if templ_7745c5c3_Err != nil {
@@ -7471,7 +7471,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 					var templ_7745c5c3_Var321 string
 					templ_7745c5c3_Var321, templ_7745c5c3_Err = templ.JoinStringErrs(phpWorkerOppositeState(worker.DesiredState))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1045, Col: 273}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1046, Col: 273}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var321))
 					if templ_7745c5c3_Err != nil {
@@ -7484,7 +7484,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 					var templ_7745c5c3_Var322 string
 					templ_7745c5c3_Var322, templ_7745c5c3_Err = templ.JoinStringErrs(phpWorkerStateAction(worker.DesiredState))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1045, Col: 370}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1046, Col: 370}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var322))
 					if templ_7745c5c3_Err != nil {
@@ -7497,7 +7497,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 					var templ_7745c5c3_Var323 string
 					templ_7745c5c3_Var323, templ_7745c5c3_Err = templ.JoinStringErrs("php-worker-edit-" + formatJobID(worker.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1045, Col: 496}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1046, Col: 496}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var323))
 					if templ_7745c5c3_Err != nil {
@@ -7510,7 +7510,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 					var templ_7745c5c3_Var324 string
 					templ_7745c5c3_Var324, templ_7745c5c3_Err = templ.JoinStringErrs("Edit " + worker.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1045, Col: 526}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1046, Col: 526}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var324))
 					if templ_7745c5c3_Err != nil {
@@ -7531,7 +7531,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 					var templ_7745c5c3_Var325 string
 					templ_7745c5c3_Var325, templ_7745c5c3_Err = templ.JoinStringErrs("php-worker-delete-" + formatJobID(worker.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1045, Col: 663}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1046, Col: 663}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var325))
 					if templ_7745c5c3_Err != nil {
@@ -7544,7 +7544,7 @@ func phpApplicationWorkers(item dashboard.Site, workspace controlphpapp.Workspac
 					var templ_7745c5c3_Var326 string
 					templ_7745c5c3_Var326, templ_7745c5c3_Err = templ.JoinStringErrs("Delete " + worker.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1045, Col: 695}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1046, Col: 695}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var326))
 					if templ_7745c5c3_Err != nil {
@@ -7609,7 +7609,7 @@ func phpApplicationReleases(item dashboard.Site, workspace controlphpapp.Workspa
 		var templ_7745c5c3_Var328 string
 		templ_7745c5c3_Var328, templ_7745c5c3_Err = templ.JoinStringErrs(phpReleaseLimit(workspace))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1055, Col: 272}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1056, Col: 272}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var328))
 		if templ_7745c5c3_Err != nil {
@@ -7683,7 +7683,7 @@ func phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspac
 		var templ_7745c5c3_Var330 string
 		templ_7745c5c3_Var330, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(deployment.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1073, Col: 105}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1074, Col: 105}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var330))
 		if templ_7745c5c3_Err != nil {
@@ -7696,7 +7696,7 @@ func phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspac
 		var templ_7745c5c3_Var331 string
 		templ_7745c5c3_Var331, templ_7745c5c3_Err = templ.JoinStringErrs(deployment.RequestedRevision)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1073, Col: 157}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1074, Col: 157}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var331))
 		if templ_7745c5c3_Err != nil {
@@ -7709,7 +7709,7 @@ func phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspac
 		var templ_7745c5c3_Var332 string
 		templ_7745c5c3_Var332, templ_7745c5c3_Err = templ.JoinStringErrs(deployment.ResolvedRevision)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1073, Col: 203}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1074, Col: 203}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var332))
 		if templ_7745c5c3_Err != nil {
@@ -7722,7 +7722,7 @@ func phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspac
 		var templ_7745c5c3_Var333 string
 		templ_7745c5c3_Var333, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(deployment.CreatedAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1073, Col: 253}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1074, Col: 253}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var333))
 		if templ_7745c5c3_Err != nil {
@@ -7735,7 +7735,7 @@ func phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspac
 		var templ_7745c5c3_Var334 string
 		templ_7745c5c3_Var334, templ_7745c5c3_Err = templ.JoinStringErrs(phpDeploymentMarker(deployment, workspace.ActiveDeploymentID, workspace.PreviousDeploymentID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1073, Col: 397}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1074, Col: 397}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var334))
 		if templ_7745c5c3_Err != nil {
@@ -7761,7 +7761,7 @@ func phpReleaseRow(item dashboard.Site, deployment types.PHPDeployment, workspac
 			var templ_7745c5c3_Var335 string
 			templ_7745c5c3_Var335, templ_7745c5c3_Err = templ.JoinStringErrs("php-rollback-" + formatJobID(deployment.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1075, Col: 117}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1076, Col: 117}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var335))
 			if templ_7745c5c3_Err != nil {
@@ -7808,7 +7808,7 @@ func phpApplicationLogs(item dashboard.Site, workspace controlphpapp.Workspace, 
 		var templ_7745c5c3_Var337 templ.SafeURL
 		templ_7745c5c3_Var337, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/logs")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1081, Col: 301}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1082, Col: 301}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var337))
 		if templ_7745c5c3_Err != nil {
@@ -7821,7 +7821,7 @@ func phpApplicationLogs(item dashboard.Site, workspace controlphpapp.Workspace, 
 		var templ_7745c5c3_Var338 templ.SafeURL
 		templ_7745c5c3_Var338, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/logs?source=php_deployment")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1082, Col: 139}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1083, Col: 139}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var338))
 		if templ_7745c5c3_Err != nil {
@@ -7834,7 +7834,7 @@ func phpApplicationLogs(item dashboard.Site, workspace controlphpapp.Workspace, 
 		var templ_7745c5c3_Var339 templ.SafeURL
 		templ_7745c5c3_Var339, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/logs?source=php_worker")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1082, Col: 334}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1083, Col: 334}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var339))
 		if templ_7745c5c3_Err != nil {
@@ -7847,7 +7847,7 @@ func phpApplicationLogs(item dashboard.Site, workspace controlphpapp.Workspace, 
 		var templ_7745c5c3_Var340 templ.SafeURL
 		templ_7745c5c3_Var340, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/logs?source=php_fpm")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1082, Col: 513}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1083, Col: 513}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var340))
 		if templ_7745c5c3_Err != nil {
@@ -7899,7 +7899,7 @@ func phpApplicationActivity(item dashboard.Site, workspace controlphpapp.Workspa
 		var templ_7745c5c3_Var342 templ.SafeURL
 		templ_7745c5c3_Var342, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/activity")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1090, Col: 284}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1091, Col: 284}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var342))
 		if templ_7745c5c3_Err != nil {
@@ -7912,7 +7912,7 @@ func phpApplicationActivity(item dashboard.Site, workspace controlphpapp.Workspa
 		var templ_7745c5c3_Var343 string
 		templ_7745c5c3_Var343, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(workspace.Application.DesiredRevision))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1090, Col: 417}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1091, Col: 417}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var343))
 		if templ_7745c5c3_Err != nil {
@@ -7925,7 +7925,7 @@ func phpApplicationActivity(item dashboard.Site, workspace controlphpapp.Workspa
 		var templ_7745c5c3_Var344 string
 		templ_7745c5c3_Var344, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(workspace.AppliedRevision))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1090, Col: 504}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1091, Col: 504}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var344))
 		if templ_7745c5c3_Err != nil {
@@ -7938,7 +7938,7 @@ func phpApplicationActivity(item dashboard.Site, workspace controlphpapp.Workspa
 		var templ_7745c5c3_Var345 string
 		templ_7745c5c3_Var345, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(workspace.LoadedAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1090, Col: 586}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1091, Col: 586}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var345))
 		if templ_7745c5c3_Err != nil {
@@ -7951,7 +7951,7 @@ func phpApplicationActivity(item dashboard.Site, workspace controlphpapp.Workspa
 		var templ_7745c5c3_Var346 string
 		templ_7745c5c3_Var346, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.ConvergenceStatus)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1090, Col: 657}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1091, Col: 657}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var346))
 		if templ_7745c5c3_Err != nil {
@@ -7993,7 +7993,7 @@ func phpDeploymentDetail(deployment types.PHPDeployment, workspace controlphpapp
 		var templ_7745c5c3_Var348 string
 		templ_7745c5c3_Var348, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(deployment.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1094, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1095, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var348))
 		if templ_7745c5c3_Err != nil {
@@ -8006,7 +8006,7 @@ func phpDeploymentDetail(deployment types.PHPDeployment, workspace controlphpapp
 		var templ_7745c5c3_Var349 string
 		templ_7745c5c3_Var349, templ_7745c5c3_Err = templ.JoinStringErrs(deployment.RequestedRevision)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1094, Col: 176}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1095, Col: 176}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var349))
 		if templ_7745c5c3_Err != nil {
@@ -8019,7 +8019,7 @@ func phpDeploymentDetail(deployment types.PHPDeployment, workspace controlphpapp
 		var templ_7745c5c3_Var350 string
 		templ_7745c5c3_Var350, templ_7745c5c3_Err = templ.JoinStringErrs(deployment.ResolvedRevision)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1094, Col: 212}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1095, Col: 212}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var350))
 		if templ_7745c5c3_Err != nil {
@@ -8040,7 +8040,7 @@ func phpDeploymentDetail(deployment types.PHPDeployment, workspace controlphpapp
 		var templ_7745c5c3_Var351 string
 		templ_7745c5c3_Var351, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(deployment.StartedAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1094, Col: 343}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1095, Col: 343}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var351))
 		if templ_7745c5c3_Err != nil {
@@ -8053,7 +8053,7 @@ func phpDeploymentDetail(deployment types.PHPDeployment, workspace controlphpapp
 		var templ_7745c5c3_Var352 string
 		templ_7745c5c3_Var352, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(deployment.FinishedAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1094, Col: 417}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1095, Col: 417}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var352))
 		if templ_7745c5c3_Err != nil {
@@ -8066,7 +8066,7 @@ func phpDeploymentDetail(deployment types.PHPDeployment, workspace controlphpapp
 		var templ_7745c5c3_Var353 string
 		templ_7745c5c3_Var353, templ_7745c5c3_Err = templ.JoinStringErrs(deployment.HealthMessage)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1094, Col: 480}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1095, Col: 480}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var353))
 		if templ_7745c5c3_Err != nil {
@@ -8079,7 +8079,7 @@ func phpDeploymentDetail(deployment types.PHPDeployment, workspace controlphpapp
 		var templ_7745c5c3_Var354 string
 		templ_7745c5c3_Var354, templ_7745c5c3_Err = templ.JoinStringErrs(deployment.ComposerAudit)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1094, Col: 551}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1095, Col: 551}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var354))
 		if templ_7745c5c3_Err != nil {
@@ -8097,7 +8097,7 @@ func phpDeploymentDetail(deployment types.PHPDeployment, workspace controlphpapp
 			var templ_7745c5c3_Var355 string
 			templ_7745c5c3_Var355, templ_7745c5c3_Err = templ.JoinStringErrs(deployment.LastError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1096, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1097, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var355))
 			if templ_7745c5c3_Err != nil {
@@ -8144,7 +8144,7 @@ func phpExtensionSummary(runtime types.PHPRuntimeCapability) templ.Component {
 		var templ_7745c5c3_Var357 string
 		templ_7745c5c3_Var357, templ_7745c5c3_Err = templ.JoinStringErrs(phpExtensionList(runtime.Extensions))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1102, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1103, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var357))
 		if templ_7745c5c3_Err != nil {
@@ -8179,7 +8179,7 @@ func phpExtensionSummary(runtime types.PHPRuntimeCapability) templ.Component {
 		var templ_7745c5c3_Var360 string
 		templ_7745c5c3_Var360, templ_7745c5c3_Err = templ.JoinStringErrs(phpMissingExtensionList(runtime.MissingExtensions))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1102, Col: 314}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1103, Col: 314}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var360))
 		if templ_7745c5c3_Err != nil {
@@ -8230,7 +8230,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var362 templ.SafeURL
 			templ_7745c5c3_Var362, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1108, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1109, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var362))
 			if templ_7745c5c3_Err != nil {
@@ -8257,7 +8257,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 					var templ_7745c5c3_Var363 string
 					templ_7745c5c3_Var363, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(repository.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1113, Col: 49}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1114, Col: 49}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var363))
 					if templ_7745c5c3_Err != nil {
@@ -8280,7 +8280,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 					var templ_7745c5c3_Var364 string
 					templ_7745c5c3_Var364, templ_7745c5c3_Err = templ.JoinStringErrs(phpGitOption(repository))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1113, Col: 142}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1114, Col: 142}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var364))
 					if templ_7745c5c3_Err != nil {
@@ -8299,7 +8299,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var365 string
 			templ_7745c5c3_Var365, templ_7745c5c3_Err = templ.JoinStringErrs(phpDefaultString(workspace.Application.RepositoryRef, "main"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1116, Col: 145}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1117, Col: 145}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var365))
 			if templ_7745c5c3_Err != nil {
@@ -8360,7 +8360,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var366 string
 			templ_7745c5c3_Var366, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.PublicPath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1117, Col: 999}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1118, Col: 999}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var366))
 			if templ_7745c5c3_Err != nil {
@@ -8373,7 +8373,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var367 string
 			templ_7745c5c3_Var367, templ_7745c5c3_Err = templ.JoinStringErrs(phpDefaultString(workspace.Application.HealthPath, "/"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1117, Col: 1157}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1118, Col: 1157}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var367))
 			if templ_7745c5c3_Err != nil {
@@ -8386,7 +8386,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var368 string
 			templ_7745c5c3_Var368, templ_7745c5c3_Err = templ.JoinStringErrs(phpSharedPathsTextarea(workspace.Application.SharedPaths))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1117, Col: 1406}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1118, Col: 1406}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var368))
 			if templ_7745c5c3_Err != nil {
@@ -8399,7 +8399,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var369 string
 			templ_7745c5c3_Var369, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(workspace.Environment)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1118, Col: 205}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1119, Col: 205}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var369))
 			if templ_7745c5c3_Err != nil {
@@ -8412,7 +8412,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var370 string
 			templ_7745c5c3_Var370, templ_7745c5c3_Err = templ.JoinStringErrs(phpRetentionValue(workspace.Application.ReleaseRetention))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1118, Col: 474}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1119, Col: 474}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var370))
 			if templ_7745c5c3_Err != nil {
@@ -8483,7 +8483,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var371 string
 			templ_7745c5c3_Var371, templ_7745c5c3_Err = templ.JoinStringErrs(phpReleaseLimit(workspace))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 356}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 356}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var371))
 			if templ_7745c5c3_Err != nil {
@@ -8496,7 +8496,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var372 string
 			templ_7745c5c3_Var372, templ_7745c5c3_Err = templ.JoinStringErrs(phpWorkerLimit(workspace))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 399}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 399}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var372))
 			if templ_7745c5c3_Err != nil {
@@ -8509,7 +8509,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var373 string
 			templ_7745c5c3_Var373, templ_7745c5c3_Err = templ.JoinStringErrs(phpRepositoryLabel(data.SubscriptionServices.Git, workspace.Application.RepositoryID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 594}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 594}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var373))
 			if templ_7745c5c3_Err != nil {
@@ -8522,7 +8522,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var374 string
 			templ_7745c5c3_Var374, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.RepositoryRef)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 694}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 694}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var374))
 			if templ_7745c5c3_Err != nil {
@@ -8535,7 +8535,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var375 string
 			templ_7745c5c3_Var375, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.PHPVersion)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 785}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 785}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var375))
 			if templ_7745c5c3_Err != nil {
@@ -8548,7 +8548,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var376 string
 			templ_7745c5c3_Var376, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Application.FrameworkProfile)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 890}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 890}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var376))
 			if templ_7745c5c3_Err != nil {
@@ -8561,7 +8561,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var377 string
 			templ_7745c5c3_Var377, templ_7745c5c3_Err = templ.JoinStringErrs(phpComposerLabel(workspace.Application.Composer))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 1007}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 1007}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var377))
 			if templ_7745c5c3_Err != nil {
@@ -8574,7 +8574,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var378 string
 			templ_7745c5c3_Var378, templ_7745c5c3_Err = templ.JoinStringErrs(phpDefaultString(workspace.Application.PublicPath, "Document root"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 1148}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 1148}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var378))
 			if templ_7745c5c3_Err != nil {
@@ -8587,7 +8587,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var379 string
 			templ_7745c5c3_Var379, templ_7745c5c3_Err = templ.JoinStringErrs(phpDefaultString(workspace.Application.HealthPath, "/"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 1272}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 1272}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var379))
 			if templ_7745c5c3_Err != nil {
@@ -8600,7 +8600,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var380 string
 			templ_7745c5c3_Var380, templ_7745c5c3_Err = templ.JoinStringErrs(phpSharedPaths(workspace.Application.SharedPaths))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 1392}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 1392}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var380))
 			if templ_7745c5c3_Err != nil {
@@ -8613,7 +8613,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var381 string
 			templ_7745c5c3_Var381, templ_7745c5c3_Err = templ.JoinStringErrs(phpRetentionValue(workspace.Application.ReleaseRetention))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1123, Col: 1528}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1124, Col: 1528}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var381))
 			if templ_7745c5c3_Err != nil {
@@ -8640,7 +8640,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var382 templ.SafeURL
 			templ_7745c5c3_Var382, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/deployments"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1129, Col: 445}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1130, Col: 445}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var382))
 			if templ_7745c5c3_Err != nil {
@@ -8661,7 +8661,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var383 string
 			templ_7745c5c3_Var383, templ_7745c5c3_Err = templ.JoinStringErrs(phpDefaultString(workspace.Application.RepositoryRef, "main"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1129, Col: 574}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1130, Col: 574}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var383))
 			if templ_7745c5c3_Err != nil {
@@ -8688,7 +8688,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var384 templ.SafeURL
 			templ_7745c5c3_Var384, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/environment"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1132, Col: 443}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1133, Col: 443}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var384))
 			if templ_7745c5c3_Err != nil {
@@ -8723,7 +8723,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 			var templ_7745c5c3_Var385 templ.SafeURL
 			templ_7745c5c3_Var385, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/workers"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1135, Col: 460}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1136, Col: 460}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var385))
 			if templ_7745c5c3_Err != nil {
@@ -8751,7 +8751,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var386 string
 				templ_7745c5c3_Var386, templ_7745c5c3_Err = templ.JoinStringErrs("php-environment-edit-" + environment.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1139, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1140, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var386))
 				if templ_7745c5c3_Err != nil {
@@ -8764,7 +8764,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var387 string
 				templ_7745c5c3_Var387, templ_7745c5c3_Err = templ.JoinStringErrs(environment.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1139, Col: 152}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1140, Col: 152}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var387))
 				if templ_7745c5c3_Err != nil {
@@ -8800,7 +8800,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var388 templ.SafeURL
 				templ_7745c5c3_Var388, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/environment"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1145, Col: 254}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1146, Col: 254}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var388))
 				if templ_7745c5c3_Err != nil {
@@ -8821,7 +8821,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var389 string
 				templ_7745c5c3_Var389, templ_7745c5c3_Err = templ.JoinStringErrs(environment.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1145, Col: 356}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1146, Col: 356}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var389))
 				if templ_7745c5c3_Err != nil {
@@ -8854,7 +8854,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var390 string
 				templ_7745c5c3_Var390, templ_7745c5c3_Err = templ.JoinStringErrs(environment.Value)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1145, Col: 664}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1146, Col: 664}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var390))
 				if templ_7745c5c3_Err != nil {
@@ -8887,7 +8887,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var391 string
 				templ_7745c5c3_Var391, templ_7745c5c3_Err = templ.JoinStringErrs("php-environment-delete-" + environment.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1146, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1147, Col: 76}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var391))
 				if templ_7745c5c3_Err != nil {
@@ -8900,7 +8900,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var392 string
 				templ_7745c5c3_Var392, templ_7745c5c3_Err = templ.JoinStringErrs(environment.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1146, Col: 156}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1147, Col: 156}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var392))
 				if templ_7745c5c3_Err != nil {
@@ -8921,7 +8921,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var393 templ.SafeURL
 				templ_7745c5c3_Var393, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/environment/delete"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1146, Col: 495}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1147, Col: 495}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var393))
 				if templ_7745c5c3_Err != nil {
@@ -8942,7 +8942,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var394 string
 				templ_7745c5c3_Var394, templ_7745c5c3_Err = templ.JoinStringErrs(environment.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1146, Col: 571}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1147, Col: 571}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var394))
 				if templ_7745c5c3_Err != nil {
@@ -8963,7 +8963,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var395 string
 				templ_7745c5c3_Var395, templ_7745c5c3_Err = templ.JoinStringErrs("php-worker-edit-" + formatJobID(worker.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1151, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var395))
 				if templ_7745c5c3_Err != nil {
@@ -8976,7 +8976,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var396 string
 				templ_7745c5c3_Var396, templ_7745c5c3_Err = templ.JoinStringErrs(worker.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1151, Col: 148}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 148}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var396))
 				if templ_7745c5c3_Err != nil {
@@ -8997,7 +8997,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var397 templ.SafeURL
 				templ_7745c5c3_Var397, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/workers"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1151, Col: 492}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 492}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var397))
 				if templ_7745c5c3_Err != nil {
@@ -9018,7 +9018,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var398 string
 				templ_7745c5c3_Var398, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(worker.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1151, Col: 579}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 579}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var398))
 				if templ_7745c5c3_Err != nil {
@@ -9031,7 +9031,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var399 string
 				templ_7745c5c3_Var399, templ_7745c5c3_Err = templ.JoinStringErrs(worker.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1151, Col: 632}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 632}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var399))
 				if templ_7745c5c3_Err != nil {
@@ -9044,7 +9044,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var400 string
 				templ_7745c5c3_Var400, templ_7745c5c3_Err = templ.JoinStringErrs(worker.Script)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1151, Col: 741}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 741}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var400))
 				if templ_7745c5c3_Err != nil {
@@ -9057,7 +9057,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var401 string
 				templ_7745c5c3_Var401, templ_7745c5c3_Err = templ.JoinStringErrs(phpWorkerArgumentsTextarea(worker.Arguments))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1151, Col: 874}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 874}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var401))
 				if templ_7745c5c3_Err != nil {
@@ -9070,7 +9070,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var402 string
 				templ_7745c5c3_Var402, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(worker.Processes))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1151, Col: 998}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 998}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var402))
 				if templ_7745c5c3_Err != nil {
@@ -9083,7 +9083,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var403 string
 				templ_7745c5c3_Var403, templ_7745c5c3_Err = templ.JoinStringErrs(worker.DesiredState)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1151, Col: 1088}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 1088}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var403))
 				if templ_7745c5c3_Err != nil {
@@ -9096,7 +9096,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var404 string
 				templ_7745c5c3_Var404, templ_7745c5c3_Err = templ.JoinStringErrs("php-worker-delete-" + formatJobID(worker.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1153, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var404))
 				if templ_7745c5c3_Err != nil {
@@ -9109,7 +9109,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var405 string
 				templ_7745c5c3_Var405, templ_7745c5c3_Err = templ.JoinStringErrs(worker.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 152}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1153, Col: 152}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var405))
 				if templ_7745c5c3_Err != nil {
@@ -9130,7 +9130,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 				var templ_7745c5c3_Var406 templ.SafeURL
 				templ_7745c5c3_Var406, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/workers/" + formatJobID(worker.ID) + "/delete"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1152, Col: 493}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1153, Col: 493}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var406))
 				if templ_7745c5c3_Err != nil {
@@ -9160,7 +9160,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 					var templ_7745c5c3_Var407 string
 					templ_7745c5c3_Var407, templ_7745c5c3_Err = templ.JoinStringErrs("php-rollback-" + formatJobID(deployment.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1158, Col: 77}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1159, Col: 77}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var407))
 					if templ_7745c5c3_Err != nil {
@@ -9173,7 +9173,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 					var templ_7745c5c3_Var408 string
 					templ_7745c5c3_Var408, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(deployment.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1158, Col: 182}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1159, Col: 182}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var408))
 					if templ_7745c5c3_Err != nil {
@@ -9194,7 +9194,7 @@ func phpApplicationDialogs(item dashboard.Site, data dashboard.Data, workspace c
 					var templ_7745c5c3_Var409 templ.SafeURL
 					templ_7745c5c3_Var409, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/php-application/deployments/" + formatJobID(deployment.ID) + "/rollback"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1158, Col: 590}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1159, Col: 590}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var409))
 					if templ_7745c5c3_Err != nil {
@@ -9259,7 +9259,7 @@ func domainContainers(user auth.SessionUser, item dashboard.Site, subscription t
 			var templ_7745c5c3_Var411 string
 			templ_7745c5c3_Var411, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(applicationsForSite(data.SubscriptionServices.Applications, item.ID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1173, Col: 158}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1174, Col: 158}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var411))
 			if templ_7745c5c3_Err != nil {
@@ -9295,7 +9295,7 @@ func domainContainers(user auth.SessionUser, item dashboard.Site, subscription t
 					var templ_7745c5c3_Var412 string
 					templ_7745c5c3_Var412, templ_7745c5c3_Err = templ.JoinStringErrs(application.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1184, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1185, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var412))
 					if templ_7745c5c3_Err != nil {
@@ -9308,7 +9308,7 @@ func domainContainers(user auth.SessionUser, item dashboard.Site, subscription t
 					var templ_7745c5c3_Var413 string
 					templ_7745c5c3_Var413, templ_7745c5c3_Err = templ.JoinStringErrs(shortImageReference(application.ImageRef))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1184, Col: 130}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1185, Col: 130}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var413))
 					if templ_7745c5c3_Err != nil {
@@ -9331,7 +9331,7 @@ func domainContainers(user auth.SessionUser, item dashboard.Site, subscription t
 						var templ_7745c5c3_Var414 string
 						templ_7745c5c3_Var414, templ_7745c5c3_Err = templ.JoinStringErrs(application.RoutePrefix)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1188, Col: 39}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1189, Col: 39}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var414))
 						if templ_7745c5c3_Err != nil {
@@ -9366,7 +9366,7 @@ func domainContainers(user auth.SessionUser, item dashboard.Site, subscription t
 						var templ_7745c5c3_Var415 string
 						templ_7745c5c3_Var415, templ_7745c5c3_Err = templ.JoinStringErrs(application.ObservedMessage)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1192, Col: 61}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1193, Col: 61}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var415))
 						if templ_7745c5c3_Err != nil {
@@ -9384,7 +9384,7 @@ func domainContainers(user auth.SessionUser, item dashboard.Site, subscription t
 					var templ_7745c5c3_Var416 string
 					templ_7745c5c3_Var416, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(application.ActiveRevision))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1194, Col: 79}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1195, Col: 79}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var416))
 					if templ_7745c5c3_Err != nil {
@@ -9397,7 +9397,7 @@ func domainContainers(user auth.SessionUser, item dashboard.Site, subscription t
 					var templ_7745c5c3_Var417 templ.SafeURL
 					templ_7745c5c3_Var417, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/containers/"+formatJobID(application.ID))))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1194, Col: 236}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1195, Col: 236}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var417))
 					if templ_7745c5c3_Err != nil {
@@ -9462,7 +9462,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 		var templ_7745c5c3_Var419 templ.SafeURL
 		templ_7745c5c3_Var419, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/applications"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1206, Col: 156}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1207, Col: 156}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var419))
 		if templ_7745c5c3_Err != nil {
@@ -9483,7 +9483,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 		var templ_7745c5c3_Var420 string
 		templ_7745c5c3_Var420, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1207, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1208, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var420))
 		if templ_7745c5c3_Err != nil {
@@ -9516,7 +9516,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 				var templ_7745c5c3_Var421 string
 				templ_7745c5c3_Var421, templ_7745c5c3_Err = templ.JoinStringErrs(preset.Slug)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1218, Col: 34}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1219, Col: 34}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var421))
 				if templ_7745c5c3_Err != nil {
@@ -9529,7 +9529,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 				var templ_7745c5c3_Var422 string
 				templ_7745c5c3_Var422, templ_7745c5c3_Err = templ.JoinStringErrs(preset.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1218, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1219, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var422))
 				if templ_7745c5c3_Err != nil {
@@ -9553,7 +9553,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 			var templ_7745c5c3_Var423 string
 			templ_7745c5c3_Var423, templ_7745c5c3_Err = templ.JoinStringErrs("{}")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1235, Col: 145}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1236, Col: 145}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var423))
 			if templ_7745c5c3_Err != nil {
@@ -9566,7 +9566,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 			var templ_7745c5c3_Var424 string
 			templ_7745c5c3_Var424, templ_7745c5c3_Err = templ.JoinStringErrs("{\"APP_ENV\":\"production\"}")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1235, Col: 248}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1236, Col: 248}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var424))
 			if templ_7745c5c3_Err != nil {
@@ -9579,7 +9579,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 			var templ_7745c5c3_Var425 string
 			templ_7745c5c3_Var425, templ_7745c5c3_Err = templ.JoinStringErrs("{\"DATABASE_PASSWORD\":\"...\"}")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1236, Col: 203}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1237, Col: 203}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var425))
 			if templ_7745c5c3_Err != nil {
@@ -9592,7 +9592,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 			var templ_7745c5c3_Var426 string
 			templ_7745c5c3_Var426, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(applicationsForSubscription(data.SubscriptionServices.Applications, subscription.ID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1239, Col: 150}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1240, Col: 150}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var426))
 			if templ_7745c5c3_Err != nil {
@@ -9605,7 +9605,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 			var templ_7745c5c3_Var427 string
 			templ_7745c5c3_Var427, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(policy.Resources.MaxApplications))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1239, Col: 206}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1240, Col: 206}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var427))
 			if templ_7745c5c3_Err != nil {
@@ -9618,7 +9618,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 			var templ_7745c5c3_Var428 string
 			templ_7745c5c3_Var428, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(policy.Resources.MemoryMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1240, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1241, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var428))
 			if templ_7745c5c3_Err != nil {
@@ -9631,7 +9631,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 			var templ_7745c5c3_Var429 string
 			templ_7745c5c3_Var429, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(policy.Resources.CPUPercent))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1241, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1242, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var429))
 			if templ_7745c5c3_Err != nil {
@@ -9644,7 +9644,7 @@ func containerDeployDialog(user auth.SessionUser, item dashboard.Site, subscript
 			var templ_7745c5c3_Var430 string
 			templ_7745c5c3_Var430, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(policy.Resources.ContainerStorageMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1242, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1243, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var430))
 			if templ_7745c5c3_Err != nil {
@@ -9701,7 +9701,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var432 string
 		templ_7745c5c3_Var432, templ_7745c5c3_Err = templ.JoinStringErrs(application.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1256, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1257, Col: 100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var432))
 		if templ_7745c5c3_Err != nil {
@@ -9714,7 +9714,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var433 templ.SafeURL
 		templ_7745c5c3_Var433, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(item.ID)+"/containers")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1256, Col: 316}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1257, Col: 316}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var433))
 		if templ_7745c5c3_Err != nil {
@@ -9727,7 +9727,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var434 string
 		templ_7745c5c3_Var434, templ_7745c5c3_Err = templ.JoinStringErrs(shortImageReference(application.ImageRef))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1258, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1259, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var434))
 		if templ_7745c5c3_Err != nil {
@@ -9748,7 +9748,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var435 string
 		templ_7745c5c3_Var435, templ_7745c5c3_Err = templ.JoinStringErrs(application.DesiredState)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1259, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1260, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var435))
 		if templ_7745c5c3_Err != nil {
@@ -9761,7 +9761,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var436 string
 		templ_7745c5c3_Var436, templ_7745c5c3_Err = templ.JoinStringErrs(application.ObservedState)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1259, Col: 190}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1260, Col: 190}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var436))
 		if templ_7745c5c3_Err != nil {
@@ -9774,7 +9774,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var437 string
 		templ_7745c5c3_Var437, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullableTime(application.ObservedAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1259, Col: 248}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1260, Col: 248}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var437))
 		if templ_7745c5c3_Err != nil {
@@ -9787,7 +9787,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var438 string
 		templ_7745c5c3_Var438, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(application.ActiveRevision))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1259, Col: 339}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1260, Col: 339}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var438))
 		if templ_7745c5c3_Err != nil {
@@ -9800,7 +9800,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var439 string
 		templ_7745c5c3_Var439, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(application.EndpointPort))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1259, Col: 474}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1260, Col: 474}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var439))
 		if templ_7745c5c3_Err != nil {
@@ -9818,7 +9818,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 			var templ_7745c5c3_Var440 string
 			templ_7745c5c3_Var440, templ_7745c5c3_Err = templ.JoinStringErrs(application.LastError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1261, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1262, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var440))
 			if templ_7745c5c3_Err != nil {
@@ -9871,7 +9871,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var441 templ.SafeURL
 		templ_7745c5c3_Var441, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/services/application/" + formatJobID(application.ID) + "/delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1273, Col: 156}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1274, Col: 156}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var441))
 		if templ_7745c5c3_Err != nil {
@@ -9892,7 +9892,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var442 string
 		templ_7745c5c3_Var442, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1275, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1276, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var442))
 		if templ_7745c5c3_Err != nil {
@@ -9905,7 +9905,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var443 string
 		templ_7745c5c3_Var443, templ_7745c5c3_Err = templ.JoinStringErrs("Remove " + application.Name + " and its container storage configuration?")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1277, Col: 139}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1278, Col: 139}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var443))
 		if templ_7745c5c3_Err != nil {
@@ -9918,7 +9918,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var444 string
 		templ_7745c5c3_Var444, templ_7745c5c3_Err = templ.JoinStringErrs(application.ImageRef)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1282, Col: 176}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1283, Col: 176}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var444))
 		if templ_7745c5c3_Err != nil {
@@ -9931,7 +9931,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var445 string
 		templ_7745c5c3_Var445, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(application.ContainerPort))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1282, Col: 272}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1283, Col: 272}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var445))
 		if templ_7745c5c3_Err != nil {
@@ -9944,7 +9944,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var446 string
 		templ_7745c5c3_Var446, templ_7745c5c3_Err = templ.JoinStringErrs(application.HealthKind)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1282, Col: 333}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1283, Col: 333}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var446))
 		if templ_7745c5c3_Err != nil {
@@ -9957,7 +9957,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var447 string
 		templ_7745c5c3_Var447, templ_7745c5c3_Err = templ.JoinStringErrs(application.HealthPath)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1282, Col: 366}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1283, Col: 366}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var447))
 		if templ_7745c5c3_Err != nil {
@@ -9970,7 +9970,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var448 string
 		templ_7745c5c3_Var448, templ_7745c5c3_Err = templ.JoinStringErrs(application.RouteMode)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1283, Col: 162}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1284, Col: 162}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var448))
 		if templ_7745c5c3_Err != nil {
@@ -9983,7 +9983,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var449 string
 		templ_7745c5c3_Var449, templ_7745c5c3_Err = templ.JoinStringErrs(application.RoutePrefix)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1283, Col: 228}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1284, Col: 228}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var449))
 		if templ_7745c5c3_Err != nil {
@@ -9996,7 +9996,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var450 string
 		templ_7745c5c3_Var450, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(application.EndpointPort))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1283, Col: 333}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1284, Col: 333}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var450))
 		if templ_7745c5c3_Err != nil {
@@ -10014,7 +10014,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 			var templ_7745c5c3_Var451 string
 			templ_7745c5c3_Var451, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(generation.DesiredRevision))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1289, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1290, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var451))
 			if templ_7745c5c3_Err != nil {
@@ -10035,7 +10035,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 			var templ_7745c5c3_Var452 string
 			templ_7745c5c3_Var452, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(generation.EndpointPort))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1289, Col: 220}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1290, Col: 220}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var452))
 			if templ_7745c5c3_Err != nil {
@@ -10048,7 +10048,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 			var templ_7745c5c3_Var453 string
 			templ_7745c5c3_Var453, templ_7745c5c3_Err = templ.JoinStringErrs(generation.HealthMessage)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1289, Col: 277}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1290, Col: 277}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var453))
 			if templ_7745c5c3_Err != nil {
@@ -10061,7 +10061,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 			var templ_7745c5c3_Var454 string
 			templ_7745c5c3_Var454, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(generation.StartedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1289, Col: 343}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1290, Col: 343}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var454))
 			if templ_7745c5c3_Err != nil {
@@ -10079,7 +10079,7 @@ func domainContainerDetail(item dashboard.Site, subscription types.SubscriptionS
 		var templ_7745c5c3_Var455 string
 		templ_7745c5c3_Var455, templ_7745c5c3_Err = templ.JoinStringErrs("/sites/" + formatJobID(item.ID) + "/containers/" + formatJobID(application.ID) + "/logs")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1293, Col: 166}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1294, Col: 166}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var455))
 		if templ_7745c5c3_Err != nil {
@@ -10121,7 +10121,7 @@ func containerActionForm(subscriptionID int64, siteID int64, applicationID int64
 		var templ_7745c5c3_Var457 templ.SafeURL
 		templ_7745c5c3_Var457, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscriptionID) + "/applications/" + formatJobID(applicationID) + "/action"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1302, Col: 144}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1303, Col: 144}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var457))
 		if templ_7745c5c3_Err != nil {
@@ -10142,7 +10142,7 @@ func containerActionForm(subscriptionID int64, siteID int64, applicationID int64
 		var templ_7745c5c3_Var458 string
 		templ_7745c5c3_Var458, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1302, Col: 226}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1303, Col: 226}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var458))
 		if templ_7745c5c3_Err != nil {
@@ -10155,7 +10155,7 @@ func containerActionForm(subscriptionID int64, siteID int64, applicationID int64
 		var templ_7745c5c3_Var459 string
 		templ_7745c5c3_Var459, templ_7745c5c3_Err = templ.JoinStringErrs(action)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1302, Col: 279}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1303, Col: 279}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var459))
 		if templ_7745c5c3_Err != nil {
@@ -10168,7 +10168,7 @@ func containerActionForm(subscriptionID int64, siteID int64, applicationID int64
 		var templ_7745c5c3_Var460 string
 		templ_7745c5c3_Var460, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1302, Col: 340}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1303, Col: 340}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var460))
 		if templ_7745c5c3_Err != nil {
@@ -10230,7 +10230,7 @@ func domainStaging(item dashboard.Site, subscription types.SubscriptionSummary, 
 			var templ_7745c5c3_Var462 templ.SafeURL
 			templ_7745c5c3_Var462, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/staging"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1315, Col: 119}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1316, Col: 119}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var462))
 			if templ_7745c5c3_Err != nil {
@@ -10256,7 +10256,7 @@ func domainStaging(item dashboard.Site, subscription types.SubscriptionSummary, 
 				var templ_7745c5c3_Var463 string
 				templ_7745c5c3_Var463, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(target.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1320, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1321, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var463))
 				if templ_7745c5c3_Err != nil {
@@ -10269,7 +10269,7 @@ func domainStaging(item dashboard.Site, subscription types.SubscriptionSummary, 
 				var templ_7745c5c3_Var464 string
 				templ_7745c5c3_Var464, templ_7745c5c3_Err = templ.JoinStringErrs(target.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1320, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1321, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var464))
 				if templ_7745c5c3_Err != nil {
@@ -10297,7 +10297,7 @@ func domainStaging(item dashboard.Site, subscription types.SubscriptionSummary, 
 			var templ_7745c5c3_Var465 string
 			templ_7745c5c3_Var465, templ_7745c5c3_Err = templ.JoinStringErrs(operation.SourceDomain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1335, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1336, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var465))
 			if templ_7745c5c3_Err != nil {
@@ -10310,7 +10310,7 @@ func domainStaging(item dashboard.Site, subscription types.SubscriptionSummary, 
 			var templ_7745c5c3_Var466 string
 			templ_7745c5c3_Var466, templ_7745c5c3_Err = templ.JoinStringErrs(operation.TargetDomain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1335, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1336, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var466))
 			if templ_7745c5c3_Err != nil {
@@ -10323,7 +10323,7 @@ func domainStaging(item dashboard.Site, subscription types.SubscriptionSummary, 
 			var templ_7745c5c3_Var467 string
 			templ_7745c5c3_Var467, templ_7745c5c3_Err = templ.JoinStringErrs(operation.Direction)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1335, Col: 165}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1336, Col: 165}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var467))
 			if templ_7745c5c3_Err != nil {
@@ -10345,7 +10345,7 @@ func domainStaging(item dashboard.Site, subscription types.SubscriptionSummary, 
 				var templ_7745c5c3_Var468 string
 				templ_7745c5c3_Var468, templ_7745c5c3_Err = templ.JoinStringErrs(operation.LastError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1337, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1338, Col: 51}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var468))
 				if templ_7745c5c3_Err != nil {
@@ -10363,7 +10363,7 @@ func domainStaging(item dashboard.Site, subscription types.SubscriptionSummary, 
 			var templ_7745c5c3_Var469 string
 			templ_7745c5c3_Var469, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(operation.CopiedBytes))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1339, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1340, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var469))
 			if templ_7745c5c3_Err != nil {
@@ -10376,7 +10376,7 @@ func domainStaging(item dashboard.Site, subscription types.SubscriptionSummary, 
 			var templ_7745c5c3_Var470 string
 			templ_7745c5c3_Var470, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(operation.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1339, Col: 134}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1340, Col: 134}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var470))
 			if templ_7745c5c3_Err != nil {
@@ -10456,7 +10456,7 @@ func pageSectionHead(title string, copy string) templ.Component {
 		var templ_7745c5c3_Var473 string
 		templ_7745c5c3_Var473, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1351, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1352, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var473))
 		if templ_7745c5c3_Err != nil {
@@ -10469,7 +10469,7 @@ func pageSectionHead(title string, copy string) templ.Component {
 		var templ_7745c5c3_Var474 string
 		templ_7745c5c3_Var474, templ_7745c5c3_Err = templ.JoinStringErrs(copy)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1351, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1352, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var474))
 		if templ_7745c5c3_Err != nil {
@@ -10537,7 +10537,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 		var templ_7745c5c3_Var478 templ.SafeURL
 		templ_7745c5c3_Var478, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(siteID)+"/web-server")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1358, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1359, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var478))
 		if templ_7745c5c3_Err != nil {
@@ -10550,7 +10550,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 		var templ_7745c5c3_Var479 string
 		templ_7745c5c3_Var479, templ_7745c5c3_Err = templ.JoinStringErrs(ariaCurrent(domainHostingActive(current)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1358, Col: 189}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1359, Col: 189}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var479))
 		if templ_7745c5c3_Err != nil {
@@ -10605,7 +10605,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 		var templ_7745c5c3_Var482 string
 		templ_7745c5c3_Var482, templ_7745c5c3_Err = templ.JoinStringErrs(domainToolLabel(current))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1364, Col: 75}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1365, Col: 75}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var482))
 		if templ_7745c5c3_Err != nil {
@@ -10645,7 +10645,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 			var templ_7745c5c3_Var485 templ.SafeURL
 			templ_7745c5c3_Var485, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, siteID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1368, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1369, Col: 99}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var485))
 			if templ_7745c5c3_Err != nil {
@@ -10723,7 +10723,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 		var templ_7745c5c3_Var486 string
 		templ_7745c5c3_Var486, templ_7745c5c3_Err = templ.JoinStringErrs("domain-tools-" + formatJobID(siteID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1388, Col: 113}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1389, Col: 113}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var486))
 		if templ_7745c5c3_Err != nil {
@@ -10744,7 +10744,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 		var templ_7745c5c3_Var487 string
 		templ_7745c5c3_Var487, templ_7745c5c3_Err = templ.JoinStringErrs(domainCurrentLabel(current))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1388, Col: 198}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1389, Col: 198}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var487))
 		if templ_7745c5c3_Err != nil {
@@ -10765,7 +10765,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 		var templ_7745c5c3_Var488 string
 		templ_7745c5c3_Var488, templ_7745c5c3_Err = templ.JoinStringErrs("domain-tools-" + formatJobID(siteID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1390, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1391, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var488))
 		if templ_7745c5c3_Err != nil {
@@ -10778,7 +10778,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 		var templ_7745c5c3_Var489 string
 		templ_7745c5c3_Var489, templ_7745c5c3_Err = templ.JoinStringErrs("domain-tools-title-" + formatJobID(siteID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1390, Col: 167}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1391, Col: 167}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var489))
 		if templ_7745c5c3_Err != nil {
@@ -10791,7 +10791,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 		var templ_7745c5c3_Var490 string
 		templ_7745c5c3_Var490, templ_7745c5c3_Err = templ.JoinStringErrs("domain-tools-title-" + formatJobID(siteID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1391, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1392, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var490))
 		if templ_7745c5c3_Err != nil {
@@ -10804,7 +10804,7 @@ func domainNavigation(siteID int64, current string, view WorkspaceView, canUseFi
 		var templ_7745c5c3_Var491 string
 		templ_7745c5c3_Var491, templ_7745c5c3_Err = templ.JoinStringErrs(domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1391, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1392, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var491))
 		if templ_7745c5c3_Err != nil {
@@ -10888,7 +10888,7 @@ func domainTab(siteID int64, tab string, label string, current string, view Work
 		var templ_7745c5c3_Var495 templ.SafeURL
 		templ_7745c5c3_Var495, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(siteID)) + "?tab=" + tab))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1400, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1401, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var495))
 		if templ_7745c5c3_Err != nil {
@@ -10901,7 +10901,7 @@ func domainTab(siteID int64, tab string, label string, current string, view Work
 		var templ_7745c5c3_Var496 string
 		templ_7745c5c3_Var496, templ_7745c5c3_Err = templ.JoinStringErrs(ariaCurrent(domainTabActive(current, tab)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1400, Col: 185}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1401, Col: 185}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var496))
 		if templ_7745c5c3_Err != nil {
@@ -10914,7 +10914,7 @@ func domainTab(siteID int64, tab string, label string, current string, view Work
 		var templ_7745c5c3_Var497 string
 		templ_7745c5c3_Var497, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1400, Col: 195}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1401, Col: 195}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var497))
 		if templ_7745c5c3_Err != nil {
@@ -10974,7 +10974,7 @@ func domainDeepTab(siteID int64, tab string, label string, current string, view 
 		var templ_7745c5c3_Var501 templ.SafeURL
 		templ_7745c5c3_Var501, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(siteID)+"/"+tab)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1403, Col: 122}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1404, Col: 122}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var501))
 		if templ_7745c5c3_Err != nil {
@@ -10987,7 +10987,7 @@ func domainDeepTab(siteID int64, tab string, label string, current string, view 
 		var templ_7745c5c3_Var502 string
 		templ_7745c5c3_Var502, templ_7745c5c3_Err = templ.JoinStringErrs(ariaCurrent(domainTabActive(current, tab)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1403, Col: 181}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1404, Col: 181}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var502))
 		if templ_7745c5c3_Err != nil {
@@ -11000,7 +11000,7 @@ func domainDeepTab(siteID int64, tab string, label string, current string, view 
 		var templ_7745c5c3_Var503 string
 		templ_7745c5c3_Var503, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1403, Col: 191}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1404, Col: 191}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var503))
 		if templ_7745c5c3_Err != nil {
@@ -11042,7 +11042,7 @@ func domainTool(siteID int64, tab string, iconName string, title string, copy st
 		var templ_7745c5c3_Var505 templ.SafeURL
 		templ_7745c5c3_Var505, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(siteID)) + "?tab=" + tab))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1406, Col: 87}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1407, Col: 87}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var505))
 		if templ_7745c5c3_Err != nil {
@@ -11063,7 +11063,7 @@ func domainTool(siteID int64, tab string, iconName string, title string, copy st
 		var templ_7745c5c3_Var506 string
 		templ_7745c5c3_Var506, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1406, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1407, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var506))
 		if templ_7745c5c3_Err != nil {
@@ -11076,7 +11076,7 @@ func domainTool(siteID int64, tab string, iconName string, title string, copy st
 		var templ_7745c5c3_Var507 string
 		templ_7745c5c3_Var507, templ_7745c5c3_Err = templ.JoinStringErrs(copy)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1406, Col: 143}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1407, Col: 143}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var507))
 		if templ_7745c5c3_Err != nil {
@@ -11118,7 +11118,7 @@ func domainDeepTool(siteID int64, route string, iconName string, title string, c
 		var templ_7745c5c3_Var509 templ.SafeURL
 		templ_7745c5c3_Var509, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(siteID)+"/"+route)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1409, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1410, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var509))
 		if templ_7745c5c3_Err != nil {
@@ -11139,7 +11139,7 @@ func domainDeepTool(siteID int64, route string, iconName string, title string, c
 		var templ_7745c5c3_Var510 string
 		templ_7745c5c3_Var510, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1409, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1410, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var510))
 		if templ_7745c5c3_Err != nil {
@@ -11152,7 +11152,7 @@ func domainDeepTool(siteID int64, route string, iconName string, title string, c
 		var templ_7745c5c3_Var511 string
 		templ_7745c5c3_Var511, templ_7745c5c3_Err = templ.JoinStringErrs(copy)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1409, Col: 141}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1410, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var511))
 		if templ_7745c5c3_Err != nil {
@@ -11198,7 +11198,7 @@ func domainWordPress(item dashboard.Site, subscription types.SubscriptionSummary
 		var templ_7745c5c3_Var513 string
 		templ_7745c5c3_Var513, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(workspace.Available))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1415, Col: 68}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1416, Col: 68}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var513))
 		if templ_7745c5c3_Err != nil {
@@ -11211,7 +11211,7 @@ func domainWordPress(item dashboard.Site, subscription types.SubscriptionSummary
 		var templ_7745c5c3_Var514 string
 		templ_7745c5c3_Var514, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(workspace.Policy.Resources.MaxWordPressSites))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1416, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1417, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var514))
 		if templ_7745c5c3_Err != nil {
@@ -11224,7 +11224,7 @@ func domainWordPress(item dashboard.Site, subscription types.SubscriptionSummary
 		var templ_7745c5c3_Var515 string
 		templ_7745c5c3_Var515, templ_7745c5c3_Err = templ.JoinStringErrs(phpHostingModeLabel(workspace.Site.HostingMode))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1417, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1418, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var515))
 		if templ_7745c5c3_Err != nil {
@@ -11242,7 +11242,7 @@ func domainWordPress(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var516 string
 			templ_7745c5c3_Var516, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Reason)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1421, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1422, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var516))
 			if templ_7745c5c3_Err != nil {
@@ -11274,7 +11274,7 @@ func domainWordPress(item dashboard.Site, subscription types.SubscriptionSummary
 				var templ_7745c5c3_Var517 string
 				templ_7745c5c3_Var517, templ_7745c5c3_Err = templ.JoinStringErrs(workspace.Reason)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1427, Col: 54}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1428, Col: 54}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var517))
 				if templ_7745c5c3_Err != nil {
@@ -11292,7 +11292,7 @@ func domainWordPress(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var518 templ.SafeURL
 			templ_7745c5c3_Var518, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1429, Col: 224}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1430, Col: 224}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var518))
 			if templ_7745c5c3_Err != nil {
@@ -11388,7 +11388,7 @@ func domainWordPressRemoving(instance controlwordpress.Instance) templ.Component
 			var templ_7745c5c3_Var520 string
 			templ_7745c5c3_Var520, templ_7745c5c3_Err = templ.JoinStringErrs(instance.LastError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1451, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1452, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var520))
 			if templ_7745c5c3_Err != nil {
@@ -11464,7 +11464,7 @@ func domainWordPressRemoved(item dashboard.Site, instance controlwordpress.Insta
 				var templ_7745c5c3_Var522 string
 				templ_7745c5c3_Var522, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(removal.BackupID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1468, Col: 81}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1469, Col: 81}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var522))
 				if templ_7745c5c3_Err != nil {
@@ -11487,7 +11487,7 @@ func domainWordPressRemoved(item dashboard.Site, instance controlwordpress.Insta
 		var templ_7745c5c3_Var523 templ.SafeURL
 		templ_7745c5c3_Var523, templ_7745c5c3_Err = templ.JoinURLErrs(wordpressTabURL(view, item.ID, "activity"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1472, Col: 207}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1473, Col: 207}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var523))
 		if templ_7745c5c3_Err != nil {
@@ -11571,7 +11571,7 @@ func domainWordPressIncomplete(item dashboard.Site, instance controlwordpress.In
 			var templ_7745c5c3_Var525 string
 			templ_7745c5c3_Var525, templ_7745c5c3_Err = templ.JoinStringErrs(instance.LastError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1488, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1489, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var525))
 			if templ_7745c5c3_Err != nil {
@@ -11590,7 +11590,7 @@ func domainWordPressIncomplete(item dashboard.Site, instance controlwordpress.In
 			var templ_7745c5c3_Var526 templ.SafeURL
 			templ_7745c5c3_Var526, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1492, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1493, Col: 129}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var526))
 			if templ_7745c5c3_Err != nil {
@@ -11611,7 +11611,7 @@ func domainWordPressIncomplete(item dashboard.Site, instance controlwordpress.In
 			var templ_7745c5c3_Var527 templ.SafeURL
 			templ_7745c5c3_Var527, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1492, Col: 467}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1493, Col: 467}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var527))
 			if templ_7745c5c3_Err != nil {
@@ -11674,7 +11674,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 		var templ_7745c5c3_Var529 string
 		templ_7745c5c3_Var529, templ_7745c5c3_Err = templ.JoinStringErrs(instance.InstalledVersion)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1499, Col: 143}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1500, Col: 143}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var529))
 		if templ_7745c5c3_Err != nil {
@@ -11687,7 +11687,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 		var templ_7745c5c3_Var530 string
 		templ_7745c5c3_Var530, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(instance.Inventory.UpdatesAvailable))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1499, Col: 212}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1500, Col: 212}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var530))
 		if templ_7745c5c3_Err != nil {
@@ -11700,7 +11700,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 		var templ_7745c5c3_Var531 string
 		templ_7745c5c3_Var531, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(instance.Security.Score))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1499, Col: 286}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1500, Col: 286}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var531))
 		if templ_7745c5c3_Err != nil {
@@ -11713,7 +11713,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 		var templ_7745c5c3_Var532 templ.SafeURL
 		templ_7745c5c3_Var532, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1499, Col: 430}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1500, Col: 430}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var532))
 		if templ_7745c5c3_Err != nil {
@@ -11775,7 +11775,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var533 string
 			templ_7745c5c3_Var533, templ_7745c5c3_Err = templ.JoinStringErrs(instance.SiteTitle)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1509, Col: 282}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 282}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var533))
 			if templ_7745c5c3_Err != nil {
@@ -11788,7 +11788,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var534 string
 			templ_7745c5c3_Var534, templ_7745c5c3_Err = templ.JoinStringErrs(instance.Inventory.SiteURL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1509, Col: 349}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 349}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var534))
 			if templ_7745c5c3_Err != nil {
@@ -11801,7 +11801,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var535 string
 			templ_7745c5c3_Var535, templ_7745c5c3_Err = templ.JoinStringErrs(instance.AdminUser)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1509, Col: 413}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 413}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var535))
 			if templ_7745c5c3_Err != nil {
@@ -11814,7 +11814,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var536 string
 			templ_7745c5c3_Var536, templ_7745c5c3_Err = templ.JoinStringErrs(instance.AdminEmail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1509, Col: 478}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 478}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var536))
 			if templ_7745c5c3_Err != nil {
@@ -11827,7 +11827,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var537 string
 			templ_7745c5c3_Var537, templ_7745c5c3_Err = templ.JoinStringErrs(instance.Inventory.PHPVersion)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1509, Col: 543}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 543}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var537))
 			if templ_7745c5c3_Err != nil {
@@ -11840,7 +11840,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var538 string
 			templ_7745c5c3_Var538, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(instance.LastScannedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1509, Col: 619}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 619}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var538))
 			if templ_7745c5c3_Err != nil {
@@ -11853,7 +11853,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var539 string
 			templ_7745c5c3_Var539, templ_7745c5c3_Err = templ.JoinStringErrs(instance.DesiredState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 289}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1511, Col: 289}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var539))
 			if templ_7745c5c3_Err != nil {
@@ -11866,7 +11866,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var540 string
 			templ_7745c5c3_Var540, templ_7745c5c3_Err = templ.JoinStringErrs(instance.ObservedState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 352}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1511, Col: 352}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var540))
 			if templ_7745c5c3_Err != nil {
@@ -11879,7 +11879,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var541 string
 			templ_7745c5c3_Var541, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(instance.AppliedRevision))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 430}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1511, Col: 430}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var541))
 			if templ_7745c5c3_Err != nil {
@@ -11892,7 +11892,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var542 string
 			templ_7745c5c3_Var542, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(instance.DesiredRevision))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 474}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1511, Col: 474}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var542))
 			if templ_7745c5c3_Err != nil {
@@ -11905,7 +11905,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var543 string
 			templ_7745c5c3_Var543, templ_7745c5c3_Err = templ.JoinStringErrs(instance.ChecksumStatus)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 539}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1511, Col: 539}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var543))
 			if templ_7745c5c3_Err != nil {
@@ -11918,7 +11918,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var544 string
 			templ_7745c5c3_Var544, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(instance.MaintenanceMode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1510, Col: 614}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1511, Col: 614}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var544))
 			if templ_7745c5c3_Err != nil {
@@ -11936,7 +11936,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 				var templ_7745c5c3_Var545 string
 				templ_7745c5c3_Var545, templ_7745c5c3_Err = templ.JoinStringErrs(instance.LastError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1512, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1513, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var545))
 				if templ_7745c5c3_Err != nil {
@@ -11954,7 +11954,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var546 templ.SafeURL
 			templ_7745c5c3_Var546, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1514, Col: 132}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1515, Col: 132}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var546))
 			if templ_7745c5c3_Err != nil {
@@ -11990,7 +11990,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var547 templ.SafeURL
 			templ_7745c5c3_Var547, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/detach"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1522, Col: 507}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1523, Col: 507}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var547))
 			if templ_7745c5c3_Err != nil {
@@ -12026,7 +12026,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var548 string
 			templ_7745c5c3_Var548, templ_7745c5c3_Err = templ.JoinStringErrs(wordpressSecurityLabel(instance.Security))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1529, Col: 268}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1530, Col: 268}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var548))
 			if templ_7745c5c3_Err != nil {
@@ -12039,7 +12039,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var549 string
 			templ_7745c5c3_Var549, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(instance.Security.CoreChecksumsValid))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1529, Col: 391}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1530, Col: 391}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var549))
 			if templ_7745c5c3_Err != nil {
@@ -12052,7 +12052,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var550 string
 			templ_7745c5c3_Var550, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(instance.Security.FilePermissionsSafe))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1529, Col: 485}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1530, Col: 485}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var550))
 			if templ_7745c5c3_Err != nil {
@@ -12065,7 +12065,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var551 string
 			templ_7745c5c3_Var551, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(instance.Security.FileEditingDisabled))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1529, Col: 583}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1530, Col: 583}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var551))
 			if templ_7745c5c3_Err != nil {
@@ -12078,7 +12078,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var552 string
 			templ_7745c5c3_Var552, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(instance.Security.DebugDisabled))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1529, Col: 669}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1530, Col: 669}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var552))
 			if templ_7745c5c3_Err != nil {
@@ -12091,7 +12091,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var553 string
 			templ_7745c5c3_Var553, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(instance.Security.HTTPSConfigured))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1529, Col: 759}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1530, Col: 759}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var553))
 			if templ_7745c5c3_Err != nil {
@@ -12114,7 +12114,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 					var templ_7745c5c3_Var554 string
 					templ_7745c5c3_Var554, templ_7745c5c3_Err = templ.JoinStringErrs(finding)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1533, Col: 20}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1534, Col: 20}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var554))
 					if templ_7745c5c3_Err != nil {
@@ -12137,7 +12137,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var555 templ.SafeURL
 			templ_7745c5c3_Var555, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1537, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1538, Col: 129}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var555))
 			if templ_7745c5c3_Err != nil {
@@ -12158,7 +12158,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var556 templ.SafeURL
 			templ_7745c5c3_Var556, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1537, Col: 375}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1538, Col: 375}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var556))
 			if templ_7745c5c3_Err != nil {
@@ -12184,7 +12184,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var557 string
 			templ_7745c5c3_Var557, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(instance.Inventory.UpdatesAvailable))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1540, Col: 242}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1541, Col: 242}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var557))
 			if templ_7745c5c3_Err != nil {
@@ -12197,7 +12197,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var558 templ.SafeURL
 			templ_7745c5c3_Var558, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1540, Col: 570}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1541, Col: 570}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var558))
 			if templ_7745c5c3_Err != nil {
@@ -12218,7 +12218,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 			var templ_7745c5c3_Var559 templ.SafeURL
 			templ_7745c5c3_Var559, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1540, Col: 921}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1541, Col: 921}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var559))
 			if templ_7745c5c3_Err != nil {
@@ -12259,7 +12259,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 					var templ_7745c5c3_Var560 string
 					templ_7745c5c3_Var560, templ_7745c5c3_Err = templ.JoinStringErrs(string(operation.Kind))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1548, Col: 70}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1549, Col: 70}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var560))
 					if templ_7745c5c3_Err != nil {
@@ -12272,7 +12272,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 					var templ_7745c5c3_Var561 string
 					templ_7745c5c3_Var561, templ_7745c5c3_Err = templ.JoinStringErrs(string(operation.TargetType))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1548, Col: 140}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1549, Col: 140}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var561))
 					if templ_7745c5c3_Err != nil {
@@ -12285,7 +12285,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 					var templ_7745c5c3_Var562 string
 					templ_7745c5c3_Var562, templ_7745c5c3_Err = templ.JoinStringErrs(operation.TargetSlug)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1548, Col: 165}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1549, Col: 165}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var562))
 					if templ_7745c5c3_Err != nil {
@@ -12306,7 +12306,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 					var templ_7745c5c3_Var563 string
 					templ_7745c5c3_Var563, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(operation.CreatedAt))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1548, Col: 290}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1549, Col: 290}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var563))
 					if templ_7745c5c3_Err != nil {
@@ -12324,7 +12324,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 						var templ_7745c5c3_Var564 string
 						templ_7745c5c3_Var564, templ_7745c5c3_Err = templ.JoinStringErrs(operation.LastError)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1550, Col: 53}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1551, Col: 53}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var564))
 						if templ_7745c5c3_Err != nil {
@@ -12342,7 +12342,7 @@ func domainWordPressInstalled(item dashboard.Site, instance controlwordpress.Ins
 						var templ_7745c5c3_Var565 string
 						templ_7745c5c3_Var565, templ_7745c5c3_Err = templ.JoinStringErrs(operation.Output)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1552, Col: 33}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1553, Col: 33}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var565))
 						if templ_7745c5c3_Err != nil {
@@ -12413,7 +12413,7 @@ func wordpressTabLink(siteID int64, tab string, label string, view WorkspaceView
 		var templ_7745c5c3_Var568 templ.SafeURL
 		templ_7745c5c3_Var568, templ_7745c5c3_Err = templ.JoinURLErrs(wordpressTabURL(view, siteID, tab))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1565, Col: 43}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1566, Col: 43}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var568))
 		if templ_7745c5c3_Err != nil {
@@ -12439,7 +12439,7 @@ func wordpressTabLink(siteID int64, tab string, label string, view WorkspaceView
 		var templ_7745c5c3_Var570 string
 		templ_7745c5c3_Var570, templ_7745c5c3_Err = templ.JoinStringErrs(ariaCurrent(wordpressTabClass(view, tab)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1565, Col: 139}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1566, Col: 139}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var570))
 		if templ_7745c5c3_Err != nil {
@@ -12452,7 +12452,7 @@ func wordpressTabLink(siteID int64, tab string, label string, view WorkspaceView
 		var templ_7745c5c3_Var571 string
 		templ_7745c5c3_Var571, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1565, Col: 149}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1566, Col: 149}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var571))
 		if templ_7745c5c3_Err != nil {
@@ -12494,7 +12494,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 		var templ_7745c5c3_Var573 string
 		templ_7745c5c3_Var573, templ_7745c5c3_Err = templ.JoinStringErrs(strings.ToUpper(target[:1]) + target[1:] + "s")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1569, Col: 112}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1570, Col: 112}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var573))
 		if templ_7745c5c3_Err != nil {
@@ -12507,7 +12507,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 		var templ_7745c5c3_Var574 string
 		templ_7745c5c3_Var574, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(components)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1569, Col: 235}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1570, Col: 235}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var574))
 		if templ_7745c5c3_Err != nil {
@@ -12525,7 +12525,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 			var templ_7745c5c3_Var575 string
 			templ_7745c5c3_Var575, templ_7745c5c3_Err = templ.JoinStringErrs(target)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1571, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1572, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var575))
 			if templ_7745c5c3_Err != nil {
@@ -12548,7 +12548,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 				var templ_7745c5c3_Var576 string
 				templ_7745c5c3_Var576, templ_7745c5c3_Err = templ.JoinStringErrs(component.Slug)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1575, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1576, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var576))
 				if templ_7745c5c3_Err != nil {
@@ -12561,7 +12561,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 				var templ_7745c5c3_Var577 string
 				templ_7745c5c3_Var577, templ_7745c5c3_Err = templ.JoinStringErrs(component.Version)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1575, Col: 115}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1576, Col: 115}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var577))
 				if templ_7745c5c3_Err != nil {
@@ -12574,7 +12574,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 				var templ_7745c5c3_Var578 string
 				templ_7745c5c3_Var578, templ_7745c5c3_Err = templ.JoinStringErrs(component.Status)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1575, Col: 163}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1576, Col: 163}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var578))
 				if templ_7745c5c3_Err != nil {
@@ -12588,7 +12588,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 					var templ_7745c5c3_Var579 string
 					templ_7745c5c3_Var579, templ_7745c5c3_Err = templ.JoinStringErrs(component.UpdateVersion)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1577, Col: 32}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1578, Col: 32}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var579))
 					if templ_7745c5c3_Err != nil {
@@ -12612,7 +12612,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 					var templ_7745c5c3_Var580 templ.SafeURL
 					templ_7745c5c3_Var580, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1583, Col: 105}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1584, Col: 105}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var580))
 					if templ_7745c5c3_Err != nil {
@@ -12633,7 +12633,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 					var templ_7745c5c3_Var581 string
 					templ_7745c5c3_Var581, templ_7745c5c3_Err = templ.JoinStringErrs(target)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1583, Col: 229}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1584, Col: 229}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var581))
 					if templ_7745c5c3_Err != nil {
@@ -12646,7 +12646,7 @@ func wordpressComponents(item dashboard.Site, components []types.WordPressCompon
 					var templ_7745c5c3_Var582 string
 					templ_7745c5c3_Var582, templ_7745c5c3_Err = templ.JoinStringErrs(component.Slug)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1583, Col: 295}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1584, Col: 295}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var582))
 					if templ_7745c5c3_Err != nil {
@@ -12711,7 +12711,7 @@ func wordpressInstallDialog(item dashboard.Site, view WorkspaceView) templ.Compo
 		var templ_7745c5c3_Var584 templ.SafeURL
 		templ_7745c5c3_Var584, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/install"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1593, Col: 740}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1594, Col: 740}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var584))
 		if templ_7745c5c3_Err != nil {
@@ -12777,7 +12777,7 @@ func wordpressPasswordDialog(item dashboard.Site, instance controlwordpress.Inst
 		var templ_7745c5c3_Var586 string
 		templ_7745c5c3_Var586, templ_7745c5c3_Err = templ.JoinStringErrs(instance.AdminUser)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1597, Col: 262}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1598, Col: 262}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var586))
 		if templ_7745c5c3_Err != nil {
@@ -12798,7 +12798,7 @@ func wordpressPasswordDialog(item dashboard.Site, instance controlwordpress.Inst
 		var templ_7745c5c3_Var587 templ.SafeURL
 		templ_7745c5c3_Var587, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/operations"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1597, Col: 543}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1598, Col: 543}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var587))
 		if templ_7745c5c3_Err != nil {
@@ -12872,7 +12872,7 @@ func wordpressUninstallDialog(item dashboard.Site, instance controlwordpress.Ins
 		var templ_7745c5c3_Var589 templ.SafeURL
 		templ_7745c5c3_Var589, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/wordpress/uninstall"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1601, Col: 653}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1602, Col: 653}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var589))
 		if templ_7745c5c3_Err != nil {
@@ -12908,7 +12908,7 @@ func wordpressUninstallDialog(item dashboard.Site, instance controlwordpress.Ins
 		var templ_7745c5c3_Var590 string
 		templ_7745c5c3_Var590, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1608, Col: 45}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1609, Col: 45}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var590))
 		if templ_7745c5c3_Err != nil {
@@ -12963,7 +12963,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var593 templ.SafeURL
 				templ_7745c5c3_Var593, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(data.SiteID))))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1616, Col: 108}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1617, Col: 108}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var593))
 				if templ_7745c5c3_Err != nil {
@@ -12986,7 +12986,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var594 string
 			templ_7745c5c3_Var594, templ_7745c5c3_Err = templ.JoinStringErrs(data.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1619, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1620, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var594))
 			if templ_7745c5c3_Err != nil {
@@ -12999,7 +12999,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var595 templ.SafeURL
 			templ_7745c5c3_Var595, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(data.SiteID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1620, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1621, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var595))
 			if templ_7745c5c3_Err != nil {
@@ -13124,7 +13124,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var596 templ.SafeURL
 			templ_7745c5c3_Var596, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1634, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1635, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var596))
 			if templ_7745c5c3_Err != nil {
@@ -13142,7 +13142,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var597 string
 				templ_7745c5c3_Var597, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1636, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1637, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var597))
 				if templ_7745c5c3_Err != nil {
@@ -13164,7 +13164,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var598 string
 			templ_7745c5c3_Var598, templ_7745c5c3_Err = templ.JoinStringErrs(data.Query)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1638, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1639, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var598))
 			if templ_7745c5c3_Err != nil {
@@ -13197,7 +13197,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var599 templ.SafeURL
 			templ_7745c5c3_Var599, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileActionPath(view, data.SiteID, "upload", data.Path)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1641, Col: 112}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1642, Col: 112}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var599))
 			if templ_7745c5c3_Err != nil {
@@ -13221,7 +13221,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var600 templ.SafeURL
 				templ_7745c5c3_Var600, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileManagerPath(view, data.SiteID, crumb.Path)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1651, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1652, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var600))
 				if templ_7745c5c3_Err != nil {
@@ -13234,7 +13234,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var601 string
 				templ_7745c5c3_Var601, templ_7745c5c3_Err = templ.JoinStringErrs(crumb.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1651, Col: 90}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1652, Col: 90}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var601))
 				if templ_7745c5c3_Err != nil {
@@ -13260,7 +13260,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var602 templ.SafeURL
 			templ_7745c5c3_Var602, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileManagerPath(view, data.SiteID, "")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1657, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1658, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var602))
 			if templ_7745c5c3_Err != nil {
@@ -13286,7 +13286,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var603 templ.SafeURL
 				templ_7745c5c3_Var603, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileManagerPath(view, data.SiteID, fileParent(data.Path))))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1659, Col: 86}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1660, Col: 86}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var603))
 				if templ_7745c5c3_Err != nil {
@@ -13313,7 +13313,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var604 templ.SafeURL
 				templ_7745c5c3_Var604, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileManagerPath(view, data.SiteID, item.Path)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1662, Col: 74}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1663, Col: 74}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var604))
 				if templ_7745c5c3_Err != nil {
@@ -13334,7 +13334,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var605 string
 				templ_7745c5c3_Var605, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1662, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1663, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var605))
 				if templ_7745c5c3_Err != nil {
@@ -13360,7 +13360,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var606 string
 			templ_7745c5c3_Var606, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(data.Total))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1666, Col: 189}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1667, Col: 189}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var606))
 			if templ_7745c5c3_Err != nil {
@@ -13386,7 +13386,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var607 string
 				templ_7745c5c3_Var607, templ_7745c5c3_Err = templ.JoinStringErrs(data.Error)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1668, Col: 137}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1669, Col: 137}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var607))
 				if templ_7745c5c3_Err != nil {
@@ -13412,7 +13412,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var608 string
 				templ_7745c5c3_Var608, templ_7745c5c3_Err = templ.JoinStringErrs(fileEmptyTitle(data.Query))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1670, Col: 94}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1671, Col: 94}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var608))
 				if templ_7745c5c3_Err != nil {
@@ -13425,7 +13425,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var609 string
 				templ_7745c5c3_Var609, templ_7745c5c3_Err = templ.JoinStringErrs(fileEmptyCopy(data.Query))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1670, Col: 135}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1671, Col: 135}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var609))
 				if templ_7745c5c3_Err != nil {
@@ -13472,7 +13472,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var610 string
 					templ_7745c5c3_Var610, templ_7745c5c3_Err = templ.JoinStringErrs(item.Path)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1674, Col: 108}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1675, Col: 108}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var610))
 					if templ_7745c5c3_Err != nil {
@@ -13485,7 +13485,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var611 string
 					templ_7745c5c3_Var611, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + item.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1674, Col: 143}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1675, Col: 143}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var611))
 					if templ_7745c5c3_Err != nil {
@@ -13533,7 +13533,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var614 templ.SafeURL
 						templ_7745c5c3_Var614, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileManagerPath(view, data.SiteID, item.Path)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1676, Col: 78}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1677, Col: 78}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var614))
 						if templ_7745c5c3_Err != nil {
@@ -13546,7 +13546,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var615 string
 						templ_7745c5c3_Var615, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1676, Col: 100}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1677, Col: 100}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var615))
 						if templ_7745c5c3_Err != nil {
@@ -13564,7 +13564,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var616 string
 						templ_7745c5c3_Var616, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1678, Col: 29}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1679, Col: 29}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var616))
 						if templ_7745c5c3_Err != nil {
@@ -13582,7 +13582,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var617 string
 					templ_7745c5c3_Var617, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(item.ModifiedAt))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1680, Col: 68}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1681, Col: 68}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var617))
 					if templ_7745c5c3_Err != nil {
@@ -13605,7 +13605,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var618 string
 						templ_7745c5c3_Var618, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(item.Size))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1684, Col: 40}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1685, Col: 40}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var618))
 						if templ_7745c5c3_Err != nil {
@@ -13623,7 +13623,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var619 string
 					templ_7745c5c3_Var619, templ_7745c5c3_Err = templ.JoinStringErrs(fileMode(item.Mode))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1686, Col: 69}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1687, Col: 69}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var619))
 					if templ_7745c5c3_Err != nil {
@@ -13636,7 +13636,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var620 string
 					templ_7745c5c3_Var620, templ_7745c5c3_Err = templ.JoinStringErrs(item.Owner)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1686, Col: 118}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1687, Col: 118}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var620))
 					if templ_7745c5c3_Err != nil {
@@ -13649,7 +13649,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var621 string
 					templ_7745c5c3_Var621, templ_7745c5c3_Err = templ.JoinStringErrs(item.Group)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1686, Col: 160}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1687, Col: 160}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var621))
 					if templ_7745c5c3_Err != nil {
@@ -13662,7 +13662,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var622 string
 					templ_7745c5c3_Var622, templ_7745c5c3_Err = templ.JoinStringErrs("Actions for " + item.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1686, Col: 254}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1687, Col: 254}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var622))
 					if templ_7745c5c3_Err != nil {
@@ -13688,7 +13688,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var623 templ.SafeURL
 						templ_7745c5c3_Var623, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileEntryPath(view, data.SiteID, "edit", item.Path)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1688, Col: 83}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1689, Col: 83}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var623))
 						if templ_7745c5c3_Err != nil {
@@ -13715,7 +13715,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var624 templ.SafeURL
 						templ_7745c5c3_Var624, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileEntryPath(view, data.SiteID, "download", item.Path)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1691, Col: 87}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1692, Col: 87}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var624))
 						if templ_7745c5c3_Err != nil {
@@ -13742,7 +13742,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var625 string
 						templ_7745c5c3_Var625, templ_7745c5c3_Err = templ.JoinStringErrs(item.Path)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1694, Col: 86}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1695, Col: 86}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var625))
 						if templ_7745c5c3_Err != nil {
@@ -13755,7 +13755,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var626 string
 						templ_7745c5c3_Var626, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1694, Col: 110}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1695, Col: 110}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var626))
 						if templ_7745c5c3_Err != nil {
@@ -13782,7 +13782,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var627 string
 						templ_7745c5c3_Var627, templ_7745c5c3_Err = templ.JoinStringErrs(item.Path)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1697, Col: 91}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1698, Col: 91}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var627))
 						if templ_7745c5c3_Err != nil {
@@ -13795,7 +13795,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var628 string
 						templ_7745c5c3_Var628, templ_7745c5c3_Err = templ.JoinStringErrs(fileMode(item.Mode))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1697, Col: 125}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1698, Col: 125}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var628))
 						if templ_7745c5c3_Err != nil {
@@ -13822,7 +13822,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var629 string
 						templ_7745c5c3_Var629, templ_7745c5c3_Err = templ.JoinStringErrs(item.Path)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1700, Col: 87}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1701, Col: 87}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var629))
 						if templ_7745c5c3_Err != nil {
@@ -13849,7 +13849,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var630 templ.SafeURL
 						templ_7745c5c3_Var630, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID) + "/delete"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1703, Col: 94}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1704, Col: 94}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var630))
 						if templ_7745c5c3_Err != nil {
@@ -13870,7 +13870,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var631 string
 						templ_7745c5c3_Var631, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1703, Col: 163}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1704, Col: 163}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var631))
 						if templ_7745c5c3_Err != nil {
@@ -13883,7 +13883,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var632 string
 						templ_7745c5c3_Var632, templ_7745c5c3_Err = templ.JoinStringErrs(item.Path)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1703, Col: 218}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1704, Col: 218}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var632))
 						if templ_7745c5c3_Err != nil {
@@ -13896,7 +13896,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var633 string
 						templ_7745c5c3_Var633, templ_7745c5c3_Err = templ.JoinStringErrs("Delete " + item.Name + " permanently?")
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1703, Col: 315}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1704, Col: 315}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var633))
 						if templ_7745c5c3_Err != nil {
@@ -13932,7 +13932,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var634 string
 					templ_7745c5c3_Var634, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(data.Page))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1709, Col: 102}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1710, Col: 102}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var634))
 					if templ_7745c5c3_Err != nil {
@@ -13945,7 +13945,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 					var templ_7745c5c3_Var635 string
 					templ_7745c5c3_Var635, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(filePageCount(data.Total, data.PerPage)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1709, Col: 165}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1710, Col: 165}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var635))
 					if templ_7745c5c3_Err != nil {
@@ -13963,7 +13963,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var636 templ.SafeURL
 						templ_7745c5c3_Var636, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(filePagePath(view, data, data.Page-1)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1711, Col: 95}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1712, Col: 95}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var636))
 						if templ_7745c5c3_Err != nil {
@@ -13982,7 +13982,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 						var templ_7745c5c3_Var637 templ.SafeURL
 						templ_7745c5c3_Var637, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(filePagePath(view, data, data.Page+1)))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1714, Col: 95}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1715, Col: 95}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var637))
 						if templ_7745c5c3_Err != nil {
@@ -14006,7 +14006,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var638 string
 			templ_7745c5c3_Var638, templ_7745c5c3_Err = templ.JoinStringErrs(uploadLimitLabel(data.UploadMaxBytes))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1721, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1722, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var638))
 			if templ_7745c5c3_Err != nil {
@@ -14019,7 +14019,7 @@ func routedFileManager(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var639 string
 			templ_7745c5c3_Var639, templ_7745c5c3_Err = templ.JoinStringErrs(data.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1721, Col: 136}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1722, Col: 136}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var639))
 			if templ_7745c5c3_Err != nil {
@@ -14088,7 +14088,7 @@ func fileSortLink(view WorkspaceView, data *FileManagerView, field string, label
 		var templ_7745c5c3_Var643 templ.SafeURL
 		templ_7745c5c3_Var643, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileSortPath(view, data, field)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1728, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1729, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var643))
 		if templ_7745c5c3_Err != nil {
@@ -14101,7 +14101,7 @@ func fileSortLink(view WorkspaceView, data *FileManagerView, field string, label
 		var templ_7745c5c3_Var644 string
 		templ_7745c5c3_Var644, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1728, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1729, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var644))
 		if templ_7745c5c3_Err != nil {
@@ -14155,7 +14155,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var646 templ.SafeURL
 		templ_7745c5c3_Var646, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID) + "/create"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1732, Col: 402}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1733, Col: 402}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var646))
 		if templ_7745c5c3_Err != nil {
@@ -14176,7 +14176,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var647 string
 		templ_7745c5c3_Var647, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1732, Col: 471}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1733, Col: 471}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var647))
 		if templ_7745c5c3_Err != nil {
@@ -14209,7 +14209,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var648 templ.SafeURL
 		templ_7745c5c3_Var648, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID) + "/archive"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1735, Col: 408}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1736, Col: 408}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var648))
 		if templ_7745c5c3_Err != nil {
@@ -14230,7 +14230,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var649 string
 		templ_7745c5c3_Var649, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1735, Col: 501}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1736, Col: 501}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var649))
 		if templ_7745c5c3_Err != nil {
@@ -14251,7 +14251,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var650 templ.SafeURL
 		templ_7745c5c3_Var650, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID) + "/delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1736, Col: 464}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1737, Col: 464}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var650))
 		if templ_7745c5c3_Err != nil {
@@ -14272,7 +14272,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var651 string
 		templ_7745c5c3_Var651, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1736, Col: 557}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1737, Col: 557}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var651))
 		if templ_7745c5c3_Err != nil {
@@ -14293,7 +14293,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var652 templ.SafeURL
 		templ_7745c5c3_Var652, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID) + "/rename"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1737, Col: 399}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1738, Col: 399}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var652))
 		if templ_7745c5c3_Err != nil {
@@ -14314,7 +14314,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var653 string
 		templ_7745c5c3_Var653, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1737, Col: 468}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1738, Col: 468}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var653))
 		if templ_7745c5c3_Err != nil {
@@ -14335,7 +14335,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var654 templ.SafeURL
 		templ_7745c5c3_Var654, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID) + "/permissions"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1738, Col: 468}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1739, Col: 468}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var654))
 		if templ_7745c5c3_Err != nil {
@@ -14356,7 +14356,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var655 string
 		templ_7745c5c3_Var655, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1738, Col: 537}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1739, Col: 537}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var655))
 		if templ_7745c5c3_Err != nil {
@@ -14377,7 +14377,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var656 templ.SafeURL
 		templ_7745c5c3_Var656, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID) + "/extract"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1739, Col: 398}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1740, Col: 398}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var656))
 		if templ_7745c5c3_Err != nil {
@@ -14398,7 +14398,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var657 string
 		templ_7745c5c3_Var657, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1739, Col: 467}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1740, Col: 467}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var657))
 		if templ_7745c5c3_Err != nil {
@@ -14411,7 +14411,7 @@ func fileManagerDialogs(view WorkspaceView, data *FileManagerView) templ.Compone
 		var templ_7745c5c3_Var658 string
 		templ_7745c5c3_Var658, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1739, Col: 595}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1740, Col: 595}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var658))
 		if templ_7745c5c3_Err != nil {
@@ -14453,7 +14453,7 @@ func fileBatchDialog(view WorkspaceView, data *FileManagerView, id string, title
 		var templ_7745c5c3_Var660 string
 		templ_7745c5c3_Var660, templ_7745c5c3_Err = templ.JoinStringErrs(id)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1743, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1744, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var660))
 		if templ_7745c5c3_Err != nil {
@@ -14474,7 +14474,7 @@ func fileBatchDialog(view WorkspaceView, data *FileManagerView, id string, title
 		var templ_7745c5c3_Var661 string
 		templ_7745c5c3_Var661, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1743, Col: 255}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1744, Col: 255}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var661))
 		if templ_7745c5c3_Err != nil {
@@ -14487,7 +14487,7 @@ func fileBatchDialog(view WorkspaceView, data *FileManagerView, id string, title
 		var templ_7745c5c3_Var662 templ.SafeURL
 		templ_7745c5c3_Var662, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID) + "/" + action))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1743, Col: 384}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1744, Col: 384}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var662))
 		if templ_7745c5c3_Err != nil {
@@ -14508,7 +14508,7 @@ func fileBatchDialog(view WorkspaceView, data *FileManagerView, id string, title
 		var templ_7745c5c3_Var663 string
 		templ_7745c5c3_Var663, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1743, Col: 477}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1744, Col: 477}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var663))
 		if templ_7745c5c3_Err != nil {
@@ -14521,7 +14521,7 @@ func fileBatchDialog(view WorkspaceView, data *FileManagerView, id string, title
 		var templ_7745c5c3_Var664 string
 		templ_7745c5c3_Var664, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1743, Col: 535}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1744, Col: 535}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var664))
 		if templ_7745c5c3_Err != nil {
@@ -14534,7 +14534,7 @@ func fileBatchDialog(view WorkspaceView, data *FileManagerView, id string, title
 		var templ_7745c5c3_Var665 string
 		templ_7745c5c3_Var665, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1743, Col: 580}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1744, Col: 580}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var665))
 		if templ_7745c5c3_Err != nil {
@@ -14547,7 +14547,7 @@ func fileBatchDialog(view WorkspaceView, data *FileManagerView, id string, title
 		var templ_7745c5c3_Var666 string
 		templ_7745c5c3_Var666, templ_7745c5c3_Err = templ.JoinStringErrs(submit)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1743, Col: 847}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1744, Col: 847}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var666))
 		if templ_7745c5c3_Err != nil {
@@ -14602,7 +14602,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var669 templ.SafeURL
 				templ_7745c5c3_Var669, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileManagerPath(view, data.SiteID, fileParent(data.Path))))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1749, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1750, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var669))
 				if templ_7745c5c3_Err != nil {
@@ -14625,7 +14625,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var670 string
 			templ_7745c5c3_Var670, templ_7745c5c3_Err = templ.JoinStringErrs(data.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1752, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1753, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var670))
 			if templ_7745c5c3_Err != nil {
@@ -14638,7 +14638,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var671 string
 			templ_7745c5c3_Var671, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1752, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1753, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var671))
 			if templ_7745c5c3_Err != nil {
@@ -14651,7 +14651,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var672 templ.SafeURL
 			templ_7745c5c3_Var672, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileManagerPath(view, data.SiteID, fileParent(data.Path))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1753, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1754, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var672))
 			if templ_7745c5c3_Err != nil {
@@ -14680,7 +14680,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var673 templ.SafeURL
 			templ_7745c5c3_Var673, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileBasePath(view, data.SiteID) + "/save"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1756, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1757, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var673))
 			if templ_7745c5c3_Err != nil {
@@ -14701,7 +14701,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var674 string
 			templ_7745c5c3_Var674, templ_7745c5c3_Err = templ.JoinStringErrs(data.Path)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1757, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1758, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var674))
 			if templ_7745c5c3_Err != nil {
@@ -14714,7 +14714,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var675 string
 			templ_7745c5c3_Var675, templ_7745c5c3_Err = templ.JoinStringErrs(data.SHA256)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1757, Col: 127}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1758, Col: 127}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var675))
 			if templ_7745c5c3_Err != nil {
@@ -14735,7 +14735,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var676 string
 			templ_7745c5c3_Var676, templ_7745c5c3_Err = templ.JoinStringErrs(data.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1758, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1759, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var676))
 			if templ_7745c5c3_Err != nil {
@@ -14748,7 +14748,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var677 string
 			templ_7745c5c3_Var677, templ_7745c5c3_Err = templ.JoinStringErrs(fileMode(data.Mode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1758, Col: 114}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1759, Col: 114}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var677))
 			if templ_7745c5c3_Err != nil {
@@ -14761,7 +14761,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var678 templ.SafeURL
 			templ_7745c5c3_Var678, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(fileEntryPath(view, data.SiteID, "download", data.Path)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1758, Col: 237}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1759, Col: 237}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var678))
 			if templ_7745c5c3_Err != nil {
@@ -14790,7 +14790,7 @@ func routedFileEditor(view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var679 string
 			templ_7745c5c3_Var679, templ_7745c5c3_Err = templ.JoinStringErrs(data.Content)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1759, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1760, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var679))
 			if templ_7745c5c3_Err != nil {
@@ -14847,7 +14847,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var681 string
 			templ_7745c5c3_Var681, templ_7745c5c3_Err = templ.JoinStringErrs(dnsZoneRelationship(zone, item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1771, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1772, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var681))
 			if templ_7745c5c3_Err != nil {
@@ -14860,7 +14860,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var682 string
 			templ_7745c5c3_Var682, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1771, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1772, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var682))
 			if templ_7745c5c3_Err != nil {
@@ -14873,7 +14873,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var683 string
 			templ_7745c5c3_Var683, templ_7745c5c3_Err = templ.JoinStringErrs(zone.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1771, Col: 149}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1772, Col: 149}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var683))
 			if templ_7745c5c3_Err != nil {
@@ -14886,7 +14886,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var684 string
 			templ_7745c5c3_Var684, templ_7745c5c3_Err = templ.JoinStringErrs("dns-record-dialog-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1773, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1774, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var684))
 			if templ_7745c5c3_Err != nil {
@@ -14907,7 +14907,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var685 string
 			templ_7745c5c3_Var685, templ_7745c5c3_Err = templ.JoinStringErrs("dns-preview-options-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1774, Col: 120}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1775, Col: 120}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var685))
 			if templ_7745c5c3_Err != nil {
@@ -14944,7 +14944,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var686 string
 			templ_7745c5c3_Var686, templ_7745c5c3_Err = templ.JoinStringErrs("dns-zone-authorization-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1779, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1780, Col: 97}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var686))
 			if templ_7745c5c3_Err != nil {
@@ -14965,7 +14965,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var687 string
 			templ_7745c5c3_Var687, templ_7745c5c3_Err = templ.JoinStringErrs("dns-zone-reset-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1780, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1781, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var687))
 			if templ_7745c5c3_Err != nil {
@@ -14986,7 +14986,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var688 string
 			templ_7745c5c3_Var688, templ_7745c5c3_Err = templ.JoinStringErrs(zone.Mode)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1786, Col: 29}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1787, Col: 29}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var688))
 			if templ_7745c5c3_Err != nil {
@@ -15007,7 +15007,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var689 string
 			templ_7745c5c3_Var689, templ_7745c5c3_Err = templ.JoinStringErrs(dnsTemplateSyncLabel(zone))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1788, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1789, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var689))
 			if templ_7745c5c3_Err != nil {
@@ -15020,7 +15020,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var690 string
 			templ_7745c5c3_Var690, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(zone.TemplateRevision))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1788, Col: 110}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1789, Col: 110}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var690))
 			if templ_7745c5c3_Err != nil {
@@ -15033,7 +15033,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var691 string
 			templ_7745c5c3_Var691, templ_7745c5c3_Err = templ.JoinStringErrs(dnsLocalRecordLabel(dnsRecordsForSiteZone(phase.DNSRecords, zone, item.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1788, Col: 191}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1789, Col: 191}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var691))
 			if templ_7745c5c3_Err != nil {
@@ -15046,7 +15046,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var692 string
 			templ_7745c5c3_Var692, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(zone.AppliedRevision))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1789, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1790, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var692))
 			if templ_7745c5c3_Err != nil {
@@ -15059,7 +15059,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var693 string
 			templ_7745c5c3_Var693, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(zone.DesiredRevision))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1789, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1790, Col: 93}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var693))
 			if templ_7745c5c3_Err != nil {
@@ -15072,7 +15072,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var694 string
 			templ_7745c5c3_Var694, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(zone.Serial))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1790, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1791, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var694))
 			if templ_7745c5c3_Err != nil {
@@ -15090,7 +15090,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var695 string
 				templ_7745c5c3_Var695, templ_7745c5c3_Err = templ.JoinStringErrs(zone.LastError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1793, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1794, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var695))
 				if templ_7745c5c3_Err != nil {
@@ -15113,7 +15113,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var696 string
 				templ_7745c5c3_Var696, templ_7745c5c3_Err = templ.JoinStringErrs(zone.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1797, Col: 126}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1798, Col: 126}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var696))
 				if templ_7745c5c3_Err != nil {
@@ -15134,7 +15134,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var697 string
 				templ_7745c5c3_Var697, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(dnsSyncCount(preview, "added")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1799, Col: 90}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1800, Col: 90}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var697))
 				if templ_7745c5c3_Err != nil {
@@ -15147,7 +15147,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var698 string
 				templ_7745c5c3_Var698, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(dnsSyncCount(preview, "updated")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1800, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1801, Col: 98}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var698))
 				if templ_7745c5c3_Err != nil {
@@ -15160,7 +15160,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var699 string
 				templ_7745c5c3_Var699, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(dnsSyncCount(preview, "adopted")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1801, Col: 97}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1802, Col: 97}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var699))
 				if templ_7745c5c3_Err != nil {
@@ -15173,7 +15173,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var700 string
 				templ_7745c5c3_Var700, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(dnsSyncCount(preview, "removed")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1802, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1803, Col: 98}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var700))
 				if templ_7745c5c3_Err != nil {
@@ -15186,7 +15186,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var701 string
 				templ_7745c5c3_Var701, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(dnsSyncCount(preview, "preserved")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1803, Col: 104}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1804, Col: 104}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var701))
 				if templ_7745c5c3_Err != nil {
@@ -15199,7 +15199,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var702 string
 				templ_7745c5c3_Var702, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(dnsSyncCount(preview, "conflicts")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1804, Col: 104}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1805, Col: 104}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var702))
 				if templ_7745c5c3_Err != nil {
@@ -15217,7 +15217,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 					var templ_7745c5c3_Var703 string
 					templ_7745c5c3_Var703, templ_7745c5c3_Err = templ.JoinStringErrs(result.Domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1808, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1809, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var703))
 					if templ_7745c5c3_Err != nil {
@@ -15238,7 +15238,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 					var templ_7745c5c3_Var704 string
 					templ_7745c5c3_Var704, templ_7745c5c3_Err = templ.JoinStringErrs(displayFallback(result.Detail, "No changes"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1808, Col: 182}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1809, Col: 182}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var704))
 					if templ_7745c5c3_Err != nil {
@@ -15261,7 +15261,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 					var templ_7745c5c3_Var705 templ.SafeURL
 					templ_7745c5c3_Var705, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/dns-template/" + formatJobID(preview.ID) + "/apply"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1812, Col: 157}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1813, Col: 157}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var705))
 					if templ_7745c5c3_Err != nil {
@@ -15282,7 +15282,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 					var templ_7745c5c3_Var706 string
 					templ_7745c5c3_Var706, templ_7745c5c3_Err = templ.JoinStringErrs(preview.PreviewToken)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1813, Col: 93}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1814, Col: 93}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var706))
 					if templ_7745c5c3_Err != nil {
@@ -15313,7 +15313,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var707 string
 			templ_7745c5c3_Var707, templ_7745c5c3_Err = templ.JoinStringErrs(dnsRecordCountLabel(len(dnsRecordsForSiteZone(phase.DNSRecords, zone, item.ID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1824, Col: 176}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1825, Col: 176}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var707))
 			if templ_7745c5c3_Err != nil {
@@ -15331,7 +15331,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var708 string
 				templ_7745c5c3_Var708, templ_7745c5c3_Err = templ.JoinStringErrs(record.Type)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1828, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1829, Col: 48}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var708))
 				if templ_7745c5c3_Err != nil {
@@ -15344,7 +15344,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var709 string
 				templ_7745c5c3_Var709, templ_7745c5c3_Err = templ.JoinStringErrs(record.Host + " " + record.Value + " " + dnsRecordOrigin(record))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1828, Col: 121}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1829, Col: 121}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var709))
 				if templ_7745c5c3_Err != nil {
@@ -15357,7 +15357,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var710 string
 				templ_7745c5c3_Var710, templ_7745c5c3_Err = templ.JoinStringErrs(dnsDisplayHost(record, zone, item.Domain))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1829, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1830, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var710))
 				if templ_7745c5c3_Err != nil {
@@ -15370,7 +15370,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var711 string
 				templ_7745c5c3_Var711, templ_7745c5c3_Err = templ.JoinStringErrs(record.Type)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1829, Col: 124}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1830, Col: 124}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var711))
 				if templ_7745c5c3_Err != nil {
@@ -15383,7 +15383,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var712 string
 				templ_7745c5c3_Var712, templ_7745c5c3_Err = templ.JoinStringErrs(dnsRecordValue(record))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1829, Col: 184}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1830, Col: 184}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var712))
 				if templ_7745c5c3_Err != nil {
@@ -15396,7 +15396,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var713 string
 				templ_7745c5c3_Var713, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(record.TTL))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1829, Col: 272}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1830, Col: 272}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var713))
 				if templ_7745c5c3_Err != nil {
@@ -15431,7 +15431,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var716 string
 				templ_7745c5c3_Var716, templ_7745c5c3_Err = templ.JoinStringErrs(dnsRecordOrigin(record))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1829, Col: 356}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1830, Col: 356}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var716))
 				if templ_7745c5c3_Err != nil {
@@ -15444,7 +15444,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var717 string
 				templ_7745c5c3_Var717, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(record.TTL))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1829, Col: 457}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1830, Col: 457}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var717))
 				if templ_7745c5c3_Err != nil {
@@ -15479,7 +15479,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var720 string
 				templ_7745c5c3_Var720, templ_7745c5c3_Err = templ.JoinStringErrs(dnsRecordOrigin(record))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1829, Col: 593}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1830, Col: 593}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var720))
 				if templ_7745c5c3_Err != nil {
@@ -15497,7 +15497,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 					var templ_7745c5c3_Var721 string
 					templ_7745c5c3_Var721, templ_7745c5c3_Err = templ.JoinStringErrs("dns-record-edit-" + formatJobID(record.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1832, Col: 140}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1833, Col: 140}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var721))
 					if templ_7745c5c3_Err != nil {
@@ -15523,7 +15523,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 						var templ_7745c5c3_Var722 templ.SafeURL
 						templ_7745c5c3_Var722, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/dns-records/" + formatJobID(record.ID) + "/restore"))
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1834, Col: 133}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1835, Col: 133}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var722))
 						if templ_7745c5c3_Err != nil {
@@ -15557,7 +15557,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 					var templ_7745c5c3_Var723 templ.SafeURL
 					templ_7745c5c3_Var723, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/dns-records/" + formatJobID(record.ID) + "/delete"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1836, Col: 131}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1837, Col: 131}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var723))
 					if templ_7745c5c3_Err != nil {
@@ -15609,7 +15609,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var724 string
 			templ_7745c5c3_Var724, templ_7745c5c3_Err = templ.JoinStringErrs("dns-preview-options-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1845, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1846, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var724))
 			if templ_7745c5c3_Err != nil {
@@ -15622,7 +15622,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var725 string
 			templ_7745c5c3_Var725, templ_7745c5c3_Err = templ.JoinStringErrs("dns-preview-title-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1845, Col: 154}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1846, Col: 154}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var725))
 			if templ_7745c5c3_Err != nil {
@@ -15643,7 +15643,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var726 string
 			templ_7745c5c3_Var726, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1847, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1848, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var726))
 			if templ_7745c5c3_Err != nil {
@@ -15656,7 +15656,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var727 string
 			templ_7745c5c3_Var727, templ_7745c5c3_Err = templ.JoinStringErrs("dns-preview-title-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1847, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1848, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var727))
 			if templ_7745c5c3_Err != nil {
@@ -15669,7 +15669,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var728 templ.SafeURL
 			templ_7745c5c3_Var728, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/dns-template/preview"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1848, Col: 133}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1849, Col: 133}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var728))
 			if templ_7745c5c3_Err != nil {
@@ -15710,7 +15710,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var729 string
 			templ_7745c5c3_Var729, templ_7745c5c3_Err = templ.JoinStringErrs(zone.Mode)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1861, Col: 219}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1862, Col: 219}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var729))
 			if templ_7745c5c3_Err != nil {
@@ -15723,7 +15723,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var730 string
 			templ_7745c5c3_Var730, templ_7745c5c3_Err = templ.JoinStringErrs(dnsTemplateSyncLabel(zone))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1861, Col: 253}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1862, Col: 253}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var730))
 			if templ_7745c5c3_Err != nil {
@@ -15749,7 +15749,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var731 templ.SafeURL
 				templ_7745c5c3_Var731, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/dns-zone/subdomain-mode"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1866, Col: 139}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1867, Col: 139}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var731))
 				if templ_7745c5c3_Err != nil {
@@ -15770,7 +15770,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var732 string
 				templ_7745c5c3_Var732, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(zone.DesiredRevision))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1867, Col: 111}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1868, Col: 111}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var732))
 				if templ_7745c5c3_Err != nil {
@@ -15793,7 +15793,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var733 string
 				templ_7745c5c3_Var733, templ_7745c5c3_Err = templ.JoinStringErrs(zone.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1869, Col: 188}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1870, Col: 188}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var733))
 				if templ_7745c5c3_Err != nil {
@@ -15844,7 +15844,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var734 templ.SafeURL
 				templ_7745c5c3_Var734, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/dns-zone/mode"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1884, Col: 128}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1885, Col: 128}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var734))
 				if templ_7745c5c3_Err != nil {
@@ -15865,7 +15865,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var735 string
 				templ_7745c5c3_Var735, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(zone.DesiredRevision))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1885, Col: 110}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1886, Col: 110}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var735))
 				if templ_7745c5c3_Err != nil {
@@ -15908,7 +15908,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var736 string
 				templ_7745c5c3_Var736, templ_7745c5c3_Err = templ.JoinStringErrs(zone.UpstreamPrimaries)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1887, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1888, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var736))
 				if templ_7745c5c3_Err != nil {
@@ -15921,7 +15921,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var737 templ.SafeURL
 				templ_7745c5c3_Var737, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/dns-zone/soa"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1892, Col: 133}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1893, Col: 133}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var737))
 				if templ_7745c5c3_Err != nil {
@@ -15942,7 +15942,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var738 string
 				templ_7745c5c3_Var738, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(zone.DesiredRevision))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1893, Col: 110}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1894, Col: 110}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var738))
 				if templ_7745c5c3_Err != nil {
@@ -15955,7 +15955,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var739 string
 				templ_7745c5c3_Var739, templ_7745c5c3_Err = templ.JoinStringErrs(zone.SOA.PrimaryNameserver)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1895, Col: 99}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1896, Col: 99}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var739))
 				if templ_7745c5c3_Err != nil {
@@ -15968,7 +15968,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var740 string
 				templ_7745c5c3_Var740, templ_7745c5c3_Err = templ.JoinStringErrs(zone.SOA.ResponsibleMailbox)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1896, Col: 102}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1897, Col: 102}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var740))
 				if templ_7745c5c3_Err != nil {
@@ -16001,7 +16001,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var741 string
 				templ_7745c5c3_Var741, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(zone.SOA.DefaultTTL))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1898, Col: 130}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1899, Col: 130}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var741))
 				if templ_7745c5c3_Err != nil {
@@ -16014,7 +16014,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var742 string
 				templ_7745c5c3_Var742, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(zone.SOA.RefreshSeconds))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1899, Col: 135}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1900, Col: 135}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var742))
 				if templ_7745c5c3_Err != nil {
@@ -16027,7 +16027,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var743 string
 				templ_7745c5c3_Var743, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(zone.SOA.RetrySeconds))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1900, Col: 128}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1901, Col: 128}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var743))
 				if templ_7745c5c3_Err != nil {
@@ -16040,7 +16040,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var744 string
 				templ_7745c5c3_Var744, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(zone.SOA.ExpireSeconds))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1901, Col: 136}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1902, Col: 136}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var744))
 				if templ_7745c5c3_Err != nil {
@@ -16053,7 +16053,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var745 string
 				templ_7745c5c3_Var745, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(zone.SOA.MinimumTTL))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1902, Col: 137}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1903, Col: 137}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var745))
 				if templ_7745c5c3_Err != nil {
@@ -16066,7 +16066,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 				var templ_7745c5c3_Var746 string
 				templ_7745c5c3_Var746, templ_7745c5c3_Err = templ.JoinStringErrs(zone.TransferCIDRs)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1903, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1904, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var746))
 				if templ_7745c5c3_Err != nil {
@@ -16084,7 +16084,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var747 string
 			templ_7745c5c3_Var747, templ_7745c5c3_Err = templ.JoinStringErrs("dns-zone-reset-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1909, Col: 316}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1910, Col: 316}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var747))
 			if templ_7745c5c3_Err != nil {
@@ -16105,7 +16105,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var748 string
 			templ_7745c5c3_Var748, templ_7745c5c3_Err = templ.JoinStringErrs("dns-zone-authorization-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1912, Col: 108}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1913, Col: 108}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var748))
 			if templ_7745c5c3_Err != nil {
@@ -16118,7 +16118,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var749 string
 			templ_7745c5c3_Var749, templ_7745c5c3_Err = templ.JoinStringErrs("dns-zone-authorization-title-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1912, Col: 196}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1913, Col: 196}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var749))
 			if templ_7745c5c3_Err != nil {
@@ -16139,7 +16139,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var750 string
 			templ_7745c5c3_Var750, templ_7745c5c3_Err = templ.JoinStringErrs("dns-zone-authorization-title-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1912, Col: 440}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1913, Col: 440}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var750))
 			if templ_7745c5c3_Err != nil {
@@ -16160,7 +16160,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var751 string
 			templ_7745c5c3_Var751, templ_7745c5c3_Err = templ.JoinStringErrs("dns-zone-reset-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1913, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1914, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var751))
 			if templ_7745c5c3_Err != nil {
@@ -16173,7 +16173,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var752 string
 			templ_7745c5c3_Var752, templ_7745c5c3_Err = templ.JoinStringErrs("dns-zone-reset-title-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1913, Col: 152}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1914, Col: 152}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var752))
 			if templ_7745c5c3_Err != nil {
@@ -16194,7 +16194,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var753 string
 			templ_7745c5c3_Var753, templ_7745c5c3_Err = templ.JoinStringErrs("dns-zone-reset-title-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1913, Col: 386}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1914, Col: 386}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var753))
 			if templ_7745c5c3_Err != nil {
@@ -16207,7 +16207,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var754 string
 			templ_7745c5c3_Var754, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1913, Col: 408}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1914, Col: 408}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var754))
 			if templ_7745c5c3_Err != nil {
@@ -16220,7 +16220,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var755 templ.SafeURL
 			templ_7745c5c3_Var755, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/dns-template/reset"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1913, Col: 599}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1914, Col: 599}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var755))
 			if templ_7745c5c3_Err != nil {
@@ -16241,7 +16241,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var756 string
 			templ_7745c5c3_Var756, templ_7745c5c3_Err = templ.JoinStringErrs(zone.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1913, Col: 686}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1914, Col: 686}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var756))
 			if templ_7745c5c3_Err != nil {
@@ -16275,7 +16275,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var757 string
 			templ_7745c5c3_Var757, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1916, Col: 138}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1917, Col: 138}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var757))
 			if templ_7745c5c3_Err != nil {
@@ -16288,7 +16288,7 @@ func domainDNS(user auth.SessionUser, item dashboard.Site, phase dashboard.Phase
 			var templ_7745c5c3_Var758 string
 			templ_7745c5c3_Var758, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1916, Col: 206}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1917, Col: 206}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var758))
 			if templ_7745c5c3_Err != nil {
@@ -16335,7 +16335,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var760 string
 		templ_7745c5c3_Var760, templ_7745c5c3_Err = templ.JoinStringErrs(id)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1922, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1923, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var760))
 		if templ_7745c5c3_Err != nil {
@@ -16348,7 +16348,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var761 string
 		templ_7745c5c3_Var761, templ_7745c5c3_Err = templ.JoinStringErrs(id + "-title")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1922, Col: 81}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1923, Col: 81}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var761))
 		if templ_7745c5c3_Err != nil {
@@ -16369,7 +16369,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var762 string
 		templ_7745c5c3_Var762, templ_7745c5c3_Err = templ.JoinStringErrs(id + "-title")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1924, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1925, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var762))
 		if templ_7745c5c3_Err != nil {
@@ -16382,7 +16382,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var763 string
 		templ_7745c5c3_Var763, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1924, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1925, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var763))
 		if templ_7745c5c3_Err != nil {
@@ -16395,7 +16395,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var764 string
 		templ_7745c5c3_Var764, templ_7745c5c3_Err = templ.JoinStringErrs(zone.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1924, Col: 148}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1925, Col: 148}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var764))
 		if templ_7745c5c3_Err != nil {
@@ -16408,7 +16408,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var765 templ.SafeURL
 		templ_7745c5c3_Var765, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(siteID) + "/dns-records"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1925, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1926, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var765))
 		if templ_7745c5c3_Err != nil {
@@ -16429,7 +16429,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var766 string
 		templ_7745c5c3_Var766, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(record.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1926, Col: 87}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1927, Col: 87}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var766))
 		if templ_7745c5c3_Err != nil {
@@ -16442,7 +16442,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var767 string
 		templ_7745c5c3_Var767, templ_7745c5c3_Err = templ.JoinStringErrs(dnsDisplayHost(record, zone, siteDomain))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1927, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1928, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var767))
 		if templ_7745c5c3_Err != nil {
@@ -16545,7 +16545,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var768 string
 		templ_7745c5c3_Var768, templ_7745c5c3_Err = templ.JoinStringErrs(record.Value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1929, Col: 55}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1930, Col: 55}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var768))
 		if templ_7745c5c3_Err != nil {
@@ -16558,7 +16558,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var769 string
 		templ_7745c5c3_Var769, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(record.Priority))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1930, Col: 144}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1931, Col: 144}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var769))
 		if templ_7745c5c3_Err != nil {
@@ -16571,7 +16571,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var770 string
 		templ_7745c5c3_Var770, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(record.Weight))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1931, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1932, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var770))
 		if templ_7745c5c3_Err != nil {
@@ -16584,7 +16584,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var771 string
 		templ_7745c5c3_Var771, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(record.Port))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1932, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1933, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var771))
 		if templ_7745c5c3_Err != nil {
@@ -16597,7 +16597,7 @@ func dnsRecordDialog(view WorkspaceView, siteID int64, siteDomain string, zone d
 		var templ_7745c5c3_Var772 string
 		templ_7745c5c3_Var772, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(record.TTL))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1933, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1934, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var772))
 		if templ_7745c5c3_Err != nil {
@@ -16661,7 +16661,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 		var templ_7745c5c3_Var776 string
 		templ_7745c5c3_Var776, templ_7745c5c3_Err = templ.JoinStringErrs(formatTLSState(item))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1941, Col: 154}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1942, Col: 154}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var776))
 		if templ_7745c5c3_Err != nil {
@@ -16674,7 +16674,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 		var templ_7745c5c3_Var777 string
 		templ_7745c5c3_Var777, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1941, Col: 199}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1942, Col: 199}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var777))
 		if templ_7745c5c3_Err != nil {
@@ -16695,7 +16695,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 		var templ_7745c5c3_Var778 string
 		templ_7745c5c3_Var778, templ_7745c5c3_Err = templ.JoinStringErrs(tlsWorkspaceTitle(item))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1941, Col: 370}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1942, Col: 370}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var778))
 		if templ_7745c5c3_Err != nil {
@@ -16708,7 +16708,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 		var templ_7745c5c3_Var779 string
 		templ_7745c5c3_Var779, templ_7745c5c3_Err = templ.JoinStringErrs(tlsWorkspaceCopy(item))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1941, Col: 404}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1942, Col: 404}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var779))
 		if templ_7745c5c3_Err != nil {
@@ -16729,7 +16729,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 		var templ_7745c5c3_Var780 string
 		templ_7745c5c3_Var780, templ_7745c5c3_Err = templ.JoinStringErrs(displayFallback(item.TLSIssuer, "Not issued"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1941, Col: 546}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1942, Col: 546}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var780))
 		if templ_7745c5c3_Err != nil {
@@ -16742,7 +16742,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 		var templ_7745c5c3_Var781 string
 		templ_7745c5c3_Var781, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullableTime(item.TLSExpiresAt))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1941, Col: 623}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1942, Col: 623}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var781))
 		if templ_7745c5c3_Err != nil {
@@ -16755,7 +16755,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 		var templ_7745c5c3_Var782 string
 		templ_7745c5c3_Var782, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(item.TLSAutoRenew))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1941, Col: 697}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1942, Col: 697}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var782))
 		if templ_7745c5c3_Err != nil {
@@ -16768,7 +16768,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 		var templ_7745c5c3_Var783 string
 		templ_7745c5c3_Var783, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(item.HTTPSRedirect))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1941, Col: 769}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1942, Col: 769}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var783))
 		if templ_7745c5c3_Err != nil {
@@ -16786,7 +16786,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 			var templ_7745c5c3_Var784 string
 			templ_7745c5c3_Var784, templ_7745c5c3_Err = templ.JoinStringErrs(item.TLSLastError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1944, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1945, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var784))
 			if templ_7745c5c3_Err != nil {
@@ -16818,7 +16818,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 			var templ_7745c5c3_Var785 string
 			templ_7745c5c3_Var785, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1949, Col: 144}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1950, Col: 144}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var785))
 			if templ_7745c5c3_Err != nil {
@@ -16831,7 +16831,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 			var templ_7745c5c3_Var786 string
 			templ_7745c5c3_Var786, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1949, Col: 212}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1950, Col: 212}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var786))
 			if templ_7745c5c3_Err != nil {
@@ -16852,7 +16852,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 			var templ_7745c5c3_Var787 string
 			templ_7745c5c3_Var787, templ_7745c5c3_Err = templ.JoinStringErrs("custom-certificate-dialog-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1949, Col: 473}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1950, Col: 473}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var787))
 			if templ_7745c5c3_Err != nil {
@@ -16873,7 +16873,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 			var templ_7745c5c3_Var788 templ.SafeURL
 			templ_7745c5c3_Var788, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/tls-auto-renew"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1950, Col: 141}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1951, Col: 141}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var788))
 			if templ_7745c5c3_Err != nil {
@@ -16904,7 +16904,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 			var templ_7745c5c3_Var789 string
 			templ_7745c5c3_Var789, templ_7745c5c3_Err = templ.JoinStringErrs("custom-certificate-dialog-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1951, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1952, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var789))
 			if templ_7745c5c3_Err != nil {
@@ -16925,7 +16925,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 			var templ_7745c5c3_Var790 string
 			templ_7745c5c3_Var790, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1951, Col: 351}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1952, Col: 351}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var790))
 			if templ_7745c5c3_Err != nil {
@@ -16938,7 +16938,7 @@ func domainSSL(user auth.SessionUser, item dashboard.Site, subscription types.Su
 			var templ_7745c5c3_Var791 templ.SafeURL
 			templ_7745c5c3_Var791, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID) + "/certificates/custom"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1951, Col: 562}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1952, Col: 562}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var791))
 			if templ_7745c5c3_Err != nil {
@@ -16993,7 +16993,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 		var templ_7745c5c3_Var793 string
 		templ_7745c5c3_Var793, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(view.SupportCustomerID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1957, Col: 146}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1958, Col: 146}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var793))
 		if templ_7745c5c3_Err != nil {
@@ -17006,7 +17006,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 		var templ_7745c5c3_Var794 string
 		templ_7745c5c3_Var794, templ_7745c5c3_Err = templ.JoinStringErrs(databaseScopedURL("/sites/"+formatJobID(item.ID)+"/databases/status", view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1957, Col: 246}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1958, Col: 246}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var794))
 		if templ_7745c5c3_Err != nil {
@@ -17027,7 +17027,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 		var templ_7745c5c3_Var795 string
 		templ_7745c5c3_Var795, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1961, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1962, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var795))
 		if templ_7745c5c3_Err != nil {
@@ -17045,7 +17045,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var796 string
 			templ_7745c5c3_Var796, templ_7745c5c3_Err = templ.JoinStringErrs("database-create-dialog-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1964, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1965, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var796))
 			if templ_7745c5c3_Err != nil {
@@ -17071,7 +17071,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 		var templ_7745c5c3_Var797 string
 		templ_7745c5c3_Var797, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(databases)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1969, Col: 70}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1970, Col: 70}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var797))
 		if templ_7745c5c3_Err != nil {
@@ -17084,7 +17084,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 		var templ_7745c5c3_Var798 string
 		templ_7745c5c3_Var798, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.DatabasesUsed, subscription.MaxDatabases, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1970, Col: 125}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1971, Col: 125}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var798))
 		if templ_7745c5c3_Err != nil {
@@ -17097,7 +17097,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 		var templ_7745c5c3_Var799 string
 		templ_7745c5c3_Var799, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1970, Col: 170}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1971, Col: 170}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var799))
 		if templ_7745c5c3_Err != nil {
@@ -17139,7 +17139,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 				var templ_7745c5c3_Var800 string
 				templ_7745c5c3_Var800, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(database.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1984, Col: 79}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1985, Col: 79}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var800))
 				if templ_7745c5c3_Err != nil {
@@ -17152,7 +17152,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 				var templ_7745c5c3_Var801 string
 				templ_7745c5c3_Var801, templ_7745c5c3_Err = templ.JoinStringErrs(database.Status)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1984, Col: 116}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1985, Col: 116}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var801))
 				if templ_7745c5c3_Err != nil {
@@ -17173,7 +17173,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 				var templ_7745c5c3_Var802 string
 				templ_7745c5c3_Var802, templ_7745c5c3_Err = templ.JoinStringErrs(database.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1986, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1987, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var802))
 				if templ_7745c5c3_Err != nil {
@@ -17186,7 +17186,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 				var templ_7745c5c3_Var803 string
 				templ_7745c5c3_Var803, templ_7745c5c3_Err = templ.JoinStringErrs(databaseEngineLabel(database.Engine))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1986, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1987, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var803))
 				if templ_7745c5c3_Err != nil {
@@ -17199,7 +17199,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 				var templ_7745c5c3_Var804 string
 				templ_7745c5c3_Var804, templ_7745c5c3_Err = templ.JoinStringErrs(database.User)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1987, Col: 89}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 1988, Col: 89}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var804))
 				if templ_7745c5c3_Err != nil {
@@ -17255,7 +17255,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var805 string
 			templ_7745c5c3_Var805, templ_7745c5c3_Err = templ.JoinStringErrs("database-create-dialog-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2003, Col: 110}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2004, Col: 110}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var805))
 			if templ_7745c5c3_Err != nil {
@@ -17268,7 +17268,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var806 string
 			templ_7745c5c3_Var806, templ_7745c5c3_Err = templ.JoinStringErrs("database-create-title-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2003, Col: 191}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2004, Col: 191}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var806))
 			if templ_7745c5c3_Err != nil {
@@ -17281,7 +17281,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var807 string
 			templ_7745c5c3_Var807, templ_7745c5c3_Err = templ.JoinStringErrs("database-create-title-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2006, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2007, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var807))
 			if templ_7745c5c3_Err != nil {
@@ -17294,7 +17294,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var808 string
 			templ_7745c5c3_Var808, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2007, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2008, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var808))
 			if templ_7745c5c3_Err != nil {
@@ -17307,7 +17307,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var809 string
 			templ_7745c5c3_Var809, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2007, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2008, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var809))
 			if templ_7745c5c3_Err != nil {
@@ -17336,7 +17336,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var810 string
 			templ_7745c5c3_Var810, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.SubscriptionID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2011, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2012, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var810))
 			if templ_7745c5c3_Err != nil {
@@ -17349,7 +17349,7 @@ func domainDatabases(item dashboard.Site, subscription types.SubscriptionSummary
 			var templ_7745c5c3_Var811 string
 			templ_7745c5c3_Var811, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2012, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2013, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var811))
 			if templ_7745c5c3_Err != nil {
@@ -17416,7 +17416,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 		var templ_7745c5c3_Var813 string
 		templ_7745c5c3_Var813, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(backups)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2028, Col: 157}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2029, Col: 157}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var813))
 		if templ_7745c5c3_Err != nil {
@@ -17429,7 +17429,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 		var templ_7745c5c3_Var814 string
 		templ_7745c5c3_Var814, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2028, Col: 184}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2029, Col: 184}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var814))
 		if templ_7745c5c3_Err != nil {
@@ -17447,7 +17447,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 			var templ_7745c5c3_Var815 string
 			templ_7745c5c3_Var815, templ_7745c5c3_Err = templ.JoinStringErrs("backup-create-dialog-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2030, Col: 91}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2031, Col: 91}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var815))
 			if templ_7745c5c3_Err != nil {
@@ -17473,7 +17473,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 		var templ_7745c5c3_Var816 string
 		templ_7745c5c3_Var816, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(backups)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2033, Col: 99}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2034, Col: 99}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var816))
 		if templ_7745c5c3_Err != nil {
@@ -17486,7 +17486,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 		var templ_7745c5c3_Var817 string
 		templ_7745c5c3_Var817, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.BackupsUsed, subscription.MaxBackups, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2033, Col: 255}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2034, Col: 255}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var817))
 		if templ_7745c5c3_Err != nil {
@@ -17499,7 +17499,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 		var templ_7745c5c3_Var818 string
 		templ_7745c5c3_Var818, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(subscription.BackupBytesUsed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2033, Col: 312}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2034, Col: 312}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var818))
 		if templ_7745c5c3_Err != nil {
@@ -17541,7 +17541,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 				var templ_7745c5c3_Var819 string
 				templ_7745c5c3_Var819, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(backup.CreatedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2042, Col: 128}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2043, Col: 128}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var819))
 				if templ_7745c5c3_Err != nil {
@@ -17554,7 +17554,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 				var templ_7745c5c3_Var820 string
 				templ_7745c5c3_Var820, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(backup.SizeBytes))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2042, Col: 177}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2043, Col: 177}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var820))
 				if templ_7745c5c3_Err != nil {
@@ -17576,7 +17576,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 					var templ_7745c5c3_Var821 string
 					templ_7745c5c3_Var821, templ_7745c5c3_Err = templ.JoinStringErrs("backup-restore-dialog-" + formatJobID(backup.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2044, Col: 125}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2045, Col: 125}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var821))
 					if templ_7745c5c3_Err != nil {
@@ -17589,7 +17589,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 					var templ_7745c5c3_Var822 string
 					templ_7745c5c3_Var822, templ_7745c5c3_Err = templ.JoinStringErrs("backup-restore-dialog-" + formatJobID(backup.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2045, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2046, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var822))
 					if templ_7745c5c3_Err != nil {
@@ -17602,7 +17602,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 					var templ_7745c5c3_Var823 string
 					templ_7745c5c3_Var823, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2045, Col: 229}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2046, Col: 229}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var823))
 					if templ_7745c5c3_Err != nil {
@@ -17631,7 +17631,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 					var templ_7745c5c3_Var824 string
 					templ_7745c5c3_Var824, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(backup.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2045, Col: 560}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2046, Col: 560}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var824))
 					if templ_7745c5c3_Err != nil {
@@ -17644,7 +17644,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 					var templ_7745c5c3_Var825 string
 					templ_7745c5c3_Var825, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2045, Col: 628}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2046, Col: 628}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var825))
 					if templ_7745c5c3_Err != nil {
@@ -17673,7 +17673,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 			var templ_7745c5c3_Var826 string
 			templ_7745c5c3_Var826, templ_7745c5c3_Err = templ.JoinStringErrs("backup-create-dialog-" + formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2052, Col: 78}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2053, Col: 78}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var826))
 			if templ_7745c5c3_Err != nil {
@@ -17686,7 +17686,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 			var templ_7745c5c3_Var827 string
 			templ_7745c5c3_Var827, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2052, Col: 207}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2053, Col: 207}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var827))
 			if templ_7745c5c3_Err != nil {
@@ -17715,7 +17715,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 			var templ_7745c5c3_Var828 string
 			templ_7745c5c3_Var828, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.SubscriptionID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2052, Col: 494}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2053, Col: 494}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var828))
 			if templ_7745c5c3_Err != nil {
@@ -17728,7 +17728,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 			var templ_7745c5c3_Var829 string
 			templ_7745c5c3_Var829, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(item.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2052, Col: 562}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2053, Col: 562}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var829))
 			if templ_7745c5c3_Err != nil {
@@ -17741,7 +17741,7 @@ func domainBackups(user auth.SessionUser, item dashboard.Site, subscription type
 			var templ_7745c5c3_Var830 string
 			templ_7745c5c3_Var830, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2052, Col: 620}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2053, Col: 620}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var830))
 			if templ_7745c5c3_Err != nil {
@@ -17838,7 +17838,7 @@ func routedBackups(data dashboard.Phase6Data, sites []dashboard.Site, subscripti
 			var templ_7745c5c3_Var833 string
 			templ_7745c5c3_Var833, templ_7745c5c3_Err = templ.JoinStringErrs(backup.TargetName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2067, Col: 52}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2068, Col: 52}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var833))
 			if templ_7745c5c3_Err != nil {
@@ -17851,7 +17851,7 @@ func routedBackups(data dashboard.Phase6Data, sites []dashboard.Site, subscripti
 			var templ_7745c5c3_Var834 string
 			templ_7745c5c3_Var834, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(backup.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2067, Col: 114}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2068, Col: 114}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var834))
 			if templ_7745c5c3_Err != nil {
@@ -17864,7 +17864,7 @@ func routedBackups(data dashboard.Phase6Data, sites []dashboard.Site, subscripti
 			var templ_7745c5c3_Var835 string
 			templ_7745c5c3_Var835, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(backup.SizeBytes))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2067, Col: 174}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2068, Col: 174}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var835))
 			if templ_7745c5c3_Err != nil {
@@ -17968,7 +17968,7 @@ func routedDNS(data dashboard.Phase6Data, sites []dashboard.Site, actions Dashbo
 				var templ_7745c5c3_Var837 string
 				templ_7745c5c3_Var837, templ_7745c5c3_Err = templ.JoinStringErrs(z.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2089, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2090, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var837))
 				if templ_7745c5c3_Err != nil {
@@ -17981,7 +17981,7 @@ func routedDNS(data dashboard.Phase6Data, sites []dashboard.Site, actions Dashbo
 				var templ_7745c5c3_Var838 string
 				templ_7745c5c3_Var838, templ_7745c5c3_Err = templ.JoinStringErrs(z.Address)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2089, Col: 86}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2090, Col: 86}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var838))
 				if templ_7745c5c3_Err != nil {
@@ -17994,7 +17994,7 @@ func routedDNS(data dashboard.Phase6Data, sites []dashboard.Site, actions Dashbo
 				var templ_7745c5c3_Var839 string
 				templ_7745c5c3_Var839, templ_7745c5c3_Err = templ.JoinStringErrs(z.Status)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2089, Col: 127}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2090, Col: 127}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var839))
 				if templ_7745c5c3_Err != nil {
@@ -18007,7 +18007,7 @@ func routedDNS(data dashboard.Phase6Data, sites []dashboard.Site, actions Dashbo
 				var templ_7745c5c3_Var840 string
 				templ_7745c5c3_Var840, templ_7745c5c3_Err = templ.JoinStringErrs(z.Serial)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2089, Col: 168}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2090, Col: 168}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var840))
 				if templ_7745c5c3_Err != nil {
@@ -18044,7 +18044,7 @@ func routedDNS(data dashboard.Phase6Data, sites []dashboard.Site, actions Dashbo
 				var templ_7745c5c3_Var841 string
 				templ_7745c5c3_Var841, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2098, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2099, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var841))
 				if templ_7745c5c3_Err != nil {
@@ -18057,7 +18057,7 @@ func routedDNS(data dashboard.Phase6Data, sites []dashboard.Site, actions Dashbo
 				var templ_7745c5c3_Var842 string
 				templ_7745c5c3_Var842, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2098, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2099, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var842))
 				if templ_7745c5c3_Err != nil {
@@ -18118,7 +18118,7 @@ func routedCertificates(sites []dashboard.Site, actions DashboardActions, view W
 			var templ_7745c5c3_Var844 templ.SafeURL
 			templ_7745c5c3_Var844, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(item.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2112, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2113, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var844))
 			if templ_7745c5c3_Err != nil {
@@ -18131,7 +18131,7 @@ func routedCertificates(sites []dashboard.Site, actions DashboardActions, view W
 			var templ_7745c5c3_Var845 string
 			templ_7745c5c3_Var845, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2112, Col: 105}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2113, Col: 105}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var845))
 			if templ_7745c5c3_Err != nil {
@@ -18144,7 +18144,7 @@ func routedCertificates(sites []dashboard.Site, actions DashboardActions, view W
 			var templ_7745c5c3_Var846 string
 			templ_7745c5c3_Var846, templ_7745c5c3_Err = templ.JoinStringErrs(item.TLSStatus)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2112, Col: 156}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2113, Col: 156}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var846))
 			if templ_7745c5c3_Err != nil {
@@ -18157,7 +18157,7 @@ func routedCertificates(sites []dashboard.Site, actions DashboardActions, view W
 			var templ_7745c5c3_Var847 string
 			templ_7745c5c3_Var847, templ_7745c5c3_Err = templ.JoinStringErrs(item.TLSIssuer)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2112, Col: 203}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2113, Col: 203}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var847))
 			if templ_7745c5c3_Err != nil {
@@ -18170,7 +18170,7 @@ func routedCertificates(sites []dashboard.Site, actions DashboardActions, view W
 			var templ_7745c5c3_Var848 string
 			templ_7745c5c3_Var848, templ_7745c5c3_Err = templ.JoinStringErrs(formatNullableTime(item.TLSExpiresAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2112, Col: 274}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2113, Col: 274}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var848))
 			if templ_7745c5c3_Err != nil {
@@ -18206,7 +18206,7 @@ func routedCertificates(sites []dashboard.Site, actions DashboardActions, view W
 				var templ_7745c5c3_Var849 string
 				templ_7745c5c3_Var849, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2120, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2121, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var849))
 				if templ_7745c5c3_Err != nil {
@@ -18219,7 +18219,7 @@ func routedCertificates(sites []dashboard.Site, actions DashboardActions, view W
 				var templ_7745c5c3_Var850 string
 				templ_7745c5c3_Var850, templ_7745c5c3_Err = templ.JoinStringErrs(item.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2120, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2121, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var850))
 				if templ_7745c5c3_Err != nil {
@@ -18383,7 +18383,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 			var templ_7745c5c3_Var857 string
 			templ_7745c5c3_Var857, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Status)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2150, Col: 163}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2151, Col: 163}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var857))
 			if templ_7745c5c3_Err != nil {
@@ -18396,7 +18396,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 			var templ_7745c5c3_Var858 string
 			templ_7745c5c3_Var858, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Company)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2151, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2152, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var858))
 			if templ_7745c5c3_Err != nil {
@@ -18409,7 +18409,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 			var templ_7745c5c3_Var859 string
 			templ_7745c5c3_Var859, templ_7745c5c3_Err = templ.JoinStringErrs(providerName(customer, data.Resellers))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2151, Col: 146}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2152, Col: 146}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var859))
 			if templ_7745c5c3_Err != nil {
@@ -18422,7 +18422,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 			var templ_7745c5c3_Var860 string
 			templ_7745c5c3_Var860, templ_7745c5c3_Err = templ.JoinStringErrs(customerLoginMode(customer))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2151, Col: 211}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2152, Col: 211}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var860))
 			if templ_7745c5c3_Err != nil {
@@ -18435,7 +18435,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 			var templ_7745c5c3_Var861 string
 			templ_7745c5c3_Var861, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Notes)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2151, Col: 263}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2152, Col: 263}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var861))
 			if templ_7745c5c3_Err != nil {
@@ -18456,7 +18456,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 			var templ_7745c5c3_Var862 string
 			templ_7745c5c3_Var862, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2153, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2154, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var862))
 			if templ_7745c5c3_Err != nil {
@@ -18489,7 +18489,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 				var templ_7745c5c3_Var863 templ.SafeURL
 				templ_7745c5c3_Var863, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/support/customers/" + formatJobID(customer.ID) + "/enter"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2161, Col: 109}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2162, Col: 109}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var863))
 				if templ_7745c5c3_Err != nil {
@@ -18528,7 +18528,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 				var templ_7745c5c3_Var864 string
 				templ_7745c5c3_Var864, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2170, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2171, Col: 78}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var864))
 				if templ_7745c5c3_Err != nil {
@@ -18546,7 +18546,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 					var templ_7745c5c3_Var865 string
 					templ_7745c5c3_Var865, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(reseller.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2174, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2175, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var865))
 					if templ_7745c5c3_Err != nil {
@@ -18569,7 +18569,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 					var templ_7745c5c3_Var866 string
 					templ_7745c5c3_Var866, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.DisplayName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2174, Col: 122}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2175, Col: 122}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var866))
 					if templ_7745c5c3_Err != nil {
@@ -18592,7 +18592,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 			var templ_7745c5c3_Var867 templ.SafeURL
 			templ_7745c5c3_Var867, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/new?customer_id=" + formatJobID(customer.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2181, Col: 164}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2182, Col: 164}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var867))
 			if templ_7745c5c3_Err != nil {
@@ -18642,7 +18642,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 				var templ_7745c5c3_Var868 string
 				templ_7745c5c3_Var868, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2186, Col: 248}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2187, Col: 248}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var868))
 				if templ_7745c5c3_Err != nil {
@@ -18655,7 +18655,7 @@ func routedCustomerDetail(data dashboard.Data, user auth.SessionUser, view Works
 				var templ_7745c5c3_Var869 string
 				templ_7745c5c3_Var869, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Email)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2186, Col: 319}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2187, Col: 319}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var869))
 				if templ_7745c5c3_Err != nil {
@@ -18769,7 +18769,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 					var templ_7745c5c3_Var871 string
 					templ_7745c5c3_Var871, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2218, Col: 47}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2219, Col: 47}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var871))
 					if templ_7745c5c3_Err != nil {
@@ -18782,7 +18782,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 					var templ_7745c5c3_Var872 string
 					templ_7745c5c3_Var872, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2218, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2219, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var872))
 					if templ_7745c5c3_Err != nil {
@@ -18806,7 +18806,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 				var templ_7745c5c3_Var873 string
 				templ_7745c5c3_Var873, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2225, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2226, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var873))
 				if templ_7745c5c3_Err != nil {
@@ -18819,7 +18819,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 				var templ_7745c5c3_Var874 string
 				templ_7745c5c3_Var874, templ_7745c5c3_Err = templ.JoinStringErrs(displayCustomer(customer))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2225, Col: 79}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2226, Col: 79}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var874))
 				if templ_7745c5c3_Err != nil {
@@ -18857,7 +18857,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var875 string
 			templ_7745c5c3_Var875, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(subscription.ResellerID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2248, Col: 89}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2249, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var875))
 			if templ_7745c5c3_Err != nil {
@@ -18870,7 +18870,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var876 string
 			templ_7745c5c3_Var876, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(subscription.CustomerUserID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2248, Col: 156}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2249, Col: 156}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var876))
 			if templ_7745c5c3_Err != nil {
@@ -18883,7 +18883,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var877 string
 			templ_7745c5c3_Var877, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(subscription.CustomerID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2248, Col: 214}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2249, Col: 214}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var877))
 			if templ_7745c5c3_Err != nil {
@@ -18896,7 +18896,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var878 string
 			templ_7745c5c3_Var878, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2248, Col: 255}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2249, Col: 255}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var878))
 			if templ_7745c5c3_Err != nil {
@@ -18909,7 +18909,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var879 string
 			templ_7745c5c3_Var879, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerEmail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2248, Col: 308}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2249, Col: 308}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var879))
 			if templ_7745c5c3_Err != nil {
@@ -18927,7 +18927,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 				var templ_7745c5c3_Var880 string
 				templ_7745c5c3_Var880, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(subscription.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2250, Col: 194}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2251, Col: 194}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var880))
 				if templ_7745c5c3_Err != nil {
@@ -18940,7 +18940,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 				var templ_7745c5c3_Var881 string
 				templ_7745c5c3_Var881, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + subscription.SubscriptionName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2250, Col: 249}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2251, Col: 249}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var881))
 				if templ_7745c5c3_Err != nil {
@@ -18958,7 +18958,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var882 templ.SafeURL
 			templ_7745c5c3_Var882, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/subscriptions/"+formatJobID(subscription.ID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2253, Col: 127}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2254, Col: 127}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var882))
 			if templ_7745c5c3_Err != nil {
@@ -18971,7 +18971,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var883 string
 			templ_7745c5c3_Var883, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2253, Col: 169}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2254, Col: 169}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var883))
 			if templ_7745c5c3_Err != nil {
@@ -18984,7 +18984,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var884 string
 			templ_7745c5c3_Var884, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(subscription.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2253, Col: 218}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2254, Col: 218}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var884))
 			if templ_7745c5c3_Err != nil {
@@ -18997,7 +18997,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var885 string
 			templ_7745c5c3_Var885, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2254, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2255, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var885))
 			if templ_7745c5c3_Err != nil {
@@ -19010,7 +19010,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var886 string
 			templ_7745c5c3_Var886, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerEmail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2254, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2255, Col: 129}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var886))
 			if templ_7745c5c3_Err != nil {
@@ -19023,7 +19023,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var887 string
 			templ_7745c5c3_Var887, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2256, Col: 112}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2257, Col: 112}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var887))
 			if templ_7745c5c3_Err != nil {
@@ -19036,7 +19036,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var888 string
 			templ_7745c5c3_Var888, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.DomainsUsed, subscription.MaxSites, true))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2257, Col: 156}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2258, Col: 156}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var888))
 			if templ_7745c5c3_Err != nil {
@@ -19049,7 +19049,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var889 string
 			templ_7745c5c3_Var889, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.SubdomainsUsed, subscription.MaxSubdomains, true))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2257, Col: 282}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2258, Col: 282}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var889))
 			if templ_7745c5c3_Err != nil {
@@ -19062,7 +19062,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var890 string
 			templ_7745c5c3_Var890, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.DatabasesUsed, subscription.MaxDatabases, true))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2257, Col: 409}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2258, Col: 409}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var890))
 			if templ_7745c5c3_Err != nil {
@@ -19087,7 +19087,7 @@ func routedSubscriptions(user auth.SessionUser, data dashboard.Data, view Worksp
 			var templ_7745c5c3_Var891 templ.SafeURL
 			templ_7745c5c3_Var891, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/subscriptions/"+formatJobID(subscription.ID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2259, Col: 182}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2260, Col: 182}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var891))
 			if templ_7745c5c3_Err != nil {
@@ -19279,7 +19279,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 		var templ_7745c5c3_Var896 string
 		templ_7745c5c3_Var896, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2321, Col: 40}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2322, Col: 40}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var896))
 		if templ_7745c5c3_Err != nil {
@@ -19319,7 +19319,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var897 templ.SafeURL
 			templ_7745c5c3_Var897, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/customers/"+formatJobID(subscription.CustomerID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2330, Col: 102}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2331, Col: 102}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var897))
 			if templ_7745c5c3_Err != nil {
@@ -19332,7 +19332,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var898 string
 			templ_7745c5c3_Var898, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2330, Col: 132}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2331, Col: 132}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var898))
 			if templ_7745c5c3_Err != nil {
@@ -19346,7 +19346,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var899 string
 			templ_7745c5c3_Var899, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2332, Col: 33}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2333, Col: 33}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var899))
 			if templ_7745c5c3_Err != nil {
@@ -19369,7 +19369,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var900 templ.SafeURL
 			templ_7745c5c3_Var900, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatJobID(subscription.PlanID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2336, Col: 88}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2337, Col: 88}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var900))
 			if templ_7745c5c3_Err != nil {
@@ -19382,7 +19382,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var901 string
 			templ_7745c5c3_Var901, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2336, Col: 114}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2337, Col: 114}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var901))
 			if templ_7745c5c3_Err != nil {
@@ -19400,7 +19400,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var902 string
 			templ_7745c5c3_Var902, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2338, Col: 34}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2339, Col: 34}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var902))
 			if templ_7745c5c3_Err != nil {
@@ -19419,7 +19419,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var903 string
 			templ_7745c5c3_Var903, templ_7745c5c3_Err = templ.JoinStringErrs(account.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2342, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2343, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var903))
 			if templ_7745c5c3_Err != nil {
@@ -19438,7 +19438,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var904 string
 			templ_7745c5c3_Var904, templ_7745c5c3_Err = templ.JoinStringErrs(formatDateLabel(subscription.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2346, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2347, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var904))
 			if templ_7745c5c3_Err != nil {
@@ -19457,7 +19457,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var905 templ.SafeURL
 			templ_7745c5c3_Var905, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2352, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2353, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var905))
 			if templ_7745c5c3_Err != nil {
@@ -19475,7 +19475,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 				var templ_7745c5c3_Var906 templ.SafeURL
 				templ_7745c5c3_Var906, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2354, Col: 108}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2355, Col: 108}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var906))
 				if templ_7745c5c3_Err != nil {
@@ -19503,7 +19503,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var907 templ.SafeURL
 			templ_7745c5c3_Var907, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2361, Col: 178}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2362, Col: 178}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var907))
 			if templ_7745c5c3_Err != nil {
@@ -19521,7 +19521,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 				var templ_7745c5c3_Var908 string
 				templ_7745c5c3_Var908, templ_7745c5c3_Err = templ.JoinStringErrs("{\"subscription_id\":\"" + formatJobID(subscription.ID) + "\"}")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2364, Col: 92}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2365, Col: 92}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var908))
 				if templ_7745c5c3_Err != nil {
@@ -19561,7 +19561,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var909 templ.SafeURL
 			templ_7745c5c3_Var909, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2374, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2375, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var909))
 			if templ_7745c5c3_Err != nil {
@@ -19579,7 +19579,7 @@ func subscriptionObjectHead(user auth.SessionUser, subscription types.Subscripti
 			var templ_7745c5c3_Var910 templ.SafeURL
 			templ_7745c5c3_Var910, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2376, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2377, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var910))
 			if templ_7745c5c3_Err != nil {
@@ -19655,7 +19655,7 @@ func subscriptionTabLink(view WorkspaceView, subscriptionID int64, tab string, l
 			var templ_7745c5c3_Var912 templ.SafeURL
 			templ_7745c5c3_Var912, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscriptionID, tab))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2391, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2392, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var912))
 			if templ_7745c5c3_Err != nil {
@@ -19668,7 +19668,7 @@ func subscriptionTabLink(view WorkspaceView, subscriptionID int64, tab string, l
 			var templ_7745c5c3_Var913 string
 			templ_7745c5c3_Var913, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2391, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2392, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var913))
 			if templ_7745c5c3_Err != nil {
@@ -19690,7 +19690,7 @@ func subscriptionTabLink(view WorkspaceView, subscriptionID int64, tab string, l
 			var templ_7745c5c3_Var914 templ.SafeURL
 			templ_7745c5c3_Var914, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscriptionID, tab))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2393, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2394, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var914))
 			if templ_7745c5c3_Err != nil {
@@ -19703,7 +19703,7 @@ func subscriptionTabLink(view WorkspaceView, subscriptionID int64, tab string, l
 			var templ_7745c5c3_Var915 string
 			templ_7745c5c3_Var915, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2393, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2394, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var915))
 			if templ_7745c5c3_Err != nil {
@@ -19752,7 +19752,7 @@ func subscriptionTabBadge(badge string, alert bool) templ.Component {
 				var templ_7745c5c3_Var917 string
 				templ_7745c5c3_Var917, templ_7745c5c3_Err = templ.JoinStringErrs(badge)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2400, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2401, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var917))
 				if templ_7745c5c3_Err != nil {
@@ -19770,7 +19770,7 @@ func subscriptionTabBadge(badge string, alert bool) templ.Component {
 				var templ_7745c5c3_Var918 string
 				templ_7745c5c3_Var918, templ_7745c5c3_Err = templ.JoinStringErrs(badge)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2402, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2403, Col: 37}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var918))
 				if templ_7745c5c3_Err != nil {
@@ -19831,7 +19831,7 @@ func subscriptionAttention(user auth.SessionUser, subscription types.Subscriptio
 				var templ_7745c5c3_Var920 string
 				templ_7745c5c3_Var920, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(subscription.ComplianceCheckedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2417, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2418, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var920))
 				if templ_7745c5c3_Err != nil {
@@ -19844,7 +19844,7 @@ func subscriptionAttention(user auth.SessionUser, subscription types.Subscriptio
 				var templ_7745c5c3_Var921 string
 				templ_7745c5c3_Var921, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(subscription.ComplianceCheckedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2417, Col: 132}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2418, Col: 132}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var921))
 				if templ_7745c5c3_Err != nil {
@@ -19862,7 +19862,7 @@ func subscriptionAttention(user auth.SessionUser, subscription types.Subscriptio
 			var templ_7745c5c3_Var922 string
 			templ_7745c5c3_Var922, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionBreachSentence(breaches))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2421, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2422, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var922))
 			if templ_7745c5c3_Err != nil {
@@ -19875,7 +19875,7 @@ func subscriptionAttention(user auth.SessionUser, subscription types.Subscriptio
 			var templ_7745c5c3_Var923 templ.SafeURL
 			templ_7745c5c3_Var923, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2423, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2424, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var923))
 			if templ_7745c5c3_Err != nil {
@@ -19902,7 +19902,7 @@ func subscriptionAttention(user auth.SessionUser, subscription types.Subscriptio
 			var templ_7745c5c3_Var924 string
 			templ_7745c5c3_Var924, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SyncError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2435, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2436, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var924))
 			if templ_7745c5c3_Err != nil {
@@ -19920,7 +19920,7 @@ func subscriptionAttention(user auth.SessionUser, subscription types.Subscriptio
 				var templ_7745c5c3_Var925 templ.SafeURL
 				templ_7745c5c3_Var925, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2438, Col: 108}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2439, Col: 108}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var925))
 				if templ_7745c5c3_Err != nil {
@@ -19990,7 +19990,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var927 templ.SafeURL
 			templ_7745c5c3_Var927, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/customers/"+formatJobID(subscription.CustomerID))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2464, Col: 103}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2465, Col: 103}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var927))
 			if templ_7745c5c3_Err != nil {
@@ -20003,7 +20003,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var928 string
 			templ_7745c5c3_Var928, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2464, Col: 133}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2465, Col: 133}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var928))
 			if templ_7745c5c3_Err != nil {
@@ -20021,7 +20021,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var929 string
 			templ_7745c5c3_Var929, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2466, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2467, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var929))
 			if templ_7745c5c3_Err != nil {
@@ -20040,7 +20040,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var930 string
 			templ_7745c5c3_Var930, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerEmail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2469, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2470, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var930))
 			if templ_7745c5c3_Err != nil {
@@ -20063,7 +20063,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var931 templ.SafeURL
 			templ_7745c5c3_Var931, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatJobID(subscription.PlanID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2478, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2479, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var931))
 			if templ_7745c5c3_Err != nil {
@@ -20076,7 +20076,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var932 string
 			templ_7745c5c3_Var932, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2478, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2479, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var932))
 			if templ_7745c5c3_Err != nil {
@@ -20094,7 +20094,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var933 string
 			templ_7745c5c3_Var933, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2480, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2481, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var933))
 			if templ_7745c5c3_Err != nil {
@@ -20112,7 +20112,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 		var templ_7745c5c3_Var934 string
 		templ_7745c5c3_Var934, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.PlanRevision))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2482, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2483, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var934))
 		if templ_7745c5c3_Err != nil {
@@ -20125,7 +20125,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 		var templ_7745c5c3_Var935 string
 		templ_7745c5c3_Var935, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionProviderLabel(subscription))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2482, Col: 114}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2483, Col: 114}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var935))
 		if templ_7745c5c3_Err != nil {
@@ -20143,7 +20143,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var936 templ.SafeURL
 			templ_7745c5c3_Var936, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2486, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2487, Col: 99}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var936))
 			if templ_7745c5c3_Err != nil {
@@ -20161,7 +20161,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 		var templ_7745c5c3_Var937 string
 		templ_7745c5c3_Var937, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSyncModeLabel(subscription.SyncMode))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2491, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2492, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var937))
 		if templ_7745c5c3_Err != nil {
@@ -20174,7 +20174,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 		var templ_7745c5c3_Var938 string
 		templ_7745c5c3_Var938, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSyncModeDetail(subscription.SyncMode))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2491, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2492, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var938))
 		if templ_7745c5c3_Err != nil {
@@ -20196,7 +20196,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var939 string
 			templ_7745c5c3_Var939, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(subscription.UpdatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2498, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2499, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var939))
 			if templ_7745c5c3_Err != nil {
@@ -20223,7 +20223,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var940 string
 			templ_7745c5c3_Var940, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(subscription.ComplianceCheckedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2507, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2508, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var940))
 			if templ_7745c5c3_Err != nil {
@@ -20246,7 +20246,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var941 string
 			templ_7745c5c3_Var941, templ_7745c5c3_Err = templ.JoinStringErrs(account.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2514, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2515, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var941))
 			if templ_7745c5c3_Err != nil {
@@ -20259,7 +20259,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var942 string
 			templ_7745c5c3_Var942, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellWord(account.ShellMode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2514, Col: 104}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2515, Col: 104}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var942))
 			if templ_7745c5c3_Err != nil {
@@ -20272,7 +20272,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var943 string
 			templ_7745c5c3_Var943, templ_7745c5c3_Err = templ.JoinStringErrs(account.HomePath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2514, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2515, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var943))
 			if templ_7745c5c3_Err != nil {
@@ -20291,7 +20291,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var944 string
 			templ_7745c5c3_Var944, templ_7745c5c3_Err = templ.JoinStringErrs(formatDateLabel(subscription.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2521, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2522, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var944))
 			if templ_7745c5c3_Err != nil {
@@ -20309,7 +20309,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 				var templ_7745c5c3_Var945 string
 				templ_7745c5c3_Var945, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(subscription.UpdatedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2523, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2524, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var945))
 				if templ_7745c5c3_Err != nil {
@@ -20337,7 +20337,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 			var templ_7745c5c3_Var946 templ.SafeURL
 			templ_7745c5c3_Var946, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/support/customers/" + formatJobID(subscription.CustomerID) + "/enter"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2531, Col: 120}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2532, Col: 120}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var946))
 			if templ_7745c5c3_Err != nil {
@@ -20363,7 +20363,7 @@ func subscriptionPropertiesRail(user auth.SessionUser, subscription types.Subscr
 		var templ_7745c5c3_Var947 templ.SafeURL
 		templ_7745c5c3_Var947, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2539, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2540, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var947))
 		if templ_7745c5c3_Err != nil {
@@ -20451,7 +20451,7 @@ func limitRowBlock(row limitRow) templ.Component {
 		var templ_7745c5c3_Var951 string
 		templ_7745c5c3_Var951, templ_7745c5c3_Err = templ.JoinStringErrs(row.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2558, Col: 46}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2559, Col: 46}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var951))
 		if templ_7745c5c3_Err != nil {
@@ -20464,7 +20464,7 @@ func limitRowBlock(row limitRow) templ.Component {
 		var templ_7745c5c3_Var952 string
 		templ_7745c5c3_Var952, templ_7745c5c3_Err = templ.JoinStringErrs(row.Used)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2558, Col: 73}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2559, Col: 73}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var952))
 		if templ_7745c5c3_Err != nil {
@@ -20477,7 +20477,7 @@ func limitRowBlock(row limitRow) templ.Component {
 		var templ_7745c5c3_Var953 string
 		templ_7745c5c3_Var953, templ_7745c5c3_Err = templ.JoinStringErrs(row.Limit)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2558, Col: 90}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2559, Col: 90}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var953))
 		if templ_7745c5c3_Err != nil {
@@ -20513,7 +20513,7 @@ func limitRowBlock(row limitRow) templ.Component {
 			var templ_7745c5c3_Var956 string
 			templ_7745c5c3_Var956, templ_7745c5c3_Err = templ.JoinStringErrs(limitRowMeterLabel(row))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2560, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2561, Col: 84}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var956))
 			if templ_7745c5c3_Err != nil {
@@ -20526,7 +20526,7 @@ func limitRowBlock(row limitRow) templ.Component {
 			var templ_7745c5c3_Var957 string
 			templ_7745c5c3_Var957, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("width:" + row.Percent + "%")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2560, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2561, Col: 129}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var957))
 			if templ_7745c5c3_Err != nil {
@@ -20545,7 +20545,7 @@ func limitRowBlock(row limitRow) templ.Component {
 			var templ_7745c5c3_Var958 string
 			templ_7745c5c3_Var958, templ_7745c5c3_Err = templ.JoinStringErrs(row.Note)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2563, Col: 38}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2564, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var958))
 			if templ_7745c5c3_Err != nil {
@@ -20600,7 +20600,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 				var templ_7745c5c3_Var960 string
 				templ_7745c5c3_Var960, templ_7745c5c3_Err = templ.JoinStringErrs(row.Group)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2577, Col: 76}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2578, Col: 76}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var960))
 				if templ_7745c5c3_Err != nil {
@@ -20640,7 +20640,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var963 string
 			templ_7745c5c3_Var963, templ_7745c5c3_Err = templ.JoinStringErrs(row.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2580, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2581, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var963))
 			if templ_7745c5c3_Err != nil {
@@ -20653,7 +20653,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var964 string
 			templ_7745c5c3_Var964, templ_7745c5c3_Err = templ.JoinStringErrs(row.Used)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2581, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2582, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var964))
 			if templ_7745c5c3_Err != nil {
@@ -20666,7 +20666,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var965 string
 			templ_7745c5c3_Var965, templ_7745c5c3_Err = templ.JoinStringErrs(row.Limit)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2582, Col: 39}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2583, Col: 39}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var965))
 			if templ_7745c5c3_Err != nil {
@@ -20702,7 +20702,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 				var templ_7745c5c3_Var968 string
 				templ_7745c5c3_Var968, templ_7745c5c3_Err = templ.JoinStringErrs(limitRowMeterLabel(row))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2585, Col: 88}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2586, Col: 88}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var968))
 				if templ_7745c5c3_Err != nil {
@@ -20715,7 +20715,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 				var templ_7745c5c3_Var969 string
 				templ_7745c5c3_Var969, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues("width:" + row.Percent + "%")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2585, Col: 133}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2586, Col: 133}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var969))
 				if templ_7745c5c3_Err != nil {
@@ -20734,7 +20734,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 				var templ_7745c5c3_Var970 string
 				templ_7745c5c3_Var970, templ_7745c5c3_Err = templ.JoinStringErrs(row.Note)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2588, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2589, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var970))
 				if templ_7745c5c3_Err != nil {
@@ -20752,7 +20752,7 @@ func subscriptionLimitsTable(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var971 string
 			templ_7745c5c3_Var971, templ_7745c5c3_Err = templ.JoinStringErrs(row.Enforcement)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2591, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2592, Col: 83}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var971))
 			if templ_7745c5c3_Err != nil {
@@ -20918,7 +20918,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var980 templ.SafeURL
 			templ_7745c5c3_Var980, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sync"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2625, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2626, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var980))
 			if templ_7745c5c3_Err != nil {
@@ -20945,7 +20945,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var981 templ.SafeURL
 			templ_7745c5c3_Var981, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/mode"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2631, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2632, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var981))
 			if templ_7745c5c3_Err != nil {
@@ -20971,7 +20971,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var982 templ.SafeURL
 			templ_7745c5c3_Var982, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/mode"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2637, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2638, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var982))
 			if templ_7745c5c3_Err != nil {
@@ -21002,7 +21002,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var983 string
 			templ_7745c5c3_Var983, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ComplianceError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2645, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2646, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var983))
 			if templ_7745c5c3_Err != nil {
@@ -21024,7 +21024,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var984 templ.SafeURL
 		templ_7745c5c3_Var984, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionDrawerPath(view, subscription.ID, "subscription-plan-dialog-"+formatJobID(subscription.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2649, Col: 144}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2650, Col: 144}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var984))
 		if templ_7745c5c3_Err != nil {
@@ -21037,7 +21037,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var985 string
 		templ_7745c5c3_Var985, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-plan-dialog-" + formatJobID(subscription.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2649, Col: 225}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2650, Col: 225}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var985))
 		if templ_7745c5c3_Err != nil {
@@ -21050,7 +21050,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var986 string
 		templ_7745c5c3_Var986, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-plan-dialog-" + formatJobID(subscription.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2650, Col: 100}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2651, Col: 100}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var986))
 		if templ_7745c5c3_Err != nil {
@@ -21081,7 +21081,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var987 templ.SafeURL
 		templ_7745c5c3_Var987, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2650, Col: 515}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2651, Col: 515}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var987))
 		if templ_7745c5c3_Err != nil {
@@ -21102,7 +21102,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var988 string
 		templ_7745c5c3_Var988, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(subscription.CustomerID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2652, Col: 88}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2653, Col: 88}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var988))
 		if templ_7745c5c3_Err != nil {
@@ -21115,7 +21115,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var989 string
 		templ_7745c5c3_Var989, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2652, Col: 175}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2653, Col: 175}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var989))
 		if templ_7745c5c3_Err != nil {
@@ -21128,7 +21128,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var990 string
 		templ_7745c5c3_Var990, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SyncMode)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2652, Col: 246}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2653, Col: 246}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var990))
 		if templ_7745c5c3_Err != nil {
@@ -21141,7 +21141,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var991 string
 		templ_7745c5c3_Var991, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.Status)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2652, Col: 312}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2653, Col: 312}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var991))
 		if templ_7745c5c3_Err != nil {
@@ -21160,7 +21160,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 				var templ_7745c5c3_Var992 string
 				templ_7745c5c3_Var992, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2656, Col: 44}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2657, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var992))
 				if templ_7745c5c3_Err != nil {
@@ -21183,7 +21183,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 				var templ_7745c5c3_Var993 string
 				templ_7745c5c3_Var993, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2656, Col: 103}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2657, Col: 103}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var993))
 				if templ_7745c5c3_Err != nil {
@@ -21202,7 +21202,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var994 templ.SafeURL
 		templ_7745c5c3_Var994, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionDrawerPath(view, subscription.ID, "subscription-status-dialog-"+formatJobID(subscription.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2663, Col: 146}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2664, Col: 146}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var994))
 		if templ_7745c5c3_Err != nil {
@@ -21215,7 +21215,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var995 string
 		templ_7745c5c3_Var995, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-status-dialog-" + formatJobID(subscription.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2663, Col: 229}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2664, Col: 229}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var995))
 		if templ_7745c5c3_Err != nil {
@@ -21228,7 +21228,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var996 string
 		templ_7745c5c3_Var996, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-status-dialog-" + formatJobID(subscription.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2664, Col: 102}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2665, Col: 102}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var996))
 		if templ_7745c5c3_Err != nil {
@@ -21259,7 +21259,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var997 templ.SafeURL
 		templ_7745c5c3_Var997, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/status"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2664, Col: 521}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2665, Col: 521}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var997))
 		if templ_7745c5c3_Err != nil {
@@ -21280,7 +21280,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var998 string
 		templ_7745c5c3_Var998, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(subscription.CustomerID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2666, Col: 88}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2667, Col: 88}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var998))
 		if templ_7745c5c3_Err != nil {
@@ -21293,7 +21293,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var999 string
 		templ_7745c5c3_Var999, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2666, Col: 175}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2667, Col: 175}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var999))
 		if templ_7745c5c3_Err != nil {
@@ -21306,7 +21306,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var1000 string
 		templ_7745c5c3_Var1000, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SyncMode)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2666, Col: 246}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2667, Col: 246}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1000))
 		if templ_7745c5c3_Err != nil {
@@ -21319,7 +21319,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var1001 string
 		templ_7745c5c3_Var1001, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(subscription.PlanID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2666, Col: 327}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2667, Col: 327}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1001))
 		if templ_7745c5c3_Err != nil {
@@ -21362,7 +21362,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 		var templ_7745c5c3_Var1002 string
 		templ_7745c5c3_Var1002, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(sitesForSubscription(data.Sites, subscription.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2668, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2669, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1002))
 		if templ_7745c5c3_Err != nil {
@@ -21380,7 +21380,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var1003 templ.SafeURL
 			templ_7745c5c3_Var1003, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/addons"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2673, Col: 138}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2674, Col: 138}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1003))
 			if templ_7745c5c3_Err != nil {
@@ -21406,7 +21406,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 				var templ_7745c5c3_Var1004 string
 				templ_7745c5c3_Var1004, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(addon.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2677, Col: 98}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2678, Col: 98}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1004))
 				if templ_7745c5c3_Err != nil {
@@ -21419,7 +21419,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 				var templ_7745c5c3_Var1005 string
 				templ_7745c5c3_Var1005, templ_7745c5c3_Err = templ.JoinStringErrs(addon.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2677, Col: 114}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2678, Col: 114}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1005))
 				if templ_7745c5c3_Err != nil {
@@ -21456,7 +21456,7 @@ func subscriptionSettingsPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var1006 templ.SafeURL
 			templ_7745c5c3_Var1006, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2688, Col: 202}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2689, Col: 202}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1006))
 			if templ_7745c5c3_Err != nil {
@@ -21504,7 +21504,7 @@ func subscriptionDomainsPanel(subscription types.SubscriptionSummary, data dashb
 		var templ_7745c5c3_Var1008 string
 		templ_7745c5c3_Var1008, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.DomainsUsed, subscription.MaxSites, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2697, Col: 187}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2698, Col: 187}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1008))
 		if templ_7745c5c3_Err != nil {
@@ -21522,7 +21522,7 @@ func subscriptionDomainsPanel(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1009 templ.SafeURL
 			templ_7745c5c3_Var1009, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2699, Col: 173}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2700, Col: 173}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1009))
 			if templ_7745c5c3_Err != nil {
@@ -21566,7 +21566,7 @@ func subscriptionDomainsPanel(subscription types.SubscriptionSummary, data dashb
 				var templ_7745c5c3_Var1010 templ.SafeURL
 				templ_7745c5c3_Var1010, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(siteCreateChoicePath(WorkspaceView{SupportCustomerID: view.SupportCustomerID, SelectedSubscription: subscription.ID}, "php")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2708, Col: 174}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2709, Col: 174}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1010))
 				if templ_7745c5c3_Err != nil {
@@ -21604,7 +21604,7 @@ func subscriptionDomainsPanel(subscription types.SubscriptionSummary, data dashb
 				var templ_7745c5c3_Var1011 templ.SafeURL
 				templ_7745c5c3_Var1011, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2718, Col: 195}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2719, Col: 195}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1011))
 				if templ_7745c5c3_Err != nil {
@@ -21687,7 +21687,7 @@ func subscriptionTimeline(events []types.AuditEvent) templ.Component {
 			var templ_7745c5c3_Var1015 string
 			templ_7745c5c3_Var1015, templ_7745c5c3_Err = templ.JoinStringErrs(auditActionLabel(event.Action))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2729, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2730, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1015))
 			if templ_7745c5c3_Err != nil {
@@ -21700,7 +21700,7 @@ func subscriptionTimeline(events []types.AuditEvent) templ.Component {
 			var templ_7745c5c3_Var1016 string
 			templ_7745c5c3_Var1016, templ_7745c5c3_Err = templ.JoinStringErrs(event.TargetType)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2729, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2730, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1016))
 			if templ_7745c5c3_Err != nil {
@@ -21713,7 +21713,7 @@ func subscriptionTimeline(events []types.AuditEvent) templ.Component {
 			var templ_7745c5c3_Var1017 string
 			templ_7745c5c3_Var1017, templ_7745c5c3_Err = templ.JoinStringErrs(auditActor(event))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2729, Col: 136}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2730, Col: 136}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1017))
 			if templ_7745c5c3_Err != nil {
@@ -21726,7 +21726,7 @@ func subscriptionTimeline(events []types.AuditEvent) templ.Component {
 			var templ_7745c5c3_Var1018 string
 			templ_7745c5c3_Var1018, templ_7745c5c3_Err = templ.JoinStringErrs(formatRelativeLabel(event.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2730, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2731, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1018))
 			if templ_7745c5c3_Err != nil {
@@ -21739,7 +21739,7 @@ func subscriptionTimeline(events []types.AuditEvent) templ.Component {
 			var templ_7745c5c3_Var1019 string
 			templ_7745c5c3_Var1019, templ_7745c5c3_Err = templ.JoinStringErrs(formatStampLabel(event.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2730, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2731, Col: 129}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1019))
 			if templ_7745c5c3_Err != nil {
@@ -21794,7 +21794,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var1021 string
 			templ_7745c5c3_Var1021, templ_7745c5c3_Err = templ.JoinStringErrs(account.DesiredState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2744, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2745, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1021))
 			if templ_7745c5c3_Err != nil {
@@ -21807,7 +21807,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var1022 string
 			templ_7745c5c3_Var1022, templ_7745c5c3_Err = templ.JoinStringErrs(accountStateWord(account.DesiredState))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2744, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2745, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1022))
 			if templ_7745c5c3_Err != nil {
@@ -21820,7 +21820,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var1023 string
 			templ_7745c5c3_Var1023, templ_7745c5c3_Err = templ.JoinStringErrs(account.AppliedState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2745, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2746, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1023))
 			if templ_7745c5c3_Err != nil {
@@ -21833,7 +21833,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var1024 string
 			templ_7745c5c3_Var1024, templ_7745c5c3_Err = templ.JoinStringErrs(accountStateWord(account.AppliedState))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2745, Col: 125}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2746, Col: 125}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1024))
 			if templ_7745c5c3_Err != nil {
@@ -21846,7 +21846,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var1025 string
 			templ_7745c5c3_Var1025, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellWord(account.ShellMode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2746, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2747, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1025))
 			if templ_7745c5c3_Err != nil {
@@ -21864,7 +21864,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 				var templ_7745c5c3_Var1026 string
 				templ_7745c5c3_Var1026, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellDetail(account.ShellMode))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2748, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2749, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1026))
 				if templ_7745c5c3_Err != nil {
@@ -21903,7 +21903,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 				var templ_7745c5c3_Var1027 string
 				templ_7745c5c3_Var1027, templ_7745c5c3_Err = templ.JoinStringErrs(account.LastError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2755, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2756, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1027))
 				if templ_7745c5c3_Err != nil {
@@ -21921,7 +21921,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 				var templ_7745c5c3_Var1028 string
 				templ_7745c5c3_Var1028, templ_7745c5c3_Err = templ.JoinStringErrs(account.MigrationError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2757, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2758, Col: 48}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1028))
 				if templ_7745c5c3_Err != nil {
@@ -21959,7 +21959,7 @@ func subscriptionActivityPanel(subscription types.SubscriptionSummary, data dash
 			var templ_7745c5c3_Var1029 templ.SafeURL
 			templ_7745c5c3_Var1029, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/activity")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2769, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2770, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1029))
 			if templ_7745c5c3_Err != nil {
@@ -22012,7 +22012,7 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 		var templ_7745c5c3_Var1031 string
 		templ_7745c5c3_Var1031, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(subscription.BackupBytesUsed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2780, Col: 130}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2781, Col: 130}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1031))
 		if templ_7745c5c3_Err != nil {
@@ -22025,7 +22025,7 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 		var templ_7745c5c3_Var1032 string
 		templ_7745c5c3_Var1032, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.BackupsUsed, subscription.MaxBackups, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2780, Col: 225}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2781, Col: 225}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1032))
 		if templ_7745c5c3_Err != nil {
@@ -22043,7 +22043,7 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1033 string
 			templ_7745c5c3_Var1033, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.BackupsUsed - subscription.MaxBackups))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2782, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2783, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1033))
 			if templ_7745c5c3_Err != nil {
@@ -22056,7 +22056,7 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1034 string
 			templ_7745c5c3_Var1034, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.MaxBackups))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2782, Col: 182}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2783, Col: 182}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1034))
 			if templ_7745c5c3_Err != nil {
@@ -22088,7 +22088,7 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 				var templ_7745c5c3_Var1035 string
 				templ_7745c5c3_Var1035, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(subscription.BackupsUsed))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2790, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2791, Col: 51}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1035))
 				if templ_7745c5c3_Err != nil {
@@ -22121,7 +22121,7 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 				var templ_7745c5c3_Var1036 string
 				templ_7745c5c3_Var1036, templ_7745c5c3_Err = templ.JoinStringErrs(formatStampLabel(item.CreatedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2804, Col: 43}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2805, Col: 43}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1036))
 				if templ_7745c5c3_Err != nil {
@@ -22134,7 +22134,7 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 				var templ_7745c5c3_Var1037 string
 				templ_7745c5c3_Var1037, templ_7745c5c3_Err = templ.JoinStringErrs(item.TargetName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2806, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2807, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1037))
 				if templ_7745c5c3_Err != nil {
@@ -22147,7 +22147,7 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 				var templ_7745c5c3_Var1038 string
 				templ_7745c5c3_Var1038, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(item.SizeBytes))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2807, Col: 59}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2808, Col: 59}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1038))
 				if templ_7745c5c3_Err != nil {
@@ -22169,7 +22169,7 @@ func subscriptionBackupsPanel(subscription types.SubscriptionSummary, data dashb
 					var templ_7745c5c3_Var1039 string
 					templ_7745c5c3_Var1039, templ_7745c5c3_Err = templ.JoinStringErrs(item.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2811, Col: 55}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2812, Col: 55}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1039))
 					if templ_7745c5c3_Err != nil {
@@ -22235,7 +22235,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1041 templ.SafeURL
 			templ_7745c5c3_Var1041, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/policy"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2827, Col: 134}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2828, Col: 134}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1041))
 			if templ_7745c5c3_Err != nil {
@@ -22256,7 +22256,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1042 string
 			templ_7745c5c3_Var1042, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.CPUPercent)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2831, Col: 151}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2832, Col: 151}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1042))
 			if templ_7745c5c3_Err != nil {
@@ -22269,7 +22269,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1043 string
 			templ_7745c5c3_Var1043, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MemoryMB)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2832, Col: 145}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2833, Col: 145}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1043))
 			if templ_7745c5c3_Err != nil {
@@ -22282,7 +22282,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1044 string
 			templ_7745c5c3_Var1044, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.IOReadMBPS)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2833, Col: 154}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2834, Col: 154}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1044))
 			if templ_7745c5c3_Err != nil {
@@ -22295,7 +22295,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1045 string
 			templ_7745c5c3_Var1045, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.IOWriteMBPS)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2834, Col: 157}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2835, Col: 157}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1045))
 			if templ_7745c5c3_Err != nil {
@@ -22308,7 +22308,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1046 string
 			templ_7745c5c3_Var1046, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MaxTasks)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2835, Col: 149}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2836, Col: 149}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1046))
 			if templ_7745c5c3_Err != nil {
@@ -22321,7 +22321,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1047 string
 			templ_7745c5c3_Var1047, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MaxScheduledTasks)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2836, Col: 170}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2837, Col: 170}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1047))
 			if templ_7745c5c3_Err != nil {
@@ -22334,7 +22334,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1048 string
 			templ_7745c5c3_Var1048, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.MaxApplications)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2837, Col: 162}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2838, Col: 162}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1048))
 			if templ_7745c5c3_Err != nil {
@@ -22347,7 +22347,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1049 string
 			templ_7745c5c3_Var1049, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(account.EffectivePolicy.Resources.ContainerStorageMB)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2838, Col: 177}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2839, Col: 177}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1049))
 			if templ_7745c5c3_Err != nil {
@@ -22384,7 +22384,7 @@ func subscriptionPolicyEditor(subscription types.SubscriptionSummary, data dashb
 			var templ_7745c5c3_Var1050 string
 			templ_7745c5c3_Var1050, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(account.EffectivePolicy.Applications.AllowedRegistries))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2847, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2848, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1050))
 			if templ_7745c5c3_Err != nil {
@@ -22433,7 +22433,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1052 string
 			templ_7745c5c3_Var1052, templ_7745c5c3_Err = templ.JoinStringErrs(account.Username)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2860, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2861, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1052))
 			if templ_7745c5c3_Err != nil {
@@ -22446,7 +22446,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1053 string
 			templ_7745c5c3_Var1053, templ_7745c5c3_Err = templ.JoinStringErrs(account.HomePath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2861, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2862, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1053))
 			if templ_7745c5c3_Err != nil {
@@ -22459,7 +22459,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1054 string
 			templ_7745c5c3_Var1054, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellWord(account.ShellMode))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2865, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2866, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1054))
 			if templ_7745c5c3_Err != nil {
@@ -22477,7 +22477,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 				var templ_7745c5c3_Var1055 string
 				templ_7745c5c3_Var1055, templ_7745c5c3_Err = templ.JoinStringErrs(accountShellDetail(account.ShellMode))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2867, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2868, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1055))
 				if templ_7745c5c3_Err != nil {
@@ -22538,7 +22538,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 				var templ_7745c5c3_Var1056 string
 				templ_7745c5c3_Var1056, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2893, Col: 48}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2894, Col: 48}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1056))
 				if templ_7745c5c3_Err != nil {
@@ -22551,7 +22551,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 				var templ_7745c5c3_Var1057 string
 				templ_7745c5c3_Var1057, templ_7745c5c3_Err = templ.JoinStringErrs(item.RelativeRoot)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2893, Col: 107}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2894, Col: 107}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1057))
 				if templ_7745c5c3_Err != nil {
@@ -22591,7 +22591,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1058 templ.SafeURL
 			templ_7745c5c3_Var1058, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionDrawerPath(view, subscription.ID, "subscription-sftp-dialog-"+formatJobID(subscription.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2902, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2903, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1058))
 			if templ_7745c5c3_Err != nil {
@@ -22604,7 +22604,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1059 string
 			templ_7745c5c3_Var1059, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-sftp-dialog-" + formatJobID(subscription.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2902, Col: 221}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2903, Col: 221}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1059))
 			if templ_7745c5c3_Err != nil {
@@ -22617,7 +22617,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1060 string
 			templ_7745c5c3_Var1060, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-sftp-dialog-" + formatJobID(subscription.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2903, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2904, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1060))
 			if templ_7745c5c3_Err != nil {
@@ -22648,7 +22648,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1061 templ.SafeURL
 			templ_7745c5c3_Var1061, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/sftp"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2903, Col: 519}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2904, Col: 519}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1061))
 			if templ_7745c5c3_Err != nil {
@@ -22704,7 +22704,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 				var templ_7745c5c3_Var1062 string
 				templ_7745c5c3_Var1062, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2926, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2927, Col: 51}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1062))
 				if templ_7745c5c3_Err != nil {
@@ -22744,7 +22744,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1063 templ.SafeURL
 			templ_7745c5c3_Var1063, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionDrawerPath(view, subscription.ID, "subscription-ftps-dialog-"+formatJobID(subscription.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2935, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2936, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1063))
 			if templ_7745c5c3_Err != nil {
@@ -22757,7 +22757,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1064 string
 			templ_7745c5c3_Var1064, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-ftps-dialog-" + formatJobID(subscription.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2935, Col: 221}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2936, Col: 221}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1064))
 			if templ_7745c5c3_Err != nil {
@@ -22770,7 +22770,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1065 string
 			templ_7745c5c3_Var1065, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-ftps-dialog-" + formatJobID(subscription.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2936, Col: 100}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2937, Col: 100}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1065))
 			if templ_7745c5c3_Err != nil {
@@ -22801,7 +22801,7 @@ func subscriptionAccessPanel(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1066 templ.SafeURL
 			templ_7745c5c3_Var1066, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/ftp"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2936, Col: 529}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2937, Col: 529}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1066))
 			if templ_7745c5c3_Err != nil {
@@ -22874,7 +22874,7 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 			var templ_7745c5c3_Var1068 string
 			templ_7745c5c3_Var1068, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(instance.MemoryMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2955, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2956, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1068))
 			if templ_7745c5c3_Err != nil {
@@ -22887,7 +22887,7 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 			var templ_7745c5c3_Var1069 string
 			templ_7745c5c3_Var1069, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(instance.MaxClients))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2956, Col: 76}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2957, Col: 76}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1069))
 			if templ_7745c5c3_Err != nil {
@@ -22900,7 +22900,7 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 			var templ_7745c5c3_Var1070 string
 			templ_7745c5c3_Var1070, templ_7745c5c3_Err = templ.JoinStringErrs(formatSeconds(instance.IdleTimeoutSeconds))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2957, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2958, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1070))
 			if templ_7745c5c3_Err != nil {
@@ -22913,7 +22913,7 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 			var templ_7745c5c3_Var1071 string
 			templ_7745c5c3_Var1071, templ_7745c5c3_Err = templ.JoinStringErrs(formatPercent(instance.CPUPercent))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2958, Col: 68}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2959, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1071))
 			if templ_7745c5c3_Err != nil {
@@ -22926,7 +22926,7 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 			var templ_7745c5c3_Var1072 string
 			templ_7745c5c3_Var1072, templ_7745c5c3_Err = templ.JoinStringErrs(credentialWord(instance.CredentialSet))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2959, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2960, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1072))
 			if templ_7745c5c3_Err != nil {
@@ -22939,7 +22939,7 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 			var templ_7745c5c3_Var1073 string
 			templ_7745c5c3_Var1073, templ_7745c5c3_Err = templ.JoinStringErrs(instance.SocketPath)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2960, Col: 56}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2961, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1073))
 			if templ_7745c5c3_Err != nil {
@@ -22957,7 +22957,7 @@ func subscriptionCachePanel(subscription types.SubscriptionSummary, data dashboa
 				var templ_7745c5c3_Var1074 string
 				templ_7745c5c3_Var1074, templ_7745c5c3_Err = templ.JoinStringErrs(instance.LastError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2963, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2964, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1074))
 				if templ_7745c5c3_Err != nil {
@@ -23050,7 +23050,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 		var templ_7745c5c3_Var1076 templ.SafeURL
 		templ_7745c5c3_Var1076, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/valkey"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2987, Col: 132}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2988, Col: 132}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1076))
 		if templ_7745c5c3_Err != nil {
@@ -23072,7 +23072,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			var templ_7745c5c3_Var1077 string
 			templ_7745c5c3_Var1077, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2989, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2990, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1077))
 			if templ_7745c5c3_Err != nil {
@@ -23110,7 +23110,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 		var templ_7745c5c3_Var1078 string
 		templ_7745c5c3_Var1078, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MemoryMB))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2992, Col: 386}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2993, Col: 386}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1078))
 		if templ_7745c5c3_Err != nil {
@@ -23123,7 +23123,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 		var templ_7745c5c3_Var1079 string
 		templ_7745c5c3_Var1079, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MaxClients))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2992, Col: 542}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2993, Col: 542}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1079))
 		if templ_7745c5c3_Err != nil {
@@ -23136,7 +23136,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 		var templ_7745c5c3_Var1080 string
 		templ_7745c5c3_Var1080, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.IdleTimeoutSeconds))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2992, Col: 721}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2993, Col: 721}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1080))
 		if templ_7745c5c3_Err != nil {
@@ -23149,7 +23149,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 		var templ_7745c5c3_Var1081 string
 		templ_7745c5c3_Var1081, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.CPUPercent))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2992, Col: 873}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2993, Col: 873}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1081))
 		if templ_7745c5c3_Err != nil {
@@ -23162,7 +23162,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 		var templ_7745c5c3_Var1082 string
 		templ_7745c5c3_Var1082, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.ProcessLimit))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2992, Col: 1030}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 2993, Col: 1030}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1082))
 		if templ_7745c5c3_Err != nil {
@@ -23195,7 +23195,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			var templ_7745c5c3_Var1083 templ.SafeURL
 			templ_7745c5c3_Var1083, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/valkey"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3001, Col: 141}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3002, Col: 141}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1083))
 			if templ_7745c5c3_Err != nil {
@@ -23217,7 +23217,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 				var templ_7745c5c3_Var1084 string
 				templ_7745c5c3_Var1084, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3003, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3004, Col: 67}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1084))
 				if templ_7745c5c3_Err != nil {
@@ -23235,7 +23235,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			var templ_7745c5c3_Var1085 string
 			templ_7745c5c3_Var1085, templ_7745c5c3_Err = templ.JoinStringErrs(instance.DesiredState)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3006, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3007, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1085))
 			if templ_7745c5c3_Err != nil {
@@ -23248,7 +23248,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			var templ_7745c5c3_Var1086 string
 			templ_7745c5c3_Var1086, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MemoryMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3006, Col: 167}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3007, Col: 167}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1086))
 			if templ_7745c5c3_Err != nil {
@@ -23261,7 +23261,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			var templ_7745c5c3_Var1087 string
 			templ_7745c5c3_Var1087, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.MaxClients))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3006, Col: 264}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3007, Col: 264}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1087))
 			if templ_7745c5c3_Err != nil {
@@ -23274,7 +23274,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			var templ_7745c5c3_Var1088 string
 			templ_7745c5c3_Var1088, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.IdleTimeoutSeconds))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3006, Col: 378}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3007, Col: 378}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1088))
 			if templ_7745c5c3_Err != nil {
@@ -23287,7 +23287,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			var templ_7745c5c3_Var1089 string
 			templ_7745c5c3_Var1089, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.CPUPercent))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3006, Col: 475}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3007, Col: 475}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1089))
 			if templ_7745c5c3_Err != nil {
@@ -23300,7 +23300,7 @@ func valkeyConfigurationForms(subscription types.SubscriptionSummary, view Works
 			var templ_7745c5c3_Var1090 string
 			templ_7745c5c3_Var1090, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(instance.ProcessLimit))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3006, Col: 576}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3007, Col: 576}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1090))
 			if templ_7745c5c3_Err != nil {
@@ -23374,7 +23374,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 				var templ_7745c5c3_Var1092 string
 				templ_7745c5c3_Var1092, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3034, Col: 20}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3035, Col: 20}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1092))
 				if templ_7745c5c3_Err != nil {
@@ -23392,7 +23392,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 					var templ_7745c5c3_Var1093 string
 					templ_7745c5c3_Var1093, templ_7745c5c3_Err = templ.JoinStringErrs(domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3036, Col: 42}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3037, Col: 42}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1093))
 					if templ_7745c5c3_Err != nil {
@@ -23405,7 +23405,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 					var templ_7745c5c3_Var1094 string
 					templ_7745c5c3_Var1094, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(item.TimeoutSeconds))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3036, Col: 94}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3037, Col: 94}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1094))
 					if templ_7745c5c3_Err != nil {
@@ -23423,7 +23423,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 				var templ_7745c5c3_Var1095 string
 				templ_7745c5c3_Var1095, templ_7745c5c3_Err = templ.JoinStringErrs(item.Schedule)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3039, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3040, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1095))
 				if templ_7745c5c3_Err != nil {
@@ -23436,7 +23436,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 				var templ_7745c5c3_Var1096 string
 				templ_7745c5c3_Var1096, templ_7745c5c3_Err = templ.JoinStringErrs(item.Command)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3040, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3041, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1096))
 				if templ_7745c5c3_Err != nil {
@@ -23458,7 +23458,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 					var templ_7745c5c3_Var1097 string
 					templ_7745c5c3_Var1097, templ_7745c5c3_Err = templ.JoinStringErrs(item.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3044, Col: 55}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3045, Col: 55}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1097))
 					if templ_7745c5c3_Err != nil {
@@ -23481,7 +23481,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 					var templ_7745c5c3_Var1098 templ.SafeURL
 					templ_7745c5c3_Var1098, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks/" + formatJobID(item.ID) + "/run"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3050, Col: 180}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3051, Col: 180}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1098))
 					if templ_7745c5c3_Err != nil {
@@ -23523,7 +23523,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 				var templ_7745c5c3_Var1099 templ.SafeURL
 				templ_7745c5c3_Var1099, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionDrawerPath(view, subscription.ID, "subscription-task-dialog-"+formatJobID(subscription.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3064, Col: 141}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3065, Col: 141}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1099))
 				if templ_7745c5c3_Err != nil {
@@ -23536,7 +23536,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 				var templ_7745c5c3_Var1100 string
 				templ_7745c5c3_Var1100, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-task-dialog-" + formatJobID(subscription.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3064, Col: 222}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3065, Col: 222}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1100))
 				if templ_7745c5c3_Err != nil {
@@ -23549,7 +23549,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 				var templ_7745c5c3_Var1101 string
 				templ_7745c5c3_Var1101, templ_7745c5c3_Err = templ.JoinStringErrs("subscription-task-dialog-" + formatJobID(subscription.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3065, Col: 101}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3066, Col: 101}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1101))
 				if templ_7745c5c3_Err != nil {
@@ -23580,7 +23580,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 				var templ_7745c5c3_Var1102 templ.SafeURL
 				templ_7745c5c3_Var1102, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/scheduled-tasks"))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3065, Col: 532}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3066, Col: 532}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1102))
 				if templ_7745c5c3_Err != nil {
@@ -23606,7 +23606,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 					var templ_7745c5c3_Var1103 string
 					templ_7745c5c3_Var1103, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(site.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3072, Col: 45}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3073, Col: 45}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1103))
 					if templ_7745c5c3_Err != nil {
@@ -23619,7 +23619,7 @@ func subscriptionTasksPanel(subscription types.SubscriptionSummary, data dashboa
 					var templ_7745c5c3_Var1104 string
 					templ_7745c5c3_Var1104, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3072, Col: 61}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3073, Col: 61}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1104))
 					if templ_7745c5c3_Err != nil {
@@ -23694,7 +23694,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 				var templ_7745c5c3_Var1106 string
 				templ_7745c5c3_Var1106, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3095, Col: 39}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3096, Col: 39}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1106))
 				if templ_7745c5c3_Err != nil {
@@ -23717,7 +23717,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 			var templ_7745c5c3_Var1107 templ.SafeURL
 			templ_7745c5c3_Var1107, templ_7745c5c3_Err = templ.JoinURLErrs(subscriptionTabPath(view, subscription.ID, "resources"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3100, Col: 98}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3101, Col: 98}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1107))
 			if templ_7745c5c3_Err != nil {
@@ -23740,7 +23740,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 			var templ_7745c5c3_Var1108 string
 			templ_7745c5c3_Var1108, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscriptionMailboxesUsed(subscription, data), mailboxLimit, true))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3109, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3110, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1108))
 			if templ_7745c5c3_Err != nil {
@@ -23779,7 +23779,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					var templ_7745c5c3_Var1109 templ.SafeURL
 					templ_7745c5c3_Var1109, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=mail"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3120, Col: 118}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3121, Col: 118}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1109))
 					if templ_7745c5c3_Err != nil {
@@ -23800,7 +23800,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					var templ_7745c5c3_Var1110 string
 					templ_7745c5c3_Var1110, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3121, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3122, Col: 34}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1110))
 					if templ_7745c5c3_Err != nil {
@@ -23813,7 +23813,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					var templ_7745c5c3_Var1111 string
 					templ_7745c5c3_Var1111, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(mailboxesForWorkspace(data.SubscriptionServices.Mailboxes, []dashboard.MailDomain{domain}))))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3121, Col: 165}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3122, Col: 165}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1111))
 					if templ_7745c5c3_Err != nil {
@@ -23826,7 +23826,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					var templ_7745c5c3_Var1112 string
 					templ_7745c5c3_Var1112, templ_7745c5c3_Err = templ.JoinStringErrs(formatEnabled(domain.DKIM))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3121, Col: 214}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3122, Col: 214}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1112))
 					if templ_7745c5c3_Err != nil {
@@ -23839,7 +23839,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					var templ_7745c5c3_Var1113 string
 					templ_7745c5c3_Var1113, templ_7745c5c3_Err = templ.JoinStringErrs(domain.DMARCPolicy)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3121, Col: 246}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3122, Col: 246}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1113))
 					if templ_7745c5c3_Err != nil {
@@ -23865,7 +23865,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					var templ_7745c5c3_Var1114 templ.SafeURL
 					templ_7745c5c3_Var1114, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=mail"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3124, Col: 118}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3125, Col: 118}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1114))
 					if templ_7745c5c3_Err != nil {
@@ -23886,7 +23886,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					var templ_7745c5c3_Var1115 string
 					templ_7745c5c3_Var1115, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3125, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3126, Col: 34}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1115))
 					if templ_7745c5c3_Err != nil {
@@ -23912,7 +23912,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					var templ_7745c5c3_Var1116 templ.SafeURL
 					templ_7745c5c3_Var1116, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=dns"))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3128, Col: 117}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3129, Col: 117}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1116))
 					if templ_7745c5c3_Err != nil {
@@ -23933,7 +23933,7 @@ func subscriptionMailPanel(subscription types.SubscriptionSummary, data dashboar
 					var templ_7745c5c3_Var1117 string
 					templ_7745c5c3_Var1117, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3129, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3130, Col: 34}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1117))
 					if templ_7745c5c3_Err != nil {
@@ -23996,7 +23996,7 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 		var templ_7745c5c3_Var1119 string
 		templ_7745c5c3_Var1119, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(len(instances), subscriptionApplicationLimit(data.SubscriptionServices.Accounts, subscription.ID), true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3142, Col: 242}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3143, Col: 242}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1119))
 		if templ_7745c5c3_Err != nil {
@@ -24038,7 +24038,7 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 				var templ_7745c5c3_Var1120 string
 				templ_7745c5c3_Var1120, templ_7745c5c3_Err = templ.JoinStringErrs(item.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3161, Col: 20}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3162, Col: 20}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1120))
 				if templ_7745c5c3_Err != nil {
@@ -24056,7 +24056,7 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 					var templ_7745c5c3_Var1121 string
 					templ_7745c5c3_Var1121, templ_7745c5c3_Err = templ.JoinStringErrs(domain)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3163, Col: 42}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3164, Col: 42}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1121))
 					if templ_7745c5c3_Err != nil {
@@ -24074,7 +24074,7 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 				var templ_7745c5c3_Var1122 string
 				templ_7745c5c3_Var1122, templ_7745c5c3_Err = templ.JoinStringErrs(item.Runtime)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3166, Col: 47}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3167, Col: 47}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1122))
 				if templ_7745c5c3_Err != nil {
@@ -24087,7 +24087,7 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 				var templ_7745c5c3_Var1123 string
 				templ_7745c5c3_Var1123, templ_7745c5c3_Err = templ.JoinStringErrs(item.ImageRef)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3167, Col: 52}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3168, Col: 52}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1123))
 				if templ_7745c5c3_Err != nil {
@@ -24109,7 +24109,7 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 					var templ_7745c5c3_Var1124 string
 					templ_7745c5c3_Var1124, templ_7745c5c3_Err = templ.JoinStringErrs(item.LastError)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3171, Col: 55}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3172, Col: 55}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1124))
 					if templ_7745c5c3_Err != nil {
@@ -24151,7 +24151,7 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 				var templ_7745c5c3_Var1125 templ.SafeURL
 				templ_7745c5c3_Var1125, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)+"/applications")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3185, Col: 119}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3186, Col: 119}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1125))
 				if templ_7745c5c3_Err != nil {
@@ -24164,7 +24164,7 @@ func subscriptionApplicationsPanel(subscription types.SubscriptionSummary, data 
 				var templ_7745c5c3_Var1126 string
 				templ_7745c5c3_Var1126, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3185, Col: 149}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3186, Col: 149}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1126))
 				if templ_7745c5c3_Err != nil {
@@ -24216,7 +24216,7 @@ func subscriptionServiceDelete(subscriptionID int64, kind string, id int64, view
 		var templ_7745c5c3_Var1128 templ.SafeURL
 		templ_7745c5c3_Var1128, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscriptionID) + "/services/" + kind + "/" + formatJobID(id) + "/delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3193, Col: 161}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3194, Col: 161}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1128))
 		if templ_7745c5c3_Err != nil {
@@ -24274,7 +24274,7 @@ func siteSubscriptionServiceDelete(subscriptionID int64, kind string, id int64, 
 		var templ_7745c5c3_Var1130 templ.SafeURL
 		templ_7745c5c3_Var1130, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscriptionID) + "/services/" + kind + "/" + formatJobID(id) + "/delete"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3197, Col: 161}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3198, Col: 161}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1130))
 		if templ_7745c5c3_Err != nil {
@@ -24295,7 +24295,7 @@ func siteSubscriptionServiceDelete(subscriptionID int64, kind string, id int64, 
 		var templ_7745c5c3_Var1131 string
 		templ_7745c5c3_Var1131, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(siteID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3197, Col: 243}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3198, Col: 243}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1131))
 		if templ_7745c5c3_Err != nil {
@@ -24308,7 +24308,7 @@ func siteSubscriptionServiceDelete(subscriptionID int64, kind string, id int64, 
 		var templ_7745c5c3_Var1132 string
 		templ_7745c5c3_Var1132, templ_7745c5c3_Err = templ.JoinStringErrs(returnTo)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3197, Col: 301}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3198, Col: 301}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1132))
 		if templ_7745c5c3_Err != nil {
@@ -24364,7 +24364,7 @@ func subscriptionBackupRows(items []dashboard.Backup, subscriptionID int64) temp
 				var templ_7745c5c3_Var1134 string
 				templ_7745c5c3_Var1134, templ_7745c5c3_Err = templ.JoinStringErrs(item.TargetName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3204, Col: 49}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3205, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1134))
 				if templ_7745c5c3_Err != nil {
@@ -24385,7 +24385,7 @@ func subscriptionBackupRows(items []dashboard.Backup, subscriptionID int64) temp
 				var templ_7745c5c3_Var1135 string
 				templ_7745c5c3_Var1135, templ_7745c5c3_Err = templ.JoinStringErrs(formatBytes(item.SizeBytes))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3204, Col: 160}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3205, Col: 160}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1135))
 				if templ_7745c5c3_Err != nil {
@@ -24398,7 +24398,7 @@ func subscriptionBackupRows(items []dashboard.Backup, subscriptionID int64) temp
 				var templ_7745c5c3_Var1136 string
 				templ_7745c5c3_Var1136, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(item.CreatedAt))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3204, Col: 220}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3205, Col: 220}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1136))
 				if templ_7745c5c3_Err != nil {
@@ -24446,7 +24446,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1138 templ.SafeURL
 		templ_7745c5c3_Var1138, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/subscriptions/" + formatJobID(subscription.ID) + "/mode"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3212, Col: 154}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3213, Col: 154}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1138))
 		if templ_7745c5c3_Err != nil {
@@ -24581,7 +24581,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1139 string
 		templ_7745c5c3_Var1139, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.DiskWarningPercent)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3234, Col: 151}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3235, Col: 151}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1139))
 		if templ_7745c5c3_Err != nil {
@@ -24594,7 +24594,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1140 string
 		templ_7745c5c3_Var1140, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.TrafficWarningPercent)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3235, Col: 160}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3236, Col: 160}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1140))
 		if templ_7745c5c3_Err != nil {
@@ -24640,7 +24640,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1141 string
 			templ_7745c5c3_Var1141, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3240, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3241, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1141))
 			if templ_7745c5c3_Err != nil {
@@ -24663,7 +24663,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1142 string
 			templ_7745c5c3_Var1142, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3240, Col: 160}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3241, Col: 160}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1142))
 			if templ_7745c5c3_Err != nil {
@@ -24686,7 +24686,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1143 string
 			templ_7745c5c3_Var1143, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3244, Col: 28}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3245, Col: 28}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1143))
 			if templ_7745c5c3_Err != nil {
@@ -24709,7 +24709,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1144 string
 			templ_7745c5c3_Var1144, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3244, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3245, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1144))
 			if templ_7745c5c3_Err != nil {
@@ -24727,7 +24727,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1145 string
 		templ_7745c5c3_Var1145, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.Hosting.WebServer)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3247, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3248, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1145))
 		if templ_7745c5c3_Err != nil {
@@ -24740,7 +24740,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1146 string
 		templ_7745c5c3_Var1146, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.Hosting.PreferredDomain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3248, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3249, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1146))
 		if templ_7745c5c3_Err != nil {
@@ -24753,7 +24753,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1147 string
 		templ_7745c5c3_Var1147, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.MaxExecutionSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3249, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3250, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1147))
 		if templ_7745c5c3_Err != nil {
@@ -24766,7 +24766,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1148 string
 		templ_7745c5c3_Var1148, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.MaxInputSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3250, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3251, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1148))
 		if templ_7745c5c3_Err != nil {
@@ -24779,7 +24779,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1149 string
 		templ_7745c5c3_Var1149, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.PostMaxMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3251, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3252, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1149))
 		if templ_7745c5c3_Err != nil {
@@ -24792,7 +24792,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1150 string
 		templ_7745c5c3_Var1150, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.UploadMaxMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3252, Col: 120}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3253, Col: 120}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1150))
 		if templ_7745c5c3_Err != nil {
@@ -24805,7 +24805,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1151 string
 		templ_7745c5c3_Var1151, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.PHP.FPMMaxRequests)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3253, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3254, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1151))
 		if templ_7745c5c3_Err != nil {
@@ -24818,7 +24818,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1152 string
 		templ_7745c5c3_Var1152, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.PHP.DisplayErrors))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3254, Col: 115}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3255, Col: 115}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1152))
 		if templ_7745c5c3_Err != nil {
@@ -24831,7 +24831,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1153 string
 		templ_7745c5c3_Var1153, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.PHP.LogErrors))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3255, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3256, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1153))
 		if templ_7745c5c3_Err != nil {
@@ -24844,7 +24844,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1154 string
 		templ_7745c5c3_Var1154, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.PHP.AllowURLFOpen))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3256, Col: 116}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3257, Col: 116}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1154))
 		if templ_7745c5c3_Err != nil {
@@ -24857,7 +24857,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1155 string
 		templ_7745c5c3_Var1155, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Mail.WebmailEnabled))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3257, Col: 119}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3258, Col: 119}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1155))
 		if templ_7745c5c3_Err != nil {
@@ -24870,7 +24870,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1156 string
 		templ_7745c5c3_Var1156, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Mail.SpamFilter))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3258, Col: 111}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3259, Col: 111}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1156))
 		if templ_7745c5c3_Err != nil {
@@ -24883,7 +24883,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1157 string
 		templ_7745c5c3_Var1157, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Mail.DKIM))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3259, Col: 98}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3260, Col: 98}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1157))
 		if templ_7745c5c3_Err != nil {
@@ -24896,7 +24896,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1158 string
 		templ_7745c5c3_Var1158, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.Mail.DMARCPolicy)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3260, Col: 101}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3261, Col: 101}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1158))
 		if templ_7745c5c3_Err != nil {
@@ -24909,7 +24909,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1159 string
 		templ_7745c5c3_Var1159, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.ServicePresets.DNS.Mode)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3261, Col: 84}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3262, Col: 84}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1159))
 		if templ_7745c5c3_Err != nil {
@@ -24922,7 +24922,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1160 string
 		templ_7745c5c3_Var1160, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.DNS.DefaultTTL)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3262, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3263, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1160))
 		if templ_7745c5c3_Err != nil {
@@ -24935,7 +24935,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1161 string
 		templ_7745c5c3_Var1161, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.Performance.MaxConnections)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3263, Col: 141}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3264, Col: 141}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1161))
 		if templ_7745c5c3_Err != nil {
@@ -24948,7 +24948,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1162 string
 		templ_7745c5c3_Var1162, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Performance.StaticFileCache))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3264, Col: 131}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3265, Col: 131}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1162))
 		if templ_7745c5c3_Err != nil {
@@ -24961,7 +24961,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1163 string
 		templ_7745c5c3_Var1163, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Logs.RotationEnabled))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3265, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3266, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1163))
 		if templ_7745c5c3_Err != nil {
@@ -24974,7 +24974,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1164 string
 		templ_7745c5c3_Var1164, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(subscription.ServicePresets.Logs.RetentionDays)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3266, Col: 125}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3267, Col: 125}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1164))
 		if templ_7745c5c3_Err != nil {
@@ -24987,7 +24987,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 		var templ_7745c5c3_Var1165 string
 		templ_7745c5c3_Var1165, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.ServicePresets.Applications.CatalogEnabled))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3267, Col: 135}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3268, Col: 135}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1165))
 		if templ_7745c5c3_Err != nil {
@@ -25005,7 +25005,7 @@ func customEntitlementEditor(subscription types.SubscriptionSummary, data dashbo
 			var templ_7745c5c3_Var1166 string
 			templ_7745c5c3_Var1166, templ_7745c5c3_Err = templ.JoinStringErrs(application)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3269, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3270, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1166))
 			if templ_7745c5c3_Err != nil {
@@ -25070,7 +25070,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1168 templ.SafeURL
 		templ_7745c5c3_Var1168, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3281, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3282, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1168))
 		if templ_7745c5c3_Err != nil {
@@ -25083,7 +25083,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1169 string
 		templ_7745c5c3_Var1169, templ_7745c5c3_Err = templ.JoinStringErrs(site.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3281, Col: 103}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3282, Col: 103}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1169))
 		if templ_7745c5c3_Err != nil {
@@ -25101,7 +25101,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 			var templ_7745c5c3_Var1170 string
 			templ_7745c5c3_Var1170, templ_7745c5c3_Err = templ.JoinStringErrs(parent)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3284, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3285, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1170))
 			if templ_7745c5c3_Err != nil {
@@ -25119,7 +25119,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1171 string
 		templ_7745c5c3_Var1171, templ_7745c5c3_Err = templ.JoinStringErrs(site.PHPVersion)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3286, Col: 26}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3287, Col: 26}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1171))
 		if templ_7745c5c3_Err != nil {
@@ -25137,7 +25137,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 			var templ_7745c5c3_Var1172 string
 			templ_7745c5c3_Var1172, templ_7745c5c3_Err = templ.JoinStringErrs(disk)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3288, Col: 15}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3289, Col: 15}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1172))
 			if templ_7745c5c3_Err != nil {
@@ -25171,7 +25171,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1173 string
 		templ_7745c5c3_Var1173, templ_7745c5c3_Err = templ.JoinStringErrs(formatTLSState(site))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3295, Col: 49}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3296, Col: 49}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1173))
 		if templ_7745c5c3_Err != nil {
@@ -25192,7 +25192,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1174 string
 		templ_7745c5c3_Var1174, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(len(databasesForSite(data.Databases, site.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3296, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3297, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1174))
 		if templ_7745c5c3_Err != nil {
@@ -25213,7 +25213,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1175 string
 		templ_7745c5c3_Var1175, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(siteBackupCount(data.Phase6.Backups, site.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3297, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3298, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1175))
 		if templ_7745c5c3_Err != nil {
@@ -25226,7 +25226,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1176 templ.SafeURL
 		templ_7745c5c3_Var1176, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=hosting"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3300, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3301, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1176))
 		if templ_7745c5c3_Err != nil {
@@ -25239,7 +25239,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1177 templ.SafeURL
 		templ_7745c5c3_Var1177, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=php"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3301, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3302, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1177))
 		if templ_7745c5c3_Err != nil {
@@ -25252,7 +25252,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1178 templ.SafeURL
 		templ_7745c5c3_Var1178, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=dns"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3302, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3303, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1178))
 		if templ_7745c5c3_Err != nil {
@@ -25265,7 +25265,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1179 templ.SafeURL
 		templ_7745c5c3_Var1179, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=ssl"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3303, Col: 89}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3304, Col: 89}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1179))
 		if templ_7745c5c3_Err != nil {
@@ -25278,7 +25278,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1180 templ.SafeURL
 		templ_7745c5c3_Var1180, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=databases"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3304, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3305, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1180))
 		if templ_7745c5c3_Err != nil {
@@ -25291,7 +25291,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1181 templ.SafeURL
 		templ_7745c5c3_Var1181, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=backups"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3305, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3306, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1181))
 		if templ_7745c5c3_Err != nil {
@@ -25312,7 +25312,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 		var templ_7745c5c3_Var1182 templ.SafeURL
 		templ_7745c5c3_Var1182, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3309, Col: 106}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3310, Col: 106}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1182))
 		if templ_7745c5c3_Err != nil {
@@ -25330,7 +25330,7 @@ func subscriptionDomainBlock(site dashboard.Site, data dashboard.Data, view Work
 			var templ_7745c5c3_Var1183 templ.SafeURL
 			templ_7745c5c3_Var1183, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites/"+formatJobID(site.ID)) + "?tab=ssl"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3311, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3312, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1183))
 			if templ_7745c5c3_Err != nil {
@@ -25412,7 +25412,7 @@ func routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) templ
 			var templ_7745c5c3_Var1186 string
 			templ_7745c5c3_Var1186, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3327, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3328, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1186))
 			if templ_7745c5c3_Err != nil {
@@ -25435,7 +25435,7 @@ func routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) templ
 			var templ_7745c5c3_Var1187 string
 			templ_7745c5c3_Var1187, templ_7745c5c3_Err = templ.JoinStringErrs(displayCustomer(customer))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3327, Col: 118}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3328, Col: 118}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1187))
 			if templ_7745c5c3_Err != nil {
@@ -25448,7 +25448,7 @@ func routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) templ
 			var templ_7745c5c3_Var1188 string
 			templ_7745c5c3_Var1188, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3327, Col: 140}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3328, Col: 140}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1188))
 			if templ_7745c5c3_Err != nil {
@@ -25472,7 +25472,7 @@ func routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) templ
 				var templ_7745c5c3_Var1189 string
 				templ_7745c5c3_Var1189, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3335, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3336, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1189))
 				if templ_7745c5c3_Err != nil {
@@ -25485,7 +25485,7 @@ func routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) templ
 				var templ_7745c5c3_Var1190 string
 				templ_7745c5c3_Var1190, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(planPHPVersions(plan, data.Capabilities)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3335, Col: 117}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3336, Col: 117}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1190))
 				if templ_7745c5c3_Err != nil {
@@ -25498,7 +25498,7 @@ func routedSubscriptionOnboarding(data dashboard.Data, view WorkspaceView) templ
 				var templ_7745c5c3_Var1191 string
 				templ_7745c5c3_Var1191, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3335, Col: 131}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3336, Col: 131}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1191))
 				if templ_7745c5c3_Err != nil {
@@ -25662,7 +25662,7 @@ func routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView)
 		var templ_7745c5c3_Var1200 string
 		templ_7745c5c3_Var1200, templ_7745c5c3_Err = templ.JoinStringErrs(planListType(view))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3364, Col: 128}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3365, Col: 128}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1200))
 		if templ_7745c5c3_Err != nil {
@@ -25683,7 +25683,7 @@ func routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView)
 		var templ_7745c5c3_Var1201 string
 		templ_7745c5c3_Var1201, templ_7745c5c3_Err = templ.JoinStringErrs(view.SearchQuery)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3364, Col: 233}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3365, Col: 233}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1201))
 		if templ_7745c5c3_Err != nil {
@@ -25711,7 +25711,7 @@ func routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView)
 			var templ_7745c5c3_Var1202 string
 			templ_7745c5c3_Var1202, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(reseller.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3366, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3367, Col: 45}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1202))
 			if templ_7745c5c3_Err != nil {
@@ -25734,7 +25734,7 @@ func routedPlans(data dashboard.Data, user auth.SessionUser, view WorkspaceView)
 			var templ_7745c5c3_Var1203 string
 			templ_7745c5c3_Var1203, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3366, Col: 133}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3367, Col: 133}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1203))
 			if templ_7745c5c3_Err != nil {
@@ -25843,7 +25843,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1205 string
 				templ_7745c5c3_Var1205, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 122}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 122}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1205))
 				if templ_7745c5c3_Err != nil {
@@ -25856,7 +25856,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1206 string
 				templ_7745c5c3_Var1206, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 178}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 178}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1206))
 				if templ_7745c5c3_Err != nil {
@@ -25869,7 +25869,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1207 templ.SafeURL
 				templ_7745c5c3_Var1207, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 296}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 296}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1207))
 				if templ_7745c5c3_Err != nil {
@@ -25882,7 +25882,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1208 string
 				templ_7745c5c3_Var1208, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 318}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 318}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1208))
 				if templ_7745c5c3_Err != nil {
@@ -25895,7 +25895,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1209 string
 				templ_7745c5c3_Var1209, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Revision)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 381}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 381}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1209))
 				if templ_7745c5c3_Err != nil {
@@ -25908,7 +25908,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1210 string
 				templ_7745c5c3_Var1210, templ_7745c5c3_Err = templ.JoinStringErrs(planReadinessLabel(plan))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 413}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 413}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1210))
 				if templ_7745c5c3_Err != nil {
@@ -25921,7 +25921,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1211 string
 				templ_7745c5c3_Var1211, templ_7745c5c3_Err = templ.JoinStringErrs(planProvider(plan, data.Resellers))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 494}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 494}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1211))
 				if templ_7745c5c3_Err != nil {
@@ -25934,7 +25934,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1212 string
 				templ_7745c5c3_Var1212, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 605}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 605}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1212))
 				if templ_7745c5c3_Err != nil {
@@ -25947,7 +25947,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1213 string
 				templ_7745c5c3_Var1213, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 713}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 713}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1213))
 				if templ_7745c5c3_Err != nil {
@@ -25960,7 +25960,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1214 string
 				templ_7745c5c3_Var1214, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 763}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 763}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1214))
 				if templ_7745c5c3_Err != nil {
@@ -25973,7 +25973,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1215 string
 				templ_7745c5c3_Var1215, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxDatabases))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 811}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 811}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1215))
 				if templ_7745c5c3_Err != nil {
@@ -25986,7 +25986,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1216 string
 				templ_7745c5c3_Var1216, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.BandwidthMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 864}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 864}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1216))
 				if templ_7745c5c3_Err != nil {
@@ -25999,7 +25999,7 @@ func hostingPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1217 string
 				templ_7745c5c3_Var1217, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanPrice(plan.PriceCents))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3387, Col: 951}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3388, Col: 951}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1217))
 				if templ_7745c5c3_Err != nil {
@@ -26077,7 +26077,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1219 string
 				templ_7745c5c3_Var1219, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(addon.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 124}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 124}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1219))
 				if templ_7745c5c3_Err != nil {
@@ -26090,7 +26090,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1220 string
 				templ_7745c5c3_Var1220, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + addon.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 181}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 181}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1220))
 				if templ_7745c5c3_Err != nil {
@@ -26103,7 +26103,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1221 templ.SafeURL
 				templ_7745c5c3_Var1221, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/addons/" + formatPlanID(addon.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 309}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 309}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1221))
 				if templ_7745c5c3_Err != nil {
@@ -26116,7 +26116,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1222 string
 				templ_7745c5c3_Var1222, templ_7745c5c3_Err = templ.JoinStringErrs(addon.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 332}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 332}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1222))
 				if templ_7745c5c3_Err != nil {
@@ -26129,7 +26129,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1223 string
 				templ_7745c5c3_Var1223, templ_7745c5c3_Err = templ.JoinStringErrs(addon.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 369}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 369}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1223))
 				if templ_7745c5c3_Err != nil {
@@ -26142,7 +26142,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1224 string
 				templ_7745c5c3_Var1224, templ_7745c5c3_Err = templ.JoinStringErrs(addonProvider(addon, data.Resellers))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 452}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 452}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1224))
 				if templ_7745c5c3_Err != nil {
@@ -26155,7 +26155,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1225 string
 				templ_7745c5c3_Var1225, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(addon.Entitlements.DiskMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 575}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 575}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1225))
 				if templ_7745c5c3_Err != nil {
@@ -26168,7 +26168,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1226 string
 				templ_7745c5c3_Var1226, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(addon.Entitlements.MaxSites))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 640}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 640}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1226))
 				if templ_7745c5c3_Err != nil {
@@ -26181,7 +26181,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1227 string
 				templ_7745c5c3_Var1227, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(addon.Entitlements.MaxSubdomains))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 706}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 706}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1227))
 				if templ_7745c5c3_Err != nil {
@@ -26194,7 +26194,7 @@ func addonPlanTable(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1228 string
 				templ_7745c5c3_Var1228, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(addon.Revision)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3400, Col: 802}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3401, Col: 802}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1228))
 				if templ_7745c5c3_Err != nil {
@@ -26263,7 +26263,7 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1230 string
 			templ_7745c5c3_Var1230, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 130}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 130}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1230))
 			if templ_7745c5c3_Err != nil {
@@ -26276,7 +26276,7 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1231 string
 			templ_7745c5c3_Var1231, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + plan.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 186}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 186}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1231))
 			if templ_7745c5c3_Err != nil {
@@ -26289,7 +26289,7 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1232 templ.SafeURL
 			templ_7745c5c3_Var1232, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/resellers/" + formatPlanID(plan.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 314}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 314}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1232))
 			if templ_7745c5c3_Err != nil {
@@ -26302,7 +26302,7 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1233 string
 			templ_7745c5c3_Var1233, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 336}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 336}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1233))
 			if templ_7745c5c3_Err != nil {
@@ -26315,7 +26315,7 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1234 string
 			templ_7745c5c3_Var1234, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 372}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 372}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1234))
 			if templ_7745c5c3_Err != nil {
@@ -26328,7 +26328,7 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1235 string
 			templ_7745c5c3_Var1235, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxCustomers))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 454}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 454}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1235))
 			if templ_7745c5c3_Err != nil {
@@ -26341,7 +26341,7 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1236 string
 			templ_7745c5c3_Var1236, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSubscriptions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 532}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 532}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1236))
 			if templ_7745c5c3_Err != nil {
@@ -26354,7 +26354,7 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1237 string
 			templ_7745c5c3_Var1237, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 593}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 593}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1237))
 			if templ_7745c5c3_Err != nil {
@@ -26367,7 +26367,7 @@ func resellerPlanTable(data dashboard.Data, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1238 string
 			templ_7745c5c3_Var1238, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3411, Col: 655}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3412, Col: 655}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1238))
 			if templ_7745c5c3_Err != nil {
@@ -26444,7 +26444,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 		var templ_7745c5c3_Var1241 string
 		templ_7745c5c3_Var1241, templ_7745c5c3_Err = templ.JoinStringErrs(formatBadgeCount(len(data.Resellers)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3421, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3422, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1241))
 		if templ_7745c5c3_Err != nil {
@@ -26470,7 +26470,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var1242 string
 			templ_7745c5c3_Var1242, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(reseller.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3427, Col: 129}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3428, Col: 129}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1242))
 			if templ_7745c5c3_Err != nil {
@@ -26483,7 +26483,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var1243 string
 			templ_7745c5c3_Var1243, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + reseller.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3427, Col: 177}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3428, Col: 177}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1243))
 			if templ_7745c5c3_Err != nil {
@@ -26496,7 +26496,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var1244 templ.SafeURL
 			templ_7745c5c3_Var1244, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/resellers/" + formatJobID(reseller.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3427, Col: 296}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3428, Col: 296}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1244))
 			if templ_7745c5c3_Err != nil {
@@ -26509,7 +26509,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var1245 string
 			templ_7745c5c3_Var1245, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3427, Col: 329}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3428, Col: 329}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1245))
 			if templ_7745c5c3_Err != nil {
@@ -26522,7 +26522,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var1246 string
 			templ_7745c5c3_Var1246, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3427, Col: 363}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3428, Col: 363}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1246))
 			if templ_7745c5c3_Err != nil {
@@ -26535,7 +26535,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var1247 string
 			templ_7745c5c3_Var1247, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3427, Col: 423}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3428, Col: 423}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1247))
 			if templ_7745c5c3_Err != nil {
@@ -26548,7 +26548,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var1248 string
 			templ_7745c5c3_Var1248, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(customersForReseller(data.Customers, reseller.ID)))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3427, Col: 532}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3428, Col: 532}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1248))
 			if templ_7745c5c3_Err != nil {
@@ -26561,7 +26561,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 			var templ_7745c5c3_Var1249 string
 			templ_7745c5c3_Var1249, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(subscriptionsForReseller(data.Subscriptions, reseller.ID)))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3427, Col: 653}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3428, Col: 653}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1249))
 			if templ_7745c5c3_Err != nil {
@@ -26601,7 +26601,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1250 string
 				templ_7745c5c3_Var1250, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(plan.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3437, Col: 42}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 42}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1250))
 				if templ_7745c5c3_Err != nil {
@@ -26614,7 +26614,7 @@ func routedResellers(data dashboard.Data, view WorkspaceView) templ.Component {
 				var templ_7745c5c3_Var1251 string
 				templ_7745c5c3_Var1251, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3437, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3438, Col: 56}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1251))
 				if templ_7745c5c3_Err != nil {
@@ -26693,7 +26693,7 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			var templ_7745c5c3_Var1254 string
 			templ_7745c5c3_Var1254, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3448, Col: 194}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3449, Col: 194}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1254))
 			if templ_7745c5c3_Err != nil {
@@ -26706,7 +26706,7 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			var templ_7745c5c3_Var1255 string
 			templ_7745c5c3_Var1255, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.Company)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3448, Col: 250}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3449, Col: 250}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1255))
 			if templ_7745c5c3_Err != nil {
@@ -26719,7 +26719,7 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			var templ_7745c5c3_Var1256 string
 			templ_7745c5c3_Var1256, templ_7745c5c3_Err = templ.JoinStringErrs(reseller.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3448, Col: 313}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3449, Col: 313}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1256))
 			if templ_7745c5c3_Err != nil {
@@ -26732,7 +26732,7 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			var templ_7745c5c3_Var1257 string
 			templ_7745c5c3_Var1257, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(customersForReseller(data.Customers, reseller.ID)))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3448, Col: 428}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3449, Col: 428}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1257))
 			if templ_7745c5c3_Err != nil {
@@ -26753,7 +26753,7 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			var templ_7745c5c3_Var1258 string
 			templ_7745c5c3_Var1258, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(reseller.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3448, Col: 581}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3449, Col: 581}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1258))
 			if templ_7745c5c3_Err != nil {
@@ -26766,7 +26766,7 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			var templ_7745c5c3_Var1259 string
 			templ_7745c5c3_Var1259, templ_7745c5c3_Err = templ.JoinStringErrs(oppositeCustomerStatus(types.Customer{Status: reseller.Status}))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3448, Col: 690}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3449, Col: 690}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1259))
 			if templ_7745c5c3_Err != nil {
@@ -26779,7 +26779,7 @@ func routedResellerDetail(data dashboard.Data, view WorkspaceView) templ.Compone
 			var templ_7745c5c3_Var1260 string
 			templ_7745c5c3_Var1260, templ_7745c5c3_Err = templ.JoinStringErrs(customerStatusAction(types.Customer{Status: reseller.Status}))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3448, Col: 889}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3449, Col: 889}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1260))
 			if templ_7745c5c3_Err != nil {
@@ -26866,7 +26866,7 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 				var templ_7745c5c3_Var1263 templ.SafeURL
 				templ_7745c5c3_Var1263, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/resellers/" + formatPlanID(plan.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 127}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3460, Col: 127}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1263))
 				if templ_7745c5c3_Err != nil {
@@ -26879,7 +26879,7 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 				var templ_7745c5c3_Var1264 string
 				templ_7745c5c3_Var1264, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 149}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3460, Col: 149}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1264))
 				if templ_7745c5c3_Err != nil {
@@ -26892,7 +26892,7 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 				var templ_7745c5c3_Var1265 string
 				templ_7745c5c3_Var1265, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 185}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3460, Col: 185}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1265))
 				if templ_7745c5c3_Err != nil {
@@ -26905,7 +26905,7 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 				var templ_7745c5c3_Var1266 string
 				templ_7745c5c3_Var1266, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxCustomers))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 267}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3460, Col: 267}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1266))
 				if templ_7745c5c3_Err != nil {
@@ -26918,7 +26918,7 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 				var templ_7745c5c3_Var1267 string
 				templ_7745c5c3_Var1267, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSubscriptions))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 345}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3460, Col: 345}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1267))
 				if templ_7745c5c3_Err != nil {
@@ -26931,7 +26931,7 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 				var templ_7745c5c3_Var1268 string
 				templ_7745c5c3_Var1268, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 406}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3460, Col: 406}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1268))
 				if templ_7745c5c3_Err != nil {
@@ -26944,7 +26944,7 @@ func routedResellerPlans(data dashboard.Data, view WorkspaceView) templ.Componen
 				var templ_7745c5c3_Var1269 string
 				templ_7745c5c3_Var1269, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3459, Col: 468}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3460, Col: 468}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1269))
 				if templ_7745c5c3_Err != nil {
@@ -27031,7 +27031,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 			var templ_7745c5c3_Var1272 string
 			templ_7745c5c3_Var1272, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3470, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3471, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1272))
 			if templ_7745c5c3_Err != nil {
@@ -27049,7 +27049,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		var templ_7745c5c3_Var1273 string
 		templ_7745c5c3_Var1273, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3472, Col: 121}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3473, Col: 121}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1273))
 		if templ_7745c5c3_Err != nil {
@@ -27072,7 +27072,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		var templ_7745c5c3_Var1274 string
 		templ_7745c5c3_Var1274, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3472, Col: 492}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3473, Col: 492}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1274))
 		if templ_7745c5c3_Err != nil {
@@ -27094,7 +27094,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		var templ_7745c5c3_Var1276 templ.SafeURL
 		templ_7745c5c3_Var1276, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planTabURL(view, "resources")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3473, Col: 126}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3474, Col: 126}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1276))
 		if templ_7745c5c3_Err != nil {
@@ -27129,7 +27129,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		var templ_7745c5c3_Var1279 templ.SafeURL
 		templ_7745c5c3_Var1279, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planTabURL(view, "permissions")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3473, Col: 275}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3474, Col: 275}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1279))
 		if templ_7745c5c3_Err != nil {
@@ -27376,7 +27376,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 			var templ_7745c5c3_Var1281 string
 			templ_7745c5c3_Var1281, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3477, Col: 86}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3478, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1281))
 			if templ_7745c5c3_Err != nil {
@@ -27399,7 +27399,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 			var templ_7745c5c3_Var1282 string
 			templ_7745c5c3_Var1282, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3477, Col: 174}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3478, Col: 174}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1282))
 			if templ_7745c5c3_Err != nil {
@@ -27427,7 +27427,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		var templ_7745c5c3_Var1283 string
 		templ_7745c5c3_Var1283, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(plan.HostingPolicy.Applications.AllowedRegistries))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3479, Col: 704}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3480, Col: 704}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1283))
 		if templ_7745c5c3_Err != nil {
@@ -27462,7 +27462,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		var templ_7745c5c3_Var1284 string
 		templ_7745c5c3_Var1284, templ_7745c5c3_Err = templ.JoinStringErrs(resellerPlanEditorSaveTitle(plan))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3484, Col: 82}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3485, Col: 82}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1284))
 		if templ_7745c5c3_Err != nil {
@@ -27475,7 +27475,7 @@ func routedResellerPlanEditor(plan types.ResellerPlan, capabilities types.Runtim
 		var templ_7745c5c3_Var1285 string
 		templ_7745c5c3_Var1285, templ_7745c5c3_Err = templ.JoinStringErrs(resellerPlanEditorSubmitLabel(plan))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3484, Col: 329}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3485, Col: 329}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1285))
 		if templ_7745c5c3_Err != nil {
@@ -27528,7 +27528,7 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 				var templ_7745c5c3_Var1287 string
 				templ_7745c5c3_Var1287, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3494, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1287))
 				if templ_7745c5c3_Err != nil {
@@ -27549,7 +27549,7 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 				var templ_7745c5c3_Var1288 string
 				templ_7745c5c3_Var1288, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxCustomers))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3494, Col: 213}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 213}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1288))
 				if templ_7745c5c3_Err != nil {
@@ -27562,7 +27562,7 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 				var templ_7745c5c3_Var1289 string
 				templ_7745c5c3_Var1289, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSubscriptions))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3494, Col: 297}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 297}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1289))
 				if templ_7745c5c3_Err != nil {
@@ -27575,7 +27575,7 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 				var templ_7745c5c3_Var1290 string
 				templ_7745c5c3_Var1290, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitMB(plan.DiskMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3494, Col: 364}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 364}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1290))
 				if templ_7745c5c3_Err != nil {
@@ -27588,7 +27588,7 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 				var templ_7745c5c3_Var1291 string
 				templ_7745c5c3_Var1291, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxSites))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3494, Col: 432}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 432}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1291))
 				if templ_7745c5c3_Err != nil {
@@ -27601,7 +27601,7 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 				var templ_7745c5c3_Var1292 string
 				templ_7745c5c3_Var1292, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimit(plan.MaxDatabases))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3494, Col: 508}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 508}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1292))
 				if templ_7745c5c3_Err != nil {
@@ -27614,7 +27614,7 @@ func routedMyResources(data dashboard.Data, view WorkspaceView) templ.Component 
 				var templ_7745c5c3_Var1293 string
 				templ_7745c5c3_Var1293, templ_7745c5c3_Err = templ.JoinStringErrs(yesNo(plan.AllowCustomPlans))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3494, Col: 581}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3495, Col: 581}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1293))
 				if templ_7745c5c3_Err != nil {
@@ -27663,7 +27663,7 @@ func customerRows(customers []types.Customer, subscriptions []types.Subscription
 			var templ_7745c5c3_Var1295 string
 			templ_7745c5c3_Var1295, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(customer.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3502, Col: 128}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3503, Col: 128}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1295))
 			if templ_7745c5c3_Err != nil {
@@ -27676,7 +27676,7 @@ func customerRows(customers []types.Customer, subscriptions []types.Subscription
 			var templ_7745c5c3_Var1296 string
 			templ_7745c5c3_Var1296, templ_7745c5c3_Err = templ.JoinStringErrs("Select " + customer.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3502, Col: 176}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3503, Col: 176}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1296))
 			if templ_7745c5c3_Err != nil {
@@ -27689,7 +27689,7 @@ func customerRows(customers []types.Customer, subscriptions []types.Subscription
 			var templ_7745c5c3_Var1297 templ.SafeURL
 			templ_7745c5c3_Var1297, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/customers/" + formatJobID(customer.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3502, Col: 295}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3503, Col: 295}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1297))
 			if templ_7745c5c3_Err != nil {
@@ -27702,7 +27702,7 @@ func customerRows(customers []types.Customer, subscriptions []types.Subscription
 			var templ_7745c5c3_Var1298 string
 			templ_7745c5c3_Var1298, templ_7745c5c3_Err = templ.JoinStringErrs(customer.DisplayName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3502, Col: 328}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3503, Col: 328}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1298))
 			if templ_7745c5c3_Err != nil {
@@ -27715,7 +27715,7 @@ func customerRows(customers []types.Customer, subscriptions []types.Subscription
 			var templ_7745c5c3_Var1299 string
 			templ_7745c5c3_Var1299, templ_7745c5c3_Err = templ.JoinStringErrs(customer.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3502, Col: 362}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3503, Col: 362}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1299))
 			if templ_7745c5c3_Err != nil {
@@ -27728,7 +27728,7 @@ func customerRows(customers []types.Customer, subscriptions []types.Subscription
 			var templ_7745c5c3_Var1300 string
 			templ_7745c5c3_Var1300, templ_7745c5c3_Err = templ.JoinStringErrs(providerName(customer, resellers))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3502, Col: 441}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3503, Col: 441}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1300))
 			if templ_7745c5c3_Err != nil {
@@ -27741,7 +27741,7 @@ func customerRows(customers []types.Customer, subscriptions []types.Subscription
 			var templ_7745c5c3_Var1301 string
 			templ_7745c5c3_Var1301, templ_7745c5c3_Err = templ.JoinStringErrs(formatJobID(int64(len(subscriptionsForCustomer(subscriptions, customer.ID)))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3502, Col: 557}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3503, Col: 557}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1301))
 			if templ_7745c5c3_Err != nil {
@@ -27807,7 +27807,7 @@ func planRows(plans []controlquota.Plan) templ.Component {
 				var templ_7745c5c3_Var1303 templ.SafeURL
 				templ_7745c5c3_Var1303, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/" + formatPlanID(plan.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 92}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3514, Col: 92}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1303))
 				if templ_7745c5c3_Err != nil {
@@ -27820,7 +27820,7 @@ func planRows(plans []controlquota.Plan) templ.Component {
 				var templ_7745c5c3_Var1304 string
 				templ_7745c5c3_Var1304, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3514, Col: 120}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1304))
 				if templ_7745c5c3_Err != nil {
@@ -27833,7 +27833,7 @@ func planRows(plans []controlquota.Plan) templ.Component {
 				var templ_7745c5c3_Var1305 string
 				templ_7745c5c3_Var1305, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3513, Col: 156}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3514, Col: 156}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1305))
 				if templ_7745c5c3_Err != nil {
@@ -27973,7 +27973,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1310 templ.SafeURL
 			templ_7745c5c3_Var1310, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planListBackURL(addon)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3537, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3538, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1310))
 			if templ_7745c5c3_Err != nil {
@@ -27991,7 +27991,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 				var templ_7745c5c3_Var1311 templ.SafeURL
 				templ_7745c5c3_Var1311, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/service-plans/new?clone_from=" + formatPlanID(plan.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3539, Col: 112}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3540, Col: 112}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1311))
 				if templ_7745c5c3_Err != nil {
@@ -28036,7 +28036,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1312 string
 			templ_7745c5c3_Var1312, templ_7745c5c3_Err = templ.JoinStringErrs(planReadinessLabel(plan))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3544, Col: 190}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3545, Col: 190}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1312))
 			if templ_7745c5c3_Err != nil {
@@ -28049,7 +28049,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1313 string
 			templ_7745c5c3_Var1313, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Revision)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3544, Col: 277}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3545, Col: 277}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1313))
 			if templ_7745c5c3_Err != nil {
@@ -28062,7 +28062,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1314 string
 			templ_7745c5c3_Var1314, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(planSubscriptionCount(plan.ID, data.Subscriptions))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3544, Col: 406}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3545, Col: 406}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1314))
 			if templ_7745c5c3_Err != nil {
@@ -28075,7 +28075,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1315 string
 			templ_7745c5c3_Var1315, templ_7745c5c3_Err = templ.JoinStringErrs(planSyncLabel(plan.ID, data.Subscriptions))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3544, Col: 508}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3545, Col: 508}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1315))
 			if templ_7745c5c3_Err != nil {
@@ -28088,7 +28088,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1316 string
 			templ_7745c5c3_Var1316, templ_7745c5c3_Err = templ.JoinStringErrs(planProvider(plan, data.Resellers))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3544, Col: 595}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3545, Col: 595}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1316))
 			if templ_7745c5c3_Err != nil {
@@ -28106,7 +28106,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 				var templ_7745c5c3_Var1317 string
 				templ_7745c5c3_Var1317, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3546, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3547, Col: 83}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1317))
 				if templ_7745c5c3_Err != nil {
@@ -28127,7 +28127,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 				var templ_7745c5c3_Var1318 string
 				templ_7745c5c3_Var1318, templ_7745c5c3_Err = templ.JoinStringErrs(planSyncLabel(plan.ID, data.Subscriptions))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3548, Col: 105}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3549, Col: 105}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1318))
 				if templ_7745c5c3_Err != nil {
@@ -28146,7 +28146,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1319 templ.SafeURL
 		templ_7745c5c3_Var1319, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planEditorAction(addon)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3553, Col: 91}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3554, Col: 91}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1319))
 		if templ_7745c5c3_Err != nil {
@@ -28159,7 +28159,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1320 string
 		templ_7745c5c3_Var1320, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3553, Col: 153}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3554, Col: 153}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1320))
 		if templ_7745c5c3_Err != nil {
@@ -28182,7 +28182,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 				var templ_7745c5c3_Var1321 string
 				templ_7745c5c3_Var1321, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3557, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3558, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1321))
 				if templ_7745c5c3_Err != nil {
@@ -28200,7 +28200,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 				var templ_7745c5c3_Var1322 string
 				templ_7745c5c3_Var1322, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(plan.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3559, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3560, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1322))
 				if templ_7745c5c3_Err != nil {
@@ -28257,7 +28257,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1323 string
 		templ_7745c5c3_Var1323, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorNameLabel(addon))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3565, Col: 448}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3566, Col: 448}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1323))
 		if templ_7745c5c3_Err != nil {
@@ -28270,7 +28270,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1324 string
 		templ_7745c5c3_Var1324, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3565, Col: 486}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3566, Col: 486}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1324))
 		if templ_7745c5c3_Err != nil {
@@ -28288,7 +28288,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1325 string
 			templ_7745c5c3_Var1325, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanPriceCents(plan.PriceCents))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3567, Col: 126}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3568, Col: 126}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1325))
 			if templ_7745c5c3_Err != nil {
@@ -28321,7 +28321,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1326 string
 		templ_7745c5c3_Var1326, templ_7745c5c3_Err = templ.JoinStringErrs(plan.Description)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3571, Col: 105}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3572, Col: 105}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1326))
 		if templ_7745c5c3_Err != nil {
@@ -28369,7 +28369,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1327 string
 			templ_7745c5c3_Var1327, templ_7745c5c3_Err = templ.JoinStringErrs(plan.ChangeReason)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3574, Col: 79}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3575, Col: 79}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1327))
 			if templ_7745c5c3_Err != nil {
@@ -28402,7 +28402,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1328 string
 			templ_7745c5c3_Var1328, templ_7745c5c3_Err = templ.JoinStringErrs(planReadinessLabel(plan))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3578, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3579, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1328))
 			if templ_7745c5c3_Err != nil {
@@ -28420,7 +28420,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 				var templ_7745c5c3_Var1329 string
 				templ_7745c5c3_Var1329, templ_7745c5c3_Err = templ.JoinStringErrs(plan.ReadinessError)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3580, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3581, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1329))
 				if templ_7745c5c3_Err != nil {
@@ -28600,7 +28600,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1330 string
 			templ_7745c5c3_Var1330, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.DiskWarningPercent)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3598, Col: 231}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3599, Col: 231}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1330))
 			if templ_7745c5c3_Err != nil {
@@ -28613,7 +28613,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 			var templ_7745c5c3_Var1331 string
 			templ_7745c5c3_Var1331, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.TrafficWarningPercent)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3598, Col: 458}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3599, Col: 458}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1331))
 			if templ_7745c5c3_Err != nil {
@@ -28789,7 +28789,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1332 string
 		templ_7745c5c3_Var1332, templ_7745c5c3_Err = templ.JoinStringErrs(plan.HostingPolicy.Access.NspawnImage)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3608, Col: 1333}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3609, Col: 1333}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1332))
 		if templ_7745c5c3_Err != nil {
@@ -28802,7 +28802,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1333 string
 		templ_7745c5c3_Var1333, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Access.SSHIdleTimeoutMins)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3608, Col: 1584}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3609, Col: 1584}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1333))
 		if templ_7745c5c3_Err != nil {
@@ -28945,7 +28945,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1334 string
 		templ_7745c5c3_Var1334, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.MaxExecutionSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 1332}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3620, Col: 1332}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1334))
 		if templ_7745c5c3_Err != nil {
@@ -28958,7 +28958,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1335 string
 		templ_7745c5c3_Var1335, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.MaxInputSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 1484}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3620, Col: 1484}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1335))
 		if templ_7745c5c3_Err != nil {
@@ -28971,7 +28971,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1336 string
 		templ_7745c5c3_Var1336, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.PostMaxMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 1627}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3620, Col: 1627}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1336))
 		if templ_7745c5c3_Err != nil {
@@ -28984,7 +28984,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1337 string
 		templ_7745c5c3_Var1337, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.UploadMaxMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 1776}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3620, Col: 1776}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1337))
 		if templ_7745c5c3_Err != nil {
@@ -28997,7 +28997,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1338 string
 		templ_7745c5c3_Var1338, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.PHP.FPMMaxRequests)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 1928}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3620, Col: 1928}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1338))
 		if templ_7745c5c3_Err != nil {
@@ -29010,7 +29010,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1339 string
 		templ_7745c5c3_Var1339, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.PHP.FPMIdleTimeoutSecs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 2098}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3620, Col: 2098}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1339))
 		if templ_7745c5c3_Err != nil {
@@ -29023,7 +29023,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1340 string
 		templ_7745c5c3_Var1340, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.PHP.RequestTerminateSecs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 2282}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3620, Col: 2282}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1340))
 		if templ_7745c5c3_Err != nil {
@@ -29036,7 +29036,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1341 string
 		templ_7745c5c3_Var1341, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.PHP.OPcacheMemoryMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3619, Col: 2444}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3620, Col: 2444}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1341))
 		if templ_7745c5c3_Err != nil {
@@ -29081,7 +29081,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1342 string
 		templ_7745c5c3_Var1342, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSaveTitle(plan, addon))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3621, Col: 80}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3622, Col: 80}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1342))
 		if templ_7745c5c3_Err != nil {
@@ -29094,7 +29094,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1343 string
 		templ_7745c5c3_Var1343, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSaveHint(plan, addon))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3621, Col: 129}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3622, Col: 129}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1343))
 		if templ_7745c5c3_Err != nil {
@@ -29107,7 +29107,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1344 templ.SafeURL
 		templ_7745c5c3_Var1344, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planListBackURL(addon)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3621, Col: 224}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3622, Col: 224}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1344))
 		if templ_7745c5c3_Err != nil {
@@ -29120,7 +29120,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 		var templ_7745c5c3_Var1345 string
 		templ_7745c5c3_Var1345, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSubmitLabel(plan, addon))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3621, Col: 314}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3622, Col: 314}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1345))
 		if templ_7745c5c3_Err != nil {
@@ -29156,7 +29156,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 					var templ_7745c5c3_Var1346 string
 					templ_7745c5c3_Var1346, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(revision.Revision)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3633, Col: 116}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3634, Col: 116}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1346))
 					if templ_7745c5c3_Err != nil {
@@ -29169,7 +29169,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 					var templ_7745c5c3_Var1347 string
 					templ_7745c5c3_Var1347, templ_7745c5c3_Err = templ.JoinStringErrs(revision.ChangeReason)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3633, Col: 157}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3634, Col: 157}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1347))
 					if templ_7745c5c3_Err != nil {
@@ -29182,7 +29182,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 					var templ_7745c5c3_Var1348 string
 					templ_7745c5c3_Var1348, templ_7745c5c3_Err = templ.JoinStringErrs(planRevisionActor(revision))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3633, Col: 217}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3634, Col: 217}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1348))
 					if templ_7745c5c3_Err != nil {
@@ -29195,7 +29195,7 @@ func routedPlanEditor(plan controlquota.Plan, data dashboard.Data, view Workspac
 					var templ_7745c5c3_Var1349 string
 					templ_7745c5c3_Var1349, templ_7745c5c3_Err = templ.JoinStringErrs(formatTime(revision.CreatedAt))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3633, Col: 267}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3634, Col: 267}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1349))
 					if templ_7745c5c3_Err != nil {
@@ -29257,7 +29257,7 @@ func planEditorTabLink(view WorkspaceView, tab string, label string) templ.Compo
 		var templ_7745c5c3_Var1352 templ.SafeURL
 		templ_7745c5c3_Var1352, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(planTabURL(view, tab)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3641, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1352))
 		if templ_7745c5c3_Err != nil {
@@ -29283,7 +29283,7 @@ func planEditorTabLink(view WorkspaceView, tab string, label string) templ.Compo
 		var templ_7745c5c3_Var1354 string
 		templ_7745c5c3_Var1354, templ_7745c5c3_Err = templ.JoinStringErrs(tab)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 175}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3641, Col: 175}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1354))
 		if templ_7745c5c3_Err != nil {
@@ -29296,7 +29296,7 @@ func planEditorTabLink(view WorkspaceView, tab string, label string) templ.Compo
 		var templ_7745c5c3_Var1355 string
 		templ_7745c5c3_Var1355, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3640, Col: 185}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3641, Col: 185}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1355))
 		if templ_7745c5c3_Err != nil {
@@ -29338,7 +29338,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 		var templ_7745c5c3_Var1357 string
 		templ_7745c5c3_Var1357, templ_7745c5c3_Err = templ.JoinStringErrs(planInputEnforcement(name))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3642, Col: 150}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3643, Col: 150}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1357))
 		if templ_7745c5c3_Err != nil {
@@ -29351,7 +29351,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 		var templ_7745c5c3_Var1358 string
 		templ_7745c5c3_Var1358, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3642, Col: 166}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3643, Col: 166}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1358))
 		if templ_7745c5c3_Err != nil {
@@ -29364,7 +29364,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 		var templ_7745c5c3_Var1359 string
 		templ_7745c5c3_Var1359, templ_7745c5c3_Err = templ.JoinStringErrs(planInputEnforcement(name))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3642, Col: 249}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3643, Col: 249}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1359))
 		if templ_7745c5c3_Err != nil {
@@ -29377,7 +29377,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 		var templ_7745c5c3_Var1360 string
 		templ_7745c5c3_Var1360, templ_7745c5c3_Err = templ.JoinStringErrs(planEnforcementLabel(name))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3642, Col: 280}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3643, Col: 280}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1360))
 		if templ_7745c5c3_Err != nil {
@@ -29390,7 +29390,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 		var templ_7745c5c3_Var1361 string
 		templ_7745c5c3_Var1361, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3642, Col: 369}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3643, Col: 369}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1361))
 		if templ_7745c5c3_Err != nil {
@@ -29403,7 +29403,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 		var templ_7745c5c3_Var1362 string
 		templ_7745c5c3_Var1362, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorLimitDisplayValue(value, unit))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3642, Col: 419}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3643, Col: 419}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1362))
 		if templ_7745c5c3_Err != nil {
@@ -29416,7 +29416,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 		var templ_7745c5c3_Var1363 string
 		templ_7745c5c3_Var1363, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3642, Col: 440}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3643, Col: 440}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1363))
 		if templ_7745c5c3_Err != nil {
@@ -29434,7 +29434,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 			var templ_7745c5c3_Var1364 string
 			templ_7745c5c3_Var1364, templ_7745c5c3_Err = templ.JoinStringErrs(name + "_unit")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3644, Col: 31}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3645, Col: 31}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1364))
 			if templ_7745c5c3_Err != nil {
@@ -29447,7 +29447,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 			var templ_7745c5c3_Var1365 string
 			templ_7745c5c3_Var1365, templ_7745c5c3_Err = templ.JoinStringErrs(label + " unit")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3644, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3645, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1365))
 			if templ_7745c5c3_Err != nil {
@@ -29495,7 +29495,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 			var templ_7745c5c3_Var1366 string
 			templ_7745c5c3_Var1366, templ_7745c5c3_Err = templ.JoinStringErrs(name + "_unit")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3646, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3647, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1366))
 			if templ_7745c5c3_Err != nil {
@@ -29508,7 +29508,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 			var templ_7745c5c3_Var1367 string
 			templ_7745c5c3_Var1367, templ_7745c5c3_Err = templ.JoinStringErrs(unit)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3646, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3647, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1367))
 			if templ_7745c5c3_Err != nil {
@@ -29526,7 +29526,7 @@ func planLimitField(label string, name string, value int, unit string) templ.Com
 		var templ_7745c5c3_Var1368 string
 		templ_7745c5c3_Var1368, templ_7745c5c3_Err = templ.JoinStringErrs(name + "_unlimited")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3648, Col: 78}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3649, Col: 78}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1368))
 		if templ_7745c5c3_Err != nil {
@@ -29578,7 +29578,7 @@ func planToggle(name string, label string, checked bool) templ.Component {
 		var templ_7745c5c3_Var1370 string
 		templ_7745c5c3_Var1370, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3650, Col: 125}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3651, Col: 125}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1370))
 		if templ_7745c5c3_Err != nil {
@@ -29591,7 +29591,7 @@ func planToggle(name string, label string, checked bool) templ.Component {
 		var templ_7745c5c3_Var1371 string
 		templ_7745c5c3_Var1371, templ_7745c5c3_Err = templ.JoinStringErrs(name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3650, Col: 177}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3651, Col: 177}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1371))
 		if templ_7745c5c3_Err != nil {
@@ -29614,7 +29614,7 @@ func planToggle(name string, label string, checked bool) templ.Component {
 		var templ_7745c5c3_Var1372 string
 		templ_7745c5c3_Var1372, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3650, Col: 228}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3651, Col: 228}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1372))
 		if templ_7745c5c3_Err != nil {
@@ -29656,7 +29656,7 @@ func overuseOption(plan controlquota.Plan, value string, label string) templ.Com
 		var templ_7745c5c3_Var1374 string
 		templ_7745c5c3_Var1374, templ_7745c5c3_Err = templ.JoinStringErrs(value)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3652, Col: 136}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3653, Col: 136}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1374))
 		if templ_7745c5c3_Err != nil {
@@ -29679,7 +29679,7 @@ func overuseOption(plan controlquota.Plan, value string, label string) templ.Com
 		var templ_7745c5c3_Var1375 string
 		templ_7745c5c3_Var1375, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3652, Col: 202}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3653, Col: 202}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1375))
 		if templ_7745c5c3_Err != nil {
@@ -29722,7 +29722,7 @@ func phpVersionOptions(plan controlquota.Plan, capabilities types.RuntimeCapabil
 			var templ_7745c5c3_Var1377 string
 			templ_7745c5c3_Var1377, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3656, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3657, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1377))
 			if templ_7745c5c3_Err != nil {
@@ -29745,7 +29745,7 @@ func phpVersionOptions(plan controlquota.Plan, capabilities types.RuntimeCapabil
 			var templ_7745c5c3_Var1378 string
 			templ_7745c5c3_Var1378, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3656, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3657, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1378))
 			if templ_7745c5c3_Err != nil {
@@ -29789,7 +29789,7 @@ func phpVersionChecks(plan controlquota.Plan, capabilities types.RuntimeCapabili
 			var templ_7745c5c3_Var1380 string
 			templ_7745c5c3_Var1380, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3661, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3662, Col: 84}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1380))
 			if templ_7745c5c3_Err != nil {
@@ -29812,7 +29812,7 @@ func phpVersionChecks(plan controlquota.Plan, capabilities types.RuntimeCapabili
 			var templ_7745c5c3_Var1381 string
 			templ_7745c5c3_Var1381, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3661, Col: 149}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3662, Col: 149}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1381))
 			if templ_7745c5c3_Err != nil {
@@ -29973,7 +29973,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1383 string
 		templ_7745c5c3_Var1383, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.DNS.DefaultTTL)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3667, Col: 785}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 785}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1383))
 		if templ_7745c5c3_Err != nil {
@@ -30004,7 +30004,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1384 string
 		templ_7745c5c3_Var1384, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.Performance.MaxConnections)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 589}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 589}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1384))
 		if templ_7745c5c3_Err != nil {
@@ -30017,7 +30017,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1385 string
 		templ_7745c5c3_Var1385, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.RequestRatePerSecond)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 763}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 763}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1385))
 		if templ_7745c5c3_Err != nil {
@@ -30030,7 +30030,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1386 string
 		templ_7745c5c3_Var1386, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.RequestBurst)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 909}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 909}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1386))
 		if templ_7745c5c3_Err != nil {
@@ -30043,7 +30043,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1387 string
 		templ_7745c5c3_Var1387, templ_7745c5c3_Err = templ.JoinStringErrs(plan.HostingPolicy.Web.IndexFiles)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 1010}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 1010}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1387))
 		if templ_7745c5c3_Err != nil {
@@ -30056,7 +30056,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1388 string
 		templ_7745c5c3_Var1388, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.RequestBodyLimitMB)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 1171}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 1171}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1388))
 		if templ_7745c5c3_Err != nil {
@@ -30069,7 +30069,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1389 string
 		templ_7745c5c3_Var1389, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.CacheTTLSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 1333}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 1333}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1389))
 		if templ_7745c5c3_Err != nil {
@@ -30082,7 +30082,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1390 string
 		templ_7745c5c3_Var1390, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.ConnectTimeoutSecs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 1501}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 1501}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1390))
 		if templ_7745c5c3_Err != nil {
@@ -30095,7 +30095,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1391 string
 		templ_7745c5c3_Var1391, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Web.ReadTimeoutSecs)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 1660}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 1660}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1391))
 		if templ_7745c5c3_Err != nil {
@@ -30138,7 +30138,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1392 string
 		templ_7745c5c3_Var1392, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.MaxClients)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 2208}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 2208}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1392))
 		if templ_7745c5c3_Err != nil {
@@ -30151,7 +30151,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1393 string
 		templ_7745c5c3_Var1393, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.IdleTimeoutSeconds)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 2383}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 2383}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1393))
 		if templ_7745c5c3_Err != nil {
@@ -30164,7 +30164,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1394 string
 		templ_7745c5c3_Var1394, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.CPUPercent)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 2534}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 2534}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1394))
 		if templ_7745c5c3_Err != nil {
@@ -30177,7 +30177,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1395 string
 		templ_7745c5c3_Var1395, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.HostingPolicy.Valkey.ProcessLimit)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3668, Col: 2697}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 2697}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1395))
 		if templ_7745c5c3_Err != nil {
@@ -30216,7 +30216,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1396 string
 		templ_7745c5c3_Var1396, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanID(int64(plan.Presets.Logs.RetentionDays)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3669, Col: 547}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3670, Col: 547}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1396))
 		if templ_7745c5c3_Err != nil {
@@ -30281,7 +30281,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1397 string
 		templ_7745c5c3_Var1397, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(plan.HostingPolicy.Applications.AllowedRegistries))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3673, Col: 1095}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3674, Col: 1095}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1397))
 		if templ_7745c5c3_Err != nil {
@@ -30294,7 +30294,7 @@ func planPresetPanels(plan controlquota.Plan, view WorkspaceView) templ.Componen
 		var templ_7745c5c3_Var1398 string
 		templ_7745c5c3_Var1398, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(plan.Presets.Applications.Allowed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3673, Col: 1265}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3674, Col: 1265}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1398))
 		if templ_7745c5c3_Err != nil {
@@ -30422,7 +30422,7 @@ func planPreviewDialog(plan controlquota.Plan, view WorkspaceView) templ.Compone
 		var templ_7745c5c3_Var1402 string
 		templ_7745c5c3_Var1402, templ_7745c5c3_Err = templ.JoinStringErrs(planEditorSubmitLabel(plan, false))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3685, Col: 1927}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3686, Col: 1927}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1402))
 		if templ_7745c5c3_Err != nil {
@@ -30464,7 +30464,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1404 string
 		templ_7745c5c3_Var1404, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-dialog-" + formatJobID(parent.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3688, Col: 118}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3689, Col: 118}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1404))
 		if templ_7745c5c3_Err != nil {
@@ -30477,7 +30477,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1405 string
 		templ_7745c5c3_Var1405, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-title-" + formatJobID(parent.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3688, Col: 195}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3689, Col: 195}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1405))
 		if templ_7745c5c3_Err != nil {
@@ -30490,7 +30490,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1406 string
 		templ_7745c5c3_Var1406, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-title-" + formatJobID(parent.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3689, Col: 85}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 85}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1406))
 		if templ_7745c5c3_Err != nil {
@@ -30503,7 +30503,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1407 string
 		templ_7745c5c3_Var1407, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3689, Col: 124}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 124}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1407))
 		if templ_7745c5c3_Err != nil {
@@ -30516,7 +30516,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1408 string
 		templ_7745c5c3_Var1408, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.SubscriptionName)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3689, Col: 161}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 161}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1408))
 		if templ_7745c5c3_Err != nil {
@@ -30537,7 +30537,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1409 templ.SafeURL
 		templ_7745c5c3_Var1409, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/sites/" + formatJobID(parent.ID) + "/subdomains"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 123}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3691, Col: 123}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1409))
 		if templ_7745c5c3_Err != nil {
@@ -30550,7 +30550,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1410 string
 		templ_7745c5c3_Var1410, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 193}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3691, Col: 193}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1410))
 		if templ_7745c5c3_Err != nil {
@@ -30563,7 +30563,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1411 string
 		templ_7745c5c3_Var1411, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.MaxSubdomains))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 273}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3691, Col: 273}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1411))
 		if templ_7745c5c3_Err != nil {
@@ -30576,7 +30576,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1412 string
 		templ_7745c5c3_Var1412, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.SubdomainsUsed))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 355}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3691, Col: 355}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1412))
 		if templ_7745c5c3_Err != nil {
@@ -30589,7 +30589,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1413 string
 		templ_7745c5c3_Var1413, templ_7745c5c3_Err = templ.JoinStringErrs(string(subscription.OverusePolicy))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 417}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3691, Col: 417}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1413))
 		if templ_7745c5c3_Err != nil {
@@ -30602,7 +30602,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1414 string
 		templ_7745c5c3_Var1414, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(stringInSlice(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist), subscriptionDefaultPHPVersion(subscription, capabilities))))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3690, Col: 591}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3691, Col: 591}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1414))
 		if templ_7745c5c3_Err != nil {
@@ -30623,7 +30623,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1415 string
 		templ_7745c5c3_Var1415, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-name-" + formatJobID(parent.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3694, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3695, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1415))
 		if templ_7745c5c3_Err != nil {
@@ -30636,7 +30636,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1416 string
 		templ_7745c5c3_Var1416, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-name-" + formatJobID(parent.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3695, Col: 92}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3696, Col: 92}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1416))
 		if templ_7745c5c3_Err != nil {
@@ -30649,7 +30649,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1417 string
 		templ_7745c5c3_Var1417, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-hint-" + formatJobID(parent.ID) + " subdomain-error-" + formatJobID(parent.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3695, Col: 305}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3696, Col: 305}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1417))
 		if templ_7745c5c3_Err != nil {
@@ -30662,7 +30662,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1418 string
 		templ_7745c5c3_Var1418, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3695, Col: 402}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3696, Col: 402}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1418))
 		if templ_7745c5c3_Err != nil {
@@ -30675,7 +30675,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1419 string
 		templ_7745c5c3_Var1419, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-hint-" + formatJobID(parent.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3696, Col: 77}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3697, Col: 77}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1419))
 		if templ_7745c5c3_Err != nil {
@@ -30688,7 +30688,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1420 string
 		templ_7745c5c3_Var1420, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3696, Col: 156}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3697, Col: 156}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1420))
 		if templ_7745c5c3_Err != nil {
@@ -30701,7 +30701,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1421 string
 		templ_7745c5c3_Var1421, templ_7745c5c3_Err = templ.JoinStringErrs("subdomain-error-" + formatJobID(parent.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3697, Col: 87}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3698, Col: 87}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1421))
 		if templ_7745c5c3_Err != nil {
@@ -30714,7 +30714,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1422 string
 		templ_7745c5c3_Var1422, templ_7745c5c3_Err = templ.JoinStringErrs(parent.Domain)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3699, Col: 117}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3700, Col: 117}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1422))
 		if templ_7745c5c3_Err != nil {
@@ -30727,7 +30727,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1423 string
 		templ_7745c5c3_Var1423, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaCompactCount(subscription.SubdomainsUsed, subscription.MaxSubdomains, true))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3699, Col: 267}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3700, Col: 267}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1423))
 		if templ_7745c5c3_Err != nil {
@@ -30740,7 +30740,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1424 string
 		templ_7745c5c3_Var1424, templ_7745c5c3_Err = templ.JoinStringErrs(displayFallback(subscriptionDefaultPHPVersion(subscription, capabilities), "Not available"))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3700, Col: 191}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3701, Col: 191}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1424))
 		if templ_7745c5c3_Err != nil {
@@ -30769,7 +30769,7 @@ func routedSubdomainDialog(parent dashboard.Site, subscription types.Subscriptio
 		var templ_7745c5c3_Var1425 templ.SafeURL
 		templ_7745c5c3_Var1425, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/sites")))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3703, Col: 83}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3704, Col: 83}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1425))
 		if templ_7745c5c3_Err != nil {
@@ -30866,7 +30866,7 @@ func routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities ty
 			var templ_7745c5c3_Var1427 string
 			templ_7745c5c3_Var1427, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3723, Col: 29}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3724, Col: 29}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1427))
 			if templ_7745c5c3_Err != nil {
@@ -30879,7 +30879,7 @@ func routedSiteDialog(subscriptions []types.SubscriptionSummary, capabilities ty
 			var templ_7745c5c3_Var1428 string
 			templ_7745c5c3_Var1428, templ_7745c5c3_Err = templ.JoinStringErrs(version)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3723, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3724, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1428))
 			if templ_7745c5c3_Err != nil {
@@ -30963,7 +30963,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1430 string
 			templ_7745c5c3_Var1430, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaUserID(subscription.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1430))
 			if templ_7745c5c3_Err != nil {
@@ -30976,7 +30976,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1431 string
 			templ_7745c5c3_Var1431, templ_7745c5c3_Err = templ.JoinStringErrs(formatBool(subscription.AllowTLS))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 106}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 106}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1431))
 			if templ_7745c5c3_Err != nil {
@@ -30989,7 +30989,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1432 string
 			templ_7745c5c3_Var1432, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaUserID(subscription.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 166}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 166}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1432))
 			if templ_7745c5c3_Err != nil {
@@ -31002,7 +31002,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1433 string
 			templ_7745c5c3_Var1433, templ_7745c5c3_Err = templ.JoinStringErrs(formatQuotaUserID(subscription.CustomerID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 230}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 230}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1433))
 			if templ_7745c5c3_Err != nil {
@@ -31015,7 +31015,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1434 string
 			templ_7745c5c3_Var1434, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.CustomerEmail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 272}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 272}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1434))
 			if templ_7745c5c3_Err != nil {
@@ -31028,7 +31028,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1435 string
 			templ_7745c5c3_Var1435, templ_7745c5c3_Err = templ.JoinStringErrs(subscription.PlanName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 313}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 313}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1435))
 			if templ_7745c5c3_Err != nil {
@@ -31041,7 +31041,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1436 string
 			templ_7745c5c3_Var1436, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.MaxSites))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 402}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 402}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1436))
 			if templ_7745c5c3_Err != nil {
@@ -31054,7 +31054,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1437 string
 			templ_7745c5c3_Var1437, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.DomainsUsed))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 473}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 473}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1437))
 			if templ_7745c5c3_Err != nil {
@@ -31067,7 +31067,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1438 string
 			templ_7745c5c3_Var1438, templ_7745c5c3_Err = templ.JoinStringErrs(string(subscription.OverusePolicy))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 532}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 532}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1438))
 			if templ_7745c5c3_Err != nil {
@@ -31080,7 +31080,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1439 string
 			templ_7745c5c3_Var1439, templ_7745c5c3_Err = templ.JoinStringErrs(formatPlanLimitFormValue(subscription.DiskMB))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 598}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 598}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1439))
 			if templ_7745c5c3_Err != nil {
@@ -31093,7 +31093,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1440 string
 			templ_7745c5c3_Var1440, templ_7745c5c3_Err = templ.JoinStringErrs(joinStrings(phpVersionsFromCapabilities(capabilities, subscription.PHPAllowlist)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 701}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 701}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1440))
 			if templ_7745c5c3_Err != nil {
@@ -31106,7 +31106,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1441 string
 			templ_7745c5c3_Var1441, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionDefaultPHPVersion(subscription, capabilities))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 779}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 779}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1441))
 			if templ_7745c5c3_Err != nil {
@@ -31119,7 +31119,7 @@ func routedSubscriptionSelect(subscriptions []types.SubscriptionSummary, capabil
 			var templ_7745c5c3_Var1442 string
 			templ_7745c5c3_Var1442, templ_7745c5c3_Err = templ.JoinStringErrs(subscriptionSelectLabel(subscription))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3739, Col: 821}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3740, Col: 821}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1442))
 			if templ_7745c5c3_Err != nil {
@@ -31229,7 +31229,7 @@ func noticeBanner(message string, kind dashboard.NoticeKind) templ.Component {
 		var templ_7745c5c3_Var1447 string
 		templ_7745c5c3_Var1447, templ_7745c5c3_Err = templ.JoinStringErrs(noticeRole(kind))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3749, Col: 74}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3750, Col: 74}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1447))
 		if templ_7745c5c3_Err != nil {
@@ -31250,7 +31250,7 @@ func noticeBanner(message string, kind dashboard.NoticeKind) templ.Component {
 		var templ_7745c5c3_Var1448 string
 		templ_7745c5c3_Var1448, templ_7745c5c3_Err = templ.JoinStringErrs(message)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3751, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3752, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1448))
 		if templ_7745c5c3_Err != nil {
@@ -31297,7 +31297,7 @@ func navAlert(path string, label string, iconName string, active string, count i
 		var templ_7745c5c3_Var1451 templ.SafeURL
 		templ_7745c5c3_Var1451, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(path))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3756, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3757, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1451))
 		if templ_7745c5c3_Err != nil {
@@ -31323,7 +31323,7 @@ func navAlert(path string, label string, iconName string, active string, count i
 		var templ_7745c5c3_Var1453 string
 		templ_7745c5c3_Var1453, templ_7745c5c3_Err = templ.JoinStringErrs(ariaCurrent(active))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3756, Col: 108}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3757, Col: 108}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1453))
 		if templ_7745c5c3_Err != nil {
@@ -31344,7 +31344,7 @@ func navAlert(path string, label string, iconName string, active string, count i
 		var templ_7745c5c3_Var1454 string
 		templ_7745c5c3_Var1454, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3758, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3759, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1454))
 		if templ_7745c5c3_Err != nil {
@@ -31380,7 +31380,7 @@ func navAlert(path string, label string, iconName string, active string, count i
 			var templ_7745c5c3_Var1457 string
 			templ_7745c5c3_Var1457, templ_7745c5c3_Err = templ.JoinStringErrs(attentionBadgeTitle(count))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3760, Col: 95}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3761, Col: 95}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1457))
 			if templ_7745c5c3_Err != nil {
@@ -31393,7 +31393,7 @@ func navAlert(path string, label string, iconName string, active string, count i
 			var templ_7745c5c3_Var1458 string
 			templ_7745c5c3_Var1458, templ_7745c5c3_Err = templ.JoinStringErrs(formatBadgeCount(count))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3760, Col: 123}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3761, Col: 123}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1458))
 			if templ_7745c5c3_Err != nil {
@@ -31471,7 +31471,7 @@ func domainHealthPanel(item dashboard.Site, view WorkspaceView) templ.Component 
 			var templ_7745c5c3_Var1462 templ.SafeURL
 			templ_7745c5c3_Var1462, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, "/activity")))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3777, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3778, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1462))
 			if templ_7745c5c3_Err != nil {
@@ -31511,7 +31511,7 @@ func domainHealthPanel(item dashboard.Site, view WorkspaceView) templ.Component 
 				var templ_7745c5c3_Var1465 string
 				templ_7745c5c3_Var1465, templ_7745c5c3_Err = templ.JoinStringErrs(issue.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3784, Col: 28}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3785, Col: 28}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1465))
 				if templ_7745c5c3_Err != nil {
@@ -31529,7 +31529,7 @@ func domainHealthPanel(item dashboard.Site, view WorkspaceView) templ.Component 
 					var templ_7745c5c3_Var1466 string
 					templ_7745c5c3_Var1466, templ_7745c5c3_Err = templ.JoinStringErrs(issue.Detail)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3786, Col: 28}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3787, Col: 28}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1466))
 					if templ_7745c5c3_Err != nil {
@@ -31552,7 +31552,7 @@ func domainHealthPanel(item dashboard.Site, view WorkspaceView) templ.Component 
 					var templ_7745c5c3_Var1467 templ.SafeURL
 					templ_7745c5c3_Var1467, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(workspacePath(view, issue.ActionTo)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3790, Col: 95}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3791, Col: 95}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1467))
 					if templ_7745c5c3_Err != nil {
@@ -31565,7 +31565,7 @@ func domainHealthPanel(item dashboard.Site, view WorkspaceView) templ.Component 
 					var templ_7745c5c3_Var1468 string
 					templ_7745c5c3_Var1468, templ_7745c5c3_Err = templ.JoinStringErrs(issue.Action)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3790, Col: 112}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3791, Col: 112}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1468))
 					if templ_7745c5c3_Err != nil {
@@ -31629,7 +31629,7 @@ func emptyState(iconName string, title string, detail string) templ.Component {
 		var templ_7745c5c3_Var1470 string
 		templ_7745c5c3_Var1470, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3805, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3806, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1470))
 		if templ_7745c5c3_Err != nil {
@@ -31647,7 +31647,7 @@ func emptyState(iconName string, title string, detail string) templ.Component {
 			var templ_7745c5c3_Var1471 string
 			templ_7745c5c3_Var1471, templ_7745c5c3_Err = templ.JoinStringErrs(detail)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3807, Col: 14}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/control/web/workspace.templ`, Line: 3808, Col: 14}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var1471))
 			if templ_7745c5c3_Err != nil {
