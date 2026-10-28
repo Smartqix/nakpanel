@@ -1,0 +1,252 @@
+{
+  "dataset_kind": "synthetic_requirements_inventory",
+  "schema_version": 1,
+  "baseline_commit": "24ea971e2169cd692b88ea09cbb9903020417571",
+  "real_customers_assessed": 0,
+  "source_servers_contacted": 0,
+  "target_contract": {
+    "os": "Ubuntu 26.04 LTS",
+    "codename": "resolute",
+    "php_provider": "sury",
+    "hosting_php": [
+      "8.3",
+      "8.4",
+      "8.5"
+    ],
+    "internal_php": "8.5"
+  },
+  "meaning": "Fictional requirements for planning and local fixture checks. No record is approved for live migration. Proposed decisions are manual assessments, not output of an implemented migration classifier.",
+  "cases": [
+    {
+      "id": "S01",
+      "customer_ref": "DEMO-C01",
+      "domain": "harbor-cafe.test",
+      "source_php": "8.3",
+      "source_db_engine": "mariadb",
+      "requirements": [
+        "classic_php",
+        "wordpress",
+        "standard_permalinks",
+        "external_mail"
+      ],
+      "source_web_stack": "nginx",
+      "mail": {
+        "mode": "external"
+      },
+      "proposed_decision": "candidate_for_rehearsal",
+      "gap_ids": [],
+      "rehearsal_ids": [
+        "R1",
+        "R4",
+        "R5"
+      ],
+      "evidence_status": "synthetic_only"
+    },
+    {
+      "id": "S02",
+      "customer_ref": "DEMO-C02",
+      "domain": "atlas-studio.test",
+      "source_php": "8.4",
+      "source_db_engine": "mariadb",
+      "requirements": [
+        "classic_php",
+        "composer_lock",
+        "scheduled_php_task",
+        "confined_sftp",
+        "external_mail"
+      ],
+      "source_web_stack": "nginx",
+      "mail": {
+        "mode": "external"
+      },
+      "proposed_decision": "candidate_for_rehearsal",
+      "gap_ids": [],
+      "rehearsal_ids": [
+        "R1",
+        "R2",
+        "R4",
+        "R5"
+      ],
+      "evidence_status": "synthetic_only"
+    },
+    {
+      "id": "S03",
+      "customer_ref": "DEMO-C03",
+      "domain": "meadow-blog.test",
+      "child_domains": [
+        "news.meadow-blog.test"
+      ],
+      "source_php": "8.5",
+      "source_db_engine": "mariadb",
+      "requirements": [
+        "classic_php",
+        "subdomain_mail",
+        "same_subscription_alias",
+        "custom_dns_preservation"
+      ],
+      "source_web_stack": "nginx",
+      "mail": {
+        "mode": "local",
+        "message_count": 250,
+        "folder_count": 6,
+        "largest_message_bytes": 1048576,
+        "requires_post_completion_catchup": true
+      },
+      "proposed_decision": "candidate_for_rehearsal",
+      "gap_ids": [
+        "G05"
+      ],
+      "rehearsal_ids": [
+        "R1",
+        "R3",
+        "R4",
+        "R5"
+      ],
+      "evidence_status": "synthetic_only"
+    },
+    {
+      "id": "S04",
+      "customer_ref": "DEMO-C04",
+      "domain": "archive-shop.test",
+      "source_php": "8.2",
+      "source_db_engine": "mariadb",
+      "requirements": [
+        "classic_php",
+        "ioncube",
+        "apache_htaccess_access_rules"
+      ],
+      "source_web_stack": "apache_nginx",
+      "mail": {
+        "mode": "external"
+      },
+      "proposed_decision": "blocked",
+      "gap_ids": [
+        "G01",
+        "G02"
+      ],
+      "rehearsal_ids": [
+        "R2"
+      ],
+      "evidence_status": "synthetic_only"
+    },
+    {
+      "id": "S05",
+      "customer_ref": "DEMO-C05",
+      "domain": "api-office.test",
+      "source_php": "8.4",
+      "source_db_engine": "pgsql",
+      "requirements": [
+        "native_nodejs",
+        "managed_tenant_postgresql"
+      ],
+      "source_web_stack": "apache_nginx",
+      "mail": {
+        "mode": "external"
+      },
+      "proposed_decision": "blocked",
+      "gap_ids": [
+        "G03",
+        "G07"
+      ],
+      "rehearsal_ids": [
+        "R2"
+      ],
+      "evidence_status": "synthetic_only"
+    },
+    {
+      "id": "S06",
+      "customer_ref": "DEMO-C06",
+      "domain": "post-office.test",
+      "source_php": "8.4",
+      "source_db_engine": "mariadb",
+      "requirements": [
+        "external_mail_forwarders",
+        "catch_all",
+        "autoresponders",
+        "sieve",
+        "contacts_calendars",
+        "preserve_mail_passwords"
+      ],
+      "source_web_stack": "nginx",
+      "mail": {
+        "mode": "local",
+        "message_count": 6000,
+        "folder_count": 18,
+        "largest_message_bytes": 2097152,
+        "requires_post_completion_catchup": true
+      },
+      "proposed_decision": "blocked",
+      "gap_ids": [
+        "G04",
+        "G05",
+        "G06"
+      ],
+      "rehearsal_ids": [
+        "R3",
+        "R4",
+        "R5"
+      ],
+      "evidence_status": "synthetic_only"
+    },
+    {
+      "id": "S07",
+      "customer_ref": "DEMO-C07",
+      "domain": "orders.test",
+      "source_php": "8.4",
+      "source_db_engine": "mysql",
+      "source_db_version": "8.0 (fictional)",
+      "requirements": [
+        "classic_php",
+        "mysql_specific_collation",
+        "stored_routines_definers_events",
+        "apache_htaccess_rewrites",
+        "scheduled_php_task",
+        "transactional_writes"
+      ],
+      "source_web_stack": "apache_nginx",
+      "mail": {
+        "mode": "external"
+      },
+      "proposed_decision": "needs_changes",
+      "gap_ids": [
+        "G01",
+        "G03",
+        "G10"
+      ],
+      "rehearsal_ids": [
+        "R2",
+        "R4",
+        "R5"
+      ],
+      "evidence_status": "synthetic_only"
+    },
+    {
+      "id": "S08",
+      "customer_ref": "DEMO-C08",
+      "domain": "bulk-mail.test",
+      "source_php": "8.5",
+      "source_db_engine": "mariadb",
+      "requirements": [
+        "oversized_mail_import"
+      ],
+      "source_web_stack": "nginx",
+      "mail": {
+        "mode": "local",
+        "message_count": 100001,
+        "folder_count": 1001,
+        "largest_message_bytes": 67108865,
+        "maildir_compressed_bytes": 134217729,
+        "maildir_expanded_bytes": 1073741825
+      },
+      "proposed_decision": "blocked",
+      "gap_ids": [
+        "G05",
+        "G06"
+      ],
+      "rehearsal_ids": [
+        "R3"
+      ],
+      "evidence_status": "synthetic_only"
+    }
+  ]
+}

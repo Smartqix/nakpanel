@@ -8,6 +8,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -19,6 +21,7 @@ import (
 )
 
 type fakeFileManagerService struct {
+	batches   map[string]types.FileBatchReq
 	site      controlfiles.Site
 	listing   types.FileListResult
 	staged    bool
@@ -69,13 +72,22 @@ func (f *fakeFileManagerService) Write(context.Context, auth.SessionUser, int64,
 func (f *fakeFileManagerService) Create(context.Context, auth.SessionUser, int64, types.FileCreateReq) (types.FileMutationResult, error) {
 	return types.FileMutationResult{}, nil
 }
-func (f *fakeFileManagerService) Copy(context.Context, auth.SessionUser, int64, types.FileBatchReq) (types.FileMutationResult, error) {
+func (f *fakeFileManagerService) Copy(_ context.Context, _ auth.SessionUser, _ int64, req types.FileBatchReq) (types.FileMutationResult, error) {
+	if f.batches != nil {
+		f.batches["copy"] = req
+	}
 	return types.FileMutationResult{}, nil
 }
-func (f *fakeFileManagerService) Move(context.Context, auth.SessionUser, int64, types.FileBatchReq) (types.FileMutationResult, error) {
+func (f *fakeFileManagerService) Move(_ context.Context, _ auth.SessionUser, _ int64, req types.FileBatchReq) (types.FileMutationResult, error) {
+	if f.batches != nil {
+		f.batches["move"] = req
+	}
 	return types.FileMutationResult{}, nil
 }
-func (f *fakeFileManagerService) Delete(context.Context, auth.SessionUser, int64, types.FileBatchReq) (types.FileMutationResult, error) {
+func (f *fakeFileManagerService) Delete(_ context.Context, _ auth.SessionUser, _ int64, req types.FileBatchReq) (types.FileMutationResult, error) {
+	if f.batches != nil {
+		f.batches["delete"] = req
+	}
 	return types.FileMutationResult{}, nil
 }
 func (f *fakeFileManagerService) Archive(context.Context, auth.SessionUser, int64, types.FileArchiveReq) (types.FileMutationResult, error) {
@@ -192,5 +204,43 @@ func TestJoinManagedFilePathRejectsTraversalAndAbsoluteNames(t *testing.T) {
 	}
 	if got, err := joinManagedFilePath("assets", "nested/file.txt", true); err != nil || got != "assets/nested/file.txt" {
 		t.Fatalf("joined=%q err=%v", got, err)
+	}
+}
+
+func TestFileManagerBatchActionsParseHeaderAuthenticatedForms(t *testing.T) {
+	for _, action := range []string{"copy", "move", "delete"} {
+		t.Run(action, func(t *testing.T) {
+			files := &fakeFileManagerService{site: controlfiles.Site{ID: 7, Username: "npdemo", Domain: "owned.test"}, batches: map[string]types.FileBatchReq{}}
+			handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{}, FileManager: files})
+			cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+			form := url.Values{"paths": {"rehearsal.zip", "second.txt"}, "destination": {"archive"}}
+			req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/files/"+action, strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.Header.Set("Origin", "https://panel.test")
+			req.Header.Set("X-Nakpanel-SPA", "true")
+			req.AddCookie(cookie)
+			req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusSeeOther || !reflect.DeepEqual(files.batches[action].Paths, []string{"rehearsal.zip", "second.txt"}) {
+				t.Fatalf("%s status=%d paths=%v body=%s", action, rec.Code, files.batches[action].Paths, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestFileManagerDeleteRejectsMalformedFormBeforeAgentCall(t *testing.T) {
+	files := &fakeFileManagerService{site: controlfiles.Site{ID: 7, Username: "npdemo", Domain: "owned.test"}, batches: map[string]types.FileBatchReq{}}
+	handler, _ := newTestHandlerWithOptions(t, auth.RoleAdmin, ServerOptions{DashboardReader: &fakeDashboardReader{}, FileManager: files})
+	cookie := login(t, handler, "admin@nakpanel.test", "NakpanelAdmin!2026")
+	req := httptest.NewRequest(http.MethodPost, "https://panel.test/sites/7/files/delete", strings.NewReader("paths=%GG"))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Origin", "https://panel.test")
+	req.AddCookie(cookie)
+	req.Header.Set("X-Nakpanel-CSRF", csrfToken(req))
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnprocessableEntity || len(files.batches) != 0 {
+		t.Fatalf("invalid delete status=%d calls=%d body=%s", rec.Code, len(files.batches), rec.Body.String())
 	}
 }

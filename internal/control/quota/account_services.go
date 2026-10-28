@@ -487,6 +487,10 @@ func (s *SQLStore) UpsertScheduledTask(ctx context.Context, subscriptionID, acto
 	if input.Kind == "php" && (script == "." || filepath.IsAbs(script) || script == ".." || strings.HasPrefix(script, ".."+string(filepath.Separator))) {
 		return 0, errors.New("a site-relative PHP script is required")
 	}
+	working := filepath.Clean(strings.TrimSpace(input.WorkingDirectory))
+	if filepath.IsAbs(working) || working == ".." || strings.HasPrefix(working, ".."+string(filepath.Separator)) {
+		return 0, errors.New("a site-relative working directory is required")
+	}
 	if strings.TrimSpace(input.Name) == "" || strings.ContainsAny(input.Name+input.Command+input.URL+input.Script+input.WorkingDirectory+input.Timezone, "\x00\r\n") || input.TimeoutSeconds < 1 || input.TimeoutSeconds > 86400 {
 		return 0, errors.New("invalid scheduled task")
 	}
@@ -506,7 +510,7 @@ func (s *SQLStore) UpsertScheduledTask(ctx context.Context, subscriptionID, acto
 		err := tx.QueryRowContext(ctx, `INSERT INTO scheduled_tasks(id,subscription_id,site_id,name,schedule,command,working_directory,timeout_seconds,enabled,kind,url,script_path,timezone)
 VALUES(CASE WHEN $1=0 THEN nextval('scheduled_tasks_id_seq') ELSE $1 END,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
 ON CONFLICT(id) DO UPDATE SET site_id=EXCLUDED.site_id,name=EXCLUDED.name,schedule=EXCLUDED.schedule,command=EXCLUDED.command,working_directory=EXCLUDED.working_directory,timeout_seconds=EXCLUDED.timeout_seconds,enabled=EXCLUDED.enabled,kind=EXCLUDED.kind,url=EXCLUDED.url,script_path=EXCLUDED.script_path,timezone=EXCLUDED.timezone,convergence_status='pending',last_error='',updated_at=now()
-WHERE scheduled_tasks.subscription_id=EXCLUDED.subscription_id RETURNING id`, input.ID, subscriptionID, input.SiteID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Schedule), input.Command, strings.TrimSpace(input.WorkingDirectory), input.TimeoutSeconds, input.Enabled, input.Kind, strings.TrimSpace(input.URL), script, input.Timezone).Scan(&id)
+WHERE scheduled_tasks.subscription_id=EXCLUDED.subscription_id RETURNING id`, input.ID, subscriptionID, input.SiteID, strings.TrimSpace(input.Name), strings.TrimSpace(input.Schedule), input.Command, working, input.TimeoutSeconds, input.Enabled, input.Kind, strings.TrimSpace(input.URL), script, input.Timezone).Scan(&id)
 		return id, err
 	})
 }

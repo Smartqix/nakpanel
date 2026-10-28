@@ -3,6 +3,10 @@ name: Hosted Ubuntu AMD64 qualification
 on:
   workflow_dispatch:
     inputs:
+      plesk_r0_r1_only:
+        description: Only rehearse synthetic S01-S03 ingress and containment on Ubuntu 26.04 (R0/R1)
+        type: boolean
+        default: false
       operations_only:
         description: Only verify current notifications, tasks, recovery and UX on an owned Ubuntu 26.04 guest
         type: boolean
@@ -53,7 +57,7 @@ concurrency:
 
 jobs:
   diagnose-fwupd:
-    if: github.event.repository.private == false && inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only && !inputs.operations_only
+    if: github.event.repository.private == false && inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only && !inputs.operations_only && !inputs.plesk_r0_r1_only
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -74,7 +78,7 @@ jobs:
           if-no-files-found: error
 
   diagnose-php-maintenance:
-    if: github.event.repository.private == false && inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only && !inputs.operations_only
+    if: github.event.repository.private == false && inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only && !inputs.operations_only && !inputs.plesk_r0_r1_only
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -97,7 +101,7 @@ jobs:
 
   scheduled-backups:
     needs: signed-bundles
-    if: always() && !cancelled() && github.event.repository.private == false && inputs.scheduled_backups_only && ((!inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'skipped') || (inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'success')) && !inputs.subdomain_mail_only && !inputs.operations_only
+    if: always() && !cancelled() && github.event.repository.private == false && inputs.scheduled_backups_only && ((!inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'skipped') || (inputs.scheduled_backups_build_current && needs.signed-bundles.result == 'success')) && !inputs.subdomain_mail_only && !inputs.operations_only && !inputs.plesk_r0_r1_only
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -180,7 +184,7 @@ jobs:
 
 
   subdomain-mail:
-    if: github.event.repository.private == false && inputs.subdomain_mail_only && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.operations_only
+    if: github.event.repository.private == false && inputs.subdomain_mail_only && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.operations_only && !inputs.plesk_r0_r1_only
     needs: signed-bundles
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -246,7 +250,7 @@ jobs:
           if-no-files-found: error
 
   operations:
-    if: github.event.repository.private == false && inputs.operations_only && !inputs.subdomain_mail_only && !inputs.scheduled_backups_only && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance
+    if: github.event.repository.private == false && inputs.operations_only && !inputs.subdomain_mail_only && !inputs.scheduled_backups_only && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.plesk_r0_r1_only
     needs: signed-bundles
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -306,6 +310,57 @@ jobs:
         with:
           name: operations-26.04-amd64-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/operations-evidence/
+          retention-days: 7
+          if-no-files-found: error
+
+
+  plesk-r0-r1:
+    if: always() && !cancelled() && github.event.repository.private == false && inputs.plesk_r0_r1_only
+    needs: signed-bundles
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NAKPANEL_REHEARSAL_ADMIN_PASSWORD: ${{ secrets.NAKPANEL_PLESK_R0_R1_20261027_ADMIN_PASSWORD }}
+      NAKPANEL_MULTIPASS_IMAGE: '26.04'
+      NAKPANEL_MULTIPASS_ARCH: amd64
+      NAKPANEL_QUALIFICATION_PHP_PROVIDER: sury
+      NAKPANEL_HOSTED_GUEST_FIRMWARE_POLICY: '1'
+      NAKPANEL_QUALIFICATION_VM_CPUS: '2'
+      NAKPANEL_QUALIFICATION_VM_MEMORY: 5G
+      NAKPANEL_QUALIFICATION_VM_DISK: 32G
+      NAKPANEL_QUALIFICATION_LAUNCH_TIMEOUT: '600'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require exactly the authorized R0/R1 selection and signed candidate
+        env:
+          BUNDLE_RESULT: ${{ needs.signed-bundles.result }}
+          OTHER_REQUESTED: ${{ inputs.operations_only || inputs.subdomain_mail_only || inputs.scheduled_backups_only || inputs.diagnose_fwupd || inputs.diagnose_php_maintenance }}
+        run: test "${BUNDLE_RESULT}" = success && test "${OTHER_REQUESTED}" != true
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: deploy/release/GO_VERSION
+      - uses: actions/download-artifact@v4
+        with:
+          name: hosted-development-bundles-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/plesk-rehearsal-bundle
+      - name: Prepare only this disposable hosted runner
+        run: |
+          bash deploy/multipass/prepare-hosted-runner.sh
+          sudo apt-get install -y --no-install-recommends nftables
+      - name: Freeze signed candidate, pinned Resolute image and verified WordPress source
+        run: python3 deploy/multipass/plesk-rehearsal-verify.py prepare "${RUNNER_TEMP}/plesk-rehearsal-bundle"
+      - name: Prove KVM and measured capacity before creating the owned guest
+        run: python3 deploy/multipass/hosted-runner-preflight.py --output "${RUNNER_TEMP}/plesk-rehearsal-evidence/host-preflight.json"
+      - name: Run only R0 and R1 with synthetic customers S01 S02 S03
+        run: timeout --kill-after=20s 75m python3 deploy/multipass/plesk-rehearsal-verify.py run
+      - name: Always destroy only owned rehearsal guests and then remove their containment table
+        if: always()
+        run: python3 deploy/multipass/plesk-rehearsal-verify.py cleanup
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: plesk-r0-r1-26.04-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/plesk-rehearsal-evidence/
           retention-days: 7
           if-no-files-found: error
 
@@ -388,7 +443,7 @@ jobs:
         run: rm -f "${RUNNER_TEMP}/hosted-test-private.pem"
 
   qualify-amd64:
-    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only && !inputs.operations_only
+    if: github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only && !inputs.operations_only && !inputs.plesk_r0_r1_only
     needs: signed-bundles
     runs-on: ubuntu-24.04
     timeout-minutes: 360
@@ -544,7 +599,7 @@ jobs:
           if-no-files-found: error
 
   hosted-evidence-summary:
-    if: always() && github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only && !inputs.operations_only
+    if: always() && github.event.repository.private == false && !inputs.diagnose_fwupd && !inputs.diagnose_php_maintenance && !inputs.scheduled_backups_only && !inputs.subdomain_mail_only && !inputs.operations_only && !inputs.plesk_r0_r1_only
     needs: [signed-bundles, qualify-amd64]
     runs-on: ubuntu-24.04
     steps:

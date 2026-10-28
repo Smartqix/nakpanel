@@ -2,12 +2,14 @@ package ops
 
 import (
 	"context"
+	"errors"
 	"github.com/nakroteck/nakpanel/internal/types"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSiteReadinessRequiresItsOwnEnabledVhostAndIsolatedSocket(t *testing.T) {
@@ -67,5 +69,21 @@ func TestSiteReadinessRequiresItsOwnEnabledVhostAndIsolatedSocket(t *testing.T) 
 	after, err := os.ReadFile(plan.NginxConfig)
 	if err != nil || string(after) != nginx {
 		t.Fatal("readiness probe changed hosting configuration")
+	}
+}
+
+func TestDedicatedFPMSocketWaitHonorsCancellationAndRejectsRegularFiles(t *testing.T) {
+	root := t.TempDir()
+	file := filepath.Join(root, "not-a-socket")
+	if err := os.WriteFile(file, []byte("fixture"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := waitForUnixSocket(ctx, file, 3*time.Second); !errors.Is(err, context.Canceled) {
+		t.Fatalf("wait ignored cancellation or accepted a regular file: %v", err)
+	}
+	if err := waitForUnixSocket(context.Background(), filepath.Join(root, "missing"), 20*time.Millisecond); err == nil {
+		t.Fatal("missing socket was accepted")
 	}
 }
